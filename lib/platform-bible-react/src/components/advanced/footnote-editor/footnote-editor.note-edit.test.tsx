@@ -92,6 +92,7 @@ function renderFootnoteEditor(onNoteEdit: () => void) {
     // A fresh clone per read: the save path mutates the returned op's caller in place, and a
     // shared instance would let one test's save leak into another's initial-state snapshot.
     getNoteOps: vi.fn(() => [structuredClone(sentinelNoteOp)]),
+    getOpsAfterNote: vi.fn(() => []),
     selectNote: vi.fn(),
   } as unknown as EditorRef;
 

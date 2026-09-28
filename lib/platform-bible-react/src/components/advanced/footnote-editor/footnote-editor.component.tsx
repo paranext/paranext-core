@@ -251,6 +251,14 @@ export function markerMenuItemToPaletteItem(item: EditorMarkerMenuItem): Palette
  *
  * @param op The node to be converted
  */
+/** How many units of a document `ops` insert: a string's length, one per embed. */
+function deltaOpsLength(ops: DeltaOp[]): number {
+  return ops.reduce(
+    (length, op) => length + (typeof op.insert === 'string' ? op.insert.length : 1),
+    0,
+  );
+}
+
 function footnoteToCrossReferenceOp(op: DeltaOp) {
   // The built-in type for the delta note ops does not contain the types for the attributes
   // so have to cast it here
@@ -439,6 +447,23 @@ export default function FootnoteEditor({
    */
   const lastAppliedNoteOpRef = useRef<DeltaOpInsertNoteEmbed | undefined>(undefined);
 
+  /**
+   * Text that has left the note but not yet reached the parent editor. This editor's paragraph
+   * holds the note alone, so anything that turns up after the note has left it - typing the note's
+   * closer (`\f*`) in the middle of an unclosed note closes the note there, and the rest of what
+   * was in it belongs after the note in the Scripture text. It is taken out of this editor as soon
+   * as it appears and goes to the parent with the next apply, after the note.
+   */
+  const pendingOpsAfterNoteRef = useRef<DeltaOp[]>([]);
+
+  const moveOpsAfterNoteOut = useCallback(() => {
+    const opsAfterNote = editorRef.current?.getOpsAfterNote(0);
+    if (!opsAfterNote?.length) return;
+    pendingOpsAfterNoteRef.current = [...pendingOpsAfterNoteRef.current, ...opsAfterNote];
+    // The note is the paragraph's first unit (OT index 0; see the load below).
+    editorRef.current?.applyUpdate([{ retain: 1 }, { delete: deltaOpsLength(opsAfterNote) }]);
+  }, []);
+
   const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
 
   /**
@@ -625,9 +650,19 @@ export default function FootnoteEditor({
           // behind its back with content it already has would silently strand the session. The
           // popover deliberately keeps applying unconditionally: its Save is also what confirms a
           // newly inserted note, which would otherwise be discarded as abandoned on close.
-          if (inline && deepEqual(currentNoteOp, lastAppliedNoteOpRef.current)) return;
+          const opsAfterNote = pendingOpsAfterNoteRef.current;
+          if (
+            inline &&
+            opsAfterNote.length === 0 &&
+            deepEqual(currentNoteOp, lastAppliedNoteOpRef.current)
+          )
+            return;
           lastAppliedNoteOpRef.current = currentNoteOp;
-          parentEditorRef.current?.replaceEmbedUpdate(noteKeyRef.current, [currentNoteOp]);
+          pendingOpsAfterNoteRef.current = [];
+          parentEditorRef.current?.replaceEmbedUpdate(noteKeyRef.current, [
+            currentNoteOp,
+            ...opsAfterNote,
+          ]);
         }
       }
     },
@@ -740,6 +775,7 @@ export default function FootnoteEditor({
     const noteOp = noteOps?.at(0);
     // The note about to be loaded is, by definition, what the parent already holds.
     lastAppliedNoteOpRef.current = noteOp;
+    pendingOpsAfterNoteRef.current = [];
     if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
       const rawCaller = noteOp.insert.note?.caller;
       // Parses the current caller
@@ -751,8 +787,12 @@ export default function FootnoteEditor({
       }
       // Set for every load, not only a custom one: an inline editor stays mounted from one note to
       // the next, and would otherwise offer the previous note's custom caller for this one.
+      // A note whose caller was deleted (an unclosed note in the text lets that happen) has an
+      // empty custom caller, shown as nothing rather than as the default character.
       const loadedCustomCaller =
-        parsedCallerType === 'custom' && rawCaller ? rawCaller : DEFAULT_CUSTOM_CALLER;
+        parsedCallerType === 'custom' && rawCaller !== undefined
+          ? rawCaller
+          : DEFAULT_CUSTOM_CALLER;
       setCustomCaller(loadedCustomCaller);
       setOriginalCustomCaller(loadedCustomCaller);
       setCallerType(parsedCallerType);
@@ -1027,6 +1067,8 @@ export default function FootnoteEditor({
         }
 
         hasUserEditsRef.current = true;
+        // Deferred like the extra-node cleanup above: this runs from the editor's change listener.
+        if (editorRef.current?.getOpsAfterNote(0)?.length) setTimeout(moveOpsAfterNoteOut, 0);
         // Track whether the user has undone all their edits back to the initial state
         setIsAtInitialState(JSON.stringify(noteOp) === initialNoteOpsJson.current);
 
@@ -1040,7 +1082,7 @@ export default function FootnoteEditor({
         setIsAtInitialState(true);
       }
     },
-    [inline, saveCurrentNoteOp, schedulePendingApply],
+    [inline, saveCurrentNoteOp, schedulePendingApply, moveOpsAfterNoteOut],
   );
 
   const showInlineMarkersMenu = useCallback(() => {

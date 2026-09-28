@@ -37,6 +37,7 @@ import {
 const editorRefMock = {
   applyUpdate: vi.fn(),
   getNoteOps: vi.fn(),
+  getOpsAfterNote: vi.fn(),
   focus: vi.fn(),
   selectNote: vi.fn(),
   selectNoteTextOffset: vi.fn(),
@@ -250,6 +251,18 @@ describe('FootnoteEditor note loading', () => {
 
     expect(screen.getByRole('textbox')).toHaveValue('*');
   });
+
+  it('offers a blank custom caller for a note whose caller was deleted', async () => {
+    const noCaller = makeNoteOps('text');
+    if (noCaller[0].insert.note) noCaller[0].insert.note.caller = '';
+    renderEditor({ inline: true, noteOps: noCaller, localizedStrings: buildLocalizedStrings() });
+
+    await userEvent
+      .setup({ pointerEventsCheck: 0 })
+      .click(screen.getByRole('button', { name: /callerDropdown/i }));
+
+    expect(screen.getByRole('textbox')).toHaveValue('');
+  });
 });
 
 describe('FootnoteEditor inline mode', () => {
@@ -370,6 +383,62 @@ describe('FootnoteEditor inline live-apply', () => {
     expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
     // Proves the debounce carried the LATEST edit ('edit 3'), not an earlier coalesced one.
     expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-live', 'edit 3');
+  });
+
+  describe('text that leaves the note (a closer typed mid-note)', () => {
+    const paraUsj: Usj = { type: 'USJ', version: '3.1', content: [{ type: 'para' }] };
+
+    async function editThatClosesTheNote() {
+      vi.useFakeTimers();
+      const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+      const view = renderEditor({
+        inline: true,
+        parentEditorRef: makeParentRef(parentRef),
+        noteKey: 'key-close',
+      });
+      await vi.runOnlyPendingTimersAsync(); // initial load
+      primeCurrentOps('alpha beta');
+      latestEditorialProps.onUsjChange?.(paraUsj); // snapshot call
+
+      // The note now ends at the typed closer, and what followed it sits after the note.
+      primeCurrentOps('alpha');
+      editorRefMock.getOpsAfterNote.mockReturnValue([{ insert: ' beta' }]);
+      latestEditorialProps.onUsjChange?.(paraUsj);
+      await vi.advanceTimersByTimeAsync(0);
+      editorRefMock.getOpsAfterNote.mockReturnValue([]);
+      return { ...view, parentRef };
+    }
+
+    it('takes that text out of this editor, which holds just the note', async () => {
+      await editThatClosesTheNote();
+
+      expect(editorRefMock.applyUpdate).toHaveBeenLastCalledWith([{ retain: 1 }, { delete: 5 }]);
+    });
+
+    it('applies it to the parent right after the note', async () => {
+      const { parentRef } = await editThatClosesTheNote();
+
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+
+      expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
+      const [key, ops] = parentRef.current.replaceEmbedUpdate.mock.calls[0];
+      expect(key).toBe('key-close');
+      expect(ops).toEqual([makeNoteOps('alpha')[0], { insert: ' beta' }]);
+    });
+
+    it('applies it once, and applies it even when the note is otherwise unchanged', async () => {
+      const { parentRef, unmount } = await editThatClosesTheNote();
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      // The same note again (e.g. a later no-op change) carries nothing left over.
+      latestEditorialProps.onUsjChange?.(paraUsj);
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      unmount();
+
+      const withText = parentRef.current.replaceEmbedUpdate.mock.calls.filter(([, ops]) =>
+        JSON.stringify(ops).includes(' beta'),
+      );
+      expect(withText).toHaveLength(1);
+    });
   });
 
   it('flushes a pending apply on unmount', async () => {
