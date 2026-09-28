@@ -1384,6 +1384,55 @@ step, no automation. Just a record.
   the id scheme that replaced it.
 - **Source:** PT-4464.
 
+## adr-editor-annotations-on-display-bytes: An annotation over display bytes is carrier node state, never a mark wrapping them
+
+- **Date:** 2026-09-28
+- **Status:** Accepted
+- **Context:** A checks result, a comment, or any other `setAnnotation` caller must be able to
+  annotate essentially any location the position model resolves — a marker glyph, a verse or
+  chapter number, a note caller, an attribute value — not only ordinary content text. The editor's
+  existing annotation mechanism wraps the addressed range in a `TypedMarkNode` mark. Every
+  display-run scanner (the attribute-run piece walkers, the verse and milestone run readers, the
+  settle rewrite in `$syncDisplayRun`) finds a run's pieces by POSITION and requires the run's value
+  to be a single text node; a mark node sitting inside a run breaks that assumption and corrupts the
+  run — duplicating bytes, losing a milestone's attribute, or reporting an owner destroyed when it
+  is not. This corruption class had already been found and fixed piecemeal several times before this
+  decision (`typedMarkWrap.utils.ts`'s guard history, commits `338ed25a`, `2ec657fd`, `0f9883cb`,
+  `686d5754`).
+- **Decision:** An annotation that covers display bytes is never expressed as a mark wrapping them.
+  Instead the CARRIER node itself (the marker glyph, the verse/chapter node, the note-caller text,
+  the attribute-run text) holds a new node state, `displayAnnotationsState`
+  (`{ basis, annotations: [{ type, id, start, end }] }`), remapped through a character alignment of
+  the carrier's old and new text whenever that text changes, so the tree shape every scanner,
+  settle rewrite, and exporter depends on is completely unchanged. Painting and events come from a
+  per-editor index that adds the same class names `TypedMarkNode` would (`<typedMark>-<type>`,
+  `<typedMarkOverlap>-<type>`, `annotationId-<id>`) plus `display-annotation` to the carrier's DOM
+  element, so host CSS and `scrollToAnnotation` (`.annotationId-<id>`) work unchanged. `getUsj()`
+  carries none of this — attribute values are plain strings with no sub-string annotation shape in
+  USJ — so the host re-applies its own anchors after a reload, as it already does today.
+- **Alternatives:** **Option A — let marks sit inside display runs and make every reader
+  mark-transparent.** Rejected: dozens of call sites (`$charClosingGlyph`, the char/note/para
+  constructs, the Tier-1/Tier-2 engines, `$runPieceOf`/`$displayBytesOf`) read a run's pieces as
+  DIRECT children, and the writer re-wraps by offset; every one would need a "logical sibling
+  through marks" rule, and a missed one reintroduces exactly the corruption class this decision
+  avoids. **CSS Custom Highlight API for exact, sub-carrier painting instead of node state.**
+  Rejected for now: `::highlight()` only applies `color`, `background-color`, `text-decoration` and
+  `text-shadow` — it cannot express the class-based CSS hosts already generate (border, padding,
+  font-weight, opacity), so it cannot replace the carrier's class-based painting outright. The
+  stored range stays exact regardless of which paints it, so adopting the Highlight API later for
+  finer-grained painting needs no data-model change.
+- **Consequences:** The carrier is painted WHOLE even where the stored range covers only part of
+  it — a check naming one attribute's value highlights the whole attribute-run text, and a check on
+  a verse number highlights the glyph's whole `\v 12 ` — because splitting the carrier node is the
+  corruption this decision exists to avoid. The exact range is stored regardless, so painting only
+  the named bytes (the Highlight API, or overlay rectangles) can be added later without redoing this
+  work. No `zmsc` (or other USJ shape) exists for an annotation held only on display bytes;
+  `getUsj()` never carries it, and a host that needs it back after a `setUsj` reload re-applies from
+  its own anchors. PT-4804 (`TypedMarkNode.remove` firing `"destroyed"` per mark node even while
+  other marks of the same id survive) is unchanged by this decision — the carrier path is a
+  distinct removal accounting that does not touch marks' existing behavior.
+- **Source:** PT-4370; paranext-core PR #2823, scripture-editors PR paranext/scripture-editors#11.
+
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
 
 - **Formerly:** ADR-0012

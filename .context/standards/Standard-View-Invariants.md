@@ -171,6 +171,15 @@ path that fails to resolve (or an offset past the node it lands on) is a bug or 
 expected state. Keep those host-side checks as fail-safes, log them, and do not write code that
 compensates for an expected divergence — there isn't one.
 
+**An annotation may cover display bytes, and the host keeps its anchor.** `setAnnotation` accepts
+a range over a marker glyph, a verse or chapter number, a note caller, or an attribute value
+(`['lemma'] propertyOffset …`); the editor holds it on those bytes (same CSS classes as a `<mark>`,
+plus `display-annotation`, painted whole) and never changes the document for it. `getUsj()` never
+carries it, and `setUsj` drops every annotation, so the host re-applies from its own anchors —
+`annotationInfoByIdRef` in `platform-scripture-editor.web-view.tsx` keeps each range. An
+annotation held only on display bytes reports `onRemove` once (`"removed"` or `"destroyed"`); one
+that holds text reports per `<mark>`, as before.
+
 **A position names the byte in front of which it sits, and snaps LEFT in BOTH directions.** It maps
 through whatever contains that byte on its own side; where one side has bytes the other lacks, the
 position in front of them snaps to the nearest byte both sides share, and the position just past
