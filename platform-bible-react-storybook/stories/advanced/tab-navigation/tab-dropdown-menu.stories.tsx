@@ -15,7 +15,7 @@ const meta: Meta<typeof TabDropdownMenu> = {
 A dropdown menu component designed specifically for tab contexts in Platform.Bible applications.
 
 This component provides:
-- Columns as sections: divided by separators, left out when empty, and with \`showSectionHeadings\` labeled when there are two or more
+- Columns as sections: divided by separators, left out when empty, and with \`showSectionHeadings\` labeled when there are two or more, except a column that sets \`isHeaderHidden\`, whose label names the section for screen readers only
 - Tooltips for menu items
 - Support for icons (before and after text)
 - Keyboard shortcut hints at the end of an item's row
@@ -293,6 +293,37 @@ export const SingleSection: Story = {
       description: {
         story:
           'Only the Edit column has items, so the menu has a single section: no heading and no divider, even with `showSectionHeadings` on.',
+      },
+    },
+  },
+};
+
+export const HiddenSectionHeading: Story = {
+  tags: ['test'],
+  render: () => {
+    const sampleMenuData = createSampleMenuData();
+    const menuData: Localized<MultiColumnMenu> = {
+      ...sampleMenuData,
+      columns: {
+        ...sampleMenuData.columns,
+        'tab.edit': { label: 'Edit', order: 1, isHeaderHidden: true },
+      },
+    };
+
+    return (
+      <TabDropdownMenu
+        menuData={menuData}
+        onSelectMenuItem={() => {}}
+        tabLabel="Hidden Heading Options"
+        showSectionHeadings
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The Edit column sets `isHeaderHidden`, so its section shows no heading. It keeps its divider, and its label still names the section for screen readers while two or more sections are shown.',
       },
     },
   },
