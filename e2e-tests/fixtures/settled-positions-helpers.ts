@@ -172,6 +172,37 @@ export function chapterLocation(verseRef: SerializedVerseRef, jsonPath: string, 
   };
 }
 
+/** A chapter-relative location INSIDE a property value (a verse's `number`, a span's `lemma`). */
+export function chapterPropertyLocation(
+  verseRef: SerializedVerseRef,
+  propertyJsonPath: string,
+  propertyOffset: number,
+) {
+  return {
+    verseRef,
+    granularity: 'chapter',
+    documentLocation: { jsonPath: propertyJsonPath, propertyOffset },
+  };
+}
+
+/**
+ * Depth-first search for the JSONPath of the `type: 'verse'` marker numbered `verseNumber`, or
+ * undefined. Recursive rather than index-arithmetic against a known shape, matching
+ * {@link findCharSpanText} and {@link findVerseText}.
+ */
+export function findVersePath(
+  content: readonly (string | UsjMarkerObject)[],
+  verseNumber: string,
+  indexes: readonly number[] = [],
+): string | undefined {
+  return content.reduce<string | undefined>((found, node, index) => {
+    if (found || typeof node === 'string') return found;
+    const nodeIndexes = [...indexes, index];
+    if (node.type === 'verse' && node.number === verseNumber) return contentJsonPath(nodeIndexes);
+    return findVersePath(node.content ?? [], verseNumber, nodeIndexes);
+  }, undefined);
+}
+
 /** Send one request to an editor's web view controller. */
 export async function sendToEditorController<T = unknown>(
   editorId: string,
@@ -195,6 +226,29 @@ export async function waitForEditorControllerMethod(
     webViewControllerMethod(editorId, method),
     WEBSOCKET_PORT,
     LAUNCH_PHASE_TIMEOUT_MS,
+  );
+}
+
+/**
+ * Scroll group A's id in the `ScrollGroupService`'s numeric scheme (`0`) — the group
+ * `navigateToolbarBcv` drives, and the one a freshly opened editor is subscribed to by default.
+ */
+const SCROLL_GROUP_A_ID = 0;
+
+/**
+ * Scroll group A's current reference, read from the app-global scroll group service — the same
+ * service an editor's own scroll-group state is chained to. A caller that just navigated through
+ * `navigateToolbarBcv` and needs the editor to already be showing that reference before sending a
+ * position command (rather than a DIFFERENT one, which the editor applies only after a deferred
+ * scroll — see `standard-view-annotation-positions.spec.ts`'s chapter-end step) polls this until it
+ * matches.
+ */
+export async function getScrollGroupRef(): Promise<Partial<SerializedVerseRef> | undefined> {
+  return sendPapiRequestOnce<Partial<SerializedVerseRef> | undefined>(
+    'object:ScrollGroupService.getScrRef',
+    [SCROLL_GROUP_A_ID],
+    WEBSOCKET_PORT,
+    REQUEST_TIMEOUT_MS,
   );
 }
 

@@ -29,15 +29,23 @@
  *   grace\w*` span — while an idle-settle clock can still collapse that edit to its bare `|grace`
  *   form at any moment — still marks exactly the RIGHT word LATER IN THE SAME SENTENCE: the harder
  *   case a word in a different, untouched paragraph would pass even if this were broken.
+ * - Once that pending edit settles, `setAnnotation` over the settled attribute's value (`['lemma']
+ *   propertyOffset …`) and over a verse number (`['number'] propertyOffset …`) holds each
+ *   annotation on those display bytes — never wrapping them in a mark — and leaves the document
+ *   untouched.
+ * - A position at the very end of the chapter's last text resolves to that text's own path and
+ *   offset, not to the preceding verse's own `['number']` location.
  *
- * The last two talk to the editor through the scripture editor's web view controller network object
- * (`object:webViewController<webViewId>.…`), the same surface extensions use.
+ * Every scenario that calls `setAnnotation` or `selectRange` talks to the editor through the
+ * scripture editor's web view controller network object (`object:webViewController<webViewId>.…`),
+ * the same surface extensions use.
  *
  * ONE test() per spec file on purpose: the isolated fixture is test-scoped, and a SECOND Electron
  * instance launched against the shared webpack renderer dev server has a documented failure mode
  * where new dock tabs never render (see isolated.fixture.ts). The scenarios run as test.step()s
- * sharing the one instance and one loaded chapter, in an order that leaves the tree-splitting
- * annotation and the typed-content scenario until last.
+ * sharing the one instance and one loaded chapter, in an order that types content only after the
+ * read-only scenarios, then addresses what that typing settles to, and the chapter's own last
+ * position, last of all.
  *
  * Runs against an isolated project root, so the only project is the bundled sample WEB (installed
  * by the C# backend into the empty root): `npm run test:e2e:isolated
@@ -47,10 +55,13 @@ import { FrameLocator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   chapterLocation,
+  chapterPropertyLocation,
   contentJsonPath,
   findCharSpanText,
+  findVersePath,
   findVerseText,
   getChapterUsj,
+  getScrollGroupRef,
   readEditorSelection,
   sendToEditorController,
   waitForEditorControllerMethod,
@@ -90,6 +101,8 @@ const EXPECTED_CHAR_TEXT =
 const ANNOTATION_TYPE = 'spelling';
 const ANNOTATION_ID = 'settled-offset-probe';
 const PENDING_ANNOTATION_ID = 'pending-attribute-word-after';
+const ATTRIBUTE_ANNOTATION_ID = 'attribute-value-probe';
+const VERSE_ANNOTATION_ID = 'verse-number-probe';
 
 /** The display separator the editor places between an opening marker glyph and its content. */
 const NBSP = '\u00a0';
@@ -114,6 +127,10 @@ const SPAN_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 5 };
 const SPAN_INSERTION_ANCHOR = 'servants';
 /** The word after the span, in the SAME sentence, that `setAnnotation` addresses while pending. */
 const WORD_AFTER_TARGET = 'Whatever';
+
+/** John 2:25, the chapter's last verse, addressed by its own reference for the chapter-end step. */
+const LAST_VERSE_REFERENCE = 'John 2:25';
+const LAST_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 25 };
 
 test.use({
   interfaceMode: 'power',
@@ -376,6 +393,100 @@ test.describe('scripture editor settled positions', () => {
       // Exact, not `toContainText`: the pending edit sits earlier in the SAME sentence, so any
       // offset this location resolves wrong marks a neighboring word instead of the one addressed.
       expect(await annotatedMark.textContent()).toBe(WORD_AFTER_TARGET);
+    });
+
+    await test.step('annotations on display bytes (a settled attribute value, a verse number) are held on those bytes and leave them intact', async () => {
+      // The previous step typed `\w grace\w*` then `|lemma="grace"` in front of "servants"; that
+      // settles to `\w grace|grace\w*`. Wait for the settled run on screen.
+      await expect(editorInput).toContainText(`${SPAN_WORD}|${SPAN_WORD}\\${WORD_MARKER}*`, {
+        timeout: 30_000,
+      });
+      const verseFiveText = findVerseText(chapterUsj.content ?? [], '5');
+      if (!verseFiveText) throw new Error("No plain text found for John 2:5 in the chapter's USJ");
+      const textIndex = verseFiveText.indexes.at(-1);
+      if (textIndex === undefined) throw new Error('findVerseText returned an empty index chain');
+      const wSpanPath = contentJsonPath([...verseFiveText.indexes.slice(0, -1), textIndex + 1]);
+
+      await sendToEditorController(editorId, 'setAnnotation', [
+        {
+          start: chapterPropertyLocation(SPAN_VERSE_REF, `${wSpanPath}['lemma']`, 0),
+          end: chapterPropertyLocation(SPAN_VERSE_REF, `${wSpanPath}['lemma']`, SPAN_WORD.length),
+        },
+        ANNOTATION_TYPE,
+        ATTRIBUTE_ANNOTATION_ID,
+      ]);
+      const attributeHolder = editorInput.locator(`.annotationId-${ATTRIBUTE_ANNOTATION_ID}`);
+      await expect(attributeHolder).toHaveCount(1, { timeout: 30_000 });
+      await expect(attributeHolder).toHaveClass(/(^|\s)display-annotation(\s|$)/);
+      // Held on the run itself, never a <mark> around (part of) it: the run stays whole.
+      await expect(editorInput.locator(`mark.annotationId-${ATTRIBUTE_ANNOTATION_ID}`)).toHaveCount(
+        0,
+      );
+      expect(await attributeHolder.textContent()).toBe(`|${SPAN_WORD}`);
+      await expect(editorInput).toContainText(`${SPAN_WORD}|${SPAN_WORD}\\${WORD_MARKER}*`);
+
+      const versePath = findVersePath(chapterUsj.content ?? [], String(TARGET_VERSE_REF.verseNum));
+      if (!versePath) throw new Error('No verse 4 marker in the chapter USJ');
+      await sendToEditorController(editorId, 'setAnnotation', [
+        {
+          start: chapterPropertyLocation(TARGET_VERSE_REF, `${versePath}['number']`, 0),
+          end: chapterPropertyLocation(TARGET_VERSE_REF, `${versePath}['number']`, 1),
+        },
+        ANNOTATION_TYPE,
+        VERSE_ANNOTATION_ID,
+      ]);
+      const verseHolder = editorInput.locator(`.annotationId-${VERSE_ANNOTATION_ID}`);
+      await expect(verseHolder).toHaveCount(1, { timeout: 30_000 });
+      await expect(verseHolder).toHaveClass(/(^|\s)display-annotation(\s|$)/);
+      // The verse glyph may render its separator as an NBSP; compare against a plain space so the
+      // assertion does not depend on which one the rendered text carries.
+      const verseHolderText = (await verseHolder.textContent())?.replaceAll(NBSP, ' ');
+      expect(verseHolderText?.startsWith('\\v 4')).toBe(true);
+    });
+
+    await test.step("a position at the end of the chapter's last text resolves and reports exactly", async () => {
+      const lastVerseText = findVerseText(chapterUsj.content ?? [], '25');
+      if (!lastVerseText) throw new Error("No plain text found for John 2:25 in the chapter's USJ");
+      const { jsonPath: lastTextPath, text: lastText } = lastVerseText;
+
+      // Navigate to the SAME verseRef the position below addresses, and wait for the app-global
+      // scroll group — which this freshly opened editor is subscribed to by default, and which
+      // `navigateToolbarBcv` drives — to confirm the commit, before sending any position command.
+      // A `selectRange` whose verseRef differs from the web view's OWN current scrRef is applied
+      // only after a deferred scroll, and a second scrRef change before that deferred apply runs
+      // can silently drop the range (an unreproduced host race). Matching the verseRef up front
+      // keeps the editor already on this reference, so the command below applies immediately
+      // instead of through that deferred path.
+      await navigateToolbarBcv(mainPage, LAST_VERSE_REFERENCE);
+      await expect.poll(getScrollGroupRef, { timeout: 30_000 }).toMatchObject(LAST_VERSE_REF);
+
+      const endLocation = chapterLocation(LAST_VERSE_REF, lastTextPath, lastText.length);
+      await sendToEditorController(editorId, 'selectRange', [
+        { start: endLocation, end: endLocation },
+      ]);
+      await expect
+        .poll(async () => (await readSelection())?.start?.documentLocation, { timeout: 30_000 })
+        .toEqual({ jsonPath: lastTextPath, offset: lastText.length });
+
+      const pollLastVerseText = async (expectedText: string) => {
+        await expect
+          .poll(
+            async () => {
+              const saved = await getChapterUsj(LAST_VERSE_REF);
+              return findVerseText(saved.content ?? [], '25')?.text;
+            },
+            { timeout: 30_000 },
+          )
+          .toBe(expectedText);
+      };
+
+      await editorInput.pressSequentially('!');
+      // Exact, not `endsWith`: proves the caret was really at the end, with nothing after it.
+      await pollLastVerseText(`${lastText}!`);
+
+      // Undo the probe so later steps and specs see the original text.
+      await editorInput.press('Backspace');
+      await pollLastVerseText(lastText);
     });
   });
 });
