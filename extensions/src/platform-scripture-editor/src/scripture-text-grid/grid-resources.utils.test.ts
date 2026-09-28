@@ -113,27 +113,31 @@ describe('toGridResources with an install lookup', () => {
   });
 
   it('resolves a DBL reference from disk when the catalog has no row for it', () => {
-    expect(toGridResources([dbl('uid-1')], [], answered({ 'uid-1': 'PROJ1' }))).toEqual([
-      { resourceId: 'uid-1', projectId: 'PROJ1', label: 'DBL uid-1' },
-    ]);
+    expect(
+      toGridResources([dbl('uid-1')], [], { installLookup: answered({ 'uid-1': 'PROJ1' }) }),
+    ).toEqual([{ resourceId: 'uid-1', projectId: 'PROJ1', label: 'DBL uid-1' }]);
   });
 
   it('prefers the disk answer over a catalog row whose installed flag lags', () => {
     const rows = [cached({ dblEntryUid: 'uid-1', installed: false, projectId: '' })];
-    expect(toGridResources([dbl('uid-1')], rows, answered({ 'uid-1': 'PROJ1' }))[0].projectId).toBe(
-      'PROJ1',
-    );
-  });
-
-  it('matches uids case-insensitively', () => {
     expect(
-      toGridResources([dbl('ABCDEF0123456789')], [], answered({ abcdef0123456789: 'PROJ1' }))[0]
+      toGridResources([dbl('uid-1')], rows, { installLookup: answered({ 'uid-1': 'PROJ1' }) })[0]
         .projectId,
     ).toBe('PROJ1');
   });
 
+  it('matches uids case-insensitively', () => {
+    expect(
+      toGridResources([dbl('ABCDEF0123456789')], [], {
+        installLookup: answered({ abcdef0123456789: 'PROJ1' }),
+      })[0].projectId,
+    ).toBe('PROJ1');
+  });
+
   it('does not resolve a uid that names an inherited Object member', () => {
-    expect(toGridResources([dbl('toString')], [], answered({ other: 'P' }))[0]).toEqual({
+    expect(
+      toGridResources([dbl('toString')], [], { installLookup: answered({ other: 'P' }) })[0],
+    ).toEqual({
       resourceId: 'toString',
       projectId: undefined,
       label: 'DBL toString',
@@ -142,51 +146,64 @@ describe('toGridResources with an install lookup', () => {
   });
 
   it('treats an empty project id on disk as not installed', () => {
-    expect(toGridResources([dbl('uid-1')], [], answered({ 'uid-1': '' }))[0].unresolvedReason).toBe(
-      'notInstalled',
-    );
+    expect(
+      toGridResources([dbl('uid-1')], [], { installLookup: answered({ 'uid-1': '' }) })[0]
+        .unresolvedReason,
+    ).toBe('notInstalled');
   });
 
   it('reports notInstalled when the disk answer does not name the uid', () => {
     expect(
-      toGridResources([dbl('uid-1')], [], answered({ 'uid-2': 'PROJ2' }))[0].unresolvedReason,
+      toGridResources([dbl('uid-1')], [], { installLookup: answered({ 'uid-2': 'PROJ2' }) })[0]
+        .unresolvedReason,
     ).toBe('notInstalled');
   });
 
   it('reports checking while the lookup is pending and no catalog row answers', () => {
-    expect(toGridResources([dbl('uid-1')], [], { status: 'pending' })[0].unresolvedReason).toBe(
-      'checking',
-    );
+    expect(
+      toGridResources([dbl('uid-1')], [], { installLookup: { status: 'pending' } })[0]
+        .unresolvedReason,
+    ).toBe('checking');
   });
 
   it("keeps a catalog row's not-installed answer while the lookup is pending", () => {
     const rows = [cached({ dblEntryUid: 'uid-1', installed: false, projectId: '' })];
-    expect(toGridResources([dbl('uid-1')], rows, { status: 'pending' })[0].unresolvedReason).toBe(
-      'notInstalled',
-    );
+    expect(
+      toGridResources([dbl('uid-1')], rows, { installLookup: { status: 'pending' } })[0]
+        .unresolvedReason,
+    ).toBe('notInstalled');
   });
 
   it('reports unverified when the catalog failed and the disk could not answer', () => {
     expect(
-      toGridResources([dbl('uid-1')], [], { status: 'unanswered' }, true)[0].unresolvedReason,
+      toGridResources([dbl('uid-1')], [], {
+        installLookup: { status: 'unanswered' },
+        hasCatalogError: true,
+      })[0].unresolvedReason,
     ).toBe('unverified');
   });
 
   it('reports notInstalled when the catalog did not fail and the disk could not answer', () => {
     expect(
-      toGridResources([dbl('uid-1')], [], { status: 'unanswered' }, false)[0].unresolvedReason,
+      toGridResources([dbl('uid-1')], [], {
+        installLookup: { status: 'unanswered' },
+        hasCatalogError: false,
+      })[0].unresolvedReason,
     ).toBe('notInstalled');
   });
 
   it("keeps a catalog row's not-installed answer when the disk could not answer", () => {
     const rows = [cached({ dblEntryUid: 'uid-1', installed: false, projectId: '' })];
     expect(
-      toGridResources([dbl('uid-1')], rows, { status: 'unanswered' }, true)[0].unresolvedReason,
+      toGridResources([dbl('uid-1')], rows, {
+        installLookup: { status: 'unanswered' },
+        hasCatalogError: true,
+      })[0].unresolvedReason,
     ).toBe('notInstalled');
   });
 
   it('never touches a project reference', () => {
-    expect(toGridResources([project('p1')], [], { status: 'pending' })).toEqual([
+    expect(toGridResources([project('p1')], [], { installLookup: { status: 'pending' } })).toEqual([
       { resourceId: 'p1', projectId: 'p1', label: 'Proj p1' },
     ]);
   });
