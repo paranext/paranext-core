@@ -10,7 +10,7 @@ import {
  *
  * - `unavailable`: not installed as far as the grid can tell: a catalog row or the disk scan said so,
  *   or the catalog is healthy and the scan had no answer. Shows "Resource not installed".
- * - `downloading`: data is still loading — shows a spinner.
+ * - `downloading`: data is still loading, or the install check is still in flight — shows a spinner.
  * - `failed`: data loaded but returned a PlatformError — shows "Resource unavailable" + "Download
  *   failed".
  * - `bookNotAvailable`: the resource simply does not contain the current book. Distinct from `failed`

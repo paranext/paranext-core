@@ -2,9 +2,7 @@ import type React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { CatalogRetryBanner } from './catalog-retry-banner.component';
-
-const CATALOG_ERROR_KEY = '%webView_scriptureTextGrid_catalogUnavailable%';
-const CATALOG_RETRY_KEY = '%webView_scriptureTextGrid_retry%';
+import { CATALOG_ERROR_KEY, CATALOG_RETRY_KEY } from './catalog-retry-banner.const';
 
 /**
  * The inline notice shown above the Text Collection grid's rows when the DBL catalog could not be

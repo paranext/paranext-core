@@ -84,7 +84,9 @@ describe('resolveDblCatalog', () => {
   it('rejects when a configured provider delivers an empty catalog', async () => {
     const provider = makeProvider({ getDblResources: vi.fn(async () => []) });
 
-    await expect(resolveDblCatalog(provider)).rejects.toThrow('returned no resources');
+    await expect(resolveDblCatalog(provider)).rejects.toThrow(
+      'The DBL resource catalog fetch returned no compatible resources',
+    );
   });
 });
 
