@@ -320,19 +320,20 @@ describe('resolveFootnotesPaneAutoVisibility', () => {
   });
 });
 
+/** The caret position a focus-out captured, for the selection-restoring helpers below. */
+const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
+
+/** Editor stub exposing only the selection and focus methods the selection-restoring helpers use. */
+function makeEditor(liveSelection: SelectionRange | undefined, selectedParaMarker?: string) {
+  return {
+    getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
+    setSelection: vi.fn(),
+    getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
+    focus: vi.fn(),
+  };
+}
+
 describe('restoreSelectionIfLost', () => {
-  const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
-
-  /** Editor stub exposing only the selection methods the helper consults. */
-  function makeEditor(liveSelection: SelectionRange | undefined, selectedParaMarker?: string) {
-    return {
-      getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
-      setSelection: vi.fn(),
-      getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
-      focus: vi.fn(),
-    };
-  }
-
   it('restores the snapshot when the live selection is gone', () => {
     const editor = makeEditor(undefined);
 
@@ -380,18 +381,6 @@ describe('restoreSelectionIfLost', () => {
 });
 
 describe('returnFocusToEditor', () => {
-  const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
-
-  /** Editor stub exposing only the methods the helper consults. */
-  function makeEditor(liveSelection: SelectionRange | undefined, selectedParaMarker?: string) {
-    return {
-      getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
-      setSelection: vi.fn(),
-      getSelectedParaMarker: vi.fn((): string | undefined => selectedParaMarker),
-      focus: vi.fn(),
-    };
-  }
-
   it('restores the snapshot before focusing, when the live selection is gone', () => {
     // `focus()` falls back to selecting the document end when the editor-state selection is null, so
     // the snapshot has to land first or the fallback wins.

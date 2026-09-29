@@ -3015,11 +3015,14 @@ span.read img {
 }
 
 /* Paragraph-marker selection (paragraph-structure view). The editor puts `psc-para-marker-selected`
-   on the paragraph whose gutter marker is the selection. Selection gets a
-   channel of its own, per adr-list-selection-on-a-dedicated-visual-channel: a surface fill plus a
-   4px leading bar, never the active-text focus box (which owns this element's ::after), and no
-   pseudo-element. The gutter lies outside the paragraph's box — the glyph is absolutely positioned
-   into .editor-input's padding — so the fill and bar are outer box-shadows offset toward
+   on the paragraph whose gutter marker is the selection. Selection gets a channel of its own, as in
+   adr-list-selection-on-a-dedicated-visual-channel (a 4px leading bar, never the active-text focus
+   box, which owns this element's ::after, and no pseudo-element), but diverges from that ADR in two
+   ways. It adds a row fill, which the ADR rejects for comment cards: those backgrounds carry status,
+   whereas a paragraph row's background carries none. And the bar is a box-shadow rather than a
+   logical border-inline-start, because the gutter lies outside the paragraph's box — the glyph is
+   absolutely positioned into .editor-input's padding — where no border can reach; box-shadow has no
+   logical form, hence the explicit RTL rule below. Both layers are outer box-shadows offset toward
    inline-start by the gutter width plus the paragraph's own indent compensation; the fill layer
    stops 4px short, which is the bar. `--foreground` is the bar token by measured contrast (>= 3:1
    against --background and --accent in every built-in theme), pinned by
@@ -3039,8 +3042,18 @@ span.read img {
 }
 
 .psc-gutter-markers .psc-para-marker-selected > .marker:not(.verse):not(.chapter):first-child {
-  color: var(--foreground);
+  color: var(--accent-foreground);
   font-weight: 700;
+}
+
+/* Forced colors (e.g. Windows high contrast) drop box-shadow and replace the --accent fill with the
+   system background, which would leave only the bold glyph to mark the selection. An outline in the
+   system Highlight colour survives there and, drawn around the whole paragraph box, needs no
+   direction-specific rule. */
+@media (forced-colors: active) {
+  .psc-gutter-markers .psc-para-marker-selected {
+    outline: 2px solid Highlight;
+  }
 }
 
 /* ── Active text focus box ────────────────────────────────────────────────────

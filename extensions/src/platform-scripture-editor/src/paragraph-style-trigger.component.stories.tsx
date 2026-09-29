@@ -1,11 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import {
+  Button,
   MARKER_MENU_STRING_KEYS,
   SHRINK_STEP,
   ShrinkStepOverride,
   type MarkerMenuItem,
 } from 'platform-bible-react';
-import { useState, type ComponentProps, type ReactNode } from 'react';
+import { useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import {
   ParagraphStyleTrigger,
@@ -25,7 +26,8 @@ import {
  * `ShrinkStepOverride` so every step is reachable at any browser width.
  *
  * **Try it**: click the trigger to open the marker menu, and hover the disabled story to see why
- * the paragraph style cannot be changed.
+ * the paragraph style cannot be changed. The editor-request story opens the menu the way Enter or
+ * Alt+Down on a selected paragraph marker does, without a click on the trigger.
  */
 const meta: Meta<typeof ParagraphStyleTrigger> = {
   title: 'Bundled Extensions/platform-scripture-editor/ParagraphStyleTrigger',
@@ -100,6 +102,45 @@ function Trigger({ blockMarker, isStructureProtected = false, styleName }: Parti
 }
 
 /**
+ * Renders the trigger beside a stand-in for the editor: a button that opens the menu through the
+ * controlled `isMenuOpen`, as the web view does when the editor's `onParaMarkerMenuRequest` fires,
+ * and a text box that takes focus back whenever the menu closes normally.
+ */
+function EditorRequestTrigger({
+  blockMarker,
+  isStructureProtected = false,
+  styleName,
+}: Partial<TriggerArgs>) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // The ref needs to start out with null for it to work as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  return (
+    <div className="tw:flex tw:flex-col tw:items-start tw:gap-2">
+      <ParagraphStyleTrigger
+        blockMarker={blockMarker}
+        isStructureProtected={isStructureProtected}
+        localizedStrings={localizedStrings}
+        markerMenuItems={markerMenuItems}
+        styleName={styleName}
+        isMenuOpen={isMenuOpen}
+        onMenuOpenChange={setIsMenuOpen}
+        onReturnFocusToEditor={() => editorRef.current?.focus()}
+      />
+      <textarea
+        ref={editorRef}
+        aria-label="Stand-in editor"
+        className="tw:w-56 tw:rounded-sm tw:border tw:p-1 tw:text-sm"
+        defaultValue="Focus returns here when the menu closes."
+      />
+      <Button size="sm" variant="secondary" onClick={() => setIsMenuOpen(true)}>
+        Open from the editor
+      </Button>
+    </div>
+  );
+}
+
+/**
  * Stands in for the toolbar's start zone: a bounded box that clips its overflow, which is what the
  * trigger's width floor and the label's ellipsis are negotiating against.
  */
@@ -166,6 +207,15 @@ export const MarkerWidthsAtMinimum: Story = {
       </div>
     </ShrinkStepOverride>
   ),
+};
+
+/**
+ * The menu opened by the editor rather than by a click on the trigger, as happens on Enter or
+ * Alt+Down with a paragraph marker selected. Picking an item or pressing Escape returns focus to
+ * the stand-in editor; with structure protected, the request is ignored.
+ */
+export const OpenedFromTheEditor: Story = {
+  render: (args) => <EditorRequestTrigger {...args} />,
 };
 
 /**

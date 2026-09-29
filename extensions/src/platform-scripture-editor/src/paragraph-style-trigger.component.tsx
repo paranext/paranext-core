@@ -12,6 +12,7 @@ import {
   useShrinkStepValue,
 } from 'platform-bible-react';
 import { useEffect, useMemo, useRef, type ElementRef } from 'react';
+import { wrapMarkerMenuItemsWithClose } from './marker-menu.utils';
 import { ParagraphStyleLabel } from './paragraph-style-label.component';
 
 const ARIA_LABEL_KEY = '%webView_platformScriptureEditor_paragraphSelection_ariaLabel%';
@@ -136,20 +137,9 @@ export function ParagraphStyleTrigger({
   // eslint-disable-next-line no-null/no-null
   const triggerRef = useRef<ElementRef<typeof Button>>(null);
 
-  // This is a single-select control, so picking a marker must close the menu. `MarkerMenu` wires
-  // `onSelect` straight to `item.action` and knows nothing about its host's open state, so each
-  // action is wrapped here, as `CharacterMarkerControl` does.
+  // This is a single-select control, so picking a marker must close the menu.
   const closingMarkerMenuItems = useMemo(
-    () =>
-      markerMenuItems.map(
-        (item): MarkerMenuItem => ({
-          ...item,
-          action: () => {
-            item.action();
-            onMenuOpenChange(false);
-          },
-        }),
-      ),
+    () => wrapMarkerMenuItemsWithClose(markerMenuItems, () => onMenuOpenChange(false)),
     [markerMenuItems, onMenuOpenChange],
   );
 

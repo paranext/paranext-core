@@ -1416,7 +1416,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // again makes that selection live for the next key. Opening the popover can also null a caret
   // selection the same way the paragraph switcher does above, so the restore has to run before the
   // focus, not just a plain `editorRef.current?.focus()`.
-  const focusEditor = useCallback(
+  const restoreCaretAndFocusEditor = useCallback(
     () => returnFocusToEditor(editorRef.current, lastFocusOutSelectionRef.current),
     [],
   );
@@ -3958,7 +3958,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   localizedStrings={localizedStrings}
                   isMenuOpen={isParagraphMenuOpen}
                   onMenuOpenChange={setIsParagraphMenuOpen}
-                  onReturnFocusToEditor={focusEditor}
+                  onReturnFocusToEditor={restoreCaretAndFocusEditor}
                 />
               </>
             )}

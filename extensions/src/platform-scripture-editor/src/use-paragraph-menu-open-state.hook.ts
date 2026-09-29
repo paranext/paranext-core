@@ -15,6 +15,19 @@ export type UseParagraphMenuOpenStateOptions = {
   notifyStructureProtected: () => void;
 };
 
+/** Return type of {@link useParagraphMenuOpenState}. */
+export type ParagraphMenuOpenState = {
+  /** Whether the toolbar paragraph menu is open; pass to `ParagraphStyleTrigger`'s `isMenuOpen`. */
+  isMenuOpen: boolean;
+  /** Opens or closes the menu unconditionally; pass to `ParagraphStyleTrigger`'s `onMenuOpenChange`. */
+  setIsMenuOpen: (isOpen: boolean) => void;
+  /**
+   * Opens the menu for the editor's keyboard request, or reports the structure lock if it refuses
+   * one; pass to `<Editorial onParaMarkerMenuRequest>`.
+   */
+  requestMenuFromEditor: () => void;
+};
+
 /**
  * Holds whether the toolbar paragraph menu is open, and turns the editor's keyboard request (Enter
  * or Alt+Down on a selected paragraph marker, delivered as `onParaMarkerMenuRequest`) into opening
@@ -33,7 +46,7 @@ export function useParagraphMenuOpenState({
   isStructureProtected,
   hasBlockMarker,
   notifyStructureProtected,
-}: UseParagraphMenuOpenStateOptions) {
+}: UseParagraphMenuOpenStateOptions): ParagraphMenuOpenState {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isMenuAvailable = !isReadOnly && !isStructureProtected && hasBlockMarker;
 

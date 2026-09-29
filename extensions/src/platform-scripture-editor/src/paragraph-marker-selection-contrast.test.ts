@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 // WCAG 2.2 non-text contrast minimum (SC 1.4.11). The selected-row bar is a UI indicator, not text.
 const MIN_NON_TEXT_CONTRAST = 3;
+// WCAG 2.2 text contrast minimum (SC 1.4.3). The selected marker glyph is text.
+const MIN_TEXT_CONTRAST = 4.5;
 
 type ThemeFile = Record<string, Record<string, { cssVariables: Record<string, string> }>>;
 
@@ -34,6 +36,14 @@ const scss = readFileSync(path.resolve(__dirname, '_usj-nodes.scss'), 'utf-8').r
   '',
 );
 
+/** The declarations of the rule with exactly this selector, or undefined if there is none. */
+const block = (selector: string) =>
+  scss.match(
+    new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`),
+  )?.[1];
+
+// `--foreground` is the bar token because it is the one that clears the minimum everywhere:
+// `--primary` and `--ring`, the obvious alternatives, each fall short in at least one built-in theme.
 describe('selected paragraph marker bar contrast', () => {
   it('found real themes to check', () => {
     // Guards the sweep: a filter that excluded every theme would pass every check by running none.
@@ -43,8 +53,9 @@ describe('selected paragraph marker bar contrast', () => {
   it('ties the sweep to the token the stylesheet actually paints the bar with', () => {
     // The bar is the second (lower) box-shadow layer; the fill `--accent` layer covers all of it but
     // the leading 4px. A change to another token there fails here instead of passing silently.
-    const ltr = scss.match(/\.psc-gutter-markers \.psc-para-marker-selected\s*\{([^}]*)\}/)?.[1];
-    expect(ltr).toMatch(/box-shadow:[^;]*var\(--accent\)\s*,[^;]*var\(--foreground\)\s*;/);
+    const bar = /box-shadow:[^;]*var\(--accent\)\s*,[^;]*var\(--foreground\)\s*;/;
+    expect(block('.psc-gutter-markers .psc-para-marker-selected')).toMatch(bar);
+    expect(block(".psc-gutter-markers[dir='rtl'] .psc-para-marker-selected")).toMatch(bar);
   });
 
   // The bar sits over the fill's neighbour: the editor surface (`--background`) at its outer edge
@@ -60,20 +71,25 @@ describe('selected paragraph marker bar contrast', () => {
       });
     });
   });
+});
 
-  it('rejects --primary, which fails in paratext-dark', () => {
-    const theme = realThemes.find((candidate) => candidate.name === 'paratext-dark');
-    if (!theme) throw new Error('paratext-dark theme not found in themes.data.json');
+describe('selected paragraph marker glyph contrast', () => {
+  it('ties the sweep to the token the stylesheet actually paints the glyph with', () => {
     expect(
-      chroma.contrast(chroma(theme.cssVariables.primary), chroma(theme.cssVariables.background)),
-    ).toBeLessThan(MIN_NON_TEXT_CONTRAST);
+      block(
+        '.psc-gutter-markers .psc-para-marker-selected > .marker:not(.verse):not(.chapter):first-child',
+      ),
+    ).toMatch(/(?:^|[\s;])color:\s*var\(--accent-foreground\)\s*;/);
   });
 
-  it('rejects --ring, which fails in paratext-light', () => {
-    const theme = realThemes.find((candidate) => candidate.name === 'paratext-light');
-    if (!theme) throw new Error('paratext-light theme not found in themes.data.json');
-    expect(
-      chroma.contrast(chroma(theme.cssVariables.ring), chroma(theme.cssVariables.background)),
-    ).toBeLessThan(MIN_NON_TEXT_CONTRAST);
+  // The glyph sits on the row fill (`--accent`).
+  realThemes.forEach(({ name, cssVariables }) => {
+    it(`clears ${MIN_TEXT_CONTRAST}:1 against --accent in ${name}`, () => {
+      const contrast = chroma.contrast(
+        chroma(cssVariables['accent-foreground']),
+        chroma(cssVariables.accent),
+      );
+      expect(contrast).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
+    });
   });
 });

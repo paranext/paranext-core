@@ -235,6 +235,27 @@ describe('ParagraphStyleTrigger menu', () => {
     expect(screen.getByRole('button', { name: TRIGGER_NAME })).not.toHaveFocus();
   });
 
+  it('closes and returns focus to the editor when an item is picked with Enter', async () => {
+    const onReturnFocusToEditor = vi.fn();
+    PARAGRAPH_ITEM_ACTION.mockClear();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Editor asks for the menu' }));
+    const search = screen.getByRole('combobox');
+    await waitFor(() => expect(search).toHaveFocus());
+    // cmdk highlights the first row on open, which is the one Enter picks.
+    expect(screen.getByRole('option', { name: /Paragraph/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    expect(PARAGRAPH_ITEM_ACTION).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await waitFor(() => expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: TRIGGER_NAME })).not.toHaveFocus();
+  });
+
   it('closes on a pick from a menu the toolbar button opened, too', async () => {
     const onReturnFocusToEditor = vi.fn();
     render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
@@ -260,6 +281,33 @@ describe('ParagraphStyleTrigger menu', () => {
     await waitFor(() => expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1));
     expect(queryMenu()).not.toBeInTheDocument();
     expect(trigger).not.toHaveFocus();
+  });
+
+  it('returns focus to the editor when Escape dismisses a menu the editor opened', async () => {
+    const onReturnFocusToEditor = vi.fn();
+    render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Editor asks for the menu' }));
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveFocus());
+
+    pressEscape();
+
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await waitFor(() => expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1));
+  });
+
+  it('returns focus to the editor when structure protection turns on while the menu is open', async () => {
+    // The menu closes because it stopped being available, not because the user went elsewhere, so
+    // focus must not be left in a menu that no longer exists.
+    const onReturnFocusToEditor = vi.fn();
+    const { rerender } = render(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Editor asks for the menu' }));
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveFocus());
+
+    rerender(<MenuHarness onReturnFocusToEditor={onReturnFocusToEditor} isStructureProtected />);
+
+    await waitFor(() => expect(queryMenu()).not.toBeInTheDocument());
+    await flushZeroDelayTimers();
+    expect(onReturnFocusToEditor).toHaveBeenCalledTimes(1);
   });
 
   it('leaves focus where the user put it when the menu closes because they interacted outside it', async () => {
