@@ -915,7 +915,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Date:** 2026-08-27
 - **Status:** Accepted, amended 2026-09-18 — the Text Collection's follow gate is now decided by
   project kind (`platform.isPublished`), not editability, and the editor's gate on Find's re-point
-  is removed, so Find follows every editor-column switch.
+  is removed, so Find follows every editor-column switch. Amended again 2026-09-29 — the Text
+  Collection now follows a published resource too, and never binds its settings to one; see the
+  superseding note on the "published resources are not followed" bullet.
 - **Context:** Simple mode's Column 3 holds exactly five panels — Bible Texts, Commentaries,
   Comments, the Text Collection, and Find — pinned by `shipped-simple-layout-order.test.ts`. A
   project switch re-pointed three of them explicitly (`openOrUpdateRelatedPanels` sends two
@@ -1048,6 +1050,24 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     trip through a resource reloads Find twice, clearing its results, and an `Editable=F` project now
     reloads the grid. How an unbound grid gets its first project, and what following costs
     in Power mode, is recorded in `adr-active-editor-project-is-a-window-data-type`.
+    *(Superseded 2026-09-29 for the Text Collection, PT-4686: `updateRelatedTextCollectionPanel`
+    now follows every project, published resources included. Staying put showed the outgoing
+    project's texts beside a resource they don't belong to, and kept offering them in the project
+    picker. "An empty panel" was also not the only cost of following: the grid writes into the
+    project it is bound to — `initializeTextCollectionOverlay` on mount, and every View Options
+    change — through `Extensions/UserSettings-<user>.xml` in that project's folder, and a resource
+    advertises the text-connection interface, so a plain follow would have written into the
+    resource's install folder. So the grid never binds a published resource:
+    `useTextCollectionSources` asks `useTextCollectionBinding`, which binds a project only once its
+    own `platform.isPublished` reading says it is not one, leaving a resource with no
+    `textConnectionPdp` for any write to go through. The grid then says resources have no Text
+    Collection and publishes no navigable projects. That also covers the other path onto a
+    resource, an unbound grid seeding itself from `ActiveEditorProjectId`. The Comments panel
+    likewise says resources have no comments instead of waiting on a comments provider a resource
+    never registers. The cost is a reload of the grid on each switch onto or off a resource. The
+    Checks side panel still stays on the translation project, for its own reason: a resource is not
+    something the user checks. The rest of this bullet — `isPublished` rather than `isEditable`, the
+    outgoing sync, Find — still holds.)*
   - **Added 2026-09-18 — what a followed `Editable=F` project's grid offers is unchecked.** Whether
     the Text Collection exposes controls that write to such a project is an open question, tracked on
     PT-4724, which should first settle where to run that check: `default-layout-supplement.json` lists

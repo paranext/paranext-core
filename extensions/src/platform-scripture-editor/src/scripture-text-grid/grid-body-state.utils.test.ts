@@ -11,9 +11,24 @@ const SETTLED_EMPTY: ScriptureTextGridBodyStateInput = {
   hasSources: true,
   hasCatalogError: false,
   isLoading: false,
+  isPublishedResource: false,
 };
 
 describe('getGridBodyState', () => {
+  it('says a published resource has no Text Collection, whatever else is going on', () => {
+    // Nothing is bound for a resource, so its sources never arrive and the catalog may still be
+    // loading or failed; neither may hide the answer behind a spinner or a retry.
+    expect(
+      getGridBodyState({
+        ...SETTLED_EMPTY,
+        hasSources: false,
+        isLoading: true,
+        hasCatalogError: true,
+        isPublishedResource: true,
+      }),
+    ).toBe('resource');
+  });
+
   it('shows the grid when there are rows', () => {
     expect(getGridBodyState({ ...SETTLED_EMPTY, hasRows: true })).toBe('grid');
   });

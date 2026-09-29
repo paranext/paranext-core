@@ -2620,13 +2620,17 @@ describe('finalizeProjectSwitch', () => {
     );
   });
 
-  it('does not re-point the Text Collection at a published resource', async () => {
+  it('re-points the Text Collection at a published resource too', async () => {
     // The same rule as the editor-column switch, applied through the same function.
     const { papi, mockReloadWebView } = createFinalizeMockPapi(PUBLISHED_RESOURCE);
 
     await finalizeProjectSwitch(papi, 'resource-1', undefined);
 
-    expect(mockReloadWebView).not.toHaveBeenCalled();
+    expect(mockReloadWebView).toHaveBeenCalledWith(
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      GRID_WEBVIEW_ID,
+      { projectId: 'resource-1', bringToFront: false },
+    );
   });
 
   it('re-points the Text Collection before the shared layout picks the front tab', async () => {
@@ -3706,103 +3710,19 @@ describe('updateRelatedTextCollectionPanel', () => {
     expect(mockError).toHaveBeenCalledWith(expect.stringContaining('could not establish'));
   });
 
-  it('does not follow a published resource', async () => {
-    // A published resource has no text collection of its own, so re-pointing the grid at it would
-    // cost a reload for an empty panel.
+  it.each([
+    ['an editable project', EDITABLE_PROJECT],
+    ['a translation project with editing switched off', READ_ONLY_PROJECT],
+    ['a published resource', PUBLISHED_RESOURCE],
+  ])('follows %s', async (_label, projectKind) => {
+    // A published resource is followed too: its grid says resources have no Text Collection rather
+    // than showing the outgoing project's texts. Parameterized so a reintroduced kind gate fails.
     const { papi, mockReloadWebView } = createRelatedPanelsMockPapi(
       [gridDef('proj-a')],
-      PUBLISHED_RESOURCE,
+      projectKind,
     );
-
-    await updateRelatedTextCollectionPanel(papi, 'resource-1');
-
-    expect(mockReloadWebView).not.toHaveBeenCalled();
-  });
-
-  it('follows a translation project with editing switched off', async () => {
-    // `Editable=F` does not make a project a published resource.
-    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi(
-      [gridDef('proj-a')],
-      READ_ONLY_PROJECT,
-    );
-
-    await updateRelatedTextCollectionPanel(papi, 'read-only-proj');
-
-    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('read-only-proj'));
-  });
-
-  it('classifies the incoming project, not the one the panel already shows', async () => {
-    const { papi, mockReloadWebView, setProjectKind } = createRelatedPanelsMockPapi([
-      gridDef('proj-a'),
-    ]);
-    setProjectKind('proj-a', PUBLISHED_RESOURCE);
-    setProjectKind('proj-b', EDITABLE_PROJECT);
 
     await updateRelatedTextCollectionPanel(papi, 'proj-b');
-
-    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
-  });
-
-  it('uses the published reading a caller already started instead of reading again', async () => {
-    const { papi, mockReloadWebView, mockProjectDataProvidersGet } = createRelatedPanelsMockPapi([
-      gridDef('proj-a'),
-    ]);
-
-    await updateRelatedTextCollectionPanel(papi, 'resource-1', Promise.resolve(true));
-
-    expect(mockReloadWebView).not.toHaveBeenCalled();
-    expect(mockProjectDataProvidersGet).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['no panel is open', []],
-    ['the panel already shows the project', [gridDef('proj-a')]],
-  ])(
-    'does not read whether the project is published when %s',
-    async (_label, openDefs: Array<Partial<SavedWebViewDefinition>>) => {
-      // The Power→Simple switch normally lands here: the grid arrives already bound, or is not open
-      // at all. A read there is wasted, and a failed one would warn about a re-point that was never
-      // going to happen.
-      const { papi, mockProjectDataProvidersGet, mockWarn } = createRelatedPanelsMockPapi(openDefs);
-      mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
-
-      await updateRelatedTextCollectionPanel(papi, 'proj-a');
-
-      expect(mockProjectDataProvidersGet).not.toHaveBeenCalled();
-      expect(mockWarn).not.toHaveBeenCalled();
-    },
-  );
-
-  it('treats a project whose provider cannot be reached as a translation project and says so', async () => {
-    // `platform.isPublished` defaults to false, and following is recoverable (the next switch
-    // re-points again), whereas staying would leave the grid silently on the outgoing project.
-    const { papi, mockReloadWebView, mockProjectDataProvidersGet, mockWarn } =
-      createRelatedPanelsMockPapi([gridDef('proj-a')], PUBLISHED_RESOURCE);
-    mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
-
-    await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
-
-    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
-    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('pdp unavailable'));
-  });
-
-  it.each([
-    ['rejects', () => Promise.reject(new Error('setting read failed'))],
-    ['resolves undefined', async () => undefined],
-    // A truthy non-boolean too: a provider that answers outside the setting's contract must not be
-    // read as "published", which a coercion to boolean would do.
-    ['resolves a truthy non-boolean', async () => 'no'],
-  ])('follows a project whose isPublished read %s', async (_label, reading) => {
-    // Only an explicit `true` withholds the panel; anything else is a project to follow. The
-    // project is otherwise a published resource, so a gate that read `platform.isEditable`
-    // instead would withhold the panel and fail here.
-    const { papi, mockReloadWebView, overrideIsPublished } = createRelatedPanelsMockPapi(
-      [gridDef('proj-a')],
-      PUBLISHED_RESOURCE,
-    );
-    overrideIsPublished(reading);
-
-    await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
 
     expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
   });
@@ -3838,9 +3758,8 @@ describe('openOrUpdateRelatedPanels', () => {
     expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('read-only-proj'));
   });
 
-  it('leaves the Text Collection alone for a published resource but still re-points the rest', async () => {
-    // A published resource has no text collection of its own, so re-pointing the grid at it would
-    // cost a reload for an empty panel. The command-driven panels follow the editor either way.
+  it('re-points the Text Collection at a published resource along with the rest', async () => {
+    // Staying on the outgoing project would show its texts beside a resource they don't belong to.
     const { papi, mockReloadWebView, mockSendCommand } = createRelatedPanelsMockPapi(
       [gridDef('proj-a')],
       PUBLISHED_RESOURCE,
@@ -3848,7 +3767,7 @@ describe('openOrUpdateRelatedPanels', () => {
 
     await openOrUpdateRelatedPanels(papi, 'resource-1');
 
-    expect(mockReloadWebView).not.toHaveBeenCalled();
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('resource-1'));
     expect(mockSendCommand.mock.calls).toEqual([
       ['platformScriptureEditor.openModelText', 'resource-1'],
       ['platformScriptureEditor.openResourceText', 'CommentaryResource', 'resource-1'],

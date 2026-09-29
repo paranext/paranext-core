@@ -97,6 +97,7 @@ const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
+const RESOURCE_HAS_NO_COLLECTION_KEY = '%webView_scriptureTextGrid_resourceHasNoTextCollection%';
 const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
 // Screen-reader announcements for the chapter-context split opening/closing.
 const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
@@ -112,6 +113,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   ...VIEW_OPTIONS_NOTICE_STRING_KEYS,
   CHAPTER_CONTEXT_CLOSE_KEY,
   EMPTY_STATE_KEY,
+  RESOURCE_HAS_NO_COLLECTION_KEY,
   CATALOG_ERROR_KEY,
   CATALOG_RETRY_KEY,
   CELL_ACCESSIBLE_NAME_KEY,
@@ -182,7 +184,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // explicit `projectId` moves it. See useTextCollectionProjectId.
   const effectiveProjectId = useTextCollectionProjectId(projectId);
 
-  const { sources, textConnectionPdp } = useTextCollectionSources(effectiveProjectId);
+  // A published resource gets no `textConnectionPdp`, which every write below goes through.
+  const { sources, textConnectionPdp, isPublishedResource } =
+    useTextCollectionSources(effectiveProjectId);
 
   // Latest sources for the async callbacks below — reading the render-closure `sources` would let a
   // rapid second toggle (or a toggle mid-install) compute its next-state from a pre-write snapshot
@@ -356,16 +360,19 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     hasSources: sources !== undefined,
     hasCatalogError,
     isLoading: isLoadingCachedResources || isLoadingLocalizedStrings,
+    isPublishedResource,
   });
 
   // The grid is one web view hosting many projects, so its members are invisible to global
   // navigation UI unless declared here. `resources` — and so `displayedProjectIds` — is incomplete
   // until the sources, the cached DBL list and the disk lookup have all answered, which is
-  // indistinguishable from "those projects were removed".
+  // indistinguishable from "those projects were removed". A published resource displays nothing,
+  // which is a complete answer as soon as it is known.
   usePublishNavigableProjectIds(
     useWebViewState,
     displayedProjectIds,
-    sources !== undefined && !isLoadingCachedResources && installLookup.status !== 'pending',
+    isPublishedResource ||
+      (sources !== undefined && !isLoadingCachedResources && installLookup.status !== 'pending'),
     // A project switch re-points this panel by reloading it, which reuses the web view id, so the
     // published list would otherwise outlive the project it was built for.
     effectiveProjectId,
@@ -583,6 +590,19 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   const installingResourceNames = useMemo(() => installing.map((info) => info.name), [installing]);
 
+  // Undefined until the strings load, so neither message can flash a raw `%key%`.
+  const resourceHasNoCollectionMessage = resolveLocalizedString(
+    localizedStrings,
+    RESOURCE_HAS_NO_COLLECTION_KEY,
+  );
+  // No project/PDP bound → every View Options action would silently no-op, so the controls are
+  // disabled; say why when the reason is lasting (no project, or a resource), not during the brief
+  // load after a project is bound.
+  let viewOptionsDisabledMessage: string | undefined;
+  if (isPublishedResource) viewOptionsDisabledMessage = resourceHasNoCollectionMessage;
+  else if (!effectiveProjectId)
+    viewOptionsDisabledMessage = resolveLocalizedString(localizedStrings, NO_PROJECT_KEY);
+
   return (
     <div
       data-testid="scripture-text-grid"
@@ -627,15 +647,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
               onCheckedChange={handleCheckedChange}
               onRemoveFromList={handleRemoveFromList}
               onGetResources={showResourcePicker}
-              // No project/PDP bound yet → every action would silently no-op, so disable the
-              // controls. Show the "no project" prompt only when there is genuinely no project (not
-              // during the brief load after one is bound).
               disabled={!sources || !textConnectionPdp}
-              disabledMessage={
-                effectiveProjectId
-                  ? undefined
-                  : resolveLocalizedString(localizedStrings, NO_PROJECT_KEY)
-              }
+              disabledMessage={viewOptionsDisabledMessage}
               localizedStrings={localizedStrings}
             />
           </PopoverContent>
@@ -672,6 +685,15 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
               message={localizedStrings[CATALOG_ERROR_KEY]}
               retryLabel={localizedStrings[CATALOG_RETRY_KEY]}
               onRetry={refetchCatalog}
+            />
+          </div>
+        )}
+        {gridBodyState === 'resource' && resourceHasNoCollectionMessage && (
+          <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
+            <EmptyState
+              id="scripture-text-grid-resource-state"
+              className="tw:text-center"
+              message={resourceHasNoCollectionMessage}
             />
           </div>
         )}
