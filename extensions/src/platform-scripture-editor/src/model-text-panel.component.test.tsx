@@ -67,6 +67,8 @@ const STRINGS = {
     'Register Paratext to browse freely available texts.',
   '%webView_resourcePanel_noProject_register%': 'Register Paratext',
   '%webView_modelTextPanel_noProject_unknownResource%': 'The selected text could not be found.',
+  '%webView_modelTextPanel_noProject_installedButUnavailable%':
+    "The text is installed but couldn't be opened.",
   '%webView_resourcePanel_textUnavailable%': 'This text could not be loaded.',
   '%webView_modelTextPanel_emptyState_moreInfo%': 'More info',
   '%webView_modelTextPanel_emptyState_lessInfo%': 'Less info',
@@ -915,6 +917,15 @@ describe('ModelTextPanel with no project open', () => {
     expect(
       screen.queryByText('The selected model text could not be found.'),
     ).not.toBeInTheDocument();
+  });
+
+  it('uses no-project wording when an installed text cannot be opened', async () => {
+    await renderWithCatalogStaleAfterInstall({ hasProject: false, isFreeResourceEntryPoint: true });
+
+    expect(
+      await screen.findByText("The text is installed but couldn't be opened."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/model text/)).not.toBeInTheDocument();
   });
 
   it('offers no retry for a registration failure, which retrying cannot fix', () => {
