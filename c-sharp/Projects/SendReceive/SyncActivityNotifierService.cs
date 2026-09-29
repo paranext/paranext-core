@@ -28,8 +28,8 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <para>
 /// <b>No sync ever runs in open-source Platform.Bible.</b> The run bracket that raises
 /// <see cref="ParatextProjectSendReceiveService.SyncActivityChanged"/> only exists in the Paratext 10
-/// Studio patch, so in public core the event never fires and the command always returns an idle
-/// snapshot. Every build still emits the event exactly once per backend (re)start — the idle baseline
+/// patch, so in public core the event never fires and the command always returns an idle snapshot.
+/// Every build still emits the event exactly once per backend (re)start — the idle baseline
 /// at the end of <see cref="InitializeAsync"/> — exactly like
 /// <see cref="SendReceiveBlockNotifierService"/>.
 /// </para>

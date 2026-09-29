@@ -45,6 +45,7 @@ import {
   WordRestriction,
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { projectNamesFromMetadata } from './project-names.util';
 import { Find, FIND_LOCALIZED_STRING_KEYS, FindProject } from './find/find.component';
 import { FIND_FOCUS_SEARCH_EVENT } from './find.model';
 import { useFocusSearchOnInvoke } from './find/use-focus-search-on-invoke.hook';
@@ -60,7 +61,6 @@ import {
   isFindQueryValid,
   isSimpleInterfaceMode,
   POLL_INTERVAL_MS,
-  prunePresentBookIds,
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
   resolveTargetEditorWebViewId,
@@ -68,6 +68,7 @@ import {
   shouldClearResultsForInvalidQuery,
 } from './find/find.utils';
 import { deriveFindBookLists, UNKNOWN_FIND_BOOK_LISTS } from './find/find-book-lists.utils';
+import { isExtraMaterialBookId } from './find/extra-material.utils';
 import {
   STRUCTURE_PROTECTED_ERROR,
   replacementContainsStructuralMarker,
@@ -80,6 +81,7 @@ import {
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import {
   FIND_SEARCHABLE_WEB_VIEW_TYPES,
   REFERENCE_PANEL_WEB_VIEW_TYPES,
@@ -87,6 +89,7 @@ import {
 } from './resource-panel-web-view-types.const';
 import { useFindSearchTriggers } from './find/use-find-search-triggers.hook';
 import { useAutoSearchDebounce } from './find/use-auto-search-debounce.hook';
+import { useFindBookScope } from './find/use-find-book-scope.hook';
 
 // Strings used by the webview's own replace / version-history-commit / toast logic, in addition to
 // the strings the presentational Find component needs (FIND_LOCALIZED_STRING_KEYS).
@@ -114,21 +117,10 @@ const HISTORY_DEBOUNCE_DELAY_MS = 5000;
 /** Stable empty-array reference so the History data subscription's default doesn't change identity. */
 const DEFAULT_RECENT_SEARCHES: string[] = [];
 
-/** Short and full names for every scripture project/resource, keyed by canonical project id. */
-type ProjectNamesById = { [id: string]: Pick<FindProject, 'shortName' | 'fullName'> };
-
-/**
- * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
- * `@papi`-free utils) so the utils stay importable by the presentational component and its story.
- */
-async function getProjectNames(
-  projectId: string,
-): Promise<Pick<FindProject, 'shortName' | 'fullName'>> {
-  const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-  const projectShortName = await pdp.getSetting('platform.name');
-  const projectFullName = await pdp.getSetting('platform.fullName');
-  return { shortName: projectShortName, fullName: projectFullName };
-}
+/** Display names and language for every scripture project/resource, keyed by canonical project id. */
+type ProjectNamesById = {
+  [id: string]: Pick<FindProject, 'shortName' | 'fullName' | 'language'>;
+};
 
 /**
  * Returns a promise that resolves after `ms` milliseconds. The cancel function stored in
@@ -178,22 +170,32 @@ global.webViewComponent = function FindWebView({
   useWebViewScrollGroupScrRef,
   updateWebViewDefinition,
 }: WebViewProps) {
-  const [
-    verseRefSetting,
-    setVerseRefSetting,
-    findScrollGroupId,
-    setFindScrollGroupId,
-    scrollGroupSourceProjectId,
-  ] = useWebViewScrollGroupScrRef();
+  const [verseRefSetting, setVerseRefSetting, findScrollGroupId, setFindScrollGroupId] =
+    useWebViewScrollGroupScrRef();
 
   // The project to search. Normally the tab's own — `openFind` sets it from the trigger (the
-  // editor's project, or the resource a reference panel is displaying). The simple-mode layout also
-  // seeds a Find tab that carries no projectId at all, so fall back to whichever project is driving
-  // this web view's scroll group reference (the Scripture editor, since the provider puts Find in
-  // group 0 in simple mode). Without the fallback that seeded tab renders a search box that silently
-  // searches nothing until the user's first Ctrl+F. Mirrors the Text Collection tab, which resolves
-  // its own default-layout tab the same way.
-  const projectId = webViewProjectId ?? scrollGroupSourceProjectId;
+  // editor's project, or the resource a reference panel is displaying), and the project selector's
+  // own `handleSelectProjectScrollGroup` keeps it current after that. The simple-mode layout also
+  // seeds a Find tab that carries no projectId at all, so it takes the first project BCV navigation
+  // drives in this window and keeps it until one of those sets an explicit id. Without the fallback,
+  // that seeded tab renders a search box that silently searches nothing until the user's first
+  // Ctrl+F. The fallback only seeds; after that Find is told its project (by `openFind`, the
+  // selector, or a project switch's `updateRelatedFindPanel`) rather than inferring a new one.
+  // Deliberately NOT scroll group 0's source project (`useWebViewScrollGroupScrRef`'s 5th tuple
+  // member): that field's only job is tagging which versification frame the current reference is
+  // in, and it changes for reasons that have nothing to do with which project is active (Back/
+  // Forward, a resource cell's own click, a click in the Comments or Checks panel).
+  const [activeEditorProjectIdPossiblyError] = useData(
+    papi.window.dataProviderName,
+  ).ActiveEditorProjectId(undefined, undefined);
+  const activeEditorProjectId = isPlatformError(activeEditorProjectIdPossiblyError)
+    ? undefined
+    : activeEditorProjectIdPossiblyError;
+  const [seededProjectId, setSeededProjectId] = useState(activeEditorProjectId);
+  useEffect(() => {
+    setSeededProjectId((previous) => previous ?? activeEditorProjectId);
+  }, [activeEditorProjectId]);
+  const projectId = webViewProjectId ?? seededProjectId;
 
   // Each instance needs its own mutex — a module-level mutex would cause operations from one Find
   // panel to block another if two panels are open for different projects simultaneously.
@@ -249,10 +251,7 @@ global.webViewComponent = function FindWebView({
     ? ''
     : lastSearchTermPossiblyError;
 
-  const [selectedBookIds, setSelectedBookIds] = useWebViewState<string[]>(
-    'findSelectedBookIds',
-    [],
-  );
+  const [savedBookIds, setSavedBookIds] = useWebViewState<string[]>('findSelectedBookIds', []);
   const [monitoredBookIds, setMonitoredBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useWebViewState<boolean>(
     'findShouldMatchCase',
@@ -377,29 +376,10 @@ global.webViewComponent = function FindWebView({
         includeProjectInterfaces: ['Scripture', 'Paratext'],
       });
 
-      // `allSettled`, NOT `all`. These are independent per-project reads, and `usePromise` has no
-      // `.catch` around its factory — so with `all`, one project whose PDP or `platform.name` read
-      // rejects would reject the whole batch, the rejection would escape this callback, and neither
-      // `setValue` nor `setIsLoading(false)` would ever run: `projectIdsAndNames` would stay `{}`
-      // and `isLoadingProjects` stuck `true`, permanently. That state is UNRECOVERABLE here,
-      // because the refetch effect and the reassignment effect's canonical-id gate both wait on
-      // `isLoadingProjects` — the one path that could retry is gated off by the failure itself. And
-      // the batch spans every Scripture/Paratext project, not just open ones, so a single bad
-      // project would take out the whole picker. Skip the failures, keep the rest.
-      const projectNameResults = await Promise.allSettled(
-        allMetadata.map(async (metadata) => ({
-          id: metadata.id,
-          names: await getProjectNames(metadata.id),
-        })),
-      );
-      projectNameResults.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          projectDict[result.value.id] = result.value.names;
-          return;
-        }
-        logger.warn(
-          `Find: could not read names for project ${allMetadata[index].id}; omitting it from the project picker: ${getErrorMessage(result.reason)}`,
-        );
+      // Every name the picker shows comes off the metadata already fetched above, so there is no
+      // per-project read left that could fail and take the whole picker with it.
+      allMetadata.forEach((metadata) => {
+        projectDict[metadata.id] = projectNamesFromMetadata(metadata);
       });
 
       return projectDict;
@@ -449,12 +429,19 @@ global.webViewComponent = function FindWebView({
     return ids;
   }, [allOpenProjectTabs]);
 
+  // Recency input the built-in `lastUsed` grouping reads as its "recently used" presence flag.
+  const recencyMap = useProjectRecencyMap('FindWebView');
+
   const projects = useMemo<FindProject[]>(
     () =>
       Object.entries(projectIdsAndNames)
         .filter(([id]) => openProjectIds.has(normalizeProjectId(id)))
-        .map(([id, names]) => ({ id, ...names })),
-    [projectIdsAndNames, openProjectIds],
+        .map(([id, names]) => ({
+          id,
+          ...names,
+          lastUsedAt: recencyMap.get(normalizeProjectId(id)),
+        })),
+    [projectIdsAndNames, openProjectIds, recencyMap],
   );
 
   // An open editor tab whose project the metadata fetch never returned means the fetch predates the
@@ -721,17 +708,19 @@ global.webViewComponent = function FindWebView({
   // the scope selector builds its book picker from. Filtering one but not the other would let a user
   // pick a book the search never covers.
   //
-  // This does NOT cover the `book`/`chapter` scopes, which build `findScope` from
-  // `verseRefSetting.book` rather than from these lists. The navigation control offers every book the
-  // project has (`getActiveBookIds` in the toolbar is unfiltered), so with the current reference in
-  // a book of extra material those two scopes still search it and still report the useless
-  // reference this exclusion exists to hide. Closing that path means gating the scopes themselves
-  // on the current book being searchable; PT-4415 tracks it.
+  // These lists do NOT reach the `book`/`chapter` scopes, which build `findScope` from
+  // `verseRefSetting.book` rather than from them, so the current reference can sit in a book of
+  // extra material and `isFindQueryValid` gates those two scopes on it separately. The reference
+  // gets there by several routes: `BookChapterControl` offers XXA–XXG directly, and FRT, BAK, OTH,
+  // INT, CNC, GLO, TDX and NDX arrive through a scroll-group navigation command, a persisted
+  // scroll-group reference, or a click on a resource.
   //
   // A book list is "not known" while the setting is still resolving AND when the read fails.
   // `useProjectSetting` reports a delivered `PlatformError` as loaded, so the error branch has to be
-  // recognized explicitly: treating it as an answer would report zero available books, and the prune
-  // below would then wipe the user's persisted selection for good.
+  // recognized explicitly: treating it as an answer would report zero available books, and every
+  // consumer would read this project as having nothing to search. It also re-enters loading on a
+  // project change while still holding the previous project's value, so emptiness alone can never
+  // stand in for "not known" — `useFindBookScope` relies on that distinction.
   const bookLists = useMemo(() => {
     if (isBooksPresentLoading) return UNKNOWN_FIND_BOOK_LISTS;
     if (isPlatformError(booksPresentPossiblyError)) {
@@ -784,27 +773,15 @@ global.webViewComponent = function FindWebView({
   const isEditable: boolean =
     isEditableLoading || isPlatformError(isEditablePossiblyError) ? false : isEditablePossiblyError;
 
-  // `selectedBookIds` is persisted per web view, so a project switch can leave it naming books the
-  // NEW project doesn't have. The finder engine skips absent books gracefully (see
-  // `isScriptureNotFoundError` in the finder PDPE), so this is not a crash — but with
-  // `scope === 'selectedBooks'` the search would silently cover fewer books than the checkbox list
-  // shows. Prune the selection to what the newly selected project actually has.
-  //
-  // "Don't know the books yet" must not read as "the project has no books", so `availableBooksIds`
-  // is `undefined` until the setting resolves rather than inferred from an empty list, and the
-  // selection is then left untouched. `useProjectSetting` re-enters loading whenever the project
-  // changes, and holds the previous project's value in the meantime — so emptiness alone can't tell
-  // an unread list from a project that genuinely has nothing to search, which is a real case here
-  // because extra material is excluded above.
-  //
-  // Depends on `selectedBookIds` because `useWebViewState`'s setter takes a value, not an updater.
-  // That is safe: `prunePresentBookIds` returns the original array reference when nothing needs
-  // removing, so the identity check makes the write conditional and the effect converges after a
-  // single prune instead of re-triggering itself.
-  useEffect(() => {
-    const prunedBookIds = prunePresentBookIds(availableBooksIds, selectedBookIds);
-    if (prunedBookIds !== selectedBookIds) setSelectedBookIds(prunedBookIds);
-  }, [availableBooksIds, selectedBookIds, setSelectedBookIds]);
+  // The saved selection is persisted per web view and shared across every project Find points at,
+  // so it can name books the CURRENT project doesn't have. `searchableBookIds` is that selection
+  // narrowed to this project for display and search, while the saved list keeps the user's books —
+  // see `use-find-book-scope.hook.ts` for why the narrowing is never persisted.
+  const { searchableBookIds, selectBookIds } = useFindBookScope({
+    savedBookIds,
+    setSavedBookIds,
+    availableBookIds: availableBooksIds,
+  });
 
   const availableBooksLocalizationKeys = useMemo(() => {
     const keys: `%${string}%`[] = [];
@@ -1064,8 +1041,14 @@ global.webViewComponent = function FindWebView({
   // moved into `gateStartSearch`'s `hasPdp` argument below, which is the input that actually governs
   // whether a job may start.
   const isSearchQueryValid = useMemo(
-    () => isFindQueryValid({ searchTerm, scope, selectedBookIds }),
-    [scope, searchTerm, selectedBookIds],
+    () =>
+      isFindQueryValid({
+        searchTerm,
+        scope,
+        selectedBookIds: searchableBookIds,
+        currentBookId: verseRefSetting.book,
+      }),
+    [scope, searchTerm, searchableBookIds, verseRefSetting.book],
   );
 
   // Surface an unresolvable provider through the existing error path instead of leaving the panel
@@ -1093,11 +1076,16 @@ global.webViewComponent = function FindWebView({
       case 'book':
         return [{ bookId: verseRefSetting.book }];
       case 'selectedBooks':
-        return selectedBookIds.map((bookId) => ({ bookId }));
+        // Extra material is dropped here too, not only from the book picker. A selection restored
+        // from a persisted tab is pruned against the project's book list, and that list arrives
+        // asynchronously — this is the point the search cannot be built before.
+        return searchableBookIds
+          .filter((bookId) => !isExtraMaterialBookId(bookId))
+          .map((bookId) => ({ bookId }));
       default:
         throw new Error(`Unsupported scope: ${scope}`);
     }
-  }, [scope, selectedBookIds, verseRefSetting]);
+  }, [scope, searchableBookIds, verseRefSetting]);
 
   /**
    * A stable string key capturing only the parts of scope/verseRef that affect the search query.
@@ -1106,10 +1094,10 @@ global.webViewComponent = function FindWebView({
    * setVerseRefSetting but stays within the already-searched book/chapter).
    */
   const relevantScopeKey = useMemo(() => {
-    if (scope === 'selectedBooks') return `selectedBooks:${selectedBookIds.join(',')}`;
+    if (scope === 'selectedBooks') return `selectedBooks:${searchableBookIds.join(',')}`;
     if (scope === 'book') return `book:${verseRefSetting.book}`;
     return `chapter:${verseRefSetting.book}:${verseRefSetting.chapterNum}`;
-  }, [scope, selectedBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
+  }, [scope, searchableBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
 
   // When search options change (not the search term itself), add the current term to history — the
   // user is intentionally refining how to search for it.
@@ -1244,7 +1232,7 @@ global.webViewComponent = function FindWebView({
 
         setMonitoredScope(scope);
         setMonitoredVerseRef(verseRefSetting);
-        setMonitoredBookIds(selectedBookIds);
+        setMonitoredBookIds(searchableBookIds);
 
         setFocusedResultIndex(undefined);
 
@@ -1279,7 +1267,7 @@ global.webViewComponent = function FindWebView({
       scope,
       searchTerm,
       searchTextType,
-      selectedBookIds,
+      searchableBookIds,
       shouldMatchCase,
       verseRefSetting,
       wordRestriction,
@@ -1635,11 +1623,16 @@ global.webViewComponent = function FindWebView({
     }
     requestAutoSearchWhenVisible();
   }, [
+    // Every option the search depends on belongs here even though this body reads almost none of
+    // them: these are the triggers that re-run the search, and react-hooks/exhaustive-deps cannot
+    // flag a missing one because nothing in the body references it.
     searchTerm,
     shouldMatchCase,
     wordRestriction,
     isRegexAllowed,
     searchTextType,
+    ignoreWhitespaceDifferences,
+    ignoreDiacritics,
     relevantScopeKey,
     requestAutoSearchWhenVisible,
   ]);
@@ -1754,15 +1747,11 @@ global.webViewComponent = function FindWebView({
         // Preview the match in the editor (select + highlight) without stealing focus, so the user
         // can keep navigating results. Double-click / reference-click shift focus to the editor.
         //
-        // Hidden case (see .claude/rules/cross-view-sync-hidden-views.md): if the editor tab is
-        // inactive, the preview scroll no-ops (no layout in a display:none iframe) and does NOT catch
-        // up on activation. This is a deliberate no-op, not an oversight: (1) PAPI exposes no way for
-        // this panel to observe the *editor's* visibility (useViewVisibility only sees this panel's
-        // own iframe), so a deferred catch-up isn't implementable here; (2) selection + annotation
-        // are data-driven, so they persist and render when the editor is shown — only the preview
-        // scroll is geometry; and (3) the explicit "go there" path (handleOpenAtResult) calls
-        // setFocus to activate the editor and re-runs selectRange, which scrolls correctly. A silent
-        // preview while the editor is hidden has nothing to preview, so doing nothing is correct.
+        // Hidden case (see .claude/rules/cross-view-sync-hidden-views.md): nothing to do here. This
+        // panel cannot observe the editor's visibility (useViewVisibility only sees this panel's own
+        // iframe), but the editor can: `selectRange` applies the selection at once and scrolls to the
+        // match when the editor's tab is next shown. Selection and annotation are data-driven, so
+        // they persist while hidden.
         try {
           editorWebViewController
             .selectRange({ start: searchResult.start, end: searchResult.end })
@@ -2251,7 +2240,7 @@ global.webViewComponent = function FindWebView({
       booksPresent={booksPresent}
       hasExcludedExtraMaterial={hasExcludedExtraMaterial}
       allowInvisibleCharacters={allowInvisibleCharacters}
-      selectedBookIds={selectedBookIds}
+      selectedBookIds={searchableBookIds}
       localizedBookData={localizedBookData}
       shouldMatchCase={shouldMatchCase}
       ignoreWhitespaceDifferences={ignoreWhitespaceDifferences}
@@ -2283,7 +2272,7 @@ global.webViewComponent = function FindWebView({
       onStartSearch={handleStartSearch}
       onStopSearch={handleStopSearch}
       setScope={setScope}
-      onSelectedBookIdsChange={setSelectedBookIds}
+      onSelectedBookIdsChange={selectBookIds}
       setSearchTextType={setSearchTextType}
       setWordRestriction={setWordRestriction}
       setShouldMatchCase={setShouldMatchCase}

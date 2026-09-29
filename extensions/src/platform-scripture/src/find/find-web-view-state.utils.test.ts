@@ -92,9 +92,8 @@ describe('resolveFindScrollGroupScrRef', () => {
       );
     });
 
-    it('forces group 0 for the seeded layout tab, which is what lets it resolve a project', () => {
-      // The seeded Column 3 tab carries neither a projectId nor a scroll group; the web view reads
-      // group 0's source project so the tab is usable before the first Ctrl+F.
+    it('forces group 0 for the seeded layout tab, which carries no scroll group of its own', () => {
+      // The seeded Column 3 tab carries neither a projectId nor a scroll group.
       const seeded: SavedWebViewDefinition = {
         id: 'find-1',
         webViewType: 'platformScripture.find',

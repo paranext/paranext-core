@@ -178,4 +178,24 @@ describe('OverlayContextMenuPresentational', () => {
       expect(onSelect).not.toHaveBeenCalled();
     });
   });
+
+  describe('scale', () => {
+    const items: OverlayContextMenuItem[] = [{ type: 'item', id: 'copy', label: 'Copy' }];
+
+    it('draws at interface scale', () => {
+      render(
+        <OverlayContextMenuPresentational
+          items={items}
+          position={position}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const menu = screen.getByRole('menu');
+      // jsdom leaves an unassigned inline style property `undefined` rather than '', so check both.
+      expect(menu.style.zoom || '').toBe('');
+      expect(menu.style.maxWidth).toBe('');
+    });
+  });
 });

@@ -12,10 +12,8 @@ import {
 import {
   CommentFilters,
   DEFAULT_COMMENT_FILTERS,
+  DEFAULT_SCOPE_FILTER,
   ScopeFilter,
-  SCOPE_FILTER_CURRENT_CHAPTER,
-  TEAM_ASSIGNED_USER,
-  UNFILTERED,
 } from './comment-list-filters.model';
 
 /**
@@ -137,13 +135,71 @@ const manyThreads: LegacyCommentThread[] = Array.from({ length: 30 }, (_, index)
   };
 });
 
-/** The "current chapter" the scope filter narrows to in these stories (GEN 1). */
-const STORY_SCR_REF = { book: 'GEN', chapterNum: 1 };
+/** The Scripture position the scope filter narrows to in these stories (GEN 1:1). */
+const STORY_SCR_REF = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+
+/** Whether `thread` falls within the Scripture range `scopeFilter` narrows the list to. */
+function threadMatchesScope(thread: LegacyCommentThread, scopeFilter: ScopeFilter): boolean {
+  switch (scopeFilter) {
+    case 'all-books':
+      return true;
+    case 'current-book':
+      return thread.verseRef?.startsWith(`${STORY_SCR_REF.book} `) ?? false;
+    case 'current-chapter':
+      return (
+        thread.verseRef?.startsWith(`${STORY_SCR_REF.book} ${STORY_SCR_REF.chapterNum}:`) ?? false
+      );
+    case 'current-verse':
+      return (
+        thread.verseRef ===
+        `${STORY_SCR_REF.book} ${STORY_SCR_REF.chapterNum}:${STORY_SCR_REF.verseNum}`
+      );
+    default: {
+      // Exhaustiveness guard: a scope added to the union without a case here fails to compile.
+      const unhandled: never = scopeFilter;
+      throw new Error(`Unhandled scope filter: ${String(unhandled)}`);
+    }
+  }
+}
+
+/** Whether `thread` matches the selected comment preset. */
+function threadMatchesPreset(
+  thread: LegacyCommentThread,
+  preset: CommentFilters['preset'],
+  currentUser: string,
+): boolean {
+  switch (preset) {
+    case 'unresolved':
+      return thread.status !== 'Resolved';
+    case 'resolved':
+      return thread.status === 'Resolved';
+    case 'unread':
+      return !thread.isRead;
+    case 'unread-and-unresolved':
+      return !thread.isRead && thread.status !== 'Resolved';
+    case 'conflict':
+      return thread.type === 'Conflict';
+    case 'unresolved-assigned-to-me':
+      return thread.status !== 'Resolved' && thread.assignedUser === currentUser;
+    case 'unread-assigned-to-me':
+      return !thread.isRead && thread.assignedUser === currentUser;
+    case 'all':
+    case 'unsaved':
+      // Neither narrows the list: `all` by definition, and `unsaved` because these sample threads
+      // carry no draft state.
+      return true;
+    default: {
+      // Exhaustiveness guard: a preset added to the union without a case here fails to compile.
+      const unhandled: never = preset;
+      throw new Error(`Unhandled comment preset: ${String(unhandled)}`);
+    }
+  }
+}
 
 /**
  * Mirrors the web view's comment-thread selector: the panel renders already-filtered threads, so
  * here we derive the visible threads from the toolbar filters the same way the web view's PDP query
- * would — the orthogonal resolved/read/type/assignment axes AND'd with the current-chapter scope.
+ * would — the preset AND'd with the scope.
  */
 function filterThreads(
   threads: LegacyCommentThread[],
@@ -151,25 +207,11 @@ function filterThreads(
   scopeFilter: ScopeFilter,
   currentUser: string,
 ): LegacyCommentThread[] {
-  return threads.filter((thread) => {
-    if (scopeFilter === SCOPE_FILTER_CURRENT_CHAPTER) {
-      const chapterPrefix = `${STORY_SCR_REF.book} ${STORY_SCR_REF.chapterNum}:`;
-      if (!thread.verseRef?.startsWith(chapterPrefix)) return false;
-    }
-    if (filters.resolved === 'unresolved' && thread.status === 'Resolved') return false;
-    if (filters.resolved === 'resolved' && thread.status !== 'Resolved') return false;
-    if (filters.read === 'unread' && thread.isRead) return false;
-    if (filters.read === 'read' && !thread.isRead) return false;
-    if (filters.type === 'conflicts' && thread.type !== 'Conflict') return false;
-    if (filters.type === 'comments' && thread.type !== 'Normal') return false;
-    if (filters.assignment === 'assigned-to-me' && thread.assignedUser !== currentUser)
-      return false;
-    if (filters.assignment === 'team' && thread.assignedUser !== TEAM_ASSIGNED_USER) return false;
-    // "Unassigned" = no assignee. Sample threads omit `assignedUser` (undefined); real threads carry
-    // the empty-string UNASSIGNED_USER sentinel. Both are falsy.
-    if (filters.assignment === 'unassigned' && thread.assignedUser) return false;
-    return true;
-  });
+  return threads.filter(
+    (thread) =>
+      threadMatchesScope(thread, scopeFilter) &&
+      threadMatchesPreset(thread, filters.preset, currentUser),
+  );
 }
 
 const resolveTrue = () => Promise.resolve(true);
@@ -187,7 +229,6 @@ type DecoratorConfig = {
   isLoading?: boolean;
   threads?: LegacyCommentThread[];
   initialFilters?: Partial<CommentFilters>;
-  canScopeToCurrentChapter?: boolean;
   /**
    * Render the panel with no bounding-height ancestor, reproducing the real web view where nothing
    * sets a height on `html`/`body`/`#root` so `tw:h-full` collapses to `auto` and the document is
@@ -211,7 +252,7 @@ function createDecorator(config: DecoratorConfig) {
       ...DEFAULT_COMMENT_FILTERS,
       ...config.initialFilters,
     });
-    const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(UNFILTERED);
+    const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(DEFAULT_SCOPE_FILTER);
     const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
     const [threads, setThreads] = useState<LegacyCommentThread[]>(config.threads ?? sampleThreads);
 
@@ -233,7 +274,6 @@ function createDecorator(config: DecoratorConfig) {
             onFiltersChange: setFilters,
             scopeFilter,
             onScopeFilterChange: setScopeFilter,
-            canScopeToCurrentChapter: config.canScopeToCurrentChapter,
             assignableUsers: ['', 'Alice', 'Bob', 'Charlie', CURRENT_USER],
             canUserAddCommentToThread: true,
             canUserAssignThreadCallback: resolveTrue,
@@ -342,13 +382,5 @@ export const Empty: Story = {
 
 /** No comments match the active filter — shows the "no comments match filter" message. */
 export const EmptyFiltered: Story = {
-  decorators: [createDecorator({ threads: [], initialFilters: { type: 'conflicts' } })],
-};
-
-/**
- * A list with no current chapter to follow (e.g. a cross-project open from the Send/Receive results
- * link): the scope dropdown omits "current chapter" and offers only "all books".
- */
-export const NoCurrentChapter: Story = {
-  decorators: [createDecorator({ canScopeToCurrentChapter: false })],
+  decorators: [createDecorator({ threads: [], initialFilters: { preset: 'conflict' } })],
 };

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
+  ContentZoomRoot,
   FootnoteList,
   ResizableHandle,
   ResizablePanel,
@@ -35,6 +36,12 @@ export type EnhancedResourceFootnotesPaneProps = {
   selectedFootnote?: MarkerObject;
   /** Fired when a row in the footnote list is clicked / focused. */
   onFootnoteSelected?: (footnote: MarkerObject, index: number) => void;
+  /**
+   * Name of the footnotes zoom area as the zoom indicator shows it (`Footnotes · 120 %`), so a zoom
+   * step in the footnotes pane is not mistaken for one in the Bible text. Omit it and the indicator
+   * shows the level alone.
+   */
+  zoomAreaLabel?: string;
   children: ReactNode;
 };
 
@@ -59,6 +66,7 @@ export function EnhancedResourceFootnotesPane({
   useWebViewState,
   selectedFootnote,
   onFootnoteSelected,
+  zoomAreaLabel,
   children,
 }: EnhancedResourceFootnotesPaneProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
@@ -136,15 +144,21 @@ export function EnhancedResourceFootnotesPane({
           maxSize={Math.max(maxPercent, paneSizePercent)}
           className="tw:bg-sidebar tw:pl-2 tw:pt-2 tw:pb-0 tw:pr-0 tw:flex tw:flex-col tw:min-h-0"
         >
-          <FootnoteList
-            classNameForItems="scripture-font"
-            listId={footnoteListKey}
-            layout="horizontal"
-            footnotes={footnotes}
-            showMarkers={false}
-            selectedFootnote={selectedFootnote}
-            onFootnoteSelected={handleFootnoteSelected}
-          />
+          <ContentZoomRoot
+            area="footnotes"
+            label={zoomAreaLabel}
+            className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
+          >
+            <FootnoteList
+              classNameForItems="scripture-font"
+              listId={footnoteListKey}
+              layout="horizontal"
+              footnotes={footnotes}
+              showMarkers={false}
+              selectedFootnote={selectedFootnote}
+              onFootnoteSelected={handleFootnoteSelected}
+            />
+          </ContentZoomRoot>
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>

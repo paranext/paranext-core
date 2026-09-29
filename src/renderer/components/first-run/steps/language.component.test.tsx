@@ -55,9 +55,9 @@ vi.mock('@shared/services/localization.service', () => ({
 vi.mock('@shared/services/logger.service', () => ({ logger: { warn: vi.fn() } }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
-// jsdom doesn't ship ResizeObserver or scrollIntoView; cmdk (used inside InterfaceLanguagePicker)
-// instantiates a ResizeObserver on mount. No-op stubs are sufficient since the tests don't assert
-// layout or scroll behavior.
+// jsdom doesn't ship ResizeObserver; cmdk (used inside InterfaceLanguagePicker) instantiates one
+// on mount. A no-op stub is sufficient since the tests don't assert layout behavior. scrollIntoView
+// is shimmed repo-wide in vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   // `targets` gives the no-op methods a `this` use (satisfies class-methods-use-this); unused by tests.
   private readonly targets = new Set<Element>();
@@ -79,9 +79,6 @@ beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
   }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
 });
 
 // The import must come after the vi.mock() calls and the beforeAll() stub setup so that Vitest's
@@ -96,6 +93,16 @@ describe('LanguageStep', () => {
     hookState.setupLanguages = GOOD_SETUP_LANGUAGES;
     hookState.availableLanguages = GOOD_AVAILABLE_LANGUAGES;
     hookState.isLoading = false;
+  });
+
+  // Guards that the step stays titled at all — it renders the shared WizardStepHeading, but this
+  // asserts the heading's role and text, not its Tailwind weight: a weight assertion would mirror
+  // implementation, and the shared treatment is a visual check rather than a unit-test one.
+  test('titles the step with a level-2 heading', () => {
+    render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
+    expect(
+      screen.getByRole('heading', { name: 'Choose your language', level: 2 }),
+    ).toBeInTheDocument();
   });
 
   test('renders the qualifying languages by autonym', () => {

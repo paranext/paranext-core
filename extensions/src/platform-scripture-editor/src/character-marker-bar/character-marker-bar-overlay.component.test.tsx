@@ -624,6 +624,46 @@ describe('CharacterMarkerBarOverlay', () => {
 
     expect(barContainer().style.top).toBe('118px');
   });
+
+  it('scales the baseline probe by the paragraph’s content zoom, and re-measures when that zoom differs', async () => {
+    // The paragraph sits inside the editor's content-zoom area; the probe (a sibling of the editor)
+    // does not. The stub reports a baseline proportional to the zoom the probe's container carries,
+    // so only a probe given the paragraph's zoom lines the bar up with zoomed text.
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function stub(
+      this: Element,
+    ) {
+      if (this.hasAttribute(BASELINE_PROBE_ATTRIBUTE)) {
+        const container = this.parentElement;
+        if (!(container instanceof HTMLElement))
+          return new DOMRect(0, TWO_PARAGRAPH_LINE_TOP, 0, 0);
+        const zoom = Number.parseFloat(container.style.zoom || '1');
+        return new DOMRect(
+          0,
+          TWO_PARAGRAPH_LINE_TOP + stubbedBaselineFor(container.style) * zoom,
+          0,
+          0,
+        );
+      }
+      if (this instanceof SVGElement) return new DOMRect(0, 8, 16, 16);
+      const isPara = this instanceof HTMLElement && this.classList.contains('para');
+      const isMeasuringElement =
+        this.getAttribute('aria-hidden') === 'true' && this.tagName === 'SPAN';
+      return new DOMRect(0, isPara || isMeasuringElement ? TWO_PARAGRAPH_LINE_TOP : 0, 200, 20);
+    });
+    render(twoParagraphOverlayTree({ fontSize: '16px' }, { fontSize: '16px' }));
+    const [unzoomed, zoomed] = Array.from(document.querySelectorAll('.para'));
+    // jsdom implements no `currentCSSZoom`; this is what Chromium reports inside a 200 % area.
+    Object.defineProperty(zoomed, 'currentCSSZoom', { value: 2 });
+
+    await putCaretInParagraph(unzoomed);
+    // 16px baseline - 16px icon center = 0.
+    expect(barContainer().style.top).toBe(`${TWO_PARAGRAPH_LINE_TOP}px`);
+
+    await putCaretInParagraph(zoomed);
+    // Same computed metrics, but zoomed: 32px baseline - 16px icon center = +16. Reusing the cached
+    // unzoomed offset would leave it at +0.
+    expect(barContainer().style.top).toBe(`${TWO_PARAGRAPH_LINE_TOP + 16}px`);
+  });
 });
 
 // The mount site (`platform-scripture-editor.web-view.tsx`) renders this overlay in BOTH interface

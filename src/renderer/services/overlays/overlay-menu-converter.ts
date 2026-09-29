@@ -120,6 +120,7 @@ export function convertContributionToContextMenuItems(
             type: 'item',
             id: item.command,
             label: item.label,
+            ...(item.shortcut ? { shortcut: item.shortcut } : {}),
           });
         }
       });

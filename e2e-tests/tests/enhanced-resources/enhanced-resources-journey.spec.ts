@@ -8,7 +8,8 @@
  *
  * Rules (do NOT relax during verify):
  *
- * - Import only from '../../fixtures/cdp.fixture' — never papi.fixture
+ * - Import only from '../../fixtures/enhanced-resources.fixture' (this suite's cdp.fixture wrapper) —
+ *   never papi.fixture
  * - Drive everything through visible UI (menu, button, keyboard) — no sendPapiCommand or direct
  *   JSON-RPC calls
  * - Selectors come from each WP's ui-spec Test Contract; do not invent new test ids during verify,
@@ -20,7 +21,7 @@
  * propagation, tab-switch propagation, clear-filter FN-021 — Dictionary domain row → SDV
  * filtered-by-domain dialog FN-022 — Sense-level occurrences link with descriptive tooltip
  */
-import { test, expect } from '../../fixtures/cdp.fixture';
+import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 import { closeAllNonHomeDockTabs } from './test-helpers';
 

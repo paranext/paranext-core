@@ -1,4 +1,5 @@
 import { Meta } from '@storybook/addon-docs/blocks';
+import LinkTo from '@storybook/addon-links/react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/shadcn-ui/tooltip';
 import { Kbd, KbdGroup } from '@/components/shadcn-ui/kbd';
@@ -23,11 +24,11 @@ toolbar items.
     variant="avoid"
     previewClassName="tw:pb-8"
     preview={
-<TooltipProvider>
-<Button variant="outline" size="icon" aria-label="Save">
-<Save />
-</Button>
-</TooltipProvider>
+  <TooltipProvider>
+    <Button variant="outline" size="icon" aria-label="Save">
+      <Save />
+    </Button>
+  </TooltipProvider>
 }
   >
     This icon button lacks a tooltip, so users can't learn what it means.
@@ -38,14 +39,14 @@ toolbar items.
     variant="avoid"
     previewClassName="tw:pb-8"
     preview={
-<TooltipProvider>
-<Tooltip open>
-<TooltipTrigger asChild>
-<Button>Save</Button>
-</TooltipTrigger>
-<TooltipContent side="bottom">Save</TooltipContent>
-</Tooltip>
-</TooltipProvider>
+  <TooltipProvider>
+    <Tooltip open>
+      <TooltipTrigger asChild>
+        <Button>Save</Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Save</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
 }
   >
     The tooltip only repeats the visible label — omit it.
@@ -56,21 +57,25 @@ toolbar items.
 
 Tooltip text must be short enough to scan at a glance. A tooltip is a hint, not an explanation.
 
+**Carve-out for info icon buttons:** a tooltip attached to an `Info` icon button (see
+<LinkTo title="Guidelines/Providing Help">Providing Help</LinkTo>) may run to 1–2 sentences,
+because the button's whole purpose is to reveal a longer clarification.
+
 <ExampleBlockGroup>
   <ExampleBlock
     variant="avoid"
     previewClassName="tw:pb-16"
     preview={
-<TooltipProvider>
-<Tooltip open>
-<TooltipTrigger asChild>
-<Button variant="outline" size="icon" aria-label="Save">
-<Save />
-</Button>
-</TooltipTrigger>
-<TooltipContent side="bottom" className="tw:max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
-</Tooltip>
-</TooltipProvider>
+  <TooltipProvider>
+    <Tooltip open>
+      <TooltipTrigger asChild>
+        <Button variant="outline" size="icon" aria-label="Save">
+          <Save />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="tw:max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
 }
   >
     Too long to scan — a tooltip is a hint, not a sentence.
@@ -80,16 +85,16 @@ Tooltip text must be short enough to scan at a glance. A tooltip is a hint, not 
     variant="prefer"
     previewClassName="tw:pb-16"
     preview={
-<TooltipProvider>
-<Tooltip open>
-<TooltipTrigger asChild>
-<Button variant="outline" size="icon" aria-label="Save">
-<Save />
-</Button>
-</TooltipTrigger>
-<TooltipContent side="bottom">Save changes</TooltipContent>
-</Tooltip>
-</TooltipProvider>
+  <TooltipProvider>
+    <Tooltip open>
+      <TooltipTrigger asChild>
+        <Button variant="outline" size="icon" aria-label="Save">
+          <Save />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Save changes</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
 }
   >
     The tooltip adds meaning an icon alone cannot convey, and it's short enough to read at a glance.
@@ -128,16 +133,16 @@ it, it is triggered only by hover or keyboard focus, and it contains no interact
     title="Currently valid"
     previewClassName="tw:pb-12"
     preview={
-<TooltipProvider>
-<Tooltip open>
-<TooltipTrigger asChild>
-<Button variant="ghost" size="icon" aria-label="API key info">
-<Info />
-</Button>
-</TooltipTrigger>
-<TooltipContent side="bottom">Used to authenticate requests.</TooltipContent>
-</Tooltip>
-</TooltipProvider>
+  <TooltipProvider>
+    <Tooltip open>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label="API key info">
+          <Info />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Used to authenticate requests.</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
 }
   >
     A tooltip with supplemental text only — no link needed.
@@ -147,14 +152,14 @@ it, it is triggered only by hover or keyboard focus, and it contains no interact
     variant="under-consideration"
     previewClassName="tw:pb-12"
     preview={
-<div className="tw:relative tw:inline-flex tw:items-center tw:justify-center">
-<Button variant="ghost" size="icon" aria-label="API key info">
-<Info />
-</Button>
-<div className="tw:absolute tw:top-full tw:left-1/2 tw:-translate-x-1/2 tw:mt-2 tw:rounded-md tw:border tw:border-border tw:bg-popover tw:px-3 tw:py-1.5 tw:text-xs tw:text-popover-foreground tw:shadow-md tw:whitespace-nowrap">
-Used to authenticate requests.{' '}<a href="#" className="tw:text-primary tw:underline">Learn more →</a>
-</div>
-</div>
+  <div className="tw:relative tw:inline-flex tw:items-center tw:justify-center">
+    <Button variant="ghost" size="icon" aria-label="API key info">
+      <Info />
+    </Button>
+    <div className="tw:absolute tw:top-full tw:left-1/2 tw:-translate-x-1/2 tw:mt-2 tw:rounded-md tw:border tw:border-border tw:bg-popover tw:px-3 tw:py-1.5 tw:text-xs tw:text-popover-foreground tw:shadow-md tw:whitespace-nowrap">
+      Used to authenticate requests.{' '}<a href="#" className="tw:text-primary tw:underline">Learn more →</a>
+    </div>
+  </div>
 }
   >
     A hover-triggered overlay that looks and feels like a tooltip but can contain a
@@ -195,3 +200,6 @@ tooltip closes.
 A concrete example: an info icon next to "API key" could show a tooltip saying
 "Used to authenticate requests." But if the panel also includes a *Copy key* button,
 that interaction belongs in a click-triggered popover, not a tooltip.
+
+See also: <LinkTo title="Guidelines/Providing Help">Providing Help</LinkTo> — the full ladder
+from label to online help, and where info icon buttons fit.

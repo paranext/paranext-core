@@ -259,9 +259,9 @@ describe('useSyncStatus', () => {
   });
 
   it('falls back to the claim alone when the activity command is unavailable', async () => {
-    // Public Platform.Bible, or a Studio build predating this signal: getSyncActivity rejects
-    // (rather than answering) for the life of the hook, and the toolbar must still be truthful
-    // about a claim-visible sync.
+    // Public Platform.Bible, or a Paratext 10 build predating this signal: getSyncActivity
+    // rejects (rather than answering) for the life of the hook, and the toolbar must still be
+    // truthful about a claim-visible sync.
     commands.mockGetSyncState({
       isSyncing: true,
       syncingProjectIds: ['PROJ1'],

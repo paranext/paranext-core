@@ -252,6 +252,9 @@ export interface IOverlayService {
    * menu data, renders the menu, and auto-executes the selected command. Returns the command string
    * that was executed, or undefined if dismissed.
    *
+   * The menu is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+   * at.
+   *
    * @param webViewType The webViewType to look up in the menu data service
    * @param webViewId The ID of the WebView requesting the context menu. Pass `globalThis.webViewId`
    *   from within a WebView iframe.
@@ -270,6 +273,9 @@ export interface IOverlayService {
    * return immediately with an overlay ID rather than waiting for dismissal. Use
    * {@link onPopoverDismissed} to await the result, {@link updatePopover} to change content, and
    * {@link dismissPopover} to close it programmatically.
+   *
+   * The popover is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+   * at.
    *
    * @param request The popover anchor, content, and behavioral options
    * @param webViewId The ID of the WebView requesting the popover. Pass `globalThis.webViewId` from
@@ -316,6 +322,9 @@ export interface IOverlayService {
    * `LocalizeKey` item text (`label`/`description`/`badge`) is resolved to localized strings when
    * the palette is shown, so all filtering — the palette's own search box and text forwarded via
    * {@link updateCommandPalette} — matches against the text the user actually sees.
+   *
+   * The palette is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+   * at.
    *
    * @param request The items, optional anchor position, and display options
    * @param webViewId The ID of the WebView requesting the command palette

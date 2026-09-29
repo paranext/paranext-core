@@ -87,3 +87,10 @@ export const editableView: EditorOptions['view'] = {
   hasSpacing: true,
   isFormattedFont: true,
 };
+
+/** The non-editable marker mode the scripture editor uses outside Standard view. */
+export const visibleView: EditorOptions['view'] = {
+  markerMode: 'visible',
+  hasSpacing: true,
+  isFormattedFont: true,
+};

@@ -14,11 +14,33 @@ import './index.css';
 // The unified Paratext-specific dialog is no longer part of the platform-bible-react surface.
 export {
   default as ProjectSelector,
+  type ProjectSelectorProps,
   type ProjectSelectorProject,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
+  type ProjectSelectorGrouping,
   type ProjectSelectorLocalizedStrings,
+  type ProjectSelectorLocalizedStringKey,
+  type ProjectSelectorStringLookup,
+  type ProjectSelectorFooterAction,
+  type ProjectSelectorIndicator,
+  type BuiltInGroupingStrings,
+  type SelectionGroupingStrings,
+  PROJECT_SELECTOR_STRING_KEYS,
+  PROJECT_SELECTOR_DEFAULT_STRINGS,
+  NO_GROUPING,
+  buildProjectSelectorLocalizedStrings,
+  buildBuiltInGroupingStrings,
+  buildSelectionGroupingStrings,
+  makeBuiltInGroupings,
+  makeSelectionGrouping,
+  defaultGroupings,
 } from './components/advanced/project-selector/project-selector.component';
+// One reader for "can this localized value be shown to a user, or must it fall back?", shared with
+// consumers so a web view merging its own `%webView_…%` lookups onto a component's string bag
+// judges them the same way the component does. A nullish chain cannot: an unresolved lookup arrives
+// as the raw key, which is a defined string, so `?? 'Default'` never fires on it.
+export { resolveLocalizedString } from './utils/localization.util';
 export {
   default as ResourcePickerDialog,
   type ResourcePickerDialogProps,
@@ -27,6 +49,12 @@ export {
   getResourcePickerBodyState,
   type ResourcePickerBodyState,
 } from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
+export {
+  buildLanguageFilterOptions,
+  focusResourcePickerOnOpen,
+  matchesResourceType,
+  partitionFilterSelection,
+} from './components/advanced/resource-picker-dialog/resource-picker-dialog.utils';
 export type { ScopeSelectorVariant } from './components/advanced/scope-selector/scope-selector.component';
 export {
   getAvailableBookIds,
@@ -85,8 +113,12 @@ export {
 export {
   default as InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
+  isSupportedInternetUse,
 } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
-export type { InternetAccessOptionListProps } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
+export type {
+  InternetAccessOptionListProps,
+  InternetUse,
+} from './components/advanced/internet-access-option-list/internet-access-option-list.component';
 export {
   default as DeveloperSection,
   DEVELOPER_SECTION_STRING_KEYS,

@@ -1,17 +1,29 @@
-import { normalizeProjectId, type ScrollGroupId } from 'platform-bible-utils';
+import {
+  compareProjectsByName,
+  normalizeProjectId,
+  type ScrollGroupId,
+} from 'platform-bible-utils';
 
 // #region Types
 
 /** The three modes of the project selector. */
 export type ProjectSelectorMode = 'project' | 'project-multi' | 'projectScrollGroup';
 
-/** Minimal project metadata fed to the selector. */
+/**
+ * Minimal project metadata fed to the selector.
+ *
+ * Grouping-specific fields (versification, language, type, last-used) are NOT typed here — they
+ * live in {@link customData}. This keeps the component's public shape minimal and lets any grouping
+ * (built-in or consumer-defined) declare its own key without widening the row type.
+ */
 export type ProjectSelectorProject = {
   id: string;
   shortName: string;
-  fullName: string;
-  language?: string;
-  languageCode?: string;
+  /**
+   * Full name, shown as the row's muted second line. Omit it when the project has none — don't copy
+   * the short name in; the selector already renders a single line when the names match.
+   */
+  fullName?: string;
   /**
    * When `true`, the row for this project is rendered muted, is not selectable, and the
    * `disabledReason` (if provided) is surfaced in the row tooltip. Use when a project is present in
@@ -24,18 +36,24 @@ export type ProjectSelectorProject = {
   /** Human-readable explanation surfaced in the row tooltip when `isDisabled` is true. */
   disabledReason?: string;
   /**
-   * Locale-stable versification identifier (e.g. the numeric `ScrVersType` enum as a string). Used
-   * by the selector's optional versification-grouping mode to bucket projects by canon, and to pin
-   * the consumer-supplied "priority" versification group to the top. Pair with `versificationName`
-   * for display.
+   * Consumer-owned extra fields read by `ProjectSelectorGrouping.getGroupKey` implementations. The
+   * component itself never introspects this map — it just carries it through to the grouping's
+   * partitioner.
+   *
+   * Well-known keys used by the built-ins returned from `makeBuiltInGroupings`:
+   *
+   * - `lastUsedAt: number` — ms-epoch timestamp; the built-in `lastUsed` grouping bins projects with
+   *   a timestamp under "Recently used" and the rest under "Other".
+   * - `language: string` — language name; the built-in `language` grouping buckets by exact equality
+   *   and uses the value as the section heading.
+   * - `type: string` — locale-stable type key; the built-in `type` grouping buckets by exact
+   *   equality. `typeName: string` (optional) supplies a friendlier heading — the grouping uses the
+   *   first non-empty `typeName` observed in each bucket.
+   *
+   * Custom groupings are free to define any keys they like. Values are `unknown` so the grouping's
+   * `getGroupKey` narrows them itself.
    */
-  versificationId?: string;
-  /**
-   * Human-readable versification name (e.g. "English", "Vulgate"). Used as the section header in
-   * versification-grouping mode. Defaults to a "Unknown" bucket when a project has a
-   * `versificationId` but no `versificationName`. Pair with `versificationId`.
-   */
-  versificationName?: string;
+  customData?: Readonly<Record<string, unknown>>;
 };
 
 /** A project that is currently open in a specific scroll group. */
@@ -75,15 +93,98 @@ export type ProjectScrollGroupSelection = {
   scrollGroupId?: ScrollGroupId;
 };
 
+/**
+ * One partitioned grouping definition. See {@link partitionByGrouping} and `makeBuiltInGroupings` in
+ * `project-selector.component`.
+ */
+export type ProjectSelectorGrouping = {
+  /**
+   * Unique id — used as the radio value in the filter menu and to persist the "active grouping"
+   * choice within a single mount. Must be unique within an `availableGroupings` array.
+   *
+   * Three ids are RESERVED and must not be used by a consumer-defined grouping:
+   *
+   * - `'openTabs'` — partitioning derives from the separate `openTabs` prop (see
+   *   {@link partitionByOpenTabs}) rather than any row data, and `getGroupKey` is ignored.
+   * - `'selection'` — partitioning derives from `row.isSelected` (see {@link partitionByGrouping}),
+   *   and `getGroupKey` is ignored.
+   * - `'none'` — the "no grouping" sentinel backing the group-by menu's None radio item, exported as
+   *   `NO_GROUPING`. A grouping carrying this id would collide with that radio item and could never
+   *   be activated.
+   */
+  id: string;
+  /**
+   * Label rendered in the filter menu's radio item. Consumer supplies a localized string; the
+   * component does not resolve labels on its own.
+   */
+  label: string;
+  /**
+   * Extract the row's group key. Called per project. Returning `undefined` routes the project into
+   * the "unknown" bucket (see {@link unknownSectionHeading}). Ignored for the built-in `'openTabs'`
+   * and `'selection'` groupings — those partition off row state (open-tabs prop / `isSelected`),
+   * not project fields.
+   */
+  getGroupKey?: (project: ProjectSelectorProject) => string | undefined;
+  /**
+   * Format the section heading for a given group key. Called once per non-empty bucket with the key
+   * and every project in the bucket (so consumers can lift a friendlier heading from `customData`,
+   * e.g. `typeName`). Defaults to the key verbatim.
+   *
+   * For the built-in `'selection'` grouping, this is called with the keys `'selected'` and
+   * `'unselected'` (in that order); the returned strings are used as the two section headings.
+   * Ignored for `'openTabs'`.
+   */
+  getSectionHeading?: (key: string, projects: readonly ProjectSelectorProject[]) => string;
+  /**
+   * Heading for the "unknown" bucket — rows where `getGroupKey` returned `undefined`. When absent,
+   * the unknown bucket is not emitted (its rows are dropped from the grouping's output).
+   */
+  unknownSectionHeading?: string;
+  /**
+   * Pin the bucket with this key to the top. Other buckets fall through to `compareSections`.
+   * Ignored for `'openTabs'` and `'selection'` (which have fixed ordering).
+   */
+  priorityKey?: string;
+  /**
+   * Ordering for non-priority buckets. Defaults to alphabetic (case-insensitive) by heading.
+   * Ignored for `'openTabs'` and `'selection'`.
+   */
+  compareSections?: (
+    a: { key: string; heading: string },
+    b: { key: string; heading: string },
+  ) => number;
+  /**
+   * Row order within each bucket, as a standard `Array.prototype.sort` comparator: return a
+   * negative number to put `a` before `b`, positive to put `b` first, `0` for a tie.
+   *
+   * Omit it to use the selector's canonical order (alphabetical by `shortName`, tie-broken by
+   * scroll group). Supply one when the bucket's meaning implies an order the selector cannot know —
+   * a leaderboard-style bucket ordered by a caller-side score, for example, where alphabetical
+   * order carries no meaning. The built-in `lastUsed` grouping deliberately supplies none: it reads
+   * `lastUsedAt` as a presence flag for bucketing only, and its rows stay alphabetical.
+   *
+   * Ties fall back to the canonical order, so rows for one project fanned across several scroll
+   * groups — which a comparator reading only `ProjectSelectorProject` cannot tell apart — keep a
+   * stable sequence.
+   *
+   * Ignored in three places, because those lists are not bucketed by this descriptor: the
+   * `'openTabs'` and `'selection'` groupings, which build their sections themselves; any grouping
+   * with no `getGroupKey`, which falls through to a single flat section; and the unknown bucket,
+   * which stays canonically ordered because it collects the rows the grouping could NOT classify —
+   * an order derived from the grouping's own axis would be meaningless for exactly those rows. Note
+   * the resulting list can mix two orders, e.g. a score-ordered bucket above an alphabetical
+   * "Other".
+   */
+  compareProjects?: (a: ProjectSelectorProject, b: ProjectSelectorProject) => number;
+};
+
 /** One row in the project selector list. */
 export type ProjectRow = {
   /** Stable unique key for React / cmdk. */
   rowKey: string;
   projectId: string;
   shortName: string;
-  fullName: string;
-  language?: string;
-  languageCode?: string;
+  fullName?: string;
   /**
    * The scroll group this row represents. `undefined` means the row is a project-level row (no
    * chip, or `project` mode chips aggregated in `openGroups`).
@@ -118,10 +219,12 @@ export type ProjectRow = {
   isDisabled: boolean;
   /** Mirrors {@link ProjectSelectorProject.disabledReason}. Surfaced in the row tooltip. */
   disabledReason?: string;
-  /** Mirrors {@link ProjectSelectorProject.versificationId}. */
-  versificationId?: string;
-  /** Mirrors {@link ProjectSelectorProject.versificationName}. */
-  versificationName?: string;
+  /**
+   * The source project — kept on the row so grouping partitioners can call
+   * `grouping.getGroupKey(row.project)` without another lookup. Also carries
+   * {@link ProjectSelectorProject.customData} through unchanged.
+   */
+  project: ProjectSelectorProject;
 };
 
 export type ComputeRowsArgs =
@@ -174,12 +277,23 @@ function collectOpenTabsByProject(
   return map;
 }
 
+/**
+ * Whether a (project, scroll group) pair is in the selection.
+ *
+ * Project ids are compared normalized, for the same reason `computeRows` normalizes the
+ * single-selection id: a caller whose selection came from a different source than its project list
+ * spells the same project in a different case, and comparing raw would leave every row unchecked
+ * while the trigger — which folds — named the project correctly.
+ */
 function pairIsSelected(
   pairs: readonly ProjectSelectorProjectPair[],
   projectId: string,
   scrollGroupId: ScrollGroupId | undefined,
 ): boolean {
-  return pairs.some((p) => p.projectId === projectId && p.scrollGroupId === scrollGroupId);
+  const normalizedId = normalizeProjectId(projectId);
+  return pairs.some(
+    (p) => normalizeProjectId(p.projectId) === normalizedId && p.scrollGroupId === scrollGroupId,
+  );
 }
 
 // #endregion
@@ -189,13 +303,19 @@ function pairIsSelected(
 /**
  * Build the selector's row list from the current inputs. Pure: same inputs produce the same output
  * in the same order. Consumers render these rows in the order returned unless they sort further
- * (see {@link partitionAndSort}).
+ * (see {@link partitionByOpenTabs}).
  */
 export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   const tabsByProject = collectOpenTabsByProject(args.openTabs);
 
   if (args.mode === 'project') {
-    const selectedId = args.selection.projectId;
+    // Normalized once, and compared normalized below, for the same reason open tabs are: a project
+    // id is canonical only up to case, so a caller whose selection came from a different source
+    // than its project list would otherwise leave the selected row unmarked.
+    const selectedKey =
+      args.selection.projectId === undefined
+        ? undefined
+        : normalizeProjectId(args.selection.projectId);
     return args.projects.map((project) => {
       const tabs = tabsByProject.get(normalizeProjectId(project.id)) ?? [];
       return {
@@ -203,18 +323,15 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         projectId: project.id,
         shortName: project.shortName,
         fullName: project.fullName,
-        language: project.language,
-        languageCode: project.languageCode,
         scrollGroupId: undefined,
         scrollGroupScrRefLabel: undefined,
         openGroups: tabs.map((t) => t.scrollGroupId),
-        isSelected: selectedId === project.id,
+        isSelected: selectedKey !== undefined && selectedKey === normalizeProjectId(project.id),
         isMuted: tabs.length === 0,
         isBoundButClosed: false,
         isDisabled: project.isDisabled === true,
         disabledReason: project.disabledReason,
-        versificationId: project.versificationId,
-        versificationName: project.versificationName,
+        project,
       };
     });
   }
@@ -243,8 +360,6 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         projectId: project.id,
         shortName: project.shortName,
         fullName: project.fullName,
-        language: project.language,
-        languageCode: project.languageCode,
         scrollGroupId: undefined,
         scrollGroupScrRefLabel: undefined,
         openGroups: [],
@@ -253,8 +368,7 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         isBoundButClosed: false,
         isDisabled: project.isDisabled === true,
         disabledReason: project.disabledReason,
-        versificationId: project.versificationId,
-        versificationName: project.versificationName,
+        project,
       });
       return;
     }
@@ -264,8 +378,6 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         projectId: project.id,
         shortName: project.shortName,
         fullName: project.fullName,
-        language: project.language,
-        languageCode: project.languageCode,
         scrollGroupId: tab.scrollGroupId,
         scrollGroupScrRefLabel: tab.scrollGroupScrRefLabel,
         openGroups: [],
@@ -274,8 +386,7 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         isBoundButClosed: false,
         isDisabled: project.isDisabled === true,
         disabledReason: project.disabledReason,
-        versificationId: project.versificationId,
-        versificationName: project.versificationName,
+        project,
       });
     });
   });
@@ -285,20 +396,23 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   // selected "not-open project" pair is already represented by the not-open row rendered above.
   selectedPairs.forEach((pair) => {
     if (pair.scrollGroupId === undefined) return;
+    const normalizedPairId = normalizeProjectId(pair.projectId);
     if (
-      rows.some((r) => r.projectId === pair.projectId && r.scrollGroupId === pair.scrollGroupId)
+      rows.some(
+        (r) =>
+          normalizeProjectId(r.projectId) === normalizedPairId &&
+          r.scrollGroupId === pair.scrollGroupId,
+      )
     ) {
       return;
     }
-    const project = args.projects.find((p) => p.id === pair.projectId);
+    const project = args.projects.find((p) => normalizeProjectId(p.id) === normalizedPairId);
     if (!project) return;
     rows.push({
       rowKey: `closed:${project.id}:${pair.scrollGroupId}`,
       projectId: project.id,
       shortName: project.shortName,
       fullName: project.fullName,
-      language: project.language,
-      languageCode: project.languageCode,
       scrollGroupId: pair.scrollGroupId,
       scrollGroupScrRefLabel: undefined,
       openGroups: [],
@@ -307,8 +421,7 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
       isBoundButClosed: true,
       isDisabled: project.isDisabled === true,
       disabledReason: project.disabledReason,
-      versificationId: project.versificationId,
-      versificationName: project.versificationName,
+      project,
     });
   });
 
@@ -317,22 +430,39 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
 
 // #endregion
 
-// #region partitionAndSort
+// #region Section partitioning
+
+/**
+ * English fallback heading for the built-in `'selection'` grouping's "selected" bucket. The single
+ * definition of this default — the component's `DEFAULT_STRINGS`, `makeSelectionGrouping`, and
+ * {@link partitionByGrouping}'s own last-resort fallback all read it from here.
+ */
+export const DEFAULT_SELECTED_SECTION_HEADING = 'Selected';
+
+/**
+ * English fallback heading for the built-in `'selection'` grouping's "unselected" bucket. See
+ * {@link DEFAULT_SELECTED_SECTION_HEADING}.
+ */
+export const DEFAULT_UNSELECTED_SECTION_HEADING = 'Unselected';
 
 export type RowSection = {
   /**
-   * 'flat' means no section header (grouping toggle off). 'versification' is a custom-labeled
-   * section that surfaces the versification name; the priority versification group (typically the
-   * active project's versification) is pinned to the top by `partitionByVersification`.
+   * - `'flat'` — single unheaded list (grouping = none).
+   * - `'openTabs'` / `'other'` — the two sections produced by the built-in `'openTabs'` grouping;
+   *   their headings come from the component's localized strings (openTabsSectionHeading /
+   *   otherProjectsSectionHeading).
+   * - `'grouping'` — a bucket produced by any other grouping. `label` is the heading text supplied by
+   *   the grouping (either via `getSectionHeading` or `unknownSectionHeading`).
    */
-  kind: 'openTabs' | 'other' | 'flat' | 'versification';
+  kind: 'openTabs' | 'other' | 'flat' | 'grouping';
   rows: ProjectRow[];
-  /**
-   * Set on `versification` sections — the localized versification name to render as the section
-   * header. `undefined` for other section kinds.
-   */
+  /** Localized heading text for `'grouping'` sections. Undefined for `'flat'`. */
   label?: string;
-  /** Set on `versification` sections — true for the consumer-supplied priority bucket. */
+  /** Grouping id for `'grouping'` sections — makes them addressable in tests and section keys. */
+  groupingId?: string;
+  /** Group key for `'grouping'` sections. `undefined` for the unknown bucket. */
+  key?: string;
+  /** True for the priority bucket in a `'grouping'` section. */
   isPriority?: boolean;
 };
 
@@ -347,7 +477,7 @@ function compareRows(a: ProjectRow, b: ProjectRow): number {
   // scrollGroupId. The component scrolls the selected row into view on open,
   // so selected rows do NOT float to the top — users can predict where any
   // project will land after selecting it.
-  const nameCmp = a.shortName.localeCompare(b.shortName, undefined, { sensitivity: 'base' });
+  const nameCmp = compareProjectsByName(a, b);
   if (nameCmp !== 0) return nameCmp;
   // Tie-break: scrollGroupId asc so the same project lists A before B before C.
   const aGroup = a.scrollGroupId ?? Number.POSITIVE_INFINITY;
@@ -355,33 +485,28 @@ function compareRows(a: ProjectRow, b: ProjectRow): number {
   return aGroup - bGroup;
 }
 
+/** Return a single flat, sorted section. Used when no grouping is active. */
+export function partitionFlat(rows: readonly ProjectRow[]): RowSection[] {
+  return [{ kind: 'flat', rows: [...rows].sort(compareRows) }];
+}
+
 /**
- * Split rows into the Open tabs / Other projects sections (when `groupByOpenTabs`) or a single flat
- * section (otherwise). Within each section, selected rows float to the top, then alphabetical by
- * `shortName`, tie-broken by `scrollGroupId`.
+ * Split rows into the Open tabs / Other projects sections. Within each section rows are sorted by
+ * {@link compareRows}.
  *
  * "Open tabs" rows are: open-group rows (project-multi / projectScrollGroup modes) and
  * `project`-mode rows whose project is open somewhere. Bound-but-closed synthetic rows and not-open
  * project rows land in "Other projects".
  *
- * Special case: when grouping is on but the "Open tabs" section would be empty (no project in the
- * list is currently open in any scroll group), we fall back to a flat list. A lone "Other projects"
- * heading without a partner section reads as a bug — the user wonders what they're "other" to. This
- * commonly happens when the consumer hasn't (or can't) seed `openTabs` with already-open tabs at
- * mount time.
+ * Special case: when the "Open tabs" section would be empty (no project in the list is currently
+ * open in any scroll group), we fall back to a flat list. A lone "Other projects" heading without a
+ * partner section reads as a bug — the user wonders what they're "other" to. This commonly happens
+ * when the consumer hasn't (or can't) seed `openTabs` with already-open tabs at mount time.
  */
-export function partitionAndSort(
-  rows: readonly ProjectRow[],
-  groupByOpenTabs: boolean,
-): RowSection[] {
-  if (!groupByOpenTabs) {
-    return [{ kind: 'flat', rows: [...rows].sort(compareRows) }];
-  }
+export function partitionByOpenTabs(rows: readonly ProjectRow[]): RowSection[] {
   const open = rows.filter(belongsToOpenTabsSection).sort(compareRows);
   const other = rows.filter((r) => !belongsToOpenTabsSection(r)).sort(compareRows);
   if (open.length === 0) {
-    // Grouping is on but no rows belong to "Open tabs" — render flat to avoid the misleading
-    // standalone "Other projects" header.
     return [{ kind: 'flat', rows: other }];
   }
   const sections: RowSection[] = [{ kind: 'openTabs', rows: open }];
@@ -390,62 +515,124 @@ export function partitionAndSort(
 }
 
 /**
- * Group rows by their `versificationId`, render the priority group first, and then the other groups
- * sorted alphabetically by `versificationName`. Within each group rows are sorted by
- * {@link compareRows}.
- *
- * Rows without a `versificationId` are collected into a single trailing "Unknown" section labeled
- * by `unknownLabel`. When `priorityVersificationId` is undefined, no group is pinned.
+ * Split rows into Selected (rows.isSelected === true) and Unselected. Selected always renders
+ * first. Headings come from the grouping's `getSectionHeading` (called with `'selected'` and
+ * `'unselected'`); English defaults are used when the grouping omits the helper. Empty buckets are
+ * elided.
  */
-export function partitionByVersification(
+function partitionBySelection(
   rows: readonly ProjectRow[],
-  priorityVersificationId: string | undefined,
-  unknownLabel: string,
+  grouping: ProjectSelectorGrouping,
 ): RowSection[] {
-  // Bucket by versificationId. Maps preserve insertion order which we exploit for stable section
-  // sorting below (alphabetical on the localized name, with the priority group lifted to index 0).
-  const buckets = new Map<string, { label: string; rows: ProjectRow[] }>();
+  const selected = rows.filter((r) => r.isSelected).sort(compareRows);
+  const unselected = rows.filter((r) => !r.isSelected).sort(compareRows);
+  const headingFor = (key: 'selected' | 'unselected', bucket: ProjectRow[]): string => {
+    const resolved = grouping.getSectionHeading?.(
+      key,
+      bucket.map((r) => r.project),
+    );
+    if (typeof resolved === 'string' && resolved.length > 0) return resolved;
+    return key === 'selected'
+      ? DEFAULT_SELECTED_SECTION_HEADING
+      : DEFAULT_UNSELECTED_SECTION_HEADING;
+  };
+  const sections: RowSection[] = [];
+  if (selected.length > 0) {
+    sections.push({
+      kind: 'grouping',
+      groupingId: grouping.id,
+      key: 'selected',
+      label: headingFor('selected', selected),
+      rows: selected,
+    });
+  }
+  if (unselected.length > 0) {
+    sections.push({
+      kind: 'grouping',
+      groupingId: grouping.id,
+      key: 'unselected',
+      label: headingFor('unselected', unselected),
+      rows: unselected,
+    });
+  }
+  return sections;
+}
+
+/**
+ * Bucket rows by the grouping's `getGroupKey`, then emit sections in priority-first /
+ * `compareSections` order (alphabetic by heading if `compareSections` is absent).
+ *
+ * Rows whose `getGroupKey` returns `undefined` land in an "unknown" bucket labeled by
+ * `grouping.unknownSectionHeading`. When that heading is absent the unknown bucket is dropped (its
+ * rows are elided from the grouping's output — use only for groupings where "unknown" is genuinely
+ * uninteresting).
+ *
+ * Two reserved ids override `getGroupKey`:
+ *
+ * - `'openTabs'` — routes to {@link partitionByOpenTabs}, which partitions off the separate `openTabs`
+ *   prop rather than any row data.
+ * - `'selection'` — partitions rows by `isSelected` into "Selected" and "Unselected" sections,
+ *   Selected first. Meant for `project-multi` mode; harmless (but pointless) in single-select.
+ */
+export function partitionByGrouping(
+  rows: readonly ProjectRow[],
+  grouping: ProjectSelectorGrouping,
+): RowSection[] {
+  if (grouping.id === 'openTabs') return partitionByOpenTabs(rows);
+  if (grouping.id === 'selection') return partitionBySelection(rows, grouping);
+  if (!grouping.getGroupKey) return partitionFlat(rows);
+  const buckets = new Map<string, ProjectRow[]>();
   const unknownRows: ProjectRow[] = [];
+  const { getGroupKey } = grouping;
   rows.forEach((row) => {
-    const id = row.versificationId;
-    if (id === undefined || id === '') {
+    const key = getGroupKey(row.project);
+    if (key === undefined || key === '') {
       unknownRows.push(row);
       return;
     }
-    const label = row.versificationName ?? id;
-    const existing = buckets.get(id);
-    if (existing) {
-      existing.rows.push(row);
-      // Adopt the first non-empty label observed — protects against a row missing
-      // versificationName while siblings have it.
-      if (!existing.label && row.versificationName) existing.label = row.versificationName;
-    } else {
-      buckets.set(id, { label, rows: [row] });
-    }
+    const existing = buckets.get(key);
+    if (existing) existing.push(row);
+    else buckets.set(key, [row]);
   });
-  // Sort each bucket and emit sections in priority-first / alphabetical order.
-  const entries = [...buckets.entries()].map(([id, { label, rows: groupRows }]) => ({
-    id,
-    label,
-    rows: [...groupRows].sort(compareRows),
-  }));
+  const entries = [...buckets.entries()].map(([key, groupRows]) => {
+    // Ties fall back to the canonical order so rows for one project in several scroll groups,
+    // which a caller's comparator sees as equal, keep a stable sequence.
+    const sortedRows = [...groupRows].sort(
+      (a, b) => grouping.compareProjects?.(a.project, b.project) || compareRows(a, b),
+    );
+    const heading =
+      grouping.getSectionHeading?.(
+        key,
+        sortedRows.map((r) => r.project),
+      ) ?? key;
+    return { key, heading, rows: sortedRows };
+  });
   entries.sort((a, b) => {
-    if (a.id === priorityVersificationId) return -1;
-    if (b.id === priorityVersificationId) return 1;
-    return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
+    if (a.key === grouping.priorityKey) return -1;
+    if (b.key === grouping.priorityKey) return 1;
+    if (grouping.compareSections) {
+      return grouping.compareSections(
+        { key: a.key, heading: a.heading },
+        { key: b.key, heading: b.heading },
+      );
+    }
+    return a.heading.localeCompare(b.heading, undefined, { sensitivity: 'base' });
   });
-  const sections: RowSection[] = entries.map(({ id, label, rows: groupRows }) => ({
-    kind: 'versification' as const,
+  const sections: RowSection[] = entries.map(({ key, heading, rows: groupRows }) => ({
+    kind: 'grouping',
+    groupingId: grouping.id,
+    key,
+    label: heading,
     rows: groupRows,
-    label,
-    isPriority: id === priorityVersificationId,
+    isPriority: key === grouping.priorityKey,
   }));
-  if (unknownRows.length > 0) {
+  if (unknownRows.length > 0 && grouping.unknownSectionHeading) {
     sections.push({
-      kind: 'versification',
+      kind: 'grouping',
+      groupingId: grouping.id,
+      key: undefined,
+      label: grouping.unknownSectionHeading,
       rows: [...unknownRows].sort(compareRows),
-      label: unknownLabel,
-      isPriority: false,
     });
   }
   return sections;

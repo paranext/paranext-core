@@ -1,4 +1,7 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { describe, expect, it } from 'vitest';
+import { PLACEHOLDER_TEMPLATE_VALUE } from './policy';
 import { describeBlock, stalePolicyEntries } from './report';
 
 const block = {
@@ -365,6 +368,36 @@ describe('a remedy the gate would reject is not offered', () => {
     expect(message).toContain('cannot clear this block');
   });
 
+  // A package blocked on a DECLARED copyleft identifier has three routes, and the remedy used to
+  // name two: an election, or change the dependency. A third-party program redistributed as a
+  // separate executable is admitted by a reviewed `separatePrograms` entry instead, and it is
+  // exactly the case that reaches this branch - so a remedy that stops at "the dependency has to
+  // change" tells whoever is packaging one that the answer is to drop it.
+  it('names the separate-program route for a declared copyleft identifier', () => {
+    const message = describeBlock(
+      {
+        ...copyleftText,
+        name: 'hgWindows-6.3.1',
+        declared: 'GPL-3.0-or-later',
+        detected: undefined,
+        matchedFile: undefined,
+        textSha256: undefined,
+        usableDisallowedId: undefined,
+        usableDisallowedFile: undefined,
+        reason: 'declared GPL-3.0-or-later is on the policy’s copyleft list',
+      },
+      POLICY,
+    );
+    // The pre-existing advice, which stays: this branch's whole point is that "allowed" cannot
+    // clear a copyleft identifier.
+    expect(message).toContain('Adding it to "allowed" cannot');
+    expect(message).toContain('"elections" entry');
+    // The route that was missing.
+    expect(message).toContain('"separatePrograms"');
+    expect(message).toContain('"separateProgram"');
+    expect(message).toContain('aggregation rather than derivation');
+  });
+
   // A conjunction leaves `detected` undefined, so this printed a placeholder asking the reader for
   // something already on the line above. What such an exception must record is the compound
   // expression - the shape all three conjunction entries in the closure carry.
@@ -484,5 +517,95 @@ describe('a remedy the gate would reject is not offered', () => {
     );
     const json = message.slice(message.indexOf('{'), message.lastIndexOf('}') + 1);
     expect(JSON.parse(json).spdx).toBe('<SPDX identifier this package is actually under>');
+  });
+});
+
+describe('every placeholder this pipeline emits is one PLACEHOLDER_TEMPLATE_VALUE refuses', () => {
+  // What the constant is FOR. `policy.ts` uses it to refuse a policy entry left as a pasted
+  // template, and the templates it has to catch are the ones this pipeline prints - so that
+  // obligation is checkable here rather than argued from the shape of the regex. It is the half of
+  // the contract a loosened pattern breaks: the carve-out for a Markdown autolink (`<https://…>`)
+  // already means the constant does not catch every `<…>` string, and nothing else says which ones
+  // it still must.
+  //
+  // Every non-test module in this directory, not `report.ts` alone: four of them print a
+  // paste-ready template today (`report.ts`, `main.ts`, `static-assets.ts`,
+  // `external-extensions.ts`), and a sweep scoped to one file reports full compliance for every
+  // module it does not read.
+  //
+  // Read from the SOURCE, so a template added later is covered without anyone remembering to list
+  // it here. The pattern matches a whole string literal whose content opens `<` and closes `>` -
+  // the shape of a value pasted into the policy file - rather than any expected wording, so it
+  // cannot skip a template by failing to predict how it is phrased. What it does NOT see: a
+  // template assembled by concatenation or interpolation, and one written as a backtick literal
+  // (`"${identified} OR <permissive>"` at report.ts:109 is deliberately outside the set - it
+  // illustrates a DECLARATION a package might carry, not a value anybody pastes into the policy).
+  const sources = fs
+    .readdirSync(__dirname)
+    .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))
+    .sort();
+  const templates = sources.flatMap((name) =>
+    [...fs.readFileSync(path.join(__dirname, name), 'utf8').matchAll(/'(<[^']*>)'|"(<[^"]*>)"/g)]
+      .map((match) => match[1] ?? match[2])
+      .map((template) => [name, template] as const),
+  );
+
+  it('reads every module, so a new emitter is swept without being listed here', () => {
+    // Without this, a `readdirSync` filter that stopped matching would report perfect compliance.
+    expect(sources).toContain('report.ts');
+    expect(sources).toContain('external-extensions.ts');
+    expect(sources).toContain('static-assets.ts');
+    expect(sources.length).toBeGreaterThan(10);
+  });
+
+  it('finds the templates at all, so the cases below are not passing on an empty set', () => {
+    expect(templates.length).toBeGreaterThanOrEqual(12);
+    // Named separately from the count: a sweep that read only `report.ts` would still clear a bare
+    // count of 12 once that file grew three more templates.
+    expect([...new Set(templates.map(([name]) => name))]).toEqual(
+      expect.arrayContaining([
+        'external-extensions.ts',
+        'main.ts',
+        'report.ts',
+        'static-assets.ts',
+      ]),
+    );
+  });
+
+  it.each(templates)('%s refuses %s', (_name, template) => {
+    expect(PLACEHOLDER_TEMPLATE_VALUE.test(template)).toBe(true);
+  });
+});
+
+describe('PLACEHOLDER_TEMPLATE_VALUE tells a template from an autolink', () => {
+  // The carve-out's boundary, stated as cases rather than left to the regex. A scheme is `word:`
+  // and so is the opening of an ordinary note, so a lookahead written for "any scheme shape" reads
+  // `<TODO: …>` as a link and lets the most natural spelling of an unfinished determination stand
+  // as a recorded one.
+  it.each([
+    '<TODO: ask legal where the source lives>',
+    '<NOTE: fill me in>',
+    '<FIXME:>',
+    '<see: the upstream repository>',
+    '<why this is correct - one sentence>',
+    '<admin@paratext.org>',
+  ])('refuses %s', (value) => {
+    expect(PLACEHOLDER_TEMPLATE_VALUE.test(value)).toBe(true);
+  });
+
+  it.each([
+    '<https://github.com/paranext/paranext-core>',
+    '<http://example.org/legacy-notice>',
+    '<mailto:admin@paratext.org>',
+  ])('admits the autolink %s', (value) => {
+    expect(PLACEHOLDER_TEMPLATE_VALUE.test(value)).toBe(false);
+  });
+
+  it('only tests a whole value, so a link inside a paragraph is untouched', () => {
+    expect(
+      PLACEHOLDER_TEMPLATE_VALUE.test(
+        'Corresponding source is published at <https://example.org/src>. Requests to admin@example.org.',
+      ),
+    ).toBe(false);
   });
 });

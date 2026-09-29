@@ -1026,6 +1026,103 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(onSelect).toHaveBeenCalledWith('non-basic');
     });
   });
+
+  describe('sizing and anchoring (anchored mode)', () => {
+    it('sizes the inner wrapper with the default caps and leaves PopoverContent unsized', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { style } = inner as HTMLElement;
+      // jsdom leaves an inline style property that was never assigned as `undefined` rather than the
+      // empty string a real browser reports for an unset CSS property, so the absent `zoom` is
+      // checked against both.
+      expect(style.zoom || '').toBe('');
+      // The palette's own default width/cap.
+      expect(style.maxWidth).toBe('500px');
+
+      const content = document.querySelector('[data-overlay-command-palette]');
+      expect(content).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((content as HTMLElement).style.width).toBe('auto');
+    });
+
+    it("leaves the caller's own maxWidth exactly as given at interface scale", () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          maxWidth={320}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { style } = inner as HTMLElement;
+      expect(style.maxWidth).toBe('320px');
+    });
+
+    it('renders the arrow as a sibling of the inner wrapper, not inside it', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const content = document.querySelector('[data-overlay-command-palette]');
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(content).toBeInTheDocument();
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertions above guard null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const contentEl = content as HTMLElement;
+      // PopoverContent has exactly two direct children: the inner wrapper and the arrow. Radix
+      // requires the arrow to be a child of PopoverContent, and it must be the OTHER child — inside
+      // the wrapper it would sit in the scrolled box. Checked structurally rather than by finding an
+      // `svg` because cmdk's search-icon svg (rendered inside the wrapper, ahead of the arrow's own
+      // svg in document order) would otherwise be matched first.
+      const otherChildren = Array.from(contentEl.children).filter((child) => child !== inner);
+      expect(otherChildren).toHaveLength(1);
+      expect(inner?.contains(otherChildren[0])).toBe(false);
+    });
+
+    it('sizes the anchor to the trigger as the pane measured it', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          anchor={{ width: 40, height: 20 }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const anchor = document.querySelector('[data-overlay-command-palette-anchor]');
+      expect(anchor).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { style } = anchor as HTMLElement;
+      expect(style.width).toBe('40px');
+      expect(style.height).toBe('20px');
+    });
+  });
 });
 
 describe('OverlayCommandPalette (store-connected)', () => {
@@ -1069,6 +1166,30 @@ describe('OverlayCommandPalette (store-connected)', () => {
 
   beforeEach(() => {
     clearAllOverlays();
+  });
+
+  it('hands the request’s anchor size to the presentational component it renders', () => {
+    // A `position` plus a sized `request.anchor` puts the palette in its anchored branch (the
+    // centered branch has no anchor).
+    const entry = createPaletteEntry({
+      position: { x: 10, y: 20 },
+      request: {
+        items: paletteItems,
+        disableFuzzyMatching: true,
+        anchor: { x: 10, y: 20, width: 40, height: 20 },
+      },
+    });
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    const anchor = document.querySelector('[data-overlay-command-palette-anchor]');
+    expect(anchor).toBeInTheDocument();
+    // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const { style: anchorStyle } = anchor as HTMLElement;
+    // request.anchor is 40x20, drawn at that size.
+    expect(anchorStyle.width).toBe('40px');
+    expect(anchorStyle.height).toBe('20px');
   });
 
   it('mirrors typed filter text into the store so a forwarded commit resolves against the displayed list', () => {

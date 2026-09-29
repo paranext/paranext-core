@@ -16,14 +16,10 @@
  * admin entry stays in the top section) persists.
  */
 import { Page } from '@playwright/test';
-import { test, expect } from '../../fixtures/cdp.fixture';
+import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import {
-  chapterViewOption,
-  closeAllNonHomeDockTabs,
-  verseViewOption,
-  viewOptionsButton,
-} from './test-helpers';
+import { closeAllNonHomeDockTabs } from './test-helpers';
+import { chapterViewOption, verseViewOption, viewOptionsButton } from './scripture-text-grid.page';
 
 const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 

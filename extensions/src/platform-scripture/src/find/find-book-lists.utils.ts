@@ -1,13 +1,16 @@
 import { Canon } from '@sillsdev/scripture';
 import { getAvailableBookIds } from 'platform-bible-react/experimental';
 import { BOOKS_PRESENT_DEFAULT } from 'platform-bible-utils/experimental';
+import { isExtraMaterialBookId } from './extra-material.utils';
 
 /**
- * Book numbers the canon classifies as extra material (GLO, FRT, INT, XXA, etc.). Precomputed
- * because the set is fixed for a given canon.
+ * Book numbers {@link isExtraMaterialBookId} accepts — the extra material. Precomputed because the
+ * set is fixed for a given canon, and derived from that predicate rather than from a second canon
+ * API so the flag string {@link excludeExtraMaterialBooks} clears and the scope gate cannot disagree
+ * about what counts as extra material.
  */
 const EXTRA_MATERIAL_BOOK_NUMBERS: ReadonlySet<number> = new Set(
-  Canon.nonCanonicalIds.map((bookId) => Canon.bookIdToNumber(bookId)),
+  Canon.allBookIds.filter(isExtraMaterialBookId).map((bookId) => Canon.bookIdToNumber(bookId)),
 );
 
 /**
@@ -24,7 +27,7 @@ const EXTRA_MATERIAL_BOOK_NUMBERS: ReadonlySet<number> = new Set(
  *
  * This narrows what Find _searches_ and what its book picker _offers_. It does not reach the
  * `book`/`chapter` scopes, which resolve from the current scripture reference rather than from this
- * flag string; PT-4415 covers gating those.
+ * flag string; {@link isExtraMaterialBookId} gates those.
  *
  * TODO(PT-4414): Drop this exclusion once extra material can be opened and addressed.
  *
@@ -66,9 +69,9 @@ export type FindBookLists = {
  *
  * Pass `undefined` when the project's book list is not known: while the setting is still resolving,
  * or after the read failed. `availableBookIds` then comes back `undefined` rather than empty, which
- * is what keeps a persisted book selection from being pruned away against a list nobody has read
- * yet. An EMPTY array is a real answer — a project with no searchable books — and is reported as
- * such, which is a genuine case here because extra material is excluded.
+ * keeps the derived display and search list from being narrowed against a book list not yet known.
+ * An EMPTY array is a real answer — a project with no searchable books — and is reported as such,
+ * which is a genuine case here because extra material is excluded.
  *
  * TODO(PT-4414): The `availableBookIds`/`localizableBookIds` split exists only to compensate for
  * excluding extra material; collapse it back into one list when that exclusion goes away.

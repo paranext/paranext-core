@@ -6,6 +6,12 @@ import { withPlatformBibleThemes } from '../lib/platform-bible-react/.storybook/
 import '../lib/platform-bible-react/src/index.css';
 // Provides the Shadcn Neutral palette referenced by the Theme toolbar (not shipped in index.css).
 import '../lib/platform-bible-react/.storybook/storybook-themes.css';
+// Charis SIL with real bold and italic faces. This Storybook renders the application's Scripture
+// stories — the layout demos, the model text panel, the Enhanced Resources panes — and reaches the
+// vendored `usj-nodes.css`, which declares no faces of its own. `src/renderer/styles/fonts.css` is
+// the application's source for these and is loaded only as `?raw` into a web view's srcdoc, so
+// Storybook never receives it.
+import '../lib/platform-bible-react/.storybook/scripture-fonts.css';
 
 const preview: Preview = {
   parameters: {

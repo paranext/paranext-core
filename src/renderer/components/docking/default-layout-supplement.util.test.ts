@@ -57,13 +57,38 @@ function tabsInFirstPanel(layout: LayoutBase): SavedTabInfo[] {
   /* eslint-enable no-type-assertion/no-type-assertion */
 }
 
+/** A merged tab's own `data.webViewType`, unaffected by minting (only `id` is minted) */
+function webViewTypeOf(tab: SavedTabInfo): string | undefined {
+  // `data` is typed `unknown` on `TabBase`; narrow to the shape the test fixtures actually use.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return (tab.data as { webViewType?: string } | undefined)?.webViewType;
+}
+
+/**
+ * The `webViewType` of every tab in the first panel, in order. A merged supplement tab's `id` is
+ * freshly minted (see `mintFreshWebViewIds`), so order/membership assertions read `webViewType`
+ * instead — the one property a supplement tab keeps in common with the entry that describes it.
+ */
+function webViewTypesInFirstPanel(layout: LayoutBase): (string | undefined)[] {
+  return tabsInFirstPanel(layout).map(webViewTypeOf);
+}
+
 describe('mergeDefaultLayoutSupplement', () => {
   it('appends the supplement tab to the panel containing the anchor', () => {
     const merged = mergeDefaultLayoutSupplement(baseLayout(), [gridEntry], 'simple');
-    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual([
-      'anchor-tab',
-      'scripture-text-grid-tab',
+    expect(webViewTypesInFirstPanel(merged)).toEqual([
+      'platformScriptureEditor.bibleTexts',
+      'platformScriptureEditor.scriptureTextGrid',
     ]);
+  });
+  it('mints a fresh id for the inserted tab rather than reusing the entry’s baked id', () => {
+    // The baked id in the supplement JSON is that slot's identity, not a runtime id (see
+    // `mintFreshWebViewIds`) — reusing it verbatim would let two windows' Scripture Text Grid tabs
+    // collide on the same id.
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [gridEntry], 'simple');
+    const gridTab = tabsInFirstPanel(merged)[1];
+    expect(gridTab.id).toBeDefined();
+    expect(gridTab.id).not.toBe(gridEntry.tab.id);
   });
   it('inserts the supplement tab before the tab named by insertBeforeWebViewType', () => {
     // Simple mode's Column 3 keeps Find last, so Text Collection has to land before it rather than
@@ -79,10 +104,10 @@ describe('mergeDefaultLayoutSupplement', () => {
       [{ ...gridEntry, insertBeforeWebViewType: 'platformScripture.find' }],
       'simple',
     );
-    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual([
-      'anchor-tab',
-      'scripture-text-grid-tab',
-      'find-tab',
+    expect(webViewTypesInFirstPanel(merged)).toEqual([
+      'platformScriptureEditor.bibleTexts',
+      'platformScriptureEditor.scriptureTextGrid',
+      'platformScripture.find',
     ]);
   });
   it('inserting at the head keeps the incumbent first tab as the active one', () => {
@@ -95,9 +120,9 @@ describe('mergeDefaultLayoutSupplement', () => {
       'simple',
     );
 
-    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual([
-      'scripture-text-grid-tab',
-      'anchor-tab',
+    expect(webViewTypesInFirstPanel(merged)).toEqual([
+      'platformScriptureEditor.scriptureTextGrid',
+      'platformScriptureEditor.bibleTexts',
     ]);
     // Narrowing to PanelData to read the activeId the merge pinned.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -129,9 +154,9 @@ describe('mergeDefaultLayoutSupplement', () => {
       [{ ...gridEntry, insertBeforeWebViewType: 'not.in.this.panel' }],
       'simple',
     );
-    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual([
-      'anchor-tab',
-      'scripture-text-grid-tab',
+    expect(webViewTypesInFirstPanel(merged)).toEqual([
+      'platformScriptureEditor.bibleTexts',
+      'platformScriptureEditor.scriptureTextGrid',
     ]);
   });
   it('does not mutate the input layout', () => {
@@ -139,17 +164,22 @@ describe('mergeDefaultLayoutSupplement', () => {
     mergeDefaultLayoutSupplement(input, [gridEntry], 'simple');
     expect(tabsInFirstPanel(input).map((t) => t.id)).toEqual(['anchor-tab']);
   });
-  it('is idempotent: does not add a tab whose id already exists', () => {
+  it('is idempotent: does not add a second tab of a webViewType that already exists', () => {
     const once = mergeDefaultLayoutSupplement(baseLayout(), [gridEntry], 'simple');
     const twice = mergeDefaultLayoutSupplement(once, [gridEntry], 'simple');
-    expect(tabsInFirstPanel(twice).map((t) => t.id)).toEqual([
-      'anchor-tab',
-      'scripture-text-grid-tab',
+    expect(webViewTypesInFirstPanel(twice)).toEqual([
+      'platformScriptureEditor.bibleTexts',
+      'platformScriptureEditor.scriptureTextGrid',
     ]);
+    // Recognizing "already present" by type, not by id, means the tab already in the layout is
+    // never re-minted or duplicated — it keeps the very id the first merge gave it.
+    expect(tabsInFirstPanel(twice).map((t) => t.id)).toEqual(
+      tabsInFirstPanel(once).map((t) => t.id),
+    );
   });
   it('does not re-inject a supplement tab that the user has floated out of the dockbox', () => {
     // rc-dock moves a floated tab into `floatbox`, a sibling of `dockbox`. Dedup must see it there,
-    // otherwise every subsequent load re-appends a duplicate-id copy into the dockbox anchor and
+    // otherwise every subsequent load re-appends a duplicate copy into the dockbox anchor and
     // corrupts the persisted layout.
     const layout = baseLayout();
     // The test layout is a known-fixed shape; casting the literal to rc-dock's box types matches the
@@ -161,11 +191,14 @@ describe('mergeDefaultLayoutSupplement', () => {
         {
           tabs: [
             {
-              id: 'scripture-text-grid-tab',
+              // A different id from `gridEntry.tab.id` on purpose: dedup is keyed by webViewType, so
+              // a floated tab minted in an earlier window (a different runtime id) must still be
+              // recognized as "this supplement entry is already present".
+              id: 'a-previously-minted-grid-tab-id',
               tabType: 'webView',
               data: {
                 webViewType: 'platformScriptureEditor.scriptureTextGrid',
-                id: 'scripture-text-grid-tab',
+                id: 'a-previously-minted-grid-tab-id',
               },
             },
           ],
@@ -191,6 +224,205 @@ describe('mergeDefaultLayoutSupplement', () => {
   });
 });
 
+/**
+ * An entry whose tab carries no `data.webViewType` at all — a non-web-view tab (e.g. a settings
+ * tab), the kind `mintFreshWebViewIdInTab` leaves untouched on every materialization. Dedup for
+ * these can't key on type (there is none), so it falls back to the tab's own `id`, which is sound
+ * here precisely because minting never changes it.
+ */
+const noTypeEntry: DefaultLayoutSupplementEntry = {
+  anchorWebViewType: 'platformScriptureEditor.bibleTexts',
+  tab: {
+    id: 'settings-tab',
+    tabType: 'settings',
+    data: { id: 'settings-tab' },
+  },
+};
+
+describe('mergeDefaultLayoutSupplement with a no-webViewType entry', () => {
+  it('does not append a second time when the layout already contains that tab id', () => {
+    const layout = baseLayout();
+    tabsInFirstPanel(layout).push({
+      id: 'settings-tab',
+      tabType: 'settings',
+      data: { id: 'settings-tab' },
+    });
+    const merged = mergeDefaultLayoutSupplement(layout, [noTypeEntry], 'simple');
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab', 'settings-tab']);
+  });
+
+  it('is idempotent: re-merging the output of a first merge adds nothing', () => {
+    const once = mergeDefaultLayoutSupplement(baseLayout(), [noTypeEntry], 'simple');
+    const twice = mergeDefaultLayoutSupplement(once, [noTypeEntry], 'simple');
+    expect(tabsInFirstPanel(twice).map((t) => t.id)).toEqual(
+      tabsInFirstPanel(once).map((t) => t.id),
+    );
+  });
+
+  it('positive control: a genuinely new no-type entry is still added', () => {
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [noTypeEntry], 'simple');
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab', 'settings-tab']);
+  });
+});
+
+/**
+ * A malformed entry: its tab claims to be a web view, so minting gives it a fresh id on every
+ * materialization, but it declares no `data.webViewType` for the dedup to key on. Neither identity
+ * is available, so nothing can recognize it as already present — merging it would append it again
+ * on every load, and Power mode persists the merged layout, so the file would grow without bound.
+ * Reachable only through the hand-edited supplement JSON a product build replaces.
+ */
+const webViewEntryWithNoType: DefaultLayoutSupplementEntry = {
+  anchorWebViewType: 'platformScriptureEditor.bibleTexts',
+  tab: {
+    id: 'malformed-tab',
+    tabType: 'webView',
+    data: { id: 'malformed-tab', state: {} },
+  },
+};
+
+describe('mergeDefaultLayoutSupplement with a web-view entry that declares no webViewType', () => {
+  it('does not merge it, since it has no identity that survives a reload', () => {
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [webViewEntryWithNoType], 'simple');
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab']);
+  });
+
+  it('does not grow the layout when the merge is repeated, which is the failure it prevents', () => {
+    const once = mergeDefaultLayoutSupplement(baseLayout(), [webViewEntryWithNoType], 'simple');
+    const twice = mergeDefaultLayoutSupplement(once, [webViewEntryWithNoType], 'simple');
+    expect(tabsInFirstPanel(twice).map((t) => t.id)).toEqual(
+      tabsInFirstPanel(once).map((t) => t.id),
+    );
+  });
+
+  it('reports it, so the typo in the hand-edited JSON is visible rather than silent', () => {
+    const anomalies: { entry: DefaultLayoutSupplementEntry; message: string }[] = [];
+    mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [webViewEntryWithNoType],
+      'simple',
+      (entry, message) => anomalies.push({ entry, message }),
+    );
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0].entry).toBe(webViewEntryWithNoType);
+    expect(anomalies[0].message).toContain('webViewType');
+  });
+
+  it('reports it in power mode too, unlike the ordering anomaly', () => {
+    // The ordering anomaly stays quiet in power mode because appending is what that mode's contract
+    // says happens. A malformed entry is malformed in both modes, so this one has to fire in both.
+    const anomalies: string[] = [];
+    mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [webViewEntryWithNoType],
+      'power',
+      (_entry, message) => anomalies.push(message),
+    );
+    expect(anomalies).toHaveLength(1);
+  });
+
+  it('positive control: a well-formed web-view entry is still merged and reports nothing', () => {
+    const anomalies: string[] = [];
+    const merged = mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [gridEntry],
+      'simple',
+      (_e, message) => anomalies.push(message),
+    );
+    expect(webViewTypesInFirstPanel(merged)).toEqual([
+      'platformScriptureEditor.bibleTexts',
+      'platformScriptureEditor.scriptureTextGrid',
+    ]);
+    expect(anomalies).toEqual([]);
+  });
+
+  it('positive control: a non-web-view tab with no type is unaffected and still merges', () => {
+    const anomalies: string[] = [];
+    const merged = mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [noTypeEntry],
+      'simple',
+      (_e, message) => anomalies.push(message),
+    );
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab', 'settings-tab']);
+    expect(anomalies).toEqual([]);
+  });
+});
+
+/**
+ * The mirror of `webViewEntryWithNoType`: a tab that is NOT typed as a web view but does declare a
+ * `data.webViewType`. `tabType` is the easy field to omit in a hand-edited supplement file, so this
+ * shape is at least as likely as the other one. The mint passes it through untouched, so its id is
+ * stable and its own id is the identity that dedup must both look up AND record — recording it by
+ * type instead would leave the id absent from the lookup set and add a type this entry does not
+ * actually contribute.
+ */
+const nonWebViewTabDeclaringAType: DefaultLayoutSupplementEntry = {
+  anchorWebViewType: 'platformScriptureEditor.bibleTexts',
+  tab: {
+    id: 'mislabeled-tab',
+    tabType: 'settings',
+    data: { id: 'mislabeled-tab', webViewType: 'platformScriptureEditor.scriptureTextGrid' },
+  },
+};
+
+describe('mergeDefaultLayoutSupplement records the identity its check looks up', () => {
+  it('dedups a second copy of a non-web-view tab that declares a type', () => {
+    const merged = mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [nonWebViewTabDeclaringAType, nonWebViewTabDeclaringAType],
+      'simple',
+    );
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab', 'mislabeled-tab']);
+  });
+
+  it('does not let such a tab suppress a genuine web view of the type it names', () => {
+    // The mislabeled tab contributes no web view of that type, so recording it as one would make a
+    // later well-formed entry look already-present and silently drop it.
+    const merged = mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [nonWebViewTabDeclaringAType, gridEntry],
+      'simple',
+    );
+    expect(webViewTypesInFirstPanel(merged)).toEqual([
+      'platformScriptureEditor.bibleTexts',
+      'platformScriptureEditor.scriptureTextGrid',
+      'platformScriptureEditor.scriptureTextGrid',
+    ]);
+    expect(tabsInFirstPanel(merged).map((t) => t.tabType)).toEqual([
+      'webView',
+      'settings',
+      'webView',
+    ]);
+  });
+
+  it('positive control: a genuine web view entry is still deduped by type within one merge', () => {
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [gridEntry, gridEntry], 'simple');
+    expect(webViewTypesInFirstPanel(merged)).toEqual([
+      'platformScriptureEditor.bibleTexts',
+      'platformScriptureEditor.scriptureTextGrid',
+    ]);
+  });
+
+  it('does not let a mislabeled tab already in the layout suppress a genuine web view', () => {
+    // The other half of the same rule: the initial scan classifies the layout's existing tabs, and
+    // it has to ask the same question the merge loop asks of an entry. A mislabeled tab persisted
+    // into a Power-mode layout would otherwise poison the type set on every subsequent load.
+    const layout = baseLayout();
+    tabsInFirstPanel(layout).push({
+      id: 'mislabeled-tab',
+      tabType: 'settings',
+      data: { id: 'mislabeled-tab', webViewType: 'platformScriptureEditor.scriptureTextGrid' },
+    });
+    const merged = mergeDefaultLayoutSupplement(layout, [gridEntry], 'simple');
+    expect(tabsInFirstPanel(merged).map((t) => t.tabType)).toEqual([
+      'webView',
+      'settings',
+      'webView',
+    ]);
+  });
+});
+
 /** Reads the `isClosable` a merged tab carries, which lives inside the tab's web view data. */
 function isClosableOf(tab: SavedTabInfo | undefined): boolean | undefined {
   // Tab data is `unknown` in the shared model; supplement tabs store a WebViewDefinition there.
@@ -204,7 +436,9 @@ function isClosableOf(tab: SavedTabInfo | undefined): boolean | undefined {
  * presence check has to happen before the value is read or the cases could pass vacuously.
  */
 function mergedGridTab(merged: LayoutBase): SavedTabInfo | undefined {
-  const gridTab = tabsInFirstPanel(merged).find((t) => t.id === 'scripture-text-grid-tab');
+  const gridTab = tabsInFirstPanel(merged).find(
+    (t) => webViewTypeOf(t) === 'platformScriptureEditor.scriptureTextGrid',
+  );
   expect(gridTab).toBeDefined();
   return gridTab;
 }
@@ -263,10 +497,10 @@ describe('mergeDefaultLayoutSupplement across interface modes', () => {
 
     // The simple-mode case asserts the opposite order; power mode has no fixed column order for the
     // tab to be placed relative to.
-    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual([
-      'anchor-tab',
-      'find-tab',
-      'scripture-text-grid-tab',
+    expect(webViewTypesInFirstPanel(merged)).toEqual([
+      'platformScriptureEditor.bibleTexts',
+      'platformScripture.find',
+      'platformScriptureEditor.scriptureTextGrid',
     ]);
   });
 

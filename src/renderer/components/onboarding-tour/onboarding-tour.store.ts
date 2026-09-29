@@ -9,8 +9,9 @@ import {
  * the tour is not a first-run signal — it shows to any already-onboarded user who has not yet seen
  * it, not only to someone who just finished the wizard.
  *
- * Kept in sync with `ONBOARDING_TOUR_DONE_KEY` in `e2e-tests/fixtures/helpers.ts`, which needs the
- * same key from the Playwright Node context where renderer source cannot be imported.
+ * Kept in sync with `ONBOARDING_TOUR_DONE_KEY` in `e2e-tests/fixtures/onboarding-tour.page.ts`,
+ * which needs the same key from the Playwright Node context where renderer source cannot be
+ * imported.
  */
 export const ONBOARDING_TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
 

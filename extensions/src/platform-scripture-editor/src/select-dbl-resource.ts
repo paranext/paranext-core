@@ -15,8 +15,8 @@ import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const
  * Adds a DBL resource to the current user's personal text connections.
  *
  * Always writes to the user's personal list, regardless of admin status — the project-level
- * (shared) settings are written exclusively by the Share Layout dialog now. Calls `onSelect` after
- * a successful write.
+ * (shared) settings are written exclusively by the Team layout dialog now. Calls `onSelect` after a
+ * successful write.
  *
  * @param resource The DBL resource to select and to add to the user's personal resource list
  * @param getUserTextConnections Function to retrieve the local user's text connections

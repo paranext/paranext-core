@@ -48,6 +48,32 @@ function modalDialogEntry(): OverlayEntry {
   };
 }
 
+function popoverEntry(): OverlayEntry {
+  return {
+    type: 'popover',
+    id: 'popover-1',
+    webViewId: 'web-view-1',
+    request: { anchor: { x: 100, y: 200 }, content: { type: 'text', body: 'Hello' } },
+    content: { type: 'text', body: 'Hello' },
+    position: { x: 100, y: 200 },
+    resolve: () => {},
+    reject: () => {},
+  };
+}
+
+function commandPaletteEntry(): OverlayEntry {
+  return {
+    type: 'commandPalette',
+    id: 'palette-1',
+    webViewId: 'web-view-1',
+    request: { items: [] },
+    items: [],
+    selectedIndex: 0,
+    resolve: () => {},
+    reject: () => {},
+  };
+}
+
 afterEach(() => {
   vi.clearAllMocks();
   mockGetOverlays.mockReturnValue([]);
@@ -61,6 +87,12 @@ describe('OverlayHost', () => {
     mockGetOverlays.mockReturnValue([modalDialogEntry()]);
     render(<OverlayHost />);
     expect(screen.getByTestId('overlay-body')).toBeInTheDocument();
+  });
+
+  it('renders a popover and a command palette overlay', () => {
+    mockGetOverlays.mockReturnValue([popoverEntry(), commandPaletteEntry()]);
+    render(<OverlayHost />);
+    expect(screen.getAllByTestId('overlay-body')).toHaveLength(2);
   });
 
   // Radix arbitrates the focus trap between two open modal dialogs by mount order, not z-index, so

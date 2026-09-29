@@ -50,6 +50,18 @@ describe('doesCatalogRowCoverProject', () => {
     expect(doesCatalogRowCoverProject(row({}), 'ANY-PROJECT')).toBe(false);
   });
 
+  // Documents the fallthrough rather than endorsing it: a row naming project A still claims a
+  // prefix-sharing project B. `buildLocalNonDblResources` depends on this, so changing it is a
+  // behaviour change for that consumer, not a local cleanup.
+  it('covers a prefix-sharing project even when the row names a different one', () => {
+    expect(
+      doesCatalogRowCoverProject(
+        row({ installed: true, dblEntryUid: 'aabbccdd', projectId: 'AABBCCDD1111' }),
+        'AABBCCDD2222',
+      ),
+    ).toBe(true);
+  });
+
   it('does not cover a different project', () => {
     expect(
       doesCatalogRowCoverProject(

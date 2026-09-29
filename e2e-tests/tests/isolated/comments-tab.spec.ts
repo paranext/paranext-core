@@ -10,14 +10,17 @@
  *
  * ## Stable selectors
  *
- * Tab buttons use `data-web-view-id` (added to `PlatformTabTitle`) so tests find them by the fixed
- * UUID from `simple-layout.data.ts`, not by localized text. This makes the tests locale-independent
- * and immune to translation changes.
+ * Tab buttons use `data-web-view-id` (added to `PlatformTabTitle`) so tests find them by id rather
+ * than by localized text. This makes the tests locale-independent and immune to translation
+ * changes.
  *
- * The Comment List Panel's fixed UUID in the simple layout is COMMENT_LIST_PANEL_UUID below. Match
- * it as a PREFIX: the renderer suffixes every web view id from a shared layout with the window it
- * was loaded into (`-w1`, `-w2`, ...) so two windows never collide on one id, so the rendered
- * `data-web-view-id` is the UUID plus that suffix rather than the bare UUID.
+ * The simple layout's Comment List Panel slot has a fixed `webViewType`
+ * (`legacyCommentManager.commentListPanel`, see `simple-layout.data.ts`), but not a fixed id: every
+ * materialization of a baked layout mints each web view a fresh id (`mintFreshWebViewIds` in
+ * `src/renderer/components/docking/mint-web-view-ids.util.ts`). `waitForSimpleLayout` below reads
+ * the live id once (by type, via `waitForOpenWebViewIdByType`) and every test threads that id
+ * through to `commentsFrameLocator`/`clickCommentsTab` — it stays valid for the whole worker-scoped
+ * Electron session, since this tab (unlike the scripture-editor slot) is never replaced.
  *
  * ## Tab overflow
  *
@@ -42,144 +45,82 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/comment.fixture';
 import {
+  DEFAULT_WEBSOCKET_PORT,
   waitForAppReady,
+  waitForOpenWebViewIdByType,
   waitForOverlayGone,
   waitForPapiMethodRegistered,
   sendPapiRequestOnce,
 } from '../../fixtures/helpers';
 import {
   type CommentTestProject,
+  clickCommentsTab,
   createCommentTestProject,
   cleanupCommentTestProject,
   createCommentThreads,
+  openCommentListPanel,
 } from '../../fixtures/comment-test-helpers';
+import {
+  openSimpleModeEditor,
+  SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE,
+} from '../../fixtures/simple-mode-columns.page';
 
-const DEFAULT_WEBSOCKET_PORT = 8876;
 const SETTINGS_TIMEOUT_MS = 60_000;
 /**
- * `openScriptureEditor` triggers `openOrUpdateRelatedPanels`, which sequentially awaits five PAPI
- * commands (four for a read-only resource). Each command opens a panel and can take several
- * seconds; the combined response can exceed the default 30 s PAPI request timeout. Use a generous
- * timeout.
+ * Per-request timeout for the `openCommentListPanel` calls below, each of which can rebuild the
+ * dock.
  */
 const OPEN_EDITOR_TIMEOUT_MS = 150_000;
 
 /**
- * Fixed UUID for the Comment List Panel tab in Column 3 of the simple layout. Source:
+ * `webViewType` of the Comment List Panel tab in Column 3 of the simple layout. Source:
  * src/renderer/components/docking/simple-layout.data.ts
  */
-const COMMENT_LIST_PANEL_UUID = 'c7e4a8b2-3d91-4f06-8e5a-1b2c9d0e7f83';
-
-/**
- * Fixed UUID for the Column 2 scripture-editor slot in the simple layout. Source:
- * src/renderer/components/docking/simple-layout.data.ts
- *
- * `openScriptureEditor` replaces this slot with the project editor. It must be present in the dock
- * state before `openScriptureEditor` is called, otherwise the replace fails with "target tab not
- * found". Waiting for its tab title to be attached confirms the dock has fully processed the simple
- * layout — the slot is guaranteed to be in the dock state at that point.
- */
-const SCRIPTURE_EDITOR_SLOT_UUID = '3cf575f0-2cc2-464b-8765-b588f216dfce';
+const COMMENT_LIST_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
 
 /**
  * Wait for the simple layout to be ready with all Column 2 and Column 3 tabs present, and the
- * workspace-updating overlay cleared.
+ * workspace-updating overlay cleared. Returns the Comment List Panel's live-minted id (read once by
+ * type; see the module doc comment) so callers can thread it through `commentsFrameLocator` and
+ * `clickCommentsTab` instead of re-deriving it.
  *
  * Waits for:
  *
- * 1. The Comment List Panel tab title (UUID-based) — confirms legacyCommentManager activated.
+ * 1. The Comment List Panel tab title — confirms legacyCommentManager activated.
  * 2. The scripture editor slot tab title — confirms the dock processed the Column 2 slot so that
- *    `openScriptureEditor` can replace it without a "target tab not found" error.
+ *    `openSimpleModeEditor` can replace it without a "target tab not found" error.
  * 3. The workspace-updating overlay to be gone — confirms no dock rebuild is in progress that would
  *    block clicks or iframe loading.
  */
-async function waitForSimpleLayout(mainPage: Page): Promise<void> {
+async function waitForSimpleLayout(mainPage: Page): Promise<string> {
+  const [commentListPanelId, scriptureEditorSlotId] = await Promise.all([
+    waitForOpenWebViewIdByType(mainPage, COMMENT_LIST_PANEL_WEBVIEW_TYPE),
+    waitForOpenWebViewIdByType(mainPage, SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE),
+  ]);
   await Promise.all([
     expect(
-      mainPage.locator(`.platform-tab-title[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`),
-    ).toBeAttached({ timeout: 120_000 }),
+      mainPage.locator(`.platform-tab-title[data-web-view-id="${commentListPanelId}"]`),
+    ).toBeAttached({ timeout: 60_000 }),
     expect(
-      mainPage.locator(`.platform-tab-title[data-web-view-id^="${SCRIPTURE_EDITOR_SLOT_UUID}"]`),
-    ).toBeAttached({ timeout: 120_000 }),
+      mainPage.locator(`.platform-tab-title[data-web-view-id="${scriptureEditorSlotId}"]`),
+    ).toBeAttached({ timeout: 60_000 }),
   ]);
   // Wait for any workspace-updating overlay to clear. It can appear (and reappear) during dock
   // rebuilds triggered by extension activation.
   await waitForOverlayGone(mainPage, 90_000);
+  return commentListPanelId;
 }
 
 /**
  * Returns a FrameLocator for the comment-list-panel iframe.
  *
- * Uses the UUID-based `data-web-view-id` attribute on the iframe (set by `web-view.component.tsx`)
- * rather than `iframe[title="Comments"]`, which depends on the localization service having
- * initialized before the WebView's first `getWebView()` call. The UUID attribute is always present
- * regardless of whether the title resolved.
+ * Uses the `data-web-view-id` attribute on the iframe (set by `web-view.component.tsx`) rather than
+ * `iframe[title="Comments"]`, which depends on the localization service having initialized before
+ * the WebView's first `getWebView()` call. The id attribute is always present regardless of whether
+ * the title resolved.
  */
-function commentsFrameLocator(mainPage: Page) {
-  return mainPage.frameLocator(`iframe[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`);
-}
-
-/**
- * Calls `openScriptureEditor` via PAPI to open the main (editable) project, retrying up to
- * `maxRetries` times if the dock throws "Replacing tab failed". That error is a known transient
- * race condition: `openOrUpdateRelatedPanels` can trigger a dock rebuild that briefly removes the
- * editor slot from the layout, causing the subsequent replace to fail. A short delay and retry
- * reliably succeeds once the dock settles.
- */
-async function openScriptureEditor(
-  projectId: string,
-  port: number,
-  timeout: number,
-  maxRetries = 2,
-): Promise<void> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (attempt > 0)
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 2_000);
-      });
-    try {
-      await sendPapiRequestOnce(
-        'command:platformScriptureEditor.openScriptureEditor',
-        [projectId],
-        port,
-        timeout,
-      );
-      return;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (attempt >= maxRetries || !msg.includes('Replacing tab failed')) throw e;
-      // Otherwise fall through to the next loop iteration to retry after a short delay
-    }
-  }
-}
-
-/**
- * Click the Comments tab in Column 3.
- *
- * If the tab title is scrolled outside the visible portion of the tab bar (clipped by the rc-tabs
- * overflow container), hover the `.dock-nav-more` overflow button to open the dropdown, then click
- * the Comments option via its UUID attribute.
- *
- * `actionTimeoutMs` bounds the click/hover actions — pass a short value when calling inside a retry
- * loop so a blocked click (e.g. the workspace-updating overlay intercepting pointer events) fails
- * fast and the loop can retry, instead of burning the default 30 s action timeout.
- */
-async function clickCommentsTab(mainPage: Page, actionTimeoutMs = 30_000): Promise<void> {
-  const tabTitle = mainPage.locator(
-    `.platform-tab-title[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`,
-  );
-  if (await tabTitle.isVisible()) {
-    await tabTitle.click({ timeout: actionTimeoutMs });
-    return;
-  }
-  // Tab is outside the visible scroll area — open the overflow dropdown and activate it.
-  const dockBar = mainPage.locator('.dock-bar').filter({ has: tabTitle });
-  await dockBar.locator('.dock-nav-more').hover({ timeout: actionTimeoutMs });
-  // rc-tabs re-renders PlatformTabTitle (including our data-web-view-id) in the overflow popup.
-  await mainPage
-    .locator('[role="listbox"] [role="option"]')
-    .filter({ has: mainPage.locator(`[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`) })
-    .click({ timeout: 5_000 });
+function commentsFrameLocator(mainPage: Page, commentListPanelId: string) {
+  return mainPage.frameLocator(`iframe[data-web-view-id="${commentListPanelId}"]`);
 }
 
 // Own this spec's Electron app so it is not inherited from another spec that has already replaced
@@ -188,7 +129,7 @@ test.use({ commentAppOwner: 'comments-tab' });
 
 test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   // First 3 tests: app startup (up to 180 s) + waitForSimpleLayout (up to 120 s) + test actions.
-  // "Project changes" test: two openScriptureEditor calls at 150 s each on top of startup.
+  // "Project changes" test: two openSimpleModeEditor calls at 150 s each on top of startup.
   // 7 minutes covers all cases.
   test.setTimeout(420_000);
   let project: CommentTestProject;
@@ -216,22 +157,22 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
 
   test('Comments tab is visible in Column 3 in the English UI', async ({ mainPage }) => {
     await waitForAppReady(mainPage, { timeout: 180_000 });
-    await waitForSimpleLayout(mainPage);
-    // The UUID-based locator confirms the tab is in the DOM regardless of scroll position.
+    const commentListPanelId = await waitForSimpleLayout(mainPage);
+    // The id-based locator confirms the tab is in the DOM regardless of scroll position.
     await expect(
-      mainPage.locator(`.platform-tab-title[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`),
+      mainPage.locator(`.platform-tab-title[data-web-view-id="${commentListPanelId}"]`),
     ).toBeAttached();
   });
 
   test('selecting the Comments tab displays the panel', async ({ mainPage }) => {
     await waitForAppReady(mainPage, { timeout: 180_000 });
-    await waitForSimpleLayout(mainPage);
+    const commentListPanelId = await waitForSimpleLayout(mainPage);
 
     // Assert on rendered panel UI, not just the iframe body: the body is "attached" as soon as
     // the frame element exists, which would pass even for an empty or errored WebView. The panel
     // renders skeleton placeholders while loading (this test opens no project, so it stays in the
-    // loading state) and the filter toolbar dropdowns once loaded — either proves the
-    // CommentListPanel component actually rendered.
+    // loading state) and the preset filter dropdown once loaded (it renders regardless of loading
+    // state) — either proves the CommentListPanel component actually rendered.
     //
     // Click and assert inside ONE retry loop: a workspace rebuild ("Updating project view"
     // overlay) can still fire after waitForSimpleLayout. It recreates the Column 3 tabs and resets
@@ -239,13 +180,14 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // flakes. Each attempt first waits out any in-progress rebuild (the overlay also intercepts
     // pointer events, so clicking during one always fails), then clicks and asserts with short
     // timeouts so the loop can retry promptly if another rebuild lands mid-attempt.
-    const commentsFrame = commentsFrameLocator(mainPage);
+    const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
+    const skeletonOrPresetFilter = commentsFrame
+      .locator('[data-slot="skeleton"]')
+      .or(commentsFrame.locator('[data-testid="comment-preset-filter"]'));
     await expect(async () => {
       await waitForOverlayGone(mainPage, 60_000);
-      await clickCommentsTab(mainPage, 5_000);
-      await expect(
-        commentsFrame.locator('[data-slot="skeleton"], [data-slot="select-trigger"]').first(),
-      ).toBeVisible({ timeout: 10_000 });
+      await clickCommentsTab(mainPage, commentListPanelId, 5_000);
+      await expect(skeletonOrPresetFilter.first()).toBeVisible({ timeout: 10_000 });
     }).toPass({ timeout: 180_000 });
   });
 
@@ -253,7 +195,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     mainPage,
   }) => {
     await waitForAppReady(mainPage, { timeout: 180_000 });
-    await waitForSimpleLayout(mainPage);
+    const commentListPanelId = await waitForSimpleLayout(mainPage);
 
     await createCommentThreads(project, ['GEN 1:1'], ['Visible comment for PT-4068 test']);
 
@@ -263,21 +205,11 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // that call getWebView for the comment list panel while the sentinel is in flight,
     // occasionally overwriting it with the previously-open developer project. Calling directly
     // here is safe because waitForSimpleLayout already confirmed the dock is stable (overlay gone).
-    await waitForPapiMethodRegistered(
-      'command:legacyCommentManager.openCommentListPanel',
-      DEFAULT_WEBSOCKET_PORT,
-      SETTINGS_TIMEOUT_MS,
-    );
-    await sendPapiRequestOnce(
-      'command:legacyCommentManager.openCommentListPanel',
-      [project.projectId],
-      DEFAULT_WEBSOCKET_PORT,
-      OPEN_EDITOR_TIMEOUT_MS,
-    );
+    await openCommentListPanel(project.projectId);
 
-    await clickCommentsTab(mainPage);
+    await clickCommentsTab(mainPage, commentListPanelId);
 
-    const commentsFrame = commentsFrameLocator(mainPage);
+    const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
     await expect(commentsFrame.locator('body')).toContainText('Visible comment for PT-4068 test', {
       timeout: 90_000,
     });
@@ -287,7 +219,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     mainPage,
   }) => {
     await waitForAppReady(mainPage, { timeout: 180_000 });
-    await waitForSimpleLayout(mainPage);
+    const commentListPanelId = await waitForSimpleLayout(mainPage);
 
     // Seed enough threads to force the comment list to scroll. GEN 1 has 31 verses, so 30
     // distinct single-verse threads are all valid and comfortably overflow the panel height.
@@ -301,29 +233,19 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
 
     // Point the Column 3 Comments tab at the seeded project (same direct-open path the
     // "has comments" test uses — see that test for why we avoid openScriptureEditor here).
-    await waitForPapiMethodRegistered(
-      'command:legacyCommentManager.openCommentListPanel',
-      DEFAULT_WEBSOCKET_PORT,
-      SETTINGS_TIMEOUT_MS,
-    );
-    await sendPapiRequestOnce(
-      'command:legacyCommentManager.openCommentListPanel',
-      [projectScroll.projectId],
-      DEFAULT_WEBSOCKET_PORT,
-      OPEN_EDITOR_TIMEOUT_MS,
-    );
+    await openCommentListPanel(projectScroll.projectId);
 
-    await clickCommentsTab(mainPage);
+    await clickCommentsTab(mainPage, commentListPanelId);
 
-    const commentsFrame = commentsFrameLocator(mainPage);
-    // The filter dropdowns are the toolbar; the first one is the resolved-status filter. Its
-    // visibility is a faithful proxy for "the filtering bar is visible" (PT-4070 DoD).
-    const firstFilter = commentsFrame.locator('[data-slot="select-trigger"]').first();
+    const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
+    // The preset filter dropdown is always mounted in the toolbar (never gated behind a popover),
+    // so its visibility is a faithful proxy for "the filtering bar is visible" (PT-4070 DoD).
+    const presetFilter = commentsFrame.locator('[data-testid="comment-preset-filter"]');
     const threads = commentsFrame.locator('#comment-list [role="option"]');
 
     // Wait for the seeded threads to render, then confirm the toolbar starts out visible.
     await expect(threads.first()).toBeVisible({ timeout: 90_000 });
-    await expect(firstFilter).toBeInViewport();
+    await expect(presetFilter).toBeInViewport();
 
     // Scroll the iframe DOCUMENT explicitly, not "whichever container happens to scroll". In the
     // real web view nothing bounds html/body/#root, so the document is the scroll container and
@@ -342,19 +264,19 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await expect(threads.first()).not.toBeInViewport();
 
     // The point of PT-4070: the sticky filter row must remain on-screen after scrolling to bottom.
-    await expect(firstFilter).toBeInViewport();
+    await expect(presetFilter).toBeInViewport();
   });
 
   // NOTE: The keyboard and scope-filter tests below MUST stay ahead of the PT-4069 test. That test
-  // calls openScriptureEditor, which in Simple mode dispatches `replace-tab` and swaps the Column 2
-  // scripture-editor slot (SCRIPTURE_EDITOR_SLOT_UUID) for a fresh GUID. Nothing re-applies the
-  // simple layout in-session and the Electron app is worker-scoped, so any later test's
-  // waitForSimpleLayout would block the full 120 s on a slot that no longer exists and fail its
-  // first attempt (relying on Playwright's worker-relaunch retry to recover — a guaranteed slow
-  // flake, and a hard failure under --retries=0).
+  // calls openSimpleModeEditor, which in Simple mode dispatches `replace-tab` and swaps the Column 2
+  // scripture-editor slot (SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE) for a web view of a DIFFERENT type
+  // (the project editor). Nothing re-applies the simple layout in-session and the Electron app is
+  // worker-scoped, so any later test's waitForSimpleLayout would block the full timeout on a slot
+  // that no longer exists and fail its first attempt (relying on Playwright's worker-relaunch retry
+  // to recover — a guaranteed slow flake, and a hard failure under --retries=0).
   test('filter dropdowns are operable with the keyboard (PT-4070)', async ({ mainPage }) => {
     await waitForAppReady(mainPage, { timeout: 180_000 });
-    await waitForSimpleLayout(mainPage);
+    const commentListPanelId = await waitForSimpleLayout(mainPage);
 
     // The toolbar renders in the loaded state even with zero threads, but seed a few so the panel
     // never sits in the skeleton state when we go to interact (keeps the test self-sufficient when
@@ -365,30 +287,38 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
       ['PT-4070 keyboard a11y 1', 'PT-4070 keyboard a11y 2', 'PT-4070 keyboard a11y 3'],
     );
 
-    await waitForPapiMethodRegistered(
-      'command:legacyCommentManager.openCommentListPanel',
-      DEFAULT_WEBSOCKET_PORT,
-      SETTINGS_TIMEOUT_MS,
-    );
+    await openCommentListPanel(projectScroll.projectId);
+
+    await clickCommentsTab(mainPage, commentListPanelId);
+
+    const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
+    const presetFilter = commentsFrame.locator('[data-testid="comment-preset-filter"]');
+
+    // The filter selection persists per project in localStorage (comment-filter-store.ts), so a
+    // prior test in this file — or a prior local run sharing this worker's user-data dir — can
+    // leave a non-default preset saved for projectScroll. Clear it and reopen the panel so the
+    // component remounts against a known default rather than whatever was last saved, then assert
+    // the reset actually landed before relying on "starts on All comments" below.
+    await expect(presetFilter).toBeVisible({ timeout: 90_000 });
+    await commentsFrame.locator(':root').evaluate((root, storageKey) => {
+      root.ownerDocument.defaultView?.localStorage.removeItem(storageKey);
+    }, `legacyCommentManager.filters.${projectScroll.projectId}`);
     await sendPapiRequestOnce(
       'command:legacyCommentManager.openCommentListPanel',
       [projectScroll.projectId],
       DEFAULT_WEBSOCKET_PORT,
       OPEN_EDITOR_TIMEOUT_MS,
     );
+    await expect(presetFilter).toBeVisible({ timeout: 90_000 });
+    await expect(presetFilter).toContainText('All comments');
 
-    await clickCommentsTab(mainPage);
-
-    const commentsFrame = commentsFrameLocator(mainPage);
-    const firstFilter = commentsFrame.locator('[data-slot="select-trigger"]').first();
-
-    // Wait for the loaded toolbar, then drive the first filter entirely by keyboard.
-    await expect(firstFilter).toBeVisible({ timeout: 90_000 });
-    await firstFilter.focus();
-    await expect(firstFilter).toBeFocused();
+    // The preset dropdown sits directly in the toolbar, so reach it by keyboard with no popover
+    // step in between.
+    await presetFilter.focus();
+    await expect(presetFilter).toBeFocused();
 
     // Open with the keyboard.
-    await firstFilter.press('Enter');
+    await presetFilter.press('Enter');
     const dropdown = commentsFrame.locator('[data-slot="select-content"]');
     await expect(dropdown).toBeVisible({ timeout: 10_000 });
 
@@ -397,73 +327,61 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await mainPage.keyboard.press('Enter');
     await expect(dropdown).toBeHidden({ timeout: 10_000 });
 
-    // Assert the OUTCOME, not merely that the popover closed. The first filter is the resolved-status
-    // axis, whose options are All / Unresolved / Resolved; ArrowDown from the selected "All resolved
-    // statuses" lands on "Unresolved", so the trigger must now display it. This fails if Enter closed
-    // the popover without committing a value, or re-selected the same value — cases a bare
-    // toBeHidden() (satisfied even by the toolbar re-rendering) would pass.
-    await expect(firstFilter).toContainText('Unresolved');
+    // Assert the OUTCOME, not merely that the dropdown closed. The preset options list "All
+    // comments" first; ArrowDown from the selected "All comments" lands on "Unresolved comments
+    // assigned to me", so the trigger must now display it. This fails if Enter closed the dropdown
+    // without committing a value, or re-selected the same value — cases a bare toBeHidden()
+    // (satisfied even by the toolbar re-rendering) would pass.
+    await expect(presetFilter).toContainText('Unresolved comments assigned to me');
   });
 
-  test('Comments tab scope filter offers "Current chapter" in Simple mode (PT-4070)', async ({
+  test('Comments tab scope filter offers all four scopes in Simple mode (PT-4070)', async ({
     mainPage,
   }) => {
     await waitForAppReady(mainPage, { timeout: 180_000 });
-    await waitForSimpleLayout(mainPage);
+    const commentListPanelId = await waitForSimpleLayout(mainPage);
 
     await createCommentThreads(projectScroll, ['GEN 3:1'], ['PT-4070 scope-option test']);
 
-    await waitForPapiMethodRegistered(
-      'command:legacyCommentManager.openCommentListPanel',
-      DEFAULT_WEBSOCKET_PORT,
-      SETTINGS_TIMEOUT_MS,
-    );
-    await sendPapiRequestOnce(
-      'command:legacyCommentManager.openCommentListPanel',
-      [projectScroll.projectId],
-      DEFAULT_WEBSOCKET_PORT,
-      OPEN_EDITOR_TIMEOUT_MS,
-    );
+    await openCommentListPanel(projectScroll.projectId);
 
-    const commentsFrame = commentsFrameLocator(mainPage);
+    const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
     // Find the scope dropdown by its stable data-testid rather than by trigger index — the index
     // holds only while the scope trigger stays the 5th of exactly five and no comment card renders a
-    // Select, which is a coincidence rather than a contract. Click the tab inside a retry loop: a
-    // "workspace updating" overlay can intercept pointer events during dock rebuilds, so wait it out
-    // and retry (same pattern as the panel-display test).
+    // Select, which is a coincidence rather than a contract.
     const scopeTrigger = commentsFrame.locator('[data-testid="comment-scope-filter"]');
+    // Retry the tab click: a "workspace updating" overlay can intercept pointer events during dock
+    // rebuilds, so wait it out and retry (same pattern as the panel-display test).
     await expect(async () => {
       await waitForOverlayGone(mainPage, 60_000);
-      await clickCommentsTab(mainPage, 5_000);
+      await clickCommentsTab(mainPage, commentListPanelId, 5_000);
       await expect(scopeTrigger).toBeVisible({ timeout: 15_000 });
     }).toPass({ timeout: 180_000 });
 
-    // With the overlay cleared, open the scope dropdown and confirm the Column 3 panel actually
-    // offers the "Current chapter" option — the exact capability this fix adds. Before the fix the
-    // option was gated on a wired editor (which the panel lacks even though it follows the active
-    // project's scroll group), so only "All books" appeared. Assert on the localized labels rather
-    // than the option count, so a future change that swapped in a different second scope value while
-    // dropping current-chapter could not keep this test green.
-    //
     // This overlay wait is NOT redundant with the one inside the retry loop above: the loop only
     // guarantees the overlay is gone at the moment the trigger becomes visible, but a fresh dock
     // rebuild can raise it again before the click below — which is a new pointer action. Keep it.
     await waitForOverlayGone(mainPage, 30_000);
     await scopeTrigger.click();
+
+    // Confirm the Column 3 panel offers all four scopes. Assert on the localized labels rather than
+    // just the option count, so a future change that swapped one scope value for another while
+    // keeping the count at four could not keep this test green.
     const scopeOptions = commentsFrame.locator(
       '[data-slot="select-content"] [data-slot="select-item"]',
     );
-    await expect(scopeOptions.filter({ hasText: 'Current chapter' })).toHaveCount(1, {
-      timeout: 10_000,
-    });
+    await expect(scopeOptions).toHaveCount(4, { timeout: 10_000 });
+    await expect(scopeOptions.filter({ hasText: 'Current book' })).toHaveCount(1);
+    await expect(scopeOptions.filter({ hasText: 'Current chapter' })).toHaveCount(1);
+    await expect(scopeOptions.filter({ hasText: 'Current verse' })).toHaveCount(1);
     await expect(scopeOptions.filter({ hasText: 'All books' })).toHaveCount(1);
   });
 
   test('Comments tab updates when the active project changes (PT-4069)', async ({ mainPage }) => {
-    // Two openScriptureEditor calls on top of normal startup. 10 minutes is comfortable.
+    // Two openSimpleModeEditor calls on top of normal startup. 10 minutes is comfortable.
     test.setTimeout(600_000);
     await waitForAppReady(mainPage, { timeout: 180_000 });
-    await waitForSimpleLayout(mainPage);
+    const commentListPanelId = await waitForSimpleLayout(mainPage);
 
     await createCommentThreads(projectA, ['GEN 1:1'], ['Project A unique comment text']);
     await createCommentThreads(projectB, ['GEN 1:1'], ['Project B unique comment text']);
@@ -477,20 +395,20 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // Open Project A and wait for the dock rebuilds triggered by openOrUpdateRelatedPanels to
     // settle. The overlay intercepts pointer events while it is visible; clickCommentsTab fails
     // if called while a rebuild is in progress.
-    await openScriptureEditor(projectA.projectId, DEFAULT_WEBSOCKET_PORT, OPEN_EDITOR_TIMEOUT_MS);
+    await openSimpleModeEditor(projectA.projectId);
     await waitForOverlayGone(mainPage, 90_000);
 
-    await clickCommentsTab(mainPage);
-    await expect(
-      mainPage.locator(`iframe[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`),
-    ).toBeAttached({ timeout: 30_000 });
-    const commentsFrame = commentsFrameLocator(mainPage);
+    await clickCommentsTab(mainPage, commentListPanelId);
+    await expect(mainPage.locator(`iframe[data-web-view-id="${commentListPanelId}"]`)).toBeAttached(
+      { timeout: 30_000 },
+    );
+    const commentsFrame = commentsFrameLocator(mainPage, commentListPanelId);
     await expect(commentsFrame.locator('body')).toContainText('Project A unique comment text', {
       timeout: 90_000,
     });
 
     // Switch to Project B and wait for dock rebuilds to settle before asserting.
-    await openScriptureEditor(projectB.projectId, DEFAULT_WEBSOCKET_PORT, OPEN_EDITOR_TIMEOUT_MS);
+    await openSimpleModeEditor(projectB.projectId);
     await waitForOverlayGone(mainPage, 90_000);
 
     await expect(commentsFrame.locator('body')).toContainText('Project B unique comment text', {

@@ -1,160 +1,197 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useState, type ComponentType } from 'react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { WebViewProps } from '@papi/core';
-import { INTERNET_BLOCKED_NOTIFICATION_ID } from './internet-block-notification.utils';
+import { getErrorMessage } from 'platform-bible-utils';
+import type { ResourceAction } from './get-resources.component';
 
-/*
- * The classification itself is unit-tested; what only a render can show is that the web view
- * actually raises the notification — the one surface that names the setting responsible and offers
- * to open it.
- */
-
-const { mockSendCommand, mockSendNotification, mockInstallDblResource } = vi.hoisted(() => ({
-  mockSendCommand: vi.fn(),
-  mockSendNotification: vi.fn(),
-  mockInstallDblResource: vi.fn(),
-}));
-
-vi.mock('@papi/frontend', () => ({
-  default: {
-    commands: { sendCommand: (...args: unknown[]) => mockSendCommand(...args) },
-    notifications: { send: (...args: unknown[]) => mockSendNotification(...args) },
-  },
-  logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-}));
-
-vi.mock('@papi/frontend/react', () => ({
-  useLocalizedStrings: () => [
-    { '%resources_get%': 'Get', '%resources_retry%': 'Try again' },
-    false,
-  ],
-  useDataProvider: () => ({
-    installDblResource: (...args: unknown[]) => mockInstallDblResource(...args),
-    uninstallDblResource: vi.fn(),
-  }),
-}));
-
-// Must follow the vi.mock calls; the file assigns globalThis.webViewComponent as a side effect.
-// eslint-disable-next-line import/first
-import './get-resources.web-view';
-
-// The two blocks' texts, as they arrive across the process boundary: ParatextData's own, and the
-// data provider's gate on the "Disable access to some Bible translation services" setting.
-const ALL_ACCESS_DISABLED_ERROR =
-  'JSON-RPC Request error (-32000): Bug in Paratext caused attempted access to Internet. Request has been blocked.';
-const SERVICES_BLOCKED_ERROR =
-  'JSON-RPC Request error (-32000): Internet access is disabled in “Internet & connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)';
-
-const RESOURCE = {
-  dblEntryUid: 'uid-1',
-  displayName: 'NIV',
-  fullName: 'New International Version',
-  bestLanguageName: 'English',
-  type: 'ScriptureResource' as const,
-  size: 1000,
-  installed: false,
-  updateAvailable: false,
-  projectId: 'proj-1',
-};
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  // Radix uses ResizeObserver, which jsdom does not implement.
-  global.ResizeObserver = class {
-    // jsdom stub: intentionally no `this` usage
-    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-    observe() {}
-
-    // jsdom stub: intentionally no `this` usage
-    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-    unobserve() {}
-
-    // jsdom stub: intentionally no `this` usage
-    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-    disconnect() {}
+const mocks = vi.hoisted(() => {
+  /** Rejection messages the table saw, which is how the dialog reports a failure to the user. */
+  const actionErrors: string[] = [];
+  return {
+    sendCommand: vi.fn(),
+    installDblResource: vi.fn(async () => {}),
+    uninstallDblResource: vi.fn(async () => {}),
+    actionErrors,
   };
 });
 
-function renderWebView() {
-  // globalThis is a special interface; cast to read the property the web view file added at runtime.
+vi.mock('@papi/frontend', () => ({
+  default: { commands: { sendCommand: mocks.sendCommand } },
+  logger: { warn: vi.fn(), debug: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
+vi.mock('@papi/frontend/react', () => ({
+  useLocalizedStrings: () => [{}, false],
+  useDataProvider: () => ({
+    installDblResource: mocks.installDblResource,
+    uninstallDblResource: mocks.uninstallDblResource,
+  }),
+}));
+
+// Stand in for the resource table: this test is about which uid the dialog reports after an action,
+// not about how the table renders. The two buttons are the table's two actions.
+vi.mock('./get-resources.component', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./get-resources.component')>();
+  return {
+    ...actual,
+    GetResources: ({
+      onInstallOrRemoveResource,
+      idsBeingHandled,
+    }: {
+      onInstallOrRemoveResource?: (dblEntryUid: string, action: ResourceAction) => unknown;
+      idsBeingHandled?: string[];
+    }) => {
+      // The real table awaits this call and renders whatever it rejects with; ignoring the promise
+      // here would drop the outcome and leave the rejection unhandled.
+      const act = (action: ResourceAction) => {
+        Promise.resolve(onInstallOrRemoveResource?.('uid-1', action)).catch((error: unknown) => {
+          // `getErrorMessage` as the real table does: a `PlatformError` is a plain object, so
+          // reading `.message` off an `instanceof Error` check misses it entirely.
+          mocks.actionErrors.push(getErrorMessage(error));
+        });
+      };
+      return (
+        <div>
+          <button type="button" onClick={() => act('install')}>
+            install
+          </button>
+          <button type="button" onClick={() => act('remove')}>
+            remove
+          </button>
+          {/* The rows showing a spinner: the real table renders one per id in this list. */}
+          <span data-testid="handling">{(idsBeingHandled ?? []).join(',')}</span>
+        </div>
+      );
+    },
+  };
+});
+
+// The file assigns to globalThis.webViewComponent as its side effect, so it must be imported after
+// the mocks above; vitest hoists those regardless of position.
+// eslint-disable-next-line import/first
+import './get-resources.web-view';
+
+/** Reads the component set by the web view file's side effect. */
+function getResourcesDialog(): React.ComponentType<WebViewProps> {
+  // globalThis is a special interface; cast to access a property added at runtime.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const GetResourcesWebView = (globalThis as Record<string, unknown>)
-    .webViewComponent as ComponentType<WebViewProps>;
-  // Only the props this web view reads; the double cast avoids restating every optional field.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const props = {
-    useWebViewState: (_key: string, defaultValue: unknown) => useState(defaultValue),
-  } as unknown as WebViewProps;
-  return render(<GetResourcesWebView {...props} />);
+  return (globalThis as Record<string, unknown>)
+    .webViewComponent as React.ComponentType<WebViewProps>;
 }
 
-describe('Get Resources web view', () => {
-  it('reports a blocked catalog fetch with the notification that opens the setting', async () => {
-    mockSendCommand.mockRejectedValue(new Error(SERVICES_BLOCKED_ERROR));
+/** Every `refreshResourceFlags` call this dialog has made. */
+function refreshCalls(): unknown[][] {
+  return mocks.sendCommand.mock.calls.filter(
+    ([command]) => command === 'platformGetResources.refreshResourceFlags',
+  );
+}
 
-    renderWebView();
+/**
+ * Renders the dialog and waits out the refresh it runs once per mount to correct update badges.
+ * That one names no resource, so leaving it in flight would let an assertion about the action's
+ * refresh read the mount's instead.
+ */
+async function renderDialogAndSettle() {
+  // `useWebViewState` backs the type and language filters; the stub table reads neither.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const props = { useWebViewState: () => [[], vi.fn()] } as unknown as WebViewProps;
+  const GetResourcesDialog = getResourcesDialog();
+  const rendered = render(<GetResourcesDialog {...props} />);
+  await waitFor(() => expect(refreshCalls()).toHaveLength(1));
+  return rendered;
+}
 
-    await waitFor(() =>
-      expect(mockSendNotification).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: '%data_loading_error_internetAccess_disabled_2%',
-          clickCommand: 'paratextRegistration.showInternetSettings',
-          notificationId: INTERNET_BLOCKED_NOTIFICATION_ID,
-        }),
-      ),
-    );
+describe('GetResourcesDialog action reporting', () => {
+  /** Serves a catalog whose row carries `installed`, freshly built so each refetch is a new list. */
+  function serveCatalogWithInstalled(...installedByFetch: boolean[]) {
+    let fetchCount = 0;
+    mocks.sendCommand.mockImplementation(async (command: string) => {
+      if (command !== 'platformGetResources.getCachedResources') return undefined;
+      const installed = installedByFetch[Math.min(fetchCount, installedByFetch.length - 1)];
+      fetchCount += 1;
+      return {
+        status: 'available',
+        resources: [
+          {
+            dblEntryUid: 'uid-1',
+            displayName: 'WEB',
+            fullName: 'World English Bible',
+            bestLanguageName: 'English',
+            type: 'ScriptureResource',
+            size: 1,
+            installed,
+            updateAvailable: false,
+            projectId: installed ? 'UID1AAA' : '',
+          },
+        ],
+      };
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.actionErrors.length = 0;
+    serveCatalogWithInstalled(false, true);
   });
 
-  it('reports a blocked install with the notification that opens the setting', async () => {
-    mockSendCommand.mockResolvedValue({ status: 'available', resources: [RESOURCE] });
-    mockInstallDblResource.mockRejectedValue(new Error(ALL_ACCESS_DISABLED_ERROR));
+  it('ends a row whose action the list never reflects, rather than spinning on', async () => {
+    // Installing a resource already on disk succeeds as a no-op, so an install can complete with the
+    // row still reporting itself uninstalled. The row's spinner stops only when the list agrees, so
+    // before this the row span for as long as the dialog stayed open, with nothing to click.
+    serveCatalogWithInstalled(false);
+    await renderDialogAndSettle();
 
-    renderWebView();
+    fireEvent.click(screen.getByRole('button', { name: 'install' }));
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Get' }));
-
-    await waitFor(() =>
-      expect(mockSendNotification).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: '%data_loading_error_internetAccess_disabled_2%',
-          notificationId: INTERNET_BLOCKED_NOTIFICATION_ID,
-        }),
-      ),
-    );
+    await waitFor(() => expect(mocks.actionErrors).toHaveLength(1));
+    // A sentinel rather than prose: the table owns the localized text for it.
+    expect(mocks.actionErrors[0]).toContain('platformGetResources.actionDidNotTakeEffect');
+    expect(screen.getByTestId('handling')).toHaveTextContent('');
   });
 
-  // The notification is raised from an effect keyed on the committed fetch rather than from the
-  // fetch's own catch, so a retry that succeeds does not leave a block notification standing over a
-  // list that loaded fine — and does not raise a second one.
-  it('does not report the block again once a retry succeeds', async () => {
-    mockSendCommand
-      .mockRejectedValueOnce(new Error(SERVICES_BLOCKED_ERROR))
-      .mockResolvedValue({ status: 'available', resources: [RESOURCE] });
+  it('settles a removal on the opposite flag from an install', async () => {
+    // The two actions read the same row and want contrary answers, so a branch that checked
+    // `installed` for both would report every successful removal as a failure.
+    serveCatalogWithInstalled(true, false);
+    await renderDialogAndSettle();
 
-    renderWebView();
+    fireEvent.click(screen.getByRole('button', { name: 'remove' }));
 
-    await waitFor(() => expect(mockSendNotification).toHaveBeenCalledTimes(1));
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
-
-    expect(await screen.findByRole('button', { name: 'Get' })).toBeInTheDocument();
-    expect(mockSendNotification).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mocks.uninstallDblResource).toHaveBeenCalledWith('uid-1'));
+    await waitFor(() => expect(screen.getByTestId('handling')).toHaveTextContent(''));
+    expect(mocks.actionErrors).toEqual([]);
   });
 
-  it('stays quiet for a failure that is not an internet block', async () => {
-    mockSendCommand.mockResolvedValue({ status: 'available', resources: [RESOURCE] });
-    mockInstallDblResource.mockRejectedValue(
-      new Error('JSON-RPC Request error (-32000): This resource is no longer available'),
-    );
+  it('ends a row when the refetch after its action fails', async () => {
+    // `usePromise` keeps the previous value through a rejection, so a failed refetch leaves the list
+    // at the same identity and the same contents: it will never agree with the action, and never
+    // visibly disagree either. Waiting for the list alone waits for the life of the dialog.
+    serveCatalogWithInstalled(false);
+    await renderDialogAndSettle();
+    mocks.sendCommand.mockImplementation(async (command: string) => {
+      if (command === 'platformGetResources.getCachedResources')
+        throw new Error('catalog fetch failed');
+      return undefined;
+    });
 
-    renderWebView();
+    fireEvent.click(screen.getByRole('button', { name: 'install' }));
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Get' }));
+    await waitFor(() => expect(mocks.actionErrors).toHaveLength(1));
+    expect(mocks.actionErrors[0]).toContain('platformGetResources.actionDidNotTakeEffect');
+    expect(screen.getByTestId('handling')).toHaveTextContent('');
+  });
 
-    await waitFor(() => expect(mockInstallDblResource).toHaveBeenCalled());
-    expect(mockSendNotification).not.toHaveBeenCalled();
+  it('reports no failure when the list does come to agree', async () => {
+    // The same path as above, for a resource that genuinely installs: the row must settle quietly.
+    serveCatalogWithInstalled(false, true);
+    await renderDialogAndSettle();
+
+    fireEvent.click(screen.getByRole('button', { name: 'install' }));
+
+    await waitFor(() => expect(screen.getByTestId('handling')).toHaveTextContent(''));
+    expect(mocks.actionErrors).toEqual([]);
   });
 });

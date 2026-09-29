@@ -149,17 +149,17 @@ type StartupSyncTriggerOutcome = ScheduledSessionSyncResult | 'skipped-stale' | 
  * finishes starting up.
  *
  * In Simple mode: waits (bounded) for this workspace's scripture project data provider factories to
- * be registered and answering — see {@link waitForScriptureWorkspaceReady} — then requests a sync of
- * all locally-known shared projects so the user sees the latest content as soon as they open the
- * app. The wait exists because this sync saturates the .NET data provider and would otherwise
- * starve the very factory registration the project picker waits on, leaving the picker locked while
- * the rest of the UI looks loaded. On an exhausted readiness budget the sync still fires — it is
- * delayed, never suppressed. The two exceptions are shutdown and a windowless app: a quit aborts
- * the wait, and a wait that outlives a macOS last-window close (see
- * {@link StartupTasksSignals.readinessAbortSignal}) is not allowed to fire into a resident app with
- * no windows (see {@link StartupTasksSignals.canFireStartupSync}). All errors are swallowed — the
- * S/R extension may not be installed (e.g. Platform.Bible), the command may not yet be registered,
- * or the sync may fail. Startup must never be blocked or visibly affected by this.
+ * be registered and answering — see {@link waitForScriptureWorkspaceReady} — then requests a sync
+ * via `paratextBibleSendReceive.syncProjects`'s no-ID form, which will typically enable the user to
+ * see content as soon as they open the app. The wait exists because this sync saturates the .NET
+ * data provider and would otherwise starve the very factory registration the project picker waits
+ * on, leaving the picker locked while the rest of the UI looks loaded. On an exhausted readiness
+ * budget the sync still fires — it is delayed, never suppressed. The two exceptions are shutdown
+ * and a windowless app: a quit aborts the wait, and a wait that outlives a macOS last-window close
+ * (see {@link StartupTasksSignals.readinessAbortSignal}) is not allowed to fire into a resident app
+ * with no windows (see {@link StartupTasksSignals.canFireStartupSync}). All errors are swallowed —
+ * the S/R extension may not be installed (e.g. Platform.Bible), the command may not yet be
+ * registered, or the sync may fail. Startup must never be blocked or visibly affected by this.
  *
  * In Power mode: requests a sync of just the projects scheduled "On startup/shutdown" via the S/R
  * extension's `runScheduledSessionSync` command. Same error-swallowing contract as Simple mode — if
@@ -167,10 +167,10 @@ type StartupSyncTriggerOutcome = ScheduledSessionSyncResult | 'skipped-stale' | 
  * is a logged no-op, never a crash or a blocked startup.
  *
  * If the interface-mode setting can't be read: skips the automatic startup sync entirely and warns,
- * rather than falling through to Simple mode's "sync everything". The read can fail under the same
+ * rather than falling through to Simple mode's broad no-ID sync. The read can fail under the same
  * slow-cold-boot conditions the Power retry budget exists for, and Simple's no-ID `syncProjects`
- * would S/R every locally-known shared project — overriding a Power user's schedule. Mirrors the
- * symmetric gating in {@link performShutdownTasks}.
+ * could run account-wide — overriding a Power user's schedule. Mirrors the symmetric gating in
+ * {@link performShutdownTasks}.
  */
 export async function performStartupTasks(signals?: StartupTasksSignals): Promise<void> {
   try {
@@ -183,11 +183,11 @@ export async function performStartupTasks(signals?: StartupTasksSignals): Promis
 async function performStartupTasksInternal(signals?: StartupTasksSignals): Promise<void> {
   logger.debug('performStartupTasks invoked');
 
-  // An unreadable mode must NOT fall through to Simple mode's "sync everything": the read can fail
+  // An unreadable mode must NOT fall through to Simple mode's broad no-ID sync: the read can fail
   // under exactly the slow-cold-boot conditions the Power retry budget exists to tolerate, and
-  // Simple's no-ID `syncProjects` fires an S/R of every locally-known shared project, overriding a
-  // Power user's schedule and syncing projects they deliberately excluded. When we can't tell the
-  // mode, the safe default is to skip the automatic startup sync this session and warn.
+  // Simple's no-ID `syncProjects` could run account-wide, overriding a Power user's schedule and
+  // syncing projects they deliberately excluded. When we can't tell the mode, the safe default is to
+  // skip the automatic startup sync this session and warn.
   let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
   try {
     interfaceMode = await settingsService.get('platform.interfaceMode');
@@ -277,11 +277,11 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
     return;
   }
 
-  // Simple mode: sync all locally-known shared projects (no project IDs = "sync all" per the
-  // C# `String[]? projectIds` contract). The C# S/R command registers asynchronously during
-  // startup; `sendCommand` will wait (with retry on missing handler) until it's available or
-  // times out. `undefined` as the single arg serializes as `null` in the JSON-RPC params array
-  // — matching the "sync all" sentinel on the C# side.
+  // Simple mode: `undefined` is the C# `String[]? projectIds` contract's "no explicit IDs" sentinel
+  // (serializes as `null` in the JSON-RPC params array). See `syncProjects`'s own TSDoc for exactly
+  // what that syncs — it is not always every locally-known project. The C# S/R command registers
+  // asynchronously during startup; `sendCommand` will wait (with retry on missing handler) until
+  // it's available or times out.
   logger.debug('Startup sync starting');
   try {
     await commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined);
@@ -310,10 +310,10 @@ type SimpleModeSyncGateResult = { run: true } | { run: false; reason: string };
  *
  * Preserves today's exact per-setting semantics:
  *
- * - An unreadable `platform.interfaceMode` never falls through to "sync everything": the read can
- *   fail under the same slow-cold-boot conditions the Power retry budget exists to tolerate, and
- *   Simple's no-ID `syncProjects` would S/R every locally-known shared project, overriding a Power
- *   user's schedule. Logged as a warning (production-visible even in packaged builds).
+ * - An unreadable `platform.interfaceMode` never falls through to Simple's broad no-ID sync: the read
+ *   can fail under the same slow-cold-boot conditions the Power retry budget exists to tolerate,
+ *   and Simple's no-ID `syncProjects` could run account-wide, overriding a Power user's schedule.
+ *   Logged as a warning (production-visible even in packaged builds).
  * - A mode that has moved away from `'simple'` (e.g. to `'power'`, mid-wait) is also `run: false` —
  *   this function only ever green-lights the Simple-mode sync.
  * - An unreadable or `false` `platform.firstRunComplete` skips (consent-safe: a fresh user must not

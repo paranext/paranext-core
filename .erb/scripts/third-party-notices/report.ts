@@ -244,6 +244,17 @@ function policyRemedy(v: Verdict, entryKey: string, copyleft: Set<string> = new 
         '  - if the package genuinely offers a choice of licenses, its declaration has to say so',
         `    ("${declared.ids[0]} OR <permissive>"), and an "elections" entry for "${entryKey}"`,
         '    records which branch this project takes;',
+        // The third route, and the one a reader cannot infer. A copyleft program redistributed as
+        // a separate executable and invoked as a subprocess is admitted by a reviewed
+        // `separatePrograms` entry, not by either list - so a remedy that stops at "the dependency
+        // has to change" tells whoever is packaging one that the answer is to drop it.
+        '  - if this package IS a third-party program redistributed as a separate executable and',
+        '    invoked as a subprocess rather than linked, that is a determination a human records:',
+        `    add a "separatePrograms" entry naming its terms, its reviewer, the date, why shipping`,
+        '    it beside this application is aggregation rather than derivation, and where its',
+        `    corresponding source is - then link this package to it with "separateProgram" on the`,
+        `    "overrides" entry for "${entryKey}". The entry admits the package; the override only`,
+        '    names which reviewed program it is;',
         '  - otherwise the dependency itself has to change.',
         '',
       ];

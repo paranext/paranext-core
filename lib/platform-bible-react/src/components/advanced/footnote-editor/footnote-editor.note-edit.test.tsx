@@ -7,7 +7,7 @@
  * with it, so a long live edit in the popover is never reaped as an orphaned session).
  */
 import { forwardRef, useImperativeHandle } from 'react';
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
@@ -20,37 +20,9 @@ import {
   scrRef,
   sentinelNoteOp,
 } from './footnote-editor.fixtures';
+import { installPopoverJsdomStubs } from './footnote-editor.test-harness';
 
-// cmdk (Command/CommandInput, used by the inline MarkerMenu popover) instantiates a
-// ResizeObserver on mount and schedules scrollTo/scrollIntoView; jsdom ships none of these.
-// No-op stubs are sufficient since these tests never open that popover.
-class NoopResizeObserver implements ResizeObserver {
-  private readonly targets = new Set<Element>();
-
-  observe(target: Element) {
-    this.targets.add(target);
-  }
-
-  unobserve(target: Element) {
-    this.targets.delete(target);
-  }
-
-  disconnect() {
-    this.targets.clear();
-  }
-}
-
-beforeAll(() => {
-  if (typeof globalThis.ResizeObserver === 'undefined') {
-    globalThis.ResizeObserver = NoopResizeObserver;
-  }
-  if (typeof Element.prototype.scrollTo !== 'function') {
-    Element.prototype.scrollTo = () => {};
-  }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
-});
+installPopoverJsdomStubs();
 
 /**
  * Mutable holders the stubbed `Editorial` below fills in: the mocked `EditorRef` it exposes via

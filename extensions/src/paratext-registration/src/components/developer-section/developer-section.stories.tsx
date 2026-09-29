@@ -19,7 +19,7 @@ export default meta;
 
 type Story = StoryObj<typeof DeveloperSection>;
 
-/** Collapsed by default — the server toggle is not visible. */
+/** Collapsed by default — the server radios are not visible. */
 export const Collapsed: Story = {};
 
 /** Section expanded — Production is the active server. */
@@ -62,7 +62,7 @@ export const QualityAssuranceActive: Story = {
 };
 
 /**
- * `disabled={true}` — header still clickable, but the server toggle is greyed out and
+ * `disabled={true}` — header still clickable, but the server radios are greyed out and
  * non-interactive.
  */
 export const Disabled: Story = {

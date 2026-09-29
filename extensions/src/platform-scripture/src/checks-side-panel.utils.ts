@@ -30,6 +30,7 @@ export const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webview_checksSidePanel_checkTypeFilter_deselectAll%',
   '%webView_checksSidePanel_checkTypeFilter_label%',
   '%webview_checksSidePanel_checkTypeFilter_noChecksFound%',
+  '%webView_checksSidePanel_checkTypeFilter_searchPlaceholder%',
   '%webview_checksSidePanel_checkTypeFilter_selectAll%',
   '%webview_checksSidePanel_checkTypeFilter_setUp%',
   // Misc used elsewhere on the page
@@ -67,6 +68,18 @@ export const isValidCheckScope = (value: string): value is CheckScopes => {
 
 /** Object containing strings for the project full and short names */
 export type ProjectOption = {
-  fullName: string;
+  /**
+   * Longer descriptive name. Optional: a project with no distinct full name omits it rather than
+   * mirroring the short name in, so the picker renders a single line for it.
+   */
+  fullName?: string;
   shortName: string;
+  /** Language name, used by the picker's Language grouping. Omitted when unknown. */
+  language?: string;
+  /**
+   * Presence flag the picker's Last-used grouping reads: any number puts the project in the
+   * "recently used" bucket. The magnitude is never compared, so it does not order anything. Omitted
+   * when the project has not been opened.
+   */
+  lastUsedAt?: number;
 };

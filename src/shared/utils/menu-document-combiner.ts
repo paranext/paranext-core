@@ -239,7 +239,8 @@ export class MenuDocumentCombiner extends DocumentCombiner {
   }
 
   /**
-   * Get the current set of menus given all the input documents.
+   * Get the current set of menus given all the input documents. Resolves once every menu, web view
+   * menus included, is localized.
    *
    * NOTE: If the input documents might have changed since the last time the menus were retrieved,
    * you can call `rebuild` to incorporate those document changes before calling this getter. For
@@ -264,7 +265,7 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       localizeMenuItems(retVal.defaultWebViewTopMenu.items),
       localizeMenuItems(retVal.defaultWebViewContextMenu.items),
       localizeMenuItems(retVal.defaultWebViewTabMenu?.items),
-      Object.getOwnPropertyNames(retVal.webViewMenus).map(async (webViewName: string) => {
+      ...Object.getOwnPropertyNames(retVal.webViewMenus).map(async (webViewName: string) => {
         // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         const typedWebViewName = webViewName as ReferencedItem;

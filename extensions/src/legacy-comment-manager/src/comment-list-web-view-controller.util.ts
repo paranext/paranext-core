@@ -3,6 +3,8 @@ import type { WebViewDefinition } from '@papi/core';
 import type {
   CommentFilters,
   CommentListWebViewController,
+  LegacyCommentFilters,
+  LegacyScopeFilter,
   ScopeFilter,
 } from 'legacy-comment-manager';
 import { serialize } from 'platform-bible-utils';
@@ -28,7 +30,10 @@ export function createCommentListWebViewController(
       );
       await postToWebView({ method: 'selectThread', threadId });
     },
-    async setFilters(filters?: Partial<CommentFilters>, scopeFilter?: ScopeFilter): Promise<void> {
+    async setFilters(
+      filters?: Partial<CommentFilters> | LegacyCommentFilters,
+      scopeFilter?: ScopeFilter | LegacyScopeFilter,
+    ): Promise<void> {
       logger.debug(
         `Comment List WebView Controller ${webViewDefinition.id} received setFilters ${serialize({ filters, scopeFilter })}`,
       );

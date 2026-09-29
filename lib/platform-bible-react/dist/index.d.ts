@@ -6,12 +6,13 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
+import { SerializedEditorState } from 'lexical';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PaletteItem, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, Section } from 'platform-bible-utils';
+import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuGroupDetailsInColumn, MenuGroupDetailsInSubMenu, MenuItemContainingCommand, MultiColumnMenu, PaletteItem, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, Section } from 'platform-bible-utils';
 import { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, HTMLAttributes, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -70,7 +71,13 @@ export declare const BOOK_CHAPTER_CONTROL_STRING_KEYS: readonly [
 	"%webView_bookChapterControl_selectChapter%",
 	"%webView_bookChapterControl_selectVerse%",
 	"%webView_bookChapterControl_showMoreBooks%",
-	"%webView_bookChapterControl_showProjectBooksOnly%"
+	"%webView_bookChapterControl_showProjectBooksOnly%",
+	"%webView_bookChapterControl_previousChapter%",
+	"%webView_bookChapterControl_nextChapter%",
+	"%webView_bookChapterControl_previousVerse%",
+	"%webView_bookChapterControl_nextVerse%",
+	"%webView_bookChapterControl_backToBooks%",
+	"%webView_bookChapterControl_backToChapters%"
 ];
 /** Type definition for the localized strings used in the BookChapterControl component */
 export type BookChapterControlLocalizedStrings = {
@@ -307,13 +314,27 @@ export interface RecentSearchesProps<T> {
 	renderItem?: (item: T) => string;
 	/** Function to create a unique key for each item */
 	getItemKey?: (item: T) => string;
-	/** Aria label for the recent searches button */
+	/**
+	 * Accessible name for the trigger button, which is also rendered as the button's visible tooltip
+	 * text. Write it as user-visible microcopy (sentence case), not as a screen-reader-only phrase.
+	 *
+	 * Passing an empty string suppresses the tooltip AND leaves the icon-only button without an
+	 * accessible name, so prefer omitting the prop — which falls back to a sensible default — over
+	 * passing `''`.
+	 *
+	 * A value that is still a raw `%localization_key%` is treated as not-yet-localized and falls back
+	 * to the default, so a key can never reach the screen as tooltip text.
+	 */
 	ariaLabel?: string;
-	/** Heading text for the recent searches group */
+	/**
+	 * Heading for the recent searches list. Rendered as the list's visible heading and used as its
+	 * accessible name, so a screen reader announces what the list is rather than a bare "menu". Falls
+	 * back to the default when omitted or still a raw `%localization_key%`.
+	 */
 	groupHeading?: string;
-	/** Optional ID for the popover content for accessibility */
+	/** Optional ID for the dropdown menu content for accessibility */
 	id?: string;
-	/** Class name for styling the `CommandItem` for each recent search result */
+	/** Class name for styling the `DropdownMenuItem` for each recent search result */
 	classNameForItems?: string;
 	/**
 	 * Class name for the trigger button. Defaults to absolute positioning inside an input field. Pass
@@ -322,14 +343,14 @@ export interface RecentSearchesProps<T> {
 	buttonClassName?: string;
 	/** Variant for the trigger button. Defaults to `"ghost"` */
 	buttonVariant?: ButtonProps["variant"];
-	/** Controlled open state of the popover. If provided, the component becomes controlled. */
+	/** Controlled open state of the dropdown menu. If provided, the component becomes controlled. */
 	open?: boolean;
 	/** Called when the open state changes. Required when `open` is provided. */
 	onOpenChange?: (open: boolean) => void;
 }
 /**
- * Generic component that displays a button to show recent searches in a popover. Only renders if
- * there are recent searches available. Works with any data type T.
+ * Generic component that displays a button to show recent searches in a dropdown menu. Only renders
+ * if there are recent searches available. Works with any data type T.
  */
 export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, buttonClassName, buttonVariant, open: openProp, onOpenChange, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
@@ -466,6 +487,24 @@ interface ConflictResolutionCallbacks {
 	 */
 	getOptions: (threadId: string) => Promise<ConflictResolutionOptions>;
 }
+/**
+ * A comment the user has typed but not committed — an unsent reply, an unsaved edit to an existing
+ * comment, or both at once (the reply compose box stays visible while editing an existing comment
+ * whenever it already has content). Held by the consumer rather than by the thread component, so it
+ * survives the component unmounting (a filter change does that routinely).
+ */
+export type CommentDraft = {
+	/** Serialized contents of the unsent reply, or `undefined` when nothing has been typed. */
+	editorState?: SerializedEditorState;
+	/** Pending assignee, or `undefined` when none has been chosen. */
+	assignedUser?: string;
+	/**
+	 * Unsaved edits to existing comments in this thread, keyed by comment id. A thread can hold an
+	 * unsent reply and an in-progress edit at the same time, so these are tracked separately rather
+	 * than sharing one editor state.
+	 */
+	commentEdits?: Readonly<Record<string, SerializedEditorState>>;
+};
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
 	/** The ID of the thread to add the comment to */
@@ -502,7 +541,9 @@ export declare const COMMENT_LIST_STRING_KEYS: readonly [
 	"%comment_aria_submit_comment%",
 	"%comment_aria_mark_as_read%",
 	"%comment_aria_mark_as_unread%",
-	"%comment_aria_resolve_thread%"
+	"%comment_aria_resolve_thread%",
+	"%comment_aria_cancel_edit%",
+	"%comment_aria_save_edit%"
 ];
 /**
  * Type definition for the localized strings used in the CommentList component. Handy for typing the
@@ -604,13 +645,46 @@ export interface CommentListProps {
 	 * when this is not provided.
 	 */
 	conflictResolution?: ConflictResolutionCallbacks;
+	/**
+	 * Uncommitted drafts by thread id. A thread with no entry has no draft.
+	 *
+	 * Pass this together with `onDraftChange`, or omit both — `CommentThreadProps.draft` documents
+	 * what goes wrong with only one of the pair.
+	 */
+	drafts?: Readonly<Record<string, CommentDraft>>;
+	/**
+	 * Called when a thread's draft changes. `draft` is `undefined` when the draft becomes empty, so a
+	 * consumer can drop the entry rather than keep an empty one that would read as a draft.
+	 */
+	onDraftChange?: (threadId: string, draft: CommentDraft | undefined) => void;
 }
 /**
  * Component for rendering a list of comment threads
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, conflictResolution, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, conflictResolution, drafts, onDraftChange, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * A draft is empty only when none of its three parts carry anything: no unsent reply, no pending
+ * assignee, and no in-progress edit to an existing comment. Centralized so every writer reports
+ * emptiness the same way — get it wrong in one direction and a real draft is lost, in the other an
+ * empty entry reads as a draft forever.
+ */
+export declare function isCommentDraftEmpty(draft: CommentDraft): boolean;
+/**
+ * Resolves a localize key against `localizedStrings`, falling back when the key has not actually
+ * resolved to translated text. `useLocalizedStrings` seeds every requested key to itself and
+ * returns that seed both before the subscription delivers and permanently on a `PlatformError`, so
+ * `localizedStrings[key] ?? fallback` can never catch that case — the value is a truthy string
+ * equal to the key, not `undefined`. Centralized so every visible (non-aria-label) localized string
+ * in this component tree resolves the same way.
+ *
+ * @param key The localize key to look up.
+ * @param localizedStrings The localized strings to resolve `key` against.
+ * @param fallback English text to show while `key` has not resolved to anything else.
+ * @returns The resolved string, or `fallback` when `key` is missing or still unresolved.
+ */
+export declare function localizeOrFallback(key: LocalizeKey, localizedStrings: LanguageStrings, fallback: string): string;
 /**
  * Presentational card body for a verseText merge conflict. Presents the resolution as a set of
  * clickable option cards — "Keep the current text" (accept, preselected), "Use the other change"
@@ -625,6 +699,205 @@ export function CommentList({ className, classNameForVerseText, threads, current
  * conflict.
  */
 export declare function ConflictNoteCard({ comment, localizedStrings, availableActions, resolvedResolution, onResolve, isResolving, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Props for {@link ContentZoomRoot}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomRootProps = React$1.HTMLAttributes<HTMLElement> & {
+	/**
+	 * Id of the zoom area this element belongs to: lower-case letters, digits and hyphens, starting
+	 * with a letter (`[a-z][a-z0-9-]*`). `default` is reserved by the platform and is ignored. Omit
+	 * this prop for the view's main area. A view with several independently zoomable panes gives each
+	 * its own id — the Scripture editor uses `footnotes` for its footnotes pane.
+	 *
+	 * This library does not validate the id at runtime; the platform ignores a malformed one and logs
+	 * a warning once.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	area?: string;
+	/**
+	 * Element to render: `'div'` (the default) or `'span'`. Use `'span'` inside phrasing content — a
+	 * `<p>`, a heading, or a table cell's inline text — where a `div` is not allowed.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	as?: "div" | "span";
+	/**
+	 * Name of this zoom area as the zoom indicator shows it: `<label> · 120 %` instead of `120 %`.
+	 * Give it when a view has several areas the user could not otherwise tell apart — the Text
+	 * Collection labels each resource's area with the resource's short name. Plain text. When several
+	 * elements share an area id, the first one with a label names the area. Omit it and the indicator
+	 * shows the level alone.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	label?: string;
+};
+/**
+ * Marks an element that renders project text — scripture, note bodies, result snippets, resource
+ * text in its own font — so the platform scales it with the pane's content zoom.
+ *
+ * Mark the text, not the region around it. Buttons, inputs, filters, headers, badges, card frames
+ * and pop-ups stay outside every marked element and keep interface scale. Several elements may
+ * share one area id and zoom together, so a card, list or table view marks each text element with
+ * the same id; flowing, editor-like text keeps one marker around the text body. Areas must not nest
+ * — a marked element found inside another marked element is ignored.
+ *
+ * The platform scales marked elements on Ctrl/⌘+`+`/`-`/`0`, Ctrl/⌘+wheel and the tab context menu,
+ * remembers the level per area and shows the zoom indicator; the view writes nothing else. A view
+ * that marks no area gets no content zoom unless the platform declares its web view type zoomable.
+ * Your view is zoomable only while at least one element carrying `data-platform-content-zoom-root`
+ * is rendered: the tab menu's zoom items, Ctrl/⌘ + `+`/`-`/`0` and Ctrl/⌘+wheel appear and act only
+ * then. If your view shows nothing to zoom for a while (before a search, while loading), render an
+ * empty marked element so the controls stay available.
+ *
+ * Pop-ups opened from inside stay at interface scale; anchor them to live positions
+ * (`useLivePopoverAnchor`) so they open beside zoomed content.
+ *
+ * Renders a `div` by default and a `span` with `as="span"`, in normal flow, with no classes of its
+ * own — the caller supplies whatever layout classes its parent expects. Library components that
+ * render project text mark it themselves inside a `ContentZoomTextProvider`; do not wrap such a
+ * provider's subtree in a `ContentZoomRoot`.
+ *
+ * Measurement caveat: inside a zoomed area, `getBoundingClientRect()` reports zoomed pixels, while
+ * `getComputedStyle(el).fontSize` does not reflect the zoom factor. To read the factor itself, look
+ * up the `--platform-content-zoom-<areaId>` custom property (`--platform-content-zoom-main` for the
+ * unnamed area, `--platform-content-zoom-default` as a fallback) on the view's `documentElement`.
+ *
+ * @example
+ *
+ * ```tsx
+ * <li>
+ *   <Button onClick={goToVerse}>{verseRef}</Button>
+ *   <ContentZoomRoot as="span" className="scripture-font">
+ *     {snippet}
+ *   </ContentZoomRoot>
+ * </li>;
+ * ```
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const ContentZoomRoot: import("react").ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLElement> & {
+	/**
+	 * Id of the zoom area this element belongs to: lower-case letters, digits and hyphens, starting
+	 * with a letter (`[a-z][a-z0-9-]*`). `default` is reserved by the platform and is ignored. Omit
+	 * this prop for the view's main area. A view with several independently zoomable panes gives each
+	 * its own id — the Scripture editor uses `footnotes` for its footnotes pane.
+	 *
+	 * This library does not validate the id at runtime; the platform ignores a malformed one and logs
+	 * a warning once.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	area?: string;
+	/**
+	 * Element to render: `'div'` (the default) or `'span'`. Use `'span'` inside phrasing content — a
+	 * `<p>`, a heading, or a table cell's inline text — where a `div` is not allowed.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	as?: "div" | "span";
+	/**
+	 * Name of this zoom area as the zoom indicator shows it: `<label> · 120 %` instead of `120 %`.
+	 * Give it when a view has several areas the user could not otherwise tell apart — the Text
+	 * Collection labels each resource's area with the resource's short name. Plain text. When several
+	 * elements share an area id, the first one with a label names the area. Omit it and the indicator
+	 * shows the level alone.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	label?: string;
+} & import("react").RefAttributes<HTMLElement>>;
+/**
+ * Attribute a content-zoom-eligible element carries to mark it as one zoom area. Its value is the
+ * zoom area id; an empty value marks the view's `main` area. Mirrors `CONTENT_ZOOM_ROOT_ATTRIBUTE`
+ * in paranext-core's `src/shared/models/web-view.model.ts`. This library cannot import that module
+ * (it lives under core's `src/shared`, outside this package's reach), and `@papi/core` publishes
+ * the constant as a type-only declaration whose value is not importable at runtime, so the literal
+ * is duplicated here; a platform test compares the two constants so they cannot drift silently.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_ROOT_ATTRIBUTE = "data-platform-content-zoom-root";
+/**
+ * Attribute a web view puts on an element that is not itself scaled — a row, a column, a card — to
+ * tie a click, a focus or a Ctrl/⌘+wheel anywhere inside it to one zoom area. Its value is that
+ * area's id, spelled as for {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}. A marked element inside it still
+ * decides for itself, and the attribute scales nothing, so never put it on a marked element.
+ * Mirrors `CONTENT_ZOOM_SCOPE_ATTRIBUTE` in paranext-core's `src/shared/models/web-view.model.ts`;
+ * the literal is duplicated here for the same reason as {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}, and a
+ * platform test compares the two constants.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_SCOPE_ATTRIBUTE = "data-platform-content-zoom-scope";
+/**
+ * Attribute that names a zoom area for the user: put on an element carrying
+ * {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}, it makes the platform's zoom indicator read `<label> ·
+ * <level>` (for example `HSV · 120 %`) instead of the level alone. `ContentZoomRoot` writes it from
+ * its `label` prop. Mirrors `CONTENT_ZOOM_LABEL_ATTRIBUTE` in paranext-core's
+ * `src/shared/models/web-view.model.ts`; a platform test compares the two constants.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_LABEL_ATTRIBUTE = "data-platform-content-zoom-label";
+/**
+ * Props for {@link ContentZoomTextProvider}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomTextProviderProps = {
+	/**
+	 * Id of the zoom area the project text inside belongs to, with the same rules as
+	 * `ContentZoomRootProps.area`. Omit it for the view's main area.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	area?: string;
+	/**
+	 * Name of the zoom area as the zoom indicator shows it (`<label> · 120 %`), written on every text
+	 * element the provider marks, the way `ContentZoomRootProps.label` is on its marker. Plain text.
+	 * Omit it, or pass an empty string, and the indicator shows the level alone.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	label?: string;
+	/**
+	 * The subtree whose library components mark the project text they render.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	children: React$1.ReactNode;
+};
+/**
+ * Opts the library components inside it into marking the project text they render — a comment's
+ * scripture snippet, body, conflict diff and composer, for example — so that text scales with the
+ * pane's content zoom while the components' buttons, badges and frames keep interface scale.
+ * Outside a provider those components mark nothing.
+ *
+ * The provider marks no element itself. Do not also wrap its subtree in a `ContentZoomRoot`: a
+ * marked element found inside another marked element is ignored.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function ContentZoomTextProvider({ area, label, children }: ContentZoomTextProviderProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The props a component spreads onto the existing element that renders project text inline. Inside
+ * a {@link ContentZoomTextProvider} the props carry `data-platform-content-zoom-root` set to the
+ * provider's area (`''` for the main area), plus `data-platform-content-zoom-label` when the
+ * provider names the area; outside one they are empty. Spread them onto the text element itself
+ * rather than adding a wrapper, and never onto pop-up content or an element that contains another
+ * marked element.
+ *
+ * @returns The marker (and label) attributes inside a provider; an empty object outside one
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function useContentZoomTextProps(): {
+	[CONTENT_ZOOM_ROOT_ATTRIBUTE]?: string;
+	[CONTENT_ZOOM_LABEL_ATTRIBUTE]?: string;
+};
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
@@ -835,6 +1108,12 @@ interface MultiSelectComboBoxProps {
 	onChange: (values: string[]) => void;
 	/** Placeholder text when no items are selected. */
 	placeholder: string;
+	/**
+	 * Placeholder for the search box inside the dropdown. Localize it in the caller — this component
+	 * cannot build one, because composing a sentence around {@link placeholder} only works in English.
+	 * Defaults to {@link placeholder}.
+	 */
+	searchPlaceholder?: string;
 	/** Whether to show select all/clear all buttons. */
 	hasToggleAllFeature?: boolean;
 	/** Text for the select all button. */
@@ -851,8 +1130,19 @@ interface MultiSelectComboBoxProps {
 	onOpenChange?: (open: boolean) => void;
 	/** Flag to disable the component. */
 	isDisabled?: boolean;
-	/** Flag to sort selected items. */
+	/**
+	 * Flag to sort selected items. The order is snapshotted when the dropdown opens, so selecting an
+	 * entry does not move rows out from under the pointer.
+	 */
 	sortSelected?: boolean;
+	/**
+	 * Whether to fade the bottom edge of the option list while more entries remain below the fold.
+	 *
+	 * Off by default: the cue's gradient is drawn in the popover's own background colour, so a
+	 * popover themed differently would show it as a band. Opt in on long lists where the scrollbar
+	 * alone is too weak a signal.
+	 */
+	showScrollCue?: boolean;
 	/** Optional icon to display in the button. */
 	icon?: React$1.ReactNode;
 	/** Additional class names for styling. */
@@ -863,7 +1153,7 @@ interface MultiSelectComboBoxProps {
 	id?: string;
 }
 /** MultiSelectComboBox component for selecting multiple items from a list. */
-export declare function MultiSelectComboBox({ entries, selected, onChange, placeholder, hasToggleAllFeature, selectAllText, clearAllText, commandEmptyMessage, customSelectedText, isOpen, onOpenChange, isDisabled, sortSelected, icon, className, variant, id, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
+export declare function MultiSelectComboBox({ entries, selected, onChange, placeholder, searchPlaceholder, hasToggleAllFeature, selectAllText, clearAllText, commandEmptyMessage, customSelectedText, isOpen, onOpenChange, isDisabled, sortSelected, showScrollCue, icon, className, variant, id, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 interface FilterProps extends MultiSelectComboBoxProps {
 	/**
 	 * Placeholder text that will be displayed when no items are selected. It will appear at the
@@ -879,7 +1169,7 @@ interface FilterProps extends MultiSelectComboBoxProps {
  * selected options. A placeholder text must be provided through 'badgesPlaceholder'. This will be
  * displayed if no items are selected,
  */
-export declare function Filter({ entries, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
+export declare function Filter({ entries, selected, onChange, placeholder, searchPlaceholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, showScrollCue, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 export type FootnoteLayout = "horizontal" | "vertical";
 /** Interface defining the properties for a single footnote item component */
 export interface FootnoteItemProps {
@@ -1100,7 +1390,8 @@ export declare function FootnoteItem({ footnote, layout, formatCaller, showMarke
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
 export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, selectionRequest, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
-type ScopeWithRange = Scope | "range";
+/** Same as `Scope` plus a verse-range option. Used by `ScopeSelector` when range mode is enabled. */
+export type ScopeWithRange = Scope | "range";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
 export type InventoryItemOccurrence = {
@@ -1400,13 +1691,52 @@ export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRe
 export interface SelectMenuItemHandler {
 	(selectedMenuItem: MenuItemContainingCommand): void;
 }
+/**
+ * Whether a group's items render under `columnOrSubMenuKey`: either the group names it as its
+ * `column`, or the group is the one keyed by it, which is how a submenu addresses its own group.
+ *
+ * `TabDropdownMenu` picks a column's groups with this and `getMenuSectionsWithItems` decides which
+ * columns have something to show with it, so "this column renders nothing" can never mean two
+ * different things.
+ *
+ * @param groupKey The key the group is stored under
+ * @param group The group itself
+ * @param columnOrSubMenuKey The key of the column or submenu being rendered
+ * @returns `true` if the group's items belong under `columnOrSubMenuKey`
+ */
+export declare function isGroupUnderColumnOrSubMenu(groupKey: string, group: Localized<MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu>, columnOrSubMenuKey: string): boolean;
 export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
 };
+/**
+ * A project as this sidebar's consumer supplies it.
+ *
+ * `projectName`/`projectFullName` are the same pair `platform-bible-utils` calls
+ * `ProjectNames.shortName`/`fullName`; the names differ because this type predates that helper and
+ * is exported from the stable barrel, where renaming a field is a breaking change. The two shapes
+ * meet in exactly one adapter — the `projectSelectorProjects` memo below — so the helper's rules
+ * still apply to every project this component renders.
+ */
 export type ProjectInfo = {
 	projectId: string;
+	/**
+	 * Short project name — the trigger label for the `<ProjectSelector>` and the primary line of each
+	 * popover row. Sourced from the `platform.name` project setting.
+	 */
 	projectName: string;
+	/**
+	 * Optional full project name — rendered as the muted secondary line beneath `projectName` in the
+	 * popover rows. Omit it for a project that has no distinct full name; when it is absent, blank or
+	 * equal to `projectName`, the row falls back to a single-line layout (the `hasDistinctFullName`
+	 * rule the `ProjectSelector` applies).
+	 *
+	 * Source it from project metadata (`getMetadataForAllProjects`), NOT from a
+	 * `getSetting('platform.fullName')` read: that setting cannot express "no full name" — it
+	 * defaults to a localized `%project_full_name_missing%` placeholder, which would render here as a
+	 * second name the project does not have.
+	 */
+	projectFullName?: string;
 };
 export type SettingsSidebarProps = {
 	/** Optional id for testing */
@@ -1425,6 +1755,16 @@ export type SettingsSidebarProps = {
 	projectsSidebarGroupLabel: string;
 	/** Placeholder text for the button */
 	buttonPlaceholderText: string;
+	/**
+	 * Placeholder text for the project picker's search box. Falls back to the picker's English string
+	 * when omitted.
+	 */
+	searchPlaceholderText?: string;
+	/**
+	 * Message the project picker shows when no project matches the search. Falls back to the picker's
+	 * English string when omitted.
+	 */
+	noResultsText?: string;
 	/** Additional css classes to help with unique styling of the sidebar */
 	className?: string;
 };
@@ -1435,7 +1775,7 @@ export type SettingsSidebarProps = {
  *
  * @param props - {@link SettingsSidebarProps} The props for the component.
  */
-export declare function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, searchPlaceholderText, noResultsText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
 type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** The search query in the search bar */
 	searchValue: string;
@@ -1449,7 +1789,7 @@ type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWit
  * @param {SettingsSidebarContentSearchProps} props - The props for the component.
  * @param {string} props.id - The id of the sidebar.
  */
-export declare function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebarContentSearch({ id, children, searchValue, onSearch, className, ...sidebarProps }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
@@ -1619,6 +1959,24 @@ interface ScopeSelectorProps {
 	 * {@link SelectBooks} and shown as a tooltip on that section's disabled quick-select button.
 	 */
 	disabledSectionExplanations?: Partial<Record<Section, string>>;
+	/**
+	 * Optional explanations, by scope, for why that scope cannot be chosen right now. A scope with an
+	 * entry renders disabled, with its explanation as muted text beneath the option's label. Both
+	 * variants render it inline rather than as a tooltip: a disabled control — a radio or a Radix
+	 * menu item — is out of the tab order, so hover- or focus-only affordances reach nobody. Keep
+	 * explanations short enough to read in a menu row.
+	 *
+	 * `'selectedBooks'` and `'range'` are honored in the `'radio'` variant only. In the `'dropdown'`
+	 * variant those two are menu items that open a dialog rather than scope options, and they ignore
+	 * an entry here — a consumer that must block them in a dropdown should drop them from
+	 * {@link ScopeSelectorProps.availableScopes} instead.
+	 *
+	 * Only for a scope that is genuinely unavailable in the CURRENT state — a scope the consumer
+	 * never offers at all belongs out of {@link ScopeSelectorProps.availableScopes} instead. Disabling
+	 * is only an affordance: the consumer still has to reject the query itself, since a scope already
+	 * selected when the state changed never passes through a disabled control.
+	 */
+	disabledScopeExplanations?: Partial<Record<ScopeWithRange, string>>;
 	/** Optional ID that is applied to the root element of this component */
 	id?: string;
 	/**
@@ -1685,7 +2043,7 @@ interface ScopeSelectorProps {
  * chosen, two BookChapterControl pickers are displayed for selecting the start and end verse of the
  * range.
  */
-export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, disabledSectionExplanations, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, disabledSectionExplanations, disabledScopeExplanations, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in the SelectBooks component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -1909,6 +2267,15 @@ type TabDropdownMenuProps = {
 	icon?: React$1.ReactNode;
 	/** Additional css class(es) to help with unique styling of the tab dropdown menu */
 	className?: string;
+	/**
+	 * Whether to head each section with its column label. Only takes effect when two or more sections
+	 * have items, since a lone section has nothing to be told apart from.
+	 *
+	 * Defaults to `false`, so a menu built by hand keeps its column labels hidden. Platform.Bible's
+	 * tab chrome — `TabToolbar` and `TabFloatingMenu` — turns it on for the contributed menu data it
+	 * renders.
+	 */
+	showSectionHeadings?: boolean;
 	/** Style variant for the app menubar component. */
 	variant?: "default" | "muted";
 	buttonVariant?: "default" | "ghost" | "outline" | "secondary";
@@ -1916,13 +2283,15 @@ type TabDropdownMenuProps = {
 	id?: string;
 };
 /**
- * Dropdown menu designed to be used with Platform.Bible menu data. Column headers are ignored.
- * Column data is separated by a horizontal divider, so groups are not distinguishable. Tooltips are
- * displayed on hovering over menu items, if a tooltip is defined for them.
+ * Dropdown menu for Platform.Bible menu data. Each column that has items is a section, divided from
+ * the next by a line; columns without items are left out. Groups within a column are not
+ * distinguished. Items show their tooltip on hover and their `shortcut`, if any, at the end of the
+ * row. With `showSectionHeadings`, each section is headed by its column label, except a column that
+ * sets `isHeaderHidden`, whose label names the section for screen readers only.
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
-export function TabDropdownMenu({ onSelectMenuItem, menuData, tabLabel, icon, className, variant, buttonVariant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+export function TabDropdownMenu({ onSelectMenuItem, menuData, tabLabel, icon, className, showSectionHeadings, variant, buttonVariant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 type TabToolbarCommonProps = {
 	/**
 	 * The handler to use for toolbar item commands related to the project menu. Here is a basic
@@ -2119,8 +2488,9 @@ export type ToolbarCompoundLabelProps = {
 	 */
 	separator?: string;
 	/**
-	 * Render `secondary` before `primary`, for labels that read that way round — a project selector
-	 * shows `Translation Project 1 (TP1)`, full name first, short name last.
+	 * Render `secondary` before `primary`, for labels that read that way round — a measurement that
+	 * reads `12 pt` puts the number (`secondary`) first, even though `primary` (the unit, `pt`) is
+	 * still the field that must survive shrinking.
 	 */
 	secondaryFirst?: boolean;
 	/** Whether the secondary field is rendered at all. Defaults to `true`. */
@@ -2305,72 +2675,40 @@ export declare function Popover({ ...props }: React$1.ComponentProps<typeof Popo
 /** @inheritdoc Popover */
 export declare function PopoverTrigger({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
 /**
- * Overrides the container that descendant {@link PopoverContent} components portal into. Use it to
- * keep popovers inside a Radix `DialogContent`, `DropdownMenuContent`, or any other ancestor that
- * owns a focus trap or dismiss-on-outside-click layer.
+ * Keeps descendant {@link PopoverContent} inside `container` instead of `document.body`. Use it
+ * whenever a popover's trigger sits inside an ancestor that owns a focus trap or a
+ * dismiss-on-outside-click layer (`DialogContent`, `DropdownMenuContent`, …), which would otherwise
+ * pull focus out of the popover or treat a click inside it as an outside click.
  *
- * @remarks
- * Radix `Popover` portals its content to `document.body` by default, which works fine for top-level
- * UI. The default breaks down whenever a popover trigger lives inside an ancestor that:
+ * Contract:
  *
- * - Runs a focus trap (`Dialog`, `AlertDialog`, modal `DropdownMenu`) — the trap yanks focus back out
- *   of the popover the instant it opens because the portal'd content is outside the trap's DOM
- *   subtree.
- * - Listens for outside-clicks (Radix `DismissableLayer`, used by every `*Menu`/`Dialog`) — a click
- *   inside the popover reads as "outside the menu" and dismisses the parent immediately.
+ * - Pass `null` for `container` until the ancestor element exists (the initial state of a
+ *   ref-callback `useState`) to keep Radix's `document.body` default; once it exists, later opens
+ *   portal into it.
+ * - The ancestor must wrap this provider, not the other way round, so only its own descendants are
+ *   redirected.
+ * - Only affects popovers mounted as React descendants; already-open popovers are not re-portalled.
  *
- * Wrapping the children of the trapping ancestor in this provider, with that ancestor's element as
- * `container`, makes nested `PopoverContent` portal as a DOM descendant of the trap so both focus
- * and dismiss-layer logic accept it.
- *
- * Single descendant scope: a `PopoverPortalContainerProvider` only affects `PopoverContent` mounts
- * rendered as React children. It does not retroactively re-portal already-mounted popovers, and it
- * does not affect popovers in sibling subtrees.
- *
- * Initial-mount behavior: pass `null` for `container` (the initial value of a `useState<HTMLElement
- *
- * | null>(null)` paired with a ref callback on the ancestor) to keep Radix's default
- *
- * `document.body` behavior until the ancestor mounts. Once the element exists, future popover opens
- * portal into it. The triggering ancestor (the trap owner) must wrap, not be wrapped by, this
- * provider.
- * @example
- *
- * ```tsx
- * function ScopeMenu() {
- *   const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
- *
- *   return (
- *     <Dialog open={isOpen} onOpenChange={setIsOpen}>
- *       <DialogContent ref={setDialogEl}>
- *         <PopoverPortalContainerProvider container={dialogEl}>
- *           <BookChapterControl ... />
- *         </PopoverPortalContainerProvider>
- *       </DialogContent>
- *     </Dialog>
- *   );
- * }
- * ```
+ * `TooltipPortalContainerProvider` in `tooltip.tsx` does the same for tooltips.
  *
  * @example
  *
  * ```tsx
- * // Dropdown variant: same pattern, container is the DropdownMenuContent.
- * const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
- * <DropdownMenu>
- *   <DropdownMenuTrigger>...</DropdownMenuTrigger>
- *   <DropdownMenuContent ref={setContentEl}>
- *     <PopoverPortalContainerProvider container={contentEl}>
+ * const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+ *
+ * <Dialog open={isOpen} onOpenChange={setIsOpen}>
+ *   <DialogContent ref={setDialogEl}>
+ *     <PopoverPortalContainerProvider container={dialogEl}>
  *       <BookChapterControl ... />
  *     </PopoverPortalContainerProvider>
- *   </DropdownMenuContent>
- * </DropdownMenu>
+ *   </DialogContent>
+ * </Dialog>;
  * ```
  */
-export declare function PopoverPortalContainerProvider({ container, children, }: {
+export declare const PopoverPortalContainerProvider: ({ container, children, }: {
 	container: HTMLElement | null;
 	children: React$1.ReactNode;
-}): import("react/jsx-runtime").JSX.Element;
+}) => import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Popover */
 export declare function PopoverContent({ className, align, sideOffset, style, ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Popover */
@@ -2968,6 +3306,11 @@ type DialogContentProps = React$1.ComponentProps<typeof DialogPrimitive.Content>
 	 * overlay styling than the default.
 	 */
 	overlayClassName?: string;
+	/**
+	 * Inline styles for the backdrop (`DialogOverlay`). Needed for anything the overlay sets inline —
+	 * notably `zIndex`, which an `overlayClassName` cannot override.
+	 */
+	overlayStyle?: React$1.CSSProperties;
 	showCloseButton?: boolean;
 };
 /**
@@ -2977,7 +3320,7 @@ type DialogContentProps = React$1.ComponentProps<typeof DialogPrimitive.Content>
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
  */
-export declare function DialogContent({ className, children, showCloseButton, overlayClassName, style, ...props }: DialogContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DialogContent({ className, children, showCloseButton, overlayClassName, overlayStyle, style, ...props }: DialogContentProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Container for the dialog's header area. Stacks title and description vertically.
  *
@@ -3216,7 +3559,7 @@ export declare function DropdownMenuPortal({ ...props }: React$1.ComponentProps<
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuTrigger({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuContent({ className, align, sideOffset, children, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuContent({ className, align, sideOffset, style, children, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuGroup({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
@@ -3238,7 +3581,7 @@ export declare function DropdownMenuSub({ ...props }: React$1.ComponentProps<typ
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuSubTrigger({ className, inset, children, ...props }: DropdownMenuSubTriggerProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuSubContent({ className, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuSubContent({ className, style, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Empty component displays a centered zero-state message — typically a title, description, and
  * an optional action — for when there is no content to show. The component is built and styled by
@@ -3452,6 +3795,42 @@ export declare function TooltipProvider({ delayDuration, ...props }: React$1.Com
 export declare function Tooltip({ ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tooltip */
 export declare function TooltipTrigger({ className, variant, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Trigger> & ButtonProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Keeps descendant {@link TooltipContent} inside `container` instead of `document.body`. Use it when
+ * a tooltip sits inside an ancestor that stacks _above_ the tooltip layer: content portalled to the
+ * body becomes a positioned sibling of that ancestor in the root stacking context, so the opaque
+ * first-run wizard gate at `Z_INDEX_FIRST_RUN` (700) hides tooltips at `Z_INDEX_TOOLTIP` (550)
+ * entirely.
+ *
+ * Contract:
+ *
+ * - Pass `null` for `container` until the ancestor element exists (the initial state of a
+ *   ref-callback `useState`) to keep Radix's `document.body` default; once it exists, later opens
+ *   portal into it.
+ * - The ancestor must wrap this provider, not the other way round, so only its own descendants are
+ *   redirected.
+ * - Only affects tooltips mounted as React descendants; already-open tooltips are not re-portalled.
+ *
+ * `PopoverPortalContainerProvider` in `popover.tsx` does the same for popovers.
+ *
+ * @example
+ *
+ * ```tsx
+ * const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+ *
+ * <Dialog open>
+ *   <DialogContent ref={setDialogEl} style={{ zIndex: Z_INDEX_FIRST_RUN }}>
+ *     <TooltipPortalContainerProvider container={dialogEl}>
+ *       <FirstRunShell ... />
+ *     </TooltipPortalContainerProvider>
+ *   </DialogContent>
+ * </Dialog>;
+ * ```
+ */
+export declare const TooltipPortalContainerProvider: ({ container, children, }: {
+	container: HTMLElement | null;
+	children: React$1.ReactNode;
+}) => import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tooltip */
 export declare function TooltipContent({ className, sideOffset, style, showArrow, arrowClassName, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content> & {
 	showArrow?: boolean;
@@ -3898,6 +4277,148 @@ export declare const useViewVisibility: () => boolean;
  *   effect re-firing on every visibility flip.
  */
 export declare function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void;
+/**
+ * Tracks whether `scrollerRef`'s element still has content below the fold.
+ *
+ * A long option list clipped flush at a row boundary looks complete, and the scrollbar alone is a
+ * weak signal — with a few hundred options the thumb is only a few pixels tall, and on platforms
+ * with overlay scrollbars it reserves no width at all. Callers use this to draw an explicit cue.
+ *
+ * The scroller must be attached by the time this hook's effect runs, and must stay mounted for the
+ * hook's lifetime. The listeners bind to whatever `scrollerRef.current` holds then, and React does
+ * not re-run an effect when a ref's contents change, so a scroller that mounts late or is swapped
+ * for another element leaves the answer frozen at what the previous element reported. Mount the
+ * hook alongside the scroller — as `OptionListScrollCue` does inside the popover's portal — rather
+ * than above something that mounts it conditionally.
+ *
+ * @param scrollerRef Ref to the scrolling element.
+ * @param isEnabled Whether to observe at all. When false the hook reports `false` and attaches
+ *   nothing. Defaults to `true`.
+ * @returns Whether the scroller currently has content below its visible area.
+ */
+export declare function useHasContentBelow(scrollerRef: React$1.RefObject<HTMLElement | null>, isEnabled?: boolean): boolean;
+/**
+ * What a popover is placed against, re-measured every time the popover is positioned.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type LivePopoverAnchorSource = {
+	/**
+	 * Reads the anchor's current viewport rect. Called every time the popover is positioned, which
+	 * can be more than once per frame.
+	 *
+	 * @returns The anchor's rect in viewport coordinates, or `undefined` when the source can no
+	 *   longer be measured; the anchor then keeps its last rect.
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	measure: () => DOMRect | undefined;
+	/**
+	 * An element of the content the anchor belongs to that stays in the document while the popover is
+	 * open (the editor's root, not a text span the editor may re-render). The popover's positioning
+	 * watches this element's scroll ancestors, its size and its movement while the popover is open.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	contextElement: Element;
+};
+type VirtualAnchorElement = {
+	getBoundingClientRect: () => DOMRect;
+	readonly contextElement: Element | undefined;
+};
+/**
+ * The anchor {@link useLivePopoverAnchor} returns.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type LivePopoverAnchor = {
+	/**
+	 * Pass as `PopoverAnchor`'s `virtualRef`.
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	virtualRef: React$1.RefObject<VirtualAnchorElement>;
+	/**
+	 * Points the anchor at a new source and measures it at once, so the popover opens against it
+	 * rather than against the previous source. Call it before opening the popover.
+	 *
+	 * @param source What the anchor follows from now on.
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	setSource: (source: LivePopoverAnchorSource) => void;
+};
+/**
+ * A popover anchor that follows its text instead of keeping the rect it had when the popover
+ * opened. The popover's own positioning (floating-ui's auto-update, run by Radix while the popover
+ * is open) re-reads the rect on scroll of the text's scroll container, on resize, and when the text
+ * reflows under a zoom change, so the popover stays beside its caller or selection.
+ *
+ * Hidden case: handled by holding the last usable rect. A popover can be open while its pane is
+ * hidden — the Scripture editor's footnote popover survives Escape and an outside click — and a
+ * hidden pane has no layout, so a source measures nothing there. The anchor keeps the last rect it
+ * had rather than collapsing to the pane's corner, and the next frame after the tab is shown
+ * measures again and catches up. Sources report "no measurement" by returning `undefined`; see
+ * {@link measureBox}.
+ *
+ * @example
+ *
+ * ```tsx
+ * const anchor = useLivePopoverAnchor();
+ * const [isOpen, setIsOpen] = useState(false);
+ *
+ * const openAtSelection = () => {
+ *   const selection = window.getSelection();
+ *   if (!selection || selection.rangeCount === 0 || !editorRef.current) return;
+ *   // Clone the range: the live selection keeps moving while the popover is open.
+ *   const range = selection.getRangeAt(0).cloneRange();
+ *   // Point the anchor at its source BEFORE opening, so the popover never opens at a stale rect.
+ *   anchor.setSource({
+ *     measure: () => {
+ *       const rect = measureBox(range);
+ *       return rect && leftEdgeRect(rect);
+ *     },
+ *     contextElement: editorRef.current,
+ *   });
+ *   setIsOpen(true);
+ * };
+ *
+ * return (
+ *   <Popover open={isOpen} onOpenChange={setIsOpen}>
+ *     <PopoverAnchor virtualRef={anchor.virtualRef} />
+ *     <PopoverContent>…</PopoverContent>
+ *   </Popover>
+ * );
+ * ```
+ *
+ * @returns A stable anchor (the same object on every render): its `virtualRef` goes to
+ *   `PopoverAnchor`, and its `setSource` points it at what to follow.
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function useLivePopoverAnchor(): LivePopoverAnchor;
+/**
+ * The current viewport rect of a text range or an element, for a {@link LivePopoverAnchorSource}'s
+ * `measure`.
+ *
+ * A target counts as unmeasurable only when it paints no box at all (`getClientRects()` is empty),
+ * never merely because its box is small: a zero-width or zero-height box — a collapsed caret, an
+ * empty element — is still a real, positioned point.
+ *
+ * @param target The range or element to measure.
+ * @returns The target's bounding rect in viewport coordinates, or `undefined` when it paints
+ *   nothing: a range whose text the editor replaced (it collapsed to an element boundary that has
+ *   no box), or an element with no layout because it or an ancestor is `display: none`, as inside
+ *   an inactive rc-dock tab pane.
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function measureBox(target: Range | Element): DOMRect | undefined;
+/**
+ * The zero-width rect along the left edge of `rect`, spanning its full height. A pop-up placed
+ * against it sits below (or above) all of `rect`, horizontally centered on its left edge.
+ *
+ * @param rect The rect to take the left edge of, such as a selection's box from {@link measureBox}.
+ * @returns A new rect at `rect`'s left and top, with zero width and `rect`'s height.
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function leftEdgeRect(rect: DOMRect): DOMRect;
 /** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
 export type TabIconUrls = {
 	/** Dark theme (any selection). */
@@ -4131,11 +4652,10 @@ export declare function ShrinkStepOverride({ value, children }: ShrinkStepOverri
  * Z-index for elements that need to appear above rc-dock floating tabs and potential modals (~200)
  * — the menubar, and every `PopoverContent`.
  *
- * At 600 this sits above the overlay, modal, and tooltip layers, which is why content portalled out
- * of a popover needs {@link Z_INDEX_ABOVE_POPOVER} to stay visible. Two consequences are unresolved
- * and deliberately not papered over here: a tooltip triggered from inside a popover
- * (`Z_INDEX_TOOLTIP`, 550) renders BEHIND it, and a popover renders OVER a modal dialog
- * ({@link Z_INDEX_MODAL}, 500). Both want the scale re-ordered rather than another constant raised.
+ * At 600 this sits above the overlay and modal layers, which is why content portalled out of a
+ * popover needs {@link Z_INDEX_ABOVE_POPOVER} to stay visible. One consequence is unresolved and
+ * deliberately not papered over here: a popover renders OVER a modal dialog ({@link Z_INDEX_MODAL},
+ * 500). That wants the scale re-ordered rather than another constant raised.
  */
 export declare const Z_INDEX_ABOVE_DOCK = 600;
 /**
@@ -4146,27 +4666,67 @@ export declare const Z_INDEX_ABOVE_DOCK = 600;
  * two become stacking SIBLINGS: the popover's own {@link Z_INDEX_ABOVE_DOCK} competes directly with
  * whatever the portalled child asks for, and anything lower renders behind the popover it belongs
  * to. Must therefore stay above {@link Z_INDEX_ABOVE_DOCK} and below {@link Z_INDEX_FIRST_RUN}, which
- * gates the whole app. Pinned by `z-index.test.ts`.
+ * gates the whole app. Pinned by `z-index.test.tsx`.
  *
  * Note this is only needed because {@link Z_INDEX_ABOVE_DOCK} sits so high; see its own doc.
  */
 export declare const Z_INDEX_ABOVE_POPOVER = 650;
-/** Z-index for overlay popovers and context menus */
+/**
+ * Z-index for in-page overlays that sit above ordinary page content but BELOW modal content — the
+ * renderer's overlay service (`src/renderer/components/overlays/`) plus a handful of
+ * component-level overlays across `lib/` and `extensions/`.
+ *
+ * Deliberately the lowest tier in the scale: anything that must clear a modal, a popover, or the
+ * dock belongs on {@link Z_INDEX_ABOVE_DOCK} instead. No ordering test covers this tier.
+ *
+ * Consumers are deliberately not listed here — an enumerated list in this comment went stale once
+ * already and sent a menu to 400 underneath its own 600-tier host. Grep for the constant to find
+ * them; the `adr-z-index-ordering-invariants` entry in
+ * `.context/standards/Architecture-Decisions.md` records why this tier was left alone.
+ */
 export declare const Z_INDEX_OVERLAY = 400;
 /** Z-index for the semi-transparent backdrop behind modal dialogs */
 export declare const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export declare const Z_INDEX_MODAL = 500;
 /**
- * Z-index for the one-shot onboarding tour spotlight. Sits above Z_INDEX_ABOVE_DOCK and
- * Z_INDEX_TOOLTIP so it can spotlight toolbar buttons and columns, but below Z_INDEX_FIRST_RUN so
- * the wizard always wins if both are mounted.
+ * Z-index for the backdrop behind a modal opened FROM another modal — a picker that takes the
+ * screen over the dialog that launched it.
+ *
+ * A nested modal cannot reuse {@link Z_INDEX_MODAL_BACKDROP}: at 450 the inner backdrop paints below
+ * the host dialog's own content at {@link Z_INDEX_MODAL}, so it dims the app behind the host but not
+ * the host itself — while Radix's dismissable layer still makes the host inert. The host then looks
+ * live and swallows every click, which is the opposite of what a backdrop is for.
+ *
+ * Must stay above {@link Z_INDEX_MODAL} and below {@link Z_INDEX_NESTED_MODAL}. Pinned by
+ * `z-index.test.tsx`.
  */
-export declare const Z_INDEX_ONBOARDING_TOUR = 650;
+export declare const Z_INDEX_NESTED_MODAL_BACKDROP = 510;
+/**
+ * Z-index for the content of a modal opened FROM another modal. See
+ * {@link Z_INDEX_NESTED_MODAL_BACKDROP} for why the nested case needs a tier of its own.
+ *
+ * Must stay above {@link Z_INDEX_NESTED_MODAL_BACKDROP} and below `Z_INDEX_TOOLTIP`, so a tooltip
+ * triggered from inside the nested modal — its close button carries one — still renders over it.
+ * Pinned by `z-index.test.tsx`.
+ *
+ * Deliberately absent from the SCSS twin in `src/renderer/styles/_vars.scss`, which stops at
+ * `$z-index--modal`: no SCSS-styled surface renders a nested modal, and a constant nothing consumes
+ * is one more thing to drift. Add it there if one ever does.
+ */
+export declare const Z_INDEX_NESTED_MODAL = 520;
+/**
+ * Z-index for the one-shot onboarding tour spotlight. Sits above {@link Z_INDEX_ABOVE_DOCK},
+ * {@link Z_INDEX_ABOVE_POPOVER} and `Z_INDEX_TOOLTIP` so it can spotlight toolbar buttons and
+ * columns without a tooltip on one of them painting over the spotlight, and below
+ * {@link Z_INDEX_FIRST_RUN} so the wizard always wins if both are mounted. Pinned by
+ * `z-index.test.tsx`.
+ */
+export declare const Z_INDEX_ONBOARDING_TOUR = 690;
 /**
  * Z-index for the first-run setup wizard gate. Must sit above every other layer (including
- * Z_INDEX_ABOVE_DOCK and Z_INDEX_TOOLTIP) so the wizard fully gates the app at startup and nothing
- * behind it remains clickable or focusable.
+ * {@link Z_INDEX_ABOVE_POPOVER}, `Z_INDEX_TOOLTIP` and {@link Z_INDEX_ONBOARDING_TOUR}) so the wizard
+ * fully gates the app at startup and nothing behind it remains clickable or focusable.
  */
 export declare const Z_INDEX_FIRST_RUN = 700;
 /**
@@ -4176,9 +4736,19 @@ export declare const Z_INDEX_FIRST_RUN = 700;
  * When the websocket to the rest of the app dies, every layer beneath this one is inert — the
  * first-run wizard cannot submit, modals cannot resolve, the toolbar cannot navigate. Anything
  * rendering over this state would be offering the user a control that silently does nothing. Pinned
- * by `z-index.test.ts`.
+ * by `z-index.test.tsx`.
  */
 export declare const Z_INDEX_CONNECTION_LOST = 800;
+/**
+ * Standard delay, in milliseconds, before a hover reveals a tooltip. Pass it to `TooltipProvider`'s
+ * `delayDuration` prop (or use it directly in a hand-rolled reveal timer, as
+ * `ParagraphMarkerTooltipOverlay` does) so tooltips that opt in share one consistent feel.
+ * `TooltipProvider`'s own default `delayDuration` remains 0 (instant) — most tooltips in the app
+ * don't pass this constant, so it is opt-in, not automatic. Extensions can't reach app-side
+ * renderer constants directly (see the repo's Security-Guide.md Module Import Restrictions), so —
+ * mirroring `Z_INDEX_OVERLAY` and its siblings in `z-index.ts` — this lives here instead.
+ */
+export declare const TOOLTIP_DELAY_MS = 300;
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using

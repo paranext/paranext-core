@@ -181,3 +181,14 @@ describe('ResourcePickerDialogWrapper', () => {
     expect(screen.queryByText('%resourcePicker_load_error%')).not.toBeInTheDocument();
   });
 });
+
+describe('RESOURCE_PICKER_DIALOG registration', () => {
+  // `ResourcePickerDialog` renders both halves inside the shell's single `Dialog.Root`, so the
+  // shell must render neither. The shell's own tests pin the mechanism; this pins the wiring —
+  // drop either flag here, or the forwarding in `dialog.service-shard.ts`, and the duplicate-id
+  // defect returns with every other test still green.
+  it('declares that it provides its own title and description', () => {
+    expect(RESOURCE_PICKER_DIALOG.providesOwnTitle).toBe(true);
+    expect(RESOURCE_PICKER_DIALOG.providesOwnDescription).toBe(true);
+  });
+});

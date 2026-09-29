@@ -11,7 +11,12 @@
  * on any module the host's `require` shim does not supply.
  */
 
-import { LocalizationSelectors, OpenWebViewOptions, SavedWebViewDefinition } from '@papi/core';
+import {
+  LocalizationSelectors,
+  OpenWebViewOptions,
+  SavedWebViewDefinition,
+  WebViewDefinition,
+} from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
 // Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
@@ -23,6 +28,7 @@ import {
   formatReplacementString,
   getErrorMessage,
   isLocalizeKey,
+  isParagraphMarker,
   isPlatformError,
   LanguageStrings,
   LocalizeKey,
@@ -267,6 +273,37 @@ export async function formatEditorTitle(
   return title;
 }
 
+/**
+ * The project name a tab title shows: the project's short name (`platform.name`), falling back to
+ * the project id when the setting is unavailable.
+ *
+ * Deliberately NOT `formatProjectName`. A tab strip is the most space-constrained surface in the
+ * app, so appending the full name would push the short name — the field a Paratext user identifies
+ * a project by — toward the truncation it is supposed to survive. Short-name-first holds here in
+ * the strongest form available: the short name is the only name shown.
+ *
+ * Lives here rather than inline in `main.ts`'s title callback so that the choice of setting is
+ * pinned by a test. `formatEditorTitle`'s own tests inject this name, so they stay green whichever
+ * setting feeds them; without this seam, a swap to `platform.fullName` changes every tab title and
+ * no test notices.
+ *
+ * The project-id fallback is defensive rather than reachable in production: the C# data provider
+ * special-cases `platform.name` to `scrText.Name`, and the setting carries a contribution default,
+ * so a project served by it always answers. It guards a third-party project data provider that does
+ * not, and an unavailable provider.
+ *
+ * @param papi The PAPI backend.
+ * @param projectId The project whose name the tab shows.
+ * @returns The project's short name, or the project id when it has none.
+ */
+export async function getTabTitleProjectName(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<string> {
+  const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+  return (await pdp.getSetting('platform.name')) ?? projectId;
+}
+
 // #endregion Editor Title Formatting
 
 /**
@@ -497,37 +534,58 @@ export async function convertScriptureRangeToEditorRange(
  */
 export const availableScrollGroupIds = [undefined, ...new Array(5).keys()];
 
-export type BlockMarkerBlockNames = typeof blockMarkerToBlockNames;
+/**
+ * `MarkerType.Paragraph` markers that are never valid to select via a plain paragraph-style retag,
+ * because they are instead applied through dedicated, structure-aware mechanisms.
+ */
+export const PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS: ReadonlySet<string> = new Set(['id', 'c']);
 
-// This list is incomplete.
-export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
-  cl: '%paragraphMenu_cl_markerDescription%',
-  h: '%paragraphMenu_h_markerDescription%',
-  h1: '%paragraphMenu_h1_markerDescription%',
-  h2: '%paragraphMenu_h2_markerDescription%',
-  h3: '%paragraphMenu_h3_markerDescription%',
-  ide: '%paragraphMenu_ide_markerDescription%',
-  m: '%paragraphMenu_m_markerDescription%',
-  ms: '%paragraphMenu_ms_markerDescription%',
-  ms1: '%paragraphMenu_ms1_markerDescription%',
-  ms2: '%paragraphMenu_ms2_markerDescription%',
-  ms3: '%paragraphMenu_ms3_markerDescription%',
-  mt: '%paragraphMenu_mt_markerDescription%',
-  mt1: '%paragraphMenu_mt1_markerDescription%',
-  mt2: '%paragraphMenu_mt2_markerDescription%',
-  mt3: '%paragraphMenu_mt3_markerDescription%',
-  mt4: '%paragraphMenu_mt4_markerDescription%',
-  nb: '%paragraphMenu_nb_markerDescription%',
-  p: '%paragraphMenu_p_markerDescription%',
-  pi: '%paragraphMenu_pi_markerDescription%',
-  q1: '%paragraphMenu_q1_markerDescription%',
-  q2: '%paragraphMenu_q2_markerDescription%',
-  r: '%paragraphMenu_r_markerDescription%',
-  s: '%paragraphMenu_s_markerDescription%',
-  toc1: '%paragraphMenu_toc1_markerDescription%',
-  toc2: '%paragraphMenu_toc2_markerDescription%',
-  toc3: '%paragraphMenu_toc3_markerDescription%',
-};
+/**
+ * Every USFM paragraph-style marker known to {@link usfmMarkers} that a user can validly choose to
+ * apply via a plain paragraph-style retag. (Excludes
+ * {@link PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS}.)
+ */
+export const selectableParagraphMarkers: readonly string[] = Object.keys(usfmMarkers)
+  .filter(
+    (marker) =>
+      isParagraphMarker(marker) && !PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has(marker),
+  )
+  .sort();
+
+/**
+ * True when a marker has a real (potentially localized) title available via
+ * {@link getParagraphMarkerTitle} (as displayed in tooltips, the Paragraph combo box
+ * trigger/switcher, etc.) Some titles may not be displayed in all possible contexts.
+ */
+export function hasDisplayableParagraphMarkerTitle(marker: string): boolean {
+  return isParagraphMarker(marker);
+}
+
+/**
+ * Builds the localize key for a paragraph marker's description.
+ *
+ * @param marker Marker code, without its leading backslash (e.g. `p`, not `\p`)
+ */
+export function paragraphMarkerNameKey(marker: string): LocalizeKey {
+  return `%paragraphMenu_${marker}_markerDescription%`;
+}
+
+/**
+ * Resolves the localized title for a paragraph marker. Returns `undefined` when no title is
+ * available at all ({@link hasDisplayableParagraphMarkerTitle} is `false`) — when the marker isn't a
+ * paragraph marker in `usfmMarkers` at all. Otherwise, returns whatever `localizedStrings`
+ * currently has for the marker's key (from the `useLocalizedStrings` hook).
+ *
+ * @param marker Marker code to look up, without its leading backslash (e.g. `p`, not `\p`)
+ * @param localizedStrings The localized strings to resolve the title from
+ */
+export function getParagraphMarkerTitle(
+  marker: string,
+  localizedStrings: LanguageStrings,
+): string | undefined {
+  if (!hasDisplayableParagraphMarkerTitle(marker)) return undefined;
+  return localizedStrings[paragraphMarkerNameKey(marker)];
+}
 
 /**
  * Generates the marker menu list items specifically inserting appropriate action functions using
@@ -559,7 +617,7 @@ export function generateParagraphMenuListItems(
   notifyStructureProtected: () => void,
   restoreSelection?: () => void,
 ): MarkerMenuItem[] {
-  return Object.entries(blockMarkerToBlockNames).map(([marker, title]) => {
+  return selectableParagraphMarkers.map((marker) => {
     // The trailing detail column would otherwise sit empty for exactly the menu this feature is
     // named after. `usfmMarkers[marker].description` is a localize key the web view already
     // resolves (it loads every marker description), so this needs no new key and no new
@@ -567,7 +625,7 @@ export function generateParagraphMenuListItems(
     const descriptionKey = usfmMarkers[marker]?.description;
     const markerMenuItem: MarkerMenuItem = {
       marker,
-      title: localizedStrings[title] ?? title,
+      title: getParagraphMarkerTitle(marker, localizedStrings) ?? marker,
       subtitle: descriptionKey ? localizedStrings[descriptionKey] : undefined,
       action: () => {
         // Defense-in-depth: unreachable while the paragraph control is disabled
@@ -1114,6 +1172,15 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * connected resources and translation partners (deep sync). Uses the shallower
  * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
  * flush any local edits — a full deep sync is unnecessary on the way out.
+ *
+ * The outgoing sync is skipped only for a published resource (see `isProjectPublished`), which
+ * holds nothing the user wrote. A translation project with editing switched off still syncs: its
+ * Scripture text is locked, but the user can still add comments to it. The window-close and
+ * shutdown syncs (`getWritableEditorProjectIds` in `src/main/shutdown-tasks.ts`) do not yet draw
+ * the same line: they drop every editor whose saved `isReadOnly` is set, and an editor opened with
+ * a project ID (Home, New Tab, the title-bar picker) takes that flag from `platform.isEditable`, so
+ * an `Editable=F` project is synced here but not when its window closes or the app quits
+ * (PT-4786).
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,
@@ -1128,7 +1195,7 @@ export async function syncOnProjectSwitch(
     );
   }
 
-  if (outgoingProjectId) {
+  if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
     try {
       await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
         outgoingProjectId,
@@ -1177,6 +1244,14 @@ export async function finalizeProjectSwitch(
   // tab within it.
   syncOnProjectSwitch(papi, projectId, undefined);
   if ((await papi.settings.get('platform.interfaceMode')) === 'simple') {
+    // Normally a no-op: `runProjectBoundSimpleSwitch` (`src/renderer/services/
+    // web-view.service-shard.ts`) bakes `projectId` into every merged supplement tab with
+    // `applyProjectIdToTabs` before this runs, so the Text Collection arrives already bound and
+    // the call returns at its skip guard. Kept as a safety net for a caller that skips the bake.
+    // Ordered before `applyForProject` for the same reason the editor-column switch is: a re-point
+    // settles its content before the shared layout picks which tab to front. It swallows its own
+    // failures, so no try/catch here.
+    await updateRelatedTextCollectionPanel(papi, projectId);
     await applyForProject?.(projectId);
   }
   try {
@@ -1196,20 +1271,52 @@ export async function finalizeProjectSwitch(
 // #region Text Connection Panels
 
 /**
+ * Whether `projectId` is a published resource rather than a translation project.
+ *
+ * `platform.isPublished` is the project-kind classification. `platform.isEditable` is not a
+ * substitute: it is a project-wide switch on editing the Scripture text, so a translation project
+ * can have it off.
+ *
+ * Read from the project's `platform.base` PDP rather than `projectLookup.getMetadataForProject`,
+ * because the setting is the authoritative value while the metadata field is optional.
+ *
+ * A failed read counts as "not published", the setting's own default: following a project is
+ * recoverable on the next switch, while staying put would leave a panel silently on the outgoing
+ * project.
+ */
+async function isProjectPublished(papi: typeof PapiBackend, projectId: string): Promise<boolean> {
+  try {
+    const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+    return (await pdp.getSetting('platform.isPublished')) === true;
+  } catch (e) {
+    papi.logger.warn(
+      `Could not read platform.isPublished for ${projectId} (${getErrorMessage(e)}); treating it as a translation project`,
+    );
+    return false;
+  }
+}
+
+/**
  * Opens or updates the model text and the various views to be displayed in tabs in "column 3" (
- * reference texts, commentaries, comments, etc.) for a project.
+ * reference texts, commentaries, comments, Text Collection, etc.) for a project.
+ *
+ * Every panel here is error-isolated, so one failing panel never stops the rest from being
+ * re-pointed. Find is NOT here: it needs the id of the editor web view the switch produces, so it
+ * is re-pointed separately by {@link updateRelatedFindPanel} once that editor exists.
+ *
+ * The Text Collection is the one panel that declines to follow a published resource; see
+ * {@link updateRelatedTextCollectionPanel}.
  *
  * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for
- * @param isProjectEditable Whether `projectId` names an editable translation project rather than a
- *   read-only resource opened in the editor column. Only the Scripture Text Grid honors it; the
- *   other Column 3 panels follow the editor either way.
  */
 export async function openOrUpdateRelatedPanels(
   papi: typeof PapiBackend,
   projectId: string,
-  isProjectEditable: boolean,
 ): Promise<void> {
+  // Started first so the settings round trip overlaps the four panel commands below instead of
+  // adding to the switch's latency.
+  const isPublishedPromise = isProjectPublished(papi, projectId);
   try {
     await papi.commands.sendCommand('platformScriptureEditor.openModelText', projectId);
   } catch (e) {
@@ -1238,10 +1345,8 @@ export async function openOrUpdateRelatedPanels(
   } catch (e) {
     papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
   }
-  // A text collection is built from an editable project's settings, so a read-only resource opened
-  // in the editor column must not re-point it. Not wrapped like the four above: this one swallows
-  // its own failures (see its TSDoc).
-  if (isProjectEditable) await updateRelatedTextCollectionPanel(papi, projectId);
+  // Not wrapped like the four above: this one swallows its own failures (see its TSDoc).
+  await updateRelatedTextCollectionPanel(papi, projectId, isPublishedPromise);
 }
 
 /**
@@ -1254,78 +1359,179 @@ export async function openOrUpdateRelatedPanels(
  * because an inline literal would trip TypeScript's excess-property check.
  *
  * Exported so `scriptureTextGridWebViewProvider` in `main.ts` types its `openWebViewOptions` with
- * this same type: the writer here and the reader there are otherwise linked only by the field name,
- * so renaming or dropping `projectId` on one side would leave `typecheck` green and silently stop
- * the panel following project switches. (Mirrors `FindWebViewOptions`, which Find exports once and
- * uses on both sides.)
+ * this same type, which catches a _rename_ of `projectId` on either side via the object literal's
+ * excess-property check. It does NOT catch an omission: `projectId` has to stay optional, so `{
+ * bringToFront: false }` still typechecks and the provider's `openWebViewOptions.projectId ??
+ * savedWebView.projectId` would quietly fall back to the stale saved id, leaving the panel on the
+ * outgoing project with `typecheck` green. `resolveGridProviderProjectId` pins that precedence and
+ * `buildScriptureTextGridWebView` is what the provider calls, so both the rule and its use are
+ * covered. (Mirrors `FindWebViewOptions`, which Find exports once and uses on both sides.)
  */
 export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
+
+/**
+ * Which project the Text Collection provider should hand its web view.
+ *
+ * The two halves of the re-point meet here. `openWebViewOptions` is the half a project switch fills
+ * in — `updateRelatedTextCollectionPanel` passes the incoming project through `reloadWebView` — and
+ * it has to win: preferring the saved definition when a switch supplied a project leaves the panel
+ * rendering the outgoing project's texts. `savedWebView.projectId` is what keeps a restored tab, or
+ * one re-provided for an unrelated reason, on the project it already had.
+ *
+ * Extracted from the provider so this precedence is testable: the provider itself lives in
+ * `main.ts`, which no test imports, so inline the rule could be inverted and every test would still
+ * pass.
+ *
+ * @param openWebViewOptions Options the caller passed to `openWebView`/`reloadWebView`.
+ * @param savedWebView The saved definition being re-provided.
+ * @returns The project id to bind the web view to, or `undefined` when neither half names one.
+ */
+export function resolveGridProviderProjectId(
+  openWebViewOptions: TextCollectionPanelOptions,
+  savedWebView: Pick<SavedWebViewDefinition, 'projectId'>,
+): string | undefined {
+  return openWebViewOptions.projectId ?? savedWebView.projectId;
+}
 
 /**
  * Re-points the Text Collection panel at `projectId`, the way {@link openOrUpdateRelatedPanels}
  * re-points the rest of Column 3.
  *
- * Re-pointing is a reload, not an in-place `projectId` update: `papi.webViews` exposes no
- * definition-updating call from the service side, and the grid _requires_ a remount anyway because
- * it reads admin layout settings through `useBufferedLayoutSetting`, which documents itself as
- * built for consumers that switch projects via `reloadWebView` and NOT safe for ones that change
- * `projectId` in place.
+ * Re-pointing is a reload, not an in-place `projectId` update, for two reasons. `papi.webViews`
+ * exposes no definition-updating call at all — only a web view can update its _own_ definition
+ * (`updateWebViewDefinition` in `WebViewProps`), so from the service side a reload is the only way
+ * to change any updatable property, as `reloadWebView`'s own TSDoc says. More importantly the grid
+ * _requires_ a remount: it reads admin layout settings through `useBufferedLayoutSetting`, which
+ * documents itself as built for consumers that switch projects via `reloadWebView` and NOT safe for
+ * ones that change `projectId` in place (it would keep serving the previous project's held value,
+ * and it `logger.warn`s if it detects that). Without any re-point the panel would keep rendering
+ * the outgoing project's texts indefinitely: an unbound grid seeds itself once from the window's
+ * `ActiveEditorProjectId` and keeps that project from then on (see
+ * `resolveTextCollectionProjectId`), so only a re-point moves it.
  *
- * Three deliberate constraints:
+ * Four deliberate constraints:
  *
- * - Never creates a panel when none is open. The Text Collection's only open path is the
- *   default-layout supplement, so "not open" means the tab was closed in Power mode or the
- *   `platformScriptureEditor.enableScriptureTextGrid` setting is off — neither a state a project
- *   switch should reverse.
+ * - Never follows a published resource (see `isProjectPublished`): a resource has no collection of
+ *   its own, so following it would cost a reload, and the in-memory state it drops, for an empty
+ *   panel. The rule lives here rather than in a caller so every re-point path applies it.
+ * - Never creates a panel when none is open, unlike the Text Collection's menu command
+ *   (`platformScriptureEditor.showTextCollectionPanel`), which does create one on demand. A project
+ *   switch closing a tab the user deliberately closed in Power mode, or one the
+ *   `platformScriptureEditor.enableScriptureTextGrid` setting has kept from ever existing, is not
+ *   something a re-point should reverse — only a direct request to show the panel should create it.
+ *   (Both callers are Simple-mode-only — `openOrUpdateRelatedPanels` for an editor-column switch
+ *   and `finalizeProjectSwitch` for a Power→Simple one — so this guard is a contract, not a hot
+ *   path.)
  * - Skips the reload when the panel already shows `projectId`, because rebuilding the iframe drops
- *   the grid's in-memory React state (an open chapter-context split, in-flight "Installing…" rows)
- *   for no gain.
- * - Never brings the panel to front. This re-points the whole column rather than answering a request
- *   for the Text Collection, and the admin's shared layout chooses the front tab next.
+ *   the grid's in-memory React state for no gain. State held through `useWebViewState` —
+ *   `viewMode`, per-cell zoom — survives, since a reload reuses the same web view id.
+ *
+ *   Not all of that loss is cosmetic. The reload destroys the iframe's JS realm, so a DBL install
+ *   running in the grid is abandoned mid-flight: `installDblResource` proxies to .NET and completes
+ *   regardless, but the continuation that calls `persistUserAddition` dies with the realm, leaving
+ *   the resource installed on disk and absent from the collection, with no notification and no log
+ *   (the post-await `sourcesRef` check is a staleness re-read, not a liveness check). Recoverable
+ *   by re-adding the resource, which then succeeds immediately. TODO(PT-4510): fix in the install
+ *   path — persist the addition somewhere that survives a reload.
+ * - Never brings the panel to front. This runs as part of re-pointing the whole column, not because
+ *   anyone asked for the Text Collection, and the admin's shared layout chooses the front tab
+ *   immediately afterward.
  *
  * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
  * swallowed, because the project switch itself has already succeeded by this point.
  *
  * @param papi The instance of papi to read web view definitions with and request the reload from
  * @param projectId The id of the project whose text collection the panel should show
+ * @param isPublishedPromise Whether `projectId` is a published resource. A caller that already
+ *   started this read passes it in so the round trip overlaps its own work; otherwise it is read
+ *   here, and only once a reload is still in question.
  */
 export async function updateRelatedTextCollectionPanel(
   papi: typeof PapiBackend,
   projectId: string,
+  isPublishedPromise?: Promise<boolean>,
 ): Promise<void> {
+  let existingPanel: SavedWebViewDefinition | undefined;
   try {
     const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-    const existingPanel = allOpenDefs.find(
-      (def) => def.webViewType === SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+    existingPanel = allOpenDefs.find((def) => def.webViewType === SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
+  } catch (e) {
+    // The router rejects this outright when any window is unreachable, so this is "what is open is
+    // unknown", not "no panel is open" — distinct from the no-panel case below, which is normal.
+    papi.logger.error(
+      `Text Collection re-point to ${projectId} aborted: could not establish which web views are open (${getErrorMessage(e)}). The panel may still show a previous project.`,
     );
-    if (!existingPanel || existingPanel.projectId === projectId) return;
+    return;
+  }
 
+  // Normalized on both sides, as this module does everywhere else it compares ids: they arrive
+  // verbatim from a resource reference while the .NET side canonicalizes to uppercase, so a raw
+  // `===` would read a case-differing id as a different project and reload on every switch back —
+  // discarding exactly the in-memory state this guard exists to protect.
+  if (
+    !existingPanel ||
+    (existingPanel.projectId !== undefined &&
+      normalizeProjectId(existingPanel.projectId) === normalizeProjectId(projectId))
+  )
+    return;
+
+  if (await (isPublishedPromise ?? isProjectPublished(papi, projectId))) return;
+
+  try {
     // Hidden case: Simple mode shows one Column 3 tab at a time, so this usually lands on an
     // inactive tab. That is fine and needs no catch-up — the reload remounts the panel and its
     // render is entirely data-driven (no geometry reads, no scrollIntoView), so it produces the
     // right content while hidden and is simply revealed when the tab is next activated.
     const options: TextCollectionPanelOptions = { projectId, bringToFront: false };
-    await papi.webViews.reloadWebView(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, existingPanel.id, options);
+    const reloadedId = await papi.webViews.reloadWebView(
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      existingPanel.id,
+      options,
+    );
+    // `reloadWebView` resolves `undefined` rather than throwing when the definition has gone or the
+    // provider declines to supply one. Worth an error rather than silence: a failed re-point is not
+    // self-correcting. `projectId` is not in `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS`, so once any
+    // re-point has succeeded the panel's saved definition carries a project and `explicitProjectId`
+    // wins in `resolveTextCollectionProjectId` from then on, and nothing but another re-point will
+    // move the panel.
+    if (reloadedId === undefined)
+      papi.logger.error(
+        `Text Collection re-point to ${projectId} did not take: reloadWebView returned no id for panel ${existingPanel.id}. The panel is left showing ${existingPanel.projectId ?? 'no project'}.`,
+      );
   } catch (e) {
-    papi.logger.warn(`Error updating text collection panel project: ${getErrorMessage(e)}`);
+    papi.logger.error(
+      `Text Collection re-point to ${projectId} failed for panel ${existingPanel.id}: ${getErrorMessage(e)}. The panel is left showing ${existingPanel.projectId ?? 'no project'}.`,
+    );
   }
 }
 
 /**
  * Re-points the Find panel at `projectId`, the way {@link openOrUpdateRelatedPanels} re-points the
- * rest of Column 3. Kept separate, and called after the editor's own web view exists, because Find
- * needs `editorWebViewId`: it caches that id and uses it to select and highlight a clicked result
- * in the editor, and a project switch that replaces the editor tab mints a new one. Running this
- * alongside the other panels would hand Find the id of the editor being replaced.
+ * rest of Column 3. Called after the editor's own web view exists because Find caches
+ * `editorWebViewId` to select and highlight a clicked result, and a project switch that replaces
+ * the editor tab mints a new one.
  *
- * Find is also the one Column 3 panel that is re-pointed without being opened. In Simple mode it is
- * part of the fixed layout from startup, so it is always already there; anywhere else it is a panel
- * the user opened deliberately, and a project switch is not a request to open it.
+ * Re-points without opening, like {@link updateRelatedTextCollectionPanel}: a project switch is not
+ * a request to open a panel that isn't there.
+ *
+ * Deliberately has no editability or project-kind condition: Find follows the editor onto a
+ * read-only project or a published resource because searching is a read (see
+ * `adr-find-follows-editor-to-read-only`).
+ *
+ * Only Simple mode re-points Find. The mode is read here, fresh, rather than taken from the caller:
+ * a project switch can run long enough for the user to change mode mid-way, and reloading Power
+ * mode's Find onto the switched project would be wrong.
+ *
+ * Hidden case: in Simple mode Find's tab is usually inactive when this runs. The reload remounts
+ * Find, whose render is data-driven, so it shows the right project when next shown. But a Find that
+ * restores a previous search runs it immediately, hidden or not, and the auto-search held back by
+ * `useRunWhenVisible` runs again when the tab is shown, so the search, and the clearing of results
+ * it starts with, happens twice. A known gap, tracked as PT-4418.
  *
  * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
  * swallowed, because the project switch itself has already succeeded by this point.
  *
- * @param papi The instance of papi to send the command
+ * @param papi The instance of papi to read the interface mode with and send the command
  * @param projectId The id of the project Find should search from now on
  * @param editorWebViewId Id of the editor web view the switch produced
  */
@@ -1335,6 +1541,7 @@ export async function updateRelatedFindPanel(
   editorWebViewId: string | undefined,
 ): Promise<void> {
   try {
+    if ((await papi.settings.get('platform.interfaceMode')) !== 'simple') return;
     await papi.commands.sendCommand(
       'platformScripture.updateFindProject',
       projectId,
@@ -1342,6 +1549,51 @@ export async function updateRelatedFindPanel(
     );
   } catch (e) {
     papi.logger.warn(`Error updating find panel project: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
+ * Re-points an open Checks side panel at `projectId`, the Checks counterpart of
+ * {@link updateRelatedFindPanel} and called at the same point for the same reason: the panel holds
+ * the editor's web view id to focus the editor and select a clicked result, so it needs the id of
+ * the editor the switch produced.
+ *
+ * Creates nothing. In Simple mode Checks joins Column 3 only when the user opens it, and a project
+ * switch is not a request to open it.
+ *
+ * Never follows a published resource (see `isProjectPublished`), the same rule as
+ * {@link updateRelatedTextCollectionPanel}: a resource is not something the user checks, so Checks
+ * stays on the translation project. A translation project with editing switched off is followed
+ * like any other.
+ *
+ * Only Simple mode re-points Checks, read fresh here for the same reason as in
+ * {@link updateRelatedFindPanel}. In Power mode each Checks panel is docked beside the editor it was
+ * opened for, so re-pointing "the" open one would retarget whichever editor's panel the probe
+ * happened to find.
+ *
+ * Never throws: a failure here is logged and swallowed, because the project switch itself has
+ * already succeeded by this point.
+ *
+ * @param papi The instance of papi to read the interface mode and project kind with and send the
+ *   command
+ * @param projectId The id of the project Checks should check from now on
+ * @param editorWebViewId Id of the editor web view the switch produced
+ */
+export async function updateRelatedChecksSidePanel(
+  papi: typeof PapiBackend,
+  projectId: string,
+  editorWebViewId: string | undefined,
+): Promise<void> {
+  try {
+    if ((await papi.settings.get('platform.interfaceMode')) !== 'simple') return;
+    if (await isProjectPublished(papi, projectId)) return;
+    await papi.commands.sendCommand(
+      'platformScripture.updateChecksSidePanelProject',
+      projectId,
+      editorWebViewId,
+    );
+  } catch (e) {
+    papi.logger.warn(`Error updating checks side panel project: ${getErrorMessage(e)}`);
   }
 }
 
@@ -1707,3 +1959,54 @@ export function resolveResourceContentState({
 }
 
 // #endregion Missing Book Detection
+
+/** Localize key for the Text Collection tab's title and tooltip. */
+export const SCRIPTURE_TEXT_GRID_TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
+
+/**
+ * Builds the Text Collection's web view definition.
+ *
+ * Lives here rather than inline in the provider so the project-binding seam is reachable by a test:
+ * `main.ts` is the extension entry point and no test imports it, so inline the precedence between
+ * `openWebViewOptions.projectId` and `savedWebView.projectId` could be inverted — leaving the panel
+ * on the outgoing project — with the whole suite still green.
+ *
+ * The web view's content and styles are passed in rather than imported: they are webpack `?inline`
+ * assets, and importing them here would pull them into every consumer of this module.
+ *
+ * @param papi The instance of papi to read the interface mode and localized strings from.
+ * @param savedWebView The saved definition being re-provided.
+ * @param openWebViewOptions Options the caller passed to `openWebView`/`reloadWebView`.
+ * @param webViewContent The web view's inline content and styles.
+ * @returns The definition to provide.
+ */
+export async function buildScriptureTextGridWebView(
+  papi: typeof PapiBackend,
+  savedWebView: SavedWebViewDefinition,
+  openWebViewOptions: TextCollectionPanelOptions,
+  webViewContent: { content: string; styles: string },
+): Promise<WebViewDefinition> {
+  if (savedWebView.webViewType !== SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
+    throw new Error(
+      `${SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
+    );
+
+  const projectId = resolveGridProviderProjectId(openWebViewOptions, savedWebView);
+  const interfaceMode = await papi.settings.get('platform.interfaceMode');
+  const titleLocalizedStrings = await papi.localization.getLocalizedStrings({
+    localizeKeys: [SCRIPTURE_TEXT_GRID_TITLE_KEY],
+  });
+
+  return {
+    ...savedWebView,
+    title: SCRIPTURE_TEXT_GRID_TITLE_KEY,
+    tooltip: titleLocalizedStrings[SCRIPTURE_TEXT_GRID_TITLE_KEY],
+    isClosable: interfaceMode === 'power',
+    shouldShowToolbar: false,
+    projectId,
+    content: webViewContent.content,
+    styles: webViewContent.styles,
+    iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
+    scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+  };
+}

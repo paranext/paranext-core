@@ -8,6 +8,11 @@ import {
 import { windowServiceProviderName } from '@shared/services/window.service-model';
 import { settle } from '@main/services/__tests__/service-router-test.util';
 import { dataProviderService } from '@shared/services/data-provider.service';
+import {
+  forgetWindowWithholding,
+  noteWindowWithheldFromActivation,
+  resetWindowActivationForTesting,
+} from '@main/window-activation.util';
 
 /** Handler the engine registers against the routing-target-change event, so tests can fire it */
 type RoutingTargetChangeHandler = (windowId: string | undefined) => void;
@@ -60,9 +65,11 @@ const SUBSCRIBER_HAS_NO_PREVIOUS_VALUE = Symbol('no previous value');
  * `createDataProviderSubscriber`). `emitUpdate` makes the window report an update, so a test can
  * see what reaches subscribers rather than how the relay is wired.
  */
-function windowShard(focusSubject: unknown) {
+function windowShard(focusSubject: unknown, activeEditorProjectId: unknown = undefined) {
   const unsubscribe = vi.fn(async () => true);
+  const unsubscribeActiveEditorProjectId = vi.fn(async () => true);
   let notifyOfUpdate: (() => Promise<void>) | undefined;
+  let notifyOfActiveEditorProjectIdUpdate: (() => Promise<void>) | undefined;
   const service = {
     getFocus: vi.fn(async () => focusSubject),
     // Widened past `true` because the engine forwards whatever the scoped provider answers, and
@@ -85,9 +92,30 @@ function windowShard(focusSubject: unknown) {
         return unsubscribe;
       },
     ),
+    getActiveEditorProjectId: vi.fn(async () => activeEditorProjectId),
+    subscribeActiveEditorProjectId: vi.fn(
+      async (
+        _: undefined,
+        callback: (projectId: unknown) => void,
+        options?: { retrieveDataImmediately?: boolean; whichUpdates?: 'deeply-equal' | '*' },
+      ) => {
+        let previousProjectId: unknown = SUBSCRIBER_HAS_NO_PREVIOUS_VALUE;
+        notifyOfActiveEditorProjectIdUpdate = async () => {
+          const currentProjectId = await service.getActiveEditorProjectId();
+          const isUnchanged = previousProjectId === currentProjectId;
+          previousProjectId = currentProjectId;
+          if (isUnchanged && options?.whichUpdates !== '*') return;
+          callback(currentProjectId);
+        };
+        return unsubscribeActiveEditorProjectId;
+      },
+    ),
     unsubscribe,
+    unsubscribeActiveEditorProjectId,
     /** Simulate this window reporting that its focus data changed */
     emitUpdate: async () => notifyOfUpdate?.(),
+    /** Simulate this window reporting that its active editor project changed */
+    emitActiveEditorProjectIdUpdate: async () => notifyOfActiveEditorProjectIdUpdate?.(),
   };
   return service;
 }
@@ -101,6 +129,9 @@ function moveRoutingTargetTo(windowId: string | undefined) {
 describe('window service router', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Which windows were created without activation, and whose focus has already been handed
+    // back, is process state, not a mock.
+    resetWindowActivationForTesting();
     mocks.routingTargetChangeHandlers.clear();
     mocks.getTargetWindowId.mockReturnValue('1');
   });
@@ -150,7 +181,7 @@ describe('window service router', () => {
 
     await engine.setFocus(undefined, 'detect');
 
-    expect(second.setFocus).toHaveBeenCalledWith(undefined, 'detect');
+    expect(second.setFocus).toHaveBeenCalledWith(undefined, 'detect', false);
     expect(first.setFocus).not.toHaveBeenCalled();
   });
 
@@ -160,7 +191,36 @@ describe('window service router', () => {
 
     await engine.setFocus('detect');
 
-    expect(only.setFocus).toHaveBeenCalledWith(undefined, 'detect');
+    expect(only.setFocus).toHaveBeenCalledWith(undefined, 'detect', false);
+  });
+
+  test('tells a window still awaiting its first activation not to take document focus', async () => {
+    // Every mounted panel and every loaded web view asks the window service to focus it, and
+    // routing lands here whenever the background window is the one ready to take work. Honouring
+    // that focus would let it claim the caret the moment the platform-opened window is eventually
+    // raised, regardless of which tab the raise is actually showing.
+    const only = windowShard('a');
+    const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+    noteWindowWithheldFromActivation('1');
+
+    await engine.setFocus('detect');
+
+    expect(only.setFocus).toHaveBeenCalledWith(undefined, 'detect', true);
+
+    forgetWindowWithholding('1');
+  });
+
+  test('tells a window the user has activated to focus normally', async () => {
+    // The positive control for the rule above: the withholding ends at the first activation, so an
+    // ordinary window can never reach the new branch.
+    const only = windowShard('a');
+    const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+    noteWindowWithheldFromActivation('1');
+    forgetWindowWithholding('1');
+
+    await engine.setFocus('detect');
+
+    expect(only.setFocus).toHaveBeenCalledWith(undefined, 'detect', false);
   });
 
   test('deselects with one argument, the only form that survives the trip to the renderer', async () => {
@@ -408,10 +468,12 @@ describe('window service router', () => {
       engine as unknown as { [property: string]: unknown },
     );
 
-    expect([...visibleFunctionNames].filter((name) => name.startsWith('get'))).toEqual([
+    expect([...visibleFunctionNames].filter((name) => name.startsWith('get')).sort()).toEqual([
+      'getActiveEditorProjectId',
       'getFocus',
     ]);
-    expect([...visibleFunctionNames].filter((name) => name.startsWith('set'))).toEqual([
+    expect([...visibleFunctionNames].filter((name) => name.startsWith('set')).sort()).toEqual([
+      'setActiveEditorProjectId',
       'setFocus',
     ]);
   });
@@ -485,6 +547,95 @@ describe('window service router', () => {
     expect(second.unsubscribe).toHaveBeenCalledTimes(1);
     await settle();
     expect(second.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  test('reads the active editor project id from the focused window', async () => {
+    const first = windowShard('focus-in-window-1', 'project-1');
+    const second = windowShard('focus-in-window-2', 'project-2');
+    const engine = new FocusedWindowDataProviderEngine(
+      async (id) => (id === '1' ? first : second) as never,
+    );
+    mocks.getTargetWindowId.mockReturnValue('2');
+
+    expect(await engine.getActiveEditorProjectId()).toBe('project-2');
+  });
+
+  test('rejects setActiveEditorProjectId as read-only, whether or not a window is routable', async () => {
+    // The caller sees why the write failed, never a "no windows available" routing error instead
+    mocks.getTargetWindowId.mockReturnValue(undefined);
+    const engine = new FocusedWindowDataProviderEngine(async () => undefined);
+
+    await expect(engine.setActiveEditorProjectId()).rejects.toThrow(
+      'Cannot set the active editor project id',
+    );
+  });
+
+  test('releases the subscription that succeeded when the other one fails', async () => {
+    // Left attached, the Focus subscription would keep notifying this engine with nothing holding
+    // its unsubscriber, and the retry that follows would attach a second one alongside it
+    const only = windowShard('a', 'project-1');
+    only.subscribeActiveEditorProjectId.mockRejectedValueOnce(
+      new Error('transient subscribe failure'),
+    );
+    const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+
+    await expect(engine.getFocus()).rejects.toThrow('transient subscribe failure');
+
+    expect(only.subscribeFocus).toHaveBeenCalledTimes(1);
+    expect(only.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  test('tells subscribers both answers changed when the routing target moves', async () => {
+    const engine = new FocusedWindowDataProviderEngine(async () => windowShard('a') as never);
+    const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
+
+    moveRoutingTargetTo('2');
+
+    expect(notifyUpdate).toHaveBeenCalledWith('Focus');
+    expect(notifyUpdate).toHaveBeenCalledWith('ActiveEditorProjectId');
+  });
+
+  test('relays the focused window’s own active editor project updates', async () => {
+    const only = windowShard('a', 'project-1');
+    const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+    await engine.getActiveEditorProjectId();
+    const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
+
+    await only.emitActiveEditorProjectIdUpdate();
+    await settle();
+
+    expect(notifyUpdate).toHaveBeenCalledWith('ActiveEditorProjectId');
+  });
+
+  test('subscribes to both data types on a re-point and unsubscribes both when it moves on', async () => {
+    const first = windowShard('a', 'project-1');
+    const second = windowShard('b', 'project-2');
+    const engine = new FocusedWindowDataProviderEngine(
+      async (id) => (id === '1' ? first : second) as never,
+    );
+    await engine.getFocus();
+
+    expect(first.subscribeFocus).toHaveBeenCalledTimes(1);
+    expect(first.subscribeActiveEditorProjectId).toHaveBeenCalledTimes(1);
+
+    moveRoutingTargetTo('2');
+    await engine.getFocus();
+
+    expect(first.unsubscribe).toHaveBeenCalled();
+    expect(first.unsubscribeActiveEditorProjectId).toHaveBeenCalled();
+    expect(second.subscribeFocus).toHaveBeenCalledTimes(1);
+    expect(second.subscribeActiveEditorProjectId).toHaveBeenCalledTimes(1);
+  });
+
+  test('drops both windows’ subscriptions when disposed', async () => {
+    const only = windowShard('a', 'project-1');
+    const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+    await engine.getFocus();
+
+    await engine.dispose();
+
+    expect(only.unsubscribe).toHaveBeenCalled();
+    expect(only.unsubscribeActiveEditorProjectId).toHaveBeenCalled();
   });
 
   test('leaves nothing subscribed when disposal races an in-flight relay', async () => {

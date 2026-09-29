@@ -562,9 +562,9 @@ declare module 'shared/models/web-view.model' {
      */
     shouldShowToolbar?: boolean;
     /**
-     * Whether this WebView's tab can be closed by the user (shows the tab's close button). Set to
-     * `false` for tabs that must always remain open, such as views that are part of the default
-     * layout.
+     * Whether this WebView's tab can be closed by the user (shows the tab's close button and allows
+     * closing the tab with a middle click anywhere on its header). Set to `false` for tabs that must
+     * always remain open, such as views that are part of the default layout.
      *
      * Note: this default is applied by consumers (treat `undefined` as `true`, e.g. `isClosable ??
      * true`), not enforced by the type.
@@ -628,6 +628,126 @@ declare module 'shared/models/web-view.model' {
     | Partial<Omit<WebViewDefinitionURL, SavedWebViewDefinitionOmittedKeys>>
   ) &
     Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
+  /**
+   * Id of one zoom area — a named part of a web view's content that zooms as one and keeps its own
+   * content zoom level. Ids are lower-case letters, digits and hyphens, starting with a letter
+   * (`[a-z][a-z0-9-]*`), and are stable strings a web view chooses once (for example `main` for a
+   * view's primary content; a view that has several independently zoomable parts gives each its own
+   * id).
+   *
+   * `default` is reserved: its CSS custom property is the pane-wide default every other area falls
+   * back to, so an area of that name would set the default for the whole pane. The platform ignores
+   * an area marked with it — pick any other id.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ContentZoomAreaId = string;
+  /**
+   * Id of the zoom area a web view marks without naming one. Every web view that opts into content
+   * zoom has at least this area.
+   *
+   * Three attribute values name it: an empty value (`data-platform-content-zoom-root=""`), the id
+   * itself (`="main"`), and `="true"` — the value React serializes a bare JSX prop (`<div
+   * data-platform-content-zoom-root />`) to. Because `"true"` names this area, an area genuinely
+   * called `true` is not available.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * writes the literal `'main'` itself and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const MAIN_CONTENT_ZOOM_AREA = 'main';
+  /**
+   * Web-view definition `state` key holding the pane's own content zoom levels: a map from zoom area
+   * id to factor. An area with no entry follows the default from Settings. Written only by the
+   * platform; web views may read it.
+   *
+   * A web view whose `getWebViewDefinition` rebuilds its own definition on re-point (a
+   * `reloadWebView` pointed at another project through the same web view id) must carry its saved
+   * `state` through wholesale, by spreading it rather than copying only the keys the view itself
+   * uses: the platform stores a companion identity stamp next to this key, and a view that drops the
+   * stamp while keeping the levels has the platform silently re-attribute the previous project's
+   * level to the new one, rather than losing it.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * that reads this state key writes the literal `'platform.contentZoomLevels'` itself and keeps it
+   * equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_LEVELS_STATE_KEY = 'platform.contentZoomLevels';
+  /**
+   * Attribute a web view puts on each element that wraps one zoom area's content (below its own
+   * toolbar, outside dividers and headers). The attribute value is the area id. Three values name the
+   * {@link MAIN_CONTENT_ZOOM_AREA} area instead: an empty value
+   * (`data-platform-content-zoom-root=""`), `="main"`, and the `="true"` React serializes a bare JSX
+   * prop (`<div data-platform-content-zoom-root />`) to. Write the empty value in static markup and
+   * the bare prop in JSX; either way the area is `main`. The platform's injected stylesheet applies
+   * `zoom: var(--platform-content-zoom-<area>)` to it. A marker inside another marker is ignored —
+   * matched by neither the platform's stylesheet nor its report of the view's areas — so nesting
+   * never compounds one area's zoom into another's. A web view that renders no element with this
+   * attribute is not zoomed at all, unless core declares its web view type zoomable: it renders at
+   * 100 % content zoom, its tab menu has no zoom items, and the zoom chords and Ctrl/⌘+wheel do
+   * nothing there. Interface scaling still applies to it.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * writes the literal `'data-platform-content-zoom-root'` itself and keeps it equal to this
+   * constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
+  /**
+   * Attribute a web view puts on an element that is not itself scaled — a row, a column, a card — to
+   * say that a click, a focus or a Ctrl/⌘+wheel anywhere inside it means one zoom area. The value is
+   * that area's id, spelled as for {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}. The platform consults it only
+   * where no zoom area's marked element encloses the target: a marked element always wins. It changes
+   * which area the chords, the wheel and the tab menu act on; it scales nothing, and a scope naming
+   * an area the view does not render is ignored.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * writes the literal `'data-platform-content-zoom-scope'` itself (or imports the mirror from
+   * `platform-bible-react`) and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_SCOPE_ATTRIBUTE = 'data-platform-content-zoom-scope';
+  /**
+   * Attribute a web view may add to an element carrying {@link CONTENT_ZOOM_ROOT_ATTRIBUTE} to name
+   * that zoom area for the user. The zoom indicator then reads `<label> · <level>` (for example `HSV
+   * · 120 %`) instead of the level alone. Plain text; the platform reads the first non-empty label
+   * among the area's marked elements. An area without a label shows the level alone.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * writes the literal `'data-platform-content-zoom-label'` itself (or uses `ContentZoomRoot`'s
+   * `label` prop) and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_LABEL_ATTRIBUTE = 'data-platform-content-zoom-label';
+  /**
+   * Prefix of the CSS custom properties the platform sets on every web view's root element, one per
+   * zoom area, with that area's effective factor (own level, else the Settings default):
+   * `--platform-content-zoom-main`, `--platform-content-zoom-<area>`, …
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * that reads its own zoom variable writes the literal `'--platform-content-zoom-'` itself and keeps
+   * it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_CSS_VARIABLE_PREFIX = '--platform-content-zoom-';
+  /**
+   * CSS custom property holding the Settings default, the fallback for any zoom area without its own
+   * variable.
+   *
+   * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+   * that reads the default zoom variable writes the literal `'--platform-content-zoom-default'`
+   * itself and keeps it equal to this constant.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const CONTENT_ZOOM_DEFAULT_CSS_VARIABLE = '--platform-content-zoom-default';
   /**
    * The `webViewType` of the Scripture editor web views provided by the `platform-scripture-editor`
    * extension. Must match `SCRIPTURE_EDITOR_WEBVIEW_TYPE` in `platform-scripture-editor.utils.ts` —
@@ -694,7 +814,11 @@ declare module 'shared/models/web-view.model' {
    * returned to the latest `defaultStateValue`, and changing the `stateKey` will use the latest
    * `defaultStateValue`. However, if `defaultStateValue` is changed while a state is
    * `defaultStateValue` (meaning it is reset and has no value), the returned state value will not be
-   * updated to the new `defaultStateValue`.
+   * updated to the new `defaultStateValue`. A state value showing `defaultStateValue` keeps that same
+   * object across updates to other keys of the web view state, but still pass a stable default
+   * (module-level or memoized) if the value is used in an effect's dependency list. Likewise, a saved
+   * value that is deeply equal to the current state value keeps the current object, so saving an
+   * equal new object does not give the state value a new identity.
    *
    * _＠returns_ `[stateValue, setStateValue, resetWebViewState]`
    *
@@ -808,7 +932,11 @@ declare module 'shared/models/web-view.model' {
      * returned to the latest `defaultStateValue`, and changing the `stateKey` will use the latest
      * `defaultStateValue`. However, if `defaultStateValue` is changed while a state is
      * `defaultStateValue` (meaning it is reset and has no value), the returned state value will not be
-     * updated to the new `defaultStateValue`.
+     * updated to the new `defaultStateValue`. A state value showing `defaultStateValue` keeps that same
+     * object across updates to other keys of the web view state, but still pass a stable default
+     * (module-level or memoized) if the value is used in an effect's dependency list. Likewise, a saved
+     * value that is deeply equal to the current state value keeps the current object, so saving an
+     * equal new object does not give the state value a new identity.
      *
      * _＠returns_ `[stateValue, setStateValue, resetWebViewState]`
      *
@@ -956,6 +1084,7 @@ declare module 'shared/global-this.model' {
   import type { LogLevel } from 'electron-log';
   import { FunctionComponent } from 'react';
   import {
+    ContentZoomAreaId,
     GetSavedWebViewDefinition,
     SavedWebViewDefinition,
     UpdateWebViewDefinition,
@@ -1009,7 +1138,11 @@ declare module 'shared/global-this.model' {
      * returned to the latest `defaultStateValue`, and changing the `stateKey` will use the latest
      * `defaultStateValue`. However, if `defaultStateValue` is changed while a state is
      * `defaultStateValue` (meaning it is reset and has no value), the returned state value will not be
-     * updated to the new `defaultStateValue`.
+     * updated to the new `defaultStateValue`. A state value showing `defaultStateValue` keeps that same
+     * object across updates to other keys of the web view state, but still pass a stable default
+     * (module-level or memoized) if the value is used in an effect's dependency list. Likewise, a saved
+     * value that is deeply equal to the current state value keeps the current object, so saving an
+     * equal new object does not give the state value a new identity.
      *
      * _＠returns_ `[stateValue, setStateValue, resetWebViewState]`
      *
@@ -1102,6 +1235,36 @@ declare module 'shared/global-this.model' {
      * ```
      */
     var updateWebViewDefinition: UpdateWebViewDefinition;
+    /**
+     * Zoom one area of a web view by `deltaSteps` (+1 in, −1 out). Omit `areaId` to zoom the web
+     * view's active area.
+     *
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    var adjustContentZoomById: (
+      webViewId: string,
+      deltaSteps: number,
+      areaId?: ContentZoomAreaId,
+    ) => void;
+    /**
+     * Return one area of a web view to the Settings default. Omit `areaId` to reset the web view's
+     * active area.
+     *
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    var resetContentZoomById: (webViewId: string, areaId?: ContentZoomAreaId) => void;
+    /**
+     * Report the zoom areas a web view's bootstrap discovered, in document order.
+     *
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    var reportContentZoomAreasById: (webViewId: string, areaIds: ContentZoomAreaId[]) => void;
+    /**
+     * Report the zoom area a web view's bootstrap last saw clicked or focused.
+     *
+     * @experimental This function is unstable and may change or disappear without notice
+     */
+    var reportContentZoomActiveAreaById: (webViewId: string, areaId: ContentZoomAreaId) => void;
     /** Indicates whether test code meant just for developers to see should be run */
     var isNoisyDevModeEnabled: boolean;
     /**
@@ -1123,6 +1286,18 @@ declare module 'shared/global-this.model' {
      * @experimental
      */
     var windowId: string | undefined;
+    /**
+     * Whether this window was created without being activated, as of the moment it was created. Set
+     * in the renderer process from the URL search params; no other process assigns it, so it reads
+     * `undefined` there.
+     *
+     * This is the window's state at creation, not now: what content should do about it also depends
+     * on whether the user has since done anything in the window, which the renderer tracks
+     * separately.
+     *
+     * @experimental
+     */
+    var wasWindowCreatedWithoutActivation: boolean | undefined;
     /**
      * Whether this renderer is the main window — the one that draws the top-level menu. On Windows
      * and Linux, secondary windows get identical chrome minus that menu; on macOS the top-level menu
@@ -1218,6 +1393,14 @@ declare module 'shared/data/rpc.model' {
   } from 'json-rpc-2.0';
   /** Port to use for the WebSocket */
   export const WEBSOCKET_PORT = 8876;
+  /**
+   * Largest message the WebSocket transport carries. A message over this is not a failed request: the
+   * receiver closes the connection with 1009, taking down every request in flight on it and, for the
+   * C# data provider, the process itself. Declared here rather than left to the `ws` default so a
+   * producer sizing a response against it - see `Pt9InterlinearReader.MaxPt9InterlinearDataBytes` -
+   * is measuring against a number this repository states.
+   */
+  export const MAX_WEBSOCKET_PAYLOAD_BYTES: number;
   /**
    * How many times to try sending a request before giving up if the request is not yet registered.
    * Exported so callers that layer their own retry policy on top of {@link requestWithRetry}'s cadence
@@ -1392,8 +1575,38 @@ declare module 'shared/data/rpc.model' {
    *   than throwing.
    */
   export function describeWebSocketErrorEvent(ev: unknown): string;
+  /**
+   * The subset of a socket the main-process RPC layer touches. Both `ws`'s server-side sockets and
+   * the DOM `WebSocket` type satisfy it structurally, and so does a MessagePort wrapped to look like
+   * one. `RpcServer` and `RpcWebSocketListener` are written against this rather than against
+   * `WebSocket` so that main can serve a client over something other than a TCP socket.
+   *
+   * @experimental
+   */
+  export interface ServerSocketLike {
+    /**
+     * 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED, as on `WebSocket.readyState`
+     *
+     * @experimental
+     */
+    readonly readyState: number;
+    /** @experimental */
+    send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void;
+    /** @experimental */
+    close(code?: number, reason?: string): void;
+    /** @experimental */
+    addEventListener<K extends 'close' | 'error' | 'message'>(
+      type: K,
+      listener: (ev: WebSocketEventMap[K]) => void,
+    ): void;
+    /** @experimental */
+    removeEventListener<K extends 'close' | 'error' | 'message'>(
+      type: K,
+      listener: (ev: WebSocketEventMap[K]) => void,
+    ): void;
+  }
   /** Serialize a payload, if needed, and send it over the provided WebSocket */
-  export function sendPayloadToWebSocket(ws: WebSocket | undefined, payload: unknown): void;
+  export function sendPayloadToWebSocket(ws: ServerSocketLike | undefined, payload: unknown): void;
   /**
    * Deserialize a payload from the network and return it as a JSONRPC message or array of messages.
    * Note that all `null` values from the payload will be converted into `undefined` values except for
@@ -1493,10 +1706,12 @@ declare module 'shared/data/rpc.model' {
    *
    * The code has to be read back out of the message because `doRequest` flattens every RPC-level
    * error — method-not-found and a handler throwing alike — into a thrown value whose `message` is
-   * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker (the richer
-   * `platformErrorCode` field is populated only for C# `PlatformErrorCodes.WithCode` throws, which a
-   * "no handler yet" response never carries — it has no `error.data` at all). Deriving the format
-   * from {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
+   * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker: a "no
+   * handler yet" response has no `error.data` at all, and the `platformErrorCode` field is no help
+   * either, because it is never populated from C#. `JsonRpc.ExceptionStrategy` is left at its
+   * `CommonErrorData` default, which serializes no `Exception.Data`, so `error.data.data` is always
+   * absent whatever `PlatformErrorCodes.WithCode` set. Deriving the format from
+   * {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
    * with, keeps this matcher in lockstep with any reformat there.
    *
    * @param error Error thrown by a `networkService` request
@@ -2027,6 +2242,7 @@ declare module 'shared/models/rpc.interface' {
     EventHandler,
     InternalRequestHandler,
     RequestParams,
+    ServerSocketLike,
   } from 'shared/data/rpc.model';
   import {
     SingleMethodDocumentation,
@@ -2210,6 +2426,190 @@ declare module 'shared/models/rpc.interface' {
     /** Remove all event registrations for the given handler (e.g. when a websocket closes) */
     unregisterAll(handler: unknown): void;
   }
+  /**
+   * An RPC handler that can serve a client whose socket was created by the caller rather than
+   * accepted from the websocket server. Only the process that owns the server (main) implements this;
+   * it is how a renderer's MessagePort-backed connection joins the same registry as the websocket
+   * clients.
+   *
+   * @experimental
+   */
+  export interface IRpcLocalClientAcceptor {
+    /**
+     * Start serving `socket` as a client of this process's RPC server.
+     *
+     * @param socket The server end of the client's connection
+     * @param name Label for this client in log lines, in place of the incrementing websocket number
+     * @throws If this handler is not currently accepting clients
+     * @experimental
+     */
+    acceptLocalClient(socket: ServerSocketLike, name: string): void;
+  }
+}
+declare module 'shared/data/papi-port.model' {
+  /**
+   * Wire shapes of the renderer's PAPI MessagePort transport: the IPC channels the preload uses to
+   * obtain the port from main, the message the preload forwards into the page's main world, and the
+   * close frame both adapters send before closing a port. Nothing here is a JSON-RPC message; the RPC
+   * layer never sees these shapes.
+   *
+   * Kept free of imports so the preload bundle can use it without pulling in the logger or
+   * `electron`.
+   */
+  /**
+   * The PAPI part of the bridge the preload exposes on `window.electronAPI.papi`. The preload
+   * declares its object against this type and the page reads the bridge through it, so both sides
+   * fail to compile if either renames or reshapes a member.
+   *
+   * @experimental
+   */
+  export type PapiPortBridge = {
+    /**
+     * Ask main for this window's PAPI MessagePort. The reply arrives as a `window` `message` event (a
+     * {@link PapiPortMainWorldMessage}), not as a return value, because a port can only travel over
+     * `postMessage`.
+     *
+     * @experimental
+     */
+    requestPort(): void;
+  };
+  /**
+   * IPC channel the preload sends on to ask main for this window's PAPI MessagePort
+   *
+   * @experimental
+   */
+  export const PAPI_PORT_REQUEST_CHANNEL = 'electronAPI:papi.requestPort';
+  /**
+   * IPC channel main replies on, carrying a {@link PapiPortGrant} and the port as its one transferred
+   * object. Also the `type` of the message the preload forwards into the main world.
+   *
+   * @experimental
+   */
+  export const PAPI_PORT_CHANNEL = 'electronAPI:papi.port';
+  /**
+   * IPC channel main replies on when it cannot hand out a port, carrying a {@link PapiPortError}. Also
+   * the `type` of the message the preload forwards into the main world.
+   *
+   * @experimental
+   */
+  export const PAPI_PORT_ERROR_CHANNEL = 'electronAPI:papi.portError';
+  /**
+   * What main says alongside the port it grants
+   *
+   * @experimental
+   */
+  export type PapiPortGrant = {
+    /**
+     * Platform id of the window the port was granted to, for the renderer's log lines
+     *
+     * @experimental
+     */
+    windowId: string;
+  };
+  /**
+   * Why main declined to grant a port
+   *
+   * @experimental
+   */
+  export type PapiPortError = {
+    /** @experimental */
+    reason: string;
+  };
+  /**
+   * Message the preload posts into the page's main world: either the port (in the event's `ports`)
+   * with its grant, or the error
+   *
+   * @experimental
+   */
+  export type PapiPortMainWorldMessage =
+    | ({
+        type: typeof PAPI_PORT_CHANNEL;
+      } & PapiPortGrant)
+    | ({
+        type: typeof PAPI_PORT_ERROR_CHANNEL;
+      } & PapiPortError);
+  /**
+   * Whether `data` from a `window` `message` event is a {@link PapiPortMainWorldMessage}. Anything can
+   * land on `window.postMessage`, so a shape check is the only filter.
+   *
+   * @experimental
+   */
+  export function isPapiPortMainWorldMessage(data: unknown): data is PapiPortMainWorldMessage;
+  /**
+   * `type` of the in-band close frame. A MessagePort's own `close` event carries no code, so the side
+   * that closes on purpose posts this first; the other side then reports the close with the code and
+   * reason given here, and treats a port close that arrives with no frame as 1006 (the connection
+   * died).
+   *
+   * @experimental
+   */
+  export const PAPI_PORT_CLOSE_FRAME_TYPE = 'papi:close';
+  /**
+   * Reason a port adapter reports when its port closes with no close frame first, alongside code 1006
+   *
+   * @experimental
+   */
+  export const PORT_CLOSED_WITHOUT_FRAME_REASON = 'port closed without a close frame';
+  /**
+   * The in-band close frame. Distinguishable from every JSON-RPC payload, which is a string.
+   *
+   * @experimental
+   */
+  export type PapiPortCloseFrame = {
+    /** @experimental */
+    type: typeof PAPI_PORT_CLOSE_FRAME_TYPE;
+    /**
+     * A WebSocket close code, so both ends keep using `isCleanCloseCode` unchanged
+     *
+     * @experimental
+     */
+    code: number;
+    /** @experimental */
+    reason: string;
+  };
+  /**
+   * Build the close frame a port adapter posts before closing its port on purpose
+   *
+   * @experimental
+   */
+  export function createPapiPortCloseFrame(code: number, reason: string): PapiPortCloseFrame;
+  /**
+   * Whether a message received over a PAPI port is a {@link PapiPortCloseFrame}
+   *
+   * @experimental
+   */
+  export function isPapiPortCloseFrame(data: unknown): data is PapiPortCloseFrame;
+  /**
+   * The close event a port adapter hands to the RPC layer. Only the fields
+   * `describeWebSocketCloseEvent`, `isCleanCloseEvent` and `RpcWebSocketListener.onClientDisconnect`
+   * read; a real `CloseEvent` cannot be constructed in every environment the adapters run in, and the
+   * RPC layer reads these properties reflectively.
+   *
+   * @experimental
+   */
+  export type SyntheticCloseEvent = {
+    /** @experimental */
+    type: 'close';
+    /** @experimental */
+    target: unknown;
+    /** @experimental */
+    code: number;
+    /** @experimental */
+    reason: string;
+    /** @experimental */
+    wasClean: boolean;
+  };
+  /**
+   * Build the close event a port adapter dispatches to its `close` listeners
+   *
+   * @experimental
+   */
+  export function createSyntheticCloseEvent(
+    target: unknown,
+    code: number,
+    reason: string,
+    wasClean: boolean,
+  ): SyntheticCloseEvent;
 }
 declare module 'client/services/web-socket.interface' {
   /**
@@ -2220,6 +2620,222 @@ declare module 'client/services/web-socket.interface' {
    * implementation. We can adjust as needed at that point.
    */
   export type IWebSocket = WebSocket;
+}
+declare module 'shared/data/papi-port-close-handshake' {
+  import { PapiPortCloseFrame, SyntheticCloseEvent } from 'shared/data/papi-port.model';
+  /**
+   * What an adapter hands the handshake: its own port primitives, and what to do once closed
+   *
+   * @experimental
+   */
+  export type PortCloseHandshakeHooks = {
+    /**
+     * Post a close frame on the port. May throw; the close still completes.
+     *
+     * @experimental
+     */
+    postFrame(frame: PapiPortCloseFrame): void;
+    /**
+     * Close the port
+     *
+     * @experimental
+     */
+    closePort(): void;
+    /**
+     * Called exactly once, when the connection is closed for whatever reason: detach from the port,
+     * record the closed state, and dispatch `event` to the adapter's close listeners
+     *
+     * @experimental
+     */
+    onClosed(event: SyntheticCloseEvent): void;
+  };
+  /**
+   * One connection's close handshake. Records the close exactly once, whichever side or event caused
+   * it.
+   *
+   * @experimental
+   */
+  export type PortCloseHandshake = {
+    /**
+     * Whether the connection has closed. Once true, nothing more is reported.
+     *
+     * @experimental
+     */
+    readonly isClosed: boolean;
+    /**
+     * Close on purpose: post a close frame, report the close, then close the port. A no-op once
+     * closed.
+     *
+     * @param code WebSocket close code. Defaults to 1000.
+     * @param reason Human-readable reason. Defaults to empty.
+     * @experimental
+     */
+    close(code?: number, reason?: string): void;
+    /**
+     * Offer a message that arrived on the port. A close frame is reported as the peer's close and the
+     * port is closed; anything arriving once closed is dropped.
+     *
+     * @param data The message's `data`
+     * @returns `true` when the message was consumed here, `false` when it is for the adapter to
+     *   deliver
+     * @experimental
+     */
+    handleIncoming(data: unknown): boolean;
+    /**
+     * The port's own `close` event arrived. Reported as 1006 unless the handshake already finished.
+     *
+     * @experimental
+     */
+    handlePortClosed(): void;
+  };
+  /**
+   * Create the close handshake for one connection
+   *
+   * @param target The adapter, reported as the close event's `target`
+   * @param hooks The adapter's port primitives and close handling
+   * @experimental
+   */
+  export function createPortCloseHandshake(
+    target: unknown,
+    hooks: PortCloseHandshakeHooks,
+  ): PortCloseHandshake;
+}
+declare module 'renderer/services/message-port-web-socket' {
+  /**
+   * The surface of a DOM `MessagePort` this adapter uses. Node's `worker_threads` `MessagePort`
+   * satisfies it too, which is what the in-process tests use.
+   *
+   * @experimental
+   */
+  export type MessagePortLike = {
+    /** @experimental */
+    addEventListener(type: 'message', listener: (ev: { data: unknown }) => void): void;
+    /** @experimental */
+    addEventListener(type: 'close', listener: () => void): void;
+    /** @experimental */
+    removeEventListener(type: 'message', listener: (ev: { data: unknown }) => void): void;
+    /** @experimental */
+    removeEventListener(type: 'close', listener: () => void): void;
+    /** @experimental */
+    postMessage(message: unknown): void;
+    /** @experimental */
+    start(): void;
+    /** @experimental */
+    close(): void;
+  };
+  /**
+   * How the adapter obtains its port. Calls exactly one of the handlers, once. The Electron
+   * implementation asks main through the preload; tests hand a port over directly.
+   *
+   * @experimental
+   */
+  export type PapiPortProvider = (handlers: {
+    onPort: (port: MessagePortLike, windowId: string) => void;
+    onError: (reason: string) => void;
+  }) => void;
+  type SocketEventName = keyof WebSocketEventMap;
+  /**
+   * A `WebSocket` whose wire is an Electron `MessagePort` to the main process instead of a TCP
+   * socket. Chromium closes every TCP client socket when the OS suspends; a MessagePort is a Mojo
+   * pipe, which observes no power events, so the connection survives sleep.
+   *
+   * Isomorphic with the DOM `WebSocket` for everything `RpcClient` uses: `readyState`, `url`, `send`,
+   * `close`, and the `open`/`message`/`error`/`close` events. A port has no close code, so intent
+   * travels in a close frame: `close(code, reason)` posts one before closing the port, a frame from
+   * main is reported as main's close, and a port that closes with no frame is 1006 with `wasClean:
+   * false`, the same shape a websocket that died produces. `pagehide` closes with 1001 so a reload or
+   * window close reads as clean on main.
+   *
+   * Keeps the first port it is handed and ignores any other: the bridge that hands ports out is
+   * reachable from same-origin web views, and a page has exactly one connection.
+   *
+   * @experimental
+   */
+  export class MessagePortWebSocket implements WebSocket {
+    /** @experimental */
+    readonly CONNECTING: 0;
+    /** @experimental */
+    readonly OPEN: 1;
+    /** @experimental */
+    readonly CLOSING: 2;
+    /** @experimental */
+    readonly CLOSED: 3;
+    /** @experimental */
+    readyState: number;
+    /** @experimental */
+    url: string;
+    /** @experimental */
+    readonly bufferedAmount = 0;
+    /** @experimental */
+    readonly extensions = '';
+    /** @experimental */
+    readonly protocol = '';
+    /** @experimental */
+    binaryType: BinaryType;
+    /** @experimental */
+    onopen: ((this: WebSocket, ev: Event) => unknown) | null;
+    /** @experimental */
+    onmessage: ((this: WebSocket, ev: MessageEvent) => unknown) | null;
+    /** @experimental */
+    onerror: ((this: WebSocket, ev: Event) => unknown) | null;
+    /** @experimental */
+    onclose: ((this: WebSocket, ev: CloseEvent) => unknown) | null;
+    private port;
+    private readonly handshake;
+    private readonly listeners;
+    /**
+     * @param provider How to obtain the port
+     * @param options `addPageHideListener` defaults to true; tests that share one jsdom window pass
+     *   false so sockets do not pile listeners onto it
+     * @experimental
+     */
+    constructor(
+      provider: PapiPortProvider,
+      options?: {
+        addPageHideListener?: boolean;
+      },
+    );
+    /** @experimental */
+    send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void;
+    /** @experimental */
+    close(code?: number, reason?: string): void;
+    /** @experimental */
+    addEventListener<K extends SocketEventName>(
+      type: K,
+      listener: (this: WebSocket, ev: WebSocketEventMap[K]) => unknown,
+    ): void;
+    /** @experimental */
+    removeEventListener<K extends SocketEventName>(
+      type: K,
+      listener: (this: WebSocket, ev: WebSocketEventMap[K]) => unknown,
+    ): void;
+    /** @experimental */
+    dispatchEvent(event: Event): boolean;
+    private acceptPort;
+    private failToOpen;
+    private onPortMessage;
+    private onPortClose;
+    /** Detach from the port and tell close listeners; the handshake calls this exactly once */
+    private onClosed;
+    private emit;
+  }
+  export default MessagePortWebSocket;
+}
+declare module 'renderer/services/electron-papi-port-provider' {
+  import type { PapiPortProvider } from 'renderer/services/message-port-web-socket';
+  /**
+   * Obtains this page's PAPI MessagePort from main through the preload's bridge.
+   *
+   * Installs its `message` listener BEFORE sending the request, so the reply cannot land before
+   * anyone is listening; that ordering is what lets this skip the `onload` handshake Electron's
+   * documented pattern needs. Accepts only a message posted by this window itself (the preload posts
+   * from the top window; a web view is a different `source`) that carries a port, reports the first
+   * outcome, and then stops listening, so nothing that arrives later can be mistaken for the port.
+   *
+   * @param win The window whose bridge to use. Defaults to the global `window`.
+   * @experimental
+   */
+  export function createElectronPapiPortProvider(win?: Window): PapiPortProvider;
 }
 declare module 'renderer/services/renderer-web-socket.service' {
   /** Once our network is running, run this to stop extensions from connecting to it directly */
@@ -2422,7 +3038,7 @@ declare module 'main/services/rpc-server' {
     IRpcHandler,
     RegisteredRpcMethodDetails,
   } from 'shared/models/rpc.interface';
-  import { ConnectionStatus, RequestParams } from 'shared/data/rpc.model';
+  import { ConnectionStatus, RequestParams, ServerSocketLike } from 'shared/data/rpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
   import {
     SingleMethodDocumentation,
@@ -2482,7 +3098,7 @@ declare module 'main/services/rpc-server' {
     private readonly announceClientDisconnectMethod;
     constructor(
       name: string,
-      webSocket: WebSocket,
+      webSocket: ServerSocketLike,
       propagateEventMethod: PropagateEventMethod,
       rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
       rpcEventDetailsByEventName: IRpcEventRegistry,
@@ -2604,8 +3220,13 @@ declare module 'main/services/rpc-websocket-listener' {
     EventHandler,
     InternalRequestHandler,
     RequestParams,
+    ServerSocketLike,
   } from 'shared/data/rpc.model';
-  import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from 'shared/models/rpc.interface';
+  import {
+    IRpcLocalClientAcceptor,
+    IRpcMethodRegistrar,
+    RpcClientDisconnectEvent,
+  } from 'shared/models/rpc.interface';
   import {
     OpenRpc,
     SingleMethodDocumentation,
@@ -2627,7 +3248,7 @@ declare module 'main/services/rpc-websocket-listener' {
    *
    * Created by the main process on start up when the network service initializes
    */
-  export class RpcWebSocketListener implements IRpcMethodRegistrar {
+  export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClientAcceptor {
     private readonly port;
     connectionStatus: ConnectionStatus;
     /**
@@ -2692,6 +3313,13 @@ declare module 'main/services/rpc-websocket-listener' {
       documentation?: SingleNotificationDocumentation,
     ): Promise<boolean>;
     unregisterEvent(eventName: string): Promise<boolean>;
+    /**
+     * Start serving a caller-created socket as a client of main's RPC server. See
+     * {@link IRpcLocalClientAcceptor.acceptLocalClient}.
+     *
+     * @experimental
+     */
+    acceptLocalClient(socket: ServerSocketLike, name: string): void;
     generateOpenRpcSchema(): OpenRpc;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     private propagateEvent;
@@ -2713,6 +3341,8 @@ declare module 'main/services/rpc-websocket-listener' {
      */
     private warnIfInvalidEventAnnouncement;
     private onClientConnect;
+    /** Attach an `RpcServer` to a socket and track it until the socket closes */
+    private serveClient;
     private announceClientDisconnect;
     private onClientDisconnect;
   }
@@ -2739,7 +3369,7 @@ declare module 'shared/services/network.service' {
    * expose this whole service on papi, but there are a few things that are exposed via
    * papiNetworkService
    */
-  import { InternalRequestHandler } from 'shared/data/rpc.model';
+  import { InternalRequestHandler, ServerSocketLike } from 'shared/data/rpc.model';
   import { PlatformEvent, PlatformEventEmitter, UnsubscriberAsync } from 'platform-bible-utils';
   import { StoreChangeEvent } from 'shared/services/shared-store.service';
   import { SerializedRequestType } from 'shared/utils/util';
@@ -2797,6 +3427,19 @@ declare module 'shared/services/network.service' {
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
+  /**
+   * Serve `socket` as a client of this process's RPC server, under `name`. Main-process only: it is
+   * how a renderer's MessagePort-backed connection joins the same method and event registries as the
+   * websocket clients on port 8876. Throws rather than returning `false` so the caller can put the
+   * reason in front of the client immediately instead of letting its connect attempt time out.
+   *
+   * @param socket The server end of the client's connection
+   * @param name Label for this client in log lines
+   * @throws If this is not the main process, the network service is not initialized, or its handler
+   *   cannot accept local clients
+   * @experimental
+   */
+  export function acceptLocalClient(socket: ServerSocketLike, name: string): void;
   /** Set the number of seconds that network requests in this process should wait before timing out */
   export function setRequestTimeout(timeoutSeconds: number): void;
   /**
@@ -4019,8 +4662,9 @@ declare module 'shared/models/docking-framework.model' {
     /** Last known focused element. Used for restoring focus in the tab */
     lastFocusedElement?: HTMLElement;
     /**
-     * Whether this tab can be closed by the user (shows the tab's close button). Set to `false` for
-     * tabs that must always remain open, such as views that are part of the default layout.
+     * Whether this tab can be closed by the user (shows the tab's close button and allows closing it
+     * with a middle click anywhere on its header). Set to `false` for tabs that must always remain
+     * open, such as views that are part of the default layout.
      *
      * Note: this default is applied by consumers (treat `undefined` as `true`, e.g. `isClosable ??
      * true`), not enforced by the type.
@@ -4292,13 +4936,23 @@ declare module 'shared/models/docking-framework.model' {
      * @param layout Information about where to put a new webview
      * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
      *   tabs. Defaults to `true`
+     * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+     *   taking document focus. Focusing a tab focuses its web view's iframe, and a `focus()` inside a
+     *   window that does not hold OS focus sets that document's active element without activating the
+     *   window — latently, until the window is next activated — so a window opened deliberately in
+     *   the background docks its content without taking that latent focus, leaving who owns the caret
+     *   to be decided when the window is actually raised. Left unspecified, this defaults to whether
+     *   this window is still awaiting its first activation.
      * @returns If WebView added, final layout used to display the new webView. If existing webView
      *   updated, `undefined`
+     * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+     *   member is long-established.
      */
     addWebViewToDock: (
       webView: WebViewTabProps,
       layout: Layout,
       shouldBringToFront?: boolean,
+      activateWithoutDocumentFocus?: boolean,
     ) => Layout | undefined;
     /**
      * Remove a tab in the layout
@@ -4370,12 +5024,22 @@ declare module 'shared/models/docking-framework.model' {
      *   doesn't always work well) or merged (so we can remove properties from `state`).
      * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
      *   tabs. Defaults to `false`
+     * @param activateWithoutDocumentFocus If true, a tab brought to the front is made active without
+     *   being given document focus. For content arriving in a window the user has not activated:
+     *   focusing the tab focuses its iframe, and a `focus()` call inside a window that does not hold
+     *   OS focus sets that document's active element without raising the window — so without this,
+     *   whichever tab's content focuses last would claim the caret the moment the window is finally
+     *   raised, rather than the tab the raise is actually showing. Left unspecified, this defaults to
+     *   whether this window is still awaiting its first activation.
      * @returns True if successfully found the WebView to update; false otherwise
+     * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+     *   member is long-established.
      */
     updateWebViewDefinition: (
       webViewId: string,
       updateInfo: WebViewDefinitionUpdateInfo,
       shouldBringToFront?: boolean,
+      activateWithoutDocumentFocus?: boolean,
     ) => boolean;
     /**
      * Gets info for a tab in a direction from the source tab.
@@ -4423,9 +5087,18 @@ declare module 'shared/models/docking-framework.model' {
      * tabs, and sets the document focus in that tab
      *
      * @param tabId ID of the tab to set active and focused
+     * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+     *   taking document focus. Every mounted panel and every loaded web view asks to be focused, and
+     *   a `focus()` call inside a window that does not hold OS focus only sets that document's active
+     *   element — it does not raise the window — so without this, whichever tab's content focuses
+     *   last would claim the caret the moment a window still awaiting its first activation is finally
+     *   raised. Left unspecified, this defaults to whether this window is still awaiting its first
+     *   activation.
      * @returns `true` if successfully found tab to update, `false` otherwise
+     * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+     *   member is long-established.
      */
-    focusTab: (tabId: string) => boolean;
+    focusTab: (tabId: string, activateWithoutDocumentFocus?: boolean) => boolean;
     /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *
@@ -4584,12 +5257,62 @@ declare module 'shared/services/window.service-model' {
    * surveil user input. Do not broaden what is announced here without a security review.
    */
   export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
-  /** Specific item that is intended to be focused at the top level of a window */
+  /**
+   * Payload of the {@link EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID} network event.
+   *
+   * @experimental
+   */
+  export type FocusedWindowIdEvent = {
+    /**
+     * The window the main process considers focused, or `undefined` if no window of this application
+     * currently does. Survives the whole application losing OS focus (e.g. the user alt-tabbing to
+     * another application) — it names the window the user was last working in, not whether any window
+     * currently holds OS focus. See `getFocusedWindowId`.
+     */
+    focusedWindowId: string | undefined;
+  };
+  /**
+   * Name of the network event the main process emits when the window it considers focused changes.
+   *
+   * Fires when a window takes focus (including the first window at startup) and when the focused
+   * window closes, leaving none. Deliberately does NOT fire when the application loses OS focus
+   * without a new window taking it (e.g. alt-tabbing away) — the payload keeps naming the window the
+   * user was last in, matching `getFocusedWindowId`'s survive-blur semantic, so a renderer that shows
+   * per-window UI (e.g. an active-tab focus ring) based on this event keeps showing it on the window
+   * the user will land back in rather than clearing it everywhere the moment the app is
+   * backgrounded.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID = 'platform.onDidChangeFocusedWindowId';
+  /** Specific item that is intended to be focused in the top-level app window */
   export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
   /** Instructions that indicate how to change the focus within a window */
   export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
   export type WindowDataTypes = {
     Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+    /**
+     *
+     * Get the `projectId` of the web view that BCV navigation (the top toolbar's book/chapter/verse
+     * controls and the `platform.goTo*` commands) currently drives in this window, or `undefined`
+     * when there is nothing to navigate.
+     *
+     * Which web view that is depends on the interface mode:
+     *
+     * - Simple mode: always the main Scripture editor, so this is the project the user is working in.
+     * - Power mode: the Scripture-navigable web view the user most recently focused — which may be a
+     *   resource or other reference panel rather than an editor, and whose `projectId` may be
+     *   `undefined` — falling back to the first open Scripture editor that has a project. So it
+     *   changes as focus moves between tabs, and is not necessarily an editor's project.
+     *
+     * Use this to learn which project is active, not to interpret a Scripture reference's
+     * versification frame (that is what a scroll group's own source project is for).
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns The project id, or `undefined`
+     * @experimental
+     */
+    ActiveEditorProjectId: DataProviderDataType<undefined, string | undefined, never>;
   };
   module 'papi-shared-types' {
     interface DataProviders {
@@ -4676,6 +5399,75 @@ declare module 'shared/services/window.service-model' {
       callback: (focusSubject: FocusSubject | PlatformError) => void,
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
+    /**
+     *
+     * Get the `projectId` of the web view that BCV navigation (the top toolbar's book/chapter/verse
+     * controls and the `platform.goTo*` commands) currently drives in this window, or `undefined`
+     * when there is nothing to navigate.
+     *
+     * Which web view that is depends on the interface mode:
+     *
+     * - Simple mode: always the main Scripture editor, so this is the project the user is working in.
+     * - Power mode: the Scripture-navigable web view the user most recently focused — which may be a
+     *   resource or other reference panel rather than an editor, and whose `projectId` may be
+     *   `undefined` — falling back to the first open Scripture editor that has a project. So it
+     *   changes as focus moves between tabs, and is not necessarily an editor's project.
+     *
+     * Use this to learn which project is active, not to interpret a Scripture reference's
+     * versification frame (that is what a scroll group's own source project is for).
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns The project id, or `undefined`
+     * @experimental
+     */
+    getActiveEditorProjectId(selector: undefined): Promise<string | undefined>;
+    /**
+     *
+     * Get the `projectId` of the web view that BCV navigation (the top toolbar's book/chapter/verse
+     * controls and the `platform.goTo*` commands) currently drives in this window, or `undefined`
+     * when there is nothing to navigate.
+     *
+     * Which web view that is depends on the interface mode:
+     *
+     * - Simple mode: always the main Scripture editor, so this is the project the user is working in.
+     * - Power mode: the Scripture-navigable web view the user most recently focused — which may be a
+     *   resource or other reference panel rather than an editor, and whose `projectId` may be
+     *   `undefined` — falling back to the first open Scripture editor that has a project. So it
+     *   changes as focus moves between tabs, and is not necessarily an editor's project.
+     *
+     * Use this to learn which project is active, not to interpret a Scripture reference's
+     * versification frame (that is what a scroll group's own source project is for).
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns The project id, or `undefined`
+     * @experimental
+     */
+    getActiveEditorProjectId(): Promise<string | undefined>;
+    /**
+     * This data cannot be changed. Trying to use this setter will always throw. The project follows
+     * whichever web view BCV navigation drives; see `getActiveEditorProjectId`.
+     *
+     * @throws Always
+     * @experimental
+     */
+    setActiveEditorProjectId(): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the project `getActiveEditorProjectId` reports
+     * changes.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param callback Function to run with the new active project id. If there is an error while
+     *   retrieving the updated data, the function will run with a {@link PlatformError} instead of the
+     *   data. You can call {@link isPlatformError} on this value to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     * @experimental
+     */
+    subscribeActiveEditorProjectId(
+      selector: undefined,
+      callback: (projectId: string | undefined | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
   } & OnDidDispose &
     typeof windowServiceObjectToProxy &
     IDataProvider<WindowDataTypes>;
@@ -4703,6 +5495,11 @@ declare module 'shared/services/window.service-model' {
      * This is the live answer, not the persisted flag of the same name. Usually they agree, but when
      * no open window holds the marked entry the role falls to one of the windows that are open while
      * the flag stays where it is, and this reports the window that actually answers.
+     *
+     * At most one window carries it, and possibly none — the window holding the role may be absent
+     * from the list it appears in, because a window whose close has begun and one whose renderer has
+     * been given up on are both left out. So a caller must not read "no window is flagged" as "then
+     * it must be me".
      */
     isMain: boolean;
   };
@@ -4732,7 +5529,8 @@ declare module 'shared/models/network-object-status.service-model' {
      *   indefinitely
      * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
      *   once the network object is registered, or rejects if a timeout is provided and the timeout is
-     *   reached before the network object is registered
+     *   reached before the network object is registered, or if the current set of network objects
+     *   could not be read. Rejections carry a reason string, not an `Error`
      */
     waitForNetworkObject: (
       objectDetailsToMatch: Partial<NetworkObjectDetails>,
@@ -4884,10 +5682,15 @@ declare module 'shared/services/web-view.service-model' {
      * view definitions themselves. Changing properties on returned definitions does not affect the
      * actual WebView definitions.
      *
-     * @returns Saved properties of every open WebView. Empty array if no WebViews are open. A WebView
-     *   being moved between windows is included even though it is docked in neither of them for the
-     *   length of the move, so that a caller selecting from this list cannot silently miss it; treat
-     *   the result as what is open in the app, not as what is docked in some window right now.
+     * @returns Saved properties of every open WebView, each listed once under the id it was minted
+     *   with — a web view keeps that id for its whole life, across any number of moves. Empty array
+     *   if no WebViews are open. A WebView being moved between windows is included even though it is
+     *   docked in neither of them for the length of the move, so it is not left out of the result
+     *   while a move is open; treat the result as what is open in the app, not as what is docked in
+     *   some window right now.
+     *
+     *   Do not deduplicate this list by web view type plus project: two open WebViews can genuinely
+     *   share both, and collapsing them would lose one.
      * @throws If any window could not be asked what it has open. Callers read this as the complete
      *   picture, and a window that could not answer is indistinguishable in the result from one with
      *   nothing open, so a short list is refused rather than passed off as the whole landscape.
@@ -5319,13 +6122,17 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from 'shared/services/scroll-group.service-model';
-  import type { AppWindowInputEvent, WindowSummary } from 'shared/services/window.service-model';
+  import type {
+    AppWindowInputEvent,
+    FocusedWindowIdEvent,
+    WindowSummary,
+  } from 'shared/services/window.service-model';
   import type {
     CloseWebViewEvent,
     OpenWebViewEvent,
     UpdateWebViewEvent,
   } from 'shared/services/web-view.service-model';
-  import { WebViewId } from 'shared/models/web-view.model';
+  import { ContentZoomAreaId, WebViewId } from 'shared/models/web-view.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
    * to add commands that it registers on the papi with `papi.commands.registerCommand`.
@@ -5363,7 +6170,10 @@ declare module 'papi-shared-types' {
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
     /**
-     * Create a new application window
+     * Create a new application window.
+     *
+     * Rejects in simple interface mode, which is single-window and has no chrome that could reach a
+     * second window. The first window of a launch is never refused.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
@@ -5379,13 +6189,58 @@ declare module 'papi-shared-types' {
      * of window. Titles follow each window's own content, so two windows showing the same thing
      * carry the same label and nothing distinguishes them.
      *
+     * Only windows that can still take the work are listed: a window whose close has begun, and one
+     * whose renderer has been given up on, are both left out. Either can be the window holding the
+     * primary role, so the list can carry no `isMain` at all — absence is not evidence that some
+     * other window holds it.
+     *
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.getWindows': () => Promise<WindowSummary[]>;
-    /** Increase the zoom level of the entire UI */
+    /**
+     * Increase the app-wide interface scaling — menus, toolbars and content — to the next 10 % mark
+     * in that direction. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomIn`.
+     */
     'platform.zoomIn': () => Promise<void>;
-    /** Decrease the zoom level of the entire UI */
+    /**
+     * Decrease the app-wide interface scaling — menus, toolbars and content — to the next 10 % mark
+     * in that direction. Has no default keyboard shortcut; per-pane content zoom uses
+     * `platform.webViewContentZoomOut`.
+     */
     'platform.zoomOut': () => Promise<void>;
+    /**
+     * Zoom one area of a web view's content in by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area (the one
+     * last clicked or focused). Only web views that mark at least one zoom area respond.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomIn': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Zoom one area of a web view's content out by one step (10 %). Without an id, the focused
+     * window's last focused tab is the target; without an area, the pane's active area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomOut': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
+    /**
+     * Return one area of a web view's content to the default zoom set in Settings. Without an id,
+     * the focused window's last focused tab is the target; without an area, the pane's active
+     * area.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomReset': (
+      webViewId?: WebViewId,
+      areaId?: ContentZoomAreaId,
+    ) => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
@@ -5408,13 +6263,14 @@ declare module 'papi-shared-types' {
      * distributed application is licensed to the user under, rather than this repository's AGPL
      * source (see LICENSING.md).
      *
-     * The document is handed to whatever the operating system opens Markdown with; if nothing does,
-     * it is revealed in the file manager instead.
+     * The document is a self-contained HTML file, shown in a window the application owns rather
+     * than handed to the operating system. One window at a time: a second request focuses the one
+     * already open. Every link in the document leaves through the browser, so the window only ever
+     * shows the document.
      *
-     * @throws If the document could not be opened - which includes the case where it was revealed
-     *   in the file manager instead, because that fallback cannot report whether it succeeded
-     *   either. A caller that offers this as a link needs to be able to tell the user the document
-     *   did not open, so the failure is reported rather than only logged.
+     * @throws If the document could not be loaded. A caller that offers this as a link needs to be
+     *   able to tell the user the document did not open, so the failure is reported rather than
+     *   only logged.
      */
     'platform.openTermsOfService': () => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
@@ -5429,28 +6285,40 @@ declare module 'papi-shared-types' {
      * `useWebViewState` state — in the target window. Consumers see a close event in the source and
      * an open event in the target, and the web view controller is disposed and re-created: a held
      * controller reference must be re-acquired after a move. The returned id is the authoritative
-     * id of the web view after the move, and it can differ from the id passed in: a web view
-     * restored from a persisted layout carries a window-scoped id, and a move does not carry that
-     * scope along — so use the returned id for anything after the move. In Simple mode —
-     * single-window by design — there is no other window to move to, and this does nothing.
+     * id of the web view after the move — the same id as `webViewId`, since a web view keeps the id
+     * it was minted with for its whole life, across any number of moves — so use the returned id
+     * for anything after the move. In Simple mode — single-window by design — there is no other
+     * window to move to, and this does nothing.
      *
-     * A move that fails once it has taken the web view out of its window says where it left it, as
-     * a machine-readable marker at the front of the error message: `[webViewMoveFailure:<where>]`,
-     * where `<where>` is `reopened-in-source-window` (nothing about where it lives changed),
+     * A failed move says where it left the web view, as a machine-readable marker at the front of
+     * the error message: `[webViewMoveFailure:<where>]`, where `<where>` is
+     * `reopened-in-source-window` (nothing about where it lives changed),
      * `reopened-in-focused-window` (it did move, just not to the window that was asked for),
-     * `not-reopened` (it is open in no window, and only the log holds what it was), or
-     * `possibly-closed` (taking it out of its window is what failed, so where it is cannot be
-     * told). The marker rides in the message because a rejection that crosses processes reaches its
-     * caller as a code and a message and nothing else. A failure decided before the move touches
-     * the web view carries no marker. Strip the marker before showing the message to a user — it is
-     * there to be classified on, not read.
+     * `not-reopened` (it is open in no window, and only the log holds what it was),
+     * `reached-new-window-unconfirmed` (the window created for the move is holding it, but the move
+     * could not get that confirmed), `possibly-closed` (taking it out of its window is what failed,
+     * so where it is cannot be told), or `already-moving` (this call was refused before it started,
+     * because another move of the same web view was already running — the web view is wherever that
+     * other move leaves it). The marker rides in the message because a rejection that crosses
+     * processes reaches its caller as a code and a message and nothing else. A failure decided
+     * before the move touches the web view for any other reason — an unknown target window, a
+     * target on its way out, an interface mode that could not be read — carries no marker. Strip
+     * the marker before showing the message to a user — it is there to be classified on, not read.
      *
      * @param webViewId Web view to move
-     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
-     *   see above
-     * @experimental
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own: the window that appears does not take the foreground, so it cannot interrupt
+     *   whatever the user is doing. Pass `true` only from a control the user operated
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   above
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
      */
-    'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
+    'platform.moveWebViewToNewWindow': (
+      webViewId: WebViewId,
+      isUserRequested?: boolean,
+    ) => Promise<WebViewId>;
     /**
      * Move a web view to an existing window, named by its window id (see
      * `papi.window.getWindowId()` for the id of the window the caller is in, or
@@ -5464,13 +6332,20 @@ declare module 'papi-shared-types' {
      *
      * @param webViewId Web view to move
      * @param targetWindowId Window to move it to
-     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
-     *   see `platform.moveWebViewToNewWindow`
-     * @experimental
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own. A target window the platform opened without activation and the user has not yet
+     *   been in stays backgrounded unless this is `true`: naming it is the user asking to go there,
+     *   which is what raises it. Pass `true` only from a control the user operated
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   `platform.moveWebViewToNewWindow`
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
      */
     'platform.moveWebViewToWindow': (
       webViewId: WebViewId,
       targetWindowId: string,
+      isUserRequested?: boolean,
     ) => Promise<WebViewId>;
     /** Open a dialog that displays essential information about the application */
     'platform.about': () => Promise<void>;
@@ -5630,8 +6505,39 @@ declare module 'papi-shared-types' {
      */
     'platform.requestTimeout': number;
     /**
-     * The zoom factor that applies to the entire application. 1.0 is the default. Allowed range is
-     * 0.5 to 3.0.
+     * Default content zoom applied to every zoom area of a web view pane that has no level of its
+     * own (shown in Settings as "Tab content default zoom"). A factor: 1.0 = 100 %. Allowed range
+     * is 0.5 to 3.0. Ctrl+`+` / Ctrl+`-` give one area its own level; Ctrl+`0` returns that area to
+     * this default. This factor multiplies with any font size a view sets for itself (for example a
+     * project's font size) and never replaces it; resetting a pane returns it to this default, not
+     * to that font size.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoom': number;
+    /**
+     * Per-project memory of content zoom levels, keyed `<kind>:<identity>:<area>` (kind is
+     * `editor`, `resource` or `notes`; identity is the project id, or the resource id for views
+     * without a project; area is the zoom area id, `main` for a view with one area). Written by the
+     * platform when an area's own level changes; read when a pane for that project opens. Local to
+     * this machine.
+     *
+     * A hidden setting rather than a main-process store, for the same reason as
+     * `platform.ptxUtilsMementoData`: settings already give cross-window persistence and change
+     * notification for free. Writes are best-effort last-write-wins across windows, and a direct
+     * `papi.settings.set` on this key is tolerated rather than guarded against.
+     *
+     * @experimental This setting is unstable and may change or disappear without notice
+     */
+    'platform.webViewContentZoomMemory': {
+      [key: string]: number;
+    };
+    /**
+     * The zoom factor that applies to the entire application, including menus and toolbars (shown
+     * in Settings as "Interface scaling"). 1.0 is the default. Allowed range is 0.5 to 3.0. Written
+     * from Settings and by the `platform.zoomIn` and `platform.zoomOut` commands; no keyboard
+     * shortcut changes it — the zoom chords drive per-pane content zoom, which is
+     * `platform.webViewContentZoom`.
      */
     'platform.zoomFactor': number;
     /**
@@ -6301,6 +7207,14 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.onDidAppWindowInput': AppWindowInputEvent;
+    /**
+     * Emitted by the main process when the window it considers focused changes. Survives the whole
+     * application losing OS focus (alt-tabbing to another application) — the payload keeps naming
+     * the window the user was last working in.
+     *
+     * @experimental
+     */
+    'platform.onDidChangeFocusedWindowId': FocusedWindowIdEvent;
   }
   /** Union of all known network event names (keys of {@link NetworkEvents}). */
   type NetworkEventTypes = keyof NetworkEvents;
@@ -8266,6 +9180,34 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
      */
     dialogRole?: 'dialog' | 'alertdialog';
     /**
+     * Whether this dialog's own `Component` renders a `DialogTitle`.
+     *
+     * When it does, the modal shell must not also render its fallback title: Radix derives the id
+     * from the `Dialog.Root` context, so a second title reuses the same id. The duplicate id is a
+     * `duplicate-id-aria` accessibility violation, and `aria-labelledby` resolves to whichever
+     * element comes first in document order — the shell's generic text, not the component's specific,
+     * localized text.
+     *
+     * Independent of {@link providesOwnDescription} on purpose: a dialog that renders a title but no
+     * description (or the reverse) still needs the shell's fallback for the half it omits, and a
+     * single combined flag would make it choose between a duplicate id and no accessible description
+     * at all.
+     *
+     * Defaults to `false`, which keeps the fallback title for dialogs that render none.
+     */
+    providesOwnTitle?: boolean;
+    /**
+     * Whether this dialog's own `Component` renders a `DialogDescription`.
+     *
+     * The description half of {@link providesOwnTitle}, with the same duplicate-id consequence. Set it
+     * only when the component renders a description for EVERY state it can be opened in — a
+     * description that renders conditionally (from an optional `prompt`, say) leaves the dialog with
+     * no description at all whenever the value is absent, because the shell's fallback is gone.
+     *
+     * Defaults to `false`, which keeps the fallback description for dialogs that render none.
+     */
+    providesOwnDescription?: boolean;
+    /**
      * The function used to load the dialog into the dock layout. Default uses the `Component` field
      * and passes in the `DialogProps`
      */
@@ -8364,7 +9306,13 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    *   It is not yet a stable contract.
    */
   export const PROJECT_PICKER_DIALOG_TYPE = 'platform.projectPicker';
-  /** The tabType for the share layout dialog in `share-layout.dialog.tsx` */
+  /**
+   * The tabType for the Team layout dialog in `team-layout.dialog.tsx`.
+   *
+   * The `shareLayout` spelling here, in `SHARE_LAYOUT_DIALOG_TYPE` and in the `%shareLayoutDialog_*%`
+   * localization keys is deliberately frozen: these are published contracts, and renaming them would
+   * break saved layouts and translator catalogs for a cosmetic gain.
+   */
   export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
@@ -8423,7 +9371,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    *   It is not yet a stable contract.
    */
   export type ProjectPickerOptions = DialogOptions;
-  /** Options to provide when showing the Share Layout dialog */
+  /** Options to provide when showing the Team layout dialog */
   export type ShareLayoutDialogOptions = DialogOptions & {
     /** The project whose layout is being shared */
     projectId: string;
@@ -9514,6 +10462,7 @@ declare module 'shared/services/reference-history.util' {
   ): ReferenceHistoryEntry | undefined;
 }
 declare module 'shared/data/platform.data' {
+  import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP } from 'platform-bible-utils';
   /**
    * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
    * Platform.Bible core
@@ -9548,6 +10497,23 @@ declare module 'shared/data/platform.data' {
    * @experimental
    */
   export const IS_MAIN_WINDOW_QUERY_PARAMETER = 'isMainWindow';
+  /**
+   * Query parameter passed to the renderer. Present when the window was created without being
+   * activated. Written once, at creation, and never removed — whether the user has been in the window
+   * since is the renderer's own to track.
+   *
+   * A window told to stay in the background still has its own content calling `focus()` as it lands:
+   * every mounted panel and every loaded web view asks this window's service to focus it, and
+   * focusing a tab focuses its web view's iframe. A `focus()` inside a window that does not hold OS
+   * focus sets that document's active element without activating the window, latently, until the
+   * window is next activated — so left unchecked, whichever call lands last would decide who owns the
+   * caret once the window is finally raised. Those calls resolve this window's own service shard by
+   * name and never reach the main process, so this is how the fact gets to them. The renderer stops
+   * honouring it the first time the window is activated.
+   *
+   * @experimental
+   */
+  export const WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER = 'awaitingFirstActivation';
   /**
    * Query parameter key used to pass the serialized scroll group state main holds at the moment a
    * window is created, so that window's synchronous readers are right on its first render instead of
@@ -9622,10 +10588,43 @@ declare module 'shared/data/platform.data' {
   export const DEFAULT_THEME_FAMILY = '';
   /** Type of the default theme for use in the application */
   export const DEFAULT_THEME_TYPE = 'light';
-  /** Constants related to zoom factor of entire application */
+  /**
+   * Usersnap client key of the space that holds the in-app feedback forms (Usersnap projects). Like
+   * the project keys below, it is write-only: it can only SUBMIT reports to a Usersnap project, not
+   * RETRIEVE any information from it.
+   *
+   * The Usersnap keys are intentionally empty in Platform.Bible. A product built on top of core
+   * (Paratext 10 Studio) sets them at build time through its repository patch, together with the Help
+   * menu items that open the forms. While this key is empty, Usersnap is never initialized and makes
+   * no network request.
+   *
+   * Typed as `string` rather than the literal `''` so a build that sets it still type-checks.
+   *
+   * @experimental
+   */
+  export const USERSNAP_SPACE_API_KEY: string;
+  /**
+   * Usersnap client key of the "report a bug / send feedback" form. Write-only, and empty in
+   * Platform.Bible; see {@link USERSNAP_SPACE_API_KEY}.
+   *
+   * @experimental
+   */
+  export const USERSNAP_PROJECT_REPORT_ISSUE_API_KEY: string;
+  /**
+   * Usersnap client key of the "submit an idea" form. Write-only, and empty in Platform.Bible; see
+   * {@link USERSNAP_SPACE_API_KEY}.
+   *
+   * @experimental
+   */
+  export const USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: string;
+  /** Zoom factor where 1 = the application's default, unscaled size. */
   export const DEFAULT_ZOOM_FACTOR = 1;
-  export const MIN_ZOOM_FACTOR = 0.5;
-  export const MAX_ZOOM_FACTOR = 3;
+  /**
+   * Range and step for the application's zoom factor, defined once in `platform-bible-utils`;
+   * re-exported here alongside {@link DEFAULT_ZOOM_FACTOR} so app code has one place to reach all four
+   * zoom constants.
+   */
+  export { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP };
   /**
    * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed to
    * run — one the app starts itself rather than the user driving it from the Send/Receive dialog
@@ -10710,6 +11709,13 @@ declare module 'renderer/services/overlays/overlay-store' {
   /** Get a specific overlay by id, or undefined if not found */
   export function getOverlayById(id: string): OverlayEntry | undefined;
   /**
+   * Determine whether at least one active overlay has the given type
+   *
+   * @param type The overlay type to check for (e.g. 'modalDialog')
+   * @returns True if an overlay of that type is currently active; false otherwise
+   */
+  export function hasOverlayOfType(type: OverlayEntry['type']): boolean;
+  /**
    * Get the most recently created overlay matching `predicate` — the topmost of the overlays it
    * accepts, since a newer overlay always renders over an older one.
    *
@@ -11127,6 +12133,9 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * menu data, renders the menu, and auto-executes the selected command. Returns the command string
      * that was executed, or undefined if dismissed.
      *
+     * The menu is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+     * at.
+     *
      * @param webViewType The webViewType to look up in the menu data service
      * @param webViewId The ID of the WebView requesting the context menu. Pass `globalThis.webViewId`
      *   from within a WebView iframe.
@@ -11150,6 +12159,9 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * return immediately with an overlay ID rather than waiting for dismissal. Use
      * {@link onPopoverDismissed} to await the result, {@link updatePopover} to change content, and
      * {@link dismissPopover} to close it programmatically.
+     *
+     * The popover is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+     * at.
      *
      * @param request The popover anchor, content, and behavioral options
      * @param webViewId The ID of the WebView requesting the popover. Pass `globalThis.webViewId` from
@@ -11196,6 +12208,9 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * `LocalizeKey` item text (`label`/`description`/`badge`) is resolved to localized strings when
      * the palette is shown, so all filtering — the palette's own search box and text forwarded via
      * {@link updateCommandPalette} — matches against the text the user actually sees.
+     *
+     * The palette is drawn at interface scale, whatever content zoom the requesting WebView's pane is
+     * at.
      *
      * @param request The items, optional anchor position, and display options
      * @param webViewId The ID of the WebView requesting the command palette
@@ -12109,6 +13124,7 @@ declare module '@papi/core' {
     ProjectMetadataWithoutFactoryInfo,
   } from 'shared/models/project-metadata.model';
   export type {
+    ContentZoomAreaId,
     GetWebViewOptions,
     OpenWebViewOptions,
     SavedWebViewDefinition,
@@ -12157,6 +13173,7 @@ declare module '@papi/core' {
   export type {
     AppWindowInputEvent,
     AppWindowInputKind,
+    FocusedWindowIdEvent,
     FocusSubject,
     SetFocusSubject,
     SetFocusSpecifier,
@@ -12212,7 +13229,8 @@ declare module 'shared/services/menu-data.service-model' {
     rebuildMenus(): Promise<void>;
     /**
      *
-     * Get localized menu content for the main menu
+     * Get localized menu content for the main menu. Items hidden in the current interface mode are
+     * left out, and command items whose command has a catalogued keyboard shortcut carry `shortcut`.
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of localized main menu content
@@ -12220,7 +13238,8 @@ declare module 'shared/services/menu-data.service-model' {
     getMainMenu(mainMenuType: undefined): Promise<Localized<MultiColumnMenu>>;
     /**
      *
-     * Get localized menu content for the main menu
+     * Get localized menu content for the main menu. Items hidden in the current interface mode are
+     * left out, and command items whose command has a catalogued keyboard shortcut carry `shortcut`.
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of localized main menu content
@@ -12252,7 +13271,8 @@ declare module 'shared/services/menu-data.service-model' {
     ): Promise<UnsubscriberAsync>;
     /**
      *
-     * Get unlocalized menu content for the main menu
+     * Get unlocalized menu content for the main menu. Items hidden in the current interface mode are
+     * left out. Items never carry `shortcut`.
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of unlocalized main menu content
@@ -12260,7 +13280,8 @@ declare module 'shared/services/menu-data.service-model' {
     getUnlocalizedMainMenu(mainMenuType: undefined): Promise<MultiColumnMenu>;
     /**
      *
-     * Get unlocalized menu content for the main menu
+     * Get unlocalized menu content for the main menu. Items hidden in the current interface mode are
+     * left out. Items never carry `shortcut`.
      *
      * @param mainMenuType Does not have to be defined
      * @returns MultiColumnMenu object of unlocalized main menu content
@@ -12291,7 +13312,8 @@ declare module 'shared/services/menu-data.service-model' {
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
     /**
-     * Get localized menu content for a web view
+     * Get localized menu content for a web view. Items hidden in the current interface mode are left
+     * out, and command items whose command has a catalogued keyboard shortcut carry `shortcut`.
      *
      * @param webViewType The type of webview for which a menu should be retrieved
      * @returns WebViewMenu object of web view menu content
@@ -13582,7 +14604,8 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
   export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
   /**
    * Translates iframe-relative coordinates to document-relative coordinates using
-   * getBoundingClientRect of the WebView iframe.
+   * getBoundingClientRect of the WebView iframe. The platform never scales the iframe element itself
+   * (content zoom scales marked areas inside it), so an inner pixel is an outer pixel.
    *
    * @param webViewId The webViewId of the iframe
    * @param position The iframe-relative position

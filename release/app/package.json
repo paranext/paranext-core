@@ -4,7 +4,7 @@
   "marketingVersion": "",
   "marketingVersionMoniker": "",
   "description": "Extensible Bible translation software",
-  "license": "SEE LICENSE IN TERMS-OF-SERVICE.md",
+  "license": "SEE LICENSE IN TERMS-OF-SERVICE.html",
   "author": {
     "name": "Platform",
     "url": "https://github.com/paranext/"

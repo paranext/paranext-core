@@ -1,3 +1,5 @@
+import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP } from 'platform-bible-utils';
+
 /**
  * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
  * Platform.Bible core
@@ -37,6 +39,24 @@ export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
  * @experimental
  */
 export const IS_MAIN_WINDOW_QUERY_PARAMETER = 'isMainWindow';
+
+/**
+ * Query parameter passed to the renderer. Present when the window was created without being
+ * activated. Written once, at creation, and never removed — whether the user has been in the window
+ * since is the renderer's own to track.
+ *
+ * A window told to stay in the background still has its own content calling `focus()` as it lands:
+ * every mounted panel and every loaded web view asks this window's service to focus it, and
+ * focusing a tab focuses its web view's iframe. A `focus()` inside a window that does not hold OS
+ * focus sets that document's active element without activating the window, latently, until the
+ * window is next activated — so left unchecked, whichever call lands last would decide who owns the
+ * caret once the window is finally raised. Those calls resolve this window's own service shard by
+ * name and never reach the main process, so this is how the fact gets to them. The renderer stops
+ * honouring it the first time the window is activated.
+ *
+ * @experimental
+ */
+export const WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER = 'awaitingFirstActivation';
 
 /**
  * Query parameter key used to pass the serialized scroll group state main holds at the moment a
@@ -98,6 +118,7 @@ export const URL_PARAMETERS: Readonly<Record<string, UrlParameterSpec>> = {
   [DEV_MODE_QUERY_PARAMETER]: { kind: 'flag' },
   [WINDOW_ID]: { kind: 'string' },
   [STARTUP_MARKS_QUERY_PARAMETER]: { kind: 'flag' },
+  [WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER]: { kind: 'flag' },
   [SCROLL_GROUP_STATE_QUERY_PARAMETER]: { kind: 'serialized' },
   [THEME_STATE_QUERY_PARAMETER]: { kind: 'serialized' },
   [IS_MAIN_WINDOW_QUERY_PARAMETER]: { kind: 'flag' },
@@ -133,10 +154,44 @@ export const DEFAULT_THEME_FAMILY = '';
 /** Type of the default theme for use in the application */
 export const DEFAULT_THEME_TYPE = 'light';
 
-/** Constants related to zoom factor of entire application */
+/**
+ * Usersnap client key of the space that holds the in-app feedback forms (Usersnap projects). Like
+ * the project keys below, it is write-only: it can only SUBMIT reports to a Usersnap project, not
+ * RETRIEVE any information from it.
+ *
+ * The Usersnap keys are intentionally empty in Platform.Bible. A product built on top of core
+ * (Paratext 10 Studio) sets them at build time through its repository patch, together with the Help
+ * menu items that open the forms. While this key is empty, Usersnap is never initialized and makes
+ * no network request.
+ *
+ * Typed as `string` rather than the literal `''` so a build that sets it still type-checks.
+ *
+ * @experimental
+ */
+export const USERSNAP_SPACE_API_KEY: string = '';
+/**
+ * Usersnap client key of the "report a bug / send feedback" form. Write-only, and empty in
+ * Platform.Bible; see {@link USERSNAP_SPACE_API_KEY}.
+ *
+ * @experimental
+ */
+export const USERSNAP_PROJECT_REPORT_ISSUE_API_KEY: string = '';
+/**
+ * Usersnap client key of the "submit an idea" form. Write-only, and empty in Platform.Bible; see
+ * {@link USERSNAP_SPACE_API_KEY}.
+ *
+ * @experimental
+ */
+export const USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: string = '';
+
+/** Zoom factor where 1 = the application's default, unscaled size. */
 export const DEFAULT_ZOOM_FACTOR = 1.0;
-export const MIN_ZOOM_FACTOR = 0.5;
-export const MAX_ZOOM_FACTOR = 3.0;
+/**
+ * Range and step for the application's zoom factor, defined once in `platform-bible-utils`;
+ * re-exported here alongside {@link DEFAULT_ZOOM_FACTOR} so app code has one place to reach all four
+ * zoom constants.
+ */
+export { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP };
 
 /**
  * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed to

@@ -341,8 +341,8 @@ export function OverlayCommandPalettePresentational({
   placeholder = 'Search...',
   noResultsText = 'No results found',
   listAriaLabel = 'Command palette results',
-  maxWidth = DEFAULT_MAX_WIDTH,
-  maxHeight = DEFAULT_MAX_HEIGHT,
+  maxWidth,
+  maxHeight,
   passive = false,
   filterText,
   selectedIndex = 0,
@@ -354,6 +354,10 @@ export function OverlayCommandPalettePresentational({
   searchFields,
   disableFuzzyMatching = false,
 }: OverlayCommandPalettePresentationalProps) {
+  // The caller's own maxWidth/maxHeight fall back to this component's own defaults when unsupplied.
+  const resolvedMaxWidth = maxWidth ?? DEFAULT_MAX_WIDTH;
+  const resolvedMaxHeight = maxHeight ?? DEFAULT_MAX_HEIGHT;
+
   // Fuzzy matching runs INSIDE cmdk, which owns filtering and highlight for the palettes where
   // that is safe: an ordinary focused palette, whose commits go through cmdk's own selection
   // (click/Enter/Space on the highlighted DOM item), so nothing host-side ever needs to agree
@@ -559,7 +563,7 @@ export function OverlayCommandPalettePresentational({
           highlightedItem ? getPassiveItemDomId(highlightedItem.id) : undefined
         }
         className="pr-twp tw:max-h-72 tw:scroll-py-1 tw:overflow-x-hidden tw:overflow-y-auto tw:outline-none"
-        style={{ maxHeight: maxHeight - SEARCH_INPUT_RESERVED_HEIGHT }}
+        style={{ maxHeight: resolvedMaxHeight - SEARCH_INPUT_RESERVED_HEIGHT }}
       >
         {filteredItems.length === 0 ? (
           <div data-slot="command-empty" className="tw:py-6 tw:text-center tw:text-sm">
@@ -596,7 +600,7 @@ export function OverlayCommandPalettePresentational({
       onValueChange={cmdkFuzzyEnabled ? undefined : handleCmdkValueChange}
     >
       {searchInput}
-      <CommandList style={{ maxHeight: maxHeight - SEARCH_INPUT_RESERVED_HEIGHT }}>
+      <CommandList style={{ maxHeight: resolvedMaxHeight - SEARCH_INPUT_RESERVED_HEIGHT }}>
         <CommandEmpty>{noResultsText}</CommandEmpty>
         <GroupedItems
           items={filteredItems}
@@ -627,7 +631,7 @@ export function OverlayCommandPalettePresentational({
           if (e.target === e.currentTarget) onDismiss();
         }}
       >
-        <div style={{ width: maxWidth, maxWidth }}>{paletteContent}</div>
+        <div style={{ width: resolvedMaxWidth, maxWidth: resolvedMaxWidth }}>{paletteContent}</div>
       </div>
     );
   }
@@ -660,12 +664,20 @@ export function OverlayCommandPalettePresentational({
         sideOffset={4}
         style={{
           zIndex: Z_INDEX_OVERLAY,
-          width: maxWidth,
-          maxWidth,
+          // PopoverContent holds only the inner wrapper and the arrow. Radix requires Popover.Arrow
+          // to be a descendant of PopoverContent; the wrapper below owns sizing, so PopoverContent
+          // must not carry a fixed width.
+          width: 'auto',
         }}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
+        <div
+          data-overlay-command-palette-zoom
+          style={{ width: resolvedMaxWidth, maxWidth: resolvedMaxWidth }}
+        >
+          {paletteContent}
+        </div>
         <PopoverPrimitive.Arrow
           style={{
             fill: 'var(--popover)',
@@ -673,7 +685,6 @@ export function OverlayCommandPalettePresentational({
             strokeWidth: 1,
           }}
         />
-        {paletteContent}
       </PopoverContent>
     </Popover>
   );

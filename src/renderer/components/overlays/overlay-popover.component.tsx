@@ -156,12 +156,16 @@ export function OverlayPopoverPresentational({
   position,
   anchor,
   side = 'bottom',
-  maxWidth = DEFAULT_MAX_WIDTH,
-  maxHeight = DEFAULT_MAX_HEIGHT,
+  maxWidth,
+  maxHeight,
   showArrow = true,
   onAction,
   onDismiss,
 }: OverlayPopoverPresentationalProps) {
+  // The caller's own maxWidth/maxHeight fall back to this component's own defaults when unsupplied.
+  const resolvedMaxWidth = maxWidth ?? DEFAULT_MAX_WIDTH;
+  const resolvedMaxHeight = maxHeight ?? DEFAULT_MAX_HEIGHT;
+
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open) onDismiss();
@@ -203,19 +207,32 @@ export function OverlayPopoverPresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-popover
-        className="tw:overflow-y-auto"
+        // PopoverContent must not carry a fixed width or padding, so the inner wrapper below owns
+        // width, padding and layout instead. `tw:p-0` strips the shared class's `tw:p-2.5` padding
+        // only; the shared `tw:w-72` survives the class merge and is overridden by the inline
+        // `width: 'auto'` in `style` below — removing that would bring the fixed width back.
+        className="tw:p-0"
         side={side}
         align="start"
         sideOffset={showArrow ? 8 : 4}
         style={{
           zIndex: Z_INDEX_OVERLAY,
-          maxWidth,
-          maxHeight,
+          // PopoverContent holds only the inner wrapper and the arrow. Radix requires Popover.Arrow
+          // to be a descendant of PopoverContent; keeping it beside the wrapper, which owns sizing,
+          // the caps and the scrolling, leaves the arrow outside the scrolled box.
+          width: 'auto',
         }}
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
+        <div
+          data-overlay-popover-zoom
+          className="tw:flex tw:w-72 tw:flex-col tw:gap-2.5 tw:overflow-y-auto tw:p-2.5"
+          style={{ maxWidth: resolvedMaxWidth, maxHeight: resolvedMaxHeight }}
+        >
+          <PopoverBody content={content} onAction={handleAction} />
+        </div>
         {showArrow && (
           <PopoverPrimitive.Arrow
             style={{
@@ -225,7 +242,6 @@ export function OverlayPopoverPresentational({
             }}
           />
         )}
-        <PopoverBody content={content} onAction={handleAction} />
       </PopoverContent>
     </Popover>
   );

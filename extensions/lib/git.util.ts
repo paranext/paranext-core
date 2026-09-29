@@ -372,11 +372,15 @@ async function readCanonicalLicense(root: string = repoRoot): Promise<string> {
  * Sets `license` in a JSON file, keeping it beside `version` when the field is not there yet.
  *
  * PRECONDITION: the caller has already decided that this FOLDER may be stamped.
- * `decideLicenseStamp` is what makes that decision, and it makes it for the folder rather than per
- * file - an extension deliberately given other terms is left alone there, before this is ever
- * called. A second per-file check here would be unreachable through the only caller, and worse than
- * unreachable: it would read as the decision while `decideLicenseStamp` was actually making it, so
- * a future caller could reasonably believe this function is safe to call on any folder. It is not.
+ * `decideLicenseStamp` is what makes that decision for an EXTENSION folder, and it makes it for the
+ * folder rather than per file - an extension deliberately given other terms is left alone there,
+ * before this is ever called. A second per-file check here would read as the decision while
+ * `decideLicenseStamp` was actually making it, so a future caller could reasonably believe this
+ * function is safe to call on any folder. It is not.
+ *
+ * `stampExtensionsRootLicense` is the one caller that deliberately makes no such decision: the
+ * subtree ROOT is part of this application rather than an extension, so its terms are this
+ * repository's unconditionally and there is nothing per-folder to decide.
  */
 async function stampLicenseInJson(
   repoRootRelativePath: string,
@@ -618,12 +622,26 @@ export async function formatExtensionsRoot() {
   // workspace
   await deleteUnusedPackageLockIfPresent(`${subtreeRootFolder}/package-lock.json`);
 
-  // The subtree root's own LICENSE. It is inside the subtree, so a merge from the MIT
-  // multi-extension template replaces it with the template's, while every extension folder BELOW it
-  // is corrected to AGPL. `extensions/` is part of this application, so its license is this
-  // repository's.
-  const canonical = await readCanonicalLicense();
-  await writeCanonicalLicenseInto(subtreeRootFolder, canonical, 'this repository is under');
+  await stampExtensionsRootLicense();
+}
+
+/**
+ * Gives the `extensions/` root this repository's license: the `license` field in its `package.json`
+ * and a copy of the AGPL text beside it.
+ *
+ * The subtree root is inside the subtree, so a merge from the MIT multi-extension template rewrites
+ * BOTH files - the field and the text - while every extension folder BELOW it is corrected by
+ * `stampExtensionLicense`. Restoring only the text would leave the root declaring MIT beside the
+ * AGPL, the declares-one/ships-another state that function's docstring calls worse than either.
+ * `extensions/` is part of this application, so its license is this repository's.
+ */
+export async function stampExtensionsRootLicense(root: string = repoRoot): Promise<void> {
+  // Read BEFORE anything is written, for the reason `stampExtensionLicense` gives: nothing is
+  // stamped unless the text that has to accompany the declaration is in hand.
+  const canonical = await readCanonicalLicense(root);
+  const stamped = await stampLicenseInJson(`${subtreeRootFolder}/package.json`, root);
+  await writeCanonicalLicenseInto(subtreeRootFolder, canonical, 'this repository is under', root);
+  if (stamped) console.log(`Set license to ${BUNDLED_EXTENSION_LICENSE} in ${subtreeRootFolder}`);
 }
 
 /**

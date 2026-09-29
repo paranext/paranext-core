@@ -356,7 +356,26 @@ declare module 'platform-scripture-editor' {
   };
 
   export type PlatformScriptureEditorWebViewController = NetworkableObject<{
-    /** Set the current selection on the editor */
+    /**
+     * Set the current selection on the editor, navigating to the range's book and chapter first if
+     * the editor is showing another, and scroll the range itself into view: a range already fully
+     * on screen stays put; otherwise its first line lands just below the top of the editor. If the
+     * editor's tab is hidden, the selection is made at once and the scroll happens when the tab is
+     * next shown.
+     *
+     * The reference the navigation publishes to the editor's scroll group is the range's full verse
+     * reference, not just its book and chapter, so other views on the same scroll group land on the
+     * same verse.
+     *
+     * The jump is ABANDONED — with no selection and no scroll — if the editor lands on a chapter
+     * other than the one requested before the range's content arrives (e.g. the user navigates away
+     * while the jump is still pending); the returned promise still resolves normally. It also falls
+     * back to scrolling to the verse, rather than the range, when the selection cannot be applied
+     * or its geometry cannot be measured.
+     *
+     * The returned promise resolves once the request has been sent to the editor, not once the
+     * scroll (or the navigation, selection, or fallback it may trigger) has finished.
+     */
     selectRange(range: ScriptureRange): Promise<void>;
     /**
      * Cycle through the Scripture view types in the editor (currently just a toggle between
@@ -910,6 +929,36 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.openResourceText': (
       resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
       projectId?: string,
+    ) => Promise<string | undefined>;
+    /**
+     * Brings the Bible texts tab to the front. If it isn't open, opens it for the editor's project.
+     * An open tab is raised, never reloaded, so it keeps its state.
+     *
+     * @param editorWebViewId The scripture editor the request came from
+     * @returns The Bible texts web view's ID, or `undefined` if it couldn't be shown
+     */
+    'platformScriptureEditor.showBibleTextsPanel': (
+      editorWebViewId?: string,
+    ) => Promise<string | undefined>;
+    /**
+     * Brings the Commentaries tab to the front. If it isn't open, opens it for the editor's
+     * project. An open tab is raised, never reloaded, so it keeps its state.
+     *
+     * @param editorWebViewId The scripture editor the request came from
+     * @returns The Commentaries web view's ID, or `undefined` if it couldn't be shown
+     */
+    'platformScriptureEditor.showCommentariesPanel': (
+      editorWebViewId?: string,
+    ) => Promise<string | undefined>;
+    /**
+     * Brings the Text collection tab to the front. If it isn't open, opens it; if the feature is
+     * unavailable (the provider was never registered), opens nothing and shows a warning instead.
+     *
+     * @param editorWebViewId The scripture editor the request came from (unused)
+     * @returns The Text collection web view's ID, or `undefined` if it could not be shown
+     */
+    'platformScriptureEditor.showTextCollectionPanel': (
+      editorWebViewId?: string,
     ) => Promise<string | undefined>;
   }
 

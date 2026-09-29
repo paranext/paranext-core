@@ -17,7 +17,12 @@ import {
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
 } from '@shared/services/web-view.service-model';
-import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import {
+  compareProjectsByName,
+  getErrorMessage,
+  isPlatformError,
+  normalizeFullName,
+} from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { findFirstEditorWebViewDefinition } from '@shared/models/web-view.model';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
@@ -79,19 +84,21 @@ function resolveLanguage(
 
 /**
  * Converts cheap project metadata (already fetched via `projectLookupService`) into a `ProjectItem`
- * for display, without opening a project data provider. `fullName`/`name` are optional on
- * `ProjectMetadata`, so both fall back to the project id to guarantee defined display strings (and
- * a safe sort key for callers that sort by `fullName`). A present-but-empty value passes through
- * as-is - empty FullName is a real, deliberately-supported Paratext case.
+ * for display, without opening a project data provider. `name` falls back to the project id so the
+ * identifying string is always defined; `fullName` does not, because a project with no full name of
+ * its own must stay without one rather than mirror its short name.
  */
 function metadataToProjectItem(m: ProjectMetadata): ProjectItem {
   const resolved = resolveLanguage(m.language ?? '', m.languageTag ?? '');
   return {
     id: m.id,
-    fullName: m.fullName ?? m.name ?? m.id,
-    shortName: m.name ?? m.id,
+    fullName: normalizeFullName(m.fullName),
+    // A blank name falls back to the id as an absent one does: the short name is the field that
+    // identifies a project in every list, so a blank one leaves an unidentifiable row.
+    shortName: m.name?.trim() ? m.name : m.id,
     language: resolved?.tag,
     languageDisplayName: resolved?.displayName,
+    isEditable: m.isEditable ?? true,
   };
 }
 
@@ -389,15 +396,12 @@ export function useProjectPickerData(): ProjectPickerData {
         const metadataById = new Map<string, ProjectMetadata>(
           metadata.map((m) => [normalizeProjectId(m.id), m]),
         );
-        // Preserve safeRecentIds' recency order; drop ids with no metadata (not found / errored)
-        // and non-editable projects.
-        // `isEditable` is optional on ProjectMetadata; a factory that omits it must be treated as
-        // editable to match the registered contribution default (true) for `platform.isEditable`.
+        // Preserve safeRecentIds' recency order; drop ids with no metadata (not found / errored).
+        // Read-only projects are deliberately kept: a project the user can open but not edit is
+        // still a project they can reach, and the row marks it as read-only.
         return safeRecentIds
           .map((id: string) => metadataById.get(normalizeProjectId(id)))
-          .filter(
-            (m: ProjectMetadata | undefined): m is ProjectMetadata => !!m && m.isEditable !== false,
-          )
+          .filter((m: ProjectMetadata | undefined): m is ProjectMetadata => !!m)
           .map(metadataToProjectItem);
       } catch (e) {
         logger.warn(
@@ -413,14 +417,9 @@ export function useProjectPickerData(): ProjectPickerData {
     useCallback(async () => {
       try {
         const metadata = await getAllMetadata();
-        return (
-          metadata
-            // The service already filtered to PICKER_PROJECT_INTERFACE, so only the editability
-            // filter is left. Treat a missing `isEditable` as editable - the registered default is
-            // true (see the recents filter above for the full reasoning).
-            .filter((m) => m.isEditable !== false)
-            .map(metadataToProjectItem)
-        );
+        // The service already filtered to PICKER_PROJECT_INTERFACE; nothing further is excluded.
+        // Read-only projects belong in the list, marked rather than hidden.
+        return metadata.map(metadataToProjectItem);
       } catch (e) {
         logger.warn(`ProjectPicker: could not fetch project metadata: ${getErrorMessage(e)}`);
         return [];
@@ -437,7 +436,7 @@ export function useProjectPickerData(): ProjectPickerData {
     () =>
       allProjectsWithRecent
         .filter((p) => !recentIdSet.has(normalizeProjectId(p.id)))
-        .sort((a, b) => a.fullName.localeCompare(b.fullName)),
+        .sort(compareProjectsByName),
     [allProjectsWithRecent, recentIdSet],
   );
 

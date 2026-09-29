@@ -1,6 +1,8 @@
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { getChaptersForBook, Section } from 'platform-bible-utils';
 import { ALL_ENGLISH_BOOK_NAMES, doesBookMatchQuery } from '@/components/shared/book.utils';
+import { ArrowKey } from '@/utils/keyboard.util';
+import { Direction } from '@/utils/dir-helper.util';
 import { BookWithOptionalChapterAndVerse } from './book-chapter-control.types';
 
 // Smart parsing regex patterns
@@ -63,12 +65,6 @@ export function isVerseBefore(
   if (chapterNum < lowerBound.chapterNum) return true;
   if (chapterNum > lowerBound.chapterNum) return false;
   return verseNum < lowerBound.verseNum;
-}
-
-export function getKeyCharacterType(key: string) {
-  const isLetter = /^[a-zA-Z]$/.test(key);
-  const isDigit = /^[0-9]$/.test(key);
-  return { isLetter, isDigit };
 }
 
 export function fetchEndChapter(bookId: string) {
@@ -282,4 +278,66 @@ export function deriveBookChapterControlBookLists(
     // never be marked dimmed for a list it is not part of.
     booksOutsideProject: new Set(reachableBooks.filter((bookId) => !projectBookIdSet.has(bookId))),
   };
+}
+
+/**
+ * Number of columns in the chapter and verse grids. Drives both the arrow-key arithmetic in
+ * {@link computeTargetGridItem} and the grids' rendered `gridTemplateColumns`, so the two cannot
+ * drift out of sync and leave arrow navigation landing on the wrong cell.
+ */
+export const GRID_COLUMNS = 6;
+
+/** In a right-to-left grid the horizontal arrows point at the opposite neighbour. */
+function mirrorHorizontalKey(key: ArrowKey): ArrowKey {
+  if (key === 'ArrowLeft') return 'ArrowRight';
+  if (key === 'ArrowRight') return 'ArrowLeft';
+  return key;
+}
+
+/**
+ * Computes where the highlight moves when an arrow key is pressed in a numbered grid — the chapter
+ * grid and the verse grid share this arithmetic.
+ *
+ * Horizontal movement wraps around the whole grid; vertical movement clamps at the first and last
+ * item, so a partial last row can be reached from any column above it.
+ *
+ * @param current The currently highlighted item, 1-based. Callers seed a valid highlight when a
+ *   grid becomes visible, so an out-of-range value here means the seed did not happen; the helper
+ *   lands on the first item rather than moving from an unknown position.
+ * @param key The arrow key that was pressed.
+ * @param max The number of items in the grid. Values of 0 or less mean the count is unknown (the
+ *   Scripture data returns -1 for books it has no chapter count for), and the highlight is left
+ *   alone.
+ * @param direction Layout direction. In `'rtl'` the horizontal arrows are mirrored so they follow
+ *   what the user sees; the vertical arrows are unaffected.
+ * @returns The item the highlight should move to, 1-based.
+ */
+export function computeTargetGridItem({
+  current,
+  key,
+  max,
+  direction = 'ltr',
+}: {
+  current: number;
+  key: ArrowKey;
+  max: number;
+  direction?: Direction;
+}): number {
+  if (max <= 0) return current;
+  if (current < 1 || current > max) return 1;
+
+  const effectiveKey = direction === 'rtl' ? mirrorHorizontalKey(key) : key;
+
+  switch (effectiveKey) {
+    case 'ArrowLeft':
+      return current > 1 ? current - 1 : max;
+    case 'ArrowRight':
+      return current < max ? current + 1 : 1;
+    case 'ArrowUp':
+      return Math.max(1, current - GRID_COLUMNS);
+    case 'ArrowDown':
+      return Math.min(max, current + GRID_COLUMNS);
+    default:
+      return current;
+  }
 }

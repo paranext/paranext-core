@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { fireEvent, render } from '@testing-library/react';
 import { SavedTabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
+import { WEB_VIEW_CONTENT_TYPE } from '@shared/models/web-view.model';
 import { WindowClosingError } from '@renderer/services/window-closing-error.model';
+import { useData } from '@renderer/hooks/papi-hooks';
 
 const mocks = vi.hoisted(() => ({
   reloadWebView:
@@ -8,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getSavedWebViewDefinitionSync: vi.fn<(id: string) => unknown>(),
   loggerDebug: vi.fn(),
   loggerError: vi.fn(),
+  setFocus: vi.fn(async () => true),
 }));
 
 // The shard is stubbed whole: these tests are about what the component makes of the shard's
@@ -27,6 +31,21 @@ vi.mock('@renderer/services/web-view.service-shard', () => ({
   WEBVIEW_IFRAME_SRCDOC_SANDBOX: '',
 }));
 
+// Stubbed whole: most of these tests never render an iframe (they call the tab loader directly),
+// so the load/unmount hooks that reach this service never run for them, and the real module pulls
+// the shard, settings, and project lookup in behind it. The iframe-lifecycle suite below renders
+// the component and asserts on these mocks directly.
+vi.mock('@renderer/services/web-view-content-zoom.service', () => ({
+  applyContentZoomForWebView: vi.fn(),
+  forgetContentZoom: vi.fn(),
+}));
+// The mocked content-zoom functions above, so the render test below can assert directly on them.
+// eslint-disable-next-line import/first
+import {
+  applyContentZoomForWebView,
+  forgetContentZoom,
+} from '@renderer/services/web-view-content-zoom.service';
+
 // Factory rather than the repo's automock (whose methods are plain functions): which level a
 // missing reload is reported at is the whole of what these tests assert, which needs spies
 vi.mock('@shared/services/logger.service', () => ({
@@ -34,8 +53,9 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 
 // The rest of the component's import graph reaches services that connect to the network on load.
-// None of it runs here: these tests call the tab loader, which builds the element without
-// rendering it.
+// Most of it never runs here: most of these tests call the tab loader, which builds the element
+// without rendering it. The iframe-lifecycle suite below does render the component, so it
+// configures `useData` itself to keep the (unshown) toolbar menu lookup from crashing.
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useData: vi.fn(),
   useLocalizedStrings: vi.fn(() => [{}]),
@@ -60,7 +80,9 @@ vi.mock('@shared/services/network.service', () => ({
 }));
 vi.mock('@shared/data/platform-bible-menu.commands', () => ({ handleMenuCommand: vi.fn() }));
 vi.mock('@shared/services/menu-data.service', () => ({ menuDataService: {} }));
-vi.mock('@shared/services/window.service', () => ({ windowService: {} }));
+vi.mock('@shared/services/window.service', () => ({
+  windowService: { setFocus: mocks.setFocus },
+}));
 
 const SAVED_WEB_VIEW_ID = 'restored-view';
 const SAVED_WEB_VIEW_TYPE = 'test.type';
@@ -140,5 +162,98 @@ describe('a restored tab fetching the content it was saved without', () => {
         ),
       ),
     );
+  });
+});
+
+describe('the iframe lifecycle notifies content zoom', () => {
+  const CONTENT_ZOOM_WEB_VIEW_ID = 'zoom-view';
+
+  beforeEach(() => {
+    // The curried useData return type is a deeply-generic object; its shape is tested in the
+    // papi-hooks tests. Replicating it here would create brittle coupling.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion -- necessary for mock helper flexibility
+    vi.mocked(useData).mockReturnValue({
+      WebViewMenu: () => [undefined, vi.fn(), false],
+    } as never);
+  });
+
+  test('applies content zoom when the iframe loads, and forgets it on unmount', async () => {
+    const { WebView } = await import('./web-view.component');
+    const { container, unmount } = render(
+      <WebView
+        id={CONTENT_ZOOM_WEB_VIEW_ID}
+        webViewType="test.type"
+        title="Zoom test view"
+        content=""
+        contentType={WEB_VIEW_CONTENT_TYPE.HTML}
+      />,
+    );
+    const iframe = container.querySelector('iframe');
+    if (!iframe) throw new Error('missing iframe');
+
+    fireEvent.load(iframe);
+    expect(applyContentZoomForWebView).toHaveBeenCalledWith(CONTENT_ZOOM_WEB_VIEW_ID);
+
+    unmount();
+    expect(forgetContentZoom).toHaveBeenCalledWith(CONTENT_ZOOM_WEB_VIEW_ID);
+  });
+});
+
+describe('the iframe asks for its tab to be focused when it loads', () => {
+  const FOCUS_WEB_VIEW_ID = 'focus-view';
+
+  beforeEach(() => {
+    // Same stub as the content-zoom suite above, for the same reason.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion -- necessary for mock helper flexibility
+    vi.mocked(useData).mockReturnValue({
+      WebViewMenu: () => [undefined, vi.fn(), false],
+    } as never);
+  });
+
+  /**
+   * Renders a web view and loads its iframe with the given client rects. rc-dock keeps an inactive
+   * tab's pane mounted with `display: none`, which leaves the iframe with no client rects; jsdom
+   * lays nothing out, so the rects are stubbed to stand in for the pane being shown or hidden.
+   */
+  async function loadIframe(clientRectCount: number) {
+    const { WebView } = await import('./web-view.component');
+    const { container } = render(
+      <WebView
+        id={FOCUS_WEB_VIEW_ID}
+        webViewType="test.type"
+        title="Focus test view"
+        content=""
+        contentType={WEB_VIEW_CONTENT_TYPE.HTML}
+      />,
+    );
+    const iframe = container.querySelector('iframe');
+    if (!iframe) throw new Error('missing iframe');
+    vi.spyOn(iframe, 'getClientRects').mockReturnValue(
+      // A DOMRectList is array-like; only its length is read.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      { length: clientRectCount } as unknown as DOMRectList,
+    );
+    fireEvent.load(iframe);
+  }
+
+  test('focuses the tab when the iframe loads in a tab that is shown', async () => {
+    await loadIframe(1);
+
+    await vi.waitFor(() =>
+      expect(mocks.setFocus).toHaveBeenCalledWith({ focusType: 'tab', id: FOCUS_WEB_VIEW_ID }),
+    );
+  });
+
+  test('leaves the tab where it is when the iframe loads in a tab that is hidden', async () => {
+    // A background reload (`bringToFront: false`) remounts the iframe of a tab that is not in front
+    // of its group. Focusing that tab would make it the active one, undoing the opt-out.
+    await loadIframe(0);
+
+    // Give the load effect's async focus call the same chance to run that the test above waits for
+    await vi.waitFor(() => expect(applyContentZoomForWebView).toHaveBeenCalled());
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(mocks.setFocus).not.toHaveBeenCalled();
   });
 });

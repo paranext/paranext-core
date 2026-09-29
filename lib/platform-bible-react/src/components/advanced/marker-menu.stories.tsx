@@ -272,7 +272,7 @@ export const NarrowWithLongTitles: Story = {
     ),
   ],
   args: {
-    searchPlaceholder: 'Search character markers',
+    searchPlaceholder: 'Search to change character style.',
     markerMenuItems: [
       {
         marker: 'addpn',
@@ -310,7 +310,7 @@ export const NarrowWithLongTitles: Story = {
 
 export const CharacterMarkerRemoveRow: Story = {
   args: {
-    searchPlaceholder: 'Search character markers',
+    searchPlaceholder: 'Search to change character style.',
     markerMenuItems: [
       {
         icon: RemoveFormatting,

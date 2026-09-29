@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 
@@ -8,12 +8,26 @@ import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-
 import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
 import { EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.const';
 import { RESOURCE_CELL_STRING_KEYS } from './scripture-text-grid/resource-cell.const';
+import { RESOURCE_COLLECTION_OPTIONS_STRING_KEYS } from './resource-collection-options/resource-collection-options.types';
 import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-options-notice.utils';
+import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
+import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
+import {
+  paragraphMarkerNameKey,
+  PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
+  selectableParagraphMarkers,
+} from './platform-scripture-editor.utils';
+import editorMenus from '../contributions/menus.json';
+// An explicit relative import: `extensions/` has its own tsconfig with no `@node/*` path alias
+import { DEV_ONLY_EXTENSION_NAMES } from '../../../../src/node/utils/locale-assets.test-utils';
 
 type LocalizedStringsFile = {
-  metadata?: Record<string, { fallbackKey?: string }>;
+  metadata?: Record<
+    string,
+    { fallbackKey?: string; deprecationInfo?: { date: string; message: string } }
+  >;
   localizedStrings: Record<string, Record<string, string>>;
 };
 
@@ -75,11 +89,14 @@ const CHARACTER_MARKER_CONTROL_KEYS_CHECKED_ELSEWHERE: readonly string[] = [
   // differs-from-English assertion that does not apply to them.
   '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%',
   '%webView_platformScriptureEditor_characterMarkerControl_label_format%',
-  // Ships in the core `assets/localization/*.json` beside its `%markerMenu_searchPlaceholder%`,
-  // `_insert`, and `_paragraph` siblings, not in this extension's contribution, so it is absent
-  // from the file read here. Note that `platform-bible-react`'s `src/localizedStrings.json` also
-  // defines it, but that file is Storybook-only and is never loaded by the running app — do not
-  // treat a definition there as evidence the string ships.
+  // Ships in the platform shell's locale assets (assets/localization/en.json, es.json) beside its
+  // `%markerMenu_searchPlaceholder%`, `_insert`, and `_paragraph` siblings, not in this extension's
+  // contribution, so it is absent from the file read here. Its presence is asserted instead by
+  // src/node/data/shipped-locale-assets.test.ts; the differs-from-English assertion the keys below
+  // get is deliberately NOT asserted there, so this key does not have one anywhere. Note that
+  // `platform-bible-react`'s `src/localizedStrings.json` also defines it, but that file is
+  // Storybook-only and is never loaded by the running app — do not treat a definition there as
+  // evidence the string ships.
   '%markerMenu_searchPlaceholder_character%',
 ];
 
@@ -267,6 +284,65 @@ describe.each([...RESOURCE_CELL_STRING_KEYS])('resource cell label %s', (key) =>
   });
 });
 
+// The Text Collection cell's zoom items and "⋮" button use these four keys, so they are requested
+// by the cell and must carry no deprecation notice. Shipped keys are immutable, so their values are
+// pinned as shipped.
+describe('Text Collection per-resource zoom strings', () => {
+  const zoomKeys = [
+    '%webView_scriptureTextGrid_cell_zoomIn%',
+    '%webView_scriptureTextGrid_cell_zoomOut%',
+    '%webView_scriptureTextGrid_cell_resetZoom%',
+    '%webView_scriptureTextGrid_cell_zoomOptions%',
+  ];
+
+  it.each(zoomKeys)('%s is requested by the cell and is not marked deprecated', (key) => {
+    expect(RESOURCE_CELL_STRING_KEYS).toContain(key);
+    expect(metadata?.[key]?.deprecationInfo).toBeUndefined();
+  });
+
+  it('reads deprecation notices from this file at all', () => {
+    // Positive control for the absence above: a key that is retired does carry one.
+    expect(
+      metadata?.['%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%']
+        ?.deprecationInfo,
+    ).toBeDefined();
+  });
+
+  it('keeps the shipped English and Spanish values', () => {
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomIn%']).toBe('Zoom in');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomOut%']).toBe('Zoom out');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_resetZoom%']).toBe('Reset zoom');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomOptions%']).toBe(
+      'Zoom options for {resourceName}',
+    );
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_zoomIn%']).toBe('Acercar');
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_zoomOut%']).toBe('Alejar');
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_resetZoom%']).toBe(
+      'Restablecer zoom',
+    );
+    expect(localizedStrings.es['%webView_scriptureTextGrid_cell_zoomOptions%']).toBe(
+      'Opciones de zoom para {resourceName}',
+    );
+  });
+});
+
+// Every label in the View Options panel: the VIEW toggle, the TEXTS list, and its buttons. Covered
+// for the same reason as the cell labels above — nothing else checks that a key added here reaches
+// both shipped languages.
+describe.each([...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS])('View Options label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
 // The View Options notices, which the grid web view shows outside the panel itself — in the
 // resource picker and in a notification — so they are not covered by any panel's key list.
 describe.each([...VIEW_OPTIONS_NOTICE_STRING_KEYS])('view options notice %s', (key) => {
@@ -296,5 +372,169 @@ describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s'
 
   it('Spanish label differs from English', () => {
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The toolbar button that opens the team layout dialog. Its label names the dialog, so it has to
+// stay in step with the dialog's own title in the platform shell's locale assets.
+describe.each([...TEAM_LAYOUT_BUTTON_STRING_KEYS])('team layout button label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The personal structure-protection lock button in the editor tab header: its state tooltips, its
+// disabled tooltips, and its aria-label.
+describe.each([...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS])(
+  'structure protection label %s',
+  (key) => {
+    it('has an English label', () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it('has a Spanish label', () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+
+    it('Spanish label differs from English', () => {
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
+  },
+);
+
+// Markers whose Khmer label is a legitimate exception to the differs-from-English check: `h1`,
+// `h2`, `h3` are deprecated markers not worth translating (Crowdin itself leaves them in English);
+// `d`, `sp`, `sts`, `usfm` have no Khmer translation in Crowdin and no other corpus entry (marker
+// name, description, or paired-marker template) safe to derive one from, so they stay in English
+// too.
+const KM_MARKER_DESCRIPTION_EXCEPTIONS: readonly string[] = [
+  'd',
+  'h1',
+  'h2',
+  'h3',
+  'sp',
+  'sts',
+  'usfm',
+];
+
+// The paragraph-style switcher's per-marker descriptions: one for every marker the switcher offers,
+// plus the two display-only markers named in PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS. Driven off the same
+// derived marker list the switcher and gutter tooltip both use, so a marker added to `usfmMarkers`
+// is covered here without anyone editing this file. Checked in all six shipped locales, not just
+// en/es, since these keys live only in this extension's own contributions file.
+describe.each([...selectableParagraphMarkers, ...PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS])(
+  'paragraph marker description %s',
+  (marker) => {
+    const key = paragraphMarkerNameKey(marker);
+
+    it('has an English label', () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it('has a Spanish label', () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+
+    it('Spanish label differs from English', () => {
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
+
+    it('has a French label', () => {
+      expect(localizedStrings.fr[key]).toBeTruthy();
+    });
+
+    it('French label differs from English', () => {
+      expect(localizedStrings.fr[key]).not.toBe(localizedStrings.en[key]);
+    });
+
+    it('has a Khmer label', () => {
+      expect(localizedStrings.km[key]).toBeTruthy();
+    });
+
+    if (!KM_MARKER_DESCRIPTION_EXCEPTIONS.includes(marker)) {
+      it('Khmer label differs from English', () => {
+        expect(localizedStrings.km[key]).not.toBe(localizedStrings.en[key]);
+      });
+    }
+
+    it('has a Simplified Chinese label', () => {
+      expect(localizedStrings['zh-hans'][key]).toBeTruthy();
+    });
+
+    it('Simplified Chinese label differs from English', () => {
+      expect(localizedStrings['zh-hans'][key]).not.toBe(localizedStrings.en[key]);
+    });
+
+    it('has a Traditional Chinese label', () => {
+      expect(localizedStrings['zh-hant'][key]).toBeTruthy();
+    });
+
+    it('Traditional Chinese label differs from English', () => {
+      expect(localizedStrings['zh-hant'][key]).not.toBe(localizedStrings.en[key]);
+    });
+  },
+);
+
+/** Every localization key defined for `locale` anywhere the app loads strings from. */
+function allKeys(locale: 'en' | 'es'): Set<string> {
+  const extensionsDir = path.resolve(__dirname, '../..');
+  const keys = new Set<string>();
+  readdirSync(extensionsDir, { withFileTypes: true }).forEach((entry) => {
+    if (!entry.isDirectory()) return;
+    const manifestPath = path.resolve(extensionsDir, entry.name, 'manifest.json');
+    if (existsSync(manifestPath)) {
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      // A key reachable only in noisy dev mode renders as its raw `%key%` for everyone else
+      if (manifest.name && DEV_ONLY_EXTENSION_NAMES.includes(manifest.name)) return;
+    }
+    const stringsFilePath = path.resolve(
+      extensionsDir,
+      entry.name,
+      'contributions/localizedStrings.json',
+    );
+    if (!existsSync(stringsFilePath)) return;
+    const strings =
+      JSON.parse(readFileSync(stringsFilePath, 'utf8')).localizedStrings?.[locale] ?? {};
+    Object.keys(strings).forEach((key) => keys.add(key));
+  });
+  const core = JSON.parse(
+    readFileSync(path.resolve(__dirname, `../../../../assets/localization/${locale}.json`), 'utf8'),
+  );
+  Object.keys(core).forEach((key) => keys.add(key));
+  return keys;
+}
+
+/**
+ * Every localize key the editor's top menu shows: column and item labels, plus item tooltips, which
+ * resolve through the same `%key%` mechanism as labels.
+ */
+function menuLocalizeKeys(): string[] {
+  const { topMenu } = editorMenus.webViewMenus['platformScriptureEditor.react'];
+  const keys: unknown[] = [
+    ...Object.values(topMenu.columns).map((column) => column.label),
+    ...topMenu.items.flatMap((item) => [item.label, 'tooltip' in item ? item.tooltip : undefined]),
+  ];
+  return [
+    ...new Set(keys.filter((key): key is string => typeof key === 'string' && /^%.*%$/.test(key))),
+  ];
+}
+
+// The editor's Project menu draws its column and item labels and item tooltips from keys that must
+// be defined somewhere the app loads strings from: this extension's own contribution, another
+// shipped extension's (e.g. the Comments item's label lives with legacyCommentManager), or the
+// platform shell's core locale assets. Driven off the menu document itself, so a label or tooltip
+// added to the menu is covered here without anyone remembering to update this file.
+describe.each(['en', 'es'] as const)('editor Project menu labels in %s', (locale) => {
+  const keys = menuLocalizeKeys();
+  it.each(keys)('%s is defined', (key) => {
+    expect(allKeys(locale).has(key)).toBe(true);
   });
 });

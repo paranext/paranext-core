@@ -7,43 +7,8 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { useTruncationTooltip } from '@/hooks/use-truncation-tooltip.hook';
-
-/**
- * Which input device the user most recently used, tracked document-wide.
- *
- * Radix hands focus back to a trigger when the popover or select it opened closes
- * (`onCloseAutoFocus` / `onUnmountAutoFocus`). That fires a real `focus` event with the pointer
- * nowhere near the control, so a focus listener alone cannot tell "the user tabbed here" from "a
- * menu just closed" — and treating the second as the first pops a tooltip over the toolbar that no
- * pointer event will ever close. The distinction is the input device, not the element, so it is
- * tracked once for the document rather than per label. `:focus-visible` encodes the same idea, but
- * it is unreliable under test: jsdom reports it false for a programmatic `focus()`, which is how
- * keyboard focus is simulated.
- *
- * Starts as keyboard so a label focused before any input at all still explains itself.
- */
-let lastInteractionModality: 'keyboard' | 'pointer' = 'keyboard';
-let isModalityTrackerRegistered = false;
-
-function trackInteractionModality() {
-  if (isModalityTrackerRegistered || typeof document === 'undefined') return;
-  isModalityTrackerRegistered = true;
-  // Capture phase, so the modality is already correct by the time any focus handler runs.
-  document.addEventListener(
-    'pointerdown',
-    () => {
-      lastInteractionModality = 'pointer';
-    },
-    true,
-  );
-  document.addEventListener(
-    'keydown',
-    () => {
-      lastInteractionModality = 'keyboard';
-    },
-    true,
-  );
-}
+import { getLastInteractionModality } from '@/utils/focus.util';
+import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
 
 export type ToolbarCompoundLabelProps = {
   /** The field that identifies the item — a book abbreviation, project short name, marker code. */
@@ -56,8 +21,9 @@ export type ToolbarCompoundLabelProps = {
    */
   separator?: string;
   /**
-   * Render `secondary` before `primary`, for labels that read that way round — a project selector
-   * shows `Translation Project 1 (TP1)`, full name first, short name last.
+   * Render `secondary` before `primary`, for labels that read that way round — a measurement that
+   * reads `12 pt` puts the number (`secondary`) first, even though `primary` (the unit, `pt`) is
+   * still the field that must survive shrinking.
    */
   secondaryFirst?: boolean;
   /** Whether the secondary field is rendered at all. Defaults to `true`. */
@@ -131,8 +97,9 @@ export function ToolbarCompoundLabel({
   const isSecondaryRendered = showSecondary && secondary !== undefined;
   const isShowingPartialLabel = isPartial ?? (secondary !== undefined && !showSecondary);
 
+  useInteractionModality();
+
   useEffect(() => {
-    trackInteractionModality();
     const focusable = rootRef.current?.closest('button, [role="combobox"], [tabindex]');
     if (!focusable) return undefined;
 
@@ -140,9 +107,9 @@ export function ToolbarCompoundLabel({
       !!element && element.scrollWidth > element.clientWidth;
 
     const reveal = () => {
-      // Only a keyboard arrival reveals — see `lastInteractionModality`. A pointer user who just
+      // Only a keyboard arrival reveals — see `getLastInteractionModality`. A pointer user who just
       // dismissed a menu gets focus back without asking for an explanation of a label they can see.
-      if (lastInteractionModality === 'pointer') return;
+      if (getLastInteractionModality() === 'pointer') return;
       // Same two sources as hover: a label that is short by construction, or one CSS has clipped.
       // Anything that already reads in full needs no tooltip on focus either.
       if (isShowingPartialLabel || isClipped(primaryRef.current) || isClipped(secondaryRef.current))
@@ -247,7 +214,10 @@ export function ToolbarCompoundLabel({
             {second}
           </span>
         </TooltipTrigger>
-        <TooltipContent>{fullText}</TooltipContent>
+        {/* `dir="auto"` because the tooltip is the joined form as one text node: at the narrowest
+            step it is the only place the secondary field is readable at all, and a separator
+            between two scripts otherwise lands on the visually wrong side. */}
+        <TooltipContent dir="auto">{fullText}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

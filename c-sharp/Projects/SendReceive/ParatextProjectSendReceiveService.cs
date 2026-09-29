@@ -25,7 +25,7 @@ internal class ParatextProjectSendReceiveService(
     /// every project count/size, and the only request a timeout would rescue is a lost response on
     /// an otherwise-live socket — a risk every S/R command shares. Inert in plain Platform.Bible
     /// since the stub bodies below throw immediately, but the registrations already carry it so the
-    /// Paratext 10 Studio patch (which fills in the real implementations) inherits the correct
+    /// Paratext 10 patch (which fills in the real implementations) inherits the correct
     /// timeout.
     /// </summary>
     internal static readonly TimeSpan s_sendReceiveTimeout = TimeSpan.FromSeconds(0); // 0 = no timeout
@@ -38,7 +38,7 @@ internal class ParatextProjectSendReceiveService(
     /// Forwarded to the PAPI by <see cref="SyncActivityNotifierService"/>.
     /// <para>
     /// Scaffolding: nothing in open-source Platform.Bible opens a run bracket (the sync stub bodies
-    /// below throw), so this never fires here. The Paratext 10 Studio patch, which replaces those
+    /// below throw), so this never fires here. The Paratext 10 patch, which replaces those
     /// bodies with real implementations, raises it through
     /// <see cref="RaiseSyncActivityChanged"/> at each transition. Do not remove — removing it breaks
     /// the patch.
@@ -58,7 +58,7 @@ internal class ParatextProjectSendReceiveService(
     /// surfaces report present state rather than a cached copy of the last transition.
     /// <para>
     /// Scaffolding, as with <see cref="SyncActivityChanged"/>: no sync can run in open-source
-    /// Platform.Bible, so this is always idle here. The Paratext 10 Studio patch replaces the body
+    /// Platform.Bible, so this is always idle here. The Paratext 10 patch replaces the body
     /// with a real read of its run state.
     /// </para>
     /// </summary>
@@ -67,7 +67,7 @@ internal class ParatextProjectSendReceiveService(
     /// <summary>
     /// Whether the persistent C# Send/Receive toast should be shown for a sync starting now.
     /// <para>
-    /// Scaffolding for the Paratext 10 Studio patch, which owns the toast
+    /// Scaffolding for the Paratext 10 patch, which owns the toast
     /// (<c>RunWithSyncNotification</c>) and overrides this to suppress it in Simple mode, where
     /// core's toolbar sync indicator is the single surface instead. The decision hook lives here
     /// rather than in the patch because it reads a public platform setting
@@ -80,7 +80,7 @@ internal class ParatextProjectSendReceiveService(
     /// core must keep showing whatever sync feedback it shows today. The suppressing override MUST
     /// NOT ship before the sync-activity signal it hands off to, or Simple mode goes from one sync
     /// surface to ZERO for the startup sync — the toast gone and no indicator raised in its place.
-    /// If the Studio work is split across PRs, the signal merges first.
+    /// If the Paratext 10 work is split across PRs, the signal merges first.
     /// </para>
     /// </summary>
     protected virtual bool ShouldShowPersistentSyncToast() => true;
@@ -143,7 +143,7 @@ internal class ParatextProjectSendReceiveService(
                     "Breaks (releases) the Send/Receive server-side repository lock for each given "
                         + "project and reports per-project success. Unrelated to the local "
                         + "in-process sync write gate reported by onSyncWriteLockChanged / "
-                        + "getAutoSyncBlocking. Only implemented in Paratext 10 Studio; throws "
+                        + "getAutoSyncBlocking. Only implemented in Paratext 10; throws "
                         + "PlatformUnimplementedException elsewhere.",
                     [
                         Param(
@@ -168,7 +168,7 @@ internal class ParatextProjectSendReceiveService(
 
     protected PapiClient PapiClient { get; } = papiClient;
 
-    // The three properties below are read only by the closed-source Paratext 10 Studio patch,
+    // The three properties below are read only by the closed-source Paratext 10 patch,
     // which replaces this class's stub bodies with real implementations. Do not remove them —
     // removing them breaks the patch.
     protected ParatextProjectDataProviderFactory PdpFactory { get; } = pdpFactory;
@@ -198,7 +198,7 @@ internal class ParatextProjectSendReceiveService(
     protected Boolean CommitChanges(String projectId, String comment, Boolean forceCommit = false)
     {
         throw new PlatformUnimplementedException(
-            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 to use this command."
         );
     }
 
@@ -210,22 +210,39 @@ internal class ParatextProjectSendReceiveService(
     protected void CommitDaily(String projectId)
     {
         throw new PlatformUnimplementedException(
-            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 to use this command."
         );
     }
 
     /// <summary>
-    /// Syncs projects from the provided IDs: filters for editable projects and S/Rs them,
-    /// then reads each editable project's connected resources and projects (one level deep —
-    /// connections of connections are not included) and S/Rs connected translation projects
-    /// or DBL-updates connected resources. Non-editable and unknown IDs are skipped.
-    /// Deduplication is handled internally.
-    /// Exception is thrown if this function is not implemented in the current application
-    /// or if an error was encountered syncing.
+    /// Syncs the given projects (S/Rs them), then handles connected resources and projects for the
+    /// project(s) this call settles on: connected translation projects are S/R'd, connected
+    /// resources are DBL-updated. Connections are followed one level only — connections of
+    /// connections are not included. Unknown IDs are skipped.
+    /// Exception is thrown if this function is not implemented in the current application; if
+    /// another Send/Receive is already in progress (rejects fail-fast rather than queuing behind
+    /// it); or if an error was encountered syncing.
+    /// Callers MUST NOT assume every shared project is present locally once this resolves, no
+    /// matter which form <paramref name="projectIds"/> took.
     /// </summary>
     /// <param name="projectIds">
-    /// IDs of the projects to sync. If <see langword="null"/>, all shared projects that are already
-    /// present locally (i.e., not new) are synced. An empty array is a no-op.
+    /// IDs of the projects to sync.
+    /// <list type="bullet">
+    /// <item>If explicit IDs are given, each one is synced regardless of whether it is already
+    /// present locally — a <c>new</c> (not yet downloaded) project among them is downloaded, not
+    /// skipped, though an implementation may still exclude a given id for reasons outside the
+    /// caller's control (e.g., an unsupported project version, or the project being otherwise
+    /// ineligible).</item>
+    /// <item>If <see langword="null"/> and at least one shared project the account knows about is
+    /// already present locally (not new), every locally-present shared project is synced; new
+    /// projects are left alone.</item>
+    /// <item>If <see langword="null"/> and no shared project the account knows about is present
+    /// locally yet (whether a genuine first sync, or every previously-local project has since gone
+    /// missing from disk), an implementation is expected to try to make at least one project
+    /// available for the current user to work in, if the account has one — but may stop short of
+    /// downloading every shared project in the account, trading completeness for performance.</item>
+    /// <item>An empty array is a no-op.</item>
+    /// </list>
     /// </param>
     protected void SyncProjects(String[]? projectIds)
     {
@@ -240,7 +257,7 @@ internal class ParatextProjectSendReceiveService(
         );
 #else
         throw new PlatformUnimplementedException(
-            $"Command '{nameof(SyncProjects)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            $"Command '{nameof(SyncProjects)}' is not implemented in Platform.Bible. Must be running Paratext 10 to use this command."
         );
 #endif
     }
@@ -262,7 +279,7 @@ internal class ParatextProjectSendReceiveService(
     protected void CancelSync(NotificationId? notificationId = null)
     {
         throw new PlatformUnimplementedException(
-            $"Command '{nameof(CancelSync)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            $"Command '{nameof(CancelSync)}' is not implemented in Platform.Bible. Must be running Paratext 10 to use this command."
         );
     }
 
@@ -282,11 +299,11 @@ internal class ParatextProjectSendReceiveService(
     protected Task<Dictionary<string, bool>> BreakSyncLock(List<string> projectIds)
     {
         // Deliver the fault through the returned task rather than throwing synchronously, so the
-        // stub's fault mode matches the async Paratext 10 Studio implementation that replaces this
+        // stub's fault mode matches the async Paratext 10 implementation that replaces this
         // body (and the method stays async-free, avoiding CS1998).
         return Task.FromException<Dictionary<string, bool>>(
             new PlatformUnimplementedException(
-                $"Command '{nameof(BreakSyncLock)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+                $"Command '{nameof(BreakSyncLock)}' is not implemented in Platform.Bible. Must be running Paratext 10 to use this command."
             )
         );
     }

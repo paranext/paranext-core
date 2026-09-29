@@ -1,7 +1,7 @@
 {
   "licenseeVersion": "10.1.0",
   "corpusVersion": "6.12.0",
-  "documentSha256": "e8c91ee42d6f6b7a78489368fb81e3221756c057cd1cddd7266abb0ceb9308a9",
+  "documentSha256": "b077870bca20be72e2fc597ff438f06f02aa953aeee2cec179b89f43e2ea301c",
   "packages": [
     {
       "ecosystem": "npm",
@@ -232,6 +232,15 @@
       "confidence": 100,
       "matchedFile": "LICENSE",
       "textSha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@posthog/core",
+      "version": "1.55.2",
+      "spdxId": "(MIT AND Apache-2.0)",
+      "confidence": 0,
+      "matchedFile": "LICENSE",
+      "textSha256": "d3fb92ac01f0bef4078f89aac9f20f76da3383ad45becf6204abdf5495f43f8f"
     },
     {
       "ecosystem": "npm",
@@ -1439,6 +1448,15 @@
       "confidence": 100,
       "matchedFile": "LICENSE",
       "textSha256": "d0cd141b0c322fded5dfad1d4645bb2fedfc05b7321fe1009469638190d59ef9"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "posthog-node",
+      "version": "5.51.1",
+      "spdxId": "(Apache-2.0 AND MIT)",
+      "confidence": 0,
+      "matchedFile": "LICENSE",
+      "textSha256": "a4a2a1ca3b22fe608ea29144452418e4a91f11ca44666a8a91cb72ec0a70f6ee"
     },
     {
       "ecosystem": "npm",

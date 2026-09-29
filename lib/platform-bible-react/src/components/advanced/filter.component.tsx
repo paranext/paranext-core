@@ -25,10 +25,12 @@ export function Filter({
   selected,
   onChange,
   placeholder,
+  searchPlaceholder,
   commandEmptyMessage,
   customSelectedText,
   isDisabled,
   sortSelected,
+  showScrollCue,
   icon,
   className,
   badgesPlaceholder,
@@ -41,10 +43,12 @@ export function Filter({
         selected={selected}
         onChange={onChange}
         placeholder={placeholder}
+        searchPlaceholder={searchPlaceholder}
         commandEmptyMessage={commandEmptyMessage}
         customSelectedText={customSelectedText}
         isDisabled={isDisabled}
         sortSelected={sortSelected}
+        showScrollCue={showScrollCue}
         icon={icon}
         className={className}
       />

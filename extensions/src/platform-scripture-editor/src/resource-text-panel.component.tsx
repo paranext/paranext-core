@@ -3,6 +3,7 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
+  ContentZoomRoot,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -27,6 +28,7 @@ import {
   isEchoOfPublishedScrRef,
   SCROLL_MAX_WAIT_MS,
   scrollToVerse,
+  waitForLayoutToSettle,
 } from './editor-dom.util';
 import { getRefLabel, getResourceReferenceRowId } from './resource-reference.utils';
 import type { PickerResource } from './downloaded-resources.utils';
@@ -50,6 +52,9 @@ import type {
   ResourcePanelLocalizedStringKey,
   ResourcePanelLocalizedStrings,
 } from './resource-text-panel.const';
+import type { DblResourceInstallFailureReason } from './use-dbl-resource-auto-install.hook';
+import { RESOURCE_PANEL_INSTALL_FAILURE_KEYS } from './resource-text-panel.const';
+import { getInstallFailureMessageKey } from './install-failure-message.utils';
 
 /**
  * Falls back to the key itself, matching the idiom in `model-text-panel.component.tsx`. Falling
@@ -99,7 +104,9 @@ function ResourceSelectorDropdown({
             variant="outline"
             className="tw:h-8 tw:w-full tw:justify-between tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap"
           >
-            <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+            {/* `dir="auto"`: `getRefLabel` returns the joined short/full name as one text node, so
+                the label needs the name's own direction rather than the panel's. */}
+            <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap" dir="auto">
               {selectedRef ? getRefLabel(selectedRef.reference, dblResources) : ''}
             </span>
             <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
@@ -118,6 +125,7 @@ function ResourceSelectorDropdown({
                 onCheckedChange={() => {
                   onSelectResource(refId);
                 }}
+                dir="auto"
               >
                 {getRefLabel(ref.reference, dblResources)}
               </DropdownMenuCheckboxItem>
@@ -197,7 +205,9 @@ export type ResourceTextPanelProps = {
   isInstalling: boolean;
   /** Whether the last install attempt for the selected resource failed. */
   installFailed: boolean;
-  /** Clears the failed-install state and re-attempts the same resource. */
+  /** Why the install failed, when it did. Decides whether the connection hint applies. */
+  installFailureReason: DblResourceInstallFailureReason | undefined;
+  /** Re-reads the catalog and re-attempts the same resource. */
   retryInstall: () => void;
   /** Whether the machine is online. Only adds a "check your connection" hint to install failures. */
   isOnline: boolean;
@@ -250,6 +260,7 @@ export function ResourceTextPanel({
   isSelecting,
   isInstalling,
   installFailed,
+  installFailureReason,
   retryInstall,
   isOnline,
   onShowResourcePicker,
@@ -414,69 +425,72 @@ export function ResourceTextPanel({
     // Sampling the scroll container's height until it stops changing avoids both: the geometry is
     // trustworthy by then, and the single call that follows animates uninterrupted.
     let cancelled = false;
-    const start = Date.now();
-    let lastScrollHeight = -1;
     // Pulses the verse we land on, so the match is identifiable when several share a verse or a
     // commentary entry is long. Same treatment the Scripture editor gives an arrived verse.
     let highlightedVerseElement: HTMLElement | undefined;
-    const scrollWhenSettled = () => {
-      if (cancelled) return;
-      const timedOut = Date.now() - start > SCROLL_MAX_WAIT_MS;
+    let cancelSettleWait: (() => void) | undefined;
 
-      // Below verse 1 means the chapter top, which `scrollToVerse` reaches without a verse marker
-      // and so without settled geometry — but it still needs the container in the DOM, and it
-      // cannot report that, since it returns an element only when it matched a marker. So the
-      // container is checked here before recording; otherwise a reveal that beat the container into
-      // the DOM would scroll nothing and still be recorded as done. Verse 1 is NOT in this case: it
-      // has a real marker and real geometry, so it goes through the settle loop like any other.
-      if (scrRef.verseNum < 1) {
+    if (scrRef.verseNum < 1) {
+      // Chapter top: `scrollToVerse` reaches it without a verse marker and so without settled
+      // geometry to sample — but it still needs the container in the DOM, and it cannot report
+      // that, since it returns an element only when it matched a marker. This stays its own small
+      // retry rather than going through `waitForLayoutToSettle`: that helper always requires two
+      // agreeing samples before it acts, even when the very first one is already correct, and a
+      // container already in the DOM when this effect runs should scroll on the spot rather than
+      // waiting a frame for nothing. Verse 1 is NOT in this case: it has a real marker and real
+      // geometry, so it goes through the settle wait below like any other.
+      const start = Date.now();
+      const tryScrollToChapterTop = () => {
+        if (cancelled) return;
         if (document.querySelector('.editor-container')) {
           scrollToVerse(scrRef);
           lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
           return;
         }
-        if (timedOut) return;
-        requestAnimationFrame(scrollWhenSettled);
-        return;
-      }
+        if (Date.now() - start > SCROLL_MAX_WAIT_MS) return;
+        requestAnimationFrame(tryScrollToChapterTop);
+      };
+      tryScrollToChapterTop();
+    } else {
+      cancelSettleWait = waitForLayoutToSettle<number>({
+        // `.editor-container` is sampled as a CONTENT-GROWTH PROXY, not as the scroll container.
+        // Which element actually scrolls differs by host — `_editor-overrides.scss` warns that this
+        // one is auto-height in the Scripture editor and its wrapper scrolls instead — so the scroll
+        // itself is left to `scrollToVerse`, which discovers the container via `findScrollContainer`.
+        // Only the height is read here, and that tracks the chapter laying out either way. `-1`
+        // stands for "no container yet", which never counts as agreeing with itself.
+        sample: () => {
+          const contentElement = document.querySelector<HTMLElement>('.editor-container');
+          return contentElement ? contentElement.scrollHeight : -1;
+        },
+        samplesMatch: (previous, current) => current !== -1 && current === previous,
+        onSettled: () => {
+          highlightedVerseElement = scrollToVerse(scrRef);
+          // Only a scroll that actually landed is recorded. The verse marker can be genuinely
+          // absent — a `\v 16-17` range publishes no `[data-number="17"]` — so recording regardless
+          // would make `hasNewScrollTarget` answer "same target" forever and the panel would never
+          // catch up on a later reveal.
+          if (highlightedVerseElement) {
+            lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
+            highlightedVerseElement.classList.add('highlighted');
+            return 'settled';
+          }
+          // Settled but no marker yet. Two consecutive equal heights are cheap to reach — an empty,
+          // flex-sized container reports the same height every frame before Lexical has reconciled
+          // the chapter — so "settled" is not "rendered". Keep waiting rather than treating one
+          // agreeing pair as the answer; `scrollToVerse` does not scroll without a marker, so
+          // re-calling it cannot restart an animation.
+          return 'keep-waiting';
+        },
+        // Out of time: give up WITHOUT recording, so a later reveal tries again instead of being
+        // told the target is unchanged.
+        onTimedOut: () => {},
+      });
+    }
 
-      // `.editor-container` is sampled as a CONTENT-GROWTH PROXY, not as the scroll container.
-      // Which element actually scrolls differs by host — `_editor-overrides.scss` warns that this
-      // one is auto-height in the Scripture editor and its wrapper scrolls instead — so the scroll
-      // itself is left to `scrollToVerse`, which discovers the container via `findScrollContainer`.
-      // Only the height is read here, and that tracks the chapter laying out either way.
-      const contentElement = document.querySelector<HTMLElement>('.editor-container');
-      // `querySelector` yields null, not undefined, so compare truthily — treating a missing
-      // element as "settled" would scroll against geometry that does not exist yet.
-      const scrollHeight = contentElement ? contentElement.scrollHeight : -1;
-      const isSettled = !!contentElement && scrollHeight === lastScrollHeight;
-      lastScrollHeight = scrollHeight;
-
-      if (isSettled) {
-        highlightedVerseElement = scrollToVerse(scrRef);
-        // Only a scroll that actually landed is recorded. The verse marker can be genuinely absent
-        // — a `\v 16-17` range publishes no `[data-number="17"]` — so recording regardless would
-        // make `hasNewScrollTarget` answer "same target" forever and the panel would never catch up
-        // on a later reveal.
-        if (highlightedVerseElement) {
-          lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
-          highlightedVerseElement.classList.add('highlighted');
-          return;
-        }
-        // Settled but no marker yet. Two consecutive equal heights are cheap to reach — an empty,
-        // flex-sized container reports the same height every frame before Lexical has reconciled
-        // the chapter — so "settled" is not "rendered". Keep waiting rather than treating one
-        // agreeing pair as the answer; `scrollToVerse` does not scroll without a marker, so
-        // re-calling it cannot restart an animation.
-      }
-      // Out of time: give up WITHOUT recording, so a later reveal tries again instead of being
-      // told the target is unchanged.
-      if (timedOut) return;
-      requestAnimationFrame(scrollWhenSettled);
-    };
-    scrollWhenSettled();
     return () => {
       cancelled = true;
+      cancelSettleWait?.();
       highlightedVerseElement?.classList.remove('highlighted');
     };
     // The rule wants `scrRef` itself, but this effect is keyed on the three fields that decide where
@@ -493,6 +507,10 @@ export function ResourceTextPanel({
   // One resource type, one matched set of strings. See `resolveResourcePanelStringKeys`.
   const { emptyStatePromptKey, bookNotAvailableKey, pickButtonKey } =
     resolveResourcePanelStringKeys(resourceType);
+
+  // Both web-view types share this component and resolve to the same content-zoom memory identity
+  // (their container project), so each names its own area to keep its remembered level separate.
+  const contentZoomArea = resourceType === 'ScriptureResource' ? 'bible-texts' : 'commentaries';
 
   if (!hasProject) {
     return (
@@ -579,9 +597,11 @@ export function ResourceTextPanel({
       <PanelRetryableErrorView
         message={localize(
           localizedStrings,
-          isOnline
-            ? '%webView_resourcePanel_installFailed%'
-            : '%webView_resourcePanel_installFailedOffline%',
+          getInstallFailureMessageKey(
+            installFailureReason,
+            isOnline,
+            RESOURCE_PANEL_INSTALL_FAILURE_KEYS,
+          ),
         )}
         retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
         onRetry={retryInstall}
@@ -665,19 +685,26 @@ export function ResourceTextPanel({
         </div>
       );
 
+    // The zoom marker sits INSIDE the scroll box, never on it or above it: `scrollToVerse` adds a
+    // `getBoundingClientRect()` distance (zoomed pixels) to the box's `scrollTop` (unzoomed pixels),
+    // which agree only while the box itself is unscaled. The messages and the spinner above are app
+    // chrome and stay unmarked; while one of them shows, the pane reports no area and its declared
+    // default area stands in.
     return (
       <div
         className="tw:flex-1 tw:overflow-auto"
         dir={options.textDirection}
         data-testid={RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID}
       >
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={handleScrRefChange}
-          options={options}
-          logger={logger}
-        />
+        <ContentZoomRoot area={contentZoomArea}>
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={handleScrRefChange}
+            options={options}
+            logger={logger}
+          />
+        </ContentZoomRoot>
       </div>
     );
   };
@@ -700,7 +727,7 @@ export function ResourceTextPanel({
         )}
       />
 
-      {renderContent()}
+      <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderContent()}</div>
     </div>
   );
 

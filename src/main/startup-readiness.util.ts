@@ -317,10 +317,12 @@ function shouldLogProbeAttempt(attempt: number): boolean {
  * An empty result counts as not-ready, not ready-with-no-projects. A workspace that genuinely has
  * no local scripture projects therefore waits the full budget. Note this probe and the eventual
  * sync measure different things: the probe checks for projects visible via
- * `SCRIPTURE_READINESS_PROJECT_INTERFACE`, while `syncProjects(undefined)` means "all shared
- * projects already present locally" — those sets can differ, so the delayed sync is not always a
- * no-op. When there genuinely are no local scripture projects, though, it typically has nothing to
- * do.
+ * `SCRIPTURE_READINESS_PROJECT_INTERFACE`, while `syncProjects(undefined)`'s scope depends on what
+ * is already local — those sets can differ, so the delayed sync is not always a no-op. When there
+ * are genuinely no local scripture projects — whether a true first sync, or every previously-local
+ * project having since gone missing — the delayed sync can be the MOST expensive case (trying to
+ * establish at least one usable project) rather than the least — so this probe's cost model should
+ * not assume the delayed sync is cheap there.
  *
  * Uses the WITHOUT-RETRIES lookup even though its TSDoc names layering PDP factories as the
  * intended caller and points most callers at `getMetadataForAllProjects`. That default is rejected

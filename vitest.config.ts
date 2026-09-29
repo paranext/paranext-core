@@ -5,6 +5,20 @@ const config = defineConfig(async () => {
 
   return {
     plugins: [tsconfigPaths()],
+    resolve: {
+      // `platform-bible-react`'s `exports` map sends `./experimental` to its BUILT
+      // `dist/experimental.js`, so without this a test that renders one of those components is
+      // exercising the last committed bundle rather than the source beside it — a regression in
+      // the component's own source passes green until someone runs `npm run build:pbr`. Resolve
+      // it to source instead, so these tests fail on the change that caused them.
+      alias: [
+        {
+          find: /^platform-bible-react\/experimental$/,
+          replacement: new URL('./lib/platform-bible-react/src/experimental.ts', import.meta.url)
+            .pathname,
+        },
+      ],
+    },
     test: {
       globals: true,
       environment: 'jsdom',

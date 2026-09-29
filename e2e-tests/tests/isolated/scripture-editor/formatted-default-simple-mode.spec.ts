@@ -11,6 +11,7 @@
  * ONE test() per spec file on purpose — see standard-default-power-mode.spec.ts.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { waitForAppReady } from '../../../fixtures/helpers';
 import {
   makeSampleProjectEditable,
   navigateToolbarBcv,
@@ -35,6 +36,9 @@ test.describe('scripture editor default view', () => {
     // memory-pressured machine could spuriously time out before the calibrated per-step timeouts
     // fire. Give it Playwright's 3x "slow" budget for headroom (a passing run still exits in seconds).
     test.slow();
+    // This is a Simple-mode spec, so the onboarding tour opens on its own; suppress it before its
+    // full-screen overlay can intercept the BCV trigger click below.
+    await waitForAppReady(mainPage);
     // No `waitForHomeTab` here: simple mode loads the static simpleLayout, which has NO Home tab
     // (simple-layout.data.ts). The open helper below carries its own app-readiness gates (first
     // iframe attached = initial loadLayout() done; PAPI command registration; retry loop).

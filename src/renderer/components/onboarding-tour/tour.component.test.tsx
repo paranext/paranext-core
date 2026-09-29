@@ -128,6 +128,30 @@ describe('Tour', () => {
     expect(onSkip).toHaveBeenCalledOnce();
   });
 
+  it('reports nothing when an open tour is unmounted', () => {
+    // Unmounting an open tour is a close path in its own right — callers that cannot run while the
+    // app is unusable take it, and `OnboardingTour` takes it on every connection loss. It has to
+    // stay callback-free, because callers persist a permanent "tour done" flag from `onSkip`:
+    // moving any auto-dismissal into a cleanup function would spend a tour the user never saw.
+    const onSkip = vi.fn();
+    const { unmount } = render(
+      <div>
+        <div id="a">A</div>
+        <Tour
+          steps={[{ target: '#a', title: 'A', description: 'x' }]}
+          open
+          onDone={vi.fn()}
+          onSkip={onSkip}
+        />
+      </div>,
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    unmount();
+
+    expect(onSkip).not.toHaveBeenCalled();
+  });
+
   it('renders nothing and calls onSkip when no targets resolve', () => {
     // Without the onSkip call the caller would be left with `open` stuck true behind an overlay
     // that renders nothing and never reports back, so the tour would be retried forever.
@@ -425,6 +449,52 @@ describe('Tour', () => {
     );
 
     expect(document.activeElement).toBe(priorButton);
+  });
+
+  it('restores focus when an open tour is unmounted rather than closed', () => {
+    // The close path callers take when they stand the tour down. Nothing else in the tour's own
+    // tree hands focus back on this path, so without a restore here focus is left on `<body>` and
+    // whatever mounts in the same commit has to rescue it — a dependency on a sibling component
+    // that nothing states and nothing checks. The previously focused element lives outside the
+    // rendered tree, as it does in the app: the tour goes away, the app around it does not.
+    const priorButton = document.createElement('button');
+    priorButton.type = 'button';
+    document.body.appendChild(priorButton);
+    try {
+      const { rerender, unmount } = render(
+        <div>
+          <div id="a">A</div>
+          <Tour
+            steps={[{ target: '#a', title: 'A', description: 'x' }]}
+            open={false}
+            onDone={vi.fn()}
+            onSkip={vi.fn()}
+          />
+        </div>,
+      );
+      priorButton.focus();
+
+      rerender(
+        <div>
+          <div id="a">A</div>
+          <Tour
+            steps={[{ target: '#a', title: 'A', description: 'x' }]}
+            open
+            onDone={vi.fn()}
+            onSkip={vi.fn()}
+          />
+        </div>,
+      );
+      // Opening moves focus off `priorButton` onto the card's primary action, so the restore below
+      // is a real move rather than focus that never left.
+      expect(document.activeElement).not.toBe(priorButton);
+
+      unmount();
+
+      expect(document.activeElement).toBe(priorButton);
+    } finally {
+      priorButton.remove();
+    }
   });
 
   it('resolves logical sides correctly in RTL layout', () => {

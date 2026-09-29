@@ -85,7 +85,7 @@ frames). Enter and Escape are claimed there so they cannot reach the document: a
 Lexical performs the unmarked plain split the palette exists to prevent, and leaves the palette open
 with nothing committed.
 
-Every keyboard handler change here must also update `src/stories/keyboard-shortcuts.data.ts` — see
+Every keyboard handler change here must also update `src/shared/data/keyboard-shortcuts.data.ts` — see
 `.claude/rules/keyboard-shortcuts-catalog.md`.
 
 ---
@@ -102,7 +102,7 @@ Every keyboard handler change here must also update `src/stories/keyboard-shortc
 - **A dropdown opened inside the popover must clear it.** Radix portals such content to
   `document.body` instead of nesting it, so the dropdown and `PopoverContent` are stacking SIBLINGS
   and the popover's own z-index competes directly with the dropdown's. Use `Z_INDEX_ABOVE_POPOVER`;
-  `lib/platform-bible-react/src/components/z-index.test.ts` pins the ordering.
+  `lib/platform-bible-react/src/components/z-index.test.tsx` pins the ordering.
 - **The note's shell is not typeable, and the view option alone does not achieve that.** The popover
   passes `isNoteShellEditable: false`, which renders `\f + ` in Lexical's `token` mode — necessary,
   but on its own that still lets a caret land among those characters, where a keystroke replaces the
@@ -117,10 +117,23 @@ Every keyboard handler change here must also update `src/stories/keyboard-shortc
   the way through.
 - **Custom is the one caller row a click does not commit.** It keeps the menu open on purpose
   (`onSelect` preventDefault) so a character can be typed, which leaves its own check as the
-  confirming gesture — the same commit Enter performs. Two consequences worth knowing before
+  confirming gesture — the same commit Enter performs. Escape is not a commit: the caller
+  dropdown's `onEscapeKeyDown` discards the pending caller. Two consequences worth knowing before
   touching it: the check's indicator is `pointer-events-none`, so a click on it arrives on the ROW,
   and Radix resolves selection on POINTER-UP, so by click time the row already reads as checked —
   whether the click is arming or confirming can only be answered from before the press.
+- **A dropdown hands focus to the note only after it changed something.** The note-type and caller
+  dropdowns apply a choice by replacing the note, which discards the editor's selection, and the
+  user reached the dropdown mid-edit. After a committed change each one claims Radix's
+  `onCloseAutoFocus` and calls the popover's `focusNoteText`, which restores a lost selection before
+  focusing — a bare `focus()` with no selection resolves to the document end, outside the note's
+  text, where typing joins nothing. After a dismissal (Escape, or re-picking the value already
+  applied) nothing changed, so Radix's own restore to the trigger stands, as WCAG 2.4.3 asks.
+- **The inline markers menu falls back to the enclosing note's marker.** With the caret in a
+  character run (`ft`, `xt`, …) the context marker defines no children, so
+  `generateInlineMarkerMenuListItems` (`footnote-editor.utils.ts`) builds the menu from the note's
+  own marker instead. That marker has to be the live note type, not a fixed one: `xo` belongs to
+  `\x` alone, so a note switched to a cross-reference must offer it.
 - **The footnotes pane renders a note's `category` from the note's own field.** It is the one part
   of a footnote that never appears in `content`: the parser folds the file's `\cat People\cat*` run
   onto the note as an attribute, so anything rendering a footnote from `content` alone drops it

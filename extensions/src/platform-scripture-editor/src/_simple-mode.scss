@@ -106,8 +106,15 @@
   --psc-character-marker-bar-width: 64px;
 }
 
+// The bar sits outside the editor's content-zoom area at its fixed width, while this padding is on
+// `.usfm`, inside that area, where CSS `zoom` multiplies it. Dividing by the area's factor makes
+// the reserved space render at exactly the bar's width at every level; without it the reservation
+// shrinks under the bar below 100 % and the bar paints over text.
 .editor-container-simple .usfm.psc-gutter-markers {
-  padding-inline-end: var(--psc-character-marker-bar-width);
+  padding-inline-end: calc(
+    var(--psc-character-marker-bar-width) /
+      var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1))
+  );
 }
 
 // RTL: `_usj-nodes.scss`'s mirror rule (`.usfm.psc-gutter-markers[dir='rtl']`) re-asserts
@@ -117,5 +124,8 @@
 // attribute raises specificity to (0,4,0) and settles it deterministically. That rule's
 // `padding-right` (the start-side gutter in RTL) is untouched and still applies.
 .editor-container-simple .usfm.psc-gutter-markers[dir='rtl'] {
-  padding-left: var(--psc-character-marker-bar-width);
+  padding-left: calc(
+    var(--psc-character-marker-bar-width) /
+      var(--platform-content-zoom-main, var(--platform-content-zoom-default, 1))
+  );
 }

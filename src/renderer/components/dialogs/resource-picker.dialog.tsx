@@ -45,6 +45,10 @@ function ResourcePickerDialogWrapper({
     hasSettled: hasDblSettled,
     refetch: refetchDblCatalog,
   } = useRetryablePromise(
+    // Deliberately not refreshed before this read. The flags can be one refresh behind, and acting
+    // on a stale one now costs a redundant install that succeeds as a no-op and corrects itself —
+    // where awaiting the refresh would hold the dialog's first paint on a backend call, which is
+    // the blocking `getCachedResources` was written to avoid.
     useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
   );
 
@@ -120,6 +124,11 @@ export const RESOURCE_PICKER_DIALOG: DialogDefinition<typeof RESOURCE_PICKER_DIA
     // Matches the get resources UI width so that there is no additional scroll bar on the bottom
     // for some resources that have long names
     initialSize: { width: 900, height: 650 },
+    // `ResourcePickerDialog` renders its own `DialogTitle` and `DialogDescription`, both localized
+    // and both specific to this list. Without this the modal shell adds a second, generic pair
+    // under the same Radix ids, and a screen reader announces the shell's text instead.
+    providesOwnTitle: true,
+    providesOwnDescription: true,
     Component: ResourcePickerDialogWrapper,
   });
 

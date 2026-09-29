@@ -98,8 +98,13 @@ async function openFindPanel(mainPage: Page): Promise<FrameLocator> {
   await expect(hamburger).toBeVisible({ timeout: 15_000 });
   await hamburger.click();
 
-  // Anchored to the exact label "Find" (%webView_platformScriptureEditor_openFind%).
-  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find$/i });
+  // The item's accessible name is its label "Find" (%webView_platformScriptureEditor_openFind%)
+  // followed by a keyboard shortcut hint, so the match cannot be anchored to the end of the name.
+  // The trailing `(\s|$)` rules out only a longer single word, e.g. "Finder"; a sibling item whose
+  // label begins "Find " — "Find and replace…" — matches too, and the click then fails with a
+  // strict-mode violation rather than opening the wrong panel. That failure is the signal to narrow
+  // this locator to the label element instead of the whole accessible name.
+  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find(\s|$)/i });
   await expect(findMenuItem).toBeVisible({ timeout: 5_000 });
   await findMenuItem.click();
 
@@ -489,7 +494,7 @@ test.describe('Search history on close', () => {
     // never pressed and the inactivity debounce has not elapsed. So if the term were already
     // here, the assertion after the close would pass without the close doing anything.
     await openHistoryDropdown(frame);
-    await expect(frame.getByRole('option', { name: term })).toHaveCount(0);
+    await expect(frame.getByRole('menuitem', { name: term })).toHaveCount(0);
     await frame.locator('#search-term').press('Escape');
 
     // Opening the dropdown leaves the pointer on its trigger, and the tooltip that follows renders
@@ -514,6 +519,6 @@ test.describe('Search history on close', () => {
 
     const reopened = await openFindPanel(mainPage);
     await openHistoryDropdown(reopened);
-    await expect(reopened.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
+    await expect(reopened.getByRole('menuitem', { name: term })).toBeVisible({ timeout: 5_000 });
   });
 });

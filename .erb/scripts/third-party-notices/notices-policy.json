@@ -10,6 +10,12 @@
     "CC0-1.0",
     "Zlib",
     "Python-2.0",
+    "PSF-2.0",
+    "OpenSSL",
+    "blessing",
+    "TCL",
+    "ZPL-2.1",
+    "bzip2-1.0.6",
     "Unicode-3.0",
     "Unicode-DFS-2016",
     "BlueOak-1.0.0",
@@ -94,12 +100,9 @@
     },
     "electron-updater": {
       "reason": "Declared as a root runtime dependency, but its only import in src/main/main.ts is commented out, so webpack compiles no module for it and electron-builder does not pack it either - release/app/package.json, whose closure is the one packed unbundled, declares no dependencies. Nothing this repository distributes contains it."
-    },
-    "posthog-node": {
-      "reason": "Declared as a root runtime dependency and resolved by package-lock.json, but nothing in first-party source imports it yet, so webpack compiles no module for it. It gains a row on its own the moment something does."
     }
   },
-  "exceptionsNote": "A reviewed determination that clears one blocked package. Keyed by ecosystem:name and pinned to the exact license TEXT: the block returns the moment the package changes its license text, which is what a determination read off that text can no longer stand for. `version` records which version the determination was read against, so it stays re-checkable; it is provenance, not part of the key - a version bump that leaves the text byte-identical changes nothing this entry asserts.",
+  "exceptionsNote": "A reviewed determination that clears one blocked package. Keyed by ecosystem:name and pinned to the exact license TEXT: the block returns the moment the package changes its license text, which is what a determination read off that text can no longer stand for. `version` records which version the determination was read against, so it stays re-checkable; it is provenance, not part of the key - a version bump that leaves the text byte-identical changes nothing this entry asserts. `copyrightByOperand` is optional and for a conjunction whose operands are granted by different holders: it maps an operand's SPDX id to the notice that operand is granted under, which is printed beside that operand's canonical text instead of the first notice in the package's file. Each key must be an operand of `spdx`.",
   "exceptions": [
     {
       "package": "npm:bowser",
@@ -118,6 +121,32 @@
       "reviewer": "matt_lyons@sil.org",
       "date": "2026-08-21",
       "textSha256": "85aae6740628115550c6e67a85e8f8e70835cd5b14d4a2cb878c90c998f506db"
+    },
+    {
+      "package": "npm:posthog-node",
+      "version": "5.51.1",
+      "spdx": "(Apache-2.0 AND MIT)",
+      "reason": "package.json declares MIT, but LICENSE is the Apache-2.0 grant (PostHog and Mixpanel) followed by MIT grants for code vendored from Sentry, Meta, Expo and AgentCat, so no single-license matcher identifies it; both operands are on the allowed list.",
+      "reviewer": "rolf_heij@sil.org",
+      "date": "2026-09-23",
+      "textSha256": "a4a2a1ca3b22fe608ea29144452418e4a91f11ca44666a8a91cb72ec0a70f6ee",
+      "copyrightByOperand": {
+        "Apache-2.0": "Copyright 2020 Posthog / Hiberly, Inc. Copyright 2015 Mixpanel, Inc.",
+        "MIT": "Copyright (c) 2012 Functional Software, Inc. dba Sentry; Copyright (c) 2017 Sentry; Copyright (c) Meta Platforms, Inc. and affiliates.; Copyright (c) 2015-present 650 Industries, Inc. (aka Expo); Copyright (c) 2025 AgentCat, Inc. (formerly MCPcat)"
+      }
+    },
+    {
+      "package": "npm:@posthog/core",
+      "version": "1.55.2",
+      "spdx": "(MIT AND Apache-2.0)",
+      "reason": "package.json declares MIT, but LICENSE is the posthog-js monorepo's: the Apache-2.0 grant for the repository, then a section stating that @posthog/core itself is MIT (PostHog), followed by the MIT grant for its TraceKit-derived error-tracking parser, the Apache-2.0 notice for its vendored uuidv7 (LiosK), and MIT grants for code vendored from Sentry, Meta, Expo and AgentCat. The package ships the uuidv7 and Sentry-derived code (src/vendor/uuidv7.ts, src/error-tracking/) and compiles both into dist/, so both operands apply; no single-license matcher identifies the file, and both are on the allowed list.",
+      "reviewer": "tj_couch@sil.org",
+      "date": "2026-09-28",
+      "textSha256": "d3fb92ac01f0bef4078f89aac9f20f76da3383ad45becf6204abdf5495f43f8f",
+      "copyrightByOperand": {
+        "MIT": "Copyright (c) 2022 PostHog (part of Hiberly Inc); Copyright (c) 2013 Onur Can Cakmak onur.cakmak@gmail.com and all TraceKit contributors.; Copyright (c) 2012 Functional Software, Inc. dba Sentry",
+        "Apache-2.0": "Copyright 2021-2023 LiosK"
+      }
     },
     {
       "package": "npm:fast-uri",
@@ -308,6 +337,11 @@
       "reason": "ICU is published under the Unicode license, which requires its copyright and permission notice to travel with copies. Both identifiers are listed because the version comes from the build machine and ICU moved from the Unicode License Agreement for Data Files and Software (Unicode-DFS-2016) to the Unicode License v3 (Unicode-3.0) at ICU 74 - a build on Ubuntu 22.04 copies ICU 70 and a build on current Homebrew copies ICU 74 or later, and this document cannot know which produced a given installer. The Windows copy is the Microsoft.ICU.ICU4C.Runtime package instead, which has a row of its own in the NuGet table."
     }
   },
+  "separateProgramsNote": "A third-party program redistributed as a SEPARATE EXECUTABLE that the application invokes as a subprocess - its own runtime, its own process, no linking. Keyed by program name. The entry is the reviewed determination that shipping it beside this application is aggregation rather than derivation, with reviewer, date, reason and a statement of where its corresponding source is; each delivery names the platform, the version, the mechanism that puts it in the installer, and EVIDENCE (a file and a substring) the generator refuses the entry without, so a determination cannot outlive the program it describes. The canonical text of every identifier the entry names is reproduced in the document, because a bundle may carry no license text of its own. A component recorded under a delivery's \"alsoContains\" may carry its own \"copyright\", and its text is credited in the document to it by name rather than to the program, because a bundled component is under its own terms held by its own copyright holder. An overrides entry may link to a program by name, which is what admits a copyleft NuGet package that IS the program. This repository ships none; a downstream product records its own in its overlay (NOTICES_POLICY_OVERLAY).",
+  "separatePrograms": {},
+  "externalExtensionsNote": "An extension packed from OUTSIDE this repository: a downstream build copies zips from its own extension repositories into a folder it maps to ./extensions in electron-builder.json5. Each zip bundles every dependency outside the extension host's externals list and carries no module manifest, so nothing here can itemize it. Every packed zip must have an entry, keyed by extension name, recording itemized: false and why - the document names it as a stated omission. itemized: true is refused until the generator can read a manifest set rooted in another repository. This repository packs none.",
+  "externalExtensions": {},
+  "productNote": "Overlay only. A downstream repository that builds a product from this source declares { name, repository, isParatext } in its overlay; name must equal productName in electron-builder.json5, which that build rewrites before packaging. With a product declared, the document names it instead of Platform.Bible and drops the 'reference, not the notices for any shipped product' paragraph. isParatext selects the UBS lexical-database wording, whose permission names Paratext. Never set in this file.",
   "snapStagePackagesNote": "The Ubuntu packages snapcraft stages inside the Linux .snap are redistributed inside that artifact but appear in neither the npm nor the NuGet graph, so nothing else in this pipeline can see them. This table is what the notices document's \"Linux snap\" section is written FROM: every name in electron-builder.json5's snap.stagePackages must appear here or the build refuses, so a library added to the installer cannot be described by prose that predates it. `terms` is deliberately as coarse as the source it was read from (\"the LGPL\", not a version) - recording a version nobody established would be inventing precision. A library whose terms nobody has settled is recorded as not-established rather than guessed, the same treatment LICENSING.md gives System.Net.Http; the way out of that state is to read its terms and record what they say.",
   "snapStagePackages": {
     "libappindicator3-1": {

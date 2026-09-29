@@ -11,12 +11,20 @@ import {
   decideNoteCallerClickAction,
   finalizeProjectSwitch,
   formatEditorTitle,
+  getTabTitleProjectName,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   resolveViewTypeForInterfaceMode,
   syncOnProjectSwitch,
+  openOrUpdateRelatedPanels,
+  updateRelatedFindPanel,
+  buildScriptureTextGridWebView,
+  resolveGridProviderProjectId,
+  updateRelatedChecksSidePanel,
+  updateRelatedTextCollectionPanel,
+  SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
   type OpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectProjectIdsForOpenMode,
@@ -29,9 +37,12 @@ import {
   resolveAddChapterNumberClick,
   isMissingBookError,
   isMissingBookOnScreen,
-  openOrUpdateRelatedPanels,
+  hasDisplayableParagraphMarkerTitle,
+  getParagraphMarkerTitle,
   parseMissingBookError,
   resolveResourceContentState,
+  selectableParagraphMarkers,
+  PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -2319,18 +2330,69 @@ describe('startDefaultProjectPicker', () => {
 
 // #endregion startDefaultProjectPicker
 
+/**
+ * The two project settings a helper could consult to classify a project. `platform.isPublished` is
+ * the one that tells a translation project from a published resource; `platform.isEditable` is a
+ * project-wide switch on editing the Scripture text.
+ */
+type ProjectKind = { isEditable: boolean; isPublished: boolean };
+
+const EDITABLE_PROJECT: ProjectKind = { isEditable: true, isPublished: false };
+/** A translation project with editing switched off (`Editable=F`). */
+const READ_ONLY_PROJECT: ProjectKind = { isEditable: false, isPublished: false };
+const PUBLISHED_RESOURCE: ProjectKind = { isEditable: false, isPublished: true };
+
+/**
+ * A `papi.projectDataProviders.get` mock whose `platform.base` PDP reports each project's kind:
+ * `projectKind` unless `setProjectKind` overrides it for that id. Both settings are always
+ * supplied, so a helper that consulted the wrong one gets a real answer rather than an `undefined`
+ * that happens to be falsy.
+ */
+function createProjectKindMocks(projectKind: ProjectKind) {
+  // Per-project kinds, so a test can give two projects different answers and pin which one a
+  // helper classifies.
+  const projectKindsByProjectId = new Map<string, ProjectKind>();
+  const setProjectKind = (projectId: string, kind: ProjectKind) => {
+    projectKindsByProjectId.set(projectId, kind);
+  };
+  // `Promise<unknown>`, not the inferred `Promise<boolean>`, so a test can override a reading with
+  // a value outside the setting's contract.
+  const mockGetSetting = vi.fn(async (projectId: string, key: string): Promise<unknown> => {
+    const kind = projectKindsByProjectId.get(projectId) ?? projectKind;
+    if (key === 'platform.isEditable') return kind.isEditable;
+    if (key === 'platform.isPublished') return kind.isPublished;
+    throw new Error(`unexpected setting ${key}`);
+  });
+  const mockProjectDataProvidersGet = vi.fn(async (_interface: string, projectId: string) => ({
+    getSetting: (key: string) => mockGetSetting(projectId, key),
+  }));
+  /**
+   * Replaces only the `platform.isPublished` reading, leaving `platform.isEditable` as the project
+   * kind reports it, so a helper that read the wrong setting still gets a real answer.
+   */
+  const overrideIsPublished = (reading: () => Promise<unknown>) => {
+    const kindReading = mockGetSetting.getMockImplementation();
+    mockGetSetting.mockImplementation(async (projectId, key) =>
+      key === 'platform.isPublished' ? reading() : kindReading?.(projectId, key),
+    );
+  };
+  return { mockGetSetting, mockProjectDataProvidersGet, setProjectKind, overrideIsPublished };
+}
+
 // #region syncOnProjectSwitch
 
-function createSyncMockPapi() {
+function createSyncMockPapi(projectKind: ProjectKind = EDITABLE_PROJECT) {
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
   const mockWarn = vi.fn();
+  const { mockProjectDataProvidersGet, setProjectKind } = createProjectKindMocks(projectKind);
   // Must cast since the mock only includes the papi properties used by syncOnProjectSwitch.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
     commands: { sendCommand: mockSendCommand },
+    projectDataProviders: { get: mockProjectDataProvidersGet },
     logger: { warn: mockWarn },
   } as unknown as typeof PapiBackend;
-  return { papi, mockSendCommand, mockWarn };
+  return { papi, mockSendCommand, mockWarn, mockProjectDataProvidersGet, setProjectKind };
 }
 
 describe('syncOnProjectSwitch', () => {
@@ -2423,13 +2485,52 @@ describe('syncOnProjectSwitch', () => {
 
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-outgoing'));
   });
+
+  it('still syncs an outgoing translation project with editing switched off', async () => {
+    // `Editable=F` locks the Scripture text, not comments, so the project can hold new work.
+    const { papi, mockSendCommand } = createSyncMockPapi(READ_ONLY_PROJECT);
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-outgoing',
+    ]);
+  });
+
+  it('skips the outgoing sync for a published resource but still syncs the incoming project', async () => {
+    const { papi, mockSendCommand, setProjectKind } = createSyncMockPapi();
+    // Classifies the outgoing project, not the incoming one.
+    setProjectKind('proj-outgoing', PUBLISHED_RESOURCE);
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(mockSendCommand.mock.calls).toEqual([
+      ['paratextBibleSendReceive.syncProjects', ['proj-incoming']],
+    ]);
+  });
+
+  it('syncs the outgoing project when its kind cannot be read', async () => {
+    // A resource is not synced by Send/Receive anyway, so failing open costs nothing, whereas
+    // failing closed would leave a translation project's new comments unsent.
+    const { papi, mockSendCommand, mockProjectDataProvidersGet } = createSyncMockPapi();
+    mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-outgoing',
+    ]);
+  });
 });
 
 // #endregion syncOnProjectSwitch
 
 // #region finalizeProjectSwitch
 
-function createFinalizeMockPapi() {
+const GRID_WEBVIEW_ID = 'text-collection-1';
+
+function createFinalizeMockPapi(projectKind: ProjectKind = EDITABLE_PROJECT) {
+  const { mockProjectDataProvidersGet } = createProjectKindMocks(projectKind);
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
   const mockWarn = vi.fn();
   const mockRecordProjectOpened = vi.fn().mockResolvedValue(undefined);
@@ -2442,21 +2543,40 @@ function createFinalizeMockPapi() {
   // Defaults to 'simple' - matches the common case (the switch this replays side effects for only
   // ever originates from a Power -> Simple mode change), so most tests don't need to set it.
   const mockSettingsGet = vi.fn().mockResolvedValue('simple');
+  // The Text Collection re-point runs from here, so the mock needs a webViews surface; without one
+  // it would take the swallowed-failure path and the assertions below would pass vacuously.
+  const mockGetAllOpenWebViewDefinitions = vi
+    .fn()
+    .mockResolvedValue([
+      { id: GRID_WEBVIEW_ID, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, projectId: undefined },
+    ]);
+  // Resolves an id: `reloadWebView` returning undefined means the re-point did not take, which is
+  // reported as an error.
+  const mockReloadWebView = vi.fn().mockResolvedValue(GRID_WEBVIEW_ID);
+  const mockError = vi.fn();
   // Must cast since the mock only includes the papi properties finalizeProjectSwitch uses.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
     commands: { sendCommand: mockSendCommand },
     dataProviders: { get: mockDataProvidersGet },
+    projectDataProviders: { get: mockProjectDataProvidersGet },
     settings: { get: mockSettingsGet },
-    logger: { warn: mockWarn },
+    webViews: {
+      getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions,
+      reloadWebView: mockReloadWebView,
+    },
+    logger: { warn: mockWarn, error: mockError },
   } as unknown as typeof PapiBackend;
   return {
     papi,
     mockSendCommand,
     mockWarn,
+    mockError,
     mockRecordProjectOpened,
     mockDataProvidersGet,
     mockSettingsGet,
+    mockGetAllOpenWebViewDefinitions,
+    mockReloadWebView,
   };
 }
 
@@ -2484,6 +2604,53 @@ describe('finalizeProjectSwitch', () => {
 
     expect(applyForProject).toHaveBeenCalledWith('proj-1');
     expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('re-points a Text Collection that arrives without a project', async () => {
+    // The renderer normally bakes the project into the grid's tab before this runs; this is the
+    // safety net for a caller that skips the bake.
+    const { papi, mockReloadWebView } = createFinalizeMockPapi();
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      GRID_WEBVIEW_ID,
+      { projectId: 'proj-1', bringToFront: false },
+    );
+  });
+
+  it('does not re-point the Text Collection at a published resource', async () => {
+    // The same rule as the editor-column switch, applied through the same function.
+    const { papi, mockReloadWebView } = createFinalizeMockPapi(PUBLISHED_RESOURCE);
+
+    await finalizeProjectSwitch(papi, 'resource-1', undefined);
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+  });
+
+  it('re-points the Text Collection before the shared layout picks the front tab', async () => {
+    const { papi, mockReloadWebView } = createFinalizeMockPapi();
+    const order: string[] = [];
+    mockReloadWebView.mockImplementation(async () => {
+      order.push('reload');
+    });
+    const applyForProject = vi.fn().mockImplementation(async () => {
+      order.push('applyForProject');
+    });
+
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
+
+    expect(order).toEqual(['reload', 'applyForProject']);
+  });
+
+  it('does not re-point the Text Collection once the user is back in Power mode', async () => {
+    const { papi, mockReloadWebView, mockSettingsGet } = createFinalizeMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
   });
 
   it('calls applyForProject when still in Simple mode', async () => {
@@ -2568,6 +2735,30 @@ describe('generateParagraphMenuListItems', () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
+  // Equality, not spot checks: a partial-match assertion would miss both a marker silently dropped
+  // from the offered set and an extra one silently added.
+  it("offers exactly selectableParagraphMarkers' markers, matching neither more nor fewer", () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn());
+
+    expect(items.map((item) => item.marker).sort()).toEqual([...selectableParagraphMarkers].sort());
+  });
+
+  it('offers li2, s1, bare q, lh, b, and cp, and excludes id and c', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn());
+    const markers = items.map((item) => item.marker);
+
+    expect(markers).toContain('li2');
+    expect(markers).toContain('s1');
+    expect(markers).toContain('q'); // bare `q`, distinct from `q1`
+    expect(markers).toContain('lh');
+    expect(markers).toContain('b');
+    expect(markers).toContain('cp'); // genuine paragraph-style marker in USFM, unlike `c`
+    expect(markers).not.toContain('id'); // programmatically-applied only
+    expect(markers).not.toContain('c'); // programmatically-applied only
+  });
+
   it('fills the detail column from the marker description, so the paragraph menu is not the one menu with an empty second column', () => {
     const { ref } = makeMockEditorRef();
     const items = generateParagraphMenuListItems(
@@ -2598,6 +2789,18 @@ describe('generateParagraphMenuListItems', () => {
     });
   });
 
+  it('falls back to the bare marker code for the title while its description string is still loading, never a raw localize key', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn());
+
+    const paragraphItem = items.find((item) => item.marker === 'p');
+
+    expect(paragraphItem?.title).toBe('p');
+    items.forEach((item) => {
+      expect(item.title).not.toMatch(/^%.*%$/);
+    });
+  });
+
   it('restores the caret before formatting, so a pick made after the menu took focus still lands', () => {
     const { ref, formatPara } = makeMockEditorRef();
     const restoreSelection = vi.fn();
@@ -2624,6 +2827,77 @@ describe('generateParagraphMenuListItems', () => {
 
     expect(restoreSelection).not.toHaveBeenCalled();
     expect(formatPara).not.toHaveBeenCalled();
+  });
+});
+
+describe('selectableParagraphMarkers', () => {
+  it('includes every USFM paragraph-style marker that a user can validly apply directly', () => {
+    expect(selectableParagraphMarkers).toContain('li2');
+    expect(selectableParagraphMarkers).toContain('s1');
+    expect(selectableParagraphMarkers).toContain('q'); // bare `q`, distinct from `q1`
+    expect(selectableParagraphMarkers).toContain('q3');
+    expect(selectableParagraphMarkers).toContain('lh');
+    expect(selectableParagraphMarkers).toContain('b');
+    expect(selectableParagraphMarkers).toContain('h'); // Headers category — deliberately not excluded
+    expect(selectableParagraphMarkers).toContain('cl'); // DivisionMarks category — deliberately not excluded
+    expect(selectableParagraphMarkers).toContain('cp'); // genuine paragraph-style marker in USFM, unlike `c`
+  });
+
+  // The confirmed, deliberate exclusions (see the comment on PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS):
+  it('excludes id and c even though isParagraphMarker is true for both', () => {
+    expect(selectableParagraphMarkers).not.toContain('id');
+    expect(selectableParagraphMarkers).not.toContain('c');
+  });
+
+  it('excludes markers that are not paragraph markers', () => {
+    expect(selectableParagraphMarkers).not.toContain('v'); // Character, special-cased by isBlockMarker only
+    expect(selectableParagraphMarkers).not.toContain('nd'); // Character
+    expect(selectableParagraphMarkers).not.toContain('qs'); // Character
+    expect(selectableParagraphMarkers).not.toContain('qac'); // Character
+  });
+
+  it('PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS contains id and c', () => {
+    expect(PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has('id')).toBe(true);
+    expect(PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has('c')).toBe(true);
+  });
+});
+
+describe('hasDisplayableParagraphMarkerTitle', () => {
+  it('is true for every marker offered by the switcher', () => {
+    expect(
+      selectableParagraphMarkers.every((marker) => hasDisplayableParagraphMarkerTitle(marker)),
+    ).toBe(true);
+  });
+
+  // `id` and `c` are applied through their own dedicated mechanisms and must never be a switcher
+  // choice, but the trigger label and gutter tooltip should still name one when the caret/selection
+  // is actually on it, rather than falling back to the generic "Miscellaneous Marker" text or a raw
+  // marker echo.
+  it('is true for id and c even though both are excluded from selectableParagraphMarkers', () => {
+    expect(selectableParagraphMarkers).not.toContain('id');
+    expect(selectableParagraphMarkers).not.toContain('c');
+    expect(hasDisplayableParagraphMarkerTitle('id')).toBe(true);
+    expect(hasDisplayableParagraphMarkerTitle('c')).toBe(true);
+  });
+
+  it('is false for a marker with no title at all', () => {
+    expect(hasDisplayableParagraphMarkerTitle('notamarker')).toBe(false);
+  });
+});
+
+describe('getParagraphMarkerTitle', () => {
+  it("resolves id's title once loaded, even though id is not offered by the switcher", () => {
+    expect(
+      getParagraphMarkerTitle('id', { '%paragraphMenu_id_markerDescription%': 'Book identifier' }),
+    ).toBe('Book identifier');
+  });
+
+  it("leaves id's title undefined while its string is still loading", () => {
+    expect(getParagraphMarkerTitle('id', {})).toBeUndefined();
+  });
+
+  it('returns undefined for a marker with no title available at all', () => {
+    expect(getParagraphMarkerTitle('notamarker', {})).toBeUndefined();
   });
 });
 
@@ -3267,101 +3541,596 @@ describe('formatEditorTitle', () => {
   });
 });
 
-// #region openOrUpdateRelatedPanels
+// #region updateRelatedTextCollectionPanel
 
-/** Papi mock exposing only what `openOrUpdateRelatedPanels` touches. */
-function createRelatedPanelsMockPapi(openWebViewDefs: { webViewType: string; id: string }[] = []) {
+/**
+ * Mock papi exposing the webViews reads/writes the Column 3 re-point helpers use, a `sendCommand`
+ * spy for the command-driven panels, a `platform.base` PDP reporting `projectKind` (see
+ * {@link createProjectKindMocks}), and a settings service reporting Simple mode.
+ *
+ * @param openDefs Definitions `getAllOpenWebViewDefinitions` should report as open.
+ * @param projectKind What a project's `platform.base` PDP reports unless `setProjectKind` overrides
+ *   it for that id.
+ */
+function createRelatedPanelsMockPapi(
+  openDefs: Array<Partial<SavedWebViewDefinition>> = [],
+  projectKind: ProjectKind = EDITABLE_PROJECT,
+) {
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
-  const mockReloadWebView = vi.fn().mockResolvedValue('grid-web-view-id');
+  const mockGetAllOpenWebViewDefinitions = vi.fn().mockResolvedValue(openDefs);
+  // Resolves an id: `reloadWebView` returning undefined means the re-point did not take, which is
+  // reported as an error.
+  const mockReloadWebView = vi.fn().mockResolvedValue(GRID_WEBVIEW_ID);
+  const mockOpenWebView = vi.fn().mockResolvedValue(undefined);
+  const mockSettingsGet = vi.fn().mockResolvedValue('simple');
+  const projectKindMocks = createProjectKindMocks(projectKind);
   const mockWarn = vi.fn();
-  // Must cast since the mock only includes the papi properties openOrUpdateRelatedPanels uses.
+  const mockError = vi.fn();
+  // Must cast since the mock only includes the papi properties these helpers use.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
     commands: { sendCommand: mockSendCommand },
     webViews: {
-      getAllOpenWebViewDefinitions: vi.fn().mockResolvedValue(openWebViewDefs),
+      getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions,
       reloadWebView: mockReloadWebView,
+      openWebView: mockOpenWebView,
     },
-    logger: { warn: mockWarn },
+    projectDataProviders: { get: projectKindMocks.mockProjectDataProvidersGet },
+    settings: { get: mockSettingsGet },
+    logger: { warn: mockWarn, error: mockError },
   } as unknown as typeof PapiBackend;
-  return { papi, mockSendCommand, mockReloadWebView, mockWarn };
+  return {
+    papi,
+    mockSendCommand,
+    mockGetAllOpenWebViewDefinitions,
+    mockReloadWebView,
+    mockOpenWebView,
+    mockSettingsGet,
+    ...projectKindMocks,
+    mockWarn,
+    mockError,
+  };
 }
 
-const OPEN_GRID_PANEL = [
-  { webViewType: 'platformScriptureEditor.scriptureTextGrid', id: 'grid-tab' },
-];
-
-/** The command names fired for one project switch. */
-function sentCommandNames(mockSendCommand: ReturnType<typeof vi.fn>): string[] {
-  return mockSendCommand.mock.calls.map(([commandName]) => commandName);
+/** An open Text Collection panel currently pointed at `projectId`. */
+function gridDef(projectId: string | undefined): Partial<SavedWebViewDefinition> {
+  return { id: GRID_WEBVIEW_ID, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, projectId };
 }
 
-describe('openOrUpdateRelatedPanels', () => {
-  it('fires every related-panel command for one project switch', async () => {
-    const { papi, mockSendCommand } = createRelatedPanelsMockPapi(OPEN_GRID_PANEL);
+/**
+ * The `reloadWebView` arguments a Text Collection re-point to `projectId` must produce. Spread into
+ * `toHaveBeenCalledWith` so `expect` stays at the call site, which is what `vitest/expect-expect`
+ * recognizes as an assertion.
+ */
+function gridReloadArgs(projectId: string) {
+  return [
+    SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+    GRID_WEBVIEW_ID,
+    expect.objectContaining({ projectId }),
+  ] as const;
+}
 
-    await openOrUpdateRelatedPanels(papi, 'proj-1', true);
+describe('updateRelatedTextCollectionPanel', () => {
+  it('reloads the open panel with the incoming project', async () => {
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
 
-    expect(sentCommandNames(mockSendCommand)).toEqual(
-      expect.arrayContaining([
-        'platformScriptureEditor.openModelText',
-        'platformScriptureEditor.openResourceText',
-        'legacyCommentManager.openCommentListPanel',
-      ]),
-    );
+    await updateRelatedTextCollectionPanel(papi, 'proj-b');
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
   });
 
-  it('re-points the Text Collection alongside the other related panels', async () => {
-    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi(OPEN_GRID_PANEL);
+  it('re-points a panel that has no project yet', async () => {
+    // The shipped Simple layout opens the grid with no projectId, so the first switch of a session
+    // is this case rather than a project-to-project change.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi([gridDef(undefined)]);
 
-    await openOrUpdateRelatedPanels(papi, 'proj-1', true);
+    await updateRelatedTextCollectionPanel(papi, 'proj-b');
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
+  });
+
+  it('never brings the panel to front', async () => {
+    // Re-pointing Column 3 must not yank the user off whichever tab they were on.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+
+    await updateRelatedTextCollectionPanel(papi, 'proj-b');
 
     expect(mockReloadWebView).toHaveBeenCalledWith(
-      'platformScriptureEditor.scriptureTextGrid',
-      'grid-tab',
-      expect.objectContaining({ projectId: 'proj-1' }),
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      GRID_WEBVIEW_ID,
+      expect.objectContaining({ bringToFront: false }),
     );
   });
 
-  // A text collection is built from an editable project's settings, so opening a read-only resource
-  // in the editor column must leave the panel pointed where it was.
-  it('leaves the Text Collection alone for a read-only resource', async () => {
-    const { papi, mockReloadWebView, mockSendCommand } =
-      createRelatedPanelsMockPapi(OPEN_GRID_PANEL);
+  it('skips the reload when the panel already shows the project', async () => {
+    // Reloading rebuilds the iframe and drops transient grid state, so an unchanged project must
+    // not trigger one.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
 
-    await openOrUpdateRelatedPanels(papi, 'resource-1', false);
+    await updateRelatedTextCollectionPanel(papi, 'proj-a');
 
     expect(mockReloadWebView).not.toHaveBeenCalled();
-    // The other Column 3 panels follow the editor either way, so a read-only open still re-points
-    // those.
-    expect(sentCommandNames(mockSendCommand)).toEqual(
-      expect.arrayContaining([
-        'platformScriptureEditor.openModelText',
-        'platformScriptureEditor.openResourceText',
-        'legacyCommentManager.openCommentListPanel',
-      ]),
-    );
   });
 
-  it('still re-points the Text Collection when an earlier panel command fails', async () => {
-    const { papi, mockSendCommand, mockReloadWebView } =
-      createRelatedPanelsMockPapi(OPEN_GRID_PANEL);
-    mockSendCommand.mockImplementation(async (commandName: string) => {
-      if (commandName === 'platformScriptureEditor.openModelText')
-        throw new Error('model text panel failed');
-    });
+  it('does not open a panel when none is open', async () => {
+    // "Not open" means the tab was closed in Power mode or the feature setting is off — neither is
+    // a state a project switch should reverse.
+    const { papi, mockReloadWebView, mockOpenWebView } = createRelatedPanelsMockPapi([
+      { id: 'other-1', webViewType: 'platformScriptureEditor.bibleTexts', projectId: 'proj-a' },
+    ]);
 
-    await openOrUpdateRelatedPanels(papi, 'proj-1', true);
+    await updateRelatedTextCollectionPanel(papi, 'proj-b');
 
-    expect(mockReloadWebView).toHaveBeenCalled();
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+    expect(mockOpenWebView).not.toHaveBeenCalled();
+  });
+
+  it('skips the reload when the open panel already shows the project in different casing', async () => {
+    // Ids reach here verbatim from a resource reference while the .NET side canonicalizes to
+    // uppercase, so a raw === would reload needlessly and discard the panel's in-memory state.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi([gridDef('PROJ-A')]);
+
+    await updateRelatedTextCollectionPanel(papi, 'proj-a');
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+  });
+
+  it('resolves without throwing and reports an error when the reload rejects', async () => {
+    const { papi, mockReloadWebView, mockError } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+    mockReloadWebView.mockRejectedValue(new Error('reload failed'));
+
+    await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('reload failed'));
+    // Names the project left on screen, so the log says what the user is actually looking at.
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('proj-a'));
+  });
+
+  it('reports an error when the reload resolves no id, which it does instead of throwing', async () => {
+    // `reloadWebView` resolves undefined when the definition has gone or the provider declines.
+    // The re-point is the panel's only project signal, so a silent no-op here is not acceptable.
+    const { papi, mockReloadWebView, mockError } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+    mockReloadWebView.mockResolvedValue(undefined);
+
+    await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('did not take'));
+  });
+
+  it('resolves without throwing and reports an error when the open-web-view probe fails', async () => {
+    const { papi, mockGetAllOpenWebViewDefinitions, mockError } = createRelatedPanelsMockPapi();
+    mockGetAllOpenWebViewDefinitions.mockRejectedValue(new Error('probe failed'));
+
+    await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('probe failed'));
+    // Distinct from "no panel is open": the router rejects when a window is unreachable, so what is
+    // open is unknown rather than empty.
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('could not establish'));
+  });
+
+  it('does not follow a published resource', async () => {
+    // A published resource has no text collection of its own, so re-pointing the grid at it would
+    // cost a reload for an empty panel.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi(
+      [gridDef('proj-a')],
+      PUBLISHED_RESOURCE,
+    );
+
+    await updateRelatedTextCollectionPanel(papi, 'resource-1');
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+  });
+
+  it('follows a translation project with editing switched off', async () => {
+    // `Editable=F` does not make a project a published resource.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi(
+      [gridDef('proj-a')],
+      READ_ONLY_PROJECT,
+    );
+
+    await updateRelatedTextCollectionPanel(papi, 'read-only-proj');
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('read-only-proj'));
+  });
+
+  it('classifies the incoming project, not the one the panel already shows', async () => {
+    const { papi, mockReloadWebView, setProjectKind } = createRelatedPanelsMockPapi([
+      gridDef('proj-a'),
+    ]);
+    setProjectKind('proj-a', PUBLISHED_RESOURCE);
+    setProjectKind('proj-b', EDITABLE_PROJECT);
+
+    await updateRelatedTextCollectionPanel(papi, 'proj-b');
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
+  });
+
+  it('uses the published reading a caller already started instead of reading again', async () => {
+    const { papi, mockReloadWebView, mockProjectDataProvidersGet } = createRelatedPanelsMockPapi([
+      gridDef('proj-a'),
+    ]);
+
+    await updateRelatedTextCollectionPanel(papi, 'resource-1', Promise.resolve(true));
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+    expect(mockProjectDataProvidersGet).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no panel is open', []],
+    ['the panel already shows the project', [gridDef('proj-a')]],
+  ])(
+    'does not read whether the project is published when %s',
+    async (_label, openDefs: Array<Partial<SavedWebViewDefinition>>) => {
+      // The Power→Simple switch normally lands here: the grid arrives already bound, or is not open
+      // at all. A read there is wasted, and a failed one would warn about a re-point that was never
+      // going to happen.
+      const { papi, mockProjectDataProvidersGet, mockWarn } = createRelatedPanelsMockPapi(openDefs);
+      mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
+
+      await updateRelatedTextCollectionPanel(papi, 'proj-a');
+
+      expect(mockProjectDataProvidersGet).not.toHaveBeenCalled();
+      expect(mockWarn).not.toHaveBeenCalled();
+    },
+  );
+
+  it('treats a project whose provider cannot be reached as a translation project and says so', async () => {
+    // `platform.isPublished` defaults to false, and following is recoverable (the next switch
+    // re-points again), whereas staying would leave the grid silently on the outgoing project.
+    const { papi, mockReloadWebView, mockProjectDataProvidersGet, mockWarn } =
+      createRelatedPanelsMockPapi([gridDef('proj-a')], PUBLISHED_RESOURCE);
+    mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
+
+    await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('pdp unavailable'));
+  });
+
+  it.each([
+    ['rejects', () => Promise.reject(new Error('setting read failed'))],
+    ['resolves undefined', async () => undefined],
+    // A truthy non-boolean too: a provider that answers outside the setting's contract must not be
+    // read as "published", which a coercion to boolean would do.
+    ['resolves a truthy non-boolean', async () => 'no'],
+  ])('follows a project whose isPublished read %s', async (_label, reading) => {
+    // Only an explicit `true` withholds the panel; anything else is a project to follow. The
+    // project is otherwise a published resource, so a gate that read `platform.isEditable`
+    // instead would withhold the panel and fail here.
+    const { papi, mockReloadWebView, overrideIsPublished } = createRelatedPanelsMockPapi(
+      [gridDef('proj-a')],
+      PUBLISHED_RESOURCE,
+    );
+    overrideIsPublished(reading);
+
+    await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
+  });
+});
+
+// #endregion updateRelatedTextCollectionPanel
+
+// #region openOrUpdateRelatedPanels
+
+describe('openOrUpdateRelatedPanels', () => {
+  it('re-points the Text Collection panel at an editable project', async () => {
+    // Every Column 3 panel must be re-pointed on a project switch. The Text Collection is the one
+    // re-pointed by reload rather than by command, so it is easy to leave out of this batch.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi(
+      [gridDef('proj-a')],
+      EDITABLE_PROJECT,
+    );
+
+    await openOrUpdateRelatedPanels(papi, 'proj-b');
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
+  });
+
+  it('re-points the Text Collection panel at a translation project with editing switched off', async () => {
+    // `Editable=F` does not make a project a published resource, so the panel must still follow it.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi(
+      [gridDef('proj-a')],
+      READ_ONLY_PROJECT,
+    );
+
+    await openOrUpdateRelatedPanels(papi, 'read-only-proj');
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('read-only-proj'));
+  });
+
+  it('leaves the Text Collection alone for a published resource but still re-points the rest', async () => {
+    // A published resource has no text collection of its own, so re-pointing the grid at it would
+    // cost a reload for an empty panel. The command-driven panels follow the editor either way.
+    const { papi, mockReloadWebView, mockSendCommand } = createRelatedPanelsMockPapi(
+      [gridDef('proj-a')],
+      PUBLISHED_RESOURCE,
+    );
+
+    await openOrUpdateRelatedPanels(papi, 'resource-1');
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+    expect(mockSendCommand.mock.calls).toEqual([
+      ['platformScriptureEditor.openModelText', 'resource-1'],
+      ['platformScriptureEditor.openResourceText', 'CommentaryResource', 'resource-1'],
+      ['platformScriptureEditor.openResourceText', 'ScriptureResource', 'resource-1'],
+      ['legacyCommentManager.openCommentListPanel', 'resource-1'],
+    ]);
+  });
+
+  it('still re-points the Text Collection when an earlier panel fails', async () => {
+    const { papi, mockSendCommand, mockReloadWebView } = createRelatedPanelsMockPapi([
+      gridDef('proj-a'),
+    ]);
+    mockSendCommand.mockRejectedValue(new Error('panel failed'));
+
+    await openOrUpdateRelatedPanels(papi, 'proj-b');
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(...gridReloadArgs('proj-b'));
   });
 
   it('resolves without throwing when every panel command fails', async () => {
-    const { papi, mockSendCommand } = createRelatedPanelsMockPapi(OPEN_GRID_PANEL);
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
     mockSendCommand.mockRejectedValue(new Error('everything is down'));
 
-    await expect(openOrUpdateRelatedPanels(papi, 'proj-1', true)).resolves.toBeUndefined();
+    await expect(openOrUpdateRelatedPanels(papi, 'proj-b')).resolves.toBeUndefined();
+  });
+
+  it('still opens the four command-driven panels', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+
+    await openOrUpdateRelatedPanels(papi, 'proj-b');
+
+    // Full arguments, not just command names: the names alone pass even if the resource types are
+    // swapped or every panel is handed the outgoing projectId, which is the routing this covers.
+    expect(mockSendCommand.mock.calls).toEqual([
+      ['platformScriptureEditor.openModelText', 'proj-b'],
+      ['platformScriptureEditor.openResourceText', 'CommentaryResource', 'proj-b'],
+      ['platformScriptureEditor.openResourceText', 'ScriptureResource', 'proj-b'],
+      ['legacyCommentManager.openCommentListPanel', 'proj-b'],
+    ]);
   });
 });
 
 // #endregion openOrUpdateRelatedPanels
+
+describe('updateRelatedChecksSidePanel', () => {
+  it.each([
+    ['an editable project', EDITABLE_PROJECT],
+    ['a translation project with editing switched off', READ_ONLY_PROJECT],
+  ])(
+    're-points the Checks side panel at %s with the new editor id',
+    async (_label, projectKind) => {
+      const { papi, mockSendCommand } = createRelatedPanelsMockPapi([], projectKind);
+
+      await updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2');
+
+      expect(mockSendCommand.mock.calls).toEqual([
+        ['platformScripture.updateChecksSidePanelProject', 'proj-b', 'editor-2'],
+      ]);
+    },
+  );
+
+  it('does not follow a published resource', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi([], PUBLISHED_RESOURCE);
+
+    await updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('does nothing in Power mode, where each Checks panel belongs to the editor it was opened for', async () => {
+    const { papi, mockSendCommand, mockSettingsGet } = createRelatedPanelsMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+
+    await updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2');
+
+    expect(mockSettingsGet).toHaveBeenCalledWith('platform.interfaceMode');
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('logs and swallows a rejection, since the project switch has already succeeded', async () => {
+    const { papi, mockSendCommand, mockWarn } = createRelatedPanelsMockPapi();
+    mockSendCommand.mockRejectedValue(new Error('platformScripture is down'));
+
+    await expect(updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2')).resolves.toBeUndefined();
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('platformScripture is down'));
+  });
+});
+
+describe('getTabTitleProjectName', () => {
+  /** A PAPI whose `platform.base` PDP returns the settings this test hands it. */
+  function papiWithSettings(settings: Record<string, unknown>) {
+    const mockGetSetting = vi.fn(async (key: string) => settings[key]);
+    const mockGet = vi.fn().mockResolvedValue({ getSetting: mockGetSetting });
+    // Mocking just the part of the PAPI that we need for these tests
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const papi = {
+      projectDataProviders: { get: mockGet },
+    } as unknown as typeof PapiBackend;
+    return { papi, mockGet, mockGetSetting };
+  }
+
+  it('shows the short name, not the full name', async () => {
+    const { papi } = papiWithSettings({
+      'platform.name': 'WEB',
+      'platform.fullName': 'World English Bible',
+    });
+
+    // Both settings are populated, so a tab title reading the wrong one — or joining the two the
+    // way every other surface now does — is distinguishable from the correct answer here.
+    expect(await getTabTitleProjectName(papi, 'project-1')).toBe('WEB');
+  });
+
+  it('falls back to the project id when the project has no short name', async () => {
+    const { papi } = papiWithSettings({});
+
+    expect(await getTabTitleProjectName(papi, 'project-1')).toBe('project-1');
+  });
+});
+
+// #region updateRelatedFindPanel
+
+describe('updateRelatedFindPanel', () => {
+  const FIND_COMMAND = 'platformScripture.updateFindProject';
+
+  it.each([
+    ['an editable project', EDITABLE_PROJECT],
+    ['a translation project with editing switched off', READ_ONLY_PROJECT],
+    ['a published resource', PUBLISHED_RESOURCE],
+  ])('re-points Find at %s with the new editor id', async (_label, projectKind) => {
+    // Find follows the editor onto every project kind, because searching is a read. The cases are
+    // identical by design: parameterizing by project kind makes a kind gate added inside
+    // `updateRelatedFindPanel` fail here. A gate added at its call site in `main.ts` would not.
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi([], projectKind);
+
+    await updateRelatedFindPanel(papi, 'proj-b', 'editor-2');
+
+    expect(mockSendCommand).toHaveBeenCalledWith(FIND_COMMAND, 'proj-b', 'editor-2');
+  });
+
+  it('does nothing in Power mode, where Find is a panel the user points themselves', async () => {
+    // Read at call time: a long switch can end after the user has already moved to Power mode.
+    const { papi, mockSendCommand, mockSettingsGet } = createRelatedPanelsMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+
+    await updateRelatedFindPanel(papi, 'proj-b', 'editor-2');
+
+    expect(mockSettingsGet).toHaveBeenCalledWith('platform.interfaceMode');
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('resolves without throwing when the Find command fails', async () => {
+    const { papi, mockSendCommand, mockWarn } = createRelatedPanelsMockPapi();
+    mockSendCommand.mockRejectedValue(new Error('find is down'));
+
+    await expect(updateRelatedFindPanel(papi, 'proj-b', 'editor-2')).resolves.toBeUndefined();
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('find is down'));
+  });
+
+  it('resolves without re-pointing when the interface mode cannot be read', async () => {
+    const { papi, mockSendCommand, mockSettingsGet, mockWarn } = createRelatedPanelsMockPapi();
+    mockSettingsGet.mockRejectedValue(new Error('settings are down'));
+
+    await expect(updateRelatedFindPanel(papi, 'proj-b', 'editor-2')).resolves.toBeUndefined();
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('settings are down'));
+  });
+});
+
+// #endregion updateRelatedFindPanel
+
+// #region resolveGridProviderProjectId
+
+describe('resolveGridProviderProjectId', () => {
+  it('prefers the project a switch supplied over the one the tab already had', () => {
+    // Inverting this strands the panel: the re-point passes the incoming project in options, and falling
+    // back to the saved id leaves the panel on the outgoing project.
+    expect(resolveGridProviderProjectId({ projectId: 'incoming' }, { projectId: 'outgoing' })).toBe(
+      'incoming',
+    );
+  });
+
+  it('keeps the saved project when the caller supplied none', () => {
+    // A restored tab, or one re-provided for a reason unrelated to a project switch.
+    expect(resolveGridProviderProjectId({}, { projectId: 'saved' })).toBe('saved');
+  });
+
+  it('binds no project when neither half names one', () => {
+    // The shipped default-layout open: the grid starts unbound and follows the scroll group.
+    expect(resolveGridProviderProjectId({}, {})).toBeUndefined();
+  });
+});
+
+// #endregion
+
+// #region buildScriptureTextGridWebView
+
+/** Papi mock exposing only what the grid's web view provider reads. */
+function createGridProviderMockPapi(interfaceMode: string) {
+  // Must cast since the mock only includes the papi properties the provider uses.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return {
+    settings: { get: vi.fn().mockResolvedValue(interfaceMode) },
+    localization: {
+      getLocalizedStrings: vi
+        .fn()
+        .mockResolvedValue({ '%webView_scriptureTextGrid_title_multiple%': 'Text Collection' }),
+    },
+  } as unknown as typeof PapiBackend;
+}
+
+const GRID_ASSETS = { content: '<html></html>', styles: '.a{}' };
+
+/**
+ * A saved Text Collection definition carrying only the fields the provider reads. `webViewType` is
+ * a parameter so the wrong-type case needs no mutation.
+ */
+function savedGrid(
+  projectId: string | undefined,
+  webViewType: string = SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+): SavedWebViewDefinition {
+  const definition = { id: 'grid-1', webViewType, projectId };
+  // A full SavedWebViewDefinition carries fields this function never touches; constructing them
+  // would obscure which ones the assertions below actually depend on.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return definition as unknown as SavedWebViewDefinition;
+}
+
+describe('buildScriptureTextGridWebView', () => {
+  it('binds the project a switch supplied rather than the one the tab already had', async () => {
+    // The provider half of the re-point. Inverting this precedence leaves the panel on the
+    // outgoing project, which is the bug this whole mechanism exists to prevent — and it is only
+    // caught here, since the provider itself is unreachable from a test.
+    const papi = createGridProviderMockPapi('simple');
+
+    const definition = await buildScriptureTextGridWebView(
+      papi,
+      savedGrid('outgoing'),
+      { projectId: 'incoming' },
+      GRID_ASSETS,
+    );
+
+    expect(definition.projectId).toBe('incoming');
+  });
+
+  it('keeps the saved project when the caller supplied none', async () => {
+    const papi = createGridProviderMockPapi('simple');
+
+    const definition = await buildScriptureTextGridWebView(
+      papi,
+      savedGrid('saved'),
+      {},
+      GRID_ASSETS,
+    );
+
+    expect(definition.projectId).toBe('saved');
+  });
+
+  it('pins the panel to scroll group 0 and makes it unclosable in Simple mode', async () => {
+    const papi = createGridProviderMockPapi('simple');
+
+    const definition = await buildScriptureTextGridWebView(papi, savedGrid('p1'), {}, GRID_ASSETS);
+
+    expect(definition.isClosable).toBe(false);
+    expect(definition.scrollGroupScrRef).toBe(0);
+  });
+
+  it('leaves the panel closable and its scroll group alone in Power mode', async () => {
+    const papi = createGridProviderMockPapi('power');
+
+    const definition = await buildScriptureTextGridWebView(papi, savedGrid('p1'), {}, GRID_ASSETS);
+
+    expect(definition.isClosable).toBe(true);
+  });
+
+  it('refuses to provide a web view of another type', async () => {
+    const papi = createGridProviderMockPapi('simple');
+    const wrongType = savedGrid('p1', 'someOther.webView');
+
+    await expect(buildScriptureTextGridWebView(papi, wrongType, {}, GRID_ASSETS)).rejects.toThrow(
+      'someOther.webView',
+    );
+  });
+});
+
+// #endregion

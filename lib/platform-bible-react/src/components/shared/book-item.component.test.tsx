@@ -31,10 +31,6 @@ beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
   }
-  // cmdk also calls `scrollIntoView` on the active item, which jsdom doesn't implement.
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
 });
 
 /** BookItem renders a cmdk CommandItem, which throws outside a Command ancestor. */

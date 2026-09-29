@@ -32,7 +32,7 @@ beforeAll(() => {
 // Sentinel strings: deliberately differ from production English to prove localization wiring.
 const mockLocalizedStrings: LanguageStrings = {
   '%internetSettings_webView_title%': 'Title sentinel',
-  '%internetSettings_webView_subtitle%': 'Subtitle sentinel',
+  '%internetSettings_webView_subtitle_2%': 'Subtitle sentinel',
   '%paratextRegistration_button_reset%': 'Discard changes sentinel',
   '%paratextRegistration_button_saveAndRestart%': 'Save and restart sentinel',
   '%paratextRegistration_button_restarting%': 'Restarting sentinel',
@@ -53,12 +53,11 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_ProxyOnly%': 'Proxy sentinel',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%': '',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
-  '%paratextRegistration_internetUse_footer%': 'Footer sentinel',
   '%paratextRegistration_developer_section_label%': 'Developer only',
-  '%paratextRegistration_label_serverType_option_Production%': 'Production',
-  '%paratextRegistration_label_serverType_option_QualityAssurance%': 'Quality Assurance',
-  '%paratextRegistration_label_serverType_option_Development%': 'Development',
-  '%paratextRegistration_label_serverType_option_Test%': 'Test',
+  '%paratextRegistration_label_serverType_option_Production_2%': 'Production server',
+  '%paratextRegistration_label_serverType_option_QualityAssurance_2%': 'Quality assurance server',
+  '%paratextRegistration_label_serverType_option_Development_2%': 'Development server',
+  '%paratextRegistration_label_serverType_option_Test_2%': 'Test server',
 };
 
 const defaultSettings: InternetSettings = {

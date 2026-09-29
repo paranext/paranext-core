@@ -1,5 +1,6 @@
 import {
   ProjectSelector,
+  type ProjectSelectorLocalizedStrings,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
 import {
@@ -21,7 +22,35 @@ export type SelectedSettingsSidebarItem = {
   projectId?: string;
 };
 
-export type ProjectInfo = { projectId: string; projectName: string };
+/**
+ * A project as this sidebar's consumer supplies it.
+ *
+ * `projectName`/`projectFullName` are the same pair `platform-bible-utils` calls
+ * `ProjectNames.shortName`/`fullName`; the names differ because this type predates that helper and
+ * is exported from the stable barrel, where renaming a field is a breaking change. The two shapes
+ * meet in exactly one adapter — the `projectSelectorProjects` memo below — so the helper's rules
+ * still apply to every project this component renders.
+ */
+export type ProjectInfo = {
+  projectId: string;
+  /**
+   * Short project name — the trigger label for the `<ProjectSelector>` and the primary line of each
+   * popover row. Sourced from the `platform.name` project setting.
+   */
+  projectName: string;
+  /**
+   * Optional full project name — rendered as the muted secondary line beneath `projectName` in the
+   * popover rows. Omit it for a project that has no distinct full name; when it is absent, blank or
+   * equal to `projectName`, the row falls back to a single-line layout (the `hasDistinctFullName`
+   * rule the `ProjectSelector` applies).
+   *
+   * Source it from project metadata (`getMetadataForAllProjects`), NOT from a
+   * `getSetting('platform.fullName')` read: that setting cannot express "no full name" — it
+   * defaults to a localized `%project_full_name_missing%` placeholder, which would render here as a
+   * second name the project does not have.
+   */
+  projectFullName?: string;
+};
 
 export type SettingsSidebarProps = {
   /** Optional id for testing */
@@ -48,6 +77,18 @@ export type SettingsSidebarProps = {
   /** Placeholder text for the button */
   buttonPlaceholderText: string;
 
+  /**
+   * Placeholder text for the project picker's search box. Falls back to the picker's English string
+   * when omitted.
+   */
+  searchPlaceholderText?: string;
+
+  /**
+   * Message the project picker shows when no project matches the search. Falls back to the picker's
+   * English string when omitted.
+   */
+  noResultsText?: string;
+
   /** Additional css classes to help with unique styling of the sidebar */
   className?: string;
 };
@@ -68,6 +109,8 @@ export function SettingsSidebar({
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
   buttonPlaceholderText,
+  searchPlaceholderText,
+  noResultsText,
   className,
 }: SettingsSidebarProps) {
   const handleSelectItem = useCallback(
@@ -86,18 +129,33 @@ export function SettingsSidebar({
   );
 
   // Adapt the public `ProjectInfo[]` shape to `ProjectSelectorProject[]` for the canonical
-  // <ProjectSelector> trigger. We only have a single name string in the public API, so reuse it
-  // as both `shortName` (the trigger label) and `fullName` (the popover row's secondary line).
-  // The public prop shape is intentionally preserved so downstream consumers don't need to change.
+  // <ProjectSelector>. `projectFullName` is passed through as-is rather than falling back to the
+  // short name: the selector suppresses a full name that is absent or equal to the short name, and
+  // mirroring one into the other would make every project look like it has a full name and defeat
+  // searching on it.
   const projectSelectorProjects = useMemo<ProjectSelectorProject[]>(
     () =>
       projectInfo.map((info) => ({
         id: info.projectId,
         shortName: info.projectName,
-        fullName: info.projectName,
+        fullName: info.projectFullName,
       })),
     [projectInfo],
   );
+
+  // `buttonPlaceholder` and `ariaLabel` are this sidebar's own copy; the popover's two strings are
+  // optional. Unsupplied entries are left off the bag rather than set to `undefined`, because
+  // ProjectSelector layers this bag over its own English defaults with a plain spread — an explicit
+  // `undefined` would blank the default it lands on instead of falling back to it.
+  const projectSelectorStrings = useMemo((): ProjectSelectorLocalizedStrings => {
+    const strings: ProjectSelectorLocalizedStrings = {
+      buttonPlaceholder: buttonPlaceholderText,
+      ariaLabel: projectsSidebarGroupLabel,
+    };
+    if (searchPlaceholderText) strings.searchPlaceholder = searchPlaceholderText;
+    if (noResultsText) strings.commandEmptyMessage = noResultsText;
+    return strings;
+  }, [buttonPlaceholderText, projectsSidebarGroupLabel, searchPlaceholderText, noResultsText]);
 
   const getIsActive: (label: string) => boolean = useCallback(
     (label: string) => !selectedSidebarItem.projectId && label === selectedSidebarItem.label,
@@ -141,11 +199,14 @@ export function SettingsSidebar({
               (no click handler), so keeping it adjacent to — rather than inside — the trigger
               preserves the visual affordance without bloating the canonical component.
 
-              Open Tabs grouping isn't wired here because the platform-bible-react library is
-              intentionally PAPI-free (see CLAUDE.md "Symlinked Directories" / lib boundaries).
-              `useOpenProjectTabs` lives in the extension layer; passing `openTabs={[]}` makes the
-              ProjectSelector fall back to a flat (non-grouped) list. If a future consumer needs
-              the grouping, they can pass `openTabs` in via a new prop on this component.
+              No groupings at all are offered here, and that is deliberate rather than an
+              oversight. platform-bible-react is intentionally PAPI-free (see CLAUDE.md
+              "Symlinked Directories" / lib boundaries), so this component cannot reach project
+              settings or the recently-opened-projects service, and its public `ProjectInfo` prop
+              carries only an id and a name — there is no language, type, or recency to group by.
+              `useOpenProjectTabs` likewise lives in the extension layer, so `openTabs={[]}` keeps
+              the ProjectSelector on a flat (non-grouped) list. A consumer that wants grouping
+              passes `openTabs` and richer rows in via new props on this component.
             */}
             <div
               className={cn(
@@ -169,8 +230,8 @@ export function SettingsSidebar({
                 }}
                 buttonVariant="ghost"
                 buttonClassName="tw:h-8 tw:w-full tw:flex-1 tw:justify-start tw:font-normal"
-                buttonPlaceholder={buttonPlaceholderText}
-                ariaLabel={projectsSidebarGroupLabel}
+                localizedStrings={projectSelectorStrings}
+                triggerLabelFormat="shortNameAndFullName"
               />
             </div>
           </SidebarGroupContent>

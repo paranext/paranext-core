@@ -21,18 +21,34 @@ export type WebViewMoveFailureDisposition =
   /** Nothing took it: it is open in no window, and only the log holds what it was */
   | 'not-reopened'
   /**
+   * It reached the window the move created, which is holding it, but the move could not get that
+   * confirmed. Distinct from `not-reopened`: the content is there and most likely in front of the
+   * user, so telling them it is closed would be false — what is unknown is whether the move
+   * finished, not where the web view went
+   */
+  | 'reached-new-window-unconfirmed'
+  /**
    * Where it is cannot be told: taking it out of the window it was in is the step that failed, and
    * that step can have closed it without handing anything back. Neither "nothing changed" nor "it
    * is gone" can be claimed, so a caller says as much rather than picking one
    */
-  | 'possibly-closed';
+  | 'possibly-closed'
+  /**
+   * Refused before it started: another move of the same web view was already running, and this call
+   * never touched the tab. Distinct from every other disposition here, which names where a move
+   * that DID start left the web view — this one names a move that did not run at all, so the web
+   * view is wherever the still-running move leaves it
+   */
+  | 'already-moving';
 
 /** Every disposition, so a reader can look for each one without a second list to keep in step */
 const ALL_DISPOSITIONS: WebViewMoveFailureDisposition[] = [
   'reopened-in-source-window',
   'reopened-in-focused-window',
   'not-reopened',
+  'reached-new-window-unconfirmed',
   'possibly-closed',
+  'already-moving',
 ];
 
 /**
