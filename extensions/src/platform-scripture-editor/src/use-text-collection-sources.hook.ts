@@ -6,6 +6,7 @@ import { useProjectDataProviderState } from '@papi/frontend/react';
 import type { TextCollectionSources } from './scripture-text-grid-contents.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST as DEFAULT_LIST } from './resource-reference-list.const';
 import { useBufferedLayoutSetting } from './use-buffered-layout-setting.hook';
+import { useTextCollectionBinding } from './use-text-collection-binding.hook';
 
 /** A user with no recorded checkbox interactions has an empty overlay. */
 const DEFAULT_OVERLAY: TextCollectionOverlay = {};
@@ -34,13 +35,19 @@ function unsubscribeAndWarn(unsubscribe: () => Promise<boolean>, subscriptionNam
  * overlay is initialized only from the referenced list), so they are not read here. The View
  * Options panel reads the admin list but never writes it (admin sharing lives in a separate
  * dialog). `sources` is `undefined` while any source is still loading.
+ *
+ * A published resource is never bound (see `useTextCollectionBinding`): it has no Text Collection
+ * and may not be written to, and `textConnectionPdp` is the only way this panel writes. For one,
+ * `sources` and `textConnectionPdp` stay `undefined` and `isPublishedResource` is `true`.
  */
 export function useTextCollectionSources(projectId: string | undefined) {
+  const { collectionProjectId, isPublishedResource } = useTextCollectionBinding(projectId);
+
   // Buffered (not raw `useProjectSetting`) so a manual-sync change to the admin layout is held
   // in memory until the member applies it, matching the resource/model-text panels. The per-user
   // list and the text-collection overlay below stay live (unbuffered).
   const [adminReferenced, isReferencedLoading, adminReferencedError] = useBufferedLayoutSetting(
-    projectId,
+    collectionProjectId,
     'platformScripture.referencedProjectsAndResources',
     DEFAULT_LIST,
   );
@@ -49,7 +56,7 @@ export function useTextCollectionSources(projectId: string | undefined) {
   // project's provider and no way to tell. `ready` is the only status that may be acted on.
   const textConnectionState = useProjectDataProviderState(
     'platformScripture.textConnectionSettings',
-    projectId,
+    collectionProjectId,
   );
   const textConnectionPdp =
     textConnectionState.status === 'ready' ? textConnectionState.networkObject : undefined;
@@ -191,6 +198,7 @@ export function useTextCollectionSources(projectId: string | undefined) {
     sources,
     textConnectionPdp,
     textConnectionState,
+    isPublishedResource,
     isOrderPending: order === undefined,
     // Surfaced because `sources` alone cannot distinguish "still arriving" from "cannot be read":
     // both leave it `undefined`, and reporting the second as the first is an unending spinner.

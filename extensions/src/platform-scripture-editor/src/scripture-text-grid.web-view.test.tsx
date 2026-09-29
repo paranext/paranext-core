@@ -44,6 +44,7 @@ type TextCollectionSourcesResult = {
   textConnectionPdp: FakeTextConnectionPdp | undefined;
   textConnectionState: { status: 'noSource' | 'loading' | 'unavailable' | 'ready' };
   isOrderPending: boolean;
+  isPublishedResource?: boolean;
 };
 
 /** Props the grid stand-in below reads; a subset of the real `ScriptureTextGrid`'s. */
@@ -77,6 +78,8 @@ const STRINGS: Record<string, string> = {
   '%webView_scriptureTextGrid_viewOptions_openPanel%': 'View Options',
   '%webView_resourcePanel_noProject%': 'No project selected.',
   '%general_loading%': 'Loading',
+  '%webView_scriptureTextGrid_resourceHasNoTextCollection%':
+    "Resources don't have a Text Collection. Switch to a project to see its texts.",
   '%webView_scriptureTextGrid_viewOptions_notSupported%':
     'Text Collection settings could not be loaded for this project.',
   '%webView_scriptureTextGrid_viewOptions_settingsUnavailable%': "Couldn't load your texts.",
@@ -134,6 +137,9 @@ vi.mock('@papi/frontend', () => ({
     // The web view swaps its tab icon on theme change; these tests never exercise that, so the
     // subscription resolves to a no-op unsubscriber and never delivers a theme.
     themes: { subscribeCurrentTheme: () => Promise.resolve(() => undefined) },
+    // The disk install lookup re-asks when projects change; these tests never change them, so the
+    // event never fires and subscribing to it returns a no-op unsubscriber.
+    network: { getNetworkEvent: () => () => () => undefined },
   },
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
@@ -352,9 +358,13 @@ async function openViewOptions() {
   await screen.findByText(TEXTS_HEADER);
 }
 
-/** The polite live region the web view announces chapter-split open/close through. */
+/**
+ * The polite live region the web view announces chapter-split open/close through. Picked out by
+ * `aria-atomic`: the catalog retry banner's region is a `status` too.
+ */
 function liveRegionText() {
-  return screen.getByRole('status').textContent;
+  return screen.getAllByRole('status').find((region) => region.getAttribute('aria-atomic'))
+    ?.textContent;
 }
 
 const UNINSTALLED_RESOURCE: DblResourceData = {
@@ -394,11 +404,27 @@ describe('View Options disabled reason', () => {
   ] as const)('names a reason while the provider status is %s', async (status, expectedMessage) => {
     fallbackHookResult = unboundResult(status);
 
-    await renderWebView();
+    // Any status but `noSource` comes from a selected project.
+    await renderWebView(status === 'noSource' ? {} : { projectId: 'projectOne' });
     await openViewOptions();
 
     expect(screen.getByText(TEXTS_HEADER)).toBeInTheDocument();
     expect(screen.getByText(expectedMessage)).toBeInTheDocument();
+  });
+
+  it('says a published resource has no Text Collection', async () => {
+    // A resource's settings are never bound, so its provider status stays `noSource`; that must not
+    // read as "no project selected".
+    fallbackHookResult = { ...unboundResult('noSource'), isPublishedResource: true };
+
+    await renderWebView({ projectId: 'resourceOne' });
+    await openViewOptions();
+
+    // Read from the panel itself: the grid body shows the same sentence.
+    expect(screen.getByText(TEXTS_HEADER).parentElement?.textContent).toContain(
+      "Resources don't have a Text Collection. Switch to a project to see its texts.",
+    );
+    expect(screen.queryByText('No project selected.')).not.toBeInTheDocument();
   });
 
   it('never shows the TEXTS header with nothing under it', async () => {

@@ -6,7 +6,9 @@ import type { TextCollectionSources } from './scripture-text-grid-contents.utils
  * Whether the Scripture Text Grid's View Options controls can be operated, and if not, why.
  *
  * - `noProject` — no project is selected, so there is nothing to configure.
- * - `loading` — a project is selected and its settings are still arriving.
+ * - `resource` — the selected project is a published resource, which has no Text Collection.
+ * - `loading` — a project is selected and its settings are still arriving, or it is not yet known
+ *   whether it is a published resource.
  * - `unavailable` — the lookup for the text-connection settings provider finished without one. Every
  *   Paratext project advertises that interface, so for one this means the lookup failed (for
  *   instance it timed out during a slow start) rather than that the project lacks the settings.
@@ -16,6 +18,7 @@ import type { TextCollectionSources } from './scripture-text-grid-contents.utils
  */
 export type ViewOptionsAvailability =
   | 'noProject'
+  | 'resource'
   | 'loading'
   | 'unavailable'
   | 'settingsError'
@@ -23,6 +26,13 @@ export type ViewOptionsAvailability =
 
 /** Inputs for {@link getViewOptionsAvailability}. */
 export type ViewOptionsAvailabilityInput = {
+  /** Whether a project is selected, bound to its settings or not. */
+  hasProject: boolean;
+  /**
+   * Whether the selected project is a published resource. Its settings are never bound, so its
+   * provider state stays `noSource` for good.
+   */
+  isPublishedResource: boolean;
   /**
    * The text-connection provider's state, passed whole rather than as its `status` alone so
    * narrowing survives the call — see `adr-async-hook-state-shape`.
@@ -50,14 +60,19 @@ export type ViewOptionsAvailabilityInput = {
  * enabled.
  *
  * @param input See {@link ViewOptionsAvailabilityInput}.
- * @returns Which of the five availability states the panel is in.
+ * @returns Which of the six availability states the panel is in.
  */
 export function getViewOptionsAvailability({
+  hasProject,
+  isPublishedResource,
   textConnectionState,
   sources,
   hasSettingsError,
 }: ViewOptionsAvailabilityInput): ViewOptionsAvailability {
-  if (textConnectionState.status === 'noSource') return 'noProject';
+  if (!hasProject) return 'noProject';
+  if (isPublishedResource) return 'resource';
+  // A selected project whose settings are not bound yet: its kind is still being read.
+  if (textConnectionState.status === 'noSource') return 'loading';
   if (textConnectionState.status === 'unavailable') return 'unavailable';
   // Before the loading fallback: a failed read has finished, so calling it "loading" is what leaves
   // the panel spinning for something that is not coming.

@@ -10,6 +10,16 @@ import type {
 import { useProjectSetting, useProjectDataProviderState } from '@papi/frontend/react';
 import { logger } from '@papi/frontend';
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
+import { useTextCollectionBinding } from './use-text-collection-binding.hook';
+
+// Binds whatever project it is given unless a test says otherwise; the classification itself is
+// covered by the binding hook's own tests.
+vi.mock('./use-text-collection-binding.hook', () => ({
+  useTextCollectionBinding: vi.fn((projectId: string | undefined) => ({
+    collectionProjectId: projectId,
+    isPublishedResource: false,
+  })),
+}));
 
 vi.mock('@papi/frontend/react', () => ({
   useProjectSetting: vi.fn(),
@@ -175,6 +185,10 @@ describe('useTextCollectionSources', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedApplyHandler = undefined;
+    vi.mocked(useTextCollectionBinding).mockImplementation((projectId) => ({
+      collectionProjectId: projectId,
+      isPublishedResource: false,
+    }));
   });
 
   it('returns sources undefined while the admin setting is still loading', () => {
@@ -632,4 +646,29 @@ describe('useTextCollectionSources', () => {
   });
 
   // #endregion
+
+  it('never binds a published resource, so nothing can write to it', () => {
+    // Every Text Collection write goes through `textConnectionPdp`, and the admin list is read
+    // through the resource's own settings; neither may be asked for a published resource.
+    vi.mocked(useTextCollectionBinding).mockReturnValue({
+      collectionProjectId: undefined,
+      isPublishedResource: true,
+    });
+    mockUseProjectSetting.mockReturnValue(settingTuple(list(), false));
+    serveProvider(makeControllablePdp().pdp);
+
+    const { result } = renderHook(() => useTextCollectionSources('resource-1'));
+
+    expect(vi.mocked(useTextCollectionBinding)).toHaveBeenCalledWith('resource-1');
+    expect(mockUseProjectDataProviderState).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'resource-1',
+    );
+    expect(mockUseProjectSetting).not.toHaveBeenCalledWith(
+      'resource-1',
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(result.current.isPublishedResource).toBe(true);
+  });
 });
