@@ -1,15 +1,16 @@
 import type { OpenWebViewOptions, SavedWebViewDefinition, WebViewDefinition } from '@papi/core';
+import type { ProjectResourceFilterValue } from './project-resource-filter.component';
 
 /** Options `platformGetResources.openHome` hands the Home web view provider. */
 export interface HomeWebViewOptions extends OpenWebViewOptions {
   /**
-   * Open Home scoped to editable projects, leaving out the published resources that otherwise share
-   * its list. Set by the title bar's project picker footer, which is asking "get me to one of my
+   * Which items Home's type filter starts on. The user can change it from there. The title bar's
+   * project picker footer asks for `paratextProject`, since it is asking "get me to one of my
    * projects". Optional, like every property here, because `OpenWebViewOptions` forbids an options
    * interface from adding mandatory properties — the reload and layout-restore paths routinely pass
    * none of them.
    */
-  shouldShowProjectsOnly?: boolean;
+  initialProjectResourceFilter?: ProjectResourceFilterValue;
 }
 
 /**
@@ -18,32 +19,41 @@ export interface HomeWebViewOptions extends OpenWebViewOptions {
  * lives in `main.ts`, which imports its web views through webpack's `?inline` loader and so cannot
  * be loaded by the test runner.
  *
- * `shouldShowProjectsOnly` is assigned unconditionally rather than falling back to the saved value.
- * It is a property of the launch, not of the tab, and it rides along in the persisted `state` — so
- * carrying a saved `true` over would leave Home hiding resources for every later open, including
- * the ones restored from a saved layout in a new session.
+ * `projectResourceFilter` holds the filter Home is showing; the web view writes the user's changes
+ * back to it. Every open resets it to the opener's preset rather than keeping the saved value: the
+ * filter answers the question the opener asked, so a saved choice would leave Home filtered for
+ * every later open, including the ones restored from a saved layout in a new session.
+ *
+ * `shouldShowProjectsOnly` is a projects-only flag that older saved layouts carry. Nothing reads
+ * it, so it is dropped rather than re-saved with every layout.
  */
 export function buildHomeWebViewState(
   savedWebView: SavedWebViewDefinition,
   options: HomeWebViewOptions,
 ): WebViewDefinition['state'] {
+  // Destructured only to leave the dead key out of the rest; `_` is the discard name for it.
+  // eslint-disable-next-line @typescript-eslint/naming-convention, @typescript-eslint/no-unused-vars
+  const { shouldShowProjectsOnly: _, ...savedState } = savedWebView.state ?? {};
   return {
-    ...savedWebView.state,
-    shouldShowProjectsOnly: options.shouldShowProjectsOnly ?? false,
+    ...savedState,
+    projectResourceFilter: options.initialProjectResourceFilter ?? 'all',
   };
 }
 
 /**
- * Whether an already-open Home has to be reloaded to honor the scoping its opener asked for.
+ * Whether an already-open Home has to be reloaded to show the filter its opener asked for.
  *
  * Reusing an existing web view brings its tab to the front and returns without consulting the
  * provider, so fresh options never reach it; a reload rebuilds the iframe and is the only way in.
- * That rebuild is the expensive path, so it is limited to the case where the scoping actually
- * differs — clicking "More projects…" twice, or opening Home from the menu twice, reloads nothing.
+ * That rebuild is the expensive path — it also drops the user's search — so it is limited to an
+ * opener that asks for a specific filter ("More projects…" asking for projects) when the filter
+ * Home is showing, which the user may have changed since it opened, is a different one. An opener
+ * with no preset is just asking for Home, so the tab is raised as the user left it.
  */
-export function shouldReloadHomeForProjectsOnly(
+export function shouldReloadHomeForFilterPreset(
   existingWebView: SavedWebViewDefinition,
-  shouldShowProjectsOnly: boolean,
+  initialProjectResourceFilter: ProjectResourceFilterValue,
 ): boolean {
-  return !!existingWebView.state?.shouldShowProjectsOnly !== shouldShowProjectsOnly;
+  if (initialProjectResourceFilter === 'all') return false;
+  return (existingWebView.state?.projectResourceFilter ?? 'all') !== initialProjectResourceFilter;
 }

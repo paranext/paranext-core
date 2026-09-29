@@ -30,10 +30,21 @@ import {
 } from 'platform-bible-react';
 import type { ProjectMetadata } from '@papi/core';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import { formatTimeSpan, getErrorMessage, normalizeFullName } from 'platform-bible-utils';
+import {
+  formatReplacementString,
+  formatTimeSpan,
+  getErrorMessage,
+  normalizeFullName,
+} from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
+import {
+  isShownByProjectResourceFilter,
+  ProjectResourceFilter,
+  type ProjectResourceFilterOption,
+  type ProjectResourceFilterValue,
+} from './project-resource-filter.component';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -43,7 +54,10 @@ import { HomeItemDropdownMenu } from './home-item-menu';
 export const HOME_STRING_KEYS = Object.freeze([
   '%resources_action%',
   '%resources_activity%',
+  '%resources_clearFilters%',
   '%resources_clearSearch%',
+  '%resources_filter_all%',
+  '%resources_filterByValue%',
   '%resources_filterInput%',
   '%resources_shortNameText%',
   '%resources_fullName%',
@@ -52,12 +66,17 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_getStartedDescription%',
   '%resources_getResources%',
   '%resources_items%',
+  '%resources_itemsFiltered%',
   '%resources_language%',
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
   '%resources_noProjectsInstructionWithoutResources%',
+  '%resources_noParatextProjectsFound%',
+  '%resources_noResourcesFound%',
   '%resources_noSearchResults%',
   '%resources_open%',
+  '%resources_paratextProjects_label%',
+  '%resources_resources_label%',
   '%resources_searchedFor%',
   '%resources_serverProjectsUnavailable_title%',
   '%resources_serverUnreachable_description%',
@@ -199,12 +218,14 @@ export type HomeProps = {
    */
   remoteProjectsState?: RemoteProjectsState;
   /**
-   * Whether to list editable projects only, leaving out the published resources that otherwise
-   * share the list. Set by entry points that are answering "get me to one of my projects" — the
-   * title bar's project picker footer — where a resource is never a valid answer. Home's own entry
-   * points leave this unset and list both.
+   * Which items the type filter starts on. The user can change it from there. Entry points that are
+   * answering "get me to one of my projects" — the title bar's project picker footer — start on
+   * `paratextProject`; Home's own entry points leave this unset and start on `all`. Read once, on
+   * mount: a later change to it does not move a filter the user may already have changed.
    */
-  shouldShowProjectsOnly?: boolean;
+  initialProjectResourceFilter?: ProjectResourceFilterValue;
+  /** Called with the new filter each time the user changes it, including through Clear Filters. */
+  onProjectResourceFilterChange?: (filter: ProjectResourceFilterValue) => void;
   /** Array of local project information, containing projects and resources. */
   localProjectsInfo?: LocalProjectInfo[];
   /** Object of shared project information, containing projects on the send/receive server. */
@@ -233,8 +254,9 @@ export type HomeProps = {
  * @param {isSendReceiveInProgress} - Whether a send/receive operation is in progress.
  * @param {isLoadingLocalProjects} - Whether loading local projects is in progress.
  * @param {remoteProjectsState} - What is known about the send/receive server's half of the list.
- * @param {shouldShowProjectsOnly} - Whether to list editable projects only, leaving out published
- *   resources.
+ * @param {initialProjectResourceFilter} - Which items the type filter starts on.
+ * @param {onProjectResourceFilterChange} - Called with the new filter each time the user changes
+ *   it.
  * @param {localProjectsInfo} - Array of local project information, containing projects and
  *   resources.
  * @param {sharedProjectsInfo} - Object of shared project information, containing projects on the
@@ -255,7 +277,8 @@ export function Home({
   isSendReceiveInProgress = false,
   isLoadingLocalProjects = false,
   remoteProjectsState = 'absent',
-  shouldShowProjectsOnly = false,
+  initialProjectResourceFilter = 'all',
+  onProjectResourceFilterChange = () => {},
   localProjectsInfo = NO_LOCAL_PROJECTS,
   sharedProjectsInfo = NO_SHARED_PROJECTS,
   activeSendReceiveProjects = NO_ACTIVE_SEND_RECEIVE_PROJECTS,
@@ -267,7 +290,10 @@ export function Home({
   const isLocalizedStringsLoading = localizedStringsWithLoadingState[1];
   const actionText: string = getLocalizedString('%resources_action%');
   const activityText: string = getLocalizedString('%resources_activity%');
+  const clearFiltersText: string = getLocalizedString('%resources_clearFilters%');
   const clearSearchText: string = getLocalizedString('%resources_clearSearch%');
+  const filterAllText: string = getLocalizedString('%resources_filter_all%');
+  const filterByValueText: string = getLocalizedString('%resources_filterByValue%');
   const filterInputText: string = getLocalizedString('%resources_filterInput%');
   const shortNameText: string = getLocalizedString('%resources_shortNameText%');
   const fullNameText: string = getLocalizedString('%resources_fullName%');
@@ -278,6 +304,7 @@ export function Home({
   const itemsText: string = isLocalizedStringsLoading
     ? ''
     : getLocalizedString('%resources_items%');
+  const itemsFilteredText: string = getLocalizedString('%resources_itemsFiltered%');
   const languageText: string = getLocalizedString('%resources_language%');
   const noProjectsText: string = getLocalizedString('%resources_noProjects%');
   // The default instruction ends with "or get resources", naming the button beside it. Callers that
@@ -287,8 +314,17 @@ export function Home({
       ? '%resources_noProjectsInstruction%'
       : '%resources_noProjectsInstructionWithoutResources%',
   );
+  const noProjectsInstructionWithoutResourcesText: string = getLocalizedString(
+    '%resources_noProjectsInstructionWithoutResources%',
+  );
+  const noParatextProjectsFoundText: string = getLocalizedString(
+    '%resources_noParatextProjectsFound%',
+  );
+  const noResourcesFoundText: string = getLocalizedString('%resources_noResourcesFound%');
   const noSearchResultsText: string = getLocalizedString('%resources_noSearchResults%');
   const openText: string = getLocalizedString('%resources_open%');
+  const paratextProjectsText: string = getLocalizedString('%resources_paratextProjects_label%');
+  const resourcesText: string = getLocalizedString('%resources_resources_label%');
   const searchedForText: string = getLocalizedString('%resources_searchedFor%');
   const syncText: string = getLocalizedString('%resources_sync%');
   // Specific title for failed sync/get attempts — the alert is only shown for that flow, so a
@@ -362,15 +398,25 @@ export function Home({
       }
     });
 
-    // Filtered here rather than in the sort below so the empty list reads as "you have no
-    // projects" instead of "your search matched nothing" — the no-results message quotes the
-    // query, and nobody typed one.
-    return shouldShowProjectsOnly
-      ? newMergedProjectInfo.filter((project) => !project.isPublished)
-      : newMergedProjectInfo;
-  }, [localProjectsInfo, sharedProjectsInfo, shouldShowProjectsOnly]);
+    return newMergedProjectInfo;
+  }, [localProjectsInfo, sharedProjectsInfo]);
 
   const [textFilter, setTextFilter] = useState<string>('');
+  const [projectResourceFilter, setProjectResourceFilter] = useState<ProjectResourceFilterValue>(
+    initialProjectResourceFilter,
+  );
+  const changeProjectResourceFilter = (filter: ProjectResourceFilterValue) => {
+    setProjectResourceFilter(filter);
+    onProjectResourceFilterChange(filter);
+  };
+
+  const projectResourceFilterOptions: ProjectResourceFilterOption[] = useMemo(
+    () => [
+      { key: 'paratextProject', label: paratextProjectsText, icon: ScrollText },
+      { key: 'resource', label: resourcesText, icon: BookOpen },
+    ],
+    [paratextProjectsText, resourcesText],
+  );
 
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'language',
@@ -380,6 +426,7 @@ export function Home({
   const filteredAndSortedProjects = useMemo(() => {
     if (!mergedProjectInfo) return [];
     const textFilteredProjects = mergedProjectInfo.filter((project) => {
+      if (!isShownByProjectResourceFilter(projectResourceFilter, project.isPublished)) return false;
       const filter = textFilter.toLowerCase();
       return (
         (project.fullName ?? '').toLowerCase().includes(filter) ||
@@ -437,7 +484,36 @@ export function Home({
           return 0;
       }
     });
-  }, [mergedProjectInfo, textFilter, sortConfig]);
+  }, [mergedProjectInfo, textFilter, sortConfig, projectResourceFilter]);
+
+  const isTypeFiltered = projectResourceFilter !== 'all';
+
+  // What to say when items exist but none survive the filters. A search gets the search message,
+  // which quotes the query; the type filter alone gets a message naming what it hid, since the
+  // search message would quote an empty query at someone who never searched.
+  const typeFilterEmptyTexts: Record<ProjectResourceFilterValue, string | undefined> = {
+    all: undefined,
+    paratextProject: noParatextProjectsFoundText,
+    resource: noResourcesFoundText,
+  };
+  const noFilterResultsText =
+    (!textFilter && typeFilterEmptyTexts[projectResourceFilter]) || noSearchResultsText;
+  // Only resources are installed and the user asked for their projects: as far as getting a
+  // project goes, that is an empty Home. Getting a resource is not the answer, and the filter would
+  // hide one anyway, so the advice and buttons leave it out.
+  const isShowingNoProjects = !textFilter && projectResourceFilter === 'paratextProject';
+
+  const clearFilters = () => {
+    setTextFilter('');
+    if (isTypeFiltered) changeProjectResourceFilter('all');
+  };
+
+  let itemCountText = `${filteredAndSortedProjects.length} ${itemsText}`;
+  if (!isLocalizedStringsLoading && filteredAndSortedProjects.length !== mergedProjectInfo.length)
+    itemCountText = formatReplacementString(itemsFilteredText, {
+      shownCount: filteredAndSortedProjects.length,
+      totalCount: mergedProjectInfo.length,
+    });
 
   const handleSort = (key: SortConfig['key']) => {
     const newSortConfig: SortConfig = { key, direction: 'ascending' };
@@ -518,7 +594,22 @@ export function Home({
             <div className="tw:flex tw:gap-4 tw:items-center tw:[@media(max-height:28rem)]:!hidden tw:max-[300px]:!hidden">
               {headerContent}
             </div>
-            <SearchBar value={textFilter} onSearch={setTextFilter} placeholder={filterInputText} />
+            <div className="tw:flex tw:items-center tw:gap-2">
+              <div className="tw:min-w-0 tw:flex-1">
+                <SearchBar
+                  value={textFilter}
+                  onSearch={setTextFilter}
+                  placeholder={filterInputText}
+                />
+              </div>
+              <ProjectResourceFilter
+                value={projectResourceFilter}
+                onChange={changeProjectResourceFilter}
+                options={projectResourceFilterOptions}
+                localizedAllText={filterAllText}
+                localizedFilterByValueText={filterByValueText}
+              />
+            </div>
           </div>
           {showGetResourcesButton && (
             <div className="tw:self-end">
@@ -586,20 +677,22 @@ export function Home({
               <div className="tw:flex-grow tw:h-full">
                 {filteredAndSortedProjects.length === 0 ? (
                   <div className="tw:flex-grow tw:h-full tw:border tw:border-muted tw:rounded-lg tw:p-6 tw:text-center tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-1">
-                    <Label className="tw:text-muted-foreground">{noSearchResultsText}</Label>
-                    <Label className="tw:text-muted-foreground tw:font-normal">
-                      {`${searchedForText} "${textFilter}".`}
-                    </Label>
+                    <Label className="tw:text-muted-foreground">{noFilterResultsText}</Label>
+                    {textFilter && (
+                      <Label className="tw:text-muted-foreground tw:font-normal">
+                        {`${searchedForText} "${textFilter}".`}
+                      </Label>
+                    )}
+                    {isShowingNoProjects && (
+                      <Label className="tw:text-muted-foreground tw:font-normal">
+                        {noProjectsInstructionWithoutResourcesText}
+                      </Label>
+                    )}
                     <div className="tw:flex tw:gap-1  tw:mt-4">
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          setTextFilter('');
-                        }}
-                      >
-                        {clearSearchText}
+                      <Button variant="ghost" onClick={clearFilters}>
+                        {isTypeFiltered ? clearFiltersText : clearSearchText}
                       </Button>
-                      {showGetResourcesButton && (
+                      {showGetResourcesButton && !isShowingNoProjects && (
                         <Button
                           onClick={onOpenGetResources}
                           variant="ghost"
@@ -637,7 +730,8 @@ export function Home({
                           }
                           key={project.projectId}
                           className={cn('tw:rounded-sm', {
-                            'tw:text-muted-foreground/70': !project.isLocallyAvailable,
+                            'tw:text-muted-foreground/70 tw:hover:text-foreground':
+                              !project.isLocallyAvailable,
                           })}
                         >
                           <TableCell
@@ -721,19 +815,24 @@ export function Home({
                 )}
               </div>
             )}
-            {mergedProjectInfo.length === 1 && mergedProjectInfo[0].name === 'WEB' && (
-              <div className="tw:flex tw:flex-col tw:gap-4 tw:items-center tw:w-auto">
-                <p className="tw:text-muted-foreground tw:font-normal">
-                  {getStartedDescriptionText}
-                </p>
-                <Button onClick={onGetStarted}>{getStartedText}</Button>
-              </div>
-            )}
+            {mergedProjectInfo.length === 1 &&
+              mergedProjectInfo[0].name === 'WEB' &&
+              isShownByProjectResourceFilter(
+                projectResourceFilter,
+                mergedProjectInfo[0].isPublished,
+              ) && (
+                <div className="tw:flex tw:flex-col tw:gap-4 tw:items-center tw:w-auto">
+                  <p className="tw:text-muted-foreground tw:font-normal">
+                    {getStartedDescriptionText}
+                  </p>
+                  <Button onClick={onGetStarted}>{getStartedText}</Button>
+                </div>
+              )}
           </div>
         </CardContent>
       )}
       <CardFooter className="tw:shrink-0 tw:flex-col tw:justify-center tw:p-4 tw:border-t tw:gap-2 tw:[@media(max-height:32rem)]:!hidden">
-        <Label>{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
+        <Label>{itemCountText}</Label>
       </CardFooter>
     </Card>
   );

@@ -141,10 +141,11 @@ declare module 'papi-shared-types' {
     /**
      * Opens a new Home web view and returns the WebView id
      *
-     * @param shouldShowProjectsOnly Open Home scoped to editable projects, leaving out the
-     *   published resources that otherwise share its list. Set by entry points that are asking "get
-     *   me to one of my projects"; Home's own entry points omit it and list both. Applies to the
-     *   open it is passed on only — it does not stick to the tab.
+     * @param shouldShowProjectsOnly Open Home with its type filter set to Paratext projects,
+     *   leaving out the published resources that otherwise share its list. The user can change the
+     *   filter from there. Set by entry points that are asking "get me to one of my projects";
+     *   Home's own entry points omit it and start on everything. Applies to the open it is passed
+     *   on only — it does not stick to the tab.
      * @returns WebView id for new Home WebView or `undefined` if not created
      */
     'platformGetResources.openHome': (

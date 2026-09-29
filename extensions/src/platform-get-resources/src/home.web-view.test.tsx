@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentType } from 'react';
 
 /*
@@ -59,16 +59,22 @@ vi.mock('./home.component', async (importOriginal) => {
     HOME_STRING_KEYS: original.HOME_STRING_KEYS,
     Home: ({
       remoteProjectsState,
-      shouldShowProjectsOnly,
+      initialProjectResourceFilter,
+      onProjectResourceFilterChange,
     }: {
       remoteProjectsState?: string;
-      shouldShowProjectsOnly?: boolean;
+      initialProjectResourceFilter?: string;
+      onProjectResourceFilterChange?: (filter: string) => void;
     }) => (
       <div
         data-testid="home"
         data-remote-state={String(remoteProjectsState)}
-        data-projects-only={String(shouldShowProjectsOnly)}
-      />
+        data-initial-filter={String(initialProjectResourceFilter)}
+      >
+        <button type="button" onClick={() => onProjectResourceFilterChange?.('resource')}>
+          filter to resources
+        </button>
+      </div>
     ),
   };
 });
@@ -116,12 +122,15 @@ import './home.web-view';
  * `state` and falls back to the caller's default. `state` is what the provider seeds from the open
  * options, so this is the seam the launch path travels through.
  */
-function makeUseWebViewState(state: Record<string, unknown>) {
+function makeUseWebViewState(
+  state: Record<string, unknown>,
+  setState: (stateKey: string, value: unknown) => void = () => {},
+) {
   return <T,>(stateKey: string, defaultStateValue: T): [T, (value: T) => void, () => void] => [
     // The state bag is untyped by nature — the hook's own signature is what assigns it a type.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     stateKey in state ? (state[stateKey] as T) : defaultStateValue,
-    vi.fn(),
+    (value: T) => setState(stateKey, value),
     vi.fn(),
   ];
 }
@@ -271,34 +280,63 @@ describe('HomeWebView shared project fetch', () => {
 });
 
 /*
- * The title bar's "More projects…" is asking "get me to one of my projects", so the read-only
- * resources that share Home's list are noise on that path alone. The flag rides in the web view's
- * `state`, which the provider seeds from the open options and scrubs on every other open — so this
- * pair is what keeps the scoping tied to the launch path rather than to Home itself.
+ * The title bar's "More projects…" is asking "get me to one of my projects", so Home starts filtered
+ * to projects on that path alone. The preset rides in the web view's `state`, which the provider
+ * seeds from the open options and scrubs on every other open — so this pair is what keeps the
+ * preset tied to the launch path rather than to Home itself.
  */
-describe('HomeWebView projects-only launch', () => {
+describe('HomeWebView filter preset', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSendCommand.mockImplementation(async () => undefined);
   });
 
-  it('scopes the list to projects when its state says it was launched that way', async () => {
+  it('starts Home on the filter its state says it was launched with', async () => {
     const HomeWebView = getHomeWebView();
-    render(<HomeWebView useWebViewState={makeUseWebViewState({ shouldShowProjectsOnly: true })} />);
+    render(
+      <HomeWebView
+        useWebViewState={makeUseWebViewState({ projectResourceFilter: 'paratextProject' })}
+      />,
+    );
 
     await waitFor(() => {
-      expect(screen.getByTestId('home')).toHaveAttribute('data-projects-only', 'true');
+      expect(screen.getByTestId('home')).toHaveAttribute('data-initial-filter', 'paratextProject');
     });
   });
 
-  it('lists resources too when nothing asked for a projects-only view', async () => {
+  it('starts Home on everything when nothing asked for a preset', async () => {
     const HomeWebView = getHomeWebView();
     render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
 
-    // Positive control: the web view rendered, so it had every chance to scope the list.
+    // Positive control: the web view rendered, so it had every chance to preset the filter.
     await waitFor(() => {
       expect(screen.getByTestId('home')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('home')).toHaveAttribute('data-projects-only', 'false');
+    expect(screen.getByTestId('home')).toHaveAttribute('data-initial-filter', 'all');
+  });
+
+  it('starts Home on everything when its state carries a filter this build does not know', async () => {
+    const HomeWebView = getHomeWebView();
+    render(
+      <HomeWebView
+        useWebViewState={makeUseWebViewState({ projectResourceFilter: 'dictionary' })}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('home')).toHaveAttribute('data-initial-filter', 'all');
+    });
+  });
+
+  it("writes the user's filter change back to its state", () => {
+    // `openHome` compares the filter in state with the one a later caller asks for, so a change
+    // that stayed inside Home would leave "More projects…" raising a widened list unreloaded.
+    const setState = vi.fn();
+    const HomeWebView = getHomeWebView();
+    render(<HomeWebView useWebViewState={makeUseWebViewState({}, setState)} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'filter to resources' }));
+
+    expect(setState).toHaveBeenCalledWith('projectResourceFilter', 'resource');
   });
 });

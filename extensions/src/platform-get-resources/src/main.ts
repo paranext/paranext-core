@@ -19,7 +19,7 @@ import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
 import {
   buildHomeWebViewState,
   type HomeWebViewOptions,
-  shouldReloadHomeForProjectsOnly,
+  shouldReloadHomeForFilterPreset,
 } from './home-web-view.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
@@ -482,8 +482,9 @@ export async function activate(context: ExecutionActivationContext) {
   const openHomeWebViewCommandPromise = papi.commands.registerCommand(
     'platformGetResources.openHome',
     async (shouldShowProjectsOnly?: boolean) => {
+      const initialProjectResourceFilter = shouldShowProjectsOnly ? 'paratextProject' : 'all';
       const options: HomeWebViewOptions = {
-        shouldShowProjectsOnly,
+        initialProjectResourceFilter,
         // Focus existing one if one exists
         existingId: '?',
       };
@@ -498,13 +499,13 @@ export async function activate(context: ExecutionActivationContext) {
       );
       if (!homeWebViewId) return homeWebViewId;
 
-      // Reusing an existing Home raises its tab without consulting the provider, so the scoping
-      // this call asked for never reaches it. Reload only when the two disagree — a rebuilt iframe
-      // is the slowest thing this command can do.
+      // Reusing an existing Home raises its tab without consulting the provider, so the preset
+      // this call asked for never reaches it. Reload only when this call asks for a filter Home is
+      // not showing — a rebuilt iframe is the slowest thing this command can do.
       const existingWebView = await papi.webViews.getOpenWebViewDefinition(homeWebViewId);
       if (
         existingWebView &&
-        shouldReloadHomeForProjectsOnly(existingWebView, !!shouldShowProjectsOnly)
+        shouldReloadHomeForFilterPreset(existingWebView, initialProjectResourceFilter)
       )
         await papi.webViews.reloadWebView(HOME_WEB_VIEW_TYPE, homeWebViewId, options);
 
