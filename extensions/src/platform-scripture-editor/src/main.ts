@@ -37,10 +37,10 @@ import {
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
   formatEditorTitle,
+  getTabTitleProjectName,
   openCommentListAndSelectThread,
   type OpenEditorDispatch,
   openOrUpdateRelatedPanels,
-  updateRelatedFindPanel,
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
@@ -50,15 +50,22 @@ import {
   startDefaultProjectPicker,
   syncOnProjectSwitch,
   toScriptureEditorInfos,
+  updateRelatedChecksSidePanel,
+  updateRelatedFindPanel,
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 import { SharedLayoutReceiver } from './shared-layout-receiver.model';
+import {
+  BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
+  COMMENTARIES_PANEL_WEBVIEW_TYPE,
+  showBibleTextsTab,
+  showCommentariesTab,
+  showTextCollectionTab,
+} from './show-panel.util';
 
 logger.debug('Scripture Editor is importing!');
 
 const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
-const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
-const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
 /** Tab title/tooltip for the Text Collection (Scripture Text Grid) tab. */
 
 // #region Editor Selection Tracking
@@ -365,12 +372,11 @@ async function open(
       projectSwitchWillStartEmitter.emit({ switchId });
 
       const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
-      // Skip outgoing S/R for read-only viewers — no local changes are possible.
+      // Fire-and-forget: runs concurrently with openWebView below. It skips the outgoing S/R only
+      // for a published resource — an `Editable=F` translation project can still hold new comments.
       // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
       // require tracking a dirty flag in the editor controller, which doesn't exist yet).
-      const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
-      // Fire-and-forget: runs concurrently with openWebView below.
-      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
+      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoing?.projectId);
     }
 
     const emitDidFinish = () => {
@@ -390,15 +396,12 @@ async function open(
 
     // If in Simple interface mode, open/update the related panels (model text, Bible texts,
     // commentaries, comments, text collection) and auto-apply the admin's shared layout for the
-    // project being opened (re-arm the buffered panels, focus the desired col-3 tab). Note: A
-    // manual/later sync's held change is applied via the notification's "Apply now" rather than
-    // automatically here.
+    // project being opened (re-arm the buffered panels, focus the desired col-3 tab). They follow
+    // the editor onto any project, editable or not, except the Text Collection, which
+    // `openOrUpdateRelatedPanels` skips for a published resource. Note: A manual/later sync's
+    // held change is applied via the notification's "Apply now" rather than automatically here.
     if (interfaceMode === 'simple' && projectForWebView.projectId) {
-      await openOrUpdateRelatedPanels(
-        papi,
-        projectForWebView.projectId,
-        !!projectForWebView.isEditable,
-      );
+      await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
       await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
     }
 
@@ -444,13 +447,11 @@ async function open(
       )
       .finally(emitDidFinish);
 
-    // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find waits
-    // until here because it is the one panel that needs the id of the editor this call just created.
-    // Find and the Scripture Text Grid both follow the active translation project, so a read-only
-    // resource opened in the editor column must not drag them along. The other Column 3 panels
-    // follow the editor either way.
-    if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable)
-      await updateRelatedFindPanel(papi, projectForWebView.projectId, openedWebViewId);
+    // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find and Checks
+    // wait until here because they are the panels that need the id of the editor this call just
+    // created. No Simple-mode or project-kind checks here — each helper owns its own guards.
+    await updateRelatedFindPanel(papi, projectForWebView.projectId, openedWebViewId);
+    await updateRelatedChecksSidePanel(papi, projectForWebView.projectId, openedWebViewId);
 
     return openedWebViewId;
   }
@@ -608,10 +609,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       unformattedTitle,
       projectId,
       isReadOnlyForTitle,
-      async (projectIdFormat) => {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectIdFormat);
-        return (await pdp.getSetting('platform.name')) ?? projectIdFormat;
-      },
+      async (projectIdFormat) => getTabTitleProjectName(papi, projectIdFormat),
       papi.localization.getLocalizedStrings,
     );
 
@@ -1164,6 +1162,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       },
     },
   );
+  // TODO(PT-3666): The Project menu's Insert items (footnote, cross-reference, comment — the three
+  // commands registered below) show enabled even where editing isn't allowed. Gate them on project
+  // editability the way the Edit flyout already is.
   const insertCrossReferencePromise = papi.commands.registerCommand(
     'platformScriptureEditor.insertCrossReferenceAtSelection',
     insertCrossReferenceAtSelection,
@@ -1377,7 +1378,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   // Feature flag (default on): gate the Scripture Text Grid web view. When off, the provider is
-  // not registered so the view cannot be opened or restored. The PT10 Studio default-layout
+  // not registered so the view cannot be opened or restored. The Paratext 10 default-layout
   // inclusion is gated by the same setting in the paratext-10-studio repo.
   // Kick off the settings read now but DON'T await it here — awaiting would serialize every
   // registration below this line behind a single settings round-trip. It is resolved at the end.
@@ -1409,6 +1410,76 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         result: {
           name: 'return value',
           summary: 'The ID of the opened WebView, or undefined if it could not be opened',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  const showBibleTextsPanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.showBibleTextsPanel',
+    showBibleTextsTab,
+    {
+      method: {
+        summary: 'Bring the Bible texts tab to the front, opening it if it is not open',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary: 'The scripture editor whose project a newly opened tab shows',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the Bible texts web view, or undefined if it could not be shown',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  const showCommentariesPanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.showCommentariesPanel',
+    showCommentariesTab,
+    {
+      method: {
+        summary: 'Bring the Commentaries tab to the front, opening it if it is not open',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary: 'The scripture editor whose project a newly opened tab shows',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the Commentaries web view, or undefined if it could not be shown',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  const showTextCollectionPanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.showTextCollectionPanel',
+    () => showTextCollectionTab(),
+    {
+      method: {
+        summary:
+          'Bring the Text collection tab to the front, opening it if it is not open and the feature is available',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary: 'The scripture editor the request came from (unused)',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the Text collection web view, or undefined if it could not be shown',
           schema: { type: 'string' },
         },
       },
@@ -1549,6 +1620,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await commentariesPanelWebViewProviderPromise,
     ...(scriptureTextGridRegistration ? [scriptureTextGridRegistration] : []),
     await openResourceTextPromise,
+    await showBibleTextsPanelPromise,
+    await showCommentariesPanelPromise,
+    await showTextCollectionPanelPromise,
     selectionChangedEventEmitter,
     {
       dispose: async () => {

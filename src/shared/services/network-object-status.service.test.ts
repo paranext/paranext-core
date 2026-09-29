@@ -58,6 +58,7 @@ describe('waitForNetworkObject', () => {
     await expect(service.waitForNetworkObject({ id: 'ScrollGroupService' })).resolves.toEqual(
       details,
     );
+    expect(mockUnsub).toHaveBeenCalled();
   });
 
   it('resolves from a creation event when the snapshot has no match', async () => {
@@ -109,12 +110,64 @@ describe('waitForNetworkObject', () => {
     await expect(waiting).rejects.toThrow(/Timeout reached/);
   });
 
-  it('propagates a failure from getAllNetworkObjectDetails', async () => {
+  it('rejects the caller at the timeout even while the snapshot is still outstanding', async () => {
+    const service = await loadService();
+    // A snapshot fetch that outlives the timeout — what a saturated main process looks like. The
+    // caller must receive the timeout rejection on the returned promise; a rejection that fires
+    // before the returned promise is even handed out is an unhandled rejection in the caller's
+    // process, and it also delays the caller until the slow snapshot finally lands.
+    let hasSnapshotResolved = false;
+    mockGet.mockResolvedValue({
+      getAllNetworkObjectDetails: vi.fn(
+        () =>
+          new Promise<Record<string, NetworkObjectDetails>>((resolve) => {
+            setTimeout(() => {
+              hasSnapshotResolved = true;
+              resolve({});
+            }, 200);
+          }),
+      ),
+    });
+
+    await expect(service.waitForNetworkObject({ id: 'Missing' }, 20)).rejects.toThrow(
+      /Timeout reached/,
+    );
+    expect(hasSnapshotResolved).toBe(false);
+  });
+
+  it('stops listening for creation events once the wait has timed out', async () => {
+    const service = await loadService();
+    mockSnapshot({ Other: makeDetails('Other') });
+
+    await expect(service.waitForNetworkObject({ id: 'Missing' }, 20)).rejects.toThrow(
+      /Timeout reached/,
+    );
+    expect(mockUnsub).toHaveBeenCalled();
+  });
+
+  it('propagates a failure from getAllNetworkObjectDetails as a reason string', async () => {
     const service = await loadService();
     mockGet.mockRejectedValue(new Error('network object service unavailable'));
 
-    await expect(service.waitForNetworkObject({ id: 'Anything' })).rejects.toThrow(
-      'network object service unavailable',
-    );
+    const waiting = service.waitForNetworkObject({ id: 'Anything' });
+    await expect(waiting).rejects.toThrow('network object service unavailable');
+    // The documented contract: every rejection is a reason string, whichever way the wait ended.
+    await expect(waiting).rejects.toBeTypeOf('string');
+    expect(mockUnsub).toHaveBeenCalled();
+  });
+
+  it('keeps an event-resolved result when the snapshot fails afterwards', async () => {
+    const service = await loadService();
+    const created = makeDetails('WebViewService');
+    // The event lands while the snapshot is in flight, then the snapshot fails. The wait is already
+    // settled, so the failure must be dropped rather than turned into a second, unhandled rejection.
+    mockGet.mockResolvedValue({
+      getAllNetworkObjectDetails: vi.fn(async () => {
+        event.emit(created);
+        throw new Error('snapshot failed after the fact');
+      }),
+    });
+
+    await expect(service.waitForNetworkObject({ id: 'WebViewService' })).resolves.toEqual(created);
   });
 });

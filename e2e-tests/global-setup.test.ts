@@ -12,7 +12,11 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { describe, expect, it, vi } from 'vitest';
-import { clearInheritedPidFile, markDevServerLogRunBoundary } from './global-setup';
+import {
+  clearInheritedPidFile,
+  devServerSpawnFlags,
+  markDevServerLogRunBoundary,
+} from './global-setup';
 
 describe('marking the dev server log for a reused server', () => {
   it('appends a boundary line rather than truncating a log a running child still holds open', () => {
@@ -89,5 +93,15 @@ describe('clearing an inherited dev-server pid file', () => {
 
     existsSpy.mockRestore();
     unlinkSpy.mockRestore();
+  });
+});
+
+describe('devServerSpawnFlags', () => {
+  it('does not detach on win32, so DETACHED_PROCESS does not reopen the console windowsHide suppresses', () => {
+    expect(devServerSpawnFlags('win32')).toEqual({ detached: false, windowsHide: true });
+  });
+
+  it('detaches into its own process group on POSIX platforms, keeping windowsHide harmlessly set', () => {
+    expect(devServerSpawnFlags('linux')).toEqual({ detached: true, windowsHide: true });
   });
 });

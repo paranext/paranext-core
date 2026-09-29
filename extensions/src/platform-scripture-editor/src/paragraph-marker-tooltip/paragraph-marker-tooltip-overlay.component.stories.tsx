@@ -7,8 +7,9 @@ import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip-overla
  * enters a USFM paragraph element. The mock editor below uses plain HTML elements styled with `para
  * usfm_X` class names — the same shape the Lexical editor produces at runtime.
  *
- * **Try it**: hover over any scripture line to see the tooltip. The last line uses an unknown
- * marker (`sp`) to demonstrate the raw-USFM fallback.
+ * **Try it**: hover over a scripture line and hold still for a brief moment (~300ms) — a quick pass
+ * across paragraphs won't reveal it. The last line uses an unknown marker (`sp`) to demonstrate the
+ * raw-USFM fallback.
  */
 const meta: Meta<typeof ParagraphMarkerTooltipOverlay> = {
   title: 'Bundled Extensions/platform-scripture-editor/ParagraphMarkerTooltipOverlay',
@@ -35,7 +36,8 @@ const INDENT1_STYLE: React.CSSProperties = { margin: '2px 0 2px 2em' };
 const INDENT2_STYLE: React.CSSProperties = { margin: '2px 0 2px 4em' };
 
 /**
- * Hover over any line to see the tooltip. Scroll the box — the tooltip anchor follows the paragraph
+ * Hover over any line and pause briefly (~300ms) to see the tooltip — moving straight through
+ * without stopping won't reveal it. Scroll the box — the tooltip anchor follows the paragraph
  * within the visible area as you scroll.
  */
 export const Default: Story = {

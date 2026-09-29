@@ -329,8 +329,8 @@ export function SyncStatusButton() {
    * `document.activeElement` rather than moving focus into a real cross-origin iframe — which jsdom
    * has no way to reproduce. So the load-bearing assumption, that Electron has already moved focus
    * to the `<iframe>` element by the time `blur` fires on this window, is asserted from the spec
-   * and not observed. It needs one manual pass in a Studio build with a scripture-editor WebView
-   * open.
+   * and not observed. It needs one manual pass in a Paratext 10 build with a scripture-editor
+   * WebView open.
    */
   useEffect(() => {
     if (!isOpen) return undefined;

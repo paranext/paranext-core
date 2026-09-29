@@ -21,7 +21,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
     /// so no live PAPI connection is needed.
     /// <para>
     /// Transitions are driven through the service's own <c>RaiseSyncActivityChanged</c> — the
-    /// scaffolding entry point the Paratext 10 Studio patch's run bracket calls — so these tests pin
+    /// scaffolding entry point the Paratext 10 patch's run bracket calls — so these tests pin
     /// the forwarding contract without depending on a sync implementation that does not exist in
     /// public core.
     /// </para>
@@ -193,7 +193,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         /// <summary>
         /// Raises <see cref="ParatextProjectSendReceiveService.SyncActivityChanged"/> with
         /// <paramref name="state"/> through the service's own protected
-        /// <c>RaiseSyncActivityChanged</c> — the scaffolding entry point the Paratext 10 Studio
+        /// <c>RaiseSyncActivityChanged</c> — the scaffolding entry point the Paratext 10
         /// patch's run bracket calls at every transition. Reflection because that member is
         /// deliberately protected: only the service's own run bracket may announce activity.
         /// </summary>
@@ -202,7 +202,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             SyncActivityState state
         )
         {
-            // Matched by parameter type, not by name alone: the Paratext 10 Studio patch adds a
+            // Matched by parameter type, not by name alone: the Paratext 10 patch adds a
             // parameterless overload for its own call sites, which makes a name-only lookup
             // ambiguous once the patch is applied.
             var info = typeof(ParatextProjectSendReceiveService).GetMethod(

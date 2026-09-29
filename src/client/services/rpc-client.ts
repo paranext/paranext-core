@@ -92,11 +92,10 @@ export class RpcClient implements IRpcMethodRegistrar {
   // instantly and reports Connected before the handshake finishes. Recreate it per attempt
   // (and move applyMiddleware to the constructor) before adding reconnect.
   //
-  // TODO(PT-4435): A fourth blocker sits outside this class and outside its tests, which mock the
-  // socket factory: in the renderer, `blockWebSocketsToPapiNetwork()` runs after the initial
-  // connect (`src/renderer/index.tsx`), so any later reconnect throws `Invalid URL` from
-  // `PapiRendererWebSocket`'s constructor and never reaches the `AsyncVariable` problems above.
-  // Reconnect needs an unblocked path to the PAPI port for this client.
+  // TODO(PT-4435): Reconnect is only needed by the extension host. The renderer connects over a
+  // MessagePort (see `web-socket.factory.ts`), which survives an OS suspend and does not go through
+  // `blockWebSocketsToPapiNetwork()`. For the extension host, reconnect still needs the
+  // `AsyncVariable` problems above resolved first.
   private readonly connectionComplete = new AsyncVariable<void>('websocket connected');
   private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
   private readonly connectionLostEmitter = new PlatformEventEmitter<void>();

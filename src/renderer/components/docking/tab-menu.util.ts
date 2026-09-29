@@ -1,6 +1,17 @@
+import type { Localized, ReferencedItem, SingleColumnMenu } from 'platform-bible-utils';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
+import {
+  CONTENT_ZOOM_COMMANDS,
+  CONTENT_ZOOM_TAB_MENU_GROUP,
+} from '@shared/models/content-zoom.model';
 import type { WindowSummary } from '@shared/services/window.service-model';
 import { WINDOW_ID_SHAPE_PATTERN_SOURCE } from '@shared/utils/util';
+
+/**
+ * Re-exported from the shared content-zoom model, which is where the rest of the zoom contract
+ * lives, so callers already importing this module's tab-menu helpers can reach it from one place.
+ */
+export { CONTENT_ZOOM_TAB_MENU_GROUP };
 
 /** A window id as this app mints them — what a generated move target's suffix must look like */
 const WINDOW_ID_PATTERN = new RegExp(`^${WINDOW_ID_SHAPE_PATTERN_SOURCE}$`, 'i');
@@ -13,6 +24,9 @@ export const FLOAT_TAB_COMMAND = 'platform.floatTab';
 
 /** Contributed command that moves the tab into a window created for it */
 export const MOVE_TO_NEW_WINDOW_COMMAND = 'platform.moveWebViewToNewWindow';
+
+/** Ids of the contributed items {@link CONTENT_ZOOM_TAB_MENU_GROUP} holds, by their command */
+const CONTENT_ZOOM_ITEM_IDS = new Set<string>(Object.values(CONTENT_ZOOM_COMMANDS));
 
 /**
  * Marks a generated target in the move-to-window submenu. What follows is the target window's id,
@@ -36,6 +50,14 @@ export type TabMenuContext = {
    * standing, and whether this one is the window that would survive anyway.
    */
   isOnlyTabInWindowThatWouldClose: boolean;
+  /**
+   * Whether this tab's pane takes content zoom: core declares its web view type zoomable, or it
+   * currently reports a zoom area (`isContentZoomable` in the content-zoom service). The zoom items
+   * exist only on a zoomable pane; on any other tab they are removed, not disabled, because a tab
+   * menu offers the zoom items exactly when the pane's chords and wheel work. The tab title holds
+   * this value steady while one menu is open, so the menu never changes shape under the pointer.
+   */
+  isContentZoomable: boolean;
 };
 
 /** Reads the target window id back out of a generated submenu entry, if that is what was selected */
@@ -56,6 +78,11 @@ function isUnavailable(item: OverlayContextMenuItem, context: TabMenuContext): b
     return !webViewId || isOnlyTabInWindowThatWouldClose;
   if (item.type === 'submenu' && item.id === MOVE_TO_WINDOW_ITEM_ID)
     return !webViewId || otherWindows.length === 0;
+  // Zooming needs a zoomable pane. A tab hosting no web view (a dialog or an error tab), or one
+  // whose pane core does not declare zoomable and which reports no area, has nothing the zoom
+  // commands act on, so the items are removed rather than offered as no-ops.
+  if (item.type === 'item' && CONTENT_ZOOM_ITEM_IDS.has(item.id))
+    return !webViewId || !context.isContentZoomable;
   return false;
 }
 
@@ -93,17 +120,43 @@ export function buildTabMenuItems(
   const available = contributedItems.filter((item) => !isUnavailable(item, context));
 
   const withTargets = available.map((item) => {
-    if (item.type !== 'submenu' || item.id !== MOVE_TO_WINDOW_ITEM_ID) return item;
-    return {
-      ...item,
-      items: context.otherWindows.map((window) => ({
-        type: 'item' as const,
-        id: `${MOVE_TO_WINDOW_TARGET_ID_PREFIX}${window.windowId}`,
-        // Two windows showing the same thing carry the same name, and nothing disambiguates them
-        label: window.label || emptyWindowLabel,
-      })),
-    };
+    if (item.type === 'submenu' && item.id === MOVE_TO_WINDOW_ITEM_ID) {
+      return {
+        ...item,
+        items: context.otherWindows.map((window) => ({
+          type: 'item' as const,
+          id: `${MOVE_TO_WINDOW_TARGET_ID_PREFIX}${window.windowId}`,
+          // Two windows showing the same thing carry the same name, and nothing disambiguates them
+          label: window.label || emptyWindowLabel,
+        })),
+      };
+    }
+    return item;
   });
 
   return pruneSeparators(withTargets);
+}
+
+/**
+ * Narrow a contributed tab menu to a single top-level group, keeping the items that belong to it.
+ *
+ * Filtering here rather than after conversion is what makes it possible at all: the converter
+ * flattens groups into one list with separators between them, so a converted item no longer says
+ * which group it came from.
+ *
+ * Only a top-level group is supported. A group anchored to a submenu item would need its host item
+ * kept too, and no such group exists in the platform's tab menu.
+ */
+export function filterTabMenuToGroup(
+  menu: Localized<SingleColumnMenu>,
+  groupId: ReferencedItem,
+): Localized<SingleColumnMenu> {
+  const { groups } = menu;
+
+  const groupDetail = groups[groupId];
+
+  return {
+    groups: groupDetail ? { [groupId]: groupDetail } : {},
+    items: menu.items.filter((item) => item.group === groupId),
+  };
 }

@@ -2,6 +2,7 @@ import type { LocalizationData } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   cn,
+  ContentZoomRoot,
   TooltipProvider,
   Tooltip,
   TooltipTrigger,
@@ -70,7 +71,11 @@ export function DictionaryListItem({
         tabIndex={-1}
       >
         <div className="tw:flex tw:items-baseline tw:gap-2">
-          <span className="tw:text-sm scripture-font">{entry.lemma}</span>
+          {/* The lemma is resource text in its own font and zooms with the pane; the count and
+              Strong's badges keep interface size. */}
+          <ContentZoomRoot as="span" className="tw:text-sm scripture-font">
+            {entry.lemma}
+          </ContentZoomRoot>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

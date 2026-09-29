@@ -1,9 +1,8 @@
 import { Usj, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 
 /**
- * The version of USFM we expect the USX data to be in. For now, Paratext 10 Studio only supports
- * 3.0. We will adjust the code significantly in many places when we implement supporting other
- * versions.
+ * The version of USFM we expect the USX data to be in. For now, Paratext 10 only supports 3.0. We
+ * will adjust the code significantly in many places when we implement supporting other versions.
  */
 const PARATEXT_USX_EXPECTED_VERSION = '3.0';
 

@@ -1,6 +1,13 @@
 import { readFileSync } from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
+import { COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
+import {
+  presetToFallbackLabel,
+  presetToLabelKey,
+  scopeFilterToFallbackLabel,
+  scopeFilterToLabelKey,
+} from './comment-list-filters.model';
 
 const PANEL_TITLE_KEY = '%webView_legacyCommentManager_commentListPanel_title%';
 const COMMENTARIES_TAB_TITLE_KEY = '%webView_resourcePanel_commentaries_title%';
@@ -13,21 +20,35 @@ const SYNC_BLOCKED_KEYS = [
   '%webView_legacyCommentManager_error_syncEditBlocked%',
 ];
 
+// The comment-filter strings the panel actually requests, derived from the panel's own key list
+// rather than hand-copied, so a key added to (or removed from) the panel and forgotten here cannot
+// pass unnoticed.
+const COMMENT_FILTER_KEYS = COMMENT_LIST_PANEL_EXTRA_STRING_KEYS.filter((key) =>
+  key.startsWith('%comment_filter_'),
+);
+
 type LocalizedStringsFile = {
+  metadata?: Record<string, { fallbackKey: string }>;
   localizedStrings: Record<string, Record<string, string>>;
 };
+
+function readLocalizedStringsFile(relativePathFromThisDir: string): LocalizedStringsFile {
+  const stringsFilePath = path.resolve(__dirname, relativePathFromThisDir);
+  // JSON.parse returns `any`; asserting the known shape of localized strings contribution files
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return JSON.parse(readFileSync(stringsFilePath, 'utf-8')) as LocalizedStringsFile;
+}
 
 function readLocalizedStrings(
   relativePathFromThisDir: string,
 ): LocalizedStringsFile['localizedStrings'] {
-  const stringsFilePath = path.resolve(__dirname, relativePathFromThisDir);
-  // JSON.parse returns `any`; asserting the known shape of localized strings contribution files
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const stringsFile = JSON.parse(readFileSync(stringsFilePath, 'utf-8')) as LocalizedStringsFile;
-  return stringsFile.localizedStrings;
+  return readLocalizedStringsFile(relativePathFromThisDir).localizedStrings;
 }
 
-const localizedStrings = readLocalizedStrings('../contributions/localizedStrings.json');
+const commentManagerStringsFile = readLocalizedStringsFile(
+  '../contributions/localizedStrings.json',
+);
+const { localizedStrings } = commentManagerStringsFile;
 // The Commentaries tab title is contributed by the platform-scripture-editor extension
 const scriptureEditorLocalizedStrings = readLocalizedStrings(
   '../../platform-scripture-editor/contributions/localizedStrings.json',
@@ -76,6 +97,139 @@ describe('legacyCommentManager sync-blocked strings', () => {
 
     it(`has a Spanish label for ${key}`, () => {
       expect(localizedStrings.es[key]).toBeTruthy();
+    });
+  });
+});
+
+describe('legacyCommentManager comment-filter strings', () => {
+  // A key with a non-empty value in both languages is necessarily present in both, so this single
+  // assertion also enforces en/es parity — no separate presence check is needed.
+  it('every comment-filter key has a non-empty value in both languages', () => {
+    const emptyInEnglish = COMMENT_FILTER_KEYS.filter((key) => !localizedStrings.en[key]);
+    const emptyInSpanish = COMMENT_FILTER_KEYS.filter((key) => !localizedStrings.es[key]);
+    expect(emptyInEnglish).toEqual([]);
+    expect(emptyInSpanish).toEqual([]);
+  });
+});
+
+describe('legacyCommentManager retired four-axis filter keys', () => {
+  // The four-axis filter model (resolved/read/type/assignment) was replaced by the preset model,
+  // and every key that belonged only to the old axes was deleted outright with no `fallbackKey`.
+  // Per Localization-Guide.md, deleting a key that a downstream consumer (an out-of-repo caller,
+  // a stale cache) may still reference is a replacement, not a removal, and needs a `fallbackKey`
+  // redirect wherever a successor genuinely carries the same meaning.
+  //
+  // Only these four have a genuine successor:
+  // - `_type_conflicts%` -> `_preset_conflict%` is a byte-exact match in both shipped languages:
+  //   the old value is the plural option label "Conflicts" ("Conflictos" in es), and the new
+  //   preset's label is the same word, phrased as a preset name rather than a list option. Both
+  //   select the identical underlying query (`selector.type = 'Conflict'` in
+  //   comment-list-filters.model.ts's `buildCommentThreadSelector`).
+  // - `_resolved_unresolved%`/`_resolved_resolved%`/`_read_unread%` are MEANING matches, not
+  //   byte-exact ones: the preset labels are full noun phrases ("Unresolved comments", "Resolved
+  //   comments", "Unread comments") naming the set they filter to, rather than the old keys' bare
+  //   adjectives ("Unresolved", "Resolved", "Unread"). Each fallback still redirects to a control
+  //   selecting the identical query, just phrased to read consistently alongside the rest of the
+  //   preset dropdown.
+  //
+  // Every other retired key either names an aria label for a per-axis control that no longer
+  // exists (the four axes collapsed into ONE preset dropdown, so there is no single-axis
+  // "resolved status"/"read status"/"note type"/"assignment" control left to label), or names an
+  // "all"/axis-neutral option whose meaning ("don't filter on THIS axis, others still apply") does
+  // not match the "all" preset's meaning ("no filtering on ANY axis") -- or, for the whole
+  // `assignment_team%`/`assignment_unassigned%` pair and the standalone "read" (not "unread")
+  // filter, the capability itself was dropped from the new model entirely (see
+  // `presetFromLegacyAxes`'s doc in comment-list-filters.model.ts). None of those have a fallback,
+  // deliberately -- a wrong redirect would be worse than the bare key.
+  const EXPECTED_FALLBACKS: Record<string, string> = {
+    '%comment_filter_resolved_unresolved%': '%comment_filter_preset_unresolved%',
+    '%comment_filter_resolved_resolved%': '%comment_filter_preset_resolved%',
+    '%comment_filter_read_unread%': '%comment_filter_preset_unread%',
+    '%comment_filter_type_conflicts%': '%comment_filter_preset_conflict%',
+  };
+
+  Object.entries(EXPECTED_FALLBACKS).forEach(([oldKey, newKey]) => {
+    it(`redirects ${oldKey} to ${newKey} via a fallbackKey`, () => {
+      expect(commentManagerStringsFile.metadata?.[oldKey]?.fallbackKey).toBe(newKey);
+    });
+
+    it(`${newKey} (the fallback target for ${oldKey}) is itself defined in both languages`, () => {
+      // Catches a typo'd or renamed target: a fallbackKey pointing at a key that doesn't exist
+      // would silently fall through to the bare-key safety net instead of showing real text.
+      expect(localizedStrings.en[newKey]).toBeTruthy();
+      expect(localizedStrings.es[newKey]).toBeTruthy();
+    });
+  });
+
+  // Explicitly pins that the remaining 13 retired keys were a deliberate "no genuine successor"
+  // decision, not an oversight -- so a future cleanup pass doesn't need to re-derive the same
+  // analysis, and a reviewer can see at a glance which keys were considered and rejected.
+  const RETIRED_WITHOUT_A_FALLBACK = [
+    '%comment_filter_aria_resolved%',
+    '%comment_filter_aria_read%',
+    '%comment_filter_aria_type%',
+    '%comment_filter_aria_assignment%',
+    '%comment_filter_resolved_all%',
+    '%comment_filter_read_all%',
+    '%comment_filter_read_read%',
+    '%comment_filter_type_all%',
+    '%comment_filter_type_comments%',
+    '%comment_filter_assignment_all%',
+    '%comment_filter_assignment_me%',
+    '%comment_filter_assignment_team%',
+    '%comment_filter_assignment_unassigned%',
+  ];
+
+  it('has exactly 4 fallbacks and 13 deliberately-unmapped keys among the 17 retired keys', () => {
+    expect(Object.keys(EXPECTED_FALLBACKS)).toHaveLength(4);
+    expect(RETIRED_WITHOUT_A_FALLBACK).toHaveLength(13);
+  });
+
+  RETIRED_WITHOUT_A_FALLBACK.forEach((oldKey) => {
+    it(`does not invent a fallback for ${oldKey}`, () => {
+      expect(commentManagerStringsFile.metadata?.[oldKey]).toBeUndefined();
+    });
+  });
+});
+
+describe('comment filter dropdown fallback labels', () => {
+  // The dropdown renders through `localizeOrFallback`, because `useLocalizedStrings` seeds every
+  // requested key to ITSELF and returns that on error -- so a plain `?? 'fallback'` can never fire
+  // and the user sees a raw `%comment_filter_preset_all%` while strings load. The fallback a user
+  // briefly sees must therefore be the same English the shipped strings resolve to; the `satisfies
+  // Record<...>` on each map catches a MISSING entry at compile time but says nothing about a
+  // STALE one, which is what this pins.
+  // Both maps are keyed by a closed union, but `Object.entries` widens those keys to `string`, so
+  // the parameters here are widened to match rather than asserted back down -- the pairing this
+  // checks is between two maps that already share a key type, so nothing is lost by looking both
+  // up as plain strings.
+  const fallbackCases = (
+    kind: string,
+    fallbacks: Readonly<Record<string, string>>,
+    labelKeys: Readonly<Record<string, string>>,
+  ): [label: string, key: string, fallback: string][] =>
+    Object.entries(fallbacks).map(([value, fallback]) => [
+      `${kind} ${value}`,
+      labelKeys[value],
+      fallback,
+    ]);
+
+  const cases: [label: string, key: string, fallback: string][] = [
+    ...fallbackCases('preset', presetToFallbackLabel, presetToLabelKey),
+    ...fallbackCases('scope', scopeFilterToFallbackLabel, scopeFilterToLabelKey),
+  ];
+
+  it('covers every preset and scope the dropdown can show', () => {
+    expect(cases).toHaveLength(
+      Object.keys(presetToLabelKey).length + Object.keys(scopeFilterToLabelKey).length,
+    );
+  });
+
+  cases.forEach(([label, key, fallback]) => {
+    it(`${label}'s fallback matches the shipped English string`, () => {
+      // Fail loudly rather than comparing against `undefined` if the key is ever renamed.
+      expect(localizedStrings.en[key]).toBeDefined();
+      expect(fallback).toBe(localizedStrings.en[key]);
     });
   });
 });

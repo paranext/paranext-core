@@ -1,44 +1,32 @@
-import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
-  ButtonGroup,
   isMacOs,
-  isWindows,
   Kbd,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { Lock, LockOpen, Shield, ShieldOff } from 'lucide-react';
+import { Lock, LockOpen } from 'lucide-react';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 
-const LOCK_STRUCTURE_KEY = '%webView_platformScriptureEditor_structureProtection_lockStructure%';
-const UNLOCK_STRUCTURE_KEY =
-  '%webView_platformScriptureEditor_structureProtection_unlockStructure%';
 const LOCKED_BY_ADMIN_KEY = '%webView_platformScriptureEditor_structureProtection_lockedByAdmin%';
 const ARIA_LABEL_KEY = '%webView_platformScriptureEditor_structureProtection_ariaLabel%';
-const LOCK_STRUCTURE_FOR_PROJECT_KEY =
-  '%webView_platformScriptureEditor_structureProtection_lockStructureForProject%';
-const UNLOCK_STRUCTURE_FOR_PROJECT_KEY =
-  '%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%';
-const PROJECT_ARIA_LABEL_KEY =
-  '%webView_platformScriptureEditor_structureProtection_projectAriaLabel%';
 const ERROR_LOADING_KEY = '%webView_platformScriptureEditor_structureProtection_errorLoading%';
+const STATE_EDITABLE_KEY = '%webView_platformScriptureEditor_structureProtection_stateEditable%';
+const STATE_PROTECTED_KEY = '%webView_platformScriptureEditor_structureProtection_stateProtected%';
 
 /**
  * Localization keys used by {@link StructureProtectionButton}. Spread these into the editor
  * web-view's localized-strings list so the values are loaded and passed into `localizedStrings`.
  */
 export const STRUCTURE_PROTECTION_BUTTON_STRING_KEYS = Object.freeze([
-  LOCK_STRUCTURE_KEY,
-  UNLOCK_STRUCTURE_KEY,
-  LOCK_STRUCTURE_FOR_PROJECT_KEY,
-  UNLOCK_STRUCTURE_FOR_PROJECT_KEY,
   LOCKED_BY_ADMIN_KEY,
   ARIA_LABEL_KEY,
-  PROJECT_ARIA_LABEL_KEY,
   ERROR_LOADING_KEY,
+  STATE_EDITABLE_KEY,
+  STATE_PROTECTED_KEY,
 ] as const);
 
 export type StructureProtectionStringKey = (typeof STRUCTURE_PROTECTION_BUTTON_STRING_KEYS)[number];
@@ -51,6 +39,13 @@ const localize = (
   strings: StructureProtectionButtonLocalizedStrings,
   key: StructureProtectionStringKey,
 ) => strings[key] ?? key;
+
+/**
+ * How long a tooltip opened by a state change (rather than by hovering) stays up before dismissing
+ * itself. Long enough to read a short state sentence plus its shortcut hint, short enough that a
+ * tooltip nobody is pointing at does not outstay the change it is reporting.
+ */
+const AUTO_OPEN_TOOLTIP_DURATION_MS = 3000;
 
 /** A keyboard shortcut: a predicate over keydown events plus the OS-appropriate display hint. */
 export type ShortcutSpec = {
@@ -65,18 +60,20 @@ export type LockToggleButtonViewProps = {
   isLocked: boolean;
   /** When `true` the button is disabled and the toggle (click + shortcut) is a no-op. */
   isDisabled: boolean;
+  /**
+   * Whether the state above is still the pre-load default rather than the project's real state.
+   * Transitions are not auto-announced while this is `true`, so opening the editor does not pop a
+   * tooltip reporting a "change" that is only the settings arriving.
+   */
+  isStateLoading: boolean;
   /** Invoked on click or matching shortcut when not disabled. */
   onToggle: () => void;
-  /** Icon shown while locked. */
-  lockedIcon: ReactNode;
-  /** Icon shown while unlocked. */
-  unlockedIcon: ReactNode;
-  /** Tooltip shown while unlocked — names the lock action a click performs. */
-  lockTooltipKey: StructureProtectionStringKey;
-  /** Tooltip shown while locked — names the unlock action a click performs. */
-  unlockTooltipKey: StructureProtectionStringKey;
-  /** Tooltip shown while disabled. Falls back to the lock/unlock tooltip if omitted. */
-  disabledTooltipKey?: StructureProtectionStringKey;
+  /** Tooltip shown while unlocked — reports that state, rather than naming a click's action. */
+  unlockedTooltipKey: StructureProtectionStringKey;
+  /** Tooltip shown while locked — reports that state, rather than naming a click's action. */
+  lockedTooltipKey: StructureProtectionStringKey;
+  /** Tooltip shown while disabled, in place of the state tooltip. */
+  disabledTooltipKey: StructureProtectionStringKey;
   /** Localization key for the button's aria-label. */
   ariaLabelKey: StructureProtectionStringKey;
   /** The keyboard shortcut bound while enabled. */
@@ -98,11 +95,10 @@ export type LockToggleButtonViewProps = {
 export function LockToggleButtonView({
   isLocked,
   isDisabled,
+  isStateLoading,
   onToggle,
-  lockedIcon,
-  unlockedIcon,
-  lockTooltipKey,
-  unlockTooltipKey,
+  unlockedTooltipKey,
+  lockedTooltipKey,
   disabledTooltipKey,
   ariaLabelKey,
   shortcut,
@@ -119,15 +115,54 @@ export function LockToggleButtonView({
 
   // Auto-open the tooltip whenever the visible state changes, so the change is never silent.
   // Radix closes it again on click-away and Escape via onOpenChange; scroll dismissal is handled by
-  // the effect below.
+  // the effect below, and the auto-dismiss timer covers the case where none of those ever fire.
   const [tooltipOpen, setTooltipOpen] = useState(false);
+  // Distinguishes the two ways this controlled tooltip opens. Radix routes hover and focus opens
+  // through `onOpenChange`; a programmatic `setTooltipOpen(true)` does not, so setting this in the
+  // state-change effect and clearing it in `onOpenChange` tells the timer below which kind of open
+  // it is looking at.
+  const wasAutoOpenedRef = useRef(false);
+  // Bumped on every auto-open, including one that happens while the tooltip is ALREADY open. The
+  // timer effect keys on this rather than on `tooltipOpen`, because `setTooltipOpen(true)` on an
+  // already-`true` state is a no-op React bails out of — so two state changes a couple of seconds
+  // apart would leave the second one sharing the first one's remaining time.
+  const [autoOpenCount, setAutoOpenCount] = useState(0);
   const prevDisplayState = useRef(displayState);
+  // Whether a settled value has been observed yet. `displayState` is seeded on the first render from
+  // mode-aware DEFAULTS, and the load finishing and the real value arriving land in the SAME commit
+  // — so comparing against the seed would report the settings merely arriving as a change the user
+  // made, and every editor open would pop a tooltip at someone who did nothing. Adopt the first
+  // settled value silently instead, and compare only from there on.
+  const hasSettledOnceRef = useRef(false);
   useEffect(() => {
-    if (prevDisplayState.current !== displayState) {
+    if (isStateLoading) return;
+    if (!hasSettledOnceRef.current) {
+      hasSettledOnceRef.current = true;
       prevDisplayState.current = displayState;
-      setTooltipOpen(true);
+      return;
     }
-  }, [displayState]);
+    if (prevDisplayState.current === displayState) return;
+    prevDisplayState.current = displayState;
+    wasAutoOpenedRef.current = true;
+    setAutoOpenCount((count) => count + 1);
+    setTooltipOpen(true);
+  }, [displayState, isStateLoading]);
+
+  // The effect above opens the tooltip without a hover, so there may be no pointer on the button
+  // and no focus in it — and then NONE of Radix's dismissal paths can fire: no pointerleave, no
+  // blur, and (while a modal covers this web view's iframe) no click-away or Escape either, since
+  // the iframe stops receiving input entirely. Without this timer such a tooltip stays on screen
+  // indefinitely, over whatever opened the modal. Hovering re-opens it, so it stays reachable.
+  //
+  // Scoped to auto-opens only. A hover-opened tooltip must stay up until the pointer leaves (WCAG
+  // 1.4.13), and it could not come back if it did not: Radix gates its pointer-move open to once per
+  // hover session, so a tooltip dismissed under a stationary pointer stays gone until the pointer
+  // leaves and returns.
+  useEffect(() => {
+    if (!tooltipOpen || !wasAutoOpenedRef.current) return undefined;
+    const timeoutId = setTimeout(() => setTooltipOpen(false), AUTO_OPEN_TOOLTIP_DURATION_MS);
+    return () => clearTimeout(timeoutId);
+  }, [tooltipOpen, autoOpenCount]);
 
   // Close the tooltip on scroll. Radix closes the controlled tooltip on click-away and Escape, but
   // not on scroll, and this button sits in the toolbar while content scrolls in a separate
@@ -153,8 +188,8 @@ export function LockToggleButtonView({
   }, [shortcut, onToggle, isDisabled]);
 
   let tooltipKey: StructureProtectionStringKey;
-  if (isDisabled && disabledTooltipKey) tooltipKey = disabledTooltipKey;
-  else tooltipKey = isLocked ? unlockTooltipKey : lockTooltipKey;
+  if (isDisabled) tooltipKey = disabledTooltipKey;
+  else tooltipKey = isLocked ? lockedTooltipKey : unlockedTooltipKey;
 
   // Unlocked + enabled is the "danger" state (structure is editable) — warn with the destructive
   // variant. Locked and disabled states stay ghost.
@@ -162,17 +197,28 @@ export function LockToggleButtonView({
 
   return (
     <TooltipProvider>
-      <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
+      <Tooltip
+        open={tooltipOpen}
+        onOpenChange={(open) => {
+          // Only a hover or focus open reaches here, so this open is not an auto-open.
+          wasAutoOpenedRef.current = false;
+          setTooltipOpen(open);
+        }}
+      >
         <TooltipTrigger asChild>
           <Button
             aria-label={localize(localizedStrings, ariaLabelKey)}
+            // The accessible name is a constant "Toggle structure protection", and the state lives
+            // in a tooltip that is not a live region — so without this a screen-reader user pressing
+            // the shortcut is told nothing about whether structure is now locked or editable.
+            aria-pressed={isLocked}
             className={className}
             size="icon"
             variant={variant}
             disabled={isDisabled}
             onClick={onToggle}
           >
-            {isLocked ? lockedIcon : unlockedIcon}
+            {isLocked ? <Lock /> : <LockOpen />}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
@@ -192,16 +238,15 @@ export type StructureProtectionButtonProps = {
   projectId: string | undefined;
   /** Localized strings for the tooltips and aria-labels. Falls back to the key if not provided. */
   localizedStrings?: StructureProtectionButtonLocalizedStrings;
-  /** CSS class name applied to each button. */
+  /** CSS class name for the button. */
   className?: string;
 };
 
 /**
- * Structure-protection controls shown in the editor tab header. Renders a personal lock button
- * (toggles the user's own preference, Ctrl/Cmd+Shift+L) for all users, plus an admin-only project
- * lock button to its right (toggles the team-wide setting, Ctrl/Cmd+Alt+Shift+L) when the user can
- * write project settings. The two are independent. The personal button is disabled with a "locked
- * by admin" tooltip for non-admins when the admin has locked the project.
+ * Personal structure-protection control shown in the editor tab header: toggles the user's own
+ * preference (Ctrl/Cmd+Shift+L). Disabled with a "locked by admin" tooltip for non-admins when the
+ * admin has locked the project for the whole team — that team-wide lock is set from the Team layout
+ * dialog, not from here.
  */
 export function StructureProtectionButton({
   projectId,
@@ -214,18 +259,15 @@ export function StructureProtectionButton({
     adminSettingError,
     canAdminToggle,
     isProtectionActive,
-    setAdminProtection,
+    isLoading: isStateLoading,
     setUserProtection,
   } = useStructureProtectionState(projectId);
 
   // OS-appropriate shortcut symbols.
   const isMac = isMacOs();
-  // Windows orders modifiers Ctrl, Shift, Alt; Linux/GNOME orders them Ctrl, Alt, Shift. This only
-  // affects the project shortcut, which is the one combo with both Shift and Alt.
-  const isWin = isWindows();
 
   // When the admin (project-level) setting failed to load, the protection values fall back to
-  // treating the admin layer as unset, so we can't trust them. Disable both toggles and surface the
+  // treating the admin layer as unset, so we can't trust them. Disable the toggle and surface the
   // error via the tooltip rather than letting the user act on a possibly-wrong state.
   const hasAdminError = adminSettingError !== undefined;
 
@@ -237,11 +279,7 @@ export function StructureProtectionButton({
     setUserProtection(!isStructureProtected);
   }, [personalDisabled, isStructureProtected, setUserProtection]);
 
-  const handleProjectToggle = useCallback(() => {
-    setAdminProtection(!isProtectedByAdmin);
-  }, [isProtectedByAdmin, setAdminProtection]);
-
-  // `!event.altKey` keeps the personal shortcut distinct from the admin combo below.
+  // `!event.altKey` so a stray Alt does not fire the personal toggle.
   const personalShortcut = useMemo<ShortcutSpec>(
     () => ({
       matches: (event) =>
@@ -254,55 +292,22 @@ export function StructureProtectionButton({
     [isMac],
   );
 
-  const projectShortcut = useMemo<ShortcutSpec>(() => {
-    let hint = 'Ctrl+Alt+Shift+L'; // Linux/GNOME modifier order
-    if (isMac) hint = '⌥⇧⌘L';
-    else if (isWin) hint = 'Ctrl+Shift+Alt+L'; // Windows modifier order
-    return {
-      matches: (event) =>
-        (event.ctrlKey || event.metaKey) &&
-        event.shiftKey &&
-        event.altKey &&
-        event.key.toLowerCase() === 'l',
-      hint,
-    };
-  }, [isMac, isWin]);
-
   // The structure-protection feature applies in simple mode only; render nothing when inactive.
   if (!isProtectionActive) return undefined;
 
   return (
-    <ButtonGroup>
-      <LockToggleButtonView
-        isLocked={isStructureProtected}
-        isDisabled={personalDisabled}
-        onToggle={handlePersonalToggle}
-        lockedIcon={<Lock />}
-        unlockedIcon={<LockOpen />}
-        lockTooltipKey={LOCK_STRUCTURE_KEY}
-        unlockTooltipKey={UNLOCK_STRUCTURE_KEY}
-        disabledTooltipKey={personalDisabledTooltipKey}
-        ariaLabelKey={ARIA_LABEL_KEY}
-        shortcut={personalShortcut}
-        localizedStrings={localizedStrings}
-        className={className}
-      />
-      {canAdminToggle && (
-        <LockToggleButtonView
-          isLocked={isProtectedByAdmin}
-          isDisabled={hasAdminError}
-          onToggle={handleProjectToggle}
-          lockedIcon={<Shield />}
-          unlockedIcon={<ShieldOff />}
-          lockTooltipKey={LOCK_STRUCTURE_FOR_PROJECT_KEY}
-          unlockTooltipKey={UNLOCK_STRUCTURE_FOR_PROJECT_KEY}
-          disabledTooltipKey={ERROR_LOADING_KEY}
-          ariaLabelKey={PROJECT_ARIA_LABEL_KEY}
-          shortcut={projectShortcut}
-          localizedStrings={localizedStrings}
-          className={className}
-        />
-      )}
-    </ButtonGroup>
+    <LockToggleButtonView
+      isLocked={isStructureProtected}
+      isDisabled={personalDisabled}
+      isStateLoading={isStateLoading}
+      onToggle={handlePersonalToggle}
+      unlockedTooltipKey={STATE_EDITABLE_KEY}
+      lockedTooltipKey={STATE_PROTECTED_KEY}
+      disabledTooltipKey={personalDisabledTooltipKey}
+      ariaLabelKey={ARIA_LABEL_KEY}
+      shortcut={personalShortcut}
+      localizedStrings={localizedStrings}
+      className={className}
+    />
   );
 }

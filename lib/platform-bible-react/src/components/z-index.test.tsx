@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { render } from '@testing-library/react';
+import { ReactElement } from 'react';
+import { fireEvent, render } from '@testing-library/react';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import {
@@ -12,6 +13,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import {
@@ -19,8 +23,29 @@ import {
   MenubarContent,
   MenubarItem,
   MenubarMenu,
+  MenubarSub,
+  MenubarSubContent,
+  MenubarSubTrigger,
   MenubarTrigger,
 } from '@/components/shadcn-ui/menubar';
+import { Dialog, DialogContent, DialogTitle } from '@/components/shadcn-ui/dialog';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from '@/components/shadcn-ui/context-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/shadcn-ui/select';
+import { installNoopResizeObserver } from '@/test-utils/resize-observer.util';
 import {
   Z_INDEX_ABOVE_DOCK,
   Z_INDEX_ABOVE_POPOVER,
@@ -28,34 +53,19 @@ import {
   Z_INDEX_FIRST_RUN,
   Z_INDEX_MODAL,
   Z_INDEX_MODAL_BACKDROP,
+  Z_INDEX_NESTED_MODAL,
+  Z_INDEX_NESTED_MODAL_BACKDROP,
   Z_INDEX_ONBOARDING_TOUR,
   Z_INDEX_OVERLAY,
   Z_INDEX_TOOLTIP,
 } from './z-index';
 
-// Radix measures its content on mount; jsdom ships neither ResizeObserver nor these methods.
-class NoopResizeObserver implements ResizeObserver {
-  // Keep an internal record of observed targets so the no-op methods touch `this` and don't
-  // trip @typescript-eslint/class-methods-use-this. No test inspects this state.
-  private readonly targets = new Set<Element>();
-
-  observe(target: Element) {
-    this.targets.add(target);
-  }
-
-  unobserve(target: Element) {
-    this.targets.delete(target);
-  }
-
-  disconnect() {
-    this.targets.clear();
-  }
-}
-
+// The hasPointerCapture / scrollIntoView shims these overlay components need in jsdom are installed
+// unconditionally by the shared repo-root vitest.setup.ts, loaded by this workspace's `unit`
+// project. ResizeObserver is opt-in from that same file (see its comment for why) — this suite opens
+// every overlay under test, so it needs one.
 beforeAll(() => {
-  if (typeof globalThis.ResizeObserver === 'undefined') {
-    globalThis.ResizeObserver = NoopResizeObserver;
-  }
+  installNoopResizeObserver();
 });
 
 // These assert ORDER, never specific numbers, so re-tiering the scale stays cheap while
@@ -63,6 +73,28 @@ beforeAll(() => {
 describe('z-index scale ordering', () => {
   test('modal content sits above its own backdrop', () => {
     expect(Z_INDEX_MODAL).toBeGreaterThan(Z_INDEX_MODAL_BACKDROP);
+  });
+
+  // A modal opened from another modal has to cover the one that launched it, backdrop included.
+  // Reusing the flat modal tier puts the inner backdrop BELOW the host's content, so the host stays
+  // bright while Radix makes it inert — a panel that looks live and swallows every click.
+  test('keeps a nested modal and its backdrop above the modal that hosts them', () => {
+    expect(Z_INDEX_NESTED_MODAL_BACKDROP).toBeGreaterThan(Z_INDEX_MODAL);
+    expect(Z_INDEX_NESTED_MODAL).toBeGreaterThan(Z_INDEX_NESTED_MODAL_BACKDROP);
+  });
+
+  // ...but not above tooltips: controls inside a nested modal carry them (the embedded pickers'
+  // close button does), and a tooltip rendering behind the surface that triggered it is invisible.
+  test('keeps tooltips above the nested modal tier', () => {
+    expect(Z_INDEX_TOOLTIP).toBeGreaterThan(Z_INDEX_NESTED_MODAL);
+  });
+
+  // Nor above the popover tier. A nested modal's own content opens popovers — the resource picker
+  // embedded in Share Layout renders its language filter on `PopoverContent` — and a popover that
+  // paints behind the modal that opened it is unusable. This holds today only because
+  // `Z_INDEX_TOOLTIP` happens to sit between the two, so it needs saying in its own right.
+  test('keeps popover-tier content above the nested modal tier', () => {
+    expect(Z_INDEX_ABOVE_DOCK).toBeGreaterThan(Z_INDEX_NESTED_MODAL);
   });
 
   test('overlay content sits above modal content', () => {
@@ -211,5 +243,167 @@ describe('rendered stacking', () => {
 
     const menu = document.querySelector<HTMLElement>('[data-slot="dropdown-menu-content"]');
     expect(menu?.style.zIndex).toBe('1234');
+  });
+});
+
+/**
+ * Renders one overlay, opens it if it needs an event to open, reads the z-index it declares inline,
+ * then unmounts it so the next overlay renders into an empty document.
+ */
+function declaredZIndex(ui: ReactElement, slot: string, open?: () => void): string {
+  const { unmount } = render(ui);
+  open?.();
+  const zIndex = document.querySelector<HTMLElement>(`[data-slot="${slot}"]`)?.style.zIndex ?? '';
+  unmount();
+  return zIndex;
+}
+
+describe('the full overlay stack', () => {
+  test('orders modal backdrop < modal < overlay surfaces <= their submenus < tooltip', () => {
+    const dialog = (
+      <Dialog defaultOpen>
+        <DialogContent aria-describedby={undefined}>
+          <DialogTitle>title</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    );
+    const dropdownMenu = (
+      <DropdownMenu defaultOpen>
+        <DropdownMenuTrigger>menu</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuSub open>
+            <DropdownMenuSubTrigger>more</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem>sub</DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+    const contextMenu = (
+      <ContextMenu>
+        <ContextMenuTrigger>target</ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuSub open>
+            <ContextMenuSubTrigger>more</ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              <ContextMenuItem>sub</ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        </ContextMenuContent>
+      </ContextMenu>
+    );
+    const openContextMenu = () => {
+      const target = document.querySelector('[data-slot="context-menu-trigger"]');
+      if (target) fireEvent.contextMenu(target);
+    };
+    const menubar = (
+      <Menubar defaultValue="file">
+        <MenubarMenu value="file">
+          <MenubarTrigger>File</MenubarTrigger>
+          <MenubarContent>
+            <MenubarSub open>
+              <MenubarSubTrigger>more</MenubarSubTrigger>
+              <MenubarSubContent>
+                <MenubarItem>sub</MenubarItem>
+              </MenubarSubContent>
+            </MenubarSub>
+          </MenubarContent>
+        </MenubarMenu>
+      </Menubar>
+    );
+
+    const tiers = {
+      modalBackdrop: declaredZIndex(dialog, 'dialog-overlay'),
+      modal: declaredZIndex(dialog, 'dialog-content'),
+      popover: declaredZIndex(
+        <Popover defaultOpen>
+          <PopoverTrigger>open</PopoverTrigger>
+          <PopoverContent>body</PopoverContent>
+        </Popover>,
+        'popover-content',
+      ),
+      dropdownMenu: declaredZIndex(dropdownMenu, 'dropdown-menu-content'),
+      dropdownMenuSub: declaredZIndex(dropdownMenu, 'dropdown-menu-sub-content'),
+      contextMenu: declaredZIndex(contextMenu, 'context-menu-content', openContextMenu),
+      contextMenuSub: declaredZIndex(contextMenu, 'context-menu-sub-content', openContextMenu),
+      menubar: declaredZIndex(menubar, 'menubar-content'),
+      menubarSub: declaredZIndex(menubar, 'menubar-sub-content'),
+      select: declaredZIndex(
+        <Select defaultOpen defaultValue="one">
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent position="popper">
+            <SelectItem value="one">one</SelectItem>
+          </SelectContent>
+        </Select>,
+        'select-content',
+      ),
+      tooltip: declaredZIndex(
+        <TooltipProvider>
+          <Tooltip defaultOpen>
+            <TooltipTrigger>hover me</TooltipTrigger>
+            <TooltipContent>tip</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>,
+        'tooltip-content',
+      ),
+    };
+
+    // Every overlay must declare a value. `Number('')` is 0, so an undeclared one would pass the
+    // comparisons below while testing nothing.
+    expect(
+      Object.entries(tiers)
+        .filter(([, zIndex]) => zIndex === '')
+        .map(([name]) => name),
+    ).toEqual([]);
+
+    expect(tiers.modalBackdrop).toBe(String(Z_INDEX_MODAL_BACKDROP));
+    expect(tiers.modal).toBe(String(Z_INDEX_MODAL));
+
+    // Popovers and the menu surfaces share one tier on purpose. A menu opened from a popover and a
+    // popover opened from a menu each have to paint over the surface they opened from, and only
+    // portal order gives both of them that (`adr-z-index-ordering-invariants`).
+    const overlaySurfaces = {
+      popover: tiers.popover,
+      dropdownMenu: tiers.dropdownMenu,
+      contextMenu: tiers.contextMenu,
+      menubar: tiers.menubar,
+      select: tiers.select,
+    };
+    expect(overlaySurfaces).toEqual({
+      popover: String(Z_INDEX_ABOVE_DOCK),
+      dropdownMenu: String(Z_INDEX_ABOVE_DOCK),
+      contextMenu: String(Z_INDEX_ABOVE_DOCK),
+      menubar: String(Z_INDEX_ABOVE_DOCK),
+      select: String(Z_INDEX_ABOVE_DOCK),
+    });
+
+    expect(Number(tiers.modal)).toBeGreaterThan(Number(tiers.modalBackdrop));
+    // A popover or menu opened from inside a dialog must be usable.
+    expect(Number(tiers.popover)).toBeGreaterThan(Number(tiers.modal));
+
+    // A submenu never sits under the menu it opened from. The dropdown submenu is pinned to the
+    // exact tier ABOVE the popover layer rather than merely `>=` its parent: a caller that lifts its
+    // DropdownMenuContent to Z_INDEX_ABOVE_POPOVER (the footnote editor's dropdowns do) must still
+    // have its submenu clear that lifted parent, which only the higher, exact tier guarantees — a
+    // `>=` check here would keep passing if the submenu were quietly dropped back to
+    // Z_INDEX_ABOVE_DOCK, ties with its un-lifted parent and all. Context-menu and menubar submenus
+    // have no such caller and genuinely only need to tie with their parent, so they keep `>=`.
+    expect(tiers.dropdownMenuSub).toBe(String(Z_INDEX_ABOVE_POPOVER));
+    expect(Number(tiers.contextMenuSub)).toBeGreaterThanOrEqual(Number(tiers.contextMenu));
+    expect(Number(tiers.menubarSub)).toBeGreaterThanOrEqual(Number(tiers.menubar));
+
+    // A tooltip clears every surface that can hold its trigger, submenus included.
+    const highestSurface = Math.max(
+      ...[
+        ...Object.values(overlaySurfaces),
+        tiers.dropdownMenuSub,
+        tiers.contextMenuSub,
+        tiers.menubarSub,
+      ].map(Number),
+    );
+    expect(Number(tiers.tooltip)).toBeGreaterThan(highestSurface);
   });
 });

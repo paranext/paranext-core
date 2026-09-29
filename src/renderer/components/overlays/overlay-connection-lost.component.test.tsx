@@ -1,12 +1,16 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import {
   reportConnectionLost,
   resetConnectionLost,
 } from '@renderer/services/connection-lost-store';
+import {
+  isWindowBlockedByOverlay,
+  resetWindowBlockingOverlays,
+} from '@renderer/services/window-blocking-overlay-store';
 import {
   CONNECTION_LOST_RELOAD_KEY,
   CONNECTION_LOST_TITLE_KEY,
@@ -111,6 +115,12 @@ describe('ConnectionLostOverlay', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([RESOLVED_STRINGS, false]);
   });
 
+  // The blocking store is a module-level singleton, so a registration left behind would block the
+  // window for every later test in this process.
+  afterEach(() => {
+    resetWindowBlockingOverlays();
+  });
+
   it('renders nothing while the connection is alive', () => {
     render(<ConnectionLostOverlay />);
     // The component renders through a portal to document.body, so it lands as a sibling of RTL's
@@ -127,6 +137,19 @@ describe('ConnectionLostOverlay', () => {
     });
 
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Connection lost.');
+  });
+
+  it('marks the window blocked while the connection is lost', () => {
+    const { unmount } = render(<ConnectionLostOverlay />);
+    expect(isWindowBlockedByOverlay()).toBe(false);
+
+    act(() => {
+      loseConnection();
+    });
+
+    expect(isWindowBlockedByOverlay()).toBe(true);
+    unmount();
+    expect(isWindowBlockedByOverlay()).toBe(false);
   });
 
   // This only pins that the component maps localizedStrings[KEY] into props instead of passing the

@@ -9,7 +9,18 @@ import {
   UnresolvedAnalyticsEvent,
 } from '@shared/models/analytics.model';
 import { ConsoleAnalyticsProvider } from '@extension-host/services/analytics-providers/console-analytics.provider';
+import { PostHogAnalyticsProvider } from '@extension-host/services/analytics-providers/posthog-analytics.provider';
+import {
+  isPostHogEnabled,
+  POSTHOG_HOST,
+  POSTHOG_PROJECT_KEYS,
+} from '@extension-host/services/analytics.config';
+import {
+  getCommonProperties,
+  mergeWithCommonProperties,
+} from '@extension-host/services/analytics-enrichment';
 import { createCachedInitializer } from '@shared/utils/cached-initializer';
+import { raceWithTimeout } from '@extension-host/services/analytics-timeout';
 
 /**
  * Env var that forces analytics to target the test environment regardless of build/S/R target, for
@@ -31,6 +42,15 @@ const INTERNET_SETTINGS_DATA_PROVIDER_ID = 'paratextRegistration.internetSetting
  */
 const ENVIRONMENT_RESOLUTION_TIMEOUT_MS = 30_000;
 
+/**
+ * The whole of analytics' share of the extension host's graceful shutdown: the wait for in-flight
+ * routing and every provider's flush together. Main allows the extension host
+ * `PROCESS_CLOSE_TIME_OUT_MS * 3/4` (about 1.5 s; see `waitForExtensionHost` in
+ * `src/main/services/extension-host.service.ts`) before it hard-kills the process, and extension
+ * deactivation runs after analytics, so this leaves it about 1 s.
+ */
+const ANALYTICS_SHUTDOWN_BUDGET_MS = 500;
+
 const queues: {
   test: AnalyticsEvent[];
   production: AnalyticsEvent[];
@@ -41,10 +61,31 @@ const queues: {
   unresolved: [],
 };
 
-const providers: Record<AnalyticsEnvironment, AnalyticsProvider> = {
-  test: new ConsoleAnalyticsProvider('test'),
-  production: new ConsoleAnalyticsProvider('production'),
-};
+let providers: Record<AnalyticsEnvironment, AnalyticsProvider> | undefined;
+
+/**
+ * Builds the provider per environment on first use. PostHog when the config says so (packaged
+ * production builds, or a developer opting in); otherwise the console provider, which is the
+ * deliberate default for everyday development and automated E2E runs, so those make no calls to
+ * PostHog.
+ */
+function getProviders(): Record<AnalyticsEnvironment, AnalyticsProvider> {
+  if (providers) return providers;
+  providers = isPostHogEnabled()
+    ? {
+        test: new PostHogAnalyticsProvider('test', POSTHOG_PROJECT_KEYS.test, POSTHOG_HOST),
+        production: new PostHogAnalyticsProvider(
+          'production',
+          POSTHOG_PROJECT_KEYS.production,
+          POSTHOG_HOST,
+        ),
+      }
+    : {
+        test: new ConsoleAnalyticsProvider('test'),
+        production: new ConsoleAnalyticsProvider('production'),
+      };
+  return providers;
+}
 
 let resolvedEnvironment: AnalyticsEnvironment | undefined;
 
@@ -134,12 +175,20 @@ function sanitizeProperties(
       }
       sanitized[key] = value;
     } catch (error) {
-      logger.warn(`Analytics: dropping non-serializable property '${key}': ${String(error)}`);
+      logger.warn(
+        `Analytics: dropping non-serializable property '${key}': ${getErrorMessage(error)}`,
+      );
     }
   });
 
   return Object.keys(sanitized).length > 0 ? sanitized : undefined;
 }
+
+/**
+ * Serializes enrichment so events reach their provider in the order they were fired even though
+ * resolving the common properties is asynchronous.
+ */
+let routingChain: Promise<void> = Promise.resolve();
 
 /**
  * Removes and processes every item currently in `queue`, in FIFO order. `onItem` receives a
@@ -159,21 +208,77 @@ function drainQueue<T>(queue: T[], onItem: (item: T) => void): void {
 }
 
 function flushQueue(environment: AnalyticsEnvironment): void {
-  const provider = providers[environment];
+  const provider = getProviders()[environment];
   // TODO(PT-4374): drainQueue removes each event before provider.send() settles, so a failed send
   // only logs -- the event is already gone from the in-memory queue and can't be retried. Fine for
-  // this ticket's non-durable, fire-and-forget queue, but the durable cross-restart queue that
-  // ticket adds should drain (persist-delete) on confirmed success, not unconditionally at dequeue
-  // time, so a failure can be retried instead of silently lost.
+  // this ticket's non-durable, fire-and-forget queue, but the drain that ticket adds on top of
+  // PT-4373's durable cross-restart queue should persist-delete on confirmed success, not
+  // unconditionally at dequeue time, so a failure can be retried instead of silently lost.
   drainQueue(queues[environment], (event) => {
     try {
+      // Debug, not warn: the provider owns the one user-visible line per failed event. The
+      // rejection itself stays meaningful as the seam a retrying queue will hook into.
       provider.send(event).catch((error) => {
-        logger.error(`Analytics: failed to send event '${event.name}': ${String(error)}`);
+        logger.debug(`Analytics: failed to send event '${event.name}': ${getErrorMessage(error)}`);
       });
     } catch (error) {
-      logger.error(`Analytics: failed to send event '${event.name}': ${String(error)}`);
+      logger.error(`Analytics: failed to send event '${event.name}': ${getErrorMessage(error)}`);
     }
   });
+}
+
+/**
+ * Attaches the common properties and the environment tag to an event and hands it to the matching
+ * provider queue. Common properties are vendor-neutral and added here rather than in a provider so
+ * a vendor swap keeps them. Never rejects: an enrichment failure sends the event unenriched.
+ */
+async function enrichAndFlush(
+  unresolvedEvent: UnresolvedAnalyticsEvent,
+  environment: AnalyticsEnvironment,
+): Promise<void> {
+  let { properties } = unresolvedEvent;
+  try {
+    const merged = mergeWithCommonProperties(
+      unresolvedEvent.properties,
+      await getCommonProperties(),
+    );
+    // Both environments send to one PostHog project because their slots share the Test key, so this
+    // property is the only way to tell real-user traffic from test traffic in the dashboard. Spread
+    // last so a caller property of the same name can never overwrite it.
+    // TODO(PT-4401): remove it once each environment has its own project.
+    properties = sanitizeProperties({ ...merged, analytics_environment: environment });
+  } catch (error) {
+    logger.warn(
+      `Analytics: enrichment failed for '${unresolvedEvent.name}': ${getErrorMessage(error)}`,
+    );
+  }
+  queues[environment].push({ ...unresolvedEvent, properties, environment });
+  flushQueue(environment);
+}
+
+/** Queues an event for enrichment and delivery behind every event routed before it. */
+function routeEvent(
+  unresolvedEvent: UnresolvedAnalyticsEvent,
+  environment: AnalyticsEnvironment,
+): void {
+  // The catch keeps the chain resolved, so one event failing to route can never skip every event
+  // routed after it.
+  routingChain = routingChain
+    .then(() => enrichAndFlush(unresolvedEvent, environment))
+    .catch((error) => {
+      logger.warn(
+        `Analytics: failed to route event '${unresolvedEvent.name}': ${getErrorMessage(error)}`,
+      );
+    });
+}
+
+/**
+ * Resolves once every event routed so far has been handed to its provider. Never rejects. Awaited
+ * by `initialize()` (so its caller knows the startup backlog has been handed off), by `shutdown()`
+ * within its time budget, and by tests; `trackEvent()` never awaits it.
+ */
+export function flushPending(): Promise<void> {
+  return routingChain;
 }
 
 /**
@@ -185,22 +290,22 @@ function flushQueue(environment: AnalyticsEnvironment): void {
  * back to `'test'` rather than throwing or leaving the caller waiting on a rejected promise.
  */
 export const initialize = createCachedInitializer(async (): Promise<void> => {
+  // Consent gate (PT-4366) belongs here, before environment resolution: if the user has not opted
+  // in, resolve to a no-op so queued events are discarded rather than sent.
   resolvedEnvironment = await resolveEnvironment();
   const environment = resolvedEnvironment;
 
-  drainQueue(queues.unresolved, (unresolvedEvent) => {
-    queues[environment].push({ ...unresolvedEvent, environment });
-  });
-
-  flushQueue(environment);
+  drainQueue(queues.unresolved, (unresolvedEvent) => routeEvent(unresolvedEvent, environment));
+  await flushPending();
 });
 
 /**
  * Records an analytics event for delivery. If the 'test'/'production' environment is already
- * resolved (see `initialize()`), the event is stamped and flushed immediately; otherwise it's held
- * until `initialize()` resolves it. Synchronous and fire-and-forget either way: never throws, and
- * does not wait for the event to actually be transmitted -- callers get no signal of eventual
- * delivery success.
+ * resolved (see `initialize()`), the event is routed straight away: it is enriched with the common
+ * properties behind any event still being enriched, then handed to its environment's provider.
+ * Otherwise it's held until `initialize()` resolves the environment. Synchronous and
+ * fire-and-forget either way: never throws, and does not wait for the event to actually be
+ * transmitted -- callers get no signal of eventual delivery success.
  *
  * @param name Event name, e.g. `'app_launch'`.
  * @param properties Arbitrary event properties, if any. A value that can't survive `JSON.stringify`
@@ -214,15 +319,36 @@ export function trackEvent(name: string, properties?: Record<string, unknown>): 
   const sanitizedProperties = sanitizeProperties(properties);
 
   if (resolvedEnvironment) {
-    queues[resolvedEnvironment].push({
-      name,
-      properties: sanitizedProperties,
-      timestamp,
-      environment: resolvedEnvironment,
-    });
-    flushQueue(resolvedEnvironment);
+    routeEvent({ name, properties: sanitizedProperties, timestamp }, resolvedEnvironment);
     return;
   }
 
   queues.unresolved.push({ name, properties: sanitizedProperties, timestamp });
+}
+
+/**
+ * Flushes and releases every provider that was created. Called from the extension host's graceful
+ * shutdown path, so the wait for in-flight routing and the providers' flushes share one deadline,
+ * `ANALYTICS_SHUTDOWN_BUDGET_MS` from the start of this call, and this never rejects.
+ */
+export async function shutdown(): Promise<void> {
+  // No providers means no event has finished enrichment yet. An event still mid-enrichment at this
+  // point is intentionally abandoned: waiting for it could eat the whole shutdown budget.
+  // TODO(PT-4373): this also drops events still waiting for the environment to resolve (up to
+  // ENVIRONMENT_RESOLUTION_TIMEOUT_MS in a packaged build); persist them unresolved and resolve them
+  // on the next launch instead of guessing an environment here.
+  if (!providers) return;
+  const deadline = Date.now() + ANALYTICS_SHUTDOWN_BUDGET_MS;
+  // flushPending() never rejects, so only the timeout can end this wait early.
+  await raceWithTimeout(flushPending(), ANALYTICS_SHUTDOWN_BUDGET_MS);
+  const remainingMs = Math.max(0, deadline - Date.now());
+  await Promise.all(
+    Object.values(providers).map(async (provider) => {
+      try {
+        await provider.shutdown?.(remainingMs);
+      } catch (error) {
+        logger.warn(`Analytics: provider shutdown failed: ${getErrorMessage(error)}`);
+      }
+    }),
+  );
 }

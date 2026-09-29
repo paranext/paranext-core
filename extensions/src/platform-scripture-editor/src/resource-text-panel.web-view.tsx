@@ -275,8 +275,17 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // (shared with the model-text panel); without it the panel spins forever. Skipped while a manual
   // pick is in flight (it installs the resource itself).
   const dblEntryUidToInstall = dblMatch && !dblMatch.installed ? dblMatch.dblEntryUid : undefined;
-  const { isInstalling, installFailed, retryInstall, markInstallFailed } =
-    useDblResourceAutoInstall(dblEntryUidToInstall, installResource, isSelecting);
+  const {
+    isInstalling,
+    installFailed,
+    installFailureReason,
+    retryInstall,
+    clearInstallFailure,
+    markInstallFailed,
+  } = useDblResourceAutoInstall(dblEntryUidToInstall, installResource, {
+    skipAutoInstall: isSelecting,
+    refreshResourceList: refetchCatalog,
+  });
 
   // Only used to add a "check your connection" hint to the install-failed message when offline.
   const isOnline = useIsOnline();
@@ -412,7 +421,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     async (resource: DblResourceData) => {
       setIsSelecting(true);
       // A user-initiated pick is a fresh attempt: clear any prior auto-install failure.
-      retryInstall();
+      clearInstallFailure();
       try {
         await selectTextConnection(
           resource,
@@ -439,7 +448,13 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
         setIsSelecting(false);
       }
     },
-    [getUserResourceTexts, setUserResourceTexts, installResource, retryInstall, markInstallFailed],
+    [
+      getUserResourceTexts,
+      setUserResourceTexts,
+      installResource,
+      clearInstallFailure,
+      markInstallFailed,
+    ],
   );
 
   // `useDialogCallback` is what keeps a second activation from destroying the picker the user is
@@ -485,6 +500,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       isSelecting={isSelecting}
       isInstalling={isInstalling}
       installFailed={installFailed}
+      installFailureReason={installFailureReason}
       retryInstall={retryInstall}
       isOnline={isOnline}
       onShowResourcePicker={showResourcePicker}

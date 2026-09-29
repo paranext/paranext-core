@@ -23,7 +23,7 @@ const SETTLED_RECHECK_INTERVAL_MS = 5000;
  * Both directions cost something. Too short and send/receive UI appears and disappears on a normal
  * startup; too long and a build without send/receive shows that UI, clickable and inert, for this
  * long on every launch. Sized at roughly three times the ~1.5s activation gap measured in a
- * Paratext 10 Studio build: long enough for a typical startup, short enough to settle quickly where
+ * Paratext 10 build: long enough for a typical startup, short enough to settle quickly where
  * send/receive genuinely isn't installed. Exceeding it is not the bug this hook exists for —
  * re-checks continue past it, so the UI comes back rather than staying hidden.
  */

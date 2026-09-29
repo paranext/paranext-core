@@ -144,7 +144,8 @@ export async function filterEnabledSupplementEntries(
  * provider computes for itself (`isClosable: interfaceMode === 'power'`).
  *
  * An entry that declares no `isClosable` at all is left untouched in both modes: it never asked to
- * be pinned, and rc-dock already treats the absent value as closable.
+ * be pinned, and `createRCDockTabFromTabInfo` already makes the tab closable when the value is
+ * absent.
  */
 function withPinningForMode(tab: SavedTabInfo, isSimpleMode: boolean): SavedTabInfo {
   // Tab data is `unknown` in the shared model; the supplement JSON stores a WebViewDefinition there.

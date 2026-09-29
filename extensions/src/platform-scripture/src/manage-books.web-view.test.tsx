@@ -7,6 +7,7 @@ import { useState, type ComponentType } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { newPlatformError } from 'platform-bible-utils';
 import { installManageBooksJsdomShims } from './manage-books-dialog/manage-books-dialog.test-utils';
+import { localizedValueFor } from './project-selector.test-utils';
 
 let uninstallShims: () => void;
 
@@ -63,22 +64,30 @@ vi.mock('@papi/frontend', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('@papi/frontend/react', () => ({
-  // Echo each requested key back as its own value, matching useLocalizedStrings' pre-resolution
-  // behavior — every entry is always a string.
-  useLocalizedStrings: (keys: string[]) => [
-    Object.fromEntries(keys.map((key) => [key, key])),
-    false,
-  ],
-  useProjectSetting: (_projectId: unknown, _key: unknown, defaultValue: unknown) => [
-    defaultValue,
-    vi.fn(),
-    false,
-  ],
-  useData: vi.fn(() => ({
-    RecentProjects: () => [mockRecentProjects.value, vi.fn(), false],
-  })),
-}));
+vi.mock('@papi/frontend/react', async () => {
+  // Imported inside the factory: a hoisted `vi.mock` factory must not close over the file's
+  // top-level import bindings. Aliased because the same names are bound at the top level.
+  const { isProjectSelectorSharedKey: isSharedKey, localizedValueFor: valueFor } = await import(
+    './project-selector.test-utils'
+  );
+  return {
+    // Echo each requested key back as its own value, which is what useLocalizedStrings does before
+    // it resolves. The shared `%projectSelector_*%` block is the exception — the picker treats a
+    // key echoed as its own value as unresolved, so those get a resolved-looking value instead.
+    useLocalizedStrings: (keys: string[]) => [
+      Object.fromEntries(keys.map((key) => [key, isSharedKey(key) ? valueFor(key) : key])),
+      false,
+    ],
+    useProjectSetting: (_projectId: unknown, _key: unknown, defaultValue: unknown) => [
+      defaultValue,
+      vi.fn(),
+      false,
+    ],
+    useData: vi.fn(() => ({
+      RecentProjects: () => [mockRecentProjects.value, vi.fn(), false],
+    })),
+  };
+});
 
 vi.mock('./hooks/use-open-project-tabs', () => ({
   useOpenProjectTabs: vi.fn(() => []),
@@ -185,7 +194,9 @@ describe('ManageBooksWebView sidebar project grouping', () => {
     const { user, popover } = await openSidebarPicker();
     await user.click(getGroupByTrigger(popover));
     await user.click(
-      await screen.findByRole('menuitemradio', { name: '%projectSelector_grouping_type_label%' }),
+      await screen.findByRole('menuitemradio', {
+        name: localizedValueFor('%projectSelector_grouping_type_label%'),
+      }),
     );
 
     // Headings are the localized type names, not the raw PT9 `ProjectType` enum values the wire
@@ -209,15 +220,19 @@ describe('ManageBooksWebView sidebar project grouping', () => {
     await user.click(getGroupByTrigger(popover));
     await user.click(
       await screen.findByRole('menuitemradio', {
-        name: '%projectSelector_grouping_lastUsed_label%',
+        name: localizedValueFor('%projectSelector_grouping_lastUsed_label%'),
       }),
     );
 
     expect(
-      await screen.findByText('%projectSelector_grouping_lastUsed_recentSectionHeading%'),
+      await screen.findByText(
+        localizedValueFor('%projectSelector_grouping_lastUsed_recentSectionHeading%'),
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText('%projectSelector_grouping_lastUsed_otherSectionHeading%'),
+      screen.queryByText(
+        localizedValueFor('%projectSelector_grouping_lastUsed_otherSectionHeading%'),
+      ),
     ).not.toBeInTheDocument();
   });
 
@@ -245,10 +260,14 @@ describe('ManageBooksWebView sidebar project grouping', () => {
     await user.click(getGroupByTrigger(popover));
 
     expect(
-      await screen.findByRole('menuitemradio', { name: '%projectSelector_grouping_type_label%' }),
+      await screen.findByRole('menuitemradio', {
+        name: localizedValueFor('%projectSelector_grouping_type_label%'),
+      }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('menuitemradio', { name: '%projectSelector_grouping_language_label%' }),
+      screen.queryByRole('menuitemradio', {
+        name: localizedValueFor('%projectSelector_grouping_language_label%'),
+      }),
     ).not.toBeInTheDocument();
   });
 });

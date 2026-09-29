@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { DblResourceData } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   ProjectReference,
@@ -428,7 +429,7 @@ describe('getViewOptionsTexts', () => {
     const downloaded: DownloadedResource[] = [
       { projectId: 'proj-kjn', name: 'KJN', fullName: 'King James New', language: 'English' },
     ];
-    const { bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    const { bottom } = getViewOptionsTexts(sources, undefined, { downloaded, dblResources: [] });
     expect(bottom).toContainEqual(
       expect.objectContaining({
         reference: expect.objectContaining({ id: 'proj-kjn' }),
@@ -446,12 +447,15 @@ describe('getViewOptionsTexts', () => {
     const downloaded: DownloadedResource[] = [
       { projectId: 'proj-web', name: 'WEB', fullName: 'World English Bible', language: 'English' },
     ];
-    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    const { top, bottom } = getViewOptionsTexts(sources, undefined, {
+      downloaded,
+      dblResources: [],
+    });
     const allForWeb = [...top, ...bottom].filter((r) => r.reference.id === 'proj-web');
     expect(allForWeb).toHaveLength(1);
   });
 
-  it('does not append a downloaded project whose ID starts with an existing DblResourceReference ID', () => {
+  it('does not append a downloaded project a listed DblResourceReference already covers', () => {
     const sources = makeSources({
       adminReferenced: list([dbl('dbl-uid-123', { isInTextCollection: true })]),
     });
@@ -463,9 +467,40 @@ describe('getViewOptionsTexts', () => {
         language: 'English',
       },
     ];
-    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    const dblResources: DblResourceData[] = [
+      {
+        dblEntryUid: 'dbl-uid-123',
+        displayName: 'DBL Resource',
+        fullName: 'DBL Resource Full',
+        bestLanguageName: 'English',
+        type: 'ScriptureResource',
+        size: 0,
+        installed: true,
+        updateAvailable: false,
+        projectId: 'dbl-uid-123extra',
+      },
+    ];
+
+    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded, dblResources });
+
     const duplicate = [...top, ...bottom].filter((r) => r.reference.id === 'dbl-uid-123extra');
     expect(duplicate).toHaveLength(0);
+  });
+
+  // `downloaded` and `dblResources` are required together, so a caller cannot supply projects
+  // without the rows needed to tell whether they are already listed. Omitting `options` entirely is
+  // the remaining shape: the referenced rows still come back, and nothing is appended beside them.
+  // The exact id list is the point — asserting only that the appended row is absent would pass just
+  // as happily against a function that returned nothing at all.
+  it('returns the referenced rows and appends nothing when no options are supplied', () => {
+    const sources = makeSources({
+      adminReferenced: list([dbl('dbl-uid-123', { isInTextCollection: true })]),
+    });
+
+    const { top, bottom } = getViewOptionsTexts(sources, undefined);
+
+    expect([...top, ...bottom].map((r) => r.reference.id)).toEqual(['dbl-uid-123']);
+    expect(bottom).toHaveLength(0);
   });
 });
 

@@ -1696,6 +1696,15 @@ export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
 export type MenuColumnWithHeader = OrderedExtensibleContainer & {
 	/** Key that represents the text of the header text of the column */
 	label: LocalizeKey;
+	/**
+	 * Set to `true` to show this column's items without its header text in the menu that opens when
+	 * you click on the top left corner of a tab (`topMenu`), which heads each section with its
+	 * column's header. While that menu shows two or more sections, the label still names this section
+	 * for assistive technology; a section left on its own, including one left alone by interface-mode
+	 * filtering, gets neither a heading nor a name. Give it a real label regardless. The application
+	 * menubar ignores this, because there the header is what opens the column.
+	 */
+	isHeaderHidden?: boolean;
 };
 export type MenuItemBase = OrderedItem & {
 	/** Menu group to which this menu item belongs */
@@ -1733,6 +1742,21 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	 * `papi-extension://helloWorld/assets/icon.png`
 	 */
 	iconPathBefore?: string;
+	/**
+	 * Display text for the keyboard shortcut that runs this item's command (e.g. `⌃F` on macOS,
+	 * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: do not parse
+	 * it as a key binding.
+	 *
+	 * The platform fills it in from its keyboard shortcuts catalog in the localized menus it serves;
+	 * the unlocalized main menu never has it. Key names are not localized, and only the first
+	 * catalogued alternative is shown.
+	 *
+	 * A `menus.json` contribution cannot set it: the menus schema rejects it, which rejects the
+	 * extension's whole `menus.json`.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	shortcut?: string;
 };
 /**
  * Group of menu items that can be combined with other groups to form a single context menu/submenu.
@@ -1806,7 +1830,7 @@ export type WebViewMenu = {
 	 * panel within its own window, which never leaves the renderer. Treat a `command` here as the
 	 * name of the action, not as something to invoke through the command service.
 	 *
-	 * The platform's own group here sits at order 100, so choose another order for yours. A
+	 * The platform's own groups here sit at orders 50 and 100, so choose another order for yours. A
 	 * single-column menu buckets every group together for the duplicate-order check, so a second
 	 * group at 100 throws — and because a failed contribution is rolled back whole, that would cost
 	 * this extension its entire `menus.json`, not just its tab items.
@@ -1923,6 +1947,10 @@ export declare const menuDocumentSchema: {
 							type: string;
 						};
 						isExperimental: {
+							description: string;
+							type: string;
+						};
+						isHeaderHidden: {
 							description: string;
 							type: string;
 						};
@@ -4076,6 +4104,73 @@ export declare function isBlockMarker(marker: string): boolean;
  */
 export declare function isCharacterMarker(marker: string): boolean;
 /**
+ * True when a marker is a paragraph-style marker, including _true_ discourse paragraphs, others
+ * that begin a block of text (poetry lines, blank lines, list entries, etc.) and chapter-level or
+ * book-level identification, metadata, or other such structural markers.
+ *
+ * Paragraph markers are identified by their {@link MarkerType.Paragraph} type in {@link usfmMarkers}
+ * rather than a hand-maintained list.
+ *
+ * @param marker Marker code to check, without its leading backslash (e.g. `p`, not `\p`)
+ * @returns `true` when the marker is a known USFM marker of type {@link MarkerType.Paragraph}.
+ *   `false` for anything else: character markers, note markers (`f`/`fe`/`x`), numbering markers
+ *   (`v`/`va`/`vp`/`ca`), and for empty or unknown marker codes.
+ */
+export declare function isParagraphMarker(marker: string): boolean;
+/**
+ * Clamping, rounding and stepping for a content-zoom factor, plus the range and step those
+ * operations enforce. The platform's per-pane content zoom and the Interface scaling setting both
+ * scale within the same `[0.5, 3]` range in steps of `0.1`, so both read these from here rather
+ * than keeping their own copy.
+ */
+/**
+ * Smallest allowed zoom factor.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const MIN_ZOOM_FACTOR = 0.5;
+/**
+ * Largest allowed zoom factor.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const MAX_ZOOM_FACTOR = 3;
+/**
+ * Amount one zoom-in / zoom-out step changes a zoom factor.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const ZOOM_STEP = 0.1;
+/**
+ * Clamps a zoom factor into `[MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR]`.
+ *
+ * @param factor The zoom factor to clamp
+ * @returns The factor bounded to the allowed range
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function clampZoom(factor: number): number;
+/**
+ * Rounds a zoom factor to one decimal place. CSS `zoom` and repeated `+ ZOOM_STEP` additions
+ * accumulate binary-float error (e.g. 1.1 + 0.1 = 1.2000000000000002); rounding keeps stored and
+ * compared factors stable.
+ *
+ * @param factor The zoom factor to round
+ * @returns The factor rounded to one decimal place
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function roundZoom(factor: number): number;
+/**
+ * Steps a factor by `deltaSteps * ZOOM_STEP`, then clamps and rounds. An off-grid factor (a typed
+ * percentage) first moves to the grid mark it has passed in the direction of travel, so one step
+ * never skips the nearest mark: from 1.37, `+1` gives 1.4 and `-1` gives 1.3.
+ *
+ * @param factor The current zoom factor
+ * @param deltaSteps Number of steps to apply (+1 = zoom in, −1 = zoom out)
+ * @returns The new clamped, rounded zoom factor
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function adjustZoomFactor(factor: number, deltaSteps: number): number;
+/**
  * Sanitizes HTML content to prevent security risks while preserving safe formatting.
  *
  * @param html - The HTML string to sanitize
@@ -4739,6 +4834,109 @@ export declare function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
  * @returns The uppercase form of the id.
  */
 export declare function normalizeProjectId(projectId: string): string;
+/** A project's display names. `fullName` is optional because not every project carries one. */
+export type ProjectNames = {
+	/** Short name, e.g. `'arb'`. Always present; this is the identifying field. */
+	shortName: string;
+	/** Longer descriptive name, e.g. `'True Meaning Arabic'`. Absent or empty on many projects. */
+	fullName?: string;
+};
+/**
+ * Whether a project's full name carries information its short name does not, and so is worth
+ * rendering as a second field.
+ *
+ * The comparison is an exact, case-sensitive `!==` on purpose: two names differing only by case are
+ * genuinely different strings a project deliberately carries, and suppressing one would hide data
+ * the user entered. Callers that render the two names in separate slots (a muted second line, a
+ * toolbar label's secondary field) use this rather than repeating the rule.
+ *
+ * Blank is absent, on the same terms as {@link normalizeFullName}: a name of spaces is present but
+ * invisible, so treating it as distinct would render a dangling separator. Applying the rule here
+ * rather than asking every caller to pre-normalize is what keeps {@link formatProjectName} safe for
+ * a raw value — including one arriving from outside the repo through a public prop.
+ *
+ * @param names The project's short and optional full name.
+ * @returns `true` when the full name is present, non-blank, and different from the short name.
+ */
+export declare function hasDistinctFullName(names: ProjectNames): boolean;
+/**
+ * Joins a project's short name to its full name in {@link formatProjectName}.
+ *
+ * Exported because a consumer that renders the two names in separate elements — a toolbar label
+ * with its own separator node, say — has to draw the same character the joined string uses, or the
+ * visible label and its own tooltip disagree the moment this changes.
+ *
+ * Not localized: it joins two proper nouns rather than translatable prose.
+ *
+ * Bidi caveat: the hyphen is direction-neutral, so it sits wherever the surrounding run puts it.
+ * Which remedy a caller needs depends on how the joined name reaches the screen:
+ *
+ * - **The joined string is an element's whole text** (a tooltip line, a trigger label): set
+ *   `dir="auto"` on that element.
+ * - **The two names are separate elements**: each gets its own direction only when it is a
+ *   block-level or flex-item box. Plain inline spans do NOT isolate — they join the surrounding run
+ *   like any other inline text — so an inline pair needs `dir="auto"` per name as well.
+ * - **The joined string is interpolated into a longer sentence** (a subtitle, a notification): an
+ *   attribute cannot help, because `dir="auto"` reads the direction of the SENTENCE's first strong
+ *   character rather than the name's. Wrap the name with {@link isolateBidi} before interpolating,
+ *   which is the character-level form of HTML's `<bdi>` and travels inside the string.
+ * - **An `aria-label`**: carries no direction at all, so the caveat does not reach it.
+ */
+export declare const PROJECT_NAME_SEPARATOR = " - ";
+/**
+ * Formats a project for display as `"{shortName} - {fullName}"`, or as the short name alone when
+ * {@link hasDistinctFullName} is false.
+ *
+ * The short name leads because it is the field that identifies a project to a Paratext user, so it
+ * is the half that must survive ellipsis truncation in a narrow container. The separator is
+ * {@link PROJECT_NAME_SEPARATOR}.
+ *
+ * @param names The project's short and optional full name.
+ * @returns The display string.
+ */
+export declare function formatProjectName(names: ProjectNames): string;
+/**
+ * Compares two project short names for display order: alphabetical, case- and accent-insensitive.
+ *
+ * The string-level form of {@link compareProjectsByName}, for a caller whose list rows are not
+ * {@link ProjectNames} objects and would otherwise allocate a throwaway one per comparison.
+ *
+ * @param a First short name.
+ * @param b Second short name.
+ * @returns Negative, zero or positive, as `Array.prototype.sort` expects.
+ */
+export declare function compareProjectShortNames(a: string, b: string): number;
+/**
+ * Compares two projects for display order: alphabetical by short name, case- and
+ * accent-insensitive.
+ *
+ * Short name rather than full name because the short name is the field that leads every project
+ * label, and a list ordered by a field the user cannot see reads as unsorted. Compares names only —
+ * a caller with its own tie-break (a scroll group, a project id) layers it on top of this result.
+ *
+ * @param a First project.
+ * @param b Second project.
+ * @returns Negative, zero or positive, as `Array.prototype.sort` expects.
+ */
+export declare function compareProjectsByName(a: ProjectNames, b: ProjectNames): number;
+/**
+ * Narrows a raw `platform.fullName` project setting to the full name, or `undefined` when the
+ * project effectively has none.
+ *
+ * The setting is typed `string`, but a project data provider yields `null` or `undefined` for a
+ * setting that was never written, and legacy projects carry `''` or a run of spaces. This is the
+ * single place that decides which of those counts as absent, so a reader can hand the raw value
+ * straight through rather than writing its own guard.
+ *
+ * Whitespace-only counts as absent: a name of spaces renders as a full name that is there but
+ * invisible, so {@link formatProjectName} would emit `'ABC - '` with a dangling separator. The
+ * returned name is not trimmed otherwise — leading or trailing space in a real name is the
+ * project's own data, and this function narrows rather than edits.
+ *
+ * @param fullName The raw setting value.
+ * @returns The full name, or `undefined` when it is absent, blank, or not a string.
+ */
+export declare function normalizeFullName(fullName: unknown): string | undefined;
 /**
  * Get a localized string representation of the time between two dates
  *
@@ -5109,19 +5307,26 @@ export type DblResourceData = {
 	projectId: string;
 };
 /**
- * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or
- * by the `startsWith(dblEntryUid)` convention (the local project id of an installed DBL resource
- * begins with its DBL entry UID).
+ * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or,
+ * failing that, by the `startsWith(dblEntryUid)` convention.
+ *
+ * The prefix branch is a best-effort fallback, not an invariant. A resource project's id is
+ * unrelated to the DBL entry it was installed from: ParatextData records the entry uid in the
+ * project's settings and matches on that, so the prefix holds for many installed resources and not
+ * for others. The `projectId` the backend reports is authoritative, so the exact match is tried
+ * first — but the prefix test is a fallthrough, not an `else`, so a row naming project A can still
+ * claim a prefix-sharing project B. `buildLocalNonDblResources` depends on that today, which is
+ * what makes tightening it a behaviour change rather than a cleanup. See
+ * `adr-dbl-install-status-from-backend`.
  *
  * Both branches require the row to have been reconciled against disk at least once (`installed`, or
  * a non-empty `projectId`). A never-synced row carries `installed: false, projectId: ''`, and
  * `''.startsWith('')` is true for every string, so trusting such a row would let a stale entry for
  * a DBL-reassigned UID hide a local project whose real UID still matches.
  *
- * This is the single home for that rule. Producers on both sides of the picker consult it — the one
- * that decides which local projects are NOT already in the catalog, and the one that decides which
- * catalog row describes a downloaded project. They must agree, or a project is claimed by one and
- * disowned by the other.
+ * Producers on both sides of the picker consult this — the one that decides which local projects
+ * are NOT already in the catalog, and the one that decides which catalog row describes a downloaded
+ * project. They must agree, or a project is claimed by one and disowned by the other.
  *
  * @param row The DBL catalog row to test
  * @param localProjectId The id of the local project to test it against
@@ -6416,9 +6621,44 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private fragmentsByJsonPathInternal;
 	private indicesInUsfmByVerseRefInternal;
 	private usfmInternal;
+	/**
+	 * Messages already reported by {@link reportProblemOnce}, so each distinct problem is reported
+	 * once per instance rather than once per occurrence. A commentary or UBS Handbook repeats markers
+	 * this class's markers map does not carry tens of thousands of times per book, and a web view's
+	 * console calls cross IPC to the main process's log file, so reporting per occurrence costs work
+	 * proportional to the document.
+	 *
+	 * Keyed by full message text, so a report collapses only as far as its text repeats: the marker
+	 * reports name only the marker, while the chapter and verse reports also name a position. The set
+	 * lives as long as the instance, so a caller that builds a new instance per action reports each
+	 * problem again per action. Deliberately not reset by {@link usjChanged}: these describe the
+	 * marker, not where it appeared.
+	 */
+	private readonly reportedProblems;
 	constructor(usj: Usj, options?: UsjReaderWriterOptions);
 	usjChanged(): void;
 	private static areUsjVersionsCompatible;
+	/**
+	 * The book this document is for, for naming it in a log message.
+	 *
+	 * Reads the book marker straight off the top level of the content already in memory and stops at
+	 * the first one, so it costs nothing beyond that scan and does not walk into nested content. Only
+	 * call it on a path that is about to log — there is no reason to look for the book otherwise.
+	 *
+	 * @returns The book code, or {@link NO_BOOK_ID} if the document does not carry one
+	 */
+	private getBookIdForLogging;
+	/**
+	 * Reports `message`, unless an identical message has already been reported by this instance. See
+	 * {@link reportedProblems} for why repeats are dropped.
+	 *
+	 * Defaults to `warn` because these describe a document that is malformed or that this class had
+	 * to reinterpret. Pass `debug` for problems that are normal in a well-formed document.
+	 *
+	 * @param message Message to report
+	 * @param level Console level to report at. Defaults to `warn`
+	 */
+	private reportProblemOnce;
 	findSingleValue<T>(jsonPathQuery: string): T | undefined;
 	findParent<T>(jsonPathQuery: string): T | undefined;
 	/**
@@ -6812,7 +7052,7 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 *   potential adjustments to handle verse ranges differently when we know better what we ought to
 	 *   do.
 	 */
-	private static transferFragmentsInfoArrayToMaps;
+	private transferFragmentsInfoArrayToMaps;
 	/**
 	 * Generates USFM representation of the USJ document passed in and returns it along with
 	 * information about how various locations in USFM and USJ map to each other

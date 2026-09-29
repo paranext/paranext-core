@@ -18,9 +18,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%internetSettings_button_retry%': 'Retry',
-      '%firstRun_step_internetSettings_body%': 'Body sentinel',
+      '%firstRun_step_internetSettings_heading%': 'Internet & connectivity',
+      '%firstRun_step_internetSettings_body%': 'Manage how Paratext accesses the internet.',
       '%firstRun_step_internetSettings_connecting%': 'Getting things ready…',
-      '%firstRun_step_internetSettings_heading%': 'Heading sentinel',
       '%firstRun_step_internetSettings_loadError%':
         "We couldn't get things ready. Please try again in a moment.",
     },
@@ -60,16 +60,13 @@ vi.mock('platform-bible-react/experimental', () => ({
   InternetAccessOptionList: ({
     value,
     onChange,
-    showFooter,
   }: {
     value: string;
     onChange: (value: string) => void;
-    showFooter?: boolean;
   }) => (
     <button
       data-testid="option-list"
       data-value={value}
-      data-show-footer={String(showFooter)}
       type="button"
       onClick={() => onChange('Enabled')}
     >
@@ -81,6 +78,9 @@ vi.mock('platform-bible-react/experimental', () => ({
       dev section
     </button>
   ),
+  // Stands in for the real helper, whose own list of implemented options is covered by
+  // InternetAccessOptionList's tests. This step only cares that it gates Next.
+  isSupportedInternetUse: (value: string) => value === 'Enabled' || value === 'VpnRequired',
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: [],
   DEVELOPER_SECTION_STRING_KEYS: [],
 }));
@@ -132,27 +132,23 @@ describe('InternetSettingsStep', () => {
     vi.clearAllMocks();
   });
 
-  it('shows the heading and description while the provider is still undefined', () => {
-    configureHooks({ provider: undefined });
+  // The heading and its lead-in match the standalone Internet & Connectivity web view. They wrap
+  // every state so they hold their place instead of popping in once the provider resolves.
+  it.each([
+    ['loaded', { value: MOCK_SETTINGS, isLoading: false }],
+    ['provider not yet registered', { provider: undefined }],
+    ['data still loading', { isLoading: true }],
+    ['read failed', { value: newPlatformError('boom'), isLoading: false }],
+  ])('shows the "Internet & connectivity" heading and its lead-in when %s', (_label, opts) => {
+    configureHooks(opts);
     renderStep();
 
-    expect(screen.getByRole('heading', { name: 'Heading sentinel' })).toBeInTheDocument();
-    expect(screen.getByText('Body sentinel')).toBeInTheDocument();
-  });
-
-  it('keeps the heading and description once the settings have loaded', () => {
-    configureHooks({ value: MOCK_SETTINGS });
-    renderStep();
-
-    expect(screen.getByRole('heading', { name: 'Heading sentinel' })).toBeInTheDocument();
-    expect(screen.getByText('Body sentinel')).toBeInTheDocument();
-  });
-
-  it('hides the option list footer so the wizard Next button stays above the fold', () => {
-    configureHooks({ value: MOCK_SETTINGS });
-    renderStep();
-
-    expect(screen.getByTestId('option-list')).toHaveAttribute('data-show-footer', 'false');
+    expect(
+      screen.getByRole('heading', { name: 'Internet & connectivity', level: 2 }),
+    ).toBeInTheDocument();
+    // The lead-in is what frames the radio list, so it must be present in every state — without it
+    // the first thing the user reads is the bare "Unrestricted" option.
+    expect(screen.getByText('Manage how Paratext accesses the internet.')).toBeInTheDocument();
   });
 
   it('shows a spinner and no error while the provider is undefined', () => {
@@ -243,6 +239,45 @@ describe('InternetSettingsStep', () => {
     // Next must be disabled on the error screen so the wizard can't advance past an unloaded step.
     expect(setCanProceed).toHaveBeenCalledWith(false);
     expect(setCanProceed).not.toHaveBeenCalledWith(true);
+  });
+
+  // InternetSettings.xml is seeded once from a co-installed Paratext 9 on first launch, so it can
+  // arrive naming an option this app does not implement yet. The list shows that option
+  // selected under a banner; Next has to stay shut until the user replaces it with one that will
+  // actually take effect.
+  describe('a stored value the app cannot honor', () => {
+    const UNSUPPORTED_SETTINGS = { ...MOCK_SETTINGS, permittedInternetUse: 'Disabled' as const };
+
+    it('keeps Next disabled while it is the current selection', async () => {
+      configureHooks({ value: UNSUPPORTED_SETTINGS, isLoading: false });
+      const { setCanProceed } = renderStep();
+
+      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Disabled');
+      await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(false));
+      expect(setCanProceed).not.toHaveBeenCalledWith(true);
+    });
+
+    it('enables Next once the user picks an option the app implements', async () => {
+      configureHooks({ value: UNSUPPORTED_SETTINGS, isLoading: false });
+      const { setCanProceed } = renderStep();
+
+      await userEvent.click(screen.getByTestId('option-list'));
+
+      await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(true));
+    });
+
+    it('does not let a server change alone unlock Next', async () => {
+      const { setData } = configureHooks({ value: UNSUPPORTED_SETTINGS, isLoading: false });
+      const { setCanProceed } = renderStep();
+
+      await userEvent.click(screen.getByTestId('dev-section'));
+
+      // The save succeeds, so the step re-derives whether it can proceed — from the value it just
+      // persisted, which still names the option the app cannot honor.
+      await waitFor(() => expect(setData).toHaveBeenCalled());
+      await waitFor(() => expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(false));
+      expect(setCanProceed).not.toHaveBeenCalledWith(true);
+    });
   });
 
   it('recovers when Retry remounts the subscription and the read then succeeds', async () => {

@@ -5,7 +5,8 @@
     "items": [
       {
         "label": "%mainMenu_open%",
-        "localizeNotes": "Application main menu > Project > Open...",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Project > Open... (opens the Home view, which lists local and shared projects and launches the resource download dialog). Hidden in Simple mode: Simple reaches resources through the model text, Bible text and commentary pickers instead, and opens an installed project from the titlebar project selector",
         "group": "platform.projectResources",
         "order": -100,
         "command": "platformGetResources.openHome"

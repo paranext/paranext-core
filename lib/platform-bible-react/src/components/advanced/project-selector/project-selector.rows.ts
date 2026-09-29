@@ -1,4 +1,8 @@
-import { normalizeProjectId, type ScrollGroupId } from 'platform-bible-utils';
+import {
+  compareProjectsByName,
+  normalizeProjectId,
+  type ScrollGroupId,
+} from 'platform-bible-utils';
 
 // #region Types
 
@@ -15,7 +19,11 @@ export type ProjectSelectorMode = 'project' | 'project-multi' | 'projectScrollGr
 export type ProjectSelectorProject = {
   id: string;
   shortName: string;
-  fullName: string;
+  /**
+   * Full name, shown as the row's muted second line. Omit it when the project has none — don't copy
+   * the short name in; the selector already renders a single line when the names match.
+   */
+  fullName?: string;
   /**
    * When `true`, the row for this project is rendered muted, is not selectable, and the
    * `disabledReason` (if provided) is surfaced in the row tooltip. Use when a project is present in
@@ -145,6 +153,29 @@ export type ProjectSelectorGrouping = {
     a: { key: string; heading: string },
     b: { key: string; heading: string },
   ) => number;
+  /**
+   * Row order within each bucket, as a standard `Array.prototype.sort` comparator: return a
+   * negative number to put `a` before `b`, positive to put `b` first, `0` for a tie.
+   *
+   * Omit it to use the selector's canonical order (alphabetical by `shortName`, tie-broken by
+   * scroll group). Supply one when the bucket's meaning implies an order the selector cannot know —
+   * a leaderboard-style bucket ordered by a caller-side score, for example, where alphabetical
+   * order carries no meaning. The built-in `lastUsed` grouping deliberately supplies none: it reads
+   * `lastUsedAt` as a presence flag for bucketing only, and its rows stay alphabetical.
+   *
+   * Ties fall back to the canonical order, so rows for one project fanned across several scroll
+   * groups — which a comparator reading only `ProjectSelectorProject` cannot tell apart — keep a
+   * stable sequence.
+   *
+   * Ignored in three places, because those lists are not bucketed by this descriptor: the
+   * `'openTabs'` and `'selection'` groupings, which build their sections themselves; any grouping
+   * with no `getGroupKey`, which falls through to a single flat section; and the unknown bucket,
+   * which stays canonically ordered because it collects the rows the grouping could NOT classify —
+   * an order derived from the grouping's own axis would be meaningless for exactly those rows. Note
+   * the resulting list can mix two orders, e.g. a score-ordered bucket above an alphabetical
+   * "Other".
+   */
+  compareProjects?: (a: ProjectSelectorProject, b: ProjectSelectorProject) => number;
 };
 
 /** One row in the project selector list. */
@@ -153,7 +184,7 @@ export type ProjectRow = {
   rowKey: string;
   projectId: string;
   shortName: string;
-  fullName: string;
+  fullName?: string;
   /**
    * The scroll group this row represents. `undefined` means the row is a project-level row (no
    * chip, or `project` mode chips aggregated in `openGroups`).
@@ -246,12 +277,23 @@ function collectOpenTabsByProject(
   return map;
 }
 
+/**
+ * Whether a (project, scroll group) pair is in the selection.
+ *
+ * Project ids are compared normalized, for the same reason `computeRows` normalizes the
+ * single-selection id: a caller whose selection came from a different source than its project list
+ * spells the same project in a different case, and comparing raw would leave every row unchecked
+ * while the trigger — which folds — named the project correctly.
+ */
 function pairIsSelected(
   pairs: readonly ProjectSelectorProjectPair[],
   projectId: string,
   scrollGroupId: ScrollGroupId | undefined,
 ): boolean {
-  return pairs.some((p) => p.projectId === projectId && p.scrollGroupId === scrollGroupId);
+  const normalizedId = normalizeProjectId(projectId);
+  return pairs.some(
+    (p) => normalizeProjectId(p.projectId) === normalizedId && p.scrollGroupId === scrollGroupId,
+  );
 }
 
 // #endregion
@@ -267,7 +309,13 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   const tabsByProject = collectOpenTabsByProject(args.openTabs);
 
   if (args.mode === 'project') {
-    const selectedId = args.selection.projectId;
+    // Normalized once, and compared normalized below, for the same reason open tabs are: a project
+    // id is canonical only up to case, so a caller whose selection came from a different source
+    // than its project list would otherwise leave the selected row unmarked.
+    const selectedKey =
+      args.selection.projectId === undefined
+        ? undefined
+        : normalizeProjectId(args.selection.projectId);
     return args.projects.map((project) => {
       const tabs = tabsByProject.get(normalizeProjectId(project.id)) ?? [];
       return {
@@ -278,7 +326,7 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         scrollGroupId: undefined,
         scrollGroupScrRefLabel: undefined,
         openGroups: tabs.map((t) => t.scrollGroupId),
-        isSelected: selectedId === project.id,
+        isSelected: selectedKey !== undefined && selectedKey === normalizeProjectId(project.id),
         isMuted: tabs.length === 0,
         isBoundButClosed: false,
         isDisabled: project.isDisabled === true,
@@ -348,12 +396,17 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   // selected "not-open project" pair is already represented by the not-open row rendered above.
   selectedPairs.forEach((pair) => {
     if (pair.scrollGroupId === undefined) return;
+    const normalizedPairId = normalizeProjectId(pair.projectId);
     if (
-      rows.some((r) => r.projectId === pair.projectId && r.scrollGroupId === pair.scrollGroupId)
+      rows.some(
+        (r) =>
+          normalizeProjectId(r.projectId) === normalizedPairId &&
+          r.scrollGroupId === pair.scrollGroupId,
+      )
     ) {
       return;
     }
-    const project = args.projects.find((p) => p.id === pair.projectId);
+    const project = args.projects.find((p) => normalizeProjectId(p.id) === normalizedPairId);
     if (!project) return;
     rows.push({
       rowKey: `closed:${project.id}:${pair.scrollGroupId}`,
@@ -424,7 +477,7 @@ function compareRows(a: ProjectRow, b: ProjectRow): number {
   // scrollGroupId. The component scrolls the selected row into view on open,
   // so selected rows do NOT float to the top — users can predict where any
   // project will land after selecting it.
-  const nameCmp = a.shortName.localeCompare(b.shortName, undefined, { sensitivity: 'base' });
+  const nameCmp = compareProjectsByName(a, b);
   if (nameCmp !== 0) return nameCmp;
   // Tie-break: scrollGroupId asc so the same project lists A before B before C.
   const aGroup = a.scrollGroupId ?? Number.POSITIVE_INFINITY;
@@ -542,7 +595,11 @@ export function partitionByGrouping(
     else buckets.set(key, [row]);
   });
   const entries = [...buckets.entries()].map(([key, groupRows]) => {
-    const sortedRows = [...groupRows].sort(compareRows);
+    // Ties fall back to the canonical order so rows for one project in several scroll groups,
+    // which a caller's comparator sees as equal, keep a stable sequence.
+    const sortedRows = [...groupRows].sort(
+      (a, b) => grouping.compareProjects?.(a.project, b.project) || compareRows(a, b),
+    );
     const heading =
       grouping.getSectionHeading?.(
         key,

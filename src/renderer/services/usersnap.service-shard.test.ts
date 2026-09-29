@@ -12,9 +12,13 @@ vi.mock('@shared/services/network-object.service', () => ({
   onDidCreateNetworkObject: vi.fn(() => vi.fn()),
   onDidDisposeNetworkObject: vi.fn(() => vi.fn()),
 }));
-vi.mock('@renderer/services/usersnap.service', () => ({
+// Core ships the project keys empty; give them distinct values so each form's key is observable
+vi.mock('@shared/data/platform.data', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/data/platform.data')>()),
   USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: 'submit-idea-key',
   USERSNAP_PROJECT_REPORT_ISSUE_API_KEY: 'report-issue-key',
+}));
+vi.mock('@renderer/services/usersnap.service', () => ({
   openUsersnapForm: mocks.openUsersnapForm,
   closeOpenUsersnapForm: mocks.closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen: mocks.isUsersnapFormCurrentlyOpen,

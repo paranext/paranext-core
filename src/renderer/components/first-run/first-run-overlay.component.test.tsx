@@ -2,13 +2,25 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
-import { forwardRef, ReactNode, useEffect } from 'react';
+import { forwardRef, type Ref, ReactNode, useEffect } from 'react';
 import * as store from '@renderer/services/first-run-store';
 import {
   reportConnectionLost,
   resetConnectionLost,
 } from '@renderer/services/connection-lost-store';
+import {
+  isWindowBlockedByOverlay,
+  resetWindowBlockingOverlays,
+} from '@renderer/services/window-blocking-overlay-store';
 import { FirstRunOverlay } from './first-run-overlay.component';
+
+// Records what FirstRunGate hands TooltipPortalContainerProvider, so a test can prove the gate
+// actually wires its dialog element through (see the "portals tooltips into the gate" test).
+// vi.hoisted so the value exists before the hoisted vi.mock factory below references it.
+const tooltipPortal = vi.hoisted<{
+  container: HTMLElement | null | undefined;
+  wrapped: boolean;
+}>(() => ({ container: undefined, wrapped: false }));
 
 vi.mock('@renderer/services/first-run-store', async (importActual) => {
   const actual = await importActual<typeof store>();
@@ -79,8 +91,22 @@ vi.mock('platform-bible-react', () => {
   function DialogStub({ children }: { children: ReactNode }) {
     return <div>{children}</div>;
   }
-  function DialogContentStub({ children }: { children: ReactNode }) {
-    return <div>{children}</div>;
+  // Forwards ref and keeps data-testid so a test can assert the gate wires this element into
+  // TooltipPortalContainerProvider. React 19 passes `ref` as an ordinary prop.
+  function DialogContentStub({
+    children,
+    ref,
+    'data-testid': testId,
+  }: {
+    children: ReactNode;
+    ref?: Ref<HTMLDivElement>;
+    'data-testid'?: string;
+  }) {
+    return (
+      <div ref={ref} data-testid={testId}>
+        {children}
+      </div>
+    );
   }
   function DialogTitleStub({ children }: { children: ReactNode }) {
     return <span>{children}</span>;
@@ -104,9 +130,24 @@ vi.mock('platform-bible-react', () => {
   function InterfaceLanguagePickerStub() {
     return <div data-testid="language-picker" />;
   }
+  // Context-only provider in the real library (it just chooses a portal target), so passing the
+  // children straight through is a faithful stub. Records its container prop so a test can prove
+  // the gate wires its dialog element in rather than silently dropping the fix.
+  function TooltipPortalContainerProviderStub({
+    container,
+    children,
+  }: {
+    container: HTMLElement | null;
+    children: ReactNode;
+  }) {
+    tooltipPortal.container = container;
+    tooltipPortal.wrapped = true;
+    return children;
+  }
   return {
     Dialog: DialogStub,
     DialogContent: DialogContentStub,
+    TooltipPortalContainerProvider: TooltipPortalContainerProviderStub,
     DialogTitle: DialogTitleStub,
     DialogDescription: DialogDescriptionStub,
     Button: ButtonStub,
@@ -135,9 +176,9 @@ vi.mock('platform-bible-react', () => {
 });
 const mockGetStatus = vi.mocked(store.getFirstRunStatus);
 
-// jsdom doesn't ship ResizeObserver or scrollIntoView; cmdk (used inside LanguageStep's
-// InterfaceLanguagePicker) instantiates a ResizeObserver on mount. No-op stubs are sufficient
-// since these tests don't assert layout or scroll behavior.
+// jsdom doesn't ship ResizeObserver; cmdk (used inside LanguageStep's InterfaceLanguagePicker)
+// instantiates one on mount. A no-op stub is sufficient since these tests don't assert layout
+// behavior. scrollIntoView is shimmed repo-wide in vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   // `targets` gives the no-op methods a `this` use (satisfies class-methods-use-this); unused by tests.
   private readonly targets = new Set<Element>();
@@ -159,13 +200,14 @@ beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
   }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
 });
 
 // beforeEach (not afterEach) so mocks are clean even when a prior test throws mid-run.
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  tooltipPortal.container = undefined;
+  tooltipPortal.wrapped = false;
+});
 // restoreAllMocks resets vi.spyOn implementations; clearAllMocks alone does not. useRealTimers
 // undoes any fake timers a test installed so it can't leak into the next test's userEvent.
 afterEach(() => {
@@ -174,6 +216,9 @@ afterEach(() => {
   // The connection-lost store is a module-level singleton and never clears itself, so a test that
   // latches it would leave every later test permanently stood down.
   resetConnectionLost();
+  // Same for the window-blocking store: a registration left behind would block the window for every
+  // later test in this process.
+  resetWindowBlockingOverlays();
 });
 
 describe('FirstRunOverlay', () => {
@@ -181,6 +226,19 @@ describe('FirstRunOverlay', () => {
     mockGetStatus.mockReturnValue({ kind: 'app' });
     const { container } = render(<FirstRunOverlay />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  // The gate is opaque and stacks above the tooltip layer (Z_INDEX_FIRST_RUN 700 vs
+  // Z_INDEX_TOOLTIP 550), so a tooltip in any step would portal to document.body and paint behind
+  // it. Guards both halves of the fix: that the provider wraps the gate's content at all, and that
+  // it receives the dialog element rather than staying null. Removing either the wrapper or the
+  // DialogContent ref in FirstRunGate fails this.
+  it('portals tooltips into the gate dialog so they are not painted behind it', () => {
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    render(<FirstRunOverlay />);
+
+    expect(tooltipPortal.wrapped).toBe(true);
+    expect(tooltipPortal.container).toBe(screen.getByTestId('first-run-dialog'));
   });
 
   it('renders the wizard shell when status is wizard', () => {
@@ -304,6 +362,42 @@ describe('FirstRunOverlay', () => {
       captured?.();
     });
     expect(screen.getByText(/choose your language/i)).toBeInTheDocument();
+  });
+
+  it('marks the window blocked while the first-run gate is up', () => {
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    const { unmount } = render(<FirstRunOverlay />);
+    expect(isWindowBlockedByOverlay()).toBe(true);
+    unmount();
+    expect(isWindowBlockedByOverlay()).toBe(false);
+  });
+
+  // The production release path: this gate is mounted for the life of the window (it returns
+  // nothing once setup is done rather than unmounting), so the block is never lifted by an unmount.
+  // A registration that only ever released on unmount would leave the window blocked for the rest
+  // of the session, and every content-zoom chord in it dead, with nothing said.
+  it('releases the block when setup finishes, without unmounting', () => {
+    let captured: (() => void) | undefined;
+    vi.spyOn(store, 'subscribeToFirstRun').mockImplementation((listener) => {
+      captured = listener;
+      return () => {};
+    });
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    render(<FirstRunOverlay />);
+    expect(isWindowBlockedByOverlay()).toBe(true);
+
+    mockGetStatus.mockReturnValue({ kind: 'app' });
+    act(() => {
+      captured?.();
+    });
+    expect(isWindowBlockedByOverlay()).toBe(false);
+  });
+
+  it('does not mark the window blocked once the connection is lost', () => {
+    reportConnectionLost();
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    render(<FirstRunOverlay />);
+    expect(isWindowBlockedByOverlay()).toBe(false);
   });
 
   // Both orderings, because the gate can be raised at any time: a background registration re-check

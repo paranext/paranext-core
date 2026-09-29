@@ -1,0 +1,17 @@
+@use '../../styles/vars';
+
+// Sizes shared by the Power-mode tab bar's layout (dock-layout-wrapper.component.scss) and the
+// drop zone's drag-time hit areas (tab-bar-drop-zone.component.scss), which have to match that
+// layout exactly to leave no dead spots.
+
+// Flex gap between the drop zone and the "+" button inside `.dock-extra-content`.
+$tab-bar-extra-gap: vars.$space--sm;
+// Width and height of the tab bar's panel buttons ("+" and the overflow "more" button).
+$panel-button-size: 30px;
+// `.dock-bar`'s inline padding, the space between the last button and the bar's end.
+$tab-bar-padding-inline: vars.$space--xs;
+// Full height of the tab bar: the tab row drives it. `.dock-tab`'s own height
+// (dock-layout-wrapper.component.scss) is the button height plus one `--tab-header-to-content-gap`,
+// and `.dock-nav-list` adds a second `--tab-header-to-content-gap` as its own
+// `padding-block-start`. `--tab-header-to-content-gap` is set on `.dock-style-platform-bible` panels.
+$tab-bar-height: calc($panel-button-size + 2 * var(--tab-header-to-content-gap));

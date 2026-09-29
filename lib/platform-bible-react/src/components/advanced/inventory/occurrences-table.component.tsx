@@ -9,6 +9,7 @@ import {
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { formatScrRef, LanguageStrings } from 'platform-bible-utils';
 import { ReactNode, useMemo } from 'react';
+import { useContentZoomTextProps } from '@/context/content-zoom-text.context';
 import { InventoryItemOccurrence } from './inventory-utils';
 
 /**
@@ -70,6 +71,10 @@ export function OccurrencesTable({
   localizedStrings,
   classNameForText,
 }: OccurrencesTableProps) {
+  // The occurrence snippet is project text; when the hosting view opts in with a
+  // `ContentZoomTextProvider`, it zooms with the pane while the reference cell and headers keep
+  // interface size.
+  const zoomTextProps = useContentZoomTextProps();
   const referenceHeaderText =
     localizedStrings['%webView_inventory_occurrences_table_header_reference%'];
   const occurrenceHeaderText =
@@ -111,7 +116,11 @@ export function OccurrencesTable({
               }}
             >
               <TableCell>{formatScrRef(occurrence.reference, 'English')}</TableCell>
-              <TableCell className={classNameForText}>
+              <TableCell
+                className={classNameForText}
+                data-platform-content-zoom-root={zoomTextProps['data-platform-content-zoom-root']}
+                data-platform-content-zoom-label={zoomTextProps['data-platform-content-zoom-label']}
+              >
                 {formatTextWithBold(occurrence.text)}
               </TableCell>
             </TableRow>

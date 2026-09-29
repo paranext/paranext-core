@@ -24,6 +24,7 @@ import { killChildProcessesFromExtensions } from '@extension-host/services/creat
 import { initialize as initializeDatabaseService } from '@extension-host/services/database.service-host';
 import { startLocalOAuthServer } from '@extension-host/services/local-oauth.service';
 import * as analyticsService from '@extension-host/services/analytics.service';
+import { runGracefulShutdown } from '@extension-host/graceful-shutdown';
 import { markStartup } from '@shared/utils/startup-timing.util';
 import { STARTUP_MARK_PROCESS_START } from '@shared/data/platform.data';
 
@@ -37,16 +38,7 @@ markStartup(STARTUP_MARK_PROCESS_START);
 process.on('message', (message) => {
   if (isString(message) && message === gracefulShutdownMessage) {
     logger.info('Beginning to shut down process due to graceful shutdown message');
-    (async () => {
-      try {
-        await extensionService.shutdown();
-      } catch (error) {
-        logger.error(`Failed to deactivate extensions. ${getErrorMessage(error)}`);
-      } finally {
-        logger.info('Finally shutting down process due to graceful shutdown message');
-        process.exit();
-      }
-    })();
+    runGracefulShutdown(() => process.exit());
   }
 });
 

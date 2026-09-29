@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
 import type { WebViewProps } from '@papi/core';
+import type { IChecklistService } from 'platform-scripture';
 import { newPlatformError } from 'platform-bible-utils';
+import { useChecklistService } from './hooks/use-checklist';
+import { localizedValueFor } from './project-selector.test-utils';
 
 // ---------------------------------------------------------------------------
 // jsdom harness — cmdk (inside ProjectSelector's popover) and Radix need these
@@ -34,9 +37,6 @@ beforeAll(() => {
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
   }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
-  }
   // jsdom does no layout, so getBoundingClientRect reports a 0-width rect. ProjectSelector's
   // auto-narrow observer treats that as a narrow trigger; give the combobox a production-like
   // width so the default (wide) rendering is what these tests exercise.
@@ -56,15 +56,18 @@ beforeAll(() => {
 // Hoisted mocks — must precede any import that touches the web view
 // ---------------------------------------------------------------------------
 
-type MockProject = { id: string; shortName: string; fullName: string };
+type MockProject = { id: string; shortName: string; fullName?: string };
 type MockOpenTab = { projectId: string; scrollGroupId: number; webViewType: string };
 
-const { mockRecentProjects, mockProjects, mockOpenTabs } = vi.hoisted(() => {
-  const projects: { value: { id: string; shortName: string; fullName: string }[] } = { value: [] };
+const { mockChecklistService, mockRecentProjects, mockProjects, mockOpenTabs } = vi.hoisted(() => {
+  const projects: { value: { id: string; shortName: string; fullName?: string }[] } = {
+    value: [],
+  };
   const openTabs: {
     value: { projectId: string; scrollGroupId: number; webViewType: string }[];
   } = { value: [] };
   return {
+    mockChecklistService: { value: undefined as unknown },
     mockRecentProjects: { value: undefined as unknown },
     mockProjects: projects,
     mockOpenTabs: openTabs,
@@ -72,12 +75,8 @@ const { mockRecentProjects, mockProjects, mockOpenTabs } = vi.hoisted(() => {
 });
 
 vi.mock('@papi/frontend', () => {
-  const makeProjectDataProvider = (projectId: string) => ({
+  const makeProjectDataProvider = () => ({
     getSetting: vi.fn(async (key: string) => {
-      const project = mockProjects.value.find((p) => p.id === projectId);
-      if (key === 'platform.name') return project?.shortName ?? 'P1';
-      if (key === 'platform.fullName') return project?.fullName ?? 'Project One';
-      if (key === 'platform.language') return 'en';
       if (key === 'platformScripture.booksPresent') return '';
       return undefined;
     }),
@@ -86,12 +85,27 @@ vi.mock('@papi/frontend', () => {
     default: {
       menuData: { dataProviderName: 'platform.menuData' },
       projectDataProviders: {
-        get: vi.fn(async (_providerType: string, projectId: string) =>
-          makeProjectDataProvider(projectId),
-        ),
+        get: vi.fn(async () => makeProjectDataProvider()),
       },
       projectLookup: {
-        getMetadataForAllProjects: vi.fn(async () => mockProjects.value.map(({ id }) => ({ id }))),
+        // The web view reads names and language off metadata, not off `pdp.getSetting` — the
+        // `platform.fullName` setting carries a localized `*Name Missing*` default that would
+        // render as a real full name. Mirror that contract: `name`/`fullName` are optional, and a
+        // fixture without a full name simply omits the field.
+        getMetadataForAllProjects: vi.fn(async () =>
+          mockProjects.value.map(({ id, shortName, fullName }) => ({
+            id,
+            name: shortName,
+            ...(fullName ? { fullName } : {}),
+            language: 'en',
+          })),
+        ),
+        getMetadataForProject: vi.fn(async (id: string) => {
+          const project = mockProjects.value.find((p) => p.id === id);
+          if (!project) throw new Error(`No metadata for ${id}`);
+          const { shortName, fullName } = project;
+          return { id, name: shortName, ...(fullName ? { fullName } : {}), language: 'en' };
+        }),
       },
       commands: { sendCommand: vi.fn(async () => undefined) },
       window: { setFocus: vi.fn(async () => undefined) },
@@ -101,25 +115,43 @@ vi.mock('@papi/frontend', () => {
   };
 });
 
-vi.mock('@papi/frontend/react', () => ({
-  // Echo each requested key back as its own value, matching useLocalizedStrings' pre-resolution
-  // behavior — every entry is always a string.
-  useLocalizedStrings: (keys: string[]) => [
-    Object.fromEntries(keys.map((key) => [key, key])),
-    false,
-  ],
-  useProjectDataProvider: vi.fn(() => undefined),
-  useData: vi.fn(() => ({
-    RecentProjects: () => [mockRecentProjects.value, vi.fn(), false],
-    WebViewMenu: (_selector: unknown, defaultValue: unknown) => [defaultValue, vi.fn(), false],
-  })),
-}));
+vi.mock('@papi/frontend/react', async () => {
+  // Imported inside the factory: `vi.mock` factories are hoisted above the file's imports, so a
+  // top-level binding may still be in its temporal dead zone when the factory runs. One rule, no
+  // exceptions — whether the helper happens to be initialized first depends on module load order,
+  // which is not a property a test should rest on. Aliased because the same names are bound at the
+  // top level.
+  const { isProjectSelectorSharedKey: isSharedKey, localizedValueFor: valueFor } = await import(
+    './project-selector.test-utils'
+  );
+  return {
+    // Echo each requested key back as its own value, which is what useLocalizedStrings does before
+    // it resolves. Two exceptions: the picker treats a key echoed as its own value as unresolved,
+    // so the shared `%projectSelector_*%` block gets a resolved-looking value instead; and the
+    // column header's aria template is echoed back resolved because dropping its `{name}`
+    // placeholder would remove the only place the composed project name is observable.
+    useLocalizedStrings: (keys: string[]) => [
+      Object.fromEntries(
+        keys.map((key) => {
+          if (key === '%markersChecklist_columnHeader_aria%') return [key, 'Project: {name}'];
+          return [key, isSharedKey(key) ? valueFor(key) : key];
+        }),
+      ),
+      false,
+    ],
+    useProjectDataProvider: vi.fn(() => undefined),
+    useData: vi.fn(() => ({
+      RecentProjects: () => [mockRecentProjects.value, vi.fn(), false],
+      WebViewMenu: (_selector: unknown, defaultValue: unknown) => [defaultValue, vi.fn(), false],
+    })),
+  };
+});
 
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
-  // Imported inside the factory: a hoisted `vi.mock` factory must not close over the file's
-  // top-level import bindings.
-  const { useEffect, useState: useStateInMock } = await import('react');
+  // Imported inside the factory, for the same reason as above. Aliased where the name is also
+  // bound at the top level.
+  const { useEffect: useEffectInMock, useState: useStateInMock } = await import('react');
   return {
     ...original,
     // The real hook subscribes to a PAPI network event; the web view's only use of it is opening
@@ -129,7 +161,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     // async source resolves, so tests can drive the web view with a real project list.
     usePromise: (fn: () => Promise<unknown>, defaultValue: unknown) => {
       const [value, setValue] = useStateInMock(defaultValue);
-      useEffect(() => {
+      useEffectInMock(() => {
         let isCurrent = true;
         fn()
           .then((result) => {
@@ -147,7 +179,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 });
 
 vi.mock('./hooks/use-checklist', () => ({
-  useChecklistService: vi.fn(() => ({ service: undefined })),
+  useChecklistService: vi.fn(() => ({ service: mockChecklistService.value })),
 }));
 
 vi.mock('./hooks/use-open-project-tabs', () => ({
@@ -202,6 +234,13 @@ function makeProps(onStateChange?: (key: string, value: unknown) => void): WebVi
 
 afterEach(() => {
   vi.clearAllMocks();
+  // Every hoisted fixture, not just the service: a test that leaves `mockProjects` or
+  // `mockRecentProjects` populated makes the next one pass on state it never set up, so the suite's
+  // result depends on file order.
+  mockChecklistService.value = undefined;
+  mockRecentProjects.value = undefined;
+  mockProjects.value = [];
+  mockOpenTabs.value = [];
 });
 
 describe('ChecklistWebView recently-opened-projects wiring', () => {
@@ -228,6 +267,65 @@ describe('ChecklistWebView recently-opened-projects wiring', () => {
     await waitFor(() => {
       expect(screen.getByTestId('checklist-primary-project-trigger')).toBeInTheDocument();
     });
+  });
+});
+
+// The module-level stub leaves `%markersChecklist_*%` keys echoed as their own values, which is
+// the unresolved path (see `./project-selector.test-utils`). The picker would fall back to its own
+// generic English there, so the web view has to supply its specific wording itself.
+describe('ChecklistWebView picker labels when its own strings are unresolved', () => {
+  const OTHER_PROJECTS: MockProject[] = [
+    { id: 'project-9', shortName: 'P9', fullName: 'Project Nine' },
+  ];
+
+  it('labels the comparative-texts picker with its own wording, not the picker default', async () => {
+    mockRecentProjects.value = [];
+    mockProjects.value = OTHER_PROJECTS;
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    const trigger = await screen.findByTestId('checklist-comparative-texts-trigger');
+    expect(within(trigger).getByRole('combobox')).toHaveTextContent('Select comparative projects');
+    expect(within(trigger).getByRole('combobox')).not.toHaveTextContent('Select a project');
+  });
+
+  it('labels the primary-project picker with its own wording, not the picker default', async () => {
+    mockRecentProjects.value = [];
+    // No row matches the web view's projectId, so the trigger shows its placeholder rather than a
+    // selected project's short name.
+    mockProjects.value = OTHER_PROJECTS;
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    const trigger = await screen.findByTestId('checklist-primary-project-trigger');
+    expect(within(trigger).getByRole('combobox')).toHaveTextContent(
+      'Select primary Scripture text',
+    );
+    expect(within(trigger).getByRole('combobox')).not.toHaveTextContent('Select a project');
+  });
+
+  // Visible text and accessible name come from one value per picker, so a screen reader user can
+  // tell the two toolbar comboboxes apart on the unresolved path — where both would otherwise be
+  // announced as the picker's generic "Projects & resources".
+  it('gives each picker a distinct accessible name', async () => {
+    mockRecentProjects.value = [];
+    mockProjects.value = OTHER_PROJECTS;
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    await screen.findByTestId('checklist-primary-project-trigger');
+    expect(
+      screen.getByRole('combobox', { name: 'Select primary Scripture text' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('combobox', { name: 'Select comparative projects' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('combobox', { name: 'Projects & resources' }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -271,7 +369,9 @@ describe('ChecklistWebView comparative-texts picker', () => {
     const { user } = await openComparativePicker();
 
     // The grouping is available and active: the open project is bucketed under "Open tabs".
-    const openTabsHeading = await screen.findByText('%projectSelector_openTabsSectionHeading%');
+    const openTabsHeading = await screen.findByText(
+      localizedValueFor('%projectSelector_openTabsSectionHeading%'),
+    );
     expect(openTabsHeading).toBeInTheDocument();
 
     // One row per project, even though the project is open in two scroll groups.
@@ -316,17 +416,21 @@ describe('ChecklistWebView comparative-texts picker', () => {
     await user.click(getGroupByTrigger());
     await user.click(
       await screen.findByRole('menuitemradio', {
-        name: '%projectSelector_grouping_lastUsed_label%',
+        name: localizedValueFor('%projectSelector_grouping_lastUsed_label%'),
       }),
     );
 
     // PROJECT-2 is the only comparative row (the primary project is filtered out), so exactly one
     // of these two headings can render: which one is the whole assertion.
     expect(
-      await screen.findByText('%projectSelector_grouping_lastUsed_recentSectionHeading%'),
+      await screen.findByText(
+        localizedValueFor('%projectSelector_grouping_lastUsed_recentSectionHeading%'),
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText('%projectSelector_grouping_lastUsed_otherSectionHeading%'),
+      screen.queryByText(
+        localizedValueFor('%projectSelector_grouping_lastUsed_otherSectionHeading%'),
+      ),
     ).not.toBeInTheDocument();
   });
 
@@ -356,5 +460,164 @@ describe('ChecklistWebView comparative-texts picker', () => {
     await user.click((await screen.findAllByRole('option', { name: /P2/ }))[0]);
     expect(comparativeTextsWrites).toHaveLength(2);
     expect(comparativeTextsWrites[1]).toEqual([]);
+  });
+});
+
+describe('ChecklistWebView column full names', () => {
+  /** A minimal success response: the column identity fields the header reads, and nothing else. */
+  function serviceWithColumns(columnProjectIds: string[], columnHeaders: string[]) {
+    return {
+      buildChecklistData: vi.fn(async () => ({
+        success: true,
+        rows: [],
+        columnHeaders,
+        columnProjectIds,
+        excludedCount: 0,
+        helpText: undefined,
+        truncated: false,
+        emptyResultMessage: undefined,
+      })),
+    };
+  }
+
+  it('heads a column with its short name and announces the full name behind it', async () => {
+    mockRecentProjects.value = [];
+    mockProjects.value = [
+      { id: 'project-1', shortName: 'P1', fullName: 'Project One' },
+      // No full name of its own — the header has only the short name to announce.
+      { id: 'project-2', shortName: 'P2' },
+    ];
+    mockOpenTabs.value = [];
+    mockChecklistService.value = serviceWithColumns(['project-1', 'project-2'], ['P1', 'P2']);
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    // The full name is resolved from metadata, so it arrives a tick after the columns render —
+    // re-query each time rather than holding the first render's nodes.
+    await waitFor(() => {
+      const [first] = screen.getAllByTestId('checklist-column-header');
+      expect(first.getAttribute('aria-label')).toContain('P1 - Project One');
+    });
+    const headers = screen.getAllByTestId('checklist-column-header');
+    // Visible text stays the short name in both cases; only the announced name differs.
+    expect(headers[0]).toHaveTextContent('P1');
+    expect(headers[1]).toHaveTextContent('P2');
+    expect(headers[1].getAttribute('aria-label')).toContain('P2');
+    expect(headers[1].getAttribute('aria-label')).not.toContain(' - ');
+  });
+});
+
+describe('ChecklistWebView data loading across web view definition updates', () => {
+  /**
+   * Props whose `useWebViewState` follows the platform hook's update semantics: every write to the
+   * web view's state is broadcast to every slot, and a slot whose key is absent from the broadcast
+   * state resets to the default the caller passed on its latest render. Content zoom writes its
+   * levels into the same state on every step, so a slot left at its default sees that reset on
+   * every zoom step.
+   */
+  function makePropsWithSharedState() {
+    let webViewState: Record<string, unknown> = {};
+    const scrRef = { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' };
+    const setScrRef = vi.fn();
+    const listeners = new Set<(state: Record<string, unknown>) => void>();
+    const writeState = (next: Record<string, unknown>) => {
+      webViewState = next;
+      listeners.forEach((listener) => listener(next));
+    };
+    function useSharedWebViewState(key: string, defaultValue: unknown) {
+      const defaultRef = useRef(defaultValue);
+      defaultRef.current = defaultValue;
+      const [value, setValue] = useState(() =>
+        key in webViewState ? webViewState[key] : defaultValue,
+      );
+      useEffect(() => {
+        const listener = (state: Record<string, unknown>) =>
+          setValue(key in state ? state[key] : defaultRef.current);
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      }, [key]);
+      // Stable per key, like the platform hook's setter.
+      const setState = useCallback(
+        (next: unknown) => writeState({ ...webViewState, [key]: next }),
+        [key],
+      );
+      return [value, setState];
+    }
+    // The literal supplies only the props the web view reads; the double cast avoids restating
+    // every optional field of WebViewProps.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const props = {
+      projectId: 'project-1',
+      updateWebViewDefinition: vi.fn(),
+      useWebViewState: useSharedWebViewState,
+      // The platform hook keeps the reference's identity until the reference changes.
+      useWebViewScrollGroupScrRef: () => [scrRef, setScrRef, undefined],
+    } as unknown as WebViewProps;
+    const writeContentZoomLevel = (level: number) =>
+      writeState({ ...webViewState, 'platform.contentZoomLevels': { main: level } });
+    return { props, writeContentZoomLevel };
+  }
+
+  const buildChecklistData = vi.fn(async () => ({
+    rows: [],
+    columnHeaders: [],
+    columnProjectIds: [],
+    excludedCount: 0,
+    truncated: false,
+  }));
+  const service = { buildChecklistData, validateMarkerSettings: vi.fn() };
+
+  async function waitForQuiet() {
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 400);
+      });
+    });
+  }
+
+  beforeEach(() => {
+    mockRecentProjects.value = [];
+    mockProjects.value = [];
+    mockOpenTabs.value = [];
+    vi.mocked(useChecklistService).mockImplementation(() => ({
+      // The mock supplies only the methods the web view calls.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      service: service as unknown as IChecklistService,
+      isEditable: false,
+    }));
+  });
+
+  afterEach(() => {
+    vi.mocked(useChecklistService).mockImplementation(() => ({
+      service: undefined,
+      isEditable: false,
+    }));
+  });
+
+  it('does not reload the checklist when a content zoom step writes the web view state', async () => {
+    const { props, writeContentZoomLevel } = makePropsWithSharedState();
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...props} />);
+
+    // Settle the mount-time loads: the first request, then the one for the verse range the
+    // auto-follow effect derives from the current reference.
+    await waitFor(() => expect(buildChecklistData.mock.calls.length).toBeGreaterThanOrEqual(2), {
+      timeout: 2000,
+    });
+    await waitForQuiet();
+    const callsBeforeZoom = buildChecklistData.mock.calls.length;
+
+    await act(async () => {
+      writeContentZoomLevel(1.1);
+    });
+    await act(async () => {
+      writeContentZoomLevel(1.2);
+    });
+    await waitForQuiet();
+
+    expect(buildChecklistData).toHaveBeenCalledTimes(callsBeforeZoom);
   });
 });

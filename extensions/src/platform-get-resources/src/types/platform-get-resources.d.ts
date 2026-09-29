@@ -17,6 +17,18 @@ declare module 'platform-get-resources' {
    */
   export type DblResourceUpdateStatus = { [dblEntryUid: string]: boolean | undefined };
 
+  /**
+   * The local project id each catalogued DBL resource is installed as, keyed by DBL Entry UID. An
+   * empty string means the resource is not installed; a resource absent from the map is one the
+   * backend did not report on, and keeps whatever the caller already has.
+   *
+   * Only the backend can produce this: a resource project's id is unrelated to the DBL entry it was
+   * installed from — the entry uid is recorded in the project's settings, which is what
+   * ParatextData matches on — so nothing in the local project list identifies the catalog row it
+   * belongs to.
+   */
+  export type DblResourceInstallStatus = { [dblEntryUid: string]: string | undefined };
+
   export type IDblResourcesProvider = IDataProvider<GetResourcesDataTypes> & {
     /**
      * Recomputes whether a newer version of each known resource is available from the DBL,
@@ -34,10 +46,39 @@ declare module 'platform-get-resources' {
      * removing a resource, where the user is already waiting on their own action.
      *
      * @returns Whether an update is available, keyed by DBL Entry UID.
+     * @experimental
      */
     recomputeDblResourcesUpdateStatus: () => Promise<DblResourceUpdateStatus>;
     /**
-     * Installs or updates a DBL resource to the local filesystem
+     * Recomputes which of the resources in the DBL catalog are installed locally, and under which
+     * project id.
+     *
+     * Callers cannot work this out for themselves: a resource project's id is unrelated to the DBL
+     * entry it was installed from, so matching a catalog row to a local project by id — exactly or
+     * by prefix — is guesswork that fails for any resource whose ids diverge.
+     *
+     * Never contacts the DBL, and gives up rather than blocking when the provider is busy. Unlike
+     * {@link recomputeDblResourcesUpdateStatus} it still answers before the catalog has been fetched
+     * — install status is a property of the machine, not of the catalog — but names only the
+     * resources that are installed until the catalog arrives, and cannot report a removal in that
+     * state. Read an empty map as "no answer" and keep the values you have; reading it as "nothing
+     * is installed" would clear every installed flag.
+     *
+     * @returns The local project id of each catalogued resource, keyed by DBL Entry UID; an empty
+     *   string for one that is not installed.
+     * @experimental
+     */
+    recomputeDblResourcesInstallStatus: () => Promise<DblResourceInstallStatus>;
+    /**
+     * Installs or updates a DBL resource to the local filesystem.
+     *
+     * Idempotent: a resource that is already installed and up to date resolves without doing
+     * anything, rather than rejecting. Callers cannot tell "installed now" from "already there",
+     * and none needs to — a caller whose catalog wrongly reports the resource missing would
+     * otherwise have no way out, since every retry would fail identically. "Already installed" is
+     * decided against a freshly refreshed project collection, so a resource removed outside this
+     * process is installed for real rather than reported as already present. See
+     * `adr-dbl-install-is-idempotent`.
      *
      * @param uid DBL Entry UID that is used to identify the resource
      */
@@ -100,9 +141,15 @@ declare module 'papi-shared-types' {
     /**
      * Opens a new Home web view and returns the WebView id
      *
+     * @param shouldShowProjectsOnly Open Home scoped to editable projects, leaving out the
+     *   published resources that otherwise share its list. Set by entry points that are asking "get
+     *   me to one of my projects"; Home's own entry points omit it and list both. Applies to the
+     *   open it is passed on only — it does not stick to the tab.
      * @returns WebView id for new Home WebView or `undefined` if not created
      */
-    'platformGetResources.openHome': () => Promise<string | undefined>;
+    'platformGetResources.openHome': (
+      shouldShowProjectsOnly?: boolean,
+    ) => Promise<string | undefined>;
 
     /**
      * Opens a "New Tab" web view and returns the WebView id
@@ -144,8 +191,16 @@ declare module 'papi-shared-types' {
      * updating or removing a resource — and then re-read the catalog, or the read will return the
      * flags from before the change. Without it an updated resource keeps its "update available"
      * flag until the catalog is read a second time, because nothing else about the row changes.
+     *
+     * @param shouldRecomputeUpdateStatus Whether to also refresh `updateAvailable`. Defaults to
+     *   `true`. It costs a second backend round trip, and only the Get Resources list renders that
+     *   flag, so a caller that reads `installed` alone — a panel, a picker, the text grid — should
+     *   pass `false` rather than wait on a value it discards.
+     * @experimental
      */
-    'platformGetResources.refreshResourceFlags': () => Promise<void>;
+    'platformGetResources.refreshResourceFlags': (
+      shouldRecomputeUpdateStatus?: boolean,
+    ) => Promise<void>;
 
     /**
      * Returns locally-installed, read-only resources that are NOT in the DBL catalog (e.g. VULGP83,

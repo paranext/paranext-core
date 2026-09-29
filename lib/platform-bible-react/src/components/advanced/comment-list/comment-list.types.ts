@@ -1,3 +1,4 @@
+import { SerializedEditorState } from 'lexical';
 import {
   CommentStatus,
   LanguageStrings,
@@ -24,6 +25,25 @@ export interface ConflictResolutionCallbacks {
    */
   getOptions: (threadId: string) => Promise<ConflictResolutionOptions>;
 }
+
+/**
+ * A comment the user has typed but not committed — an unsent reply, an unsaved edit to an existing
+ * comment, or both at once (the reply compose box stays visible while editing an existing comment
+ * whenever it already has content). Held by the consumer rather than by the thread component, so it
+ * survives the component unmounting (a filter change does that routinely).
+ */
+export type CommentDraft = {
+  /** Serialized contents of the unsent reply, or `undefined` when nothing has been typed. */
+  editorState?: SerializedEditorState;
+  /** Pending assignee, or `undefined` when none has been chosen. */
+  assignedUser?: string;
+  /**
+   * Unsaved edits to existing comments in this thread, keyed by comment id. A thread can hold an
+   * unsent reply and an in-progress edit at the same time, so these are tracked separately rather
+   * than sharing one editor state.
+   */
+  commentEdits?: Readonly<Record<string, SerializedEditorState>>;
+};
 
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
@@ -63,6 +83,8 @@ export const COMMENT_LIST_STRING_KEYS = Object.freeze([
   '%comment_aria_mark_as_read%',
   '%comment_aria_mark_as_unread%',
   '%comment_aria_resolve_thread%',
+  '%comment_aria_cancel_edit%',
+  '%comment_aria_save_edit%',
 ] as const);
 
 /**
@@ -170,6 +192,18 @@ export interface CommentListProps {
    * when this is not provided.
    */
   conflictResolution?: ConflictResolutionCallbacks;
+  /**
+   * Uncommitted drafts by thread id. A thread with no entry has no draft.
+   *
+   * Pass this together with `onDraftChange`, or omit both — `CommentThreadProps.draft` documents
+   * what goes wrong with only one of the pair.
+   */
+  drafts?: Readonly<Record<string, CommentDraft>>;
+  /**
+   * Called when a thread's draft changes. `draft` is `undefined` when the draft becomes empty, so a
+   * consumer can drop the entry rather than keep an empty one that would read as a draft.
+   */
+  onDraftChange?: (threadId: string, draft: CommentDraft | undefined) => void;
 }
 
 /** Props for the CommentThread component */
@@ -217,7 +251,15 @@ export interface CommentThreadProps {
   handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
   /** Handler for deleting a comment */
   handleDeleteComment: (commentId: string) => Promise<boolean>;
-  /** Handler for updating read status */
+  /**
+   * Handler for updating read status. Called both from the manual mark-read/unread toggle and from
+   * the auto-read timer (see `autoReadDelay`) — the two are not distinguished in the call. A
+   * consumer whose thread list is filtered by read status (server-side or client-side) should not
+   * simply re-run that filter on every call: the auto-read timer fires while the thread is open and
+   * selected, so an unread-scoped filter would remove the very thread the user is looking at the
+   * instant it fires. Consider freezing that filter's membership for the session the way an
+   * unsaved-drafts filter would (grow-only, re-snapshotted only on re-entering the filter).
+   */
   handleReadStatusChange?: (threadId: string, markRead: boolean) => void;
   /**
    * Users that can be assigned to threads. Includes special values: "Team" for team assignment, ""
@@ -274,6 +316,34 @@ export interface CommentThreadProps {
    * and has visible replies, so a resolution card isn't flush against its replies.
    */
   spaceRootContentFromReplies?: boolean;
+  /**
+   * This thread's uncommitted draft — reply-box contents, a pending assignee, or both. When
+   * provided (even as `{}`), it is rendered instead of internal state (see
+   * {@link CommentListProps.drafts}). Falls back to internal state when omitted, so callers that
+   * don't manage drafts keep working.
+   *
+   * Pass `draft` and `onDraftChange` together, or omit both — either one without the other silently
+   * freezes the tracked draft, and in a way that is easy to miss: the underlying Lexical editor
+   * keeps its own internal typing buffer regardless (its initial content is read once at mount, not
+   * on every render), so characters keep appearing as the user types. What breaks is everything
+   * that reads the _tracked_ draft instead of the editor's live buffer — most visibly, the Submit
+   * button (gated on the tracked draft having content) stays disabled forever with content visibly
+   * in the box. Concretely:
+   *
+   * - `onDraftChange` supplied, `draft` omitted: this component is "controlled" and stops writing its
+   *   own internal fallback state, but with no `draft` prop to read back from, the tracked draft
+   *   stays at its empty initial value forever.
+   * - `draft` supplied (to any fixed value, `{}` included), `onDraftChange` omitted: this component
+   *   keeps updating its internal fallback state on every keystroke as normal, but the defined
+   *   `draft` prop always takes precedence over that internal state, so the tracked draft stays
+   *   pinned at whatever `draft` was on the first render.
+   */
+  draft?: CommentDraft;
+  /**
+   * Called when this thread's draft changes. See {@link CommentListProps.onDraftChange}. Falls back
+   * to purely internal state when omitted.
+   */
+  onDraftChange?: (threadId: string, draft: CommentDraft | undefined) => void;
 }
 
 /**
@@ -316,4 +386,32 @@ export interface CommentItemProps {
   canEditOrDelete?: boolean;
   /** Whether the current user can resolve or re-open this thread. */
   canUserResolveThread?: boolean;
+  /**
+   * Controlled contents of an in-progress edit to this comment. When provided, it is rendered
+   * instead of internal state, and entering/leaving edit mode is derived from whether it is
+   * defined. Falls back to internal state when omitted.
+   *
+   * Pass `draftEditorState` and `onDraftEditorStateChange` together, or omit both — this follows
+   * the same sometimes-controlled shape as `CommentThreadProps.draft`, and either prop without the
+   * other is dangerous in its own way, not merely inert:
+   *
+   * - `onDraftEditorStateChange` supplied, `draftEditorState` omitted: this component stops writing
+   *   its internal fallback state, but with nothing to read back from, the tracked state stays
+   *   `undefined` forever — `isEditing` (derived from it) never becomes true, so entering edit mode
+   *   never visibly happens at all.
+   * - `draftEditorState` supplied (to any defined value), `onDraftEditorStateChange` omitted: this
+   *   component keeps updating its internal fallback state as the user types, but the defined
+   *   `draftEditorState` prop always takes precedence over it, so the tracked state stays pinned at
+   *   whatever was passed on the first render. Because Lexical's own editing buffer is independent
+   *   of that prop after mount, the user still sees their keystrokes — but Save reads the frozen
+   *   tracked state, not the buffer, so it silently commits the stale content instead of what was
+   *   typed.
+   */
+  draftEditorState?: SerializedEditorState;
+  /**
+   * Called when the in-progress edit's contents change. `undefined` when the edit is cancelled or
+   * saved, so a consumer can drop a stored draft rather than keep an empty one. Falls back to
+   * purely internal state when omitted.
+   */
+  onDraftEditorStateChange?: (editorState: SerializedEditorState | undefined) => void;
 }

@@ -107,6 +107,16 @@ export function getOverlayById(id: string): OverlayEntry | undefined {
 }
 
 /**
+ * Determine whether at least one active overlay has the given type
+ *
+ * @param type The overlay type to check for (e.g. 'modalDialog')
+ * @returns True if an overlay of that type is currently active; false otherwise
+ */
+export function hasOverlayOfType(type: OverlayEntry['type']): boolean {
+  return Array.from(overlays.values()).some((entry) => entry.type === type);
+}
+
+/**
  * Get the most recently created overlay matching `predicate` — the topmost of the overlays it
  * accepts, since a newer overlay always renders over an older one.
  *

@@ -2,76 +2,48 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import type { FirstRunStatus } from '@renderer/services/first-run-store';
-import { SIMPLE_PANEL_ID_PROJECT } from '@renderer/components/docking/simple-layout.data';
+import {
+  reportConnectionLost,
+  resetConnectionLost,
+} from '@renderer/services/connection-lost-store';
 import type { TourProps, TourStep } from './tour.component';
+import type { TourDomFixtures } from './onboarding-tour.test-utils';
+import {
+  installTourDomFixtures,
+  knobs,
+  recordTourDoneElsewhere,
+  resetTourHarness,
+} from './onboarding-tour.test-utils';
 import { readTourDone, requestTourReplay, writeTourDone } from './onboarding-tour.store';
 import { OnboardingTour } from './onboarding-tour.component';
 
 // window.matchMedia — which theme.service-host.ts calls at module init, reached here via
 // papi-frontend.service.ts — is stubbed for every jsdom test in vitest.setup.ts.
 
-// Mutable knobs the mocks read, so each test can set the scenario before rendering.
-let mockStatus: FirstRunStatus = { kind: 'app' };
-let mockIsPowerMode = false;
-let mockIsLocalizationLoading = false;
+// The mock harness this file shares with `onboarding-tour.connection-lost.test.tsx` — the knobs
+// each test sets, and the factory payloads below — lives in `onboarding-tour.test-utils.ts`. Only
+// the `Tour` mock further down is specific to this file. `vi.mock` is hoisted above imports, so the
+// calls stay here and pull their payloads in dynamically.
 
-let mockTourDone = false;
-// Mirrors the real store's done-flag subscription, which exists so a write in another window
-// reaches this one. Tests drive it through `recordTourDoneElsewhere`.
-const mockTourDoneListeners = new Set<() => void>();
+vi.mock('@renderer/services/first-run-store', async () => {
+  const { firstRunStoreMock } = await import('./onboarding-tour.test-utils');
+  return firstRunStoreMock();
+});
 
-/** Another window finished the tour: the shared flag flips and every window is notified. */
-function recordTourDoneElsewhere() {
-  mockTourDone = true;
-  mockTourDoneListeners.forEach((listener) => listener());
-}
+vi.mock('./onboarding-tour.store', async () => {
+  const { tourStoreMock } = await import('./onboarding-tour.test-utils');
+  return tourStoreMock();
+});
 
-// Stands in for the store's replay channel — a count plus its listeners, exactly as the real one.
-let mockReplayCount = 0;
-const mockReplayListeners = new Set<() => void>();
+vi.mock('@renderer/hooks/use-is-power-mode.hook', async () => {
+  const { powerModeMock } = await import('./onboarding-tour.test-utils');
+  return powerModeMock();
+});
 
-vi.mock('@renderer/services/first-run-store', () => ({
-  getFirstRunStatus: () => mockStatus,
-  subscribeToFirstRun: () => () => {},
-}));
-
-vi.mock('./onboarding-tour.store', () => ({
-  readTourDone: () => mockTourDone,
-  writeTourDone: () => {
-    mockTourDone = true;
-    mockTourDoneListeners.forEach((listener) => listener());
-  },
-  subscribeToTourDone: (listener: () => void) => {
-    mockTourDoneListeners.add(listener);
-    return () => {
-      mockTourDoneListeners.delete(listener);
-    };
-  },
-  getTourReplayCount: () => mockReplayCount,
-  subscribeToTourReplay: (listener: () => void) => {
-    mockReplayListeners.add(listener);
-    return () => {
-      mockReplayListeners.delete(listener);
-    };
-  },
-  requestTourReplay: () => {
-    mockReplayCount += 1;
-    mockReplayListeners.forEach((listener) => listener());
-  },
-}));
-
-vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
-  useIsPowerMode: () => mockIsPowerMode,
-}));
-
-// useLocalizedStrings returns [strings, isLoading] — mirror that shape; echo keys as values.
-vi.mock('@renderer/hooks/papi-hooks', () => ({
-  useLocalizedStrings: (keys: string[]) => [
-    Object.fromEntries(keys.map((k) => [k, k])),
-    mockIsLocalizationLoading,
-  ],
-}));
+vi.mock('@renderer/hooks/papi-hooks', async () => {
+  const { papiHooksMock } = await import('./onboarding-tour.test-utils');
+  return papiHooksMock();
+});
 
 // Mock Tour so we can assert what OnboardingTour hands it without a real DOM/spotlight.
 // Spread the real module so TOUR_LOCALIZE_KEYS (which the component composes into its key list)
@@ -117,35 +89,22 @@ vi.mock('./tour.component', async (importOriginal) => {
   };
 });
 
-// OnboardingTour polls for this element before it opens (the dock layout loads async, so the
-// panel divs are not present at startup; we add a stand-in so the layoutReady gate clears).
-let layoutPanelEl: HTMLElement;
-// The toolbar's Profile button — the one stop that survives Tour's filter in Power mode, and so
-// what the readiness gate waits for there. `platform-bible-toolbar` renders it in both modes.
-let profileTriggerEl: HTMLElement;
+let fixtures: TourDomFixtures;
 
 beforeEach(() => {
-  mockStatus = { kind: 'app' };
-  mockIsPowerMode = false;
-  mockIsLocalizationLoading = false;
-  mockTourDone = false;
-  mockReplayCount = 0;
-  mockTourDoneListeners.clear();
-
-  layoutPanelEl = document.createElement('div');
-  layoutPanelEl.setAttribute('data-dockid', SIMPLE_PANEL_ID_PROJECT);
-  document.body.appendChild(layoutPanelEl);
-
-  profileTriggerEl = document.createElement('button');
-  profileTriggerEl.setAttribute('data-testid', 'user-profile-popover-trigger');
-  document.body.appendChild(profileTriggerEl);
+  resetTourHarness();
+  // The connection-lost store is a module-level singleton that never clears itself, so an earlier
+  // test in this file that latches it would stand down the tour in every later one. `afterEach`
+  // below is what prevents that; this call is defensive, covering a run where that teardown did not
+  // get to happen.
+  resetConnectionLost();
+  fixtures = installTourDomFixtures();
 });
 
 afterEach(() => {
   cleanup();
-  mockTourDone = false;
-  layoutPanelEl?.remove();
-  profileTriggerEl?.remove();
+  resetConnectionLost();
+  fixtures.remove();
 });
 
 describe('OnboardingTour', () => {
@@ -199,31 +158,31 @@ describe('OnboardingTour', () => {
   });
 
   it('does not render while strings are still loading (prevents raw-key flash)', () => {
-    mockIsLocalizationLoading = true;
+    knobs.isLocalizationLoading = true;
     render(<OnboardingTour />);
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
 
   it('does not render while the app is still gated (wizard/loading)', () => {
-    mockStatus = { kind: 'wizard', step: 'language' };
+    knobs.firstRunStatus = { kind: 'wizard', step: 'language' };
     render(<OnboardingTour />);
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
 
   it('does not render while first-run status is still loading', () => {
-    mockStatus = { kind: 'loading' };
+    knobs.firstRunStatus = { kind: 'loading' };
     render(<OnboardingTour />);
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
 
   it('does not render when first-run status is error', () => {
-    mockStatus = { kind: 'error' };
+    knobs.firstRunStatus = { kind: 'error' };
     render(<OnboardingTour />);
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
 
   it('does not auto-show in Power mode', () => {
-    mockIsPowerMode = true;
+    knobs.isPowerMode = true;
     render(<OnboardingTour />);
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
@@ -236,13 +195,13 @@ describe('OnboardingTour', () => {
 
   it('opens once the layout panel appears (MutationObserver path)', async () => {
     // Panel absent at mount → the layoutReady gate holds the tour closed and observes the DOM.
-    layoutPanelEl.remove();
+    fixtures.layoutPanelEl.remove();
     render(<OnboardingTour />);
     expect(screen.queryByTestId('mock-tour')).toBeNull();
 
     // Panel mounts later (the real dock layout loads via an async PAPI round-trip).
     await act(async () => {
-      document.body.appendChild(layoutPanelEl);
+      document.body.appendChild(fixtures.layoutPanelEl);
       // MutationObserver callbacks deliver as a microtask; yield once so the gate can clear.
       await Promise.resolve();
     });
@@ -251,16 +210,17 @@ describe('OnboardingTour', () => {
 
   it('honors a done flag written externally between mount and open (e2e suppression path)', async () => {
     // Panel absent at mount → the tour is waiting on the layoutReady gate.
-    layoutPanelEl.remove();
+    fixtures.layoutPanelEl.remove();
     render(<OnboardingTour />);
     expect(screen.queryByTestId('mock-tour')).toBeNull();
 
-    // An external writer (e.g. the e2e harness) persists the done flag while the tour waits.
-    mockTourDone = true;
+    // An external writer (e.g. the e2e harness) persists the done flag while the tour waits. Set
+    // without notifying subscribers, which is what an out-of-band write looks like from here.
+    knobs.tourDone = true;
 
     // Layout becomes ready — the tour must re-read the flag at open time and stay closed.
     await act(async () => {
-      document.body.appendChild(layoutPanelEl);
+      document.body.appendChild(fixtures.layoutPanelEl);
       await Promise.resolve();
     });
     expect(screen.queryByTestId('mock-tour')).toBeNull();
@@ -301,7 +261,7 @@ describe('OnboardingTour', () => {
     // Power has no Simple columns and no Sync button, so Tour's open-time filter drops those stops.
     // The Profile stop survives — the toolbar renders `UserProfilePopover` in both modes — and it
     // is the one thing Help > Show the tour can still teach a Power user.
-    mockIsPowerMode = true;
+    knobs.isPowerMode = true;
     writeTourDone();
     render(<OnboardingTour />);
 
@@ -316,8 +276,8 @@ describe('OnboardingTour', () => {
     // The readiness gate exists so the column stops are in the DOM before Tour snapshots its step
     // list. Power never mounts those panels, so waiting on them would stall the replay until the
     // 10s safety timeout — a Help menu item that appears to do nothing for ten seconds.
-    layoutPanelEl.remove();
-    mockIsPowerMode = true;
+    fixtures.layoutPanelEl.remove();
+    knobs.isPowerMode = true;
     writeTourDone();
     render(<OnboardingTour />);
 
@@ -332,8 +292,8 @@ describe('OnboardingTour', () => {
     // The gate is what stops Tour snapshotting an empty step list. If every stop filters out, Tour
     // treats that as a skip and persists the done flag — so opening before the one Power anchor
     // exists would silently consume the tour rather than show it.
-    profileTriggerEl.remove();
-    mockIsPowerMode = true;
+    fixtures.profileTriggerEl.remove();
+    knobs.isPowerMode = true;
     writeTourDone();
     render(<OnboardingTour />);
 
@@ -343,7 +303,7 @@ describe('OnboardingTour', () => {
     expect(screen.queryByTestId('mock-tour')).toBeNull();
 
     await act(async () => {
-      document.body.appendChild(profileTriggerEl);
+      document.body.appendChild(fixtures.profileTriggerEl);
       await Promise.resolve();
     });
     expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
@@ -360,6 +320,35 @@ describe('OnboardingTour', () => {
     act(() => {
       recordTourDoneElsewhere();
     });
+
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('closes the open tour without recording it as done when the connection is lost', () => {
+    // The done flag is permanent and shared, so consuming it here would cost the user a tour they
+    // never saw: the connection-lost state offers only a reload, and the reload comes back to an
+    // app that believes the tour has already been given.
+    render(<OnboardingTour />);
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+
+    act(() => {
+      reportConnectionLost();
+    });
+
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+    // Reaches only as far as this file's `Tour` stub, which has no effects and no cleanup: it
+    // catches a gate that writes the flag on its way out, not a regression inside the real overlay.
+    // `onboarding-tour.connection-lost.test.tsx` covers that half with the real `Tour`, and is the
+    // test to keep if these two ever look redundant.
+    expect(readTourDone()).toBe(false);
+  });
+
+  it('does not render when the connection is already lost at mount', () => {
+    // The loss latches during startup often enough to matter — the socket can die before the dock
+    // layout resolves, which is exactly what the readiness gate is waiting for.
+    reportConnectionLost();
+
+    render(<OnboardingTour />);
 
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });

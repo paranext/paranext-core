@@ -150,3 +150,42 @@ describe('menus.model — tab menu channel', () => {
     expect(compileValidator()(doc)).toBe(false);
   });
 });
+
+describe('menus.model — shortcut field', () => {
+  const compileValidator = () => new Ajv2019({ allErrors: true }).compile(menuDocumentSchema);
+
+  const makeDoc = (item: object) => ({
+    mainMenu: {
+      columns: { 'test.column': { label: '%test_column%', order: 1 } },
+      groups: { 'test.group': { column: 'test.column', order: 1 } },
+      items: [item],
+    },
+    defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewContextMenu: { groups: {}, items: [] },
+    defaultWebViewTabMenu: { groups: {}, items: [] },
+    webViewMenus: {},
+  });
+
+  const commandItem = {
+    label: '%test_item%',
+    localizeNotes: 'test',
+    group: 'test.group',
+    order: 1,
+    command: 'test.run',
+  };
+
+  it('accepts a command item that does not declare a shortcut', () => {
+    expect(compileValidator()(makeDoc(commandItem))).toBe(true);
+  });
+
+  it('rejects a command item that declares a shortcut', () => {
+    const validate = compileValidator();
+    expect(validate(makeDoc({ ...commandItem, shortcut: 'Ctrl+F' }))).toBe(false);
+    expect(validate.errors).toContainEqual(
+      expect.objectContaining({
+        keyword: 'unevaluatedProperties',
+        params: { unevaluatedProperty: 'shortcut' },
+      }),
+    );
+  });
+});

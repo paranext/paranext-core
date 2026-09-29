@@ -5,8 +5,9 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-// cmdk (inside MarkerMenu) instantiates a ResizeObserver and schedules scrollTo/scrollIntoView;
-// jsdom ships none. Same shim the shipped control test uses.
+// cmdk (inside MarkerMenu) instantiates a ResizeObserver and schedules scrollTo; jsdom ships
+// neither. Same shim the shipped control test uses. scrollIntoView is shimmed repo-wide in
+// vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   private readonly targets = new Set<Element>();
 
@@ -29,9 +30,6 @@ beforeAll(() => {
   }
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
-  }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
   }
 });
 

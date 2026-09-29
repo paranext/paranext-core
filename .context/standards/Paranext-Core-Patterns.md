@@ -377,6 +377,8 @@ projectInterfaces.includes(scriptureInterfaceName);
 
 (`src/shared/models/project-lookup.service-model.ts` uses the same `.includes(...)` check when matching PDP factories and enriching metadata.) Keep the interface-name constant in one shared place so the name convention is encoded once. This keeps an extension's new project type working with zero changes to a central enum, and avoids a wrong-shape "fetch a project-type setting" lookup. Each PT9 project variant maps cleanly onto a combination of interface checks.
 
+**One exception: telling a published resource from a translation project.** When the question really is "is this a published resource?" (for example, a resource has no Text Collection of its own), read the `platform.isPublished` project setting — see `isProjectPublished` in `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`. Do not use `platform.isEditable`: it is a project-wide switch on editing the Scripture text, so a translation project can have it off. And do not infer it from `projectInterfaces`: both Paratext factories advertise the same reading and text-connection interfaces, and the ones only unpublished projects add (comments, PT9 interlinear) describe capabilities that happen to coincide with being unpublished today, not the category itself. Rationale: `adr-column-3-panels-are-told-their-project` in [Architecture-Decisions.md](Architecture-Decisions.md).
+
 ### Test Infrastructure
 
 - **Framework:** NUnit 4.0.1
@@ -1222,6 +1224,34 @@ export function setScrRefSync(/* ... */): boolean {
   group starts from it.
 - Add a second module named after the service. The `*.service.ts` that already exists in each process
   grows the cache; a new one beside it is a second answer to the same question.
+
+### Per-web-view state lives in the web view definition
+
+State belonging to **one open pane** goes in that web view's `SavedWebViewDefinition.state`, written
+with `updateWebViewDefinition` (a React view reaches it with `useWebViewState`). The dock layout
+serializes it, so it survives a restart and travels with the tab when the tab moves to another window.
+
+State that must **outlive the pane** — a user-level default, or per-project memory such as "what this
+project's editor was last set to" — goes in **user settings**: a visible setting for a default the
+user controls, a hidden one for the memory.
+
+**Avoid** a parallel per-web-view store. A `Record` keyed by web view id inside a service is a second
+copy of the definition's state, and it has to be taught by hand about every open, move, reload and
+close the definition already handles.
+
+State kept in a definition needs to say **what it belongs to** whenever the pane can be re-pointed at
+another project: a re-point keeps the web view id and the view rebuilds its definition by spreading
+its own saved state, so the old project's state arrives looking like state chosen for the new one.
+Store the identity beside the value and check it. Content zoom stamps
+`platform.contentZoomIdentity` (`kind:identity`) alongside its levels and re-seeds the pane from
+memory when the two disagree.
+
+Reference: content zoom keeps the pane's own levels under `platform.contentZoomLevels` in the
+definition state, and the default and per-project memory in the `platform.webViewContentZoom` and
+`platform.webViewContentZoomMemory` settings
+(`src/renderer/services/web-view-content-zoom.service.ts`). Rationale and rejected alternatives:
+`adr-per-web-view-state-lives-in-the-definition` in
+[Architecture-Decisions.md](Architecture-Decisions.md).
 
 ### Command Naming
 

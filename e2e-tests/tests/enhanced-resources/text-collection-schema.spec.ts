@@ -15,6 +15,10 @@
  * - The admin gate on the referenced-resources write is enforced server-side; it is covered by the C#
  *   unit tests, not asserted here — this fixture runs as the default (admin) user.
  */
+// Deliberately on `cdp.fixture` rather than the suite's `enhanced-resources.fixture`: this spec drives the project
+// data provider directly and never opens the Power-only "Open enhanced resource" menu item, so it
+// works in either interface mode. `enhanced-resources.fixture` would assert Power during fixture setup and turn a
+// spec that runs anywhere into a precondition failure.
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 

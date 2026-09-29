@@ -1,7 +1,6 @@
 /**
  * Shape of a platform window id where one appears inside a scoped name — a service shard's
- * registered name, or the `-w<id>` suffix a window appends to the web view ids of a layout it
- * loads.
+ * registered name, such as `DialogService-<windowId>`.
  *
  * Mirrors `WINDOW_ID_SHAPE_PATTERN_SOURCE` in `src/shared/utils/util.ts`. It is copied rather than
  * imported because the e2e project resolves none of the app's path aliases;

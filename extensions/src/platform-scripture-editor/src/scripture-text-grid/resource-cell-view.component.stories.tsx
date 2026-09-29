@@ -3,6 +3,8 @@ import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { expect, within } from 'storybook/test';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import {
+  EMPTY_KEY,
+  NO_VERSES_TO_SHOW_KEY,
   RESET_ZOOM_KEY,
   RESOURCE_CELL_STRING_KEYS,
   ResourceCellView,
@@ -33,6 +35,9 @@ export default meta;
 type Story = StoryObj<typeof ResourceCellView>;
 
 const localizedStrings = getLocalizedStrings([...RESOURCE_CELL_STRING_KEYS]);
+
+/** Storybook runs no content zoom; every cell marks its text with this one area id. */
+const STORY_ZOOM_AREA = 'resource-story';
 
 /** Bounds the cell so its `h-full`/`overflow-auto` layout behaves like a real grid column. */
 const CELL_BOX_STYLE: React.CSSProperties = {
@@ -105,6 +110,7 @@ export const Downloading: Story = {
     <CellBox>
       <ResourceCellView
         state="downloading"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -123,6 +129,7 @@ export const Failed: Story = {
     <CellBox>
       <ResourceCellView
         state="failed"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -143,6 +150,7 @@ export const BookNotAvailable: Story = {
     <CellBox>
       <ResourceCellView
         state="bookNotAvailable"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -162,6 +170,7 @@ export const NotInstalled: Story = {
     <CellBox>
       <ResourceCellView
         state="unavailable"
+        zoomArea={STORY_ZOOM_AREA}
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -177,6 +186,7 @@ export const Ready: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -192,6 +202,7 @@ export const ReadyRightToLeft: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="עברית"
         textDirection="rtl"
         localizedStrings={localizedStrings}
@@ -207,6 +218,7 @@ export const VerseReady: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -223,11 +235,12 @@ export const VerseEmpty: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
         nameDisplay="inline"
-        isVerseEmpty
+        emptyMessage={localizedStrings[EMPTY_KEY]}
         editor={undefined}
       />
     </CellBox>
@@ -240,6 +253,7 @@ export const VerseRightToLeft: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="עברית"
         textDirection="rtl"
         localizedStrings={localizedStrings}
@@ -260,6 +274,7 @@ export const VerseInlineWrapping: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -283,6 +298,7 @@ export const VerseNotInstalled: Story = {
     <CellBox>
       <ResourceCellView
         state="unavailable"
+        zoomArea={STORY_ZOOM_AREA}
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -299,6 +315,7 @@ export const VerseDownloading: Story = {
     <CellBox>
       <ResourceCellView
         state="downloading"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -315,6 +332,7 @@ export const VerseFailed: Story = {
     <CellBox>
       <ResourceCellView
         state="failed"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -334,6 +352,7 @@ export const VerseLongName: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="New International Version 2011"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -353,6 +372,7 @@ export const VerseLongNameNarrowPane: Story = {
     <CellBox width="110px">
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="New International Version 2011"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -369,6 +389,7 @@ export const VerseLongNameRightToLeft: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="תרגום השבעים המלא לפי מהדורת רלפס"
         textDirection="rtl"
         localizedStrings={localizedStrings}
@@ -388,6 +409,7 @@ export const VerseLongNameNarrowPaneRightToLeft: Story = {
     <CellBox width="110px">
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="תרגום השבעים המלא לפי מהדורת רלפס"
         textDirection="rtl"
         localizedStrings={localizedStrings}
@@ -410,6 +432,7 @@ export const PartialFailureRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="ready"
+          zoomArea={STORY_ZOOM_AREA}
           label="WEB"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -419,6 +442,7 @@ export const PartialFailureRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="failed"
+          zoomArea={STORY_ZOOM_AREA}
           label="ASV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -428,6 +452,7 @@ export const PartialFailureRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="unavailable"
+          zoomArea={STORY_ZOOM_AREA}
           label="NIV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -437,6 +462,7 @@ export const PartialFailureRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="downloading"
+          zoomArea={STORY_ZOOM_AREA}
           label="KJV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -448,52 +474,33 @@ export const PartialFailureRow: Story = {
 };
 
 // ---------------------------------------------------------------------------
-// Zoom states — each story supplies `zoomMenuLabels` so the context menu and
-// kebab button are both rendered (the component hides both when it is absent).
+// Zoom menus — each story supplies `zoomMenuLabels`, so the right-click menu
+// carries the zoom items and the header shows the "⋮" button (the component
+// renders neither when the labels are absent). The level itself is the
+// platform's content zoom; these stories show the menus' states only.
 // ---------------------------------------------------------------------------
 
 const zoomMenuLabels = {
-  zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom In',
-  zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom Out',
-  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Reset Zoom',
-  options: localizedStrings[ZOOM_OPTIONS_KEY] ?? 'Zoom options',
+  zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom in',
+  zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom out',
+  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Reset zoom',
+  options: localizedStrings[ZOOM_OPTIONS_KEY] ?? 'Zoom options for {resourceName}',
 };
 
-/**
- * Default zoom (factor = 1): both Zoom In and Zoom Out are available, and the kebab / context menu
- * are visible because `zoomMenuLabels` is provided.
- */
-export const ZoomDefault: Story = {
+/** Zoom menus available: every item enabled, the "⋮" revealed on hover or focus of the header. */
+export const ZoomMenus: Story = {
   render: () => (
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
         editor={<SampleChapter />}
-        zoomFactor={1}
         canZoomIn
         canZoomOut
-        zoomMenuLabels={zoomMenuLabels}
-      />
-    </CellBox>
-  ),
-};
-
-/** Zoomed in (factor = 1.4): the content area is enlarged; both actions remain enabled. */
-export const ZoomedIn: Story = {
-  render: () => (
-    <CellBox>
-      <ResourceCellView
-        state="ready"
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={localizedStrings}
-        editor={<SampleChapter />}
-        zoomFactor={1.4}
-        canZoomIn
-        canZoomOut
+        canReset
         zoomMenuLabels={zoomMenuLabels}
       />
     </CellBox>
@@ -501,143 +508,74 @@ export const ZoomedIn: Story = {
 };
 
 /**
- * At maximum zoom (factor = 3): `canZoomIn` is false so the Zoom In menu item is disabled; Zoom Out
- * and Reset are still enabled.
+ * Opens the "⋮" dropdown and asserts its three items. Lets reviewers confirm the affordance appears
+ * on hover and the menu renders with the resource-named button.
  */
-export const AtMaxZoom: Story = {
+export const ZoomOptionsOpen: Story = {
   render: () => (
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
         editor={<SampleChapter />}
-        zoomFactor={3}
-        canZoomIn={false}
-        canZoomOut
-        zoomMenuLabels={zoomMenuLabels}
-      />
-    </CellBox>
-  ),
-};
-
-/**
- * At minimum zoom (factor = 0.5): `canZoomOut` is false so the Zoom Out menu item is disabled; Zoom
- * In and Reset are still enabled.
- */
-export const AtMinZoom: Story = {
-  render: () => (
-    <CellBox>
-      <ResourceCellView
-        state="ready"
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={localizedStrings}
-        editor={<SampleChapter />}
-        zoomFactor={0.5}
-        canZoomIn
-        canZoomOut={false}
-        zoomMenuLabels={zoomMenuLabels}
-      />
-    </CellBox>
-  ),
-};
-
-// ---------------------------------------------------------------------------
-// Zoom interaction stories — play functions exercise the kebab dropdown so
-// reviewers can verify the affordance + ARIA state without running the full
-// app. (Right-click zoom is delivered through the editor's own context menu
-// via `EditorOptions.contextMenu`, which needs the real editor, so it is
-// verified manually in the app rather than in a story.)
-//
-// Radix DropdownMenu relies on PointerEvent sequences that a
-// plain `userEvent.click()` without setup does not synthesise. Using
-// `userEvent.setup({ pointerEventsCheck: 0 })` (the same pattern as the
-// unit tests) keeps things reliable in both jsdom and Storybook's browser
-// test-runner.
-// ---------------------------------------------------------------------------
-
-/**
- * Opens the kebab dropdown and asserts all three menu items are visible. Lets reviewers confirm the
- * affordance appears on hover and the menu renders with the correct labels.
- */
-export const ZoomKebabOpen: Story = {
-  render: () => (
-    <CellBox>
-      <ResourceCellView
-        state="ready"
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={localizedStrings}
-        editor={<SampleChapter />}
-        zoomFactor={1}
         canZoomIn
         canZoomOut
+        canReset
         zoomMenuLabels={zoomMenuLabels}
       />
     </CellBox>
   ),
   play: async ({ canvas, userEvent, step }) => {
+    // Radix DropdownMenu relies on PointerEvent sequences that a plain click does not synthesize.
     const user = userEvent.setup({ pointerEventsCheck: 0 });
-
-    await step('Hover the cell header to reveal the kebab', async () => {
-      // ResourceCellView is presentational (no gridcell role); hover the header label, which sits
-      // inside the `group` whose hover reveals the kebab.
-      const header = canvas.getByText('WEB');
-      await userEvent.hover(header);
+    await step('Hover the header to reveal the "⋮" button', async () => {
+      await userEvent.hover(canvas.getByText('WEB'));
     });
-
-    await step('Click the kebab to open the zoom menu', async () => {
-      const kebab = canvas.getByRole('button', { name: 'Zoom options for WEB' });
-      await user.click(kebab);
+    await step('Open the zoom options menu', async () => {
+      await user.click(canvas.getByRole('button', { name: /zoom options for WEB/i }));
     });
-
-    await step('Assert all three menu items are visible', async () => {
-      // Radix renders the menu portal at the document root; use `within(document.body)`.
+    await step('Assert the three zoom items are visible', async () => {
       const menu = within(canvas.getByRole('menu'));
-      await expect(menu.getByRole('menuitem', { name: 'Zoom In' })).toBeVisible();
-      await expect(menu.getByRole('menuitem', { name: 'Zoom Out' })).toBeVisible();
-      await expect(menu.getByRole('menuitem', { name: 'Reset Zoom' })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: /^zoom in$/i })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: /^zoom out$/i })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: /^reset zoom$/i })).toBeVisible();
     });
   },
 };
 
-/**
- * At maximum zoom: "Zoom In" is disabled in the dropdown while "Zoom Out" remains enabled. Lets
- * reviewers confirm the bound-guarding is reflected in the menu affordance.
- */
+/** At 300 %: Zoom in is disabled, Zoom out and Reset zoom stay enabled. */
 export const AtMaxZoomMenuOpen: Story = {
   render: () => (
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
         editor={<SampleChapter />}
-        zoomFactor={3}
         canZoomIn={false}
         canZoomOut
+        canReset
         zoomMenuLabels={zoomMenuLabels}
       />
     </CellBox>
   ),
   play: async ({ canvas, userEvent, step }) => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
-
-    await step('Open the kebab menu', async () => {
-      const kebab = canvas.getByRole('button', { name: 'Zoom options for WEB' });
-      await user.click(kebab);
+    await step('Open the zoom options menu', async () => {
+      await user.click(canvas.getByRole('button', { name: /zoom options for WEB/i }));
     });
-
-    await step('Assert Zoom In is disabled and Zoom Out is enabled', async () => {
+    await step('Assert Zoom in is disabled and Zoom out is enabled', async () => {
       const menu = within(canvas.getByRole('menu'));
-      await expect(menu.getByRole('menuitem', { name: 'Zoom In' })).toHaveAttribute(
+      await expect(menu.getByRole('menuitem', { name: /^zoom in$/i })).toHaveAttribute(
         'aria-disabled',
         'true',
       );
-      await expect(menu.getByRole('menuitem', { name: 'Zoom Out' })).not.toHaveAttribute(
+      await expect(menu.getByRole('menuitem', { name: /^zoom out$/i })).not.toHaveAttribute(
         'aria-disabled',
         'true',
       );
@@ -645,34 +583,32 @@ export const AtMaxZoomMenuOpen: Story = {
   },
 };
 
-/** At minimum zoom: "Zoom Out" is disabled in the dropdown while "Zoom In" remains enabled. */
+/** At 50 %: Zoom out is disabled, Zoom in stays enabled. */
 export const AtMinZoomMenuOpen: Story = {
   render: () => (
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
         editor={<SampleChapter />}
-        zoomFactor={0.5}
         canZoomIn
         canZoomOut={false}
+        canReset
         zoomMenuLabels={zoomMenuLabels}
       />
     </CellBox>
   ),
   play: async ({ canvas, userEvent, step }) => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
-
-    await step('Open the kebab menu', async () => {
-      const kebab = canvas.getByRole('button', { name: 'Zoom options for WEB' });
-      await user.click(kebab);
+    await step('Open the zoom options menu', async () => {
+      await user.click(canvas.getByRole('button', { name: /zoom options for WEB/i }));
     });
-
-    await step('Assert Zoom Out is disabled', async () => {
+    await step('Assert Zoom out is disabled', async () => {
       const menu = within(canvas.getByRole('menu'));
-      await expect(menu.getByRole('menuitem', { name: 'Zoom Out' })).toHaveAttribute(
+      await expect(menu.getByRole('menuitem', { name: /^zoom out$/i })).toHaveAttribute(
         'aria-disabled',
         'true',
       );
@@ -681,19 +617,19 @@ export const AtMinZoomMenuOpen: Story = {
 };
 
 /**
- * At the default factor (= 1), `canReset` is false: "Reset Zoom" is disabled. Documents the
- * disable-at-default behavior so reviewers can verify it is reflected in the menu affordance.
+ * A resource with no zoom level of its own follows the Tab content default zoom, so Reset zoom has
+ * nothing to undo and is disabled.
  */
-export const ResetDisabledAtDefault: Story = {
+export const ResetDisabledWithoutOwnLevel: Story = {
   render: () => (
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
         editor={<SampleChapter />}
-        zoomFactor={1}
         canZoomIn
         canZoomOut
         canReset={false}
@@ -703,15 +639,12 @@ export const ResetDisabledAtDefault: Story = {
   ),
   play: async ({ canvas, userEvent, step }) => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
-
-    await step('Open the kebab menu', async () => {
-      const kebab = canvas.getByRole('button', { name: 'Zoom options for WEB' });
-      await user.click(kebab);
+    await step('Open the zoom options menu', async () => {
+      await user.click(canvas.getByRole('button', { name: /zoom options for WEB/i }));
     });
-
-    await step('Assert Reset Zoom is disabled at the default factor', async () => {
+    await step('Assert Reset zoom is disabled', async () => {
       const menu = within(canvas.getByRole('menu'));
-      await expect(menu.getByRole('menuitem', { name: 'Reset Zoom' })).toHaveAttribute(
+      await expect(menu.getByRole('menuitem', { name: /^reset zoom$/i })).toHaveAttribute(
         'aria-disabled',
         'true',
       );
@@ -720,21 +653,20 @@ export const ResetDisabledAtDefault: Story = {
 };
 
 /**
- * A very long resource label: shows how the header truncates and the kebab coexists without
- * overflowing. No interaction needed — a visual smoke check for the layout.
+ * A very long resource label in the chapter-context header: shows how the header truncates and the
+ * "⋮" button coexists without overflowing. No interaction needed — a visual smoke check for the
+ * layout.
  */
-export const LongLabelWithZoom: Story = {
+export const LongLabel: Story = {
   render: () => (
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="World English Bible Revised 2023 Study Edition"
         textDirection="ltr"
         localizedStrings={localizedStrings}
         editor={<SampleChapter />}
-        zoomFactor={1}
-        canZoomIn
-        canZoomOut
         zoomMenuLabels={zoomMenuLabels}
       />
     </CellBox>
@@ -751,6 +683,7 @@ export const ReadyWithDragHandle: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
@@ -772,6 +705,7 @@ export const ReadyRightToLeftWithDragHandle: Story = {
     <CellBox>
       <ResourceCellView
         state="ready"
+        zoomArea={STORY_ZOOM_AREA}
         label="עברית"
         textDirection="rtl"
         localizedStrings={localizedStrings}
@@ -794,6 +728,7 @@ export const MixedDirectionRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="ready"
+          zoomArea={STORY_ZOOM_AREA}
           label="WEB"
           textDirection="ltr"
           localizedStrings={localizedStrings}
@@ -803,6 +738,7 @@ export const MixedDirectionRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="ready"
+          zoomArea={STORY_ZOOM_AREA}
           label="עברית"
           textDirection="rtl"
           localizedStrings={localizedStrings}
@@ -812,6 +748,7 @@ export const MixedDirectionRow: Story = {
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="ready"
+          zoomArea={STORY_ZOOM_AREA}
           label="العربية"
           textDirection="rtl"
           localizedStrings={localizedStrings}
@@ -825,5 +762,49 @@ export const MixedDirectionRow: Story = {
         />
       </div>
     </CellRowBox>
+  ),
+};
+
+/**
+ * A resource whose chapter has no verses — some commentaries, or a chapter of front matter. The
+ * aligned grid can only show verse blocks, so the cell says why the column is empty instead of
+ * leaving the reader guessing.
+ */
+export const NoVersesToAlign: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        zoomArea={STORY_ZOOM_AREA}
+        label="HBKENG"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        emptyMessage={localizedStrings[NO_VERSES_TO_SHOW_KEY]}
+        contentOverflow="visible"
+        editor={<SampleChapter />}
+      />
+    </CellBox>
+  ),
+};
+
+/**
+ * `contentOverflow="visible"` hands scrolling to an ancestor instead of the cell. The aligned grid
+ * needs it: a cell that scrolls its own content cannot take part in the grid's shared rows, and
+ * would drift out of step with its neighbours. Compare with `Ready`, which scrolls its own
+ * content.
+ */
+export const ContentScrolledByAncestor: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        zoomArea={STORY_ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        contentOverflow="visible"
+        editor={<SampleChapter />}
+      />
+    </CellBox>
   ),
 };

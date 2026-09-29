@@ -72,9 +72,12 @@ export type ManageBooksDialogProject = {
    */
   name: string;
   /**
-   * Long human-readable name (typically the project's `platform.fullName` setting), e.g. "English
-   * Standard Version 2016". Falls back to `shortName` when no fullName is configured. Used as the
-   * secondary label in the `<ProjectSelector>` dialog pickers (Copy "From", Create "Based on").
+   * Long human-readable name, e.g. "English Standard Version 2016". Used as the secondary label in
+   * the `<ProjectSelector>` dialog pickers (Copy "From", Create "Based on").
+   *
+   * Optional, and absent when the project has no distinct full name — deliberately NOT mirrored
+   * from the short name, which would claim a full name the project does not have and leave every
+   * consumer downstream to un-claim it.
    */
   fullName?: string;
   /**

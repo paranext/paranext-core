@@ -1,6 +1,7 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { getFirstRunStatus, subscribeToFirstRun } from '@renderer/services/first-run-store';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
 import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
@@ -114,7 +115,7 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
       },
       {
         // Conditional stop: the sync button it anchors to renders only where Send/Receive is
-        // installed, which is Paratext 10 Studio. In plain Platform.Bible `toolbar-sync-area`
+        // installed, which is Paratext 10. In plain Platform.Bible `toolbar-sync-area`
         // stays an empty zero-size wrapper, so Tour skips this stop and the tour runs with four —
         // expected there, not a defect. Nothing here changes between the two builds.
         target: '[data-testid="toolbar-sync-area"]',
@@ -203,16 +204,19 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
  *   replay runs in Power too, reduced by `Tour` to the stops whose anchors exist there)
  * - The app is not yet unlocked (`firstRunStatus.kind !== 'app'` — still loading or in the wizard)
  * - The tour has already been completed or skipped, and no replay has been requested
+ * - This renderer has lost its connection to the network
  *
  * Completion is recorded on Done and on Skip (Escape routes through Skip), and only then. Quitting
- * or reloading with the tour still open leaves the flag unwritten, so the tour resumes from stop 1
- * on the next launch: a user who never reached the end has not yet been oriented, and the whole
- * point of the tour is that they are.
+ * or reloading with the tour still open — or losing the connection, which closes a _running_ tour
+ * by unmounting it — leaves the flag unwritten, so the tour resumes from stop 1 on the next launch:
+ * a user who never reached the end has not yet been oriented, and the whole point of the tour is
+ * that they are.
  *
  * RTL is handled entirely inside `Tour` (logical `start`/`end` sides resolved via
  * `readDirection()`); this component never reads layout direction.
  */
 export function OnboardingTour() {
+  const isConnectionLost = useIsConnectionLost();
   // Replay requests arrive from the Help menu by way of the onboarding tour service shard. The
   // count is also the remount key, so asking again while the tour is open restarts it from stop 1
   // rather than leaving it wherever it was.
@@ -222,9 +226,28 @@ export function OnboardingTour() {
   // strings subscription and first-run/power-mode hooks for a tour that can never show. Read once
   // at mount, since only a replay can reopen the tour after that.
   const [doneAtMount] = useState(readTourDone);
-  // React components render nothing via null.
-  // eslint-disable-next-line no-null/no-null
-  if (doneAtMount && replayCount === 0) return null;
+  // Stand the tour down entirely once the connection is lost, rather than only muting its keys.
+  // The overlay's Escape handler routes through `onSkip`, which persists the done flag — so the one
+  // key a stuck user is most likely to press would spend a tour they never saw, permanently and
+  // across windows, on the way to the only action left to them (a reload). Unmounting is what
+  // withdraws that handler and the card's focus trap together, leaving Escape and Tab to the
+  // connection-lost state's own shell as the keyboard-shortcut catalog describes. A tour
+  // interrupted this way resumes from stop 1 after the reload, which is the same thing quitting
+  // mid-tour already does: an interrupted user has not been oriented.
+  //
+  // Two edges the guard does not reach. The connection-lost state latches only on an ESTABLISHED
+  // connection dropping, so reloading while the server is still down comes back to a renderer that
+  // never latches and this guard never fires — what keeps the Escape handler off the window there
+  // is the readiness gate instead: the localization provider is reached over the dead socket, so
+  // `isLoading` never resolves, `mightShow` stays false and `Tour` is never opened. Telling that
+  // user anything at all belongs to PT-4494/PT-4495, which cover a failed opening handshake. And
+  // the latch is per renderer while the done flag is `localStorage` shared across windows, so a
+  // second window whose socket survived can still spend the flag; there the user has a working app
+  // and a visible tour, so dismissing it is a genuine dismissal.
+  if (isConnectionLost) return undefined;
+
+  if (doneAtMount && replayCount === 0) return undefined;
+
   return <OnboardingTourNotYetDone key={replayCount} isReplay={replayCount > 0} />;
 }
 

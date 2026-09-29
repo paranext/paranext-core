@@ -34,7 +34,7 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// returns a not-blocking snapshot. Every build — plain Platform.Bible included — still emits the
 /// event exactly once per backend (re)start: the not-blocking baseline snapshot at the end of
 /// <see cref="InitializeAsync"/>. The service is truthful either way — it just has nothing further
-/// to report until the Paratext 10 Studio patch brackets a sync with the gate (PT-4210).
+/// to report until the Paratext 10 patch brackets a sync with the gate (PT-4210).
 /// </para>
 /// </summary>
 internal class SendReceiveBlockNotifierService(PapiClient papiClient)

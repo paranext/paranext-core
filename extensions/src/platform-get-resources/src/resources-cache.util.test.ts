@@ -18,7 +18,7 @@ describe('reconcileCachedResources', () => {
   it('clears updateAvailable on an installed resource once the backend reports no update', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [INSTALLED_WITH_UPDATE],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { abc123: false },
     );
 
@@ -30,7 +30,7 @@ describe('reconcileCachedResources', () => {
   it('sets updateAvailable on an installed resource once the backend reports an update', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [{ ...INSTALLED_WITH_UPDATE, updateAvailable: false }],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { abc123: true },
     );
 
@@ -41,7 +41,7 @@ describe('reconcileCachedResources', () => {
   it('keeps the cached updateAvailable when the backend reports no status for the resource', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [INSTALLED_WITH_UPDATE],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       undefined,
     );
 
@@ -54,7 +54,7 @@ describe('reconcileCachedResources', () => {
   it('keeps the cached updateAvailable when the backend returns an empty status map', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [INSTALLED_WITH_UPDATE],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       {},
     );
 
@@ -65,7 +65,7 @@ describe('reconcileCachedResources', () => {
   it('keeps the cached updateAvailable when the backend answers only for other resources', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [INSTALLED_WITH_UPDATE],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { somethingElse: false },
     );
 
@@ -76,7 +76,7 @@ describe('reconcileCachedResources', () => {
   it('clears updateAvailable on a resource installed elsewhere while the backend cannot answer', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [{ ...INSTALLED_WITH_UPDATE, installed: false, projectId: '' }],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       {},
     );
 
@@ -88,7 +88,7 @@ describe('reconcileCachedResources', () => {
   it('reports no change when the backend agrees with the cache', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [INSTALLED_WITH_UPDATE],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { abc123: true },
     );
 
@@ -99,7 +99,7 @@ describe('reconcileCachedResources', () => {
   it('marks a resource installed and records its project id when its project appears locally', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [{ ...INSTALLED_WITH_UPDATE, installed: false, projectId: '' }],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { abc123: false },
     );
 
@@ -109,9 +109,13 @@ describe('reconcileCachedResources', () => {
   });
 
   it('marks a resource uninstalled and clears its project id when its project is gone locally', () => {
-    const { resources, isChanged } = reconcileCachedResources([INSTALLED_WITH_UPDATE], [], {
-      abc123: true,
-    });
+    const { resources, isChanged } = reconcileCachedResources(
+      [INSTALLED_WITH_UPDATE],
+      { abc123: '' },
+      {
+        abc123: true,
+      },
+    );
 
     expect(resources[0].installed).toBe(false);
     expect(resources[0].projectId).toBe('');
@@ -122,9 +126,13 @@ describe('reconcileCachedResources', () => {
   // newest. `updateAvailable` is only meaningful while installed, so that answer must not survive
   // into the cache.
   it('clears updateAvailable on an uninstall even when the backend reports an update', () => {
-    const { resources, isChanged } = reconcileCachedResources([INSTALLED_WITH_UPDATE], [], {
-      abc123: true,
-    });
+    const { resources, isChanged } = reconcileCachedResources(
+      [INSTALLED_WITH_UPDATE],
+      { abc123: '' },
+      {
+        abc123: true,
+      },
+    );
 
     expect(resources[0].installed).toBe(false);
     expect(resources[0].updateAvailable).toBe(false);
@@ -134,7 +142,7 @@ describe('reconcileCachedResources', () => {
   it('keeps the backend answer on an install, where it is the authoritative fresh value', () => {
     const { resources } = reconcileCachedResources(
       [{ ...INSTALLED_WITH_UPDATE, installed: false, projectId: '', updateAvailable: false }],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { abc123: true },
     );
 
@@ -145,7 +153,7 @@ describe('reconcileCachedResources', () => {
   it('recovers a missing project id on a resource already cached as installed', () => {
     const { resources, isChanged } = reconcileCachedResources(
       [{ ...INSTALLED_WITH_UPDATE, projectId: '' }],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       { abc123: true },
     );
 
@@ -154,12 +162,62 @@ describe('reconcileCachedResources', () => {
     expect(isChanged).toBe(true);
   });
 
-  // An empty `dblEntryUid` would otherwise match every local project, because `''.startsWith('')`
-  // is true for every string.
-  it('does not match a resource with an empty dblEntryUid to an arbitrary local project', () => {
+  // These maps are deserialized JSON and so carry `Object.prototype`. A uid spelling an inherited
+  // member resolves to a function rather than `undefined`, which an `=== undefined` guard reads as
+  // "the backend reported on this row" — marking it installed with a function for its project id,
+  // and persisting that. Uids are hex today, so this pins the contract by construction.
+  it('treats a uid that names an inherited object member as unreported', () => {
+    const row = { ...INSTALLED_WITH_UPDATE, dblEntryUid: 'toString', installed: true };
+
+    const { resources, isChanged } = reconcileCachedResources([row], {}, undefined);
+
+    expect(resources[0]).toBe(row);
+    expect(isChanged).toBe(false);
+  });
+
+  it('does not take an inherited member as an update-status answer', () => {
+    const row = { ...INSTALLED_WITH_UPDATE, dblEntryUid: 'constructor', updateAvailable: true };
+
+    const { resources } = reconcileCachedResources([row], { constructor: 'ABC123AAAA' }, {});
+
+    expect(resources[0].updateAvailable).toBe(true);
+  });
+
+  // The contract the whole reconcile rests on. The backend reports an empty string for a resource
+  // it knows is not installed, and omits a uid entirely when it has nothing to say — offline, or
+  // when its project scan could not read every project. Treating those the same way would mark an
+  // installed resource not-installed and persist it.
+  it('leaves a row absent from the install status exactly as it was', () => {
+    const installedRow = { ...INSTALLED_WITH_UPDATE, installed: true, projectId: 'ABC123AAAA' };
+
+    const { resources, isChanged } = reconcileCachedResources([installedRow], {}, undefined);
+
+    expect(resources[0]).toBe(installedRow);
+    expect(isChanged).toBe(false);
+  });
+
+  it('clears a row the install status reports as an empty string', () => {
+    const installedRow = { ...INSTALLED_WITH_UPDATE, installed: true, projectId: 'ABC123AAAA' };
+
+    const { resources, isChanged } = reconcileCachedResources(
+      [installedRow],
+      { abc123: '' },
+      undefined,
+    );
+
+    expect(resources[0].installed).toBe(false);
+    expect(resources[0].projectId).toBe('');
+    expect(isChanged).toBe(true);
+  });
+
+  // An empty `dblEntryUid` cannot be a key the backend reported on, so the row is simply absent
+  // from the status map and left alone — the same path any unreported row takes. It had to be
+  // guarded explicitly when the match was `localProjectId.startsWith(dblEntryUid)`, since
+  // `''.startsWith('')` is true for every string.
+  it('leaves a resource with an empty dblEntryUid alone rather than matching it to a project', () => {
     const { resources } = reconcileCachedResources(
       [{ ...INSTALLED_WITH_UPDATE, dblEntryUid: '', installed: false, projectId: '' }],
-      ['ABC123AAAA'],
+      { abc123: 'ABC123AAAA' },
       {},
     );
 
@@ -181,7 +239,7 @@ describe('reconcileCachedResources', () => {
 
     const { resources, isChanged } = reconcileCachedResources(
       [INSTALLED_WITH_UPDATE, laterUnchanged],
-      ['ABC123AAAA', 'DEF456AAAA'],
+      { abc123: 'ABC123AAAA', def456: 'DEF456AAAA' },
       { abc123: false, def456: true },
     );
 

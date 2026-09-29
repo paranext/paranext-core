@@ -7,7 +7,8 @@ import { MarkerMenuItem } from 'platform-bible-react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CharacterMarkerControl } from './character-marker-control.component';
 
-// cmdk instantiates a ResizeObserver and schedules scrollTo/scrollIntoView; jsdom ships none.
+// cmdk instantiates a ResizeObserver and schedules scrollTo; jsdom ships neither. scrollIntoView
+// is shimmed repo-wide in vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   private readonly targets = new Set<Element>();
 
@@ -30,9 +31,6 @@ beforeAll(() => {
   }
   if (typeof Element.prototype.scrollTo !== 'function') {
     Element.prototype.scrollTo = () => {};
-  }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
   }
 });
 

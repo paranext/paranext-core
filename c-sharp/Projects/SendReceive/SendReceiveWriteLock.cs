@@ -175,7 +175,7 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <b>Inert in open-source Platform.Bible.</b> Nothing in public core ever calls
 /// <see cref="SetSyncing"/>, so the gate is never armed, <see cref="IsBlocked"/> always returns
 /// <c>false</c>, every <see cref="EnterWrite"/> scope succeeds, and no write is ever rejected —
-/// public behavior is unchanged by this class. The Paratext 10 Studio closed-source patch brackets
+/// public behavior is unchanged by this class. The Paratext 10 closed-source patch brackets
 /// each automatic sync with <see cref="SetSyncing"/> / <see cref="Clear(long)"/> (Jira PT-4210),
 /// which is what activates the gate. This class is the public seam; the activation lives in the
 /// patch.
@@ -183,7 +183,7 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// </remarks>
 internal static class SendReceiveWriteLock
 {
-    // The exact suffix on every rejection message. The Paratext 10 Studio Scripture editor matches
+    // The exact suffix on every rejection message. The Paratext 10 Scripture editor matches
     // this sentinel to show an "editing paused during Send/Receive" notification (rather than the
     // generic permissions message) and revert the un-saved change.
     public const string EditBlockedSentinel = "(SR_EDIT_BLOCKED)";

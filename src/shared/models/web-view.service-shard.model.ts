@@ -12,6 +12,7 @@
 
 import { Layout } from '@shared/models/docking-framework.model';
 import {
+  ContentZoomAreaId,
   OpenWebViewOptions,
   SavedWebViewDefinition,
   WebViewId,
@@ -94,6 +95,27 @@ export interface WebViewServiceShard extends WebViewServiceType {
    * @experimental
    */
   openSettingsTab(projectIdToLimitSettings?: string): Promise<Layout | undefined>;
+
+  /**
+   * Zoom one area of a web view in this window by `deltaSteps` (+1 in, −1 out). With no id, the
+   * window's last focused tab is the target; with no area, the pane's active area (the one last
+   * clicked or focused).
+   *
+   * @experimental This method is unstable and may change or disappear without notice
+   */
+  adjustContentZoom(
+    webViewId: WebViewId | undefined,
+    deltaSteps: number,
+    areaId?: ContentZoomAreaId,
+  ): Promise<void>;
+
+  /**
+   * Return one area of a web view to the Settings default. With no id, the window's last focused
+   * tab is the target; with no area, the pane's active area.
+   *
+   * @experimental This method is unstable and may change or disappear without notice
+   */
+  resetContentZoom(webViewId: WebViewId | undefined, areaId?: ContentZoomAreaId): Promise<void>;
 
   /**
    * Point a web view that carries its own independent reference at a new one.

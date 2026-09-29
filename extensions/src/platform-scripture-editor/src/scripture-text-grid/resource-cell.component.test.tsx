@@ -2,10 +2,12 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon } from '@sillsdev/scripture';
 import { ResourceCell } from './resource-cell.component';
+import type { ResourceZoomController } from './use-resource-content-zoom.hook';
 
 const {
   mockUseProjectData,
@@ -45,6 +47,9 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
       '%webView_scriptureTextGrid_cell_status_bookNotAvailable%': 'Book not in this text',
       '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
+      '%webView_scriptureTextGrid_cell_copy%': 'Copy',
+      '%webView_scriptureTextGrid_cell_noVersesToShow%':
+        'No verses to show in this chapter. Switch to Verse or Chapter view to read this text.',
     },
     false,
   ],
@@ -57,6 +62,10 @@ vi.mock('@eten-tech-foundation/platform-editor', () => {
     onScrRefChange?: (scrRef: unknown) => void;
   };
   return {
+    BLOCK_VERSE_VIEW_MODE: 'block-verse',
+    // Stands in for the real view-options builder: records which mode the cell asked for without
+    // pinning this test to the option fields upstream happens to set for it.
+    getViewOptions: (viewMode: string) => ({ viewOptionsFor: viewMode }),
     Editorial: React.forwardRef((props: EditorialMockProps, ref: React.Ref<unknown>) => {
       capturedEditorOptions(props.options);
       capturedEditorScrRef(props.scrRef);
@@ -104,6 +113,7 @@ const chapter = {
 };
 const props = {
   resourceRef: { resourceId: 'r1', projectId: 'p1', label: 'WEB' },
+  zoomArea: 'resource-r1',
   scrRef,
   setScrRef: vi.fn(),
 };
@@ -116,6 +126,15 @@ const twoVerseChapterUsj = usxStringToUsj(`<?xml version="1.0" encoding="utf-8"?
   <chapter number="1" style="c" sid="GEN 1" />
   <para style="p">
     <verse number="1" style="v" sid="GEN 1:1" />verse one<verse eid="GEN 1:1" /><verse number="2" style="v" sid="GEN 1:2" />verse two<verse eid="GEN 1:2" /></para>
+</usx>
+`);
+
+// Chapter with prose but no verse markers at all — nothing the aligned grid can place on a row.
+const introOnlyChapterUsj = usxStringToUsj(`<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="GEN" style="id">Sample</book>
+  <chapter number="1" style="c" sid="GEN 1" />
+  <para style="ip">Introduction prose with no verses.</para>
 </usx>
 `);
 
@@ -200,6 +219,7 @@ describe('ResourceCell', () => {
     render(
       <ResourceCell
         resourceRef={{ resourceId: 'dbl-uid-1', projectId: undefined, label: 'NIV' }}
+        zoomArea="resource-dbl-uid-1"
         scrRef={scrRef}
         setScrRef={vi.fn()}
       />,
@@ -289,6 +309,57 @@ describe('ResourceCell viewMode', () => {
     });
     await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
     expect(lastFedUsjText()).toContain('verse one'); // whole chapter present
+  });
+
+  it('aligned mode asks the editor for the block-verse layout, so verses become placeable rows', async () => {
+    renderResourceCell({
+      viewMode: 'aligned',
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 2 },
+      chapterUsj: twoVerseChapterUsj,
+    });
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+
+    const options = capturedEditorOptions.mock.lastCall?.[0];
+    expect(options).toMatchObject({ view: { viewOptionsFor: 'block-verse' }, isReadonly: true });
+    // The grid aligns a whole passage, so the cell feeds the chapter, not one verse's slice.
+    expect(lastFedUsjText()).toContain('verse one');
+  });
+
+  it('hands scrolling to the grid in aligned mode, which is what keeps the columns aligned', async () => {
+    // A cell that kept `overflow: auto` would both break the subgrid chain and scroll out of step
+    // with its neighbours — and the grid would still render, just unaligned.
+    renderResourceCell({ viewMode: 'aligned', chapterUsj: twoVerseChapterUsj });
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+
+    expect(document.querySelector('[data-cell-content]')).toHaveClass('tw:overflow-visible');
+  });
+
+  it('aligned mode explains a chapter with no verses instead of rendering a blank column', async () => {
+    // The aligned view hides everything between verse blocks, so a chapter that has none would show
+    // an empty column and no reason for it.
+    renderResourceCell({ viewMode: 'aligned', chapterUsj: introOnlyChapterUsj });
+
+    expect(await screen.findByText(/No verses to show in this chapter/)).toBeInTheDocument();
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+
+  it('renders the editor in aligned mode as soon as the chapter has a verse', async () => {
+    renderResourceCell({ viewMode: 'aligned', chapterUsj: twoVerseChapterUsj });
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+    expect(screen.queryByText(/No verses to show in this chapter/)).not.toBeInTheDocument();
+  });
+
+  it('leaves the other modes on the editor default layout', async () => {
+    renderResourceCell({
+      viewMode: 'chapter',
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 2 },
+      chapterUsj: twoVerseChapterUsj,
+    });
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+
+    expect(capturedEditorOptions.mock.lastCall?.[0]).not.toHaveProperty('view');
   });
 
   it('verse mode with no text for the verse shows the empty state, not the editor or "loading…"', async () => {
@@ -424,7 +495,7 @@ describe('ResourceCell verse-0 fall-forward (PT-3133)', () => {
   });
 
   // Leaving the empty state, which the tests above only ever enter. `ResourceCellView` swaps the
-  // editor out entirely for the ghost-text label while `isVerseEmpty`, so `Editorial` unmounts
+  // editor out entirely for the ghost-text label while the verse is empty, so `Editorial` unmounts
   // and `editorRef.current` goes null; navigating to a verse the resource HAS remounts it and
   // the effect must refeed. That only works because React assigns refs during commit, before
   // effects run — an ordering dependency nothing else here guards. Fall-forward makes this
@@ -482,85 +553,162 @@ describe('ResourceCell name display', () => {
     const { container } = render(<ResourceCell {...props} viewMode="chapter" />);
     const cellRoot = container.firstElementChild;
     const name = screen.getByText('WEB');
-    // Header mode: the name sits in a header band (which also hosts the zoom kebab) that is a
-    // direct child of the cell root, not an inline row shared with the editor.
+    // Header mode: the name sits in a header band that is a direct child of the cell root, not an
+    // inline row shared with the editor.
     expect(name.parentElement?.parentElement).toBe(cellRoot);
   });
 });
 
-describe('ResourceCell zoom', () => {
-  it('passes the controller factor to the cell content as a zoom style', () => {
-    const zoom = {
-      getZoom: () => 1.4,
-      setZoomForResource: vi.fn(),
-      adjustZoom: vi.fn(),
-      resetZoom: vi.fn(),
-      pruneToResourceIds: vi.fn(),
-    };
+describe('ResourceCell right-click menu', () => {
+  it('without a zoom controller, opens the cell’s own menu with Copy alone, and gives the text no zoom of its own', () => {
     setUsjResult(chapter, false);
-    render(
-      <div role="grid">
-        <div role="row">
-          <ResourceCell
-            resourceRef={{ resourceId: 'r1', projectId: 'p1', label: 'WEB' }}
-            scrRef={scrRef}
-            setScrRef={() => {}}
-            viewMode="chapter"
-            zoom={zoom}
-            zoomMenuLabels={{
-              zoomIn: 'Zoom In',
-              zoomOut: 'Zoom Out',
-              reset: 'Reset Zoom',
-              options: 'Zoom options',
-            }}
-          />
-        </div>
-      </div>,
-    );
-    // jsdom does not serialize CSS `zoom` into the style attribute string, so
-    // `[style*="zoom"]` selectors fail. Instead check the CSSOM property directly on
-    // the content wrapper element (the div with dir="ltr" that carries the zoom style).
-    const contentWrapper = document.querySelector('[dir="ltr"]');
-    expect(contentWrapper).not.toBeNull();
-    expect(contentWrapper instanceof HTMLElement && contentWrapper.style.zoom).toBe('1.4');
+    render(<ResourceCell {...props} viewMode="chapter" />);
+
+    fireEvent.contextMenu(screen.getByTestId('editorial'));
+
+    expect(screen.getByRole('menuitem', { name: 'Copy' })).toBeInTheDocument();
+    expect(screen.getAllByRole('menuitem')).toHaveLength(1);
+    // jsdom does not serialize CSS `zoom` into the style attribute, so read the CSSOM property of
+    // every element between the text and the cell's own marker.
+    const marker = document.querySelector('[data-platform-content-zoom-root="resource-r1"]');
+    expect(marker).not.toBeNull();
+    expect(marker?.getAttribute('data-platform-content-zoom-label')).toBe('WEB');
+    const zoomed: Element[] = [];
+    for (
+      let element = screen.getByTestId('editorial').parentElement;
+      element && element !== marker?.parentElement;
+      element = element.parentElement
+    )
+      if (element.style.zoom) zoomed.push(element);
+    expect(zoomed).toEqual([]);
   });
 
-  it('does NOT forward a contextMenu to the editor when zoom and zoomMenuLabels are provided', () => {
-    // Zoom items are now surfaced via the view's own right-click DropdownMenu (intercept in
-    // capture phase), not via EditorOptions.contextMenu. The editor options should never contain
-    // a contextMenu so the editor's built-in menu and our menu don't conflict.
-    const zoom = {
-      getZoom: () => 1,
-      setZoomForResource: vi.fn(),
-      adjustZoom: vi.fn(),
-      resetZoom: vi.fn(),
-      pruneToResourceIds: vi.fn(),
-    };
+  it('does NOT forward a contextMenu to the editor', () => {
+    // The cell intercepts `contextmenu` in the capture phase and opens its own menu, so the editor
+    // must never receive a menu of its own that would conflict with it.
     setUsjResult(chapter, false);
-    render(
-      <div role="grid">
-        <div role="row">
-          <ResourceCell
-            resourceRef={{ resourceId: 'r1', projectId: 'p1', label: 'WEB' }}
-            scrRef={scrRef}
-            setScrRef={() => {}}
-            viewMode="chapter"
-            zoom={zoom}
-            zoomMenuLabels={{
-              zoomIn: 'Zoom In',
-              zoomOut: 'Zoom Out',
-              reset: 'Reset Zoom',
-              options: 'Zoom options',
-            }}
-          />
-        </div>
-      </div>,
-    );
+    render(<ResourceCell {...props} viewMode="chapter" />);
 
     expect(capturedEditorOptions).toHaveBeenCalled();
     const [lastOptions] = capturedEditorOptions.mock.lastCall ?? [];
-    // The editor must not receive a contextMenu — zoom is handled by the view's own right-click menu.
     expect(lastOptions?.contextMenu).toBeUndefined();
+  });
+});
+
+const zoomMenuLabels = {
+  zoomIn: 'Zoom in',
+  zoomOut: 'Zoom out',
+  reset: 'Reset zoom',
+  options: 'Zoom options for {resourceName}',
+};
+
+/** A controller whose level and own-level state the test sets; the actions are spies. */
+function makeZoom(overrides: Partial<ResourceZoomController> = {}): ResourceZoomController {
+  return {
+    getZoom: () => 1,
+    hasOwnLevel: () => false,
+    adjustZoom: vi.fn(),
+    resetZoom: vi.fn(),
+    ...overrides,
+  };
+}
+
+describe('ResourceCell zoom menu', () => {
+  it('calls the controller with the resource id for each zoom item', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const zoom = makeZoom({ hasOwnLevel: () => true });
+    setUsjResult(chapter, false);
+    render(
+      <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
+    );
+    fireEvent.contextMenu(screen.getByTestId('editorial'));
+    await user.click(screen.getByRole('menuitem', { name: 'Zoom in' }));
+    fireEvent.contextMenu(screen.getByTestId('editorial'));
+    await user.click(screen.getByRole('menuitem', { name: 'Zoom out' }));
+    fireEvent.contextMenu(screen.getByTestId('editorial'));
+    await user.click(screen.getByRole('menuitem', { name: 'Reset zoom' }));
+    expect(zoom.adjustZoom).toHaveBeenNthCalledWith(1, 'r1', 1);
+    expect(zoom.adjustZoom).toHaveBeenNthCalledWith(2, 'r1', -1);
+    expect(zoom.resetZoom).toHaveBeenCalledWith('r1');
+  });
+
+  it('disables Zoom in and Reset zoom for a resource that follows a 300 % default', () => {
+    // No level of its own, and the Tab content default zoom is at the top of the range.
+    const zoom = makeZoom({ getZoom: () => 3, hasOwnLevel: () => false });
+    setUsjResult(chapter, false);
+    render(
+      <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
+    );
+    fireEvent.contextMenu(screen.getByTestId('editorial'));
+    expect(screen.getByRole('menuitem', { name: 'Zoom in' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Zoom out' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Reset zoom' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('disables Zoom out at 50 % and enables Reset zoom for a resource with its own level', () => {
+    const zoom = makeZoom({ getZoom: () => 0.5, hasOwnLevel: () => true });
+    setUsjResult(chapter, false);
+    render(
+      <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
+    );
+    fireEvent.contextMenu(screen.getByTestId('editorial'));
+    expect(screen.getByRole('menuitem', { name: 'Zoom out' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Reset zoom' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('shows the "⋮" button in the chapter view and none in the verse view', () => {
+    setUsjResult(chapter, false);
+    const { rerender } = render(
+      <ResourceCell
+        {...props}
+        viewMode="chapter"
+        zoom={makeZoom()}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Zoom options for WEB' })).toBeInTheDocument();
+    rerender(
+      <ResourceCell
+        {...props}
+        viewMode="verse"
+        zoom={makeZoom()}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Zoom options for WEB' })).not.toBeInTheDocument();
+  });
+
+  it('offers no zoom surfaces for a resource that is not installed', () => {
+    setUsjResult(undefined, true);
+    render(
+      <ResourceCell
+        resourceRef={{ resourceId: 'dbl-uid-2', projectId: undefined, label: 'NIV' }}
+        zoomArea="resource-dbl-uid-2"
+        scrRef={scrRef}
+        setScrRef={vi.fn()}
+        viewMode="chapter"
+        zoom={makeZoom()}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    // Positive control: the cell rendered its not-installed placeholder.
+    expect(screen.getByText('Resource not installed')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /zoom options/i })).not.toBeInTheDocument();
   });
 });
 

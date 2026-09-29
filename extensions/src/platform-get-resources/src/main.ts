@@ -7,11 +7,20 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import type { DblResourceCatalog, DblResourceUpdateStatus } from 'platform-get-resources';
+import type {
+  DblResourceCatalog,
+  DblResourceInstallStatus,
+  DblResourceUpdateStatus,
+} from 'platform-get-resources';
 import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-utils';
 import { resolveDblCatalog, shouldStopBackgroundFetch } from './dbl-catalog.utils';
 import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
+import {
+  buildHomeWebViewState,
+  type HomeWebViewOptions,
+  shouldReloadHomeForProjectsOnly,
+} from './home-web-view.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
@@ -33,6 +42,8 @@ let cachedResources: DblResourceData[] | undefined;
 const fetchMutex = new Mutex();
 let hasFetchStarted = false;
 let syncInFlight: Promise<void> | undefined;
+/** Whether `syncInFlight` refreshes `updateAvailable` as well as the install flags. */
+let doesSyncInFlightRecomputeUpdateStatus = false;
 
 async function fetchAndCacheResources(): Promise<DblResourceCatalog> {
   const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
@@ -99,18 +110,20 @@ const RESOURCE_PROJECT_WAIT_DELAY_MS = 500;
 /**
  * Reads local project metadata, waiting for the C# Paratext PDPF to register its resource projects.
  *
- * The wait is what makes a newly-installed resource visible: a read that resolves before the
- * factory registers returns only the TypeScript PDPFs, and a caller that trusts it concludes
- * nothing is installed. It is spent at most once per session — once a resource project has been
- * seen the factory is up and no wait is needed, and if the full budget passes with none seen the
- * machine has none to find, so later calls return the first read immediately.
+ * The wait is what lets a locally-installed non-DBL resource appear in the picker: a read that
+ * resolves before the factory registers returns only the TypeScript PDPFs, and a caller that trusts
+ * it concludes there are none. It is spent at most once per session — once a resource project has
+ * been seen the factory is up and no wait is needed, and if the full budget passes with none seen
+ * the machine has none to find, so later calls return the first read immediately.
  *
- * @returns The project metadata, and whether any read-only (resource) project was in it
+ * Because the budget is one-shot, a resource project that registers after it expires is not waited
+ * for again; that session's reads return whatever is registered at the time.
+ *
+ * @returns The project metadata
  */
-async function getLocalProjectMetadata(): Promise<{
-  metadata: Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>;
-  hasResourceProjects: boolean;
-}> {
+async function getLocalProjectMetadata(): Promise<
+  Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>
+> {
   const readMetadata = () =>
     papi.projectLookup.getMetadataForAllProjects({ includeProjectInterfaces: ['platform.base'] });
   const hasResourceProject = (
@@ -125,11 +138,28 @@ async function getLocalProjectMetadata(): Promise<{
       })
     : await readMetadata();
 
-  const hasResourceProjects = hasResourceProject(metadata);
-  if (hasResourceProjects) haveLocalResourceProjectsAppeared = true;
+  if (hasResourceProject(metadata)) haveLocalResourceProjectsAppeared = true;
   else if (shouldWait) hasWaitedForLocalResourceProjects = true;
 
-  return { metadata, hasResourceProjects };
+  return metadata;
+}
+
+/**
+ * Asks the backend which local project each catalogued resource is installed as, or `undefined` if
+ * it could not say.
+ *
+ * A resource project's id is unrelated to the DBL entry it was installed from, so nothing in the
+ * local project list identifies the catalog row it belongs to and only the backend can answer.
+ * `undefined` leaves the flags at their cached values rather than guessing.
+ */
+async function readInstallStatus(): Promise<DblResourceInstallStatus | undefined> {
+  try {
+    const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
+    return await provider?.recomputeDblResourcesInstallStatus();
+  } catch (error: unknown) {
+    logger.warn(`Could not recompute DBL resource install status: ${getErrorMessage(error)}`);
+    return undefined;
+  }
 }
 
 /**
@@ -154,31 +184,51 @@ async function readUpdateStatus(): Promise<DblResourceUpdateStatus | undefined> 
  * Syncs the derived flags on `cachedResources` against current local state, updating the cache and
  * writing to storage when any of them change.
  *
- * `installed` and `projectId` come from live project metadata and are always reconciled. The
- * backend round trip for `updateAvailable` is opt-in, because only the Get Resources list renders
+ * `installed` and `projectId` come from the backend's install status and are always reconciled. The
+ * second round trip for `updateAvailable` is opt-in, because only the Get Resources list renders
  * that flag: every other consumer of the catalog would otherwise wait on a value it discards.
  *
  * @param shouldRecomputeUpdateStatus Whether to also refresh `updateAvailable`
  */
 async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
-  if (cachedResources === undefined) return;
+  // Nothing cached to reconcile yet — the startup fetch window, or a fresh profile. A caller that
+  // awaited a refresh gets a resolved promise and re-reads the flags it already had, so say so
+  // here: this is the one silent no-op that is reachable without any contention.
+  if (cachedResources === undefined) {
+    logger.debug('Skipped a resource flag sync: no cached catalog to reconcile yet');
+    return;
+  }
   try {
-    const { metadata: localProjectMetadata, hasResourceProjects } = await getLocalProjectMetadata();
-    // No read-only project in the list means either C# has not registered yet or the machine has
-    // none. Syncing against it would mark every installed resource not-installed and persist that,
-    // and it can never mark anything installed, so there is nothing to gain by continuing.
-    if (!hasResourceProjects) return;
-
-    const updateStatus = shouldRecomputeUpdateStatus ? await readUpdateStatus() : undefined;
-
-    // Wrap the read-modify-write in fetchMutex so a concurrent fetchAndCacheResources call cannot
-    // overwrite cachedResources between our reconcile and our assignment.
+    // Sample the backend inside fetchMutex, not before it. Two things depend on that: a concurrent
+    // fetchAndCacheResources cannot overwrite cachedResources between the read and the assignment,
+    // and — because a refresh deliberately starts a sync of its own rather than joining one — an
+    // older sync whose status predates an install cannot win the write and persist flags from
+    // before it.
     await fetchMutex.runExclusive(async () => {
-      if (cachedResources === undefined) return;
+      // Re-checked inside the mutex because the wait for it is an await: a concurrent fetch can
+      // clear the cache in between. It also narrows the type for the reconcile below.
+      if (cachedResources === undefined) {
+        logger.debug('Skipped a resource flag sync: the cached catalog was cleared while waiting');
+        return;
+      }
+
+      const installStatus = await readInstallStatus();
+      // An empty map is not an answer: another DBL operation held the provider, or nothing is
+      // installed and the catalog has not loaded — and it reports both the same way. Reconciling
+      // against it would mark every installed resource not-installed and persist that, so leave
+      // the flags alone until there is something to act on.
+      if (!installStatus || Object.keys(installStatus).length === 0) {
+        logger.debug(
+          'Skipped a resource flag sync: the backend reported no install status, so the flags are left as they are',
+        );
+        return;
+      }
+
+      const updateStatus = shouldRecomputeUpdateStatus ? await readUpdateStatus() : undefined;
 
       const { resources: newCachedResources, isChanged } = reconcileCachedResources(
         cachedResources,
-        localProjectMetadata.map((localProject) => localProject.id),
+        installStatus,
         updateStatus,
       );
 
@@ -203,11 +253,12 @@ async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<void> {
  * being current await it and re-read `cachedResources` afterwards.
  *
  * @param shouldRecomputeUpdateStatus Whether the sync should also refresh `updateAvailable`. A
- *   caller that needs it joins an in-flight sync that does not refresh it, so ask for it through
- *   {@link refreshResourceFlags}, which starts a sync of its own rather than joining.
+ *   caller that needs it may still join an in-flight sync that does not refresh it, so ask for it
+ *   through {@link refreshResourceFlags}, which never settles for one of those.
  */
 function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promise<void> {
   if (!syncInFlight) {
+    doesSyncInFlightRecomputeUpdateStatus = shouldRecomputeUpdateStatus;
     syncInFlight = syncFlags(shouldRecomputeUpdateStatus)
       .catch((e) => logger.warn(`Background flag sync failed: ${getErrorMessage(e)}`))
       .finally(() => {
@@ -218,23 +269,40 @@ function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promis
 }
 
 /**
+ * Runs a flag sync that starts after this call rather than joining one already in flight, which may
+ * have asked the backend before whatever prompted this call. Never rejects.
+ *
+ * @param shouldRecomputeUpdateStatus Whether the sync should also refresh `updateAvailable`
+ */
+async function syncAfterInFlight(shouldRecomputeUpdateStatus: boolean): Promise<void> {
+  if (syncInFlight) await syncInFlight;
+  // Any sync running now started after this call, so joining it is fresh enough — unless this
+  // caller needs `updateAvailable` and that sync skips it. Every caller waiting on the sync above
+  // resumes in the order it started waiting, so another waiter can have started such a sync first:
+  // the project-change listener, say, ahead of the Get Resources list's refresh. Wait those out.
+  while (shouldRecomputeUpdateStatus && syncInFlight && !doesSyncInFlightRecomputeUpdateStatus)
+    // Each pass waits on a different sync, so these awaits cannot run in parallel.
+    // eslint-disable-next-line no-await-in-loop
+    await syncInFlight;
+  await ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus);
+}
+
+/**
  * Brings the derived flags up to date and resolves once they are, so the next read of the catalog
  * sees them.
  *
  * `getCachedResources` deliberately does not wait for the sync, which makes it one refresh behind:
  * it answers from the array it has and leaves the corrected one to the next call. For `installed`
- * that is invisible, because the caller that just installed something already knows. For
- * `updateAvailable` it is the whole defect — an updated resource keeps its "Update" badge, since
- * nothing else about the row changes and no data-update event exists to announce the correction. A
- * caller that has just changed local state awaits this first, then re-reads.
+ * that is invisible to the caller that just installed something, but a caller that acts on the flag
+ * — a panel deciding whether to download — reads a row from before the change. For
+ * `updateAvailable` it is the whole defect: an updated resource keeps its "Update" badge, since
+ * nothing else about the row changes and no data-update event exists to announce the correction.
+ *
+ * @param shouldRecomputeUpdateStatus Whether to also refresh `updateAvailable`. It costs a second
+ *   backend round trip, so a caller that reads `installed` alone passes `false`.
  */
-async function refreshResourceFlags(): Promise<void> {
-  // Joining a sync that is already running is not enough, for two reasons: it may have read its
-  // project metadata before the change this caller just made, and a background sync does not
-  // refresh `updateAvailable` at all. Let any running sync finish, then start one that is
-  // guaranteed to observe the change and to ask the backend.
-  if (syncInFlight) await syncInFlight;
-  await ensureInstalledFlagsSynced(true);
+async function refreshResourceFlags(shouldRecomputeUpdateStatus = true): Promise<void> {
+  await syncAfterInFlight(shouldRecomputeUpdateStatus);
 }
 
 async function getCachedResources(): Promise<DblResourceCatalog> {
@@ -288,7 +356,7 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
     // exactly the offline, never-connected users most likely to have them.
     const dblCatalog = cachedResources ?? [];
 
-    const { metadata: allMetadata } = await getLocalProjectMetadata();
+    const allMetadata = await getLocalProjectMetadata();
     return buildLocalNonDblResources(allMetadata, dblCatalog);
   } catch (error: unknown) {
     logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
@@ -315,7 +383,10 @@ const getResourcesWebViewProvider: IWebViewProvider = {
 };
 
 const homeWebViewProvider: IWebViewProvider = {
-  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    getWebViewOptions: HomeWebViewOptions,
+  ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== HOME_WEB_VIEW_TYPE)
       throw new Error(
         `${HOME_WEB_VIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
@@ -324,6 +395,7 @@ const homeWebViewProvider: IWebViewProvider = {
     return {
       title: '%home_dialog_title%',
       ...savedWebView,
+      state: buildHomeWebViewState(savedWebView, getWebViewOptions),
       content: homeDialogReact,
       styles: tailwindStyles,
     };
@@ -409,16 +481,34 @@ export async function activate(context: ExecutionActivationContext) {
 
   const openHomeWebViewCommandPromise = papi.commands.registerCommand(
     'platformGetResources.openHome',
-    async () => {
-      return papi.webViews.openWebView(
+    async (shouldShowProjectsOnly?: boolean) => {
+      const options: HomeWebViewOptions = {
+        shouldShowProjectsOnly,
+        // Focus existing one if one exists
+        existingId: '?',
+      };
+
+      const homeWebViewId = await papi.webViews.openWebView(
         HOME_WEB_VIEW_TYPE,
         {
           type: 'float',
           floatSize: HOME_WEB_VIEW_SIZE,
         },
-        // Focus existing one if one exists
-        { existingId: '?' },
+        options,
       );
+      if (!homeWebViewId) return homeWebViewId;
+
+      // Reusing an existing Home raises its tab without consulting the provider, so the scoping
+      // this call asked for never reaches it. Reload only when the two disagree — a rebuilt iframe
+      // is the slowest thing this command can do.
+      const existingWebView = await papi.webViews.getOpenWebViewDefinition(homeWebViewId);
+      if (
+        existingWebView &&
+        shouldReloadHomeForProjectsOnly(existingWebView, !!shouldShowProjectsOnly)
+      )
+        await papi.webViews.reloadWebView(HOME_WEB_VIEW_TYPE, homeWebViewId, options);
+
+      return homeWebViewId;
     },
   );
 
@@ -467,6 +557,30 @@ export async function activate(context: ExecutionActivationContext) {
   const refreshResourceFlagsCommandPromise = papi.commands.registerCommand(
     'platformGetResources.refreshResourceFlags',
     refreshResourceFlags,
+    {
+      method: {
+        // Experimental: this command's contract is not yet stable.
+        'x-experimental': true,
+        summary:
+          "Brings the resource catalog's derived flags (installed, projectId, updateAvailable) " +
+          'up to date and resolves once they are, so the next read of the catalog sees them',
+        params: [
+          {
+            name: 'shouldRecomputeUpdateStatus',
+            required: false,
+            summary:
+              'Whether to also refresh updateAvailable, which costs a second backend round trip. ' +
+              'Defaults to true; a caller that reads installed alone should pass false',
+            schema: { type: 'boolean' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'Void',
+          schema: { type: 'null' },
+        },
+      },
+    },
   );
 
   const isSendReceiveAvailableCommandPromise = papi.commands.registerCommand(
@@ -508,6 +622,26 @@ export async function activate(context: ExecutionActivationContext) {
   // Need to start async floating promise that continues after activation
   // eslint-disable-next-line @typescript-eslint/no-floating-promises
   startBackgroundFetchResources();
+
+  // The derived flags are a reading of local project state, so a change to that state is the one
+  // moment they can be known to be stale. Nothing else re-reads them on its own: an install or a
+  // removal from another window, a Send/Receive, or a resource copied in by hand would otherwise
+  // leave this catalog wrong until someone next opened the dialog. C# debounces the event and
+  // raises it from a directory watcher too, so out-of-process changes arrive here as well.
+  const unsubscribeFromProjectsChanged = papi.network.getNetworkEvent(
+    'platform.onDidChangeProjects',
+  )(() => {
+    // Never `updateAvailable`: only the Get Resources list renders it and that list refreshes it
+    // itself, so recomputing it here would put a second backend round trip on every project change
+    // for a value nothing reads.
+    // After an install from this window the event arrives once the caller's own refresh has already
+    // run, so that install costs two syncs. That is accepted rather than deduplicated: a sync that
+    // finished before the event cannot vouch for the state the event announces, and one sync is a
+    // single cheap backend call.
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    syncAfterInFlight(false);
+  });
+  context.registrations.add(unsubscribeFromProjectsChanged);
 
   const refreshIntervalId = setInterval(() => {
     // The mutex returns a floating promise here; we want fire-and-forget interval behavior

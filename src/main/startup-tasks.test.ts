@@ -133,9 +133,9 @@ describe('performStartupTasks', () => {
   });
 
   it('skips the automatic startup sync and warns when settings service throws (no sync-everything fallback)', async () => {
-    // An unreadable mode must not fall through to Simple's no-ID syncProjects (= S/R every shared
-    // project), which would override a Power user's schedule under the exact slow-boot conditions
-    // the read fails in. Do nothing this session and warn instead.
+    // An unreadable mode must not fall through to Simple's broad no-ID syncProjects, which could
+    // override a Power user's schedule under the exact slow-boot conditions the read fails in. Do
+    // nothing this session and warn instead.
     mockSettingsGet.mockRejectedValue(new Error('settings unavailable'));
     await performStartupTasks();
     expect(mockSendCommand).not.toHaveBeenCalled();

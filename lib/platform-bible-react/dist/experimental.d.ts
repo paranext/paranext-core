@@ -3,7 +3,7 @@
 import { DblResourceData, LanguageStrings, LocalizeKey, ResourceType, ScrollGroupId } from 'platform-bible-utils';
 import { ALL_BOOK_IDS, ForwardedPaletteKeyEvent, PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import React$1 from 'react';
-import { MouseEventHandler, MutableRefObject, ReactNode } from 'react';
+import { MouseEventHandler, MutableRefObject, ReactNode, RefObject } from 'react';
 
 type ClassValue = ClassArray | ClassDictionary | string | number | bigint | null | boolean | undefined;
 type ClassDictionary = Record<string, any>;
@@ -28,6 +28,12 @@ declare const buttonVariants: (props?: ({
 interface ButtonProps extends React$1.ComponentProps<"button">, VariantProps<typeof buttonVariants> {
 	asChild?: boolean;
 }
+type MultiSelectComboBoxEntry = {
+	value: string;
+	label: string;
+	secondaryLabel?: string;
+	starred?: boolean;
+};
 type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 /** Same as `Scope` plus a verse-range option. Used by `ScopeSelector` when range mode is enabled. */
 export type ScopeWithRange = Scope | "range";
@@ -49,7 +55,11 @@ export declare const Z_INDEX_TOOLTIP = 675;
 export type ProjectSelectorProject = {
 	id: string;
 	shortName: string;
-	fullName: string;
+	/**
+	 * Full name, shown as the row's muted second line. Omit it when the project has none — don't copy
+	 * the short name in; the selector already renders a single line when the names match.
+	 */
+	fullName?: string;
 	/**
 	 * When `true`, the row for this project is rendered muted, is not selectable, and the
 	 * `disabledReason` (if provided) is surfaced in the row tooltip. Use when a project is present in
@@ -173,6 +183,29 @@ export type ProjectSelectorGrouping = {
 		key: string;
 		heading: string;
 	}) => number;
+	/**
+	 * Row order within each bucket, as a standard `Array.prototype.sort` comparator: return a
+	 * negative number to put `a` before `b`, positive to put `b` first, `0` for a tie.
+	 *
+	 * Omit it to use the selector's canonical order (alphabetical by `shortName`, tie-broken by
+	 * scroll group). Supply one when the bucket's meaning implies an order the selector cannot know —
+	 * a leaderboard-style bucket ordered by a caller-side score, for example, where alphabetical
+	 * order carries no meaning. The built-in `lastUsed` grouping deliberately supplies none: it reads
+	 * `lastUsedAt` as a presence flag for bucketing only, and its rows stay alphabetical.
+	 *
+	 * Ties fall back to the canonical order, so rows for one project fanned across several scroll
+	 * groups — which a comparator reading only `ProjectSelectorProject` cannot tell apart — keep a
+	 * stable sequence.
+	 *
+	 * Ignored in three places, because those lists are not bucketed by this descriptor: the
+	 * `'openTabs'` and `'selection'` groupings, which build their sections themselves; any grouping
+	 * with no `getGroupKey`, which falls through to a single flat section; and the unknown bucket,
+	 * which stays canonically ordered because it collects the rows the grouping could NOT classify —
+	 * an order derived from the grouping's own axis would be meaningless for exactly those rows. Note
+	 * the resulting list can mix two orders, e.g. a score-ordered bucket above an alphabetical
+	 * "Other".
+	 */
+	compareProjects?: (a: ProjectSelectorProject, b: ProjectSelectorProject) => number;
 };
 /**
  * The platform-level localization keys that back every shared ProjectSelector string. Consumers
@@ -297,6 +330,44 @@ export declare function buildBuiltInGroupingStrings(strings: ProjectSelectorStri
  */
 export declare function buildSelectionGroupingStrings(strings: ProjectSelectorStringLookup): SelectionGroupingStrings;
 /**
+ * An action row pinned below the project list — "More projects…", "Browse the server…". Expressed
+ * as data rather than a render prop on purpose: the selector owns the markup so the row stays
+ * keyboard-reachable, which a caller-rendered `<button>` would not be.
+ */
+/**
+ * What {@link ProjectSelectorProps.renderProjectIndicator} returns for a row: the glyph, and
+ * optionally what it means.
+ *
+ * One value rather than a glyph prop and a label prop, so the two cannot drift: a label with no
+ * glyph would describe an icon that is not on screen, and there is nothing in a two-prop shape to
+ * stop that. Returning `undefined` for a row means no indicator, and the column stays reserved for
+ * it either way.
+ */
+export type ProjectSelectorIndicator = {
+	/** The glyph to render in the row's indicator slot. */
+	node: React$1.ReactNode;
+	/**
+	 * The glyph's meaning as text, surfaced in the row tooltip. Supply it whenever the glyph carries
+	 * meaning a sighted user cannot otherwise get from the row.
+	 *
+	 * The rows are already tooltip triggers, so a caller cannot give the glyph its own hover label
+	 * without opening a second tooltip over the row's — this is the way in.
+	 *
+	 * **Only supply this when {@link node} already names itself** — with `role="img"` and an
+	 * `aria-label`, or equivalent. The tooltip line is the sighted-user half and is rendered
+	 * `aria-hidden`, because Radix wires an open tooltip as the row's `aria-describedby` and a glyph
+	 * that names itself would otherwise be announced twice per row. A `node` that is itself
+	 * `aria-hidden` paired with a `label` leaves the indicator silent at both ends.
+	 */
+	label?: string;
+};
+export type ProjectSelectorFooterAction = {
+	/** Localized row label. */
+	label: string;
+	/** Run when the row is activated. The popover closes afterwards. */
+	onSelect: () => void;
+};
+/**
  * Every user-facing string the selector can render. All keys are optional; unset values fall back
  * to English defaults. Consumers wire this from a shared platform-level localization block (see
  * `%projectSelector_*%` keys in the platform's localizedStrings JSON) so every ProjectSelector in
@@ -307,7 +378,12 @@ export declare function buildSelectionGroupingStrings(strings: ProjectSelectorSt
  * groupings can supply their own localized label without a separate string channel.
  */
 export type ProjectSelectorLocalizedStrings = {
-	/** Trigger `aria-label`. */
+	/**
+	 * Names what the trigger selects (e.g. "Project"), NOT the whole accessible name. With something
+	 * selected the trigger announces `"{ariaLabel}: {selection}"`, so a consumer passing `"Select
+	 * project"` gets "Select project: WEB". Supply the group label alone and let the selection be
+	 * appended.
+	 */
 	ariaLabel?: string;
 	/** Trigger fallback text when nothing is selected. */
 	buttonPlaceholder?: string;
@@ -349,6 +425,22 @@ export type ProjectSelectorLocalizedStrings = {
 	/** Multi-select: "Clear all" button (shown only when at least one pair is selected). */
 	clearAll?: string;
 };
+/**
+ * English text for every {@link ProjectSelectorLocalizedStrings} key, used for any key a consumer
+ * leaves unset.
+ *
+ * `ariaLabel` and `buttonPlaceholder` are last-resort fallbacks for an unlocalized mount (e.g. a
+ * bare Storybook render), not production copy: every real consumer merges its own values for these
+ * two fields on top via `localizedStrings`. They exist so the trigger never renders with an empty
+ * accessible name or empty text before localized strings resolve.
+ *
+ * Exported so a consumer's tests can assert that NONE of these reach the screen at that call site —
+ * a consumer typically localizes only the handful of keys its configuration can reach, and which
+ * keys those are is a property of the configuration rather than of the component. Looping over this
+ * map keeps such a guard honest when a key is renamed or added; a hand-copied list of strings
+ * silently stops asserting anything.
+ */
+export declare const PROJECT_SELECTOR_DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings>;
 /**
  * Convert the raw `%projectSelector_*%` resolved strings into a
  * {@link ProjectSelectorLocalizedStrings} bag ready to pass as the `localizedStrings` prop. Merge
@@ -414,8 +506,39 @@ type CommonProps = {
 	 * are available.
 	 */
 	defaultGrouping?: string | "none";
+	/**
+	 * Render an indicator for a row — typically a small icon distinguishing one kind of row from
+	 * another, derived from the caller's own `customData`.
+	 *
+	 * The selector ships no taxonomy and no default mapping: `customData` is a free-form bag whose
+	 * meaning belongs to whoever produced the list (Paratext project types and DBL resource types are
+	 * two different vocabularies, neither owned by this library), so the caller decides both what a
+	 * value means and what it looks like. Note that the conventional `customData.type` key carries a
+	 * project TYPE, not a project/resource discriminator — a caller who needs the latter has to pack
+	 * its own flag.
+	 *
+	 * **The returned node must carry its own accessible name** (an `aria-label`, or visually hidden
+	 * text) unless the row's own text already conveys the distinction. The selector renders it
+	 * verbatim and adds no `aria-hidden` and no description of its own, so an unlabeled icon is
+	 * information conveyed by sight alone (WCAG 1.1.1). Mark it `aria-hidden` only when the name
+	 * would be redundant.
+	 *
+	 * Runs during the selector's own render, once per filtered row, on every render, so it must be
+	 * pure, cheap, and free of hooks — the row count changes as the user filters, and a hook called
+	 * here would change the selector's hook count between renders and throw.
+	 */
+	renderProjectIndicator?: (project: ProjectSelectorProject) => ProjectSelectorIndicator | undefined;
+	/**
+	 * An action row pinned below every section, with a separator above it whenever the list has rows
+	 * to divide it from. Use it for an affordance that opens a different surface — the sections
+	 * partition rows, so they cannot express one.
+	 *
+	 * The row stays available when the list is empty, which is when an escape hatch matters most, and
+	 * the "no projects" empty state still renders alongside it.
+	 */
+	footerAction?: ProjectSelectorFooterAction;
 };
-type ProjectSelectorProps = (CommonProps & {
+export type ProjectSelectorProps = (CommonProps & {
 	mode: "project";
 	selection: ProjectSelection;
 	onChangeSelection: (selection: {
@@ -430,6 +553,23 @@ type ProjectSelectorProps = (CommonProps & {
 	 * native hover.
 	 */
 	triggerLabelFormat?: "shortName" | "shortNameAndFullName";
+	/**
+	 * Render the trigger's label yourself, in place of the derived `shortName` / `shortName -
+	 * fullName` string.
+	 *
+	 * Receives the entry of `projects` that `selection.projectId` names, or `undefined` — which
+	 * means either that nothing is selected OR that the selected id matches no entry of
+	 * `projects`. The second case is reachable whenever the selection and the list come from
+	 * different sources, so a caller that can name the selected project from its own state should
+	 * fall back to that rather than treating `undefined` as "nothing is open".
+	 *
+	 * When supplied, the selector renders **no tooltip of its own** over the trigger. That is
+	 * deliberate rather than an omission: a caller reaching for this prop is rendering a label
+	 * with its own hover affordance (`ToolbarCompoundLabel` carries a truncation tooltip), and
+	 * two tooltips over one control is worse than none. Surface the full text from inside your
+	 * own node.
+	 */
+	renderTriggerLabel?: (selected: ProjectSelectorProject | undefined) => React$1.ReactNode;
 }) | (CommonProps & {
 	mode: "project-multi";
 	selection: ProjectMultiSelection;
@@ -477,11 +617,20 @@ export declare const NO_GROUPING = "none";
  */
 export declare function ProjectSelector(props: ProjectSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Resolves a localized string that may not have arrived yet, falling back to a hard-coded default.
+ *
+ * @param value The value read out of a localized-strings map, if any.
+ * @param fallback Text to show when `value` does not carry real localized text.
+ * @returns `value` when {@link isResolvedLocalizedValue} accepts it, `fallback` otherwise.
+ */
+export declare function resolveLocalizedString(value: string | undefined, fallback: string): string;
+/**
  * Localization keys used by {@link ResourcePickerDialog}. Pass to `useLocalizedStrings` and forward
  * the result as the `localizedStrings` prop.
  */
 export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%resourcePicker_title%",
+	"%resourcePicker_description%",
 	"%resourcePicker_section_already_selected%",
 	"%resourcePicker_section_installed%",
 	"%resourcePicker_section_available_to_download%",
@@ -489,6 +638,8 @@ export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%resourcePicker_search_placeholder%",
 	"%resourcePicker_language_filter_any%",
 	"%resourcePicker_language_filter_multipleSelected%",
+	"%resourcePicker_language_filter_search_placeholder%",
+	"%resourcePicker_language_filter_no_results%",
 	"%resourcePicker_showing_count%",
 	"%resourcePicker_load_error%",
 	"%resourcePicker_retry%",
@@ -529,7 +680,12 @@ export interface ResourcePickerDialogProps {
 	 * to infer it from "no results".
 	 */
 	areDownloadsUnavailable?: boolean;
-	/** If provided, only resources of this type (or any of the listed types) are shown */
+	/**
+	 * If provided, only resources of this type (or any of the listed types) are shown. Omitting it
+	 * shows everything, and so does an empty array — that is what a multi-select with nothing chosen
+	 * hands over, and {@link matchesResourceType} treats the two the same. There is no value that
+	 * means "show nothing".
+	 */
 	resourceType?: ResourceType | ResourceType[];
 	/**
 	 * Already-localized sentence shown above the resource list explaining why the list is INCOMPLETE
@@ -559,6 +715,15 @@ export interface ResourcePickerDialogProps {
 	allowDeselect?: boolean;
 	/** Called when the user clicks a resource row to select it */
 	onSelect: (resource: DblResourceData) => void;
+	/**
+	 * Ref to the search input, for a host that decides where focus lands when the dialog opens.
+	 *
+	 * Without it a host can only order its JSX and hope: the picker disables its search box whenever
+	 * there is nothing to filter, so "render the close button last so focus lands on search" silently
+	 * lands on whatever is tabbable instead — the Retry button, or the close button itself. A host
+	 * holding this ref can state the intent directly and stay correct when the box is disabled.
+	 */
+	searchInputRef?: React$1.RefObject<HTMLInputElement | null>;
 }
 /**
  * Which of the picker body's mutually exclusive states to render.
@@ -604,7 +769,82 @@ export declare function getResourcePickerBodyState(input: {
  *
  * @param props See {@link ResourcePickerDialogProps}
  */
-export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, notice, allowSelectingInstalled, localizedStrings, allowDeselect, onSelect, searchInputRef: externalSearchInputRef, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Whether a resource belongs to the section of the catalogue currently on display. An undefined
+ * `resourceType` means "no type filter", so everything matches, as does an empty array — that is
+ * what a multi-select with nothing chosen hands over.
+ *
+ * Shared by the resource rows and the language filter so the two can never disagree about which
+ * resources are in play — a language offered by the filter always has rows behind it.
+ */
+export declare function matchesResourceType(resource: DblResourceData, resourceType?: ResourceType | ResourceType[]): boolean;
+/**
+ * Builds the language filter's options from the resources currently in play.
+ *
+ * Languages are returned alphabetically, never in catalogue order — a DBL catalogue arrives in an
+ * arbitrary order that has nothing to do with what the user is likely to want. Languages that
+ * already have an installed resource are `starred`, which `MultiSelectComboBox` promotes to the top
+ * of the list when its `sortSelected` prop is set. Each entry carries its resource count as
+ * `secondaryLabel`.
+ *
+ * Pass the same list the rows are drawn from — already narrowed with {@link matchesResourceType} on
+ * a surface that scopes by type. Every language offered here has a resource behind it in whatever
+ * it is given, so "selecting a language can never produce an empty result list" is a guarantee the
+ * caller earns by deriving its rows and its options from one list, not one this function can make
+ * on its own.
+ *
+ * Note that a consumer passing `sortSelected` re-sorts these entries itself, so the rendered order
+ * is that component's (starred first, then selected, then alphabetical) rather than the plain
+ * alphabetical order returned here.
+ *
+ * @param resources The resources in play — the same list the rows are drawn from.
+ * @returns Alphabetically ordered entries, ready for `MultiSelectComboBox`.
+ */
+export declare function buildLanguageFilterOptions(resources: DblResourceData[]): MultiSelectComboBoxEntry[];
+/**
+ * Splits a filter selection into the values its options currently offer and the ones they do not.
+ *
+ * A resource list's filter options narrow with the rest of the view — the type filter, a reloaded
+ * catalogue — so a selection can name a value that is not on offer right now. Hand the filter only
+ * `offered`: filtering rows on a held value would empty the list, and `Filter` labels a badge by
+ * looking its value up in the options, so a held value would render as an X with no label.
+ *
+ * Held values are hidden, not discarded. Write a change back as `[...held, ...next]` so choosing a
+ * visible value does not drop them, and they apply again once the options offer them. This is what
+ * keeps a transient change of scope from destroying a saved selection; see
+ * `adr-shared-list-scope-predicate`.
+ *
+ * @param selected The full selection, as saved.
+ * @param entries The filter's current options.
+ * @returns `offered` — the selected values `entries` contains, in selection order; `held` — the
+ *   rest.
+ */
+export declare function partitionFilterSelection(selected: string[], entries: MultiSelectComboBoxEntry[]): {
+	offered: string[];
+	held: string[];
+};
+/**
+ * Puts opening focus where a `ResourcePickerDialog` host wants it, from the host's
+ * `DialogContent`'s `onOpenAutoFocus`.
+ *
+ * A dialog focuses its first tabbable element on open, which for an embedded picker is whatever the
+ * host renders first — typically a close button, so a keyboard user starts on "leave" rather than
+ * on the search they came to do. Ordering the JSX is not enough on its own: the picker disables its
+ * search box whenever there is nothing to filter, and focus then falls through to Retry or to the
+ * close button anyway.
+ *
+ * This lives beside the picker rather than at each host because the disabled condition is the
+ * picker's own state. A host that re-derived it would go stale the moment that condition changed.
+ * The picker re-claims focus itself once the box becomes enabled, so a host that opens the picker
+ * mid-fetch does not strand the user on the shell.
+ *
+ * @param event The `onOpenAutoFocus` event. Prevented whenever this function places focus itself.
+ * @param searchInput The picker's search box, from the ref passed as `searchInputRef`.
+ * @param content The host's own dialog content, used when there is nothing to type into. Escape and
+ *   the screen-reader announcement both still work from there.
+ */
+export declare function focusResourcePickerOnOpen(event: Event, searchInput: HTMLInputElement | null | undefined, content: HTMLElement | null | undefined): void;
 /**
  * Derives the list of available, non-obsolete book IDs from the `availableBookInfo` string
  *
@@ -813,9 +1053,19 @@ export type LinkedScrRefButtonProps = {
 export declare function LinkedScrRefButton({ scrRef, onClick, tooltipContent, ariaLabel, className, testId, }: LinkedScrRefButtonProps): import("react/jsx-runtime").JSX.Element | undefined;
 /** Text and layout direction */
 export type Direction = "rtl" | "ltr";
-/** Read layout direction from localStorage or return 'ltr' */
+/**
+ * Read layout direction from localStorage, or return 'ltr' when storage is unavailable.
+ *
+ * The `try` also covers `getItem` itself, not just reaching `localStorage` - a `Storage` object
+ * that is reachable without throwing can still throw on the call (e.g. a sandboxed proxy that
+ * defers its `SecurityError` to the method rather than the property access).
+ */
 export declare function readDirection(): Direction;
-/** Write layout direction to localStorage */
+/**
+ * Write layout direction to localStorage. A no-op when storage is unavailable or the write itself
+ * throws (e.g. quota exceeded in Safari private browsing) - see `readDirection` for why the call,
+ * not just reaching `localStorage`, has to be inside the guard.
+ */
 export declare function persistDirection(dir: Direction): void;
 /**
  * What this table needs of a keydown. A DOM `KeyboardEvent` satisfies it, and so does a
@@ -1193,7 +1443,32 @@ export type NavigationHistoryButtonsProps = {
  * arrow icons, and tooltip shortcut hints), matching Paratext 9.
  */
 export declare function NavigationHistoryButtons({ canGoBack, canGoForward, backItems, forwardItems, onNavigate, localizedStrings, showKeyboardShortcuts, className, variant, groupClassName, showDivider, }: NavigationHistoryButtonsProps): import("react/jsx-runtime").JSX.Element;
-type InternetUse = "Enabled" | "VpnRequired" | "Disabled" | "ProxyOnly";
+/**
+ * How the app is permitted to use the internet. Local alias — identical string literals to the
+ * extension's `InternetUse` type, defined here so platform-bible-react does not depend on the
+ * paratext-registration extension package.
+ *
+ * SYNC WARNING: Keep this alias identical to `InternetUse` in
+ * extensions/src/paratext-registration/src/types/paratext-registration.d.ts and the matching C#
+ * enum. Structural typing makes them mutually assignable today, but divergence (e.g. C# adding a
+ * new value) will silently break the wizard step's prop wiring. Update this alias whenever the
+ * authoritative type changes.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type InternetUse = "Enabled" | "VpnRequired" | "Disabled" | "ProxyOnly";
+/**
+ * Whether the app can honor this internet-use value.
+ *
+ * `InternetSettings.xml` is seeded once from a co-installed Paratext 9 on first launch (the two
+ * apps keep separate copies thereafter), so a stored value may name an option this app does not
+ * implement yet (the "Coming soon" rows). Such a value is shown selected and called out in a banner
+ * rather than silently replaced — callers that gate on a usable selection (the first-run wizard's
+ * Next button) should refuse to advance until this returns true.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function isSupportedInternetUse(value: InternetUse): boolean;
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[];
 /** @experimental This export is unstable and may change shape or disappear without notice */
@@ -1206,16 +1481,19 @@ export type InternetAccessOptionListProps = {
 	onChange: (value: InternetUse) => void;
 	/** When true, all rows are non-interactive (loading or saving in progress). */
 	disabled: boolean;
-	/**
-	 * Whether to show the "disabled options are planned for future updates" note below the rows.
-	 * Defaults to true. Set false where vertical space is tight (the first-run wizard step, whose
-	 * heading and Next button compete for the same fold) — the per-row "Coming soon" badges still
-	 * convey that those options are not yet available.
-	 */
-	showFooter?: boolean;
 };
-/** @experimental This export is unstable and may change shape or disappear without notice */
-export declare function InternetAccessOptionList({ localizedStrings, value, onChange, disabled, showFooter, }: InternetAccessOptionListProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The five internet-access options as radio rows. Each row's description sits behind an info icon
+ * button, revealed as a tooltip on hover or keyboard focus.
+ *
+ * The descriptions run to two sentences — longer than `Guidelines/Tooltips` allows a tooltip on a
+ * control, and within the one-to-two sentences the guidelines allow an info icon button's tooltip.
+ * That allowance and the info icon button pattern are defined in `Guidelines/Providing Help`, added
+ * by paranext-core PR #2787 (open as of 2026-09-11).
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function InternetAccessOptionList({ localizedStrings, value, onChange, disabled, }: InternetAccessOptionListProps): import("react/jsx-runtime").JSX.Element;
 type ServerType = "Production" | "QualityAssurance" | "Development" | "Test";
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[];
@@ -1223,11 +1501,11 @@ export declare const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[];
 export type DeveloperSectionProps = {
 	/** Localized strings; pass strings resolved from `DEVELOPER_SECTION_STRING_KEYS`. */
 	localizedStrings: LanguageStrings;
-	/** The currently selected server type. Every `ServerType` has its own item in the toggle. */
+	/** The currently selected server type. Every `ServerType` has its own radio. */
 	selectedServer: ServerType;
 	/** Called when the user switches to a different server type. */
 	onServerChange: (server: ServerType) => void;
-	/** When true, the toggle items are non-interactive (loading or saving in progress). */
+	/** When true, the radio items are non-interactive (loading or saving in progress). */
 	disabled: boolean;
 };
 /** @experimental This export is unstable and may change shape or disappear without notice */

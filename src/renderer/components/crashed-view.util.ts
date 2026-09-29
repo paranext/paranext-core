@@ -113,10 +113,10 @@ export function createCrashedViewLocalizer<TKey extends LocalizeKey>(
 /**
  * The layout direction to lay a crash screen out in, or `'ltr'` when it cannot be determined.
  *
- * `readDirection` reads `localStorage` unguarded, and a `localStorage` property access itself
- * throws when storage is unavailable. Every other caller in the app renders under a boundary that
- * would catch that; a crash screen is what the boundaries fall back TO, so a throw here has nothing
- * above it to catch it and unmounts the root - the blank window the screens exist to replace.
+ * `readDirection` (`dir-helper.util.ts`) already guards its own `localStorage` reads, but this
+ * wrapper's `try`/`catch` stays as belt-and-braces: a crash screen is what every other boundary in
+ * the app falls back TO, so it has nothing above it to catch a throw, and it must stay `'ltr'`-safe
+ * even if that library util's own guard ever regresses.
  *
  * @returns The persisted direction, or `'ltr'` if storage is unavailable
  */

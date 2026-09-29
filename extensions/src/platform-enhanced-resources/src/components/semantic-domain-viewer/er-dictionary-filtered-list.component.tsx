@@ -525,8 +525,9 @@ function SegmentDropdown({
       <DropdownMenuContent
         align="start"
         // No `zIndex` override: `DropdownMenuContent` sets its own tier, which already clears the
-        // drawer this list lives in. Arithmetic on a scale constant lands the element between named
-        // tiers, where nothing orders it and no test can pin it.
+        // drawer this list lives in. A consumer that pins an overlay's z-index itself is what
+        // `.claude/rules/ux/z-index-tiers.md` rule 2 rules out, and this one matched the tier the
+        // component already emits, so it never did anything.
         className="tw:max-h-[500px] tw:w-[300px] tw:overflow-y-auto tw:p-1"
         onEscapeKeyDown={(e) => {
           e.stopPropagation();

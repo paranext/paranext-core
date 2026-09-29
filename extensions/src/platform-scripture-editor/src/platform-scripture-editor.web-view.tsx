@@ -50,13 +50,16 @@ import {
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
+  ContentZoomRoot,
   EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   type FootnoteEditorMarkerPalette,
+  leftEdgeRect,
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
   MarkerMenu,
+  measureBox,
   Popover,
   PopoverAnchor,
   PopoverContent,
@@ -67,7 +70,9 @@ import {
   UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
   isMacOs,
+  useLivePopoverAnchor,
   usePromise,
+  useViewVisibility,
 } from 'platform-bible-react';
 import {
   clearPaletteSessionIfCurrent,
@@ -124,16 +129,22 @@ import {
   type ManageBooksDisabledReason,
 } from './book-not-available-view.component';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
-import {
-  ShareLayoutButton,
-  SHARE_LAYOUT_BUTTON_STRING_KEYS,
-} from './share-layout-button.component';
+import { TeamLayoutButton, TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import {
   getLocalizeKeysFromDecorations,
   mergeDecorations,
   removeDecorations,
 } from './decorations.util';
-import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
+import {
+  createNoteAnchorSource,
+  createPendingCommentAnchorSource,
+  createPendingCommentCenterAnchorSource,
+  getVerseElement,
+  runOnFirstLoad,
+  scrollToAnnotation,
+  scrollToVerse,
+} from './editor-dom.util';
+import { handleEditMenuCommand, isEditMenuCommand } from './edit-menu-actions.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
@@ -141,11 +152,11 @@ import { resolveFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
+import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   availableScrollGroupIds,
-  blockMarkerToBlockNames,
   buildChapterScaffoldOps,
   canAddChapterNumber,
   correctEditorUsjVersion,
@@ -154,15 +165,19 @@ import {
   formatEditorTitle,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
+  hasDisplayableParagraphMarkerTitle,
   isChapterBlank,
   isMissingBookError,
   isMissingBookInfoOnScreen,
   isOverrunProjectIdParse,
   openCommentListAndSelectThreadSafe,
+  paragraphMarkerNameKey,
   parseMissingBookError,
+  PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
   resolveAddChapterNumberClick,
   resolveViewTypeForInterfaceMode,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  selectableParagraphMarkers,
   selectCommentThreadInPanelSafe,
   withDocumentEndOnText,
 } from './platform-scripture-editor.utils';
@@ -188,6 +203,8 @@ import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import {
   commitVersionHistorySnapshot,
+  EDIT_ACTION_BLOCKED_KEY,
+  notifyEditMenuActionBlocked,
   notifySyncEditBlocked as sendSyncEditBlockedNotification,
   SYNC_EDIT_BLOCKED_KEY,
 } from './editor-side-effects.utils';
@@ -223,6 +240,8 @@ const EDITOR_LOAD_DELAY_TIME = 200;
  */
 const PDP_SAVE_DEBOUNCE_MS = 700;
 
+const FOOTNOTES_ZOOM_AREA_LABEL_KEY: LocalizeKey = '%webView_footnoteList_header%';
+
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...COMMENT_EDITOR_STRING_KEYS,
   ...FOOTNOTE_EDITOR_STRING_KEYS,
@@ -231,7 +250,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
   ...EMPTY_CHAPTER_VIEW_STRING_KEYS,
   ...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
-  ...SHARE_LAYOUT_BUTTON_STRING_KEYS,
+  ...TEAM_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
   // gets its remove row localized through the `localizedStrings` this web view already resolves.
@@ -247,7 +266,13 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // recent-searches labels, and the show-more-books/not-in-project strings that appear once a
   // book outside this project is reachable.
   ...BOOK_CHAPTER_CONTROL_STRING_KEYS,
-  ...Object.values(blockMarkerToBlockNames),
+  // Keys for Paragraph style titles (as displayed in tooltips, Paragraph combo box trigger/switcher,
+  // etc.) Some titles may not be displayed in all possible contexts.
+  ...[...selectableParagraphMarkers, ...PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS].map(
+    paragraphMarkerNameKey,
+  ),
+  // The footnotes pane's name on the zoom indicator.
+  FOOTNOTES_ZOOM_AREA_LABEL_KEY,
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
     .filter((item) => !!item),
@@ -265,6 +290,8 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // bar's removal action shows the same notice through the same helper and deliberately does not
   // re-list the key.
   SYNC_EDIT_BLOCKED_KEY,
+  // Same reasoning as SYNC_EDIT_BLOCKED_KEY above, for the Edit flyout's blocked-action notice.
+  EDIT_ACTION_BLOCKED_KEY,
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   '%webView_platformScriptureEditor_error_selectionNotResolved%',
@@ -279,6 +306,18 @@ const ANNOTATION_TYPE_TRANSLATOR_COMMENT = 'translator-comment';
 
 /** Annotation ID used for a pending comment that hasn't been saved yet */
 const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
+
+/**
+ * The footnote editor popover's minimum width: 500 px, yielding to the pane's available width so
+ * the popover still fits a narrow pane. Until Radix has published the available width, the viewport
+ * width stands in for it: the footnote editor locks its own width on its first layout, which
+ * happens before that.
+ *
+ * Set inline rather than as a Tailwind arbitrary class: the web view's SCSS + PostCSS pipeline
+ * drops a rule whose value is this `min()` expression, so the minimum is an inline style.
+ */
+const FOOTNOTE_POPOVER_MIN_WIDTH =
+  'min(500px, var(--radix-popover-content-available-width, 100vw))';
 
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
@@ -397,11 +436,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
-  // These control the placement of the footnote editor popover by setting the location of the anchor
+  // The footnote editor popover and the live anchor it is placed against
   const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>(false);
-  const [notePopoverAnchorX, setNotePopoverAnchorX] = useState<number>();
-  const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
-  const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
+  const notePopoverAnchor = useLivePopoverAnchor();
 
   /**
    * Mirror of {@link showFootnoteEditor} readable from the stable `noteCallerOnClick` closure: an
@@ -429,19 +466,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const editingNoteSessionRefreshedAt = useRef<number | undefined>(undefined);
 
-  // These control the placement of the comment editor popover by setting the location of the anchor
+  // The comment editor popover and the live anchor it is placed against
   const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
   /** Remembers the last assignee chosen so the next new comment pre-selects the same user */
   const [lastAssignedUser, setLastAssignedUser] = useState<string | undefined>();
-  const [commentPopoverAnchorX, setCommentPopoverAnchorX] = useState<number>();
-  const [commentPopoverAnchorY, setCommentPopoverAnchorY] = useState<number>();
-  const [commentPopoverAnchorHeight, setCommentPopoverAnchorHeight] = useState<number>();
+  const commentPopoverAnchor = useLivePopoverAnchor();
 
-  // These control the placement of the inline markers menu by setting the location of the anchor
+  // The inline markers menu and the live anchor it is placed against
   const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
-  const [markersMenuAnchorX, setMarkersMenuAnchorX] = useState<number>();
-  const [markersMenuAnchorY, setMarkersMenuAnchorY] = useState<number>();
-  const [markersMenuAnchorHeight, setMarkersMenuAnchorHeight] = useState<number>();
+  const markersMenuAnchor = useLivePopoverAnchor();
 
   // The refs needs to start out with null for it to work as a element ref
   // eslint-disable-next-line no-null/no-null
@@ -1047,6 +1080,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     ],
   );
 
+  /**
+   * Places the footnote editor popover against a note's caller (or the note itself). The caller
+   * element is measured live; if the editor re-renders it away, the note is looked up again by key.
+   * The anchor spans the element's height with no width, so the popover shows below the caller's
+   * line.
+   */
+  const setNoteAnchorSource = useCallback(
+    (element: Element, noteKey: string) => {
+      notePopoverAnchor.setSource(
+        createNoteAnchorSource(element, noteKey, (key) => editorRef.current?.getElementByKey(key)),
+      );
+    },
+    [notePopoverAnchor],
+  );
+
   const nodeOptions = useMemo<UsjNodeOptions>(
     () => ({
       chapterVerseSeparator,
@@ -1122,10 +1170,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               return;
             }
 
-            const targetRect = event.currentTarget.getBoundingClientRect();
-            setNotePopoverAnchorX(targetRect.left);
-            setNotePopoverAnchorY(targetRect.top);
-            setNotePopoverAnchorHeight(targetRect.height);
+            setNoteAnchorSource(event.currentTarget, noteNodeKey);
             editingNoteKey.current = noteNodeKey;
             editingNoteOps.current = [noteOp];
             editingNoteSessionRefreshedAt.current = Date.now();
@@ -1143,6 +1188,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       footnoteCallers,
       crossRefCallers,
       setFootnotesPaneVisible,
+      setNoteAnchorSource,
     ],
   );
 
@@ -1242,6 +1288,31 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [viewType, isPowerMode]);
 
   /**
+   * {@link toBookChapterKey} of the chapter the engine was last handed content for. A jump into
+   * another chapter waits on this rather than on a delay, because selecting before the engine has
+   * the new chapter resolves the range against the old one. State rather than a ref so the waiting
+   * jump re-runs when it changes.
+   */
+  const [editorChapterKey, setEditorChapterKey] = useState<string | undefined>(undefined);
+  /**
+   * The chapter this render's content subscription is for. `useEditorPdpSync` applies content in
+   * the commit of the render that delivered it, so this is the chapter of the content being
+   * applied.
+   *
+   * Correctness rests on `useEditorPdpSync` calling `setEditorUsj` only for a genuinely NEW
+   * `(usjFromPdp, documentSelector)` pair (its `lastProcessedUsjFromPdp` guard). During navigation
+   * there is a window where `scrRef` — and so this ref, updated every render below — has already
+   * moved to the new chapter while `usjFromPdp` still holds the PREVIOUS chapter's content
+   * (`useProjectData` keeps serving the old value until the new subscription's first delivery
+   * lands). That window is harmless here: for as long as it lasts, `usjFromPdp` is unchanged from
+   * what `useEditorPdpSync` already processed, so its guard skips the effect entirely and
+   * `setEditorUsj` — the only thing that reads this ref — is not called against it. By the time a
+   * delivery DOES pass that guard, the platform's data-hook contract guarantees it belongs to the
+   * selector current at that point, which is the same chapter this ref was just updated to.
+   */
+  const renderedChapterKeyRef = useRef(toBookChapterKey(scrRef));
+  renderedChapterKeyRef.current = toBookChapterKey(scrRef);
+  /**
    * Function to run to set the editor's USJ content. Also clears annotation info because setting
    * the editor's USJ silently removes all annotations
    *
@@ -1250,6 +1321,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const setEditorUsj = useRef((usj: Usj) => {
     editorRef.current?.setUsj(usj);
     clearAnnotationInfo.current();
+    setEditorChapterKey(renderedChapterKeyRef.current);
+  });
+
+  const isViewVisible = useViewVisibility();
+  // Jumps to a range — Find, Checks, Comments — select and scroll the range itself into view; see
+  // `computeRangeScrollTop` in editor-dom.util.ts for exactly where it lands.
+  //
+  // Hidden case: those panels drive this editor from elsewhere, and in Power mode they can share its
+  // tab stack. The selection is applied at once; the scroll waits for this tab to be shown, then
+  // runs once, instantly, for the latest request. See `useScrollToRange`.
+  const { requestScrollToRange, consumeRangeScrollClaimFor } = useScrollToRange({
+    editorRef,
+    editorChapterKey,
+    isViewVisible,
   });
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
@@ -1314,8 +1399,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       ),
     [localizedStrings, isStructureProtected, notifyStructureProtected, restoreEditorSelection],
   );
-
-  const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
 
   const insertCommentAtCurrentSelection = useCallback(() => {
     const selection = currentSelectionRef.current;
@@ -1474,6 +1557,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       }
     }
 
+    // Try to find the selected text element to anchor the popover to. No rendered editor content
+    // means there is nothing to anchor to — bail out before recording the pending range or setting
+    // the highlight annotation below, not just before opening the popover: either one left behind
+    // with no popover open to clear it would strand a highlight in the text with no way to remove
+    // it, and would misdirect the next comment actually saved to this stale range.
+    const editorContainer = document.querySelector<HTMLElement>('.usfm');
+    if (!editorContainer) return;
+
     pendingCommentAnnotationRange.current = { range: annotationRange, verseRef: scrRef };
 
     // Create a temporary annotation to highlight the selected text
@@ -1483,29 +1574,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       PENDING_COMMENT_ANNOTATION_ID,
     );
 
-    // Position the popover near the annotation
-    // Try to find the selected text element for positioning
-    const editorContainer = document.querySelector<HTMLElement>('.usfm');
-    if (editorContainer) {
-      // Use the browser's selection to get the bounding rect of the selected text
-      const domSelection = window.getSelection();
-      if (domSelection && domSelection.rangeCount > 0) {
-        const range = domSelection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        setCommentPopoverAnchorX(rect.left);
-        setCommentPopoverAnchorY(rect.bottom);
-        setCommentPopoverAnchorHeight(0);
-      } else {
-        // Fallback to center of editor viewport
-        const rect = editorContainer.getBoundingClientRect();
-        setCommentPopoverAnchorX(rect.left + rect.width / 2);
-        setCommentPopoverAnchorY(rect.top + rect.height / 2);
-        setCommentPopoverAnchorHeight(0);
-      }
+    // Position the popover near the annotation. Use the browser's selection to get the bounding
+    // rect of the selected text
+    const domSelection = window.getSelection();
+    if (domSelection && domSelection.rangeCount > 0) {
+      const range = domSelection.getRangeAt(0).cloneRange();
+      commentPopoverAnchor.setSource(
+        createPendingCommentAnchorSource(range, PENDING_COMMENT_ANNOTATION_ID, editorContainer),
+      );
+    } else {
+      // Fallback to center of editor viewport
+      commentPopoverAnchor.setSource(createPendingCommentCenterAnchorSource(editorContainer));
     }
 
     setShowCommentEditor(true);
-  }, [scrRef, canUserCreateComments, isSyncBlocked, notifySyncEditBlocked]);
+  }, [scrRef, canUserCreateComments, isSyncBlocked, notifySyncEditBlocked, commentPopoverAnchor]);
 
   /**
    * Inserts a footnote at the current selection. Shared by the "Insert footnote" context-menu item,
@@ -1603,16 +1686,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           const { scrRef: targetScrRef, range } = editorMessage;
           logger.debug(`selectRange targetScrRef ${serialize(targetScrRef)} ${serialize(range)}`);
 
-          if (compareScrRefs(scrRef, targetScrRef) !== 0) {
-            // Need to update scr ref, let the editor load the Scripture text at the new scrRef,
-            // and scroll to the new scrRef before setting the range. Set the nextSelectionRange
-            // which will set the range after a short wait time in a `useEffect` below
-            setScrRefWithScroll(targetScrRef);
-            nextSelectionRange.current = range;
-          }
-          // We're on the right scr ref. Go ahead and set the selection
-          else editorRef.current?.setSelection(range);
-
+          // Requested before navigating, so the jump records the chapter it started from.
+          requestScrollToRange(range, targetScrRef);
+          // Keeps the scroll group on the range's verse. The verse scroll this sets off stands down
+          // for a reference a range scroll owns (see the scroll effect below).
+          if (compareScrRefs(scrRef, targetScrRef) !== 0) setScrRefWithScroll(targetScrRef);
           break;
         }
         case 'updateDecorations': {
@@ -1841,6 +1919,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     insertCrossReferenceAtCurrentSelection,
     scrRef,
     setScrRefWithScroll,
+    requestScrollToRange,
     decorations,
     setDecorations,
     setFootnotesPaneVisible,
@@ -1882,13 +1961,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // existing marker menu items to be shown
     const currentSelection = window.getSelection();
     if (inlineMarkerMenuItems.length && currentSelection && currentSelection.rangeCount > 0) {
-      const selectionRect = currentSelection.getRangeAt(0).getBoundingClientRect();
-      setMarkersMenuAnchorX(selectionRect.left);
-      setMarkersMenuAnchorY(selectionRect.top);
-      setMarkersMenuAnchorHeight(selectionRect.height);
+      const range = currentSelection.getRangeAt(0).cloneRange();
+      const rangeElement =
+        range.startContainer instanceof Element
+          ? range.startContainer
+          : range.startContainer.parentElement;
+      const contextElement = rangeElement?.closest('.editor-input') ?? rangeElement;
+      // A selection outside any element has nothing to anchor to; opening anyway would place the
+      // menu against a previous selection.
+      if (!contextElement) return;
+      markersMenuAnchor.setSource({
+        measure: () => {
+          const rect = measureBox(range);
+          return rect && leftEdgeRect(rect);
+        },
+        contextElement,
+      });
       setShowMarkersMenu(true);
     }
-  }, [inlineMarkerMenuItems]);
+  }, [inlineMarkerMenuItems, markersMenuAnchor]);
 
   // Need to add a window listener for click events that will close the markers menu when you click
   // outside. There is another `onClick` listener for the marker menu that prevents click events
@@ -2658,6 +2749,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // The round trip the in-flight guard above was waiting for has completed, regardless of what
     // caused this transition.
     if (pendingScaffoldInsertRef.current) {
+      // Not gated on `consumeRangeScrollClaimFor`, unlike the two verse scrolls above: this one
+      // fires only for an insert the user's own click in THIS editor triggered, which no cross-view
+      // range jump can be concurrent with. Gate it if that ever stops being true — the `focus()`
+      // below would also re-collapse a just-applied selection.
       scrollToVerse(scrRef);
       editorRef.current?.focus();
     }
@@ -2894,30 +2989,30 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     editingNoteSessionRefreshedAt.current = Date.now();
   }, []);
 
-  const openFootnoteEditorOnNewNote = useCallback((ops?: DeltaOp[], insertedNodeKey?: string) => {
-    if (insertedNodeKey && ops) {
-      // If we are already editing a note, then returns
-      if (editingNoteKey.current) return;
+  const openFootnoteEditorOnNewNote = useCallback(
+    (ops?: DeltaOp[], insertedNodeKey?: string) => {
+      if (insertedNodeKey && ops) {
+        // If we are already editing a note, then returns
+        if (editingNoteKey.current) return;
 
-      // Makes sure the node is a note
-      const noteOp = ops[1];
-      if (!isInsertEmbedOpOfType('note', noteOp)) return;
+        // Makes sure the node is a note
+        const noteOp = ops[1];
+        if (!isInsertEmbedOpOfType('note', noteOp)) return;
 
-      const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
-      // Note element must be defined
-      if (!noteElement) return;
+        const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
+        // Note element must be defined
+        if (!noteElement) return;
 
-      const targetRect = noteElement.getBoundingClientRect();
-      setNotePopoverAnchorX(targetRect.left);
-      setNotePopoverAnchorY(targetRect.top);
-      setNotePopoverAnchorHeight(targetRect.height);
-      editingNoteKey.current = insertedNodeKey;
-      editingNoteOps.current = [noteOp];
-      editingNoteSessionRefreshedAt.current = Date.now();
-      editingNoteIsNew.current = true;
-      setShowFootnoteEditor(true);
-    }
-  }, []);
+        setNoteAnchorSource(noteElement, insertedNodeKey);
+        editingNoteKey.current = insertedNodeKey;
+        editingNoteOps.current = [noteOp];
+        editingNoteSessionRefreshedAt.current = Date.now();
+        editingNoteIsNew.current = true;
+        setShowFootnoteEditor(true);
+      }
+    },
+    [setNoteAnchorSource],
+  );
 
   // #region Debounced Save Scheduling
 
@@ -3239,7 +3334,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // TODO: hook into the editor and detect when it has loaded somehow
       const cancelRunOnLoad = runOnFirstLoad(() => {
         hasFirstRetrievedScripture.current = true;
-        scrollToVerse(scrRef);
+        // A range scroll (a find match, a check result) owns where this reference lands, exactly as
+        // the reference-scroll effect below defers to it — this poll runs every 100ms, so a jump
+        // landing in that window must not be overwritten by a plain verse-start scroll.
+        if (!consumeRangeScrollClaimFor(scrRef)) scrollToVerse(scrRef);
         editorRef.current?.focus();
         // On Load, the editor sets the selection to `scrRef`. Since this is an internal change, we
         // don't want to scroll again when we get this scrRef back from the PDP, so we set
@@ -3252,9 +3350,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     // Do nothing in destructor since we didn't do anything. TypeScript requires a returned function
     return () => {};
-  }, [usjFromPdp, scrRef]);
+  }, [usjFromPdp, scrRef, consumeRangeScrollClaimFor]);
 
-  // Scroll the selected verse and selection range into view
+  // Scroll the selected verse into view
   useEffect(() => {
     // If we made this latest scrRef change, don't scroll
     if (
@@ -3270,25 +3368,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     let highlightedVerseElement: HTMLElement | undefined;
 
-    // Queue up the next selection range to be set and clear it so we don't accidentally set the
-    // range to the wrong thing
-    const nextRange = nextSelectionRange.current;
-    nextSelectionRange.current = undefined;
-
     // Wait before scrolling to make sure there is time for the editor to load
     // TODO: hook into the editor and detect when it has loaded somehow
     const scrollTimeout = setTimeout(() => {
-      // Scroll to and add a highlight to the current verse element
-      highlightedVerseElement = scrollToVerse(scrRef);
+      // A range scroll (a find match, a check result) owns where this reference lands. Scrolling to
+      // the verse as well would drag a match low in a long verse back off screen, so only highlight.
+      highlightedVerseElement = consumeRangeScrollClaimFor(scrRef)
+        ? getVerseElement(scrRef.verseNum)
+        : scrollToVerse(scrRef);
       highlightedVerseElement?.classList.add('highlighted');
 
       // Clear the internal verse ref since we've handled it and also clear the volatile
       // allow-scroll flag so this special-casing only happens once.
       internalVerseLocationRef.current = undefined;
       allowScrollForInternalRef.current = false;
-
-      // Set the selection if the selection was set to something as part of this scr ref change
-      if (nextRange) editorRef.current?.setSelection(nextRange);
     }, EDITOR_LOAD_DELAY_TIME);
 
     return () => {
@@ -3299,7 +3392,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Remove highlight from the current verse element
       highlightedVerseElement?.classList.remove('highlighted');
     };
-  }, [scrRef]);
+  }, [scrRef, consumeRangeScrollClaimFor]);
 
   const onCommentEditorCancel = useCallback(() => {
     // Remove the pending annotation if one was created
@@ -3513,6 +3606,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const menuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
+      // The Edit flyout acts on this editor, and the clipboard needs the click's user activation,
+      // so it runs here rather than as a PAPI command
+      if (isEditMenuCommand(projectMenuCommand.command)) {
+        handleEditMenuCommand(
+          projectMenuCommand.command,
+          editorRef.current ?? undefined,
+          { isReadOnly: isReadOnlyEffective, isDurablyReadOnly, isSyncBlocked },
+          {
+            notifyActionBlocked: () => notifyEditMenuActionBlocked(localizedStrings),
+            notifySyncEditBlocked,
+            restoreSelectionIfLost: (editor) =>
+              restoreSelectionIfLost(editor, lastFocusOutSelectionRef.current),
+            onActionError: (e) => logger.warn(`Edit menu action failed: ${getErrorMessage(e)}`),
+            focusEditor: () => requestAnimationFrame(() => editorRef.current?.focus()),
+          },
+        );
+        return;
+      }
       // Find is the one menu command that needs more than the tab id: it carries this tab's current
       // text selection so the Find panel pre-fills and searches it, matching Ctrl+F. The source
       // project is deliberately left off — `openFind` resolves it from this editor's own web view
@@ -3531,11 +3642,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           );
         return;
       }
-      // Assuming that the project menu command is one of the registered command handlers in papi
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      papi.commands.sendCommand(projectMenuCommand.command as keyof CommandHandlers, webViewId);
+      papi.commands
+        // Assuming that the project menu command is one of the registered command handlers in papi
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        .sendCommand(projectMenuCommand.command as keyof CommandHandlers, webViewId)
+        .catch((e) =>
+          logger.warn(
+            `Failed to run ${projectMenuCommand.command} from the editor tab menu: ${getErrorMessage(e)}`,
+          ),
+        );
     },
-    [getMenuFindSelectionText, webViewId],
+    [
+      getMenuFindSelectionText,
+      isDurablyReadOnly,
+      isReadOnlyEffective,
+      isSyncBlocked,
+      localizedStrings,
+      notifySyncEditBlocked,
+      webViewId,
+    ],
   );
 
   function renderEditor() {
@@ -3627,23 +3752,32 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     const editorTree = (
       <TwoStepDeleteTooltipOverlay>
-        <EditorKeyboardShortcuts editorRef={editorRef}>
-          <Editorial
-            ref={editorRef}
-            scrRef={scrRef}
-            onScrRefChange={setScrRefNoScroll}
-            options={options}
-            logger={logger}
-            onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
-            onSelectionChange={handleSelectionChange}
-            onStateChange={(state) => {
-              setCanUndo(state.canUndo);
-              setCanRedo(state.canRedo);
-              setBlockMarker(state.blockMarker);
-              setContextMarker(state.contextMarker);
-            }}
-          />
-        </EditorKeyboardShortcuts>
+        {/* The Scripture text's `main` zoom area holds the editor and nothing else. The overlays
+            around it — this one's Backspace/Delete hint, the paragraph-marker tooltips and the
+            Simple-mode character-marker bar — stay at interface scale and place themselves from
+            rect differences, which a zoomed element reports in the same viewport pixels. The area
+            sits INSIDE this overlay rather than around it because the overlay positions its hint
+            relative to its own wrapper: inside the zoom, the hint's CSS offsets would be multiplied
+            by the zoom factor and land away from the verse. The wrapper holds no text itself. */}
+        <ContentZoomRoot>
+          <EditorKeyboardShortcuts editorRef={editorRef}>
+            <Editorial
+              ref={editorRef}
+              scrRef={scrRef}
+              onScrRefChange={setScrRefNoScroll}
+              options={options}
+              logger={logger}
+              onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
+              onSelectionChange={handleSelectionChange}
+              onStateChange={(state) => {
+                setCanUndo(state.canUndo);
+                setCanRedo(state.canRedo);
+                setBlockMarker(state.blockMarker);
+                setContextMarker(state.contextMarker);
+              }}
+            />
+          </EditorKeyboardShortcuts>
+        </ContentZoomRoot>
       </TwoStepDeleteTooltipOverlay>
     );
 
@@ -3749,13 +3883,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * Localized name of the current paragraph style, or the generic fallback. Undefined until the
    * localized strings resolve — `ParagraphStyleLabel` renders the marker code alone until then.
    *
-   * `Object.hasOwn`, not a bare lookup: a marker named `constructor` or `toString` would otherwise
-   * find an inherited `Object.prototype` member and take the wrong branch.
+   * Uses `hasDisplayableParagraphMarkerTitle`, not `selectableParagraphMarkers.includes`, so `id`
+   * still reads "id - Book identifier" here even though it's excluded from the switcher menu
+   * itself.
+   *
+   * Deliberately not `getParagraphMarkerTitle(blockMarker, localizedStrings) ?? misc`: that would
+   * collapse "known marker, string still loading" (should render blank, per the above) into the
+   * same branch as "marker with no title at all" (should render the misc fallback), so the
+   * membership check stays inline here instead.
    */
-  const blockMarkerName =
-    blockMarker && Object.hasOwn(blockMarkerToBlockNames, blockMarker)
-      ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
-      : localizedStrings['%paragraphMenu_misc_markerDescription%'];
+  const blockMarkerNameKey: LocalizeKey | undefined =
+    blockMarker && hasDisplayableParagraphMarkerTitle(blockMarker)
+      ? paragraphMarkerNameKey(blockMarker)
+      : undefined;
+  const blockMarkerName = blockMarkerNameKey
+    ? localizedStrings[blockMarkerNameKey]
+    : localizedStrings['%paragraphMenu_misc_markerDescription%'];
 
   const scrollGroupSelector = isPowerMode ? (
     <ScrollGroupSelector
@@ -3803,15 +3946,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         endAreaChildren={
           <>
             {/* This container is flex-row-reverse, so StructureProtectionButton must come first
-            in JSX order to render visually after (to the right of) ShareLayoutButton. */}
+            in JSX order to render visually after (to the right of) TeamLayoutButton. */}
             <StructureProtectionButton
               projectId={projectId}
               localizedStrings={localizedStrings}
               className="tw:h-8"
             />
-            {/* Share Layout is only available in 10 Simple right now. Later it will be made available in 10 Power too. */}
+            {/* Team layout is only available in 10 Simple right now. Later it will be made available in
+                10 Power too — note the team USFM structure lock it edits is itself unenforced in Power
+                mode (`useStructureProtectionState`), so opening it there needs a decision about what
+                that lock means. */}
             {!isPowerMode && (
-              <ShareLayoutButton
+              <TeamLayoutButton
                 projectId={projectId}
                 localizedStrings={localizedStrings}
                 className="tw:h-8"
@@ -3824,9 +3970,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       {/* Slim, non-covering banner while an automatic Send/Receive freezes editing. Shown only when
           sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
       {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
-      {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
+      {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state.
+          The zoom area is inside `renderEditor()`, around the editor tree only. */}
       <InPortal node={editorPortalNode}>
-        <PortalContents>{renderEditor()}</PortalContents>
+        <PortalContents>
+          <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderEditor()}</div>
+        </PortalContents>
       </InPortal>
       <div
         ref={editorContainerRef}
@@ -3890,6 +4039,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   useWebViewState={useWebViewState}
                   showMarkers={options.view?.markerMode !== 'hidden'}
                   focusRequest={footnotePaneFocusRequest}
+                  zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
                 >
                   {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                   <OutPortal node={editorPortalNode} />
@@ -3904,18 +4054,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           </div>,
         )}
       </div>
+      {/* The popovers below are rendered beside the editor and anchored to live positions in its
+          text (see useLivePopoverAnchor), so they follow the text when it scrolls or reflows. They
+          stay at interface scale. */}
       {/** Inline markers menu components */}
       <Popover open={showMarkersMenu}>
-        <PopoverAnchor
-          className="tw:absolute"
-          style={{
-            top: markersMenuAnchorY,
-            left: markersMenuAnchorX,
-            height: markersMenuAnchorHeight,
-            width: 0,
-            pointerEvents: 'none',
-          }}
-        />
+        <PopoverAnchor virtualRef={markersMenuAnchor.virtualRef} />
         <PopoverContent
           className="tw:w-[500px] tw:p-0"
           onClick={(event) => {
@@ -3933,18 +4077,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       </Popover>
       {/** Footnote editor components */}
       <Popover open={showFootnoteEditor}>
-        <PopoverAnchor
-          className="tw:absolute"
-          style={{
-            top: notePopoverAnchorY,
-            left: notePopoverAnchorX,
-            // This height makes it so that visually the popover displays below the current line where the footnote is
-            height: notePopoverAnchorHeight,
-            width: 0,
-            pointerEvents: 'none',
-          }}
-        />
-        <PopoverContent className="tw:w-max tw:min-w-[500px] tw:p-[10px]">
+        <PopoverAnchor virtualRef={notePopoverAnchor.virtualRef} />
+        <PopoverContent
+          className="tw:w-max tw:p-[10px]"
+          style={{ minWidth: FOOTNOTE_POPOVER_MIN_WIDTH }}
+        >
           <FootnoteEditor
             classNameForEditor="scripture-font"
             noteOps={editingNoteOps.current}
@@ -3962,17 +4099,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       </Popover>
       {/** Comment editor for creating new comment threads */}
       <Popover open={showCommentEditor}>
-        <PopoverAnchor
-          className="tw:absolute"
-          style={{
-            top: commentPopoverAnchorY,
-            left: commentPopoverAnchorX,
-            height: commentPopoverAnchorHeight,
-            width: 0,
-            pointerEvents: 'none',
-          }}
-        />
-        <PopoverContent className="tw:w-[400px] tw:p-[10px]">
+        <PopoverAnchor virtualRef={commentPopoverAnchor.virtualRef} />
+        {/* `always`: re-measured every frame while open. Marking the selection as the pending
+              comment re-renders the text under the anchor without any scroll, resize or layout
+              shift that would otherwise trigger a re-measure. */}
+        <PopoverContent className="tw:w-[400px] tw:p-[10px]" updatePositionStrategy="always">
           <CommentEditor
             assignableUsers={commentEditorAssignableUsers}
             onSave={onCommentEditorSave}

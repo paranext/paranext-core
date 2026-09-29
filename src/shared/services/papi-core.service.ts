@@ -81,6 +81,7 @@ export type {
   ProjectMetadataWithoutFactoryInfo,
 } from '@shared/models/project-metadata.model';
 export type {
+  ContentZoomAreaId,
   GetWebViewOptions,
   OpenWebViewOptions,
   SavedWebViewDefinition,

@@ -12,7 +12,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
     /// (<c>x-experimental: true</c>) surfaced by <c>rpc.discover</c> — the same doc-assertion
     /// pattern as <c>VersificationConversionServiceTests</c>. Deliberately NOT named
     /// <c>ParatextProjectSendReceiveServiceTests</c> (or any of the per-feature
-    /// <c>ParatextProjectSendReceiveService*Tests</c> names the Paratext 10 Studio overlay adds),
+    /// <c>ParatextProjectSendReceiveService*Tests</c> names the Paratext 10 overlay adds),
     /// so the stub's tests and the overlay's tests can coexist.
     /// </summary>
     [TestFixture]

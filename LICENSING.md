@@ -204,8 +204,8 @@ this section will find these build artifacts and wonder whether they were consid
 still move installers off the build machine, all of them for development and testing rather than for
 users: `publish.yml` uploads the Windows and macOS installers to an access-controlled S3 bucket when
 `uploadReleaseAssets` is set, `package-main.yml` uploads per-platform artifacts on pushes to the
-long-lived branches, and `test.yml`'s `check packaging` uploads one per platform on every push and
-pull request, retained for 14 days. Every one of those installers carries the lexical database, so
+long-lived branches, and `test.yml`'s `check packaging` uploads up to one per platform on every push
+and pull request, retained for 14 days. Every one of those installers carries the lexical database, so
 every one of them relies on the same Paratext permission described later in this section - UBS's
 permission runs to **Paratext** specifically - rather than on anything this repository grants. That
 is deliberate and in scope; the narrower invariant - that no build of this source is offered to a
