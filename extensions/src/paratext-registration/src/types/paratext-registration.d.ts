@@ -137,6 +137,20 @@ declare module 'papi-shared-types' {
       registrationData: RegistrationData,
     ) => Promise<boolean>;
     /**
+     * Developer reset used by `platform.resetFirstRun`: puts Platform.Bible's own registration into
+     * the state a Paratext 9 user has on their first Platform.Bible launch. Only ever touches
+     * Platform.Bible's own ParatextData folder; Paratext 9's registration is never changed. The
+     * application must be restarted afterwards.
+     *
+     * @param mode `copyFromParatext9` copies Paratext 9's registration and internet settings again
+     *   on the next start; `clear` removes the registration; `keep` does nothing
+     * @throws If ParatextData is not using Platform.Bible's own folder
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextRegistration.resetForFirstRun': (
+      mode: 'keep' | 'copyFromParatext9' | 'clear',
+    ) => Promise<void>;
+    /**
      * @deprecated Use the `paratextRegistration.internetSettingsDataProvider` data provider's
      *   `getInternetSettings` instead. Retained as a thin wrapper for backward compatibility and
      *   will be removed in a future release.

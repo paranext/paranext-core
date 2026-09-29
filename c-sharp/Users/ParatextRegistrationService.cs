@@ -1,3 +1,4 @@
+using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.Repository;
@@ -44,6 +45,10 @@ internal class ParatextRegistrationService(
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextRegistration.validateParatextRegistrationData",
             ValidateParatextRegistrationData
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.resetForFirstRun",
+            (string mode) => ResetForFirstRun(mode)
         );
 
         // Deprecated: retained as thin wrappers that delegate to InternetSettingsDataProvider so
@@ -226,6 +231,48 @@ internal class ParatextRegistrationService(
                     ? e.Message
                     : $"Setting Paratext Registration data failed! {e.Message}"
             );
+        }
+    }
+
+    /// <summary>
+    /// Developer reset: puts Platform.Bible's own registration into the state a Paratext 9 user has
+    /// on their first Platform.Bible launch. The app must be restarted afterwards. Only ever touches
+    /// Platform.Bible's pinned ParatextData folder — Paratext 9's registration is never changed.
+    /// </summary>
+    /// <param name="mode">
+    /// <c>copyFromParatext9</c>: clear Platform.Bible's folder so the next startup copies the
+    /// Paratext 9 registration and internet settings again. <c>clear</c>: remove only
+    /// Platform.Bible's registration (an unregistered Paratext 9 user). <c>keep</c>: do nothing.
+    /// </param>
+    internal static void ResetForFirstRun(string mode)
+    {
+        if (mode == "keep")
+            return;
+
+        // Don't read ParatextInfo.AppDataFolder unless the pinned folder is installed: resolving
+        // ParatextData's own folder can create or seed a Paratext 9 folder.
+        if (
+            ParatextInfo.Default is not PlatformParatextInfo platformParatextInfo
+            || ParatextInfo.AppDataFolder != platformParatextInfo.AppDataFolderPath
+        )
+            throw new InvalidOperationException(
+                "Refusing to reset registration: ParatextData is not using Platform.Bible's own "
+                    + "app-data folder"
+            );
+
+        switch (mode)
+        {
+            case "copyFromParatext9":
+                platformParatextInfo.DeleteAppDataFilesForReseed();
+                break;
+            case "clear":
+                RegistrationInfo.DeleteRegistration();
+                break;
+            default:
+                throw new ArgumentException(
+                    $"Unknown registration reset mode: {mode}",
+                    nameof(mode)
+                );
         }
     }
 

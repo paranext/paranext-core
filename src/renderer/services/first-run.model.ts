@@ -13,13 +13,17 @@ export type RegistrationValidity = 'valid' | 'invalid' | 'unknown';
 /** What the startup reducer decides should happen, given the persisted facts. */
 export type FirstRunDecision =
   | { action: 'showApp' }
-  | { action: 'completeThenShowApp' }
   | { action: 'waitForRegistration' }
   | { action: 'startWizard'; step: FirstRunStep };
 
-/** The three persisted/queried facts the reducer decides from. */
+/** The persisted/queried facts the reducer decides from. */
 export interface FirstRunFacts {
   firstRunComplete: boolean;
   wizardActive: boolean;
   registrationValidity: RegistrationValidity;
+  /**
+   * The Identify step saved a registration and restarted the app immediately before this launch (a
+   * one-launch flag).
+   */
+  justRegistered: boolean;
 }

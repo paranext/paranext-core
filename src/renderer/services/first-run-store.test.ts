@@ -10,10 +10,12 @@ import {
   resetRegistrationValidityStore,
 } from './registration-validity-store';
 import {
+  clearFirstRunLocalState,
   completeFirstRun,
   continueWithoutRegistration,
   getFirstRunStatus,
   markJustRegistered,
+  markRegisteredInWizard,
   resetFirstRunStore,
   resolveFirstRunState,
   retryFirstRunResolution,
@@ -103,20 +105,58 @@ describe('resolveFirstRunState', () => {
     expect(mockResolveReg).not.toHaveBeenCalled();
   });
 
-  it('silently completes for a pre-existing registered user (no wizard)', async () => {
+  it('shows the full wizard to a user whose registration was copied from Paratext 9', async () => {
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('valid'); // wizardActive is false (localStorage cleared)
     await resolveFirstRunState();
-    expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true);
-    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(getFirstRunStatus()).toEqual({
+      kind: 'wizard',
+      step: 'language',
+      registrationValidAtStart: true,
+      registrationPreexisting: true,
+    });
+    // Only finishing the wizard completes first run — which is what gates auto-sync on startup.
+    expect(mockSet).not.toHaveBeenCalledWith('platform.firstRunComplete', expect.anything());
+    expect(localStorage.getItem('platform-bible.firstRunComplete')).not.toBe('true');
   });
 
   it('starts a fresh user at the language step and marks the wizard active', async () => {
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('invalid');
     await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toEqual({
+      kind: 'wizard',
+      step: 'language',
+      registrationValidAtStart: false,
+      registrationPreexisting: false,
+    });
     expect(localStorage.getItem('platform-bible.firstRunWizardActive')).toBe('true');
+  });
+
+  it('starts a registered user at the language step when a stale wizard-active flag is set', async () => {
+    // The reported repro: firstRunWizardActive set by hand on a registered machine.
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'language',
+      registrationPreexisting: true,
+    });
+  });
+
+  it('does not describe a registration this wizard created as copied from Paratext 9', async () => {
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    localStorage.setItem('platform-bible.firstRunRegisteredInWizard', 'true');
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('valid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      registrationValidAtStart: true,
+      registrationPreexisting: false,
+    });
   });
 
   it('continuing without setup supersedes a slow in-flight resolution (PT-4302)', async () => {
@@ -165,10 +205,11 @@ describe('resolveFirstRunState', () => {
 
   it('resumes at sync consent after the registration relaunch (wizardActive persisted)', async () => {
     localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('valid');
     await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'syncConsent' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
     expect(mockSet).not.toHaveBeenCalled(); // not completed yet
   });
 
@@ -178,7 +219,7 @@ describe('resolveFirstRunState', () => {
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('invalid'); // transient backend failure after restart
     await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'syncConsent' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
     // Flag must be consumed so it doesn't persist into a subsequent startup.
     expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
   });
@@ -299,7 +340,7 @@ describe('demo mode (PT-4219)', () => {
     localStorage.setItem(DEMO_MODE_KEY, 'true');
     resetFirstRunStore();
     await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
     // Demo must NOT dirty the wizard-active flag: leaving it set would misroute a later real
     // first-run on the same profile to the sync-consent resume step (code-review finding).
     expect(localStorage.getItem('platform-bible.firstRunWizardActive')).toBeNull();
@@ -313,7 +354,7 @@ describe('demo mode (PT-4219)', () => {
     localStorage.setItem('platform-bible.firstRunComplete', 'true');
     resetFirstRunStore();
     await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
   });
 
   it('seeds loading synchronously (never flashes the app from a stale completion cache)', () => {
@@ -443,7 +484,7 @@ describe('retryFirstRunResolution', () => {
 
     mockResolveReg.mockResolvedValue('invalid');
     await retryFirstRunResolution();
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
   });
 
   it('still guards a just-registered user when the transient invalid lands on the retry', async () => {
@@ -463,7 +504,7 @@ describe('retryFirstRunResolution', () => {
     mockResolveReg.mockResolvedValue('invalid'); // the fluke the flag exists to absorb
     await retryFirstRunResolution();
 
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'syncConsent' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
     // The dot must agree with the gate rather than nag about the registration just fixed.
     expect(getRegistrationValidity()).toBe('valid');
   });
@@ -683,7 +724,7 @@ describe('OS-language default on fresh first-run', () => {
     });
     await resolveFirstRunState();
     expect(mockSet).toHaveBeenCalledWith('platform.interfaceLanguage', ['km']);
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
   });
 
   test.each([[['en']], [[]]])(
@@ -715,7 +756,7 @@ describe('OS-language default on fresh first-run', () => {
       // Positive control: the seed path ran and read the current value.
       expect(mockGet).toHaveBeenCalledWith('platform.interfaceLanguage');
       expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
-      expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+      expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
     },
   );
 
@@ -732,7 +773,7 @@ describe('OS-language default on fresh first-run', () => {
     // distinguishes "matcher rejected ja" from "seed never ran".
     expect(mockGetSetupDialogLanguages).toHaveBeenCalled();
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
   });
 
   test('stays in English when only English qualifies (early-startup / minimal set)', async () => {
@@ -745,7 +786,7 @@ describe('OS-language default on fresh first-run', () => {
     await resolveFirstRunState();
     expect(mockGetSetupDialogLanguages).toHaveBeenCalled();
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
   });
 
   test('does not re-seed when reopening mid-wizard (wizard already active)', async () => {
@@ -762,7 +803,7 @@ describe('OS-language default on fresh first-run', () => {
     // `!wizardActive` guard (not merely a non-matching locale) is what suppressed the write.
     expect(mockGetSetupDialogLanguages).not.toHaveBeenCalled();
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
   });
 
   test('still starts the wizard if the OS-default lookup throws', async () => {
@@ -774,7 +815,7 @@ describe('OS-language default on fresh first-run', () => {
     // Best-effort swallow: warn logged, no language write, wizard still starts.
     expect(mockLogger.warn).toHaveBeenCalled();
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
   });
 
   test('skips the write when the best OS match is English, the default', async () => {
@@ -788,7 +829,64 @@ describe('OS-language default on fresh first-run', () => {
     // Positive control: the seed ran (the lookup happened) but found nothing to change.
     expect(mockGetSetupDialogLanguages).toHaveBeenCalled();
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
+  });
+
+  test('never replaces a language the user already chose (e.g. after a developer reset)', async () => {
+    stubSettings({ firstRunComplete: false, interfaceLanguage: ['fr', 'en'] });
+    mockResolveReg.mockResolvedValue('valid');
+    mockGetCurrentLocale.mockReturnValue('km-KH');
+    mockGetSetupDialogLanguages.mockResolvedValue({
+      en: { autonym: 'English' },
+      fr: { autonym: 'Français' },
+      km: { autonym: 'ខ្មែរ' },
+    });
+    await resolveFirstRunState();
+    // Positive control: the seed path ran (it read the current language) and the wizard started.
+    expect(mockGet).toHaveBeenCalledWith('platform.interfaceLanguage');
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
+    expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
+  });
+
+  test('still replaces the default English with a qualifying OS language', async () => {
+    stubSettings({ firstRunComplete: false, interfaceLanguage: ['en'] });
+    mockResolveReg.mockResolvedValue('valid');
+    mockGetCurrentLocale.mockReturnValue('km-KH');
+    mockGetSetupDialogLanguages.mockResolvedValue({
+      en: { autonym: 'English' },
+      km: { autonym: 'ខ្មែរ' },
+    });
+    await resolveFirstRunState();
+    expect(mockSet).toHaveBeenCalledWith('platform.interfaceLanguage', ['km']);
+  });
+});
+
+describe('registered-in-wizard marker', () => {
+  it('is written by markRegisteredInWizard and cleared when first run completes', async () => {
+    markRegisteredInWizard();
+    expect(localStorage.getItem('platform-bible.firstRunRegisteredInWizard')).toBe('true');
+    await completeFirstRun();
+    expect(localStorage.getItem('platform-bible.firstRunRegisteredInWizard')).toBeNull();
+  });
+});
+
+describe('clearFirstRunLocalState', () => {
+  it('clears every first-run flag but leaves demo mode alone', () => {
+    const firstRunKeys = [
+      'platform-bible.firstRunComplete',
+      'platform-bible.firstRunWizardActive',
+      'platform-bible.firstRunJustRegistered',
+      'platform-bible.firstRunRegisteredInWizard',
+      'platform-bible.syncOnStartupDisabled',
+    ];
+    firstRunKeys.forEach((key) => localStorage.setItem(key, 'true'));
+    localStorage.setItem('platform-bible.firstRunDemoMode', 'true');
+
+    clearFirstRunLocalState();
+
+    // Names any key left behind, rather than just failing on a null check.
+    expect(firstRunKeys.filter((key) => typeof localStorage.getItem(key) === 'string')).toEqual([]);
+    expect(localStorage.getItem('platform-bible.firstRunDemoMode')).toBe('true');
   });
 });
 
@@ -799,7 +897,7 @@ describe('registration validity published to the shared store', () => {
 
     await resolveFirstRunState();
 
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'language' });
     expect(getRegistrationValidity()).toBe('invalid');
   });
 
@@ -812,7 +910,7 @@ describe('registration validity published to the shared store', () => {
     await resolveFirstRunState();
 
     // The gate treated the transient as valid; the store must not contradict it and re-nag.
-    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'syncConsent' });
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
     expect(getRegistrationValidity()).toBe('valid');
   });
 
