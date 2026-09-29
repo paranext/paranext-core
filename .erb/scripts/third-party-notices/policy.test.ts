@@ -889,8 +889,19 @@ describe('classify', () => {
         detection: detected('NOASSERTION', 100, 'abc', text),
       });
 
+    it('checks no notices for an exception that records no credits', () => {
+      // Most exceptions record none: their rows are credited to the file's first notice, so there
+      // is no hand-typed credit to check and no operand to credit the file's other notices to.
+      const v = classifyWith(undefined);
+      expect(v.verdict).toBe('excepted');
+      expect(v.copyrightByOperand).toBeUndefined();
+    });
+
     it('carries the recorded credits onto the verdict the exception clears to', () => {
-      const credits = { MIT: 'Copyright (c) 2012 Sentry' };
+      const credits = {
+        'Apache-2.0': 'Copyright 2020 Stacked, Inc.',
+        MIT: 'Copyright (c) 2012 Sentry; Copyright (c) Meta Platforms, Inc. and affiliates.',
+      };
       const v = classifyWith(credits);
       expect(v.verdict).toBe('excepted');
       expect(v.copyrightByOperand).toEqual(credits);
@@ -939,6 +950,109 @@ describe('classify', () => {
       const v = classifyWith(credits);
       expect(v.verdict).toBe('excepted');
       expect(v.copyrightByOperand).toEqual(credits);
+    });
+
+    // Each case names a real notice from STACKED_TEXT and a value that is a substring of the file
+    // without being any one of its notices whole - all printed verbatim if accepted.
+    it.each([
+      ['a notice truncated mid-line', 'Copyright (c) 2012 Sent'],
+      ['a bare fragment', 'Sentry'],
+      ['a fragment taken from mid-line', '(c) 2012 Sentry'],
+      ['a whole line of license prose', 'Permission is hereby granted ...'],
+      [
+        'a notice run on past the blank line that ends it',
+        'Copyright 2020 Stacked, Inc. Apache License, Version 2.0 ...',
+      ],
+      [
+        'two notices typed as one',
+        'Copyright (c) 2012 Sentry Copyright (c) Meta Platforms, Inc. and affiliates.',
+      ],
+    ])('refuses %s as a credit', (_, notice) => {
+      const v = classifyWith({ 'Apache-2.0': 'Copyright 2020 Stacked, Inc.', MIT: notice });
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain(`"${notice}"`);
+      expect(v.reason).toContain('not a whole notice');
+    });
+
+    it('refuses two notices the file separates with a blank line, run together as one', () => {
+      // `posthog-node`'s LICENSE opens this way: two notices a blank line apart, which read as one
+      // continuous string once whitespace is collapsed across the whole file.
+      const text = ['Copyright 2020 A, Inc.', '', 'Copyright 2015 B, Inc.', '', 'MIT ...'].join(
+        '\n',
+      );
+      const v = classifyWith(
+        {
+          'Apache-2.0': 'Copyright 2020 A, Inc. Copyright 2015 B, Inc.',
+          MIT: 'Copyright 2020 A, Inc.',
+        },
+        { text },
+      );
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('not a whole notice');
+    });
+
+    it('refuses credits that leave one of the pinned text’s notices uncredited', () => {
+      // A package keyed by name keeps its exception for as long as its LICENSE is unchanged, and a
+      // monorepo LICENSE names every holder whatever a given package ships - so a credit trimmed
+      // to today's shipped code would silently under-credit a later version.
+      const v = classifyWith({
+        'Apache-2.0': 'Copyright 2020 Stacked, Inc.',
+        MIT: 'Copyright (c) 2012 Sentry',
+      });
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('"Copyright (c) Meta Platforms, Inc."');
+      expect(v.reason).not.toContain('"Copyright (c) 2012 Sentry"');
+    });
+
+    it('requires a notice with no year, and not text that only mentions copyright', () => {
+      const text = [
+        'Copyright JS Foundation and other contributors',
+        '',
+        'Copyright (c) 2020 Other',
+        '',
+        'COPYRIGHT AND PERMISSION NOTICE',
+        'Copyright and Related Rights in the Work are waived.',
+        '   Copyright [yyyy] [name of copyright owner]',
+        '   Copyright {yyyy} {name of copyright owner}',
+        'The above copyright notice and this permission notice shall be included.',
+        '      copyright notice that is included in or attached to the work',
+        '',
+        '(c) You must retain, in the Source form of any Derivative Works',
+      ].join('\n');
+      const missing = classifyWith({ MIT: 'Copyright (c) 2020 Other' }, { text });
+      expect(missing.verdict).toBe('blocked');
+      expect(missing.reason).toContain('"Copyright JS Foundation and other contributors"');
+      const both = 'Copyright JS Foundation and other contributors; Copyright (c) 2020 Other';
+      expect(classifyWith({ MIT: both }, { text }).verdict).toBe('excepted');
+    });
+
+    it('recognizes a notice behind a comment marker, in capitals or with the copyright sign', () => {
+      const text = [
+        '# Copyright (C) 2006 A Inc.',
+        '',
+        '© 2019 B Ltd.',
+        '',
+        ' * (c) 2021 C',
+        '',
+        'COPYRIGHT (C) 2010 D',
+      ].join('\n');
+      const v = classifyWith({ MIT: 'Copyright (C) 2006 A Inc.; © 2019 B Ltd.' }, { text });
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('"(c) 2021 C", "COPYRIGHT (C) 2010 D"');
+      const all = 'Copyright (C) 2006 A Inc.; © 2019 B Ltd.; (c) 2021 C; COPYRIGHT (C) 2010 D';
+      expect(classifyWith({ MIT: all }, { text }).verdict).toBe('excepted');
+    });
+
+    it('accepts a notice cut at a line break, leaving the lines that follow it optional', () => {
+      // `All rights reserved.` under a notice is part of its paragraph, and so is a permission
+      // grant a file runs on without a blank line - neither has to be typed into the credit.
+      const text = ['Copyright (c) 2012 A', 'All rights reserved.', '', 'Redistribution ...'].join(
+        '\n',
+      );
+      expect(classifyWith({ MIT: 'Copyright (c) 2012 A' }, { text }).verdict).toBe('excepted');
+      expect(
+        classifyWith({ MIT: 'Copyright (c) 2012 A All rights reserved.' }, { text }).verdict,
+      ).toBe('excepted');
     });
   });
 

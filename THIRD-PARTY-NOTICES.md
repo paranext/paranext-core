@@ -8623,7 +8623,7 @@ rather than left blank.
 
 ### Apache-2.0 — canonical text, 6 packages
 
-- `@posthog/core@1.55.2` (npm) — Copyright 2021-2023 LiosK
+- `@posthog/core@1.55.2` (npm) — Copyright 2020 Posthog / Hiberly, Inc.; Copyright 2015 Mixpanel, Inc.; Copyright 2021-2023 LiosK
 - `chroma-js@3.2.0` (npm) — Copyright (c) 2011-2025, Gregor Aisch All rights reserved.
 - `posthog-node@5.51.1` (npm) — Copyright 2020 Posthog / Hiberly, Inc.; Copyright 2015 Mixpanel, Inc.
 - `rc-new-window@0.1.13` (npm) — no copyright notice — an npm manifest has no field for one, and it bundles no license file to carry one
@@ -8759,7 +8759,7 @@ THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH REGARD TO
 
 - `@eten-tech-foundation/platform-editor@0.8.16` (npm) — Copyright © 2023-2025 ETEN Tech Foundation
 - `@eten-tech-foundation/scripture-utilities@0.1.6` (npm) — Copyright © 2023-2025 ETEN Tech Foundation
-- `@posthog/core@1.55.2` (npm) — Copyright (c) 2022 PostHog (part of Hiberly Inc); Copyright (c) 2013 Onur Can Cakmak onur.cakmak@gmail.com and all TraceKit contributors.; Copyright (c) 2012 Functional Software, Inc. dba Sentry
+- `@posthog/core@1.55.2` (npm) — Copyright (c) 2022 PostHog (part of Hiberly Inc); Copyright (c) 2013 Onur Can Cakmak onur.cakmak@gmail.com and all TraceKit contributors.; Copyright (c) 2012 Functional Software, Inc. dba Sentry; Copyright (c) 2017 Sentry; Copyright (c) Meta Platforms, Inc. and affiliates.; Copyright (c) 2015-present 650 Industries, Inc. (aka Expo); Copyright (c) 2025 AgentCat, Inc. (formerly MCPcat)
 - `@radix-ui/number@1.1.1` (npm) — Copyright (c) 2022 WorkOS
 - `@radix-ui/react-compose-refs@1.1.2` (npm) — Copyright (c) 2022 WorkOS
 - `@radix-ui/react-context@1.1.2` (npm) — Copyright (c) 2022 WorkOS

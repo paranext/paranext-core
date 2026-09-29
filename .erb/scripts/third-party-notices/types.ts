@@ -119,8 +119,10 @@ export type Exception = {
    * from Sentry, Meta, Expo and AgentCat further down, so without this the MIT section credits
    * PostHog. Every key must be an operand of `spdx`, and `spdx` must name more than one identifier,
    * since a single-identifier row prints no per-operand credit. Each value is one or more notices
-   * copied from the pinned license file and separated by `; `; `applyException` refuses a notice
-   * the file does not state. An operand with no key keeps the package's own notice.
+   * copied whole from the pinned license file and separated by `; `. `applyException` refuses a
+   * credit that is not a whole notice the file states, and refuses credits that leave any notice in
+   * the file credited to no operand - an exception outlives the code any one version ships. An
+   * operand with no key keeps the package's own notice.
    */
   copyrightByOperand?: Record<string, string>;
 };

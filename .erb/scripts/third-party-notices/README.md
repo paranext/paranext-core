@@ -161,8 +161,10 @@ and why every escape instrument is pinned.
 - An exception recording a conjunction whose operands are granted by different holders (one file
   stacking several grants) records `copyrightByOperand`, so each operand's canonical text is
   credited to the holder that grants it rather than to whichever notice the file states first.
-  Each notice is copied from the pinned file, several separated by `; `; the gate refuses one the
-  file does not state, and refuses the field on a single identifier, where it would never print.
+  Each notice is copied whole from the pinned file, several separated by `; `. The gate refuses a
+  credit that is not a whole notice the file states, refuses credits that leave any of the file's
+  notices uncredited (even one for code the package does not ship today), and refuses the field on
+  a single identifier, where it would never print.
 - Only one `exceptions` entry per package. Re-review edits the entry in place; appending a second
   leaves the stale one in force, and `loadPolicy` refuses the file.
 

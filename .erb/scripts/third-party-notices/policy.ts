@@ -538,6 +538,49 @@ export function requireText(subject: string, field: string, value: unknown): voi
     );
 }
 
+/** Collapses every run of whitespace to one space and trims the ends. */
+function collapseWhitespace(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * A line that opens a copyright notice: `Copyright` followed by a year, `(c)`, `©` or a capitalized
+ * holder (`Copyright JS Foundation and other contributors` has no year), `COPYRIGHT` followed by a
+ * year, `(c)` or `©`, or a bare `©` or `(c)` followed by a year.
+ *
+ * Deliberately leaves out the text a license file uses to TALK about copyright - Apache-2.0's
+ * `Copyright [yyyy] [name of copyright owner]` appendix and its `(c) You must retain` clause, the
+ * `COPYRIGHT AND PERMISSION NOTICE` heading, CC0's `Copyright and Related Rights`. It misses a
+ * notice that opens mid-line (`Portions Copyright (c) 1999 Apple Inc.`) or with punctuation after
+ * the word (`Copyright: A`), neither of which a stacked-grant file has been seen to use.
+ */
+const NOTICE_START =
+  /^(?:Copyright\s+(?:\([cC]\)|©|\d|\p{Lu})|COPYRIGHT\s+(?:\([cC]\)|©|\d)|©\s*\d|\([cC]\)\s*\d)/u;
+
+/**
+ * The copyright notices a license text states, each as the forms a credit may copy it in.
+ *
+ * A notice runs from a line matching `NOTICE_START` through the lines after it, up to a blank line
+ * or the next notice - `Copyright (c) Meta Platforms, Inc.` wrapped onto `and affiliates.` is one
+ * notice. Its forms are its first line, its first two lines, and so on: a credit may stop at any
+ * line break (`All rights reserved.` is optional) but never mid-line. Each line is whitespace-
+ * collapsed and stripped of a leading comment marker (`#`, `*`, `>`, `//`), because a file wraps,
+ * indents and comments its notices freely.
+ */
+function statedNotices(text: string): string[][] {
+  const notices: string[][] = [];
+  let current: string[] | undefined;
+  text.split(/\r?\n/).forEach((rawLine) => {
+    const line = collapseWhitespace(rawLine.replace(/^\s*(?:(?:#|\*|>|\/\/)\s*)*/, ''));
+    if (!line) current = undefined;
+    else if (NOTICE_START.test(line)) {
+      current = [line];
+      notices.push(current);
+    } else current?.push(`${current[current.length - 1]} ${line}`);
+  });
+  return notices;
+}
+
 /**
  * Applies a reviewed exception. Exceptions are an override applied AFTER a block, never a path
  * reconciliation can reach on its own, and they are pinned to the exact license TEXT so that a
@@ -712,23 +755,38 @@ function applyException(
         `(recorded ${entry.textSha256}, found ${sha256}). The license text changed since it was reviewed.`,
     );
   // A credit is hand-typed, and the document prints it verbatim as the copyright notice an operand
-  // is granted under - so each holder it names must be one the pinned text actually states. The
-  // hash pins the file, not what was typed from it. `; ` separates holders within one credit, and
-  // whitespace is collapsed on both sides because the file wraps and indents its notices freely.
-  const collapse = (value: string) => value.replace(/\s+/g, ' ').trim();
-  const stated = collapse(text ?? '');
-  const unstated = creditEntries.flatMap(([, notice]) =>
-    String(notice)
-      .split(';')
-      .map(collapse)
-      .filter((holder) => holder && !stated.includes(holder)),
+  // is granted under - so each one must be a WHOLE notice the pinned text states. The hash pins the
+  // file, not what was typed from it, and a substring test passes a truncated notice, a bare
+  // fragment such as a holder's name, and two notices run together across the blank line between
+  // them. `; ` separates notices within one credit.
+  const notices = statedNotices(text ?? '');
+  const credited = creditEntries.flatMap(([, notice]) =>
+    String(notice).split(';').map(collapseWhitespace).filter(Boolean),
   );
-  if (unstated.length)
+  const notWhole = credited.filter((credit) => !notices.some((forms) => forms.includes(credit)));
+  if (notWhole.length)
     return blocked(
       `the reviewed exception for ${key}@${version} credits ` +
-        `${unstated.map((holder) => `"${holder}"`).join(', ')}, which its pinned license text does ` +
-        'not state. Each notice in copyrightByOperand is printed as a copyright notice, so it must ' +
-        'be copied from the package\'s license file; separate several notices with "; ".',
+        `${notWhole.map((credit) => `"${credit}"`).join(', ')}, which is not a whole notice its ` +
+        'pinned license text states. Each notice in copyrightByOperand is printed as a copyright ' +
+        "notice, so it must be copied whole from the package's license file, starting at the line " +
+        'that opens it; separate several notices with "; ".',
+    );
+  // And where credits are recorded, every notice the file states must be credited to SOME operand.
+  // An exception is keyed by name and outlives the code any one version ships, while a license file
+  // shared across a monorepo names every holder whatever this package ships today - so a credit
+  // trimmed to today's code would silently under-credit a later version whose license text, and so
+  // hash, is unchanged. An exception recording no credits has every row credited to the file's
+  // first notice, and nothing here to check.
+  const uncredited = creditEntries.length
+    ? notices.filter((forms) => !forms.some((form) => credited.includes(form)))
+    : [];
+  if (uncredited.length)
+    return blocked(
+      `the reviewed exception for ${key}@${version} credits no operand with ` +
+        `${uncredited.map(([notice]) => `"${notice}"`).join(', ')}, which its pinned license text ` +
+        'states. Every notice in the file must be credited to the operand it grants, even one ' +
+        "whose code the package does not ship today: the exception outlives any one version's code.",
     );
   return {
     verdict: 'excepted',
