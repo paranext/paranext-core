@@ -74,7 +74,7 @@ describe('simple-layout.builder', () => {
       // Hardcoded (Column 1: Model Text, Column 2: Scripture Editor, Column 3: Resources & Tools)
       // rather than compared against `panelTabCounts(simpleLayout)` — that would re-derive the
       // expectation with `visitPanels`, the function under test.
-      expect(panelTabCounts(result)).toEqual([1, 1, 4]);
+      expect(panelTabCounts(result)).toEqual([1, 1, 5]);
     });
 
     it('every tab in the result has data.projectId === provided projectId', () => {

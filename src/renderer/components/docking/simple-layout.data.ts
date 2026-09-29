@@ -135,6 +135,17 @@ export const simpleLayout: LayoutBase = {
                 },
               },
               {
+                id: 'd4f6a1b0-9e2c-4a7d-8f3b-5c6e0a1d2b4f',
+                tabType: TAB_TYPE_WEBVIEW,
+                data: {
+                  webViewType: 'platformLexicalTools.dictionary',
+                  id: 'd4f6a1b0-9e2c-4a7d-8f3b-5c6e0a1d2b4f',
+                  contentType: 'react',
+                  isClosable: false,
+                  state: {},
+                },
+              },
+              {
                 id: 'c7e4a8b2-3d91-4f06-8e5a-1b2c9d0e7f83',
                 tabType: TAB_TYPE_WEBVIEW,
                 data: {
