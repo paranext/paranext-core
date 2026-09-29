@@ -38,9 +38,10 @@ export async function resolveDblCatalog(
   const resources = await provider.getDblResources(undefined);
   if (!resources) throw new Error('The DBL resource catalog fetch produced no catalog');
 
-  // The backend already throws for an unreachable DBL, so an empty list here means the
-  // compatibility whitelist dropped every row. It is still no catalog: resolving it as `available`
-  // would overwrite the cached one, in memory and on disk, with nothing.
+  // The backend already throws for an unreachable DBL and for a catalog its compatibility whitelist
+  // emptied, so this guards against a provider that breaks that contract. An empty list is still no
+  // catalog: resolving it as `available` would overwrite the cached one, in memory and on disk,
+  // with nothing.
   if (resources.length === 0)
     throw new Error('The DBL resource catalog fetch returned no compatible resources');
 

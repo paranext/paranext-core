@@ -38,6 +38,9 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         // A uid on DblResourceWhiteList, so a fetched catalog keeps it after filtering.
         private const string WhitelistedUid = "008ee554c0859eb6";
 
+        // A uid absent from DblResourceWhiteList, so filtering drops it.
+        private const string NotWhitelistedUid = "0123456789abcdef";
+
         /// <summary>
         /// A catalog entry whose <see cref="InstallableResource.ExistingScrText"/> throws. That
         /// property is the live project-collection lookup the installed-project map exists to avoid, so
@@ -565,6 +568,30 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
             Assert.ThrowsAsync<Exception>(() => provider.GetDblResources(default));
             var installStatus = await provider.RecomputeDblResourcesInstallStatus();
 
+            Assert.That(
+                installStatus[WhitelistedUid],
+                Is.EqualTo(installed.Guid.ToString().ToUpperInvariant())
+            );
+        }
+
+        /// <summary>
+        /// A catalog the whitelist empties is rejected like an unreachable one, so the provider
+        /// stays in its never-fetched state and install status keeps answering from disk.
+        /// </summary>
+        [Test]
+        public async Task GetDblResources_ACatalogWithNoWhitelistedResourceLeavesInstallStatusAnsweringFromDisk()
+        {
+            DblResourcesDataProvider provider = new(
+                Client,
+                ParatextProjects,
+                () => [ResourceWithUid(NotWhitelistedUid)]
+            );
+            var installed = AddInstalledResourceProject(WhitelistedUid);
+
+            var exception = Assert.ThrowsAsync<Exception>(() => provider.GetDblResources(default));
+            var installStatus = await provider.RecomputeDblResourcesInstallStatus();
+
+            Assert.That(exception!.Message, Does.Contain("no compatible resources"));
             Assert.That(
                 installStatus[WhitelistedUid],
                 Is.EqualTo(installed.Guid.ToString().ToUpperInvariant())

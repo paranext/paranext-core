@@ -303,6 +303,7 @@ function ScriptureTextGridProjectView({
     cachedResources,
     isCatalogLoading: isLoadingCachedResources,
     hasCatalogSettled,
+    refreshCounter,
   });
 
   // The grid body's cells: the `getOrderedScriptureTextGridContents` selector over the Text
