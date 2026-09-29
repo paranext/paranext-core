@@ -6,6 +6,8 @@ const base = {
   isReadOnly: false,
   hasOpenSession: false,
   isEditorFocused: true,
+  key: 'a',
+  isTargetOtherElement: false,
 };
 
 describe('shouldRoutePaletteKey', () => {
@@ -36,11 +38,23 @@ describe('shouldRoutePaletteKey', () => {
     );
   });
 
-  it('still routes an OPEN session when the editor turns read-only mid-session, so Escape works', () => {
+  it('routes only Escape for an OPEN session once the editor turns read-only mid-session', () => {
     // `isReadOnlyEffective` folds in `isSyncBlocked`, which a scheduled Send/Receive can flip with
-    // no user gesture. Short-circuiting on it stranded a live palette over an editor that was
-    // locked and blurred by the palette itself, with no key — not even Escape — able to close it.
-    expect(shouldRoutePaletteKey({ ...base, isReadOnly: true, hasOpenSession: true })).toBe(true);
+    // no user gesture. Escape must still close the palette; every other key could reach an editor
+    // commit method, and those throw in read-only mode.
+    const readOnlySession = { ...base, isReadOnly: true, hasOpenSession: true };
+    expect(shouldRoutePaletteKey({ ...readOnlySession, key: 'Escape' })).toBe(true);
+    [' ', '*', '\\', 'Enter', 'Tab', 'a'].forEach((key) =>
+      expect(shouldRoutePaletteKey({ ...readOnlySession, key })).toBe(false),
+    );
+  });
+
+  it('does not route an OPEN session key typed into another element in the web view', () => {
+    // A comment box, say: its keys must reach it, not filter the palette or commit a marker.
+    const otherElement = { ...base, hasOpenSession: true, isTargetOtherElement: true };
+    ['a', 'Enter', 'Tab', 'Escape'].forEach((key) =>
+      expect(shouldRoutePaletteKey({ ...otherElement, key })).toBe(false),
+    );
   });
 
   it('does not route in a read-only editor when no session is open, so none can be opened', () => {

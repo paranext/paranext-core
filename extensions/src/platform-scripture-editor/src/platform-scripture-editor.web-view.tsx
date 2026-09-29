@@ -76,6 +76,7 @@ import {
 } from 'platform-bible-react';
 import {
   clearPaletteSessionIfCurrent,
+  createMarkerPaletteInputLock,
   getMarkerPaletteClaimedKeys,
   handleMarkerPaletteSessionKeyDown,
   type MarkerPaletteKeyEvent,
@@ -541,8 +542,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * palette's query — never the document.
    *
    * `'backslash'` is the collapsed-caret `\` trigger's session. Its palette keeps the overlay's
-   * non-focus-stealing (`passive: true`) DISPLAY — the caret stays visible in the editor — so the
-   * forwarding table is the palette's only key path, not a safety net. The selection-wrap `\`
+   * non-focus-stealing (`passive: true`) DISPLAY, so the forwarding table is the palette's only key
+   * path, not a safety net. Every kind holds the input lock (`setPaletteInputLock`) while open,
+   * which blurs the editor, so its caret is hidden until the session ends. The selection-wrap `\`
    * trigger opens a _focused_ palette tracked as `'selection'`.
    *
    * `'enter'` guards against a second Enter re-opening a palette while the first request's
@@ -874,6 +876,37 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const editorRef = useRef<EditorRef | null>(null);
 
   /**
+   * Mirrors `isReadOnlyEffective` so the input lock can restore the editor's REAL editable state
+   * instead of a hard-coded `true`. A ref, not the value, because the lock helper is declared above
+   * the memo that computes it.
+   */
+  const isReadOnlyEffectiveRef = useRef(false);
+  /** This editor's marker-palette input lock (see `createMarkerPaletteInputLock`). */
+  const paletteInputLock = useRef(createMarkerPaletteInputLock()).current;
+
+  /**
+   * Blocks input into the editor for the life of a marker-palette session, and releases it after.
+   *
+   * PT-4611, product ruling (Vladimir): PT9's palette "just ignores non-basic-Latin", and PT10 must
+   * match — composed text and clipboard edits cannot be claimed as keydowns, so the shared lock
+   * makes the content element non-editable. Scoped through `editorContainerRef` so the footnote
+   * popover's own `.editor-input` (which carries its own lock) is never touched.
+   */
+  const setPaletteInputLock = useCallback(
+    (locked: boolean) => {
+      const input = editorContainerRef.current?.querySelector<HTMLElement>('.editor-input');
+      if (locked && input) paletteInputLock.lock(input);
+      else paletteInputLock.unlock(!isReadOnlyEffectiveRef.current);
+    },
+    [paletteInputLock],
+  );
+
+  /** Keeps the input lock in step with whether a palette session is open. */
+  const syncPaletteInputLock = useCallback(() => {
+    setPaletteInputLock(!!paletteSession.current);
+  }, [setPaletteInputLock]);
+
+  /**
    * Ends the open marker-palette session the way the keydown table's Escape branch does — clear the
    * session and dismiss the overlay.
    *
@@ -884,65 +917,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * and every filter character were claimed), so a dismissal leaves the document untouched — no
    * transient-input declaration is needed anywhere in this flow anymore.
    */
-  /**
-   * Blocks input into the editor for the life of a marker-palette session, and releases it after.
-   *
-   * PT-4611, product ruling (Vladimir): PT9's palette "just ignores non-basic-Latin", and PT10 must
-   * match. The forwarding table can claim a KEYDOWN, but a composed character (dead keys, and every
-   * IME — which is how most non-Latin scripts are typed) does not arrive as a claimable keydown: it
-   * arrives through the input path. Measured in this Electron build, neither interception point is
-   * available — `beforeinput` for `insertCompositionText` reports `cancelable: false`, and
-   * `compositionstart` accepts `preventDefault()` and composes anyway. Making the content element
-   * non-editable is the only thing that stops it.
-   *
-   * The element is Lexical's, so this re-asserts on reconcile rather than assuming the attribute
-   * sticks, and is scoped through `editorContainerRef` so the footnote popover's own
-   * `.editor-input` is never touched.
-   */
-  /**
-   * Mirrors `isReadOnlyEffective` so the input lock can restore the editor's REAL editable state
-   * instead of a hard-coded `true`. A ref, not the value, because the lock helper is declared above
-   * the memo that computes it.
-   */
-  const isReadOnlyEffectiveRef = useRef(false);
-  /** The observer that re-asserts the lock; also the "is the lock on" flag. */
-  const paletteInputLockObserver = useRef<MutationObserver | undefined>(undefined);
-
-  const setPaletteInputLock = useCallback((locked: boolean) => {
-    const input = editorContainerRef.current?.querySelector('.editor-input');
-    if (!input) return;
-
-    if (locked) {
-      if (paletteInputLockObserver.current) return;
-      input.setAttribute('contenteditable', 'false');
-      // The attribute belongs to Lexical (`ContentEditable` renders `contentEditable={isEditable}`
-      // from `registerEditableListener`), so a mid-session editable flip — `isSyncBlocked` going
-      // false again, say — would write `true` straight back and silently reopen the hole this lock
-      // exists to close, with no symptom until a non-Latin typist hits it. Re-assert instead of
-      // assuming one write sticks.
-      const observer = new MutationObserver(() => {
-        if (input.getAttribute('contenteditable') !== 'false')
-          input.setAttribute('contenteditable', 'false');
-      });
-      observer.observe(input, { attributes: true, attributeFilter: ['contenteditable'] });
-      paletteInputLockObserver.current = observer;
-      return;
-    }
-
-    paletteInputLockObserver.current?.disconnect();
-    paletteInputLockObserver.current = undefined;
-    // Restore what the editor SHOULD be, not `true`. Hard-coding `true` could hand the user a
-    // browser-editable document that Lexical still considers read-only — typing visible text into a
-    // write-gated project that is never persisted, which is exactly what the sync write gate exists
-    // to prevent. React will not correct it, because its own `isEditable` never changed.
-    input.setAttribute('contenteditable', isReadOnlyEffectiveRef.current ? 'false' : 'true');
-  }, []);
-
-  /** Keeps the input lock in step with whether a palette session is open. */
-  const syncPaletteInputLock = useCallback(() => {
-    setPaletteInputLock(!!paletteSession.current);
-  }, [setPaletteInputLock]);
-
   const dismissPaletteSessionIfOpen = useCallback(() => {
     if (!paletteSession.current) return;
     paletteSession.current = undefined;
@@ -1149,6 +1123,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     isReadOnlyEffectiveRef.current = isReadOnlyEffective;
   }, [isReadOnlyEffective]);
+
+  // A palette cannot commit into a read-only editor (its commit methods throw), and read-only can
+  // arrive mid-session with no user gesture (`isSyncBlocked` during an automatic Send/Receive), so
+  // end the session rather than leave a palette open that nothing but Escape may act on.
+  useEffect(() => {
+    if (isReadOnlyEffective) dismissPaletteSessionIfOpen();
+  }, [isReadOnlyEffective, dismissPaletteSessionIfOpen]);
 
   /**
    * Places the footnote editor popover against a note's caller (or the note itself). The caller
@@ -2404,6 +2385,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // insert a footnote/cross-reference, and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
+    // Whether a key was typed somewhere other than the main editor or the page itself (where keys
+    // land once the palette's input lock has blurred the editor).
+    const isKeyTargetOtherElement = (target: unknown) => {
+      if (!(target instanceof Element)) return false;
+      if (target === document.body || target === document.documentElement) return false;
+      const editorInput = editorContainerRef.current?.querySelector('.editor-input');
+      return !editorInput?.contains(target);
+    };
+
     // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
     // root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
     // listener, so a window BUBBLE-phase handler runs too late — the paragraph has already split
@@ -2435,6 +2425,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           isReadOnly: isReadOnlyEffective,
           hasOpenSession: !!paletteSession.current,
           isEditorFocused: !!editorRef.current?.isFocused(),
+          key: event.key,
+          isTargetOtherElement: isKeyTargetOtherElement(event.target),
         })
       ) {
         const session = paletteSession.current;

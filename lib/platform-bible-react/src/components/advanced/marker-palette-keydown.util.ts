@@ -351,8 +351,10 @@ export function handleMarkerPaletteSessionKeyDown(
 
   if ((event.ctrlKey || event.metaKey || event.altKey) && !event.getModifierState?.('AltGraph')) {
     // An 'enter' session keeps a paragraph split pending, so a chord must not tear it down: let
-    // Cmd+S/Cmd+V do their normal job and leave the palette — and the split — alone. (Its own
-    // Enter/Tab chords were handled above.)
+    // Cmd+S/Cmd+C do their normal job and leave the palette — and the split — alone. (Its own
+    // Enter/Tab chords were handled above.) A clipboard or drop edit such a chord would make is
+    // cancelled by the consumer's input lock (`marker-palette-input-lock.util.ts`), not here: the
+    // edit arrives as a `paste`/`cut` event, which a claimed keydown does not reliably prevent.
     if (kind === 'enter') return 'passed';
 
     // A real chord (Ctrl+C, Cmd+V, …): never ingest it into the filter, and normally never claim

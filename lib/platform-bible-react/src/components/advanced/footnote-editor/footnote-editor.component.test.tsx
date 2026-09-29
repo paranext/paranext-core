@@ -767,6 +767,81 @@ describe('FootnoteEditor marker palette wiring', () => {
   });
 
   describe('editable marker mode with markerPalette, an open session forwarding table', () => {
+    /** Opens a passive `\` palette session in the popover and returns the rendered parts. */
+    function openPassiveSession() {
+      mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
+      const markerPalette = makeMarkerPalette(
+        vi.fn(() => new Promise<string | undefined>(() => {})),
+      );
+      const rendered = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(rendered.editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false,
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+      placeDomCaretInsideNote(rendered.editorInput);
+      rendered.editorInput.focus();
+      rendered.editorInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      return { ...rendered, markerPalette };
+    }
+
+    it('locks the popover editor while the session is open and releases it when the session ends', () => {
+      const { editorInput, markerPalette } = openPassiveSession();
+      expect(markerPalette.show).toHaveBeenCalled();
+      expect(editorInput.getAttribute('contenteditable')).toBe('false');
+
+      editorInput.ownerDocument.body.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+
+      expect(markerPalette.dismiss).toHaveBeenCalled();
+      expect(editorInput.getAttribute('contenteditable')).toBe('true');
+    });
+
+    it('routes session keys that land on the page once the lock has blurred the editor', () => {
+      const { editorInput, markerPalette } = openPassiveSession();
+      editorInput.blur();
+
+      editorInput.ownerDocument.body.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }),
+      );
+
+      expect(markerPalette.update).toHaveBeenCalledWith({ filterText: 'w' });
+    });
+
+    it('leaves keys typed into another element alone while a session is open', () => {
+      const { editorInput, markerPalette } = openPassiveSession();
+      const otherInput = document.createElement('textarea');
+      document.body.appendChild(otherInput);
+      otherInput.focus();
+
+      const notPrevented = otherInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }),
+      );
+
+      expect(notPrevented).toBe(true);
+      expect(markerPalette.update).not.toHaveBeenCalled();
+      expect(editorInput.getAttribute('contenteditable')).toBe('false');
+      otherInput.remove();
+    });
+
+    it('cancels a paste into the popover editor while the session is open', () => {
+      const { editorInput } = openPassiveSession();
+      const paste = new Event('paste', { bubbles: true, cancelable: true });
+
+      editorInput.dispatchEvent(paste);
+
+      expect(paste.defaultPrevented).toBe(true);
+    });
+
     it('claims the trigger and typed characters — they filter the palette, never the document', () => {
       // ACTIVE palette: under the passive palette the `\` and the typed characters landed as
       // literals and were only mirrored; now the trigger and every filter character are claimed,

@@ -96,8 +96,17 @@ particular does NOT commit here, unlike in the `\` palette.
 **Composition keys are ignored, like every other non-selection key.** PT9's palette ignores
 non-basic-Latin and PT10 matches (product ruling, PT-4611). The character is not intercepted —
 measured in this Electron build, `beforeinput` for `insertCompositionText` is not cancelable and
-`compositionstart` accepts `preventDefault()` and composes regardless. Instead the web view makes
-the editor non-editable for the life of a palette session, so composed input has nowhere to land.
+`compositionstart` accepts `preventDefault()` and composes regardless. Instead each editor that
+hosts a palette (the web view's main editor and the footnote popover) makes its content element
+non-editable for the life of a palette session, so composed input has nowhere to land. The same lock
+cancels `paste`, `cut` and `drop` into the element, which the editor would otherwise still apply,
+because it checks its own editable flag rather than the DOM attribute. Both come from the shared
+`createMarkerPaletteInputLock` (`marker-palette-input-lock.util.ts` in `platform-bible-react`).
+
+With the editor blurred by the lock, keys land on the page, so both editors route a session's keys
+from the page and from the editor, but never from any other element (a comment box, say). If the
+editor turns read-only mid-session (an automatic Send/Receive), the web view ends the session, and
+until it does only Escape is routed: the editor's commit methods throw in read-only mode.
 
 One consequence worth knowing: with the element non-editable the browser starts no composition, so a
 dead key arrives as an ordinary keydown carrying its physical key code rather than 229. It therefore

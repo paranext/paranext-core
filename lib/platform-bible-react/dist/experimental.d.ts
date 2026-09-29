@@ -1234,6 +1234,42 @@ export declare function clearPaletteSessionIfCurrent<TSession extends {
 	token: number;
 }>(sessionRef: React$1.MutableRefObject<TSession | undefined>, token: number): void;
 /**
+ * Blocks input into an editor's content element for the life of a standard-view marker-palette
+ * session — the one lock both consumers (`platform-scripture-editor.web-view.tsx` and
+ * `footnote-editor.component.tsx`) use, so the product rule holds in both: while a palette is open,
+ * only selecting a marker may change the scripture text.
+ *
+ * Two holes the keydown forwarding table cannot close, because neither arrives as a claimable
+ * keydown:
+ *
+ * - Composed text (dead keys, and every IME — how most non-Latin scripts are typed) arrives through
+ *   the input path. In this Electron build `beforeinput` for `insertCompositionText` reports
+ *   `cancelable: false`, and `compositionstart` accepts `preventDefault()` and composes anyway, so
+ *   making the element non-editable is the only thing that stops it.
+ * - Clipboard and drag-and-drop edits (`paste`, `cut`, `drop`) are dispatched at the element holding
+ *   the DOM selection, and the editor's own listeners check its editable FLAG, not the DOM
+ *   attribute — so they would still edit the text under a non-editable element. They are cancelled
+ *   in the capture phase while locked. A palette whose session a chord ends (the `\` palette on
+ *   Cmd/Ctrl+V) is unlocked before the clipboard event fires, so its paste proceeds normally.
+ */
+/** See the module header. */
+export interface MarkerPaletteInputLock {
+	/**
+	 * Locks `element`. Locking the element already locked is a no-op; locking a different element
+	 * (the editor remounted) releases the old one first.
+	 */
+	lock(element: HTMLElement): void;
+	/**
+	 * Releases the lock and restores `contenteditable` to `editable` — the editor's REAL editable
+	 * state, not a hard-coded `true`, which would hand the user a browser-editable document the
+	 * editor itself considers read-only. A no-op when nothing is locked. An element that has left the
+	 * document is released without being written to.
+	 */
+	unlock(editable: boolean): void;
+}
+/** Creates an unlocked {@link MarkerPaletteInputLock}. Each editor instance owns one. */
+export declare function createMarkerPaletteInputLock(): MarkerPaletteInputLock;
+/**
  * The session record {@link runMarkerPaletteSession} creates and hands to the consumer's session ref
  * — the forwarding table's {@link MarkerPaletteSessionState} plus the `token` that scopes async
  * settle-time cleanup to THIS session (see `clearPaletteSessionIfCurrent`) and the consumer's own

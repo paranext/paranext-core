@@ -24,6 +24,7 @@ import {
   isImeCompositionKeyEvent,
   type MarkerPaletteKeyEvent,
 } from '@/components/advanced/marker-palette-keydown.util';
+import { createMarkerPaletteInputLock } from '@/components/advanced/marker-palette-input-lock.util';
 import {
   runMarkerPaletteSession,
   type MarkerPaletteOpenSession,
@@ -336,6 +337,23 @@ export default function FootnoteEditor({
 
   /** Monotonic allocator for {@link paletteSession} tokens. */
   const paletteSessionCounter = useRef(0);
+
+  /**
+   * This popover's marker-palette input lock: while a palette session is open, only selecting a
+   * marker may change the note (see `createMarkerPaletteInputLock`).
+   */
+  const paletteInputLock = useRef(createMarkerPaletteInputLock()).current;
+
+  /** Keeps the input lock in step with whether a palette session is open. */
+  const syncPaletteInputLock = useCallback(() => {
+    const editorInput = editorParentRef.current?.querySelector<HTMLElement>('.editor-input');
+    if (paletteSession.current && editorInput) paletteInputLock.lock(editorInput);
+    // This popover's editor is always editable while a palette can be open.
+    else paletteInputLock.unlock(true);
+  }, [paletteInputLock]);
+
+  // A popover closed mid-session must not leave the lock's document listeners behind.
+  useEffect(() => () => paletteInputLock.unlock(true), [paletteInputLock]);
 
   /**
    * Last live USJ selection of this popover's editor, captured as focus left it (the focusout
@@ -790,8 +808,12 @@ export default function FootnoteEditor({
         sessionCounterRef: paletteSessionCounter,
         setSession: (session) => {
           paletteSession.current = session;
+          syncPaletteInputLock();
         },
-        clearSessionIfCurrent: (token) => clearPaletteSessionIfCurrent(paletteSession, token),
+        clearSessionIfCurrent: (token) => {
+          clearPaletteSessionIfCurrent(paletteSession, token);
+          syncPaletteInputLock();
+        },
         // Through the ref so the palette always runs the CURRENT handler — the callback is
         // captured once, at show time, while the session it drives is replaced on every reopen.
         runSessionKey: (event) => runPaletteSessionKeyRef.current(event),
@@ -826,7 +848,7 @@ export default function FootnoteEditor({
         },
       });
     },
-    [markerPalette, restoreSelectionIfLost],
+    [markerPalette, restoreSelectionIfLost, syncPaletteInputLock],
   );
 
   /**
@@ -881,9 +903,12 @@ export default function FootnoteEditor({
       });
       // Clear only if this session is still the current one: a `\` commit opens a REPLACEMENT
       // session synchronously inside the table call, and an unconditional clear would kill it.
-      if (outcome === 'ended') clearPaletteSessionIfCurrent(paletteSession, session.token);
+      if (outcome === 'ended') {
+        clearPaletteSessionIfCurrent(paletteSession, session.token);
+        syncPaletteInputLock();
+      }
     },
-    [markerPalette, openMarkerPaletteAtCaret],
+    [markerPalette, openMarkerPaletteAtCaret, syncPaletteInputLock],
   );
 
   useEffect(() => {
@@ -966,15 +991,27 @@ export default function FootnoteEditor({
         // this outer guard covers only this handler's own trigger paths.)
         if (isImeCompositionKeyEvent(event)) return;
         const editorInput = getEditorInput();
-        if (!editorInput || document.activeElement !== editorInput) return;
+        if (!editorInput) return;
         const session = paletteSession.current;
 
         if (session && markerPalette) {
+          // An open session admits keys whether or not the editor holds focus: the input lock
+          // makes the editor non-editable, which blurs it, so its keys then land on the page.
+          // Keys typed into any other element belong to that element.
+          const { target } = event;
+          const isOtherElementTarget =
+            target instanceof Element &&
+            target !== document.body &&
+            target !== document.documentElement &&
+            !editorInput.contains(target);
+          if (isOtherElementTarget) return;
           // Through the ref so this listener and the palette's forwarded keys provably run the
           // same handler (and so this effect needs no dependency on it).
           runPaletteSessionKeyRef.current(event);
           return;
         }
+
+        if (document.activeElement !== editorInput) return;
 
         // Enter with the DOM caret OUTSIDE the note content (Radix's
         // open-autofocus can park it at the wrapper-para start; Lexical's keydown path follows
