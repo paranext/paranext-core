@@ -3,7 +3,7 @@ import { logger } from '@shared/services/logger.service';
 import { localizationService } from '@shared/services/localization.service';
 import { getCurrentLocale, getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { readCachedInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
-import { readBooleanFlag, writeBooleanFlag } from './local-storage-flag.util';
+import { clearBooleanFlag, readBooleanFlag, writeBooleanFlag } from './local-storage-flag.util';
 import { decideFirstRun } from './first-run.reducer';
 import { FirstRunStep } from './first-run.model';
 import {
@@ -16,7 +16,22 @@ import { pickBestSetupLanguage } from './pick-best-setup-language';
 export type FirstRunStatus =
   | { kind: 'loading' }
   | { kind: 'app' }
-  | { kind: 'wizard'; step: FirstRunStep; allowContinueWithoutRegistration?: boolean }
+  | {
+      kind: 'wizard';
+      step: FirstRunStep;
+      allowContinueWithoutRegistration?: boolean;
+      /**
+       * The registration was valid when this wizard run started. Language, internet settings and
+       * identify then count as already completed (check marks, reachable with Next).
+       */
+      registrationValidAtStart?: boolean;
+      /**
+       * A valid registration existed that this wizard did not create — in practice the one
+       * Platform.Bible copied from Paratext 9 on its first launch. Shows the "copied from Paratext
+       * 9" banner.
+       */
+      registrationPreexisting?: boolean;
+    }
   | { kind: 'error' };
 
 const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
@@ -36,6 +51,10 @@ const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
 // resolveInternal reads and consumes it to guard against transient 'invalid' responses from the
 // registration backend: the user just registered, so 'invalid' is almost certainly a server fluke.
 const JUST_REGISTERED_KEY = 'platform-bible.firstRunJustRegistered';
+// Written when the Identify step saves a registration during onboarding (not re-register mode) and
+// cleared when first run completes. Unlike JUST_REGISTERED_KEY it lasts for the whole wizard run,
+// so a registration this wizard created is never mistaken for one copied from Paratext 9.
+const REGISTERED_IN_WIZARD_KEY = 'platform-bible.firstRunRegisteredInWizard';
 
 // Guards startBackgroundRegistrationRecheck so the completed-user re-check runs at most once per
 // startup even if resolveInternal is re-entered (e.g. via retryFirstRunResolution).
@@ -60,6 +79,14 @@ export function isDemoMode(): boolean {
  */
 export function markJustRegistered(): void {
   writeBooleanFlag(JUST_REGISTERED_KEY, true);
+}
+
+/**
+ * Records that the onboarding wizard (not re-register mode) saved the user's registration, so the
+ * rest of this wizard run does not describe that registration as copied from Paratext 9.
+ */
+export function markRegisteredInWizard(): void {
+  writeBooleanFlag(REGISTERED_IN_WIZARD_KEY, true);
 }
 
 function computeInitialStatus(): FirstRunStatus {
@@ -118,23 +145,27 @@ async function markFirstRunComplete(): Promise<void> {
   }
   writeBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY, true);
   writeBooleanFlag(WIZARD_ACTIVE_KEY, false);
+  clearBooleanFlag(REGISTERED_IN_WIZARD_KEY);
 }
 
 /**
  * On a fresh wizard start, default the interface language to the OS language when it has enough
  * setup-dialog localization (i.e. it qualifies for the picker). Best-effort: any failure leaves the
- * wizard in English. The caller guarantees this only runs on the fresh-start path, so it never
- * overrides a language the user has already chosen. Skips the write when the OS match already
- * equals the current primary language (e.g. an English OS), to avoid a redundant set + re-render.
+ * wizard in English. Only replaces the default `['en']`: a fresh start can still follow a language
+ * choice (an existing user who never finished the wizard, or a developer reset), and that choice is
+ * shown as the initial selection instead. Skips the write when the OS match already equals the
+ * current primary language (e.g. an English OS), to avoid a redundant set + re-render.
  */
 async function seedInterfaceLanguageFromOsLocale(): Promise<void> {
   try {
+    const current = await settingsService.get('platform.interfaceLanguage');
+    const hasLanguages = !isPlatformError(current) && Array.isArray(current) && current.length > 0;
+    const isDefault = !hasLanguages || (current.length === 1 && current[0] === 'en');
+    if (!isDefault) return;
     const qualifying = await localizationService.getSetupDialogLanguages();
     const best = pickBestSetupLanguage(getCurrentLocale(), Object.keys(qualifying));
     if (!best) return;
-    const current = await settingsService.get('platform.interfaceLanguage');
-    const currentPrimary =
-      !isPlatformError(current) && Array.isArray(current) && current.length > 0 ? current[0] : 'en';
+    const currentPrimary = hasLanguages ? current[0] : 'en';
     if (best === currentPrimary) return;
     await settingsService.set('platform.interfaceLanguage', [best]);
   } catch (e) {
@@ -252,6 +283,7 @@ async function resolveInternal(generation: number): Promise<void> {
       firstRunComplete: false,
       wizardActive,
       registrationValidity: effectiveValidity,
+      justRegistered,
     });
 
     // The registration probe above is the long await where the watchdog reveals the escape hatch, so
@@ -262,19 +294,16 @@ async function resolveInternal(generation: number): Promise<void> {
     if (isSuperseded()) return;
 
     switch (decision.action) {
-      case 'completeThenShowApp':
-        await markFirstRunComplete();
-        applyStatus({ kind: 'app' });
-        break;
       case 'waitForRegistration':
         applyStatus({ kind: 'error' });
         break;
-      case 'startWizard':
+      case 'startWizard': {
+        const registrationValidAtStart = effectiveValidity === 'valid';
         // Fresh start at the language step: default to the OS language if it has enough setup-dialog
-        // localization. `wizardActive` here is the pre-transition value, so this runs once and never
-        // overrides a choice a returning user already made. Seeding the setting *before* setStatus
-        // means the wizard's localized strings resolve straight to the OS language — the live-render
-        // bridge never has to fire a change. (The very first synchronous render still shows the
+        // localization. `wizardActive` here is the pre-transition value, so this runs once per
+        // wizard run, and the seed itself never replaces a language already chosen. Seeding the
+        // setting *before* setStatus means the wizard's localized strings resolve straight to the
+        // OS language — the live-render bridge never has to fire a change. (The very first synchronous render still shows the
         // English defaults that useLocalizedStrings/useSetting return before their async fetch
         // resolves; that brief default-then-resolve is the same for the English case, so seeding
         // introduces no new flash.)
@@ -285,8 +314,15 @@ async function resolveInternal(generation: number): Promise<void> {
           if (isSuperseded()) return;
         }
         writeBooleanFlag(WIZARD_ACTIVE_KEY, true);
-        applyStatus({ kind: 'wizard', step: decision.step });
+        applyStatus({
+          kind: 'wizard',
+          step: decision.step,
+          registrationValidAtStart,
+          registrationPreexisting:
+            registrationValidAtStart && !readBooleanFlag(REGISTERED_IN_WIZARD_KEY),
+        });
         break;
+      }
       default:
         // 'showApp' is unreachable here: we pass firstRunComplete: false above (the real flag was
         // checked and returned early). Defensive fallback.
@@ -439,6 +475,21 @@ export function continueWithoutRegistration(): void {
   // slow probe is still awaiting) so its late result can't override this choice.
   resolutionGeneration += 1;
   setStatus({ kind: 'app' });
+}
+
+/**
+ * Clears every first-run flag this store keeps in `localStorage`, for the developer reset
+ * (`platform.resetFirstRun`), which restarts the app right after. Leaves demo mode alone: that is a
+ * deliberate developer toggle, not first-run progress.
+ */
+export function clearFirstRunLocalState(): void {
+  [
+    FIRST_RUN_COMPLETE_CACHE_KEY,
+    WIZARD_ACTIVE_KEY,
+    JUST_REGISTERED_KEY,
+    REGISTERED_IN_WIZARD_KEY,
+    SYNC_ON_STARTUP_DISABLED_CACHE_KEY,
+  ].forEach(clearBooleanFlag);
 }
 
 /** Re-run resolution after an error (e.g. the Retry button on the "couldn't verify" screen). */

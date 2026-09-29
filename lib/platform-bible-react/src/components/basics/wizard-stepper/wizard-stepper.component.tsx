@@ -15,6 +15,12 @@ export interface WizardStepperProps {
    * `RangeError` in V8).
    */
   locale?: string;
+  /**
+   * 1-based indices of the steps to show as complete. When omitted, every step before `currentStep`
+   * is complete. Pass it when completion does not follow position — e.g. a wizard the user can step
+   * back through, where later steps may already be done. The active step always shows as active.
+   */
+  completedSteps?: number[];
 }
 
 /** Progress state of a single step circle; also exposed as a `data-state` attribute for consumers. */
@@ -26,7 +32,12 @@ type StepState = 'active' | 'complete' | 'upcoming';
  * responsible for a `sr-only` `aria-live` sibling that announces the current step to screen
  * readers.
  */
-export function WizardStepper({ currentStep, totalSteps, locale }: WizardStepperProps) {
+export function WizardStepper({
+  currentStep,
+  totalSteps,
+  locale,
+  completedSteps,
+}: WizardStepperProps) {
   const safeLocale = locale || 'en';
   const format = useMemo(() => {
     const numberFormat = new NumberFormat(safeLocale);
@@ -41,7 +52,8 @@ export function WizardStepper({ currentStep, totalSteps, locale }: WizardStepper
       {stepNumbers.map((stepNum) => {
         let state: StepState = 'upcoming';
         if (stepNum === clampedStep) state = 'active';
-        else if (stepNum < clampedStep) state = 'complete';
+        else if (completedSteps ? completedSteps.includes(stepNum) : stepNum < clampedStep)
+          state = 'complete';
         return (
           <Fragment key={stepNum}>
             {stepNum > 1 && <div className="tw:h-px tw:flex-1 tw:bg-border" />}

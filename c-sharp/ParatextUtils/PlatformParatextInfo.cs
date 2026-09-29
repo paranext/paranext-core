@@ -1,0 +1,178 @@
+using System.Text.RegularExpressions;
+using Paratext.Data;
+
+namespace Paranext.DataProvider.ParatextUtils;
+
+/// <summary>
+/// Decides where ParatextData keeps its per-user files (<c>RegistrationInfo.xml</c>,
+/// <c>InternetSettings.xml</c>, Mercurial and feedback files). ParatextData's own implementation
+/// names the folder after <see cref="ParatextInfo.ParatextVersion"/>, which Platform.Bible sets to
+/// <c>10.&lt;app major&gt;.&lt;minor&gt;.&lt;patch&gt;</c>, and seeds a new folder by copying from the
+/// highest-named <c>Paratext*</c> folder. That breaks three ways for Platform.Bible:
+/// <list type="bullet">
+/// <item>An app major version bump renames the folder (<c>Paratext100</c> → <c>Paratext101</c>),
+/// and because ParatextData orders folder names as strings, <c>Paratext95</c> sorts above
+/// <c>Paratext100</c> — so the new folder is re-seeded from Paratext 9 and every registration or
+/// internet-settings change made in Platform.Bible is silently lost.</item>
+/// <item>ParatextData caches the folder on first access, so anything that reads it before the
+/// version is changed pins Platform.Bible to Paratext 9's own folder.</item>
+/// <item>If copying is denied, ParatextData falls back to using the Paratext 9 folder directly.</item>
+/// </list>
+/// Platform.Bible must only ever READ Paratext 9's registration (once, to populate its own), never
+/// write it. So this pins the folder to a fixed name and does the one-time seeding itself.
+/// </summary>
+internal sealed class PlatformParatextInfo : ParatextInfo
+{
+    /// <summary>
+    /// Fixed name of Platform.Bible's ParatextData app-data folder. Never derive it from the app
+    /// version. It stays <c>Paratext100</c> because every existing install already keeps its data
+    /// there, so pinning it needs no migration.
+    /// </summary>
+    internal const string APP_DATA_FOLDER_NAME = "Paratext100";
+
+    /// <summary>
+    /// The files ParatextData itself carries over from an older Paratext app-data folder.
+    /// </summary>
+    internal static readonly string[] SEEDED_FILE_NAMES =
+    [
+        "RegistrationInfo.xml",
+        "InternetSettings.xml",
+        "ReleaseStage.txt",
+        "PTXprintPath.txt",
+    ];
+
+    private const string REGISTRATION_FILE_NAME = "RegistrationInfo.xml";
+
+    /// <summary>
+    /// Paratext 8.x and 9.x app-data folders (<c>Paratext80</c>–<c>Paratext99</c>). Only these are
+    /// seeding sources; a <c>Paratext10x</c> folder is never read.
+    /// </summary>
+    private static readonly Regex s_paratext8Or9FolderRegex =
+        new("^Paratext([89])([0-9])$", RegexOptions.CultureInvariant);
+
+    private readonly Lazy<string> _appDataFolder;
+
+    /// <param name="localAppDataRoot">
+    /// Folder that holds the <c>Paratext*</c> app-data folders — the OS local application data
+    /// folder in production, a temporary folder in tests.
+    /// </param>
+    internal PlatformParatextInfo(string localAppDataRoot)
+    {
+        LocalAppDataRoot = localAppDataRoot;
+        AppDataFolderPath = Path.Combine(localAppDataRoot, APP_DATA_FOLDER_NAME);
+        _appDataFolder = new Lazy<string>(ResolveAppDataFolder, isThreadSafe: true);
+    }
+
+    /// <summary>Folder that holds the <c>Paratext*</c> app-data folders.</summary>
+    internal string LocalAppDataRoot { get; }
+
+    /// <summary>Full path of Platform.Bible's pinned ParatextData app-data folder.</summary>
+    internal string AppDataFolderPath { get; }
+
+    /// <summary>
+    /// Makes ParatextData use Platform.Bible's pinned app-data folder. Must run before anything
+    /// reads <see cref="ParatextInfo.AppDataFolder"/>.
+    /// </summary>
+    /// <returns>The implementation that was installed before, so tests can restore it.</returns>
+    internal static ParatextInfo Install(PlatformParatextInfo platformParatextInfo)
+    {
+        var previous = Default;
+        Default = platformParatextInfo;
+        return previous;
+    }
+
+    /// <summary>
+    /// Restores an implementation returned by <see cref="Install"/>.
+    ///
+    /// WARNING: Test-only.
+    /// </summary>
+    internal static void Restore(ParatextInfo previous) => Default = previous;
+
+    /// <summary>The pinned app-data folder, seeded from Paratext 9 on first use if it is empty.</summary>
+    internal string ResolvedAppDataFolder => _appDataFolder.Value;
+
+    protected override string GetAppDataFolder() => _appDataFolder.Value;
+
+    /// <summary>
+    /// Deletes the files at the top level of the pinned app-data folder so that the next startup
+    /// seeds it from Paratext 9 again, the way a Paratext 9 user's first launch does. Only ever
+    /// touches <see cref="AppDataFolderPath"/>; subfolders are left alone.
+    /// </summary>
+    internal void DeleteAppDataFilesForReseed()
+    {
+        if (!Directory.Exists(AppDataFolderPath))
+            return;
+
+        foreach (var file in Directory.EnumerateFiles(AppDataFolderPath))
+            // SR-write-gate: exempt — per-user ParatextData settings, not project data
+            File.Delete(file);
+    }
+
+    private string ResolveAppDataFolder()
+    {
+        if (
+            !Directory.Exists(AppDataFolderPath)
+            || !Directory.EnumerateFiles(AppDataFolderPath).Any()
+        )
+            SeedFromParatext9();
+
+        Directory.CreateDirectory(AppDataFolderPath);
+        return AppDataFolderPath;
+    }
+
+    /// <summary>
+    /// Copies the files ParatextData would carry over from the newest Paratext 8/9 app-data folder
+    /// that has a registration. Only reads from that folder. A failure is logged and leaves the
+    /// folder unseeded — there is deliberately no fallback to using the Paratext 9 folder itself.
+    /// </summary>
+    private void SeedFromParatext9()
+    {
+        var source = FindParatext9SeedFolder();
+        if (source == null)
+            return;
+
+        try
+        {
+            Directory.CreateDirectory(AppDataFolderPath);
+            foreach (var fileName in SEEDED_FILE_NAMES)
+            {
+                var sourcePath = Path.Combine(source, fileName);
+                var destinationPath = Path.Combine(AppDataFolderPath, fileName);
+                if (File.Exists(sourcePath) && !File.Exists(destinationPath))
+                    File.Copy(sourcePath, destinationPath);
+            }
+            Console.WriteLine(
+                $"Copied Paratext registration and internet settings from {source} to {AppDataFolderPath}"
+            );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.WriteLine(
+                $"Could not copy Paratext settings from {source} to {AppDataFolderPath}: {e.Message}"
+            );
+        }
+    }
+
+    private string? FindParatext9SeedFolder()
+    {
+        if (!Directory.Exists(LocalAppDataRoot))
+            return null;
+
+        return Directory
+            .EnumerateDirectories(LocalAppDataRoot, "Paratext*", SearchOption.TopDirectoryOnly)
+            .Select(directory =>
+                (directory, match: s_paratext8Or9FolderRegex.Match(Path.GetFileName(directory)))
+            )
+            .Where(candidate =>
+                candidate.match.Success
+                && File.Exists(Path.Combine(candidate.directory, REGISTRATION_FILE_NAME))
+            )
+            // Newest Paratext version first.
+            .OrderByDescending(candidate =>
+                int.Parse(candidate.match.Groups[1].Value) * 10
+                + int.Parse(candidate.match.Groups[2].Value)
+            )
+            .Select(candidate => candidate.directory)
+            .FirstOrDefault();
+    }
+}

@@ -50,6 +50,15 @@ public static class Program
         // implementation so we don't miss `ParatextData` code that needs to run.
         ProgressUtils.Implementation = new ProgressUtilsRunImmediately();
 
+        // Pin ParatextData's per-user folder (registration, internet settings) before anything can
+        // read it: ParatextData caches the folder on first access, and its own choice would follow
+        // the app version and could land in Paratext 9's folder. See PlatformParatextInfo.
+        var platformParatextInfo = new PlatformParatextInfo(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+        );
+        PlatformParatextInfo.Install(platformParatextInfo);
+        Console.WriteLine($"ParatextData app-data folder: {ParatextInfo.AppDataFolder}");
+
         using PapiClient papi = new();
         try
         {
@@ -64,7 +73,8 @@ public static class Program
             await SharedStoreService.InitializeAsync(papi);
             papi.SetSharedStore(SharedStoreService.GetSharedStore());
 
-            // Log the ParatextData.dll assembly version then change it to 10.<our semver>
+            // Log the ParatextData.dll assembly version then change it to 10.<our semver>. The
+            // app-data folder does not follow this version; PlatformParatextInfo pins it.
             var appInfo = AppService.GetAppInfo(papi);
             var appVersion = SemVerUtils.ConvertSemVerToVersion(appInfo.Version);
             Console.WriteLine(

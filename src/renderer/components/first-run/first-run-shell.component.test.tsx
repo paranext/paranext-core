@@ -21,6 +21,7 @@ vi.mock('@shared/services/settings.service', () => ({
 vi.mock('lucide-react', () => ({
   CircleCheck: () => <span data-testid="circle-check-icon" />,
   AlertCircle: () => <span data-testid="alert-circle-icon" />,
+  Info: () => <span data-testid="info-icon" />,
 }));
 // SyncConsentStep calls paratextBibleSendReceive.syncProjects via sendCommand; mock it so the
 // shell tests exercise navigation wiring without a live PAPI backend.
@@ -40,6 +41,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_sync%': 'Sync',
       '%firstRun_button_finish%': 'Finish',
       '%firstRun_button_skipSync%': 'Skip automatic sync',
+      '%firstRun_banner_copiedFromParatext9%': 'Copied from Paratext 9',
       '%firstRun_step_syncProgress_heading%': 'Syncing your data',
       '%firstRun_step_syncProgress_body%': 'Setting up your projects.',
       '%firstRun_step_syncProgress_complete_heading%': 'Sync complete',
@@ -137,9 +139,21 @@ vi.mock('platform-bible-react', () => {
     ),
     Progress: ProgressStub,
     Spinner: () => <span data-testid="spinner" />,
-    // Returning null is the idiomatic React "render nothing" pattern; ComponentType requires a renderable return.
-    // eslint-disable-next-line no-null/no-null
-    WizardStepper: () => null,
+    cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
+    // Exposes what the shell hands the stepper: `positional` when it passes no completedSteps.
+    WizardStepper: ({
+      currentStep,
+      completedSteps,
+    }: {
+      currentStep: number;
+      completedSteps?: number[];
+    }) => (
+      <div
+        data-testid="wizard-stepper"
+        data-current-step={currentStep}
+        data-completed-steps={completedSteps ? completedSteps.join(',') : 'positional'}
+      />
+    ),
     useEvent: (
       event: ((handler: (detail: unknown) => void) => () => void) | undefined,
       handler: (detail: unknown) => void,
@@ -235,11 +249,68 @@ describe('FirstRunShell', () => {
     expect(screen.getByText('internet-settings-step')).toBeInTheDocument();
   });
 
-  it('does not offer Back at the resume entry step (no walking into completed steps)', () => {
-    // A post-relaunch user resumes at syncConsent; the already-completed language/internetSettings/identify
-    // steps behind it must be unreachable (backing into the Identify step would re-trigger the relaunch).
+  it('offers Back from a resumed entry step to the steps before it', async () => {
+    // A post-relaunch user resumes at syncConsent and can still go back to review earlier steps.
     render(<FirstRunShell entryStep="syncConsent" stepComponents={DUMMY_STEPS} />);
+    await userEvent.click(screen.getByRole('button', { name: /back/i }));
+    expect(screen.getByText('identify-step')).toBeInTheDocument();
+  });
+
+  it('does not offer Back at the entry step in re-register mode (the escape hatch takes its place)', () => {
+    render(
+      <FirstRunShell
+        entryStep="identify"
+        allowContinueWithoutRegistration
+        stepComponents={DUMMY_STEPS}
+      />,
+    );
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
+  });
+
+  it('marks the steps the user moved forward from as complete, including after going back', async () => {
+    render(<FirstRunShell entryStep="language" stepComponents={DUMMY_STEPS} />);
+    const stepper = () => screen.getByTestId('wizard-stepper');
+    expect(stepper()).toHaveAttribute('data-completed-steps', '');
+
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // → internetSettings
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // → identify
+    await userEvent.click(screen.getByRole('button', { name: /back/i })); // → internetSettings
+    await userEvent.click(screen.getByRole('button', { name: /back/i })); // → language
+
+    expect(stepper()).toHaveAttribute('data-current-step', '1');
+    expect(stepper()).toHaveAttribute('data-completed-steps', '1,2');
+  });
+
+  it('counts language, internet settings and identify as complete when already registered', () => {
+    render(
+      <FirstRunShell entryStep="language" registrationValidAtStart stepComponents={DUMMY_STEPS} />,
+    );
+    expect(screen.getByTestId('wizard-stepper')).toHaveAttribute('data-completed-steps', '1,2,3');
+  });
+
+  it('keeps positional check marks in re-register mode', () => {
+    render(
+      <FirstRunShell
+        entryStep="identify"
+        allowContinueWithoutRegistration
+        stepComponents={DUMMY_STEPS}
+      />,
+    );
+    expect(screen.getByTestId('wizard-stepper')).toHaveAttribute(
+      'data-completed-steps',
+      'positional',
+    );
+  });
+
+  it('shows the copied-from-Paratext 9 banner only when the registration was preexisting', () => {
+    const { unmount } = render(
+      <FirstRunShell entryStep="language" registrationPreexisting stepComponents={DUMMY_STEPS} />,
+    );
+    expect(screen.getByText('Copied from Paratext 9')).toBeInTheDocument();
+    unmount();
+
+    render(<FirstRunShell entryStep="language" stepComponents={DUMMY_STEPS} />);
+    expect(screen.queryByText('Copied from Paratext 9')).not.toBeInTheDocument();
   });
 
   it('completes with a sync-skipped hint when Skip is clicked on sync consent', async () => {

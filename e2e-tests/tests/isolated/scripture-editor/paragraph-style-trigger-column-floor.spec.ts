@@ -38,6 +38,8 @@ import {
 // DEV_NOISY=false: the noisy dev test layout replaces the normal layouts (see scroll-group-sync.spec.ts).
 test.use({
   interfaceMode: 'simple',
+  // Past first run, so Simple mode starts in the app rather than the setup wizard.
+  seedSettings: { 'platform.firstRunComplete': true },
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
 });
 

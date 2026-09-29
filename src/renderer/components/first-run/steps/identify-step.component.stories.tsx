@@ -50,7 +50,7 @@ export const RegistryLinkFollowsSelectedServer: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const link = canvas.getByRole('link', { name: /visit paratext registry/i });
+    const link = await canvas.findByRole('link', { name: /visit paratext registry/i });
     await waitFor(() => expect(link).toHaveAttribute('href', NON_PRODUCTION_REGISTRY_URL));
   },
 };
@@ -86,7 +86,7 @@ export const InvalidCode: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByLabelText(/registration name/i), 'Test User');
+    await userEvent.type(await canvas.findByLabelText(/registration name/i), 'Test User');
     await userEvent.type(canvas.getByLabelText(/registration code/i), VALID_CODE);
     await waitFor(() => expect(canvas.getByText(/not found/i)).toBeInTheDocument(), {
       timeout: 5000,
@@ -139,7 +139,7 @@ export const RestartPending: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByLabelText(/registration name/i), 'Test User');
+    await userEvent.type(await canvas.findByLabelText(/registration name/i), 'Test User');
     await userEvent.type(canvas.getByLabelText(/registration code/i), VALID_CODE);
     await waitFor(
       () => expect(canvas.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
@@ -149,5 +149,38 @@ export const RestartPending: Story = {
     await waitFor(() => expect(canvas.getByText(/restarting/i)).toBeInTheDocument(), {
       timeout: 3000,
     });
+  },
+};
+
+/**
+ * A valid registration already exists — typically the one Platform.Bible copied from Paratext 9 on
+ * its first launch. The step shows it read-only (the backend only ever returns the code masked) and
+ * moves on with Next, without saving or restarting. "Change registration" opens the empty form.
+ */
+export const ExistingRegistration: Story = {
+  args: { onBack: fn() },
+  beforeEach: () => {
+    setCommandServiceMock((command) => {
+      switch (command) {
+        case 'paratextRegistration.doesUserHaveValidRegistration':
+          return true;
+        case 'paratextRegistration.getParatextRegistrationData':
+          return {
+            name: 'Pat Translator',
+            code: '******-******-******-******-******',
+            email: '',
+            supporterName: '',
+          };
+        default:
+          return undefined;
+      }
+    });
+    return () => resetCommandServiceMock();
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByLabelText(/registration name/i)).toHaveValue('Pat Translator');
+    await userEvent.click(canvas.getByRole('button', { name: 'Next' }));
+    await expect(args.onNext).toHaveBeenCalled();
   },
 };

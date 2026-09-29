@@ -2,7 +2,8 @@ import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { usePrimaryInterfaceLanguage } from '@renderer/hooks/use-primary-interface-language.hook';
 import { completeFirstRun } from '@renderer/services/first-run-store';
 import { FirstRunStep, NumberedStep } from '@renderer/services/first-run.model';
-import { Button, Spinner, WizardStepper } from 'platform-bible-react';
+import { Info } from 'lucide-react';
+import { Alert, AlertDescription, Button, Spinner, WizardStepper } from 'platform-bible-react';
 import {
   formatReplacementString,
   getErrorMessage,
@@ -50,9 +51,13 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_button_back%',
   '%firstRun_button_finish%',
   '%firstRun_button_skipSync%',
+  '%firstRun_banner_copiedFromParatext9%',
   // Referenced via {%product_name%} in the title; formatReplacementString expands it.
   '%product_name%',
 ];
+
+/** Steps that a registration which is already valid at wizard start counts as completed. */
+const STEPS_COMPLETE_WHEN_REGISTERED: NumberedStep[] = ['language', 'internetSettings', 'identify'];
 
 /**
  * Owns the wizard chrome (title, step indicator) and the shared footer (Back / Next), plus step
@@ -65,12 +70,23 @@ export function FirstRunShell({
   entryStep,
   stepComponents = DEFAULT_STEP_COMPONENTS,
   allowContinueWithoutRegistration,
+  registrationValidAtStart,
+  registrationPreexisting,
 }: {
   entryStep: FirstRunStep;
   stepComponents?: Record<FirstRunStep, ComponentType<FirstRunStepProps>>;
   allowContinueWithoutRegistration?: boolean;
+  /**
+   * The registration was already valid when the wizard started, so language, internet settings and
+   * identify count as completed.
+   */
+  registrationValidAtStart?: boolean;
+  /** The registration was copied from Paratext 9 rather than entered in this wizard. */
+  registrationPreexisting?: boolean;
 }) {
   const [step, setStep] = useState<FirstRunStep>(entryStep);
+  // Numbered steps the user has moved forward from during this wizard session.
+  const [advancedPast, setAdvancedPast] = useState<ReadonlySet<NumberedStep>>(() => new Set());
   const [canProceed, setCanProceed] = useState<boolean | undefined>(true);
   const [canSkip, setCanSkip] = useState(false);
   const [managesOwnFooter, setManagesOwnFooter] = useState(false);
@@ -92,11 +108,24 @@ export function FirstRunShell({
   const isInterstitial = index >= NUMBERED_STEPS.length;
   const numberedIndex = isInterstitial ? -1 : index;
   const isLastStep = index === STEP_ORDER.length - 1;
-  // Back floor is the resume entry step, not index 0: the startup reducer resumes a post-relaunch
-  // user at `syncConsent`, and the already-completed language/internetSettings/identify steps
-  // behind it must not be reachable (the Identify step saves registration + calls platform.restart,
-  // so backing into it risks re-triggering the relaunch/resume loop).
-  const entryIndex = STEP_ORDER.indexOf(entryStep);
+  // Back reaches every earlier numbered step, including ones before a resumed entry step: an
+  // already-registered user sees the Identify step's registered view, which moves on with Next and
+  // does not restart the app. Re-register mode is the exception — it opens at Identify, whose
+  // "Continue without registration" escape hatch takes the place of Back.
+  const backFloorIndex = allowContinueWithoutRegistration ? STEP_ORDER.indexOf(entryStep) : 0;
+
+  // Re-register mode keeps the positional marks (everything before Identify was done when the user
+  // first onboarded). Otherwise completion is what the user confirmed this session, plus the steps
+  // a registration that was already valid at the start covers.
+  const completedSteps = useMemo(() => {
+    if (allowContinueWithoutRegistration) return undefined;
+    return NUMBERED_STEPS.flatMap((numberedStep, i) =>
+      advancedPast.has(numberedStep) ||
+      (registrationValidAtStart && STEPS_COMPLETE_WHEN_REGISTERED.includes(numberedStep))
+        ? [i + 1]
+        : [],
+    );
+  }, [allowContinueWithoutRegistration, advancedPast, registrationValidAtStart]);
 
   // Mirror of isBusy for the synchronous re-entrancy guard: React batches state, so two calls in the
   // same tick both read the same stale `isBusy` from the render closure. The ref is updated
@@ -137,16 +166,22 @@ export function FirstRunShell({
     // ref, not `isBusy` — two synchronous calls in one tick share a stale render-closure `isBusy`.
     if (isBusyRef.current) return;
     const next = STEP_ORDER[index + 1];
+    if (!isInterstitial) {
+      const leaving = NUMBERED_STEPS[index];
+      setAdvancedPast((previous) =>
+        previous.has(leaving) ? previous : new Set(previous).add(leaving),
+      );
+    }
     // Synchronous step advance: no async work, so skip runAction to avoid a spurious isBusy flash.
     // Only the final step calls completeFirstRun(), which is async and needs the busy state.
     if (next) goToStep(next);
     else runAction(() => completeFirstRun());
-  }, [index, runAction, goToStep]);
+  }, [index, isInterstitial, runAction, goToStep]);
 
   const onBack = useMemo(
     () =>
-      !isInterstitial && index > entryIndex ? () => goToStep(STEP_ORDER[index - 1]) : undefined,
-    [isInterstitial, index, entryIndex, goToStep],
+      !isInterstitial && index > backFloorIndex ? () => goToStep(STEP_ORDER[index - 1]) : undefined,
+    [isInterstitial, index, backFloorIndex, goToStep],
   );
 
   const onSkip = useMemo(
@@ -196,9 +231,17 @@ export function FirstRunShell({
               currentStep={numberedIndex + 1}
               totalSteps={NUMBERED_STEPS.length}
               locale={locale}
+              completedSteps={completedSteps}
             />
           )}
         </div>
+
+        {registrationPreexisting && !isInterstitial && (
+          <Alert>
+            <Info className="tw:h-4 tw:w-4" />
+            <AlertDescription>{strings['%firstRun_banner_copiedFromParatext9%']}</AlertDescription>
+          </Alert>
+        )}
 
         <StepComponent
           onNext={onNext}

@@ -4,6 +4,7 @@ import {
   continueWithoutRegistration,
   isDemoMode,
   markJustRegistered,
+  markRegisteredInWizard,
 } from '@renderer/services/first-run-store';
 import { publishRegistrationValidity } from '@renderer/services/registration-validity-store';
 import { settingsService } from '@shared/services/settings.service';
@@ -66,7 +67,25 @@ async function fetchRegistryUrl() {
   }
 }
 
-// Eight %paratextRegistration_*% keys below are provided at runtime by the paratext-registration
+/** The registration Platform.Bible already has, as shown in the registered view. */
+type ExistingRegistration = { name: string; maskedCode: string };
+
+/**
+ * Returns the current registration if it is valid — typically the one Platform.Bible copied from
+ * Paratext 9 on its first launch. Asks the backend directly rather than the shared validity store,
+ * which can report 'valid' for a just-registered user whose registration the backend still rejects.
+ * The code comes back masked (`******-…`): the backend never hands out the real code.
+ */
+async function fetchExistingRegistration(): Promise<ExistingRegistration | undefined> {
+  const [isValid, registrationData] = await Promise.all([
+    commandService.sendCommand('paratextRegistration.doesUserHaveValidRegistration'),
+    commandService.sendCommand('paratextRegistration.getParatextRegistrationData'),
+  ]);
+  if (!isValid || !registrationData.name) return undefined;
+  return { name: registrationData.name, maskedCode: registrationData.code };
+}
+
+// Nine %paratextRegistration_*% keys below are provided at runtime by the paratext-registration
 // extension's localizedStrings.json via PAPI — they will not appear in en.json.
 const KEYS: LocalizeKey[] = [
   '%paratextRegistration_label_registrationName%',
@@ -77,7 +96,11 @@ const KEYS: LocalizeKey[] = [
   '%paratextRegistration_button_saveAndRestart%',
   '%paratextRegistration_button_restarting%',
   '%paratextRegistration_warning_invalid_registration_length%',
+  '%paratextRegistration_label_yourRegistration%',
   '%firstRun_step_identify_heading%',
+  '%firstRun_step_identify_changeRegistration%',
+  '%firstRun_step_identify_keepRegistration%',
+  '%firstRun_button_next%',
   '%firstRun_step_identify_reRegisterNotice%',
   '%firstRun_step_identify_registryHelp%',
   '%firstRun_step_identify_registryLink%',
@@ -104,14 +127,19 @@ export interface IdentifyStepProps extends FirstRunStepProps {
 /**
  * Identify step of the first-run wizard (step 'identify' in STEP_ORDER). Collects and validates the
  * user's Paratext registration name + code, then calls `platform.restart` to apply the
- * registration. The store's `wizardActive` flag (already set when the wizard started) survives the
- * relaunch, so the startup reducer routes to `syncConsent` on the next launch rather than
- * re-showing this step.
+ * registration. The store's `wizardActive` and just-registered flags survive the relaunch, so the
+ * startup reducer resumes at `syncConsent` on the next launch rather than re-showing this step.
+ *
+ * When a valid registration already exists (e.g. copied from Paratext 9), the step opens on a
+ * read-only view of it whose primary action is Next — no save, no restart — with "Change
+ * registration" leading to the form. The view is decided once when the step opens. It is read-only
+ * because the backend only returns the code masked, and a masked code cannot be validated, so the
+ * form cannot edit the existing registration in place (not even just the name).
  *
  * The shell's "Next" button is hidden (`setCanProceed(undefined)` on mount) — this step owns its
- * own explicit "Save and restart" action via WizardStepForm's `primaryButton` slot.
+ * own primary action via WizardStepForm's `primaryButton` slot.
  *
- * Eight localization keys (`%paratextRegistration_*`) resolve from the paratext-registration
+ * Nine localization keys (`%paratextRegistration_*`) resolve from the paratext-registration
  * extension's `localizedStrings.json` at runtime via PAPI — they will not be in `en.json`.
  */
 export function IdentifyStep({
@@ -147,6 +175,35 @@ export function IdentifyStep({
   const [saveErrorDescription, setSaveErrorDescription] = useState('');
   const [isRestarting, setIsRestarting] = useState(false);
   const [suppressReminder, setSuppressReminder] = useState(false);
+
+  // Frozen at mount so the view never switches under the user — e.g. while a save is restarting.
+  // Re-register mode and demo mode always use the form.
+  const [checksExistingRegistration] = useState(
+    () => !isDemoMode() && !allowContinueWithoutRegistration,
+  );
+  const [isCheckingExisting, setIsCheckingExisting] = useState(checksExistingRegistration);
+  const [existingRegistration, setExistingRegistration] = useState<ExistingRegistration>();
+  const [isEditing, setIsEditing] = useState(!checksExistingRegistration);
+  useEffect(() => {
+    if (!checksExistingRegistration) return undefined;
+    let isCurrent = true;
+    (async () => {
+      try {
+        const registration = await fetchExistingRegistration();
+        if (!isCurrent) return;
+        setExistingRegistration(registration);
+        setIsEditing(!registration);
+      } catch (e) {
+        logger.warn(`Could not read the existing registration: ${getErrorMessage(e)}`);
+        if (isCurrent) setIsEditing(true);
+      } finally {
+        if (isCurrent) setIsCheckingExisting(false);
+      }
+    })();
+    return () => {
+      isCurrent = false;
+    };
+  }, [checksExistingRegistration]);
   const onToggleSuppressReminder = async (checked: boolean) => {
     setSuppressReminder(checked);
     try {
@@ -296,6 +353,8 @@ export function IdentifyStep({
       // non-fatal: the user just registered successfully, so 'invalid' on the next launch is almost
       // certainly a server fluke. The flag is consumed (cleared) on the next resolveInternal call.
       markJustRegistered();
+      // Re-register mode runs after first run is complete, so nothing would ever clear this.
+      if (!allowContinueWithoutRegistration) markRegisteredInWizard();
       // Correct THIS session too, not just the next one. The toolbar mounted behind the wizard has
       // already cached a definitive 'invalid', and the restart below is best-effort: if it fails,
       // the user stays in this session. Without this publish, that stale 'invalid' would keep the
@@ -330,16 +389,74 @@ export function IdentifyStep({
     return <StepLoading message={strings['%paratextRegistration_button_restarting%']} />;
   }
 
+  if (isCheckingExisting) return <StepLoading />;
+
+  const backToPreviousStep = onBack && (
+    <Button variant="outline" onClick={onBack}>
+      {strings['%firstRun_button_back%']}
+    </Button>
+  );
+
+  if (existingRegistration && !isEditing) {
+    return (
+      <WizardStepForm
+        heading={strings['%paratextRegistration_label_yourRegistration%']}
+        backButton={backToPreviousStep}
+        primaryButton={<Button onClick={onNext}>{strings['%firstRun_button_next%']}</Button>}
+      >
+        <div className="tw:flex tw:flex-col tw:gap-3">
+          <Alert>
+            <CircleCheck className="tw:h-4 tw:w-4" />
+            <AlertTitle>{strings['%paratextRegistration_alert_validRegistration%']}</AlertTitle>
+          </Alert>
+          <div className="tw:flex tw:flex-col tw:gap-1">
+            <label htmlFor="identify-name" className="tw:text-sm tw:font-medium">
+              {strings['%paratextRegistration_label_registrationName%']}
+            </label>
+            <Input id="identify-name" value={existingRegistration.name} readOnly />
+          </div>
+          <div className="tw:flex tw:flex-col tw:gap-1">
+            <label htmlFor="identify-code" className="tw:text-sm tw:font-medium">
+              {strings['%paratextRegistration_label_registrationCode%']}
+            </label>
+            <Input
+              id="identify-code"
+              className="tw:font-mono"
+              value={existingRegistration.maskedCode}
+              readOnly
+            />
+          </div>
+          <div>
+            <Button variant="outline" onClick={() => setIsEditing(true)}>
+              {strings['%firstRun_step_identify_changeRegistration%']}
+            </Button>
+          </div>
+        </div>
+      </WizardStepForm>
+    );
+  }
+
+  const keepCurrentRegistration = () => {
+    clearTimeout(validationTimeout.current);
+    // Invalidate any validation already in flight so its result can't land on the next form.
+    validationGeneration.current += 1;
+    setName('');
+    setRegistrationCode('');
+    setIsValidating(false);
+    setRegistrationIsValid(false);
+    setError('');
+    setErrorDescription('');
+    setSaveError('');
+    setSaveErrorDescription('');
+    setIsEditing(false);
+  };
+
   // Re-register mode surfaces an escape hatch in the back-button slot; at the identify entry the
   // shell supplies no onBack (index === entryIndex), so the slot is otherwise empty. Computed as
   // if/else (not a nested ternary) to satisfy ESLint no-nested-ternary.
   let backButton: ReactNode;
-  if (onBack) {
-    backButton = (
-      <Button variant="outline" onClick={onBack}>
-        {strings['%firstRun_button_back%']}
-      </Button>
-    );
+  if (backToPreviousStep) {
+    backButton = backToPreviousStep;
   } else if (allowContinueWithoutRegistration) {
     backButton = (
       <Button variant="ghost" onClick={() => continueWithoutRegistration()}>
@@ -418,6 +535,14 @@ export function IdentifyStep({
             <CircleCheck className="tw:h-4 tw:w-4" />
             <AlertTitle>{strings['%paratextRegistration_alert_validRegistration%']}</AlertTitle>
           </Alert>
+        )}
+
+        {existingRegistration && (
+          <div>
+            <Button variant="ghost" onClick={keepCurrentRegistration}>
+              {strings['%firstRun_step_identify_keepRegistration%']}
+            </Button>
+          </div>
         )}
 
         {/* Isolate this immediate-apply preference (persists instantly on toggle) from the

@@ -33,6 +33,13 @@ export default meta;
 type Story = StoryObj<typeof FirstRunShell>;
 
 export const Language: Story = { args: { entryStep: 'language' } };
+/**
+ * A Paratext 9 user's first launch: the registration copied from Paratext 9 is already valid, so
+ * the banner says so and language, internet settings and identify show as complete.
+ */
+export const CopiedFromParatext9: Story = {
+  args: { entryStep: 'language', registrationValidAtStart: true, registrationPreexisting: true },
+};
 export const InternetSettings: Story = { args: { entryStep: 'internetSettings' } };
 export const Identify: Story = { args: { entryStep: 'identify' } };
 export const SyncConsent: Story = { args: { entryStep: 'syncConsent' } };

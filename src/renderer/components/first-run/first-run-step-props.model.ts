@@ -14,7 +14,10 @@ export interface FirstRunStepProps {
    * `onNext()` itself is responsible for only doing so when it is valid to advance.
    */
   onNext: () => void;
-  /** Return to the previous step. Absent on the first step (Language). */
+  /**
+   * Return to the previous step. Absent on the first step (Language), on the sync-progress
+   * interstitial, and on the entry step in re-register mode.
+   */
   onBack?: () => void;
   /** Skip the rest of setup and finish. Present when the current step has called `setCanSkip(true)`. */
   onSkip?: () => void;

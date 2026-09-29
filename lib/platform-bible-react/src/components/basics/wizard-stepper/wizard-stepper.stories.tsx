@@ -16,6 +16,11 @@ export const Step2of4: Story = { args: { currentStep: 2 } };
 export const Step3of4: Story = { args: { currentStep: 3 } };
 export const Step4of4: Story = { args: { currentStep: 4 } };
 /** Verify Arabic-Indic numerals: circles should show ١ ٢ ٣ ٤ */
+/** Stepped back to step 1 of a wizard whose steps 2 and 3 are already done. */
+export const SteppedBackWithCompletedSteps: Story = {
+  args: { currentStep: 1, completedSteps: [2, 3] },
+};
+
 export const ArabicNumerals: Story = { args: { currentStep: 2, locale: 'ar' } };
 /** CurrentStep > totalSteps: clamped to last step — step 4 renders as active, steps 1-3 as complete. */
 export const OverflowClamped: Story = { args: { currentStep: 99 } };

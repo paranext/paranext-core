@@ -3196,6 +3196,12 @@ export interface WizardStepperProps {
 	 * `RangeError` in V8).
 	 */
 	locale?: string;
+	/**
+	 * 1-based indices of the steps to show as complete. When omitted, every step before `currentStep`
+	 * is complete. Pass it when completion does not follow position — e.g. a wizard the user can step
+	 * back through, where later steps may already be done. The active step always shows as active.
+	 */
+	completedSteps?: number[];
 }
 /**
  * Displays a row of numbered step circles showing progress through a multi-step wizard. Purely
@@ -3203,7 +3209,7 @@ export interface WizardStepperProps {
  * responsible for a `sr-only` `aria-live` sibling that announces the current step to screen
  * readers.
  */
-export declare function WizardStepper({ currentStep, totalSteps, locale }: WizardStepperProps): import("react/jsx-runtime").JSX.Element;
+export declare function WizardStepper({ currentStep, totalSteps, locale, completedSteps, }: WizardStepperProps): import("react/jsx-runtime").JSX.Element;
 declare const alertVariants: (props?: ({
 	variant?: "default" | "destructive" | null | undefined;
 } & ClassProp) | undefined) => string;

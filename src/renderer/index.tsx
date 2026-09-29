@@ -25,6 +25,7 @@ import {
 } from '@renderer/services/theme.service';
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
 import { startUsersnapServiceShard } from '@renderer/services/usersnap.service-shard';
+import { startFirstRunServiceShard } from '@renderer/services/first-run.service-shard';
 import { startOnboardingTourServiceShard } from '@renderer/services/onboarding-tour.service-shard';
 import { isWindowInputBlocked } from '@renderer/services/window-input-blocked.util';
 import { registerContentZoomChromeKeys } from '@renderer/services/web-view-content-zoom.chrome-keys';
@@ -171,6 +172,7 @@ initConnectionLostService();
       startUsersnapServiceShard(),
       startBookChapterControlServiceShard(),
       startOnboardingTourServiceShard(),
+      startFirstRunServiceShard(),
       startOverlayService(),
       startThemeService(),
       initializeWindowService(),

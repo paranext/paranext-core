@@ -1450,6 +1450,14 @@ npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playw
 e2e-tests/run-e2e-wsl.sh --wrap npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated
 ```
 
+### Manually Testing the First-Run Wizard
+
+To bring the setup wizard back in a running app (dev or installed), including as a registered or
+unregistered Paratext 9 user, use the `platform.resetFirstRun` command from DevTools — see
+[Resetting the first-run wizard](../../README.md#resetting-the-first-run-wizard) in the README. The
+automated first-run suites (`e2e-tests/tests/isolated/first-run/`) run in demo mode instead, so
+they do not depend on the machine's Paratext registration.
+
 ### Failure Analysis
 
 | Failure Type          | Diagnosis                       | Fix                                |

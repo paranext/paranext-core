@@ -68,12 +68,16 @@ const PARATEXT_PROJECTS_ROOT = path.join(
 const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProviderId';
 
 /**
- * Paratext app-data directories are named `Paratext<major><minor>` — `Paratext80` is 8.0,
- * `Paratext94` is 9.4, `Paratext100` is 10.0 — so the suffix read as a number orders the versions
- * (minors are single-digit). Anything below 8.0 stored registration information in a different
- * shape and ParatextData ignores it; see `UpgradeAppDataFiles` in ParatextData's ParatextInfo.
+ * The app's own ParatextData app-data directory. Kept in sync with `APP_DATA_FOLDER_NAME` in
+ * `c-sharp/ParatextUtils/PlatformParatextInfo.cs`.
  */
-const OLDEST_SUPPORTED_PARATEXT_APP_DATA_VERSION = 80;
+const PLATFORM_APP_DATA_FOLDER_NAME = 'Paratext100';
+
+/**
+ * Paratext 8 and 9 app-data directories (`Paratext80`–`Paratext99`), which the app seeds its own
+ * directory from. The two digits are the major and minor version, so they order the versions.
+ */
+const PARATEXT_8_OR_9_APP_DATA_FOLDER = /^Paratext([89]\d)$/;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -105,9 +109,37 @@ function localApplicationDataRoot(): string | undefined {
 }
 
 /**
+ * The registration file the app reads, choosing the way `PlatformParatextInfo` does: the app's own
+ * directory once it has any files, otherwise the newest Paratext 8/9 directory with a registration,
+ * which the app copies from on its next start.
+ */
+function findCurrentRegistrationFile(root: string): string | undefined {
+  const platformFolder = path.join(root, PLATFORM_APP_DATA_FOLDER_NAME);
+  const platformFolderHasFiles =
+    fs.existsSync(platformFolder) &&
+    fs.readdirSync(platformFolder, { withFileTypes: true }).some((entry) => entry.isFile());
+  if (platformFolderHasFiles) {
+    const registrationFile = path.join(platformFolder, 'RegistrationInfo.xml');
+    return fs.existsSync(registrationFile) ? registrationFile : undefined;
+  }
+
+  const newest = fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({
+      name: entry.name,
+      version: Number(PARATEXT_8_OR_9_APP_DATA_FOLDER.exec(entry.name)?.[1]),
+    }))
+    .filter((dir) => !Number.isNaN(dir.version))
+    .filter((dir) => fs.existsSync(path.join(root, dir.name, 'RegistrationInfo.xml')))
+    .sort((a, b) => a.version - b.version)
+    .pop();
+  return newest ? path.join(root, newest.name, 'RegistrationInfo.xml') : undefined;
+}
+
+/**
  * The name ParatextData reports as the current user (`RegistrationInfo.DefaultUser.Name`), read
- * from the machine's registration file: the highest-named `Paratext*` app-data directory holding a
- * `RegistrationInfo.xml`, which is how ParatextData picks one (`ParatextInfo`).
+ * from the registration file the app uses (see {@link findCurrentRegistrationFile}).
  *
  * Read from disk rather than asked of the running app on purpose. A project's
  * `ProjectUserAccess.xml` is loaded when ParatextData first opens the project, during the app's
@@ -120,19 +152,8 @@ export function readCurrentParatextUserName(): string | undefined {
   const root = localApplicationDataRoot();
   if (!root || !fs.existsSync(root)) return undefined;
 
-  const newest = fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => ({
-      name: entry.name,
-      version: Number(/^Paratext(\d+)$/.exec(entry.name)?.[1]),
-    }))
-    .filter((dir) => dir.version >= OLDEST_SUPPORTED_PARATEXT_APP_DATA_VERSION)
-    .filter((dir) => fs.existsSync(path.join(root, dir.name, 'RegistrationInfo.xml')))
-    .sort((a, b) => a.version - b.version)
-    .pop();
-  if (!newest) return undefined;
-  const registrationFile = path.join(root, newest.name, 'RegistrationInfo.xml');
+  const registrationFile = findCurrentRegistrationFile(root);
+  if (!registrationFile) return undefined;
 
   const name = /<Name>([^<]*)<\/Name>/.exec(fs.readFileSync(registrationFile, 'utf8'))?.[1];
   // Decoded here because the value is scraped straight out of XML and handed to a writer that

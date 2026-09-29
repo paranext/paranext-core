@@ -39,6 +39,11 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_continueWithoutRegistration%': 'Continue without registration',
       '%firstRun_step_identify_dontShowAgain%': "Don't show this on startup again",
       '%general_error_title%': 'Error',
+      '%paratextRegistration_label_yourRegistration%': 'Your registration',
+      '%firstRun_step_identify_changeRegistration%': 'Change registration',
+      '%firstRun_step_identify_keepRegistration%': 'Keep current registration',
+      '%firstRun_button_next%': 'Next',
+      '%firstRun_button_back%': 'Back',
     },
     false,
   ]),
@@ -46,6 +51,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 vi.mock('@renderer/services/first-run-store', () => ({
   isDemoMode: vi.fn(() => false),
   markJustRegistered: vi.fn(),
+  markRegisteredInWizard: vi.fn(),
   continueWithoutRegistration: vi.fn(),
 }));
 vi.mock('@shared/services/settings.service', () => ({
@@ -79,6 +85,7 @@ vi.mock('platform-bible-react', () => ({
     id,
     value,
     onChange,
+    readOnly,
     'aria-invalid': ariaInvalid,
     'aria-describedby': ariaDescribedBy,
   }: {
@@ -86,6 +93,7 @@ vi.mock('platform-bible-react', () => ({
     id?: string;
     value?: string;
     onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
+    readOnly?: boolean;
     'aria-invalid'?: boolean | 'false' | 'true' | 'grammar' | 'spelling';
     'aria-describedby'?: string;
   }) => (
@@ -93,6 +101,7 @@ vi.mock('platform-bible-react', () => ({
       id={id}
       value={value}
       onChange={onChange}
+      readOnly={readOnly}
       aria-invalid={ariaInvalid}
       aria-describedby={ariaDescribedBy}
     />
@@ -154,9 +163,11 @@ vi.mock('lucide-react', () => ({
 
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 const mockIsDemoMode = vi.mocked(firstRunStore.isDemoMode);
+const mockMarkRegisteredInWizard = vi.mocked(firstRunStore.markRegisteredInWizard);
 const mockLogger = vi.mocked(logger);
 
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
+const MASKED_CODE = '******-******-******-******-******';
 
 const PRODUCTION_REGISTRY_URL = 'https://registry.paratext.org';
 
@@ -165,10 +176,29 @@ const PRODUCTION_REGISTRY_URL = 'https://registry.paratext.org';
  * queued for validation/save. Pass per-test overrides for the validation/save outcomes.
  */
 function mockCommands(
-  overrides: { validate?: boolean; validateError?: Error; saveError?: Error; url?: string } = {},
+  overrides: {
+    validate?: boolean;
+    validateError?: Error;
+    saveError?: Error;
+    url?: string;
+    /** A valid registration already exists under this name (e.g. copied from Paratext 9). */
+    existingName?: string;
+    existingError?: Error;
+  } = {},
 ) {
   mockSendCommand.mockImplementation((command: string) => {
     switch (command) {
+      case 'paratextRegistration.doesUserHaveValidRegistration':
+        return overrides.existingError
+          ? Promise.reject(overrides.existingError)
+          : Promise.resolve(!!overrides.existingName);
+      case 'paratextRegistration.getParatextRegistrationData':
+        return Promise.resolve({
+          name: overrides.existingName ?? '',
+          code: overrides.existingName ? MASKED_CODE : '',
+          email: '',
+          supporterName: '',
+        });
       case 'paratextRegistration.getParatextRegistryUrl':
         return Promise.resolve(overrides.url ?? PRODUCTION_REGISTRY_URL);
       case 'paratextRegistration.validateParatextRegistrationData':
@@ -209,6 +239,18 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/**
+ * Renders the step and lets its mount-time check for an existing registration settle, so the test
+ * starts on whichever view (registered or form) that check chose.
+ */
+async function renderSettled(ui: Parameters<typeof render>[0]) {
+  const result = render(ui);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  return result;
+}
+
 /** Creates a fresh userEvent instance after fake timers are installed. */
 function setupUser() {
   return userEvent.setup({ advanceTimers: vi.advanceTimersByTimeAsync });
@@ -225,7 +267,7 @@ describe('IdentifyStep', () => {
 
   it('Save button is disabled until both name and code fields are non-empty', async () => {
     const user = setupUser();
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     expect(screen.getByRole('button', { name: /save and restart/i })).toBeDisabled();
 
@@ -242,7 +284,7 @@ describe('IdentifyStep', () => {
     const user = setupUser();
     mockCommands({ validate: true });
 
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
@@ -260,7 +302,7 @@ describe('IdentifyStep', () => {
     const user = setupUser();
     mockCommands({ validate: false });
 
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
@@ -275,7 +317,7 @@ describe('IdentifyStep', () => {
     const user = setupUser();
     mockCommands({ validate: true });
 
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
@@ -303,7 +345,7 @@ describe('IdentifyStep', () => {
     // A restart that never settles models the best-effort restart failing to take the process down.
     const onRestartAfterSave = vi.fn().mockReturnValue(new Promise<never>(() => {}));
 
-    render(
+    await renderSettled(
       <IdentifyStep
         onNext={onNext}
         setCanProceed={setCanProceed}
@@ -329,7 +371,7 @@ describe('IdentifyStep', () => {
     mockCommands({ validate: true });
     const onRestartAfterSave = vi.fn().mockReturnValue(new Promise<never>(() => {}));
 
-    render(
+    await renderSettled(
       <IdentifyStep
         onNext={onNext}
         setCanProceed={setCanProceed}
@@ -355,7 +397,7 @@ describe('IdentifyStep', () => {
     mockCommands({ validate: true });
     const onRestartAfterSave = vi.fn().mockResolvedValue(undefined);
 
-    render(
+    await renderSettled(
       <IdentifyStep
         onNext={onNext}
         setCanProceed={setCanProceed}
@@ -379,20 +421,20 @@ describe('IdentifyStep', () => {
     expect(screen.queryByText(/restarting/i)).not.toBeInTheDocument();
   });
 
-  it('calls setCanProceed(undefined) on mount to suppress the shell Next button entirely', () => {
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+  it('calls setCanProceed(undefined) on mount to suppress the shell Next button entirely', async () => {
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
     expect(setCanProceed).toHaveBeenCalledWith(undefined);
   });
 
-  it('renders name and code inputs with accessible labels', () => {
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+  it('renders name and code inputs with accessible labels', async () => {
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
     expect(screen.getByLabelText(/registration name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/registration code/i)).toBeInTheDocument();
   });
 
   it('renders a Paratext Registry link pointing at the selected server environment', async () => {
     mockCommands({ url: 'https://registry-dev.paratext.org' });
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
     const link = screen.getByRole('link', { name: /visit paratext registry/i });
     await waitFor(() => expect(link).toHaveAttribute('href', 'https://registry-dev.paratext.org'));
   });
@@ -403,7 +445,7 @@ describe('IdentifyStep', () => {
         ? Promise.reject(new Error('offline'))
         : Promise.resolve(undefined),
     );
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
     const link = screen.getByRole('link', { name: /visit paratext registry/i });
     // Flush the rejected lookup inside `act` so React commits the resulting state update. `waitFor`
     // cannot poll here: these tests install fake timers, which stall its polling interval.
@@ -422,7 +464,7 @@ describe('IdentifyStep', () => {
     const user = setupUser();
     mockCommands({ validate: true });
 
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
@@ -433,7 +475,7 @@ describe('IdentifyStep', () => {
 
   it('auto-inserts a dash after every 6th alphanumeric character typed', async () => {
     const user = setupUser();
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     const codeInput = screen.getByLabelText(/registration code/i);
     await user.type(codeInput, 'ABCDEF');
@@ -442,7 +484,7 @@ describe('IdentifyStep', () => {
 
   it('removes the dash and the preceding character when backspacing over an auto-inserted dash', async () => {
     const user = setupUser();
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     const codeInput = screen.getByLabelText(/registration code/i);
     await user.type(codeInput, 'ABCDEF');
@@ -453,7 +495,7 @@ describe('IdentifyStep', () => {
 
   it('shows format warning and sets aria-invalid after debounce when code has wrong format', async () => {
     const user = setupUser();
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration code/i), 'ABC');
     expect(screen.queryByText(/code must be/i)).not.toBeInTheDocument();
@@ -470,7 +512,7 @@ describe('IdentifyStep', () => {
     const user = setupUser();
     mockCommands({ validateError: new Error('Network error') });
 
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
@@ -484,7 +526,7 @@ describe('IdentifyStep', () => {
     const user = setupUser();
     mockCommands({ validate: false });
 
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
@@ -500,7 +542,7 @@ describe('IdentifyStep', () => {
     const user = setupUser();
     mockCommands({ validate: true });
 
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -518,7 +560,7 @@ describe('IdentifyStep', () => {
     const user = setupUser();
     mockCommands({ validate: true });
 
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
@@ -535,7 +577,7 @@ describe('IdentifyStep', () => {
     const user = setupUser();
     mockCommands({ validate: true, saveError: new Error('Server error') });
 
-    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
@@ -710,5 +752,146 @@ describe('IdentifyStep', () => {
         expect.anything(),
       );
     });
+  });
+});
+
+describe('IdentifyStep with an existing registration', () => {
+  const onNext = vi.fn();
+  const onBack = vi.fn();
+  const setCanProceed = vi.fn();
+
+  beforeEach(() => {
+    onNext.mockReset();
+    onBack.mockReset();
+    setCanProceed.mockReset();
+  });
+
+  it('shows the existing registration read-only with the masked code', async () => {
+    mockCommands({ existingName: 'Pat Translator' });
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    expect(screen.getByText('Your registration')).toBeInTheDocument();
+    expect(screen.getByLabelText(/registration name/i)).toHaveValue('Pat Translator');
+    expect(screen.getByLabelText(/registration name/i)).toHaveAttribute('readonly');
+    expect(screen.getByLabelText(/registration code/i)).toHaveValue(MASKED_CODE);
+    expect(screen.getByText('Registration accepted')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save and restart/i })).not.toBeInTheDocument();
+  });
+
+  it('moves on with Next without saving or restarting', async () => {
+    const user = setupUser();
+    mockCommands({ existingName: 'Pat Translator' });
+    await renderSettled(
+      <IdentifyStep onNext={onNext} onBack={onBack} setCanProceed={setCanProceed} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(onNext).toHaveBeenCalledOnce();
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'paratextRegistration.setParatextRegistrationData',
+      expect.anything(),
+    );
+    expect(mockSendCommand).not.toHaveBeenCalledWith('platform.restart');
+  });
+
+  it('offers Back to the previous step', async () => {
+    const user = setupUser();
+    mockCommands({ existingName: 'Pat Translator' });
+    await renderSettled(
+      <IdentifyStep onNext={onNext} onBack={onBack} setCanProceed={setCanProceed} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it('switches to an empty form on Change registration, and back on Keep current registration', async () => {
+    const user = setupUser();
+    mockCommands({ existingName: 'Pat Translator' });
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    await user.click(screen.getByRole('button', { name: 'Change registration' }));
+
+    expect(screen.getByRole('button', { name: /save and restart/i })).toBeDisabled();
+    expect(screen.getByLabelText(/registration name/i)).toHaveValue('');
+    expect(screen.getByLabelText(/registration code/i)).toHaveValue('');
+
+    await user.type(screen.getByLabelText(/registration name/i), 'Someone Else');
+    await user.click(screen.getByRole('button', { name: 'Keep current registration' }));
+
+    expect(screen.getByLabelText(/registration name/i)).toHaveValue('Pat Translator');
+    expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+  });
+
+  it('marks a registration saved during onboarding as registered in the wizard', async () => {
+    const user = setupUser();
+    mockCommands({ validate: true });
+    await renderSettled(
+      <IdentifyStep
+        onNext={onNext}
+        setCanProceed={setCanProceed}
+        onRestartAfterSave={vi.fn().mockReturnValue(new Promise<never>(() => {}))}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
+    );
+    await user.click(screen.getByRole('button', { name: /save and restart/i }));
+
+    await waitFor(() => expect(mockMarkRegisteredInWizard).toHaveBeenCalledOnce());
+  });
+
+  it('falls back to the form when the existing registration cannot be read', async () => {
+    mockCommands({ existingError: new Error('backend down') });
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    expect(screen.getByRole('button', { name: /save and restart/i })).toBeInTheDocument();
+    expect(mockLogger.warn).toHaveBeenCalled();
+  });
+
+  it('never shows the registered view in re-register mode', async () => {
+    mockCommands({ existingName: 'Pat Translator' });
+    await renderSettled(
+      <IdentifyStep
+        onNext={onNext}
+        setCanProceed={setCanProceed}
+        allowContinueWithoutRegistration
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /save and restart/i })).toBeInTheDocument();
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'paratextRegistration.doesUserHaveValidRegistration',
+    );
+  });
+
+  it('does not mark a re-registration as registered in the wizard', async () => {
+    const user = setupUser();
+    mockCommands({ validate: true });
+    await renderSettled(
+      <IdentifyStep
+        onNext={onNext}
+        setCanProceed={setCanProceed}
+        allowContinueWithoutRegistration
+        onRestartAfterSave={vi.fn().mockReturnValue(new Promise<never>(() => {}))}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
+    );
+    await user.click(screen.getByRole('button', { name: /save and restart/i }));
+
+    await waitFor(() => expect(firstRunStore.markJustRegistered).toHaveBeenCalledOnce());
+    expect(mockMarkRegisteredInWizard).not.toHaveBeenCalled();
   });
 });
