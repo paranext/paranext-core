@@ -1654,9 +1654,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   Collection resolves a DBL reference to a project only through a catalog row, so every such cell
   read "Resource not installed" while offline; the Bible texts panel kept working only because it
   also lists read-only projects straight from local metadata.
-- **Decision:** Three layers. (1) The C# provider throws when a fetch returns no resources and
-  writes `_resources`/`_hasFetchedResources` only after that check (`RequireFetchedCatalog`), so
-  install status keeps answering from disk. (2) `resolveDblCatalog` rejects an empty catalog;
+- **Decision:** Three layers. (1) The C# provider throws when a fetch returns no resources
+  (`RequireFetchedCatalog`), or none the compatibility whitelist accepts, and writes
+  `_resources`/`_hasFetchedResources` only after both checks, so install status keeps answering
+  from disk. (2) `resolveDblCatalog` rejects an empty catalog;
   `parsePersistedCatalog` discards an empty persisted one; the startup retry loop stops on an
   attempt that threw (it exists for `notReady`); concurrent on-demand reads share one fetch; and
   `getLocalNonDblResources` lists local resources even when the catalog fails. (3) The grid
@@ -1665,11 +1666,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   empty install map is never read as an answer — it means "no answer", not "nothing installed" —
   and while the disk can't answer, a catalog row still decides ("not installed"). "Couldn't check"
   shows only when the catalog failed and a reference has no row either, and it always comes with a
-  retry banner above the grid, inside a persistent `role="status"` region. Only the current ask's
-  answer is used. The Bible texts panel (`resource-text-panel.web-view.tsx`) lets rows that
+  retry banner above the grid, inside a persistent `role="status"` region. An answer holds until
+  the references change or an install from the grid changes the disk; a Retry or a project change
+  anywhere asks again while keeping it, and a Retry skips the ask the catalog refetch would only
+  answer "busy". The Bible texts panel (`resource-text-panel.web-view.tsx`) lets rows that
   resolved without the catalog — local downloads, project references — win over the catalog-error
   view, and publishes navigable ids once the catalog has loaded or such a row is shown; a failed
-  catalog alone publishes nothing, so the saved list survives it.
+  catalog alone publishes nothing, so the saved list survives it. A saved selection with no row —
+  a DBL reference, which only the catalog resolves — keeps the catalog-error view and is never
+  overwritten by the fallback to another row.
 - **Alternatives:** *Accept empty only if nothing is cached* — rejected: an empty catalog is never
   a true answer for a configured user, and C#'s own `_resources` would still be wiped. *Detect
   offline from the captured alert text* — rejected: it ties behavior to localized PT9 strings;
@@ -1693,8 +1698,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     treats as "no answer". Once the C# catalog has loaded, that call names only catalogued uids, so
     an installed resource withdrawn from the DBL reads "not installed" — the catalog path's existing
     limitation.
+  - While the catalog is failing, `getLocalNonDblResources` cannot tell which local resources came
+    from the DBL, so it lists them all, and the Bible texts panel's downloaded rows likewise become
+    project references. A resource picked in that window is saved as a plain project reference: it
+    displays offline, but never gets DBL update or Get Resources status once the catalog returns.
+    Kept deliberately, because hiding those rows would leave an offline user unable to pick an
+    installed resource at all.
   - The Model Text panel still resolves DBL references through the catalog alone — a known sibling
-    gap not addressed here.
+    gap, tracked in PT-4814.
   - **Revisit** if ParatextData ever throws on an unreachable DBL.
 - **Source:** PT-4686.
 
