@@ -264,3 +264,17 @@ export async function readEditorSelection(
     return undefined;
   }
 }
+
+/**
+ * Write one user setting through the settings service data provider's own `set` call — the same
+ * live store `useSetting` reads in a running editor, so a value written here takes effect without a
+ * restart.
+ */
+export async function setUserSetting(key: string, value: unknown): Promise<void> {
+  await sendPapiRequestOnce<unknown>(
+    'object:platform.settingsServiceDataProvider-data.set',
+    [key, value],
+    WEBSOCKET_PORT,
+    REQUEST_TIMEOUT_MS,
+  );
+}

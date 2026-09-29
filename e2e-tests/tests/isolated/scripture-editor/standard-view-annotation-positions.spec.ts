@@ -35,6 +35,12 @@
  *   untouched.
  * - A position at the very end of the chapter's last text resolves to that text's own path and
  *   offset, not to the preceding verse's own `['number']` location.
+ * - A `setAnnotation` on an already-saved word does not interrupt an UNRELATED marker edit still
+ *   being typed earlier in the same text node, with the editor's own idle-settle clock switched off
+ *   so only the caret leaving (never attempted here) could settle it: the typed literal survives
+ *   verbatim, further keystrokes still extend it in place, and the annotation lands on exactly the
+ *   saved word — checked once against a word in the SAME text node as the pending caret, and once
+ *   more, as a control, against a word in a DIFFERENT text node of the same paragraph.
  *
  * Every scenario that calls `setAnnotation` or `selectRange` talks to the editor through the
  * scripture editor's web view controller network object (`object:webViewController<webViewId>.…`),
@@ -44,8 +50,9 @@
  * instance launched against the shared webpack renderer dev server has a documented failure mode
  * where new dock tabs never render (see isolated.fixture.ts). The scenarios run as test.step()s
  * sharing the one instance and one loaded chapter, in an order that types content only after the
- * read-only scenarios, then addresses what that typing settles to, and the chapter's own last
- * position, last of all.
+ * read-only scenarios, then addresses what that typing settles to, then the chapter's own last
+ * position, and — because a failing step aborts every later one — whether an UNRELATED
+ * `setAnnotation` disturbs typing still in progress elsewhere in the same text, last of all.
  *
  * Runs against an isolated project root, so the only project is the bundled sample WEB (installed
  * by the C# backend into the empty root): `npm run test:e2e:isolated
@@ -64,6 +71,8 @@ import {
   getScrollGroupRef,
   readEditorSelection,
   sendToEditorController,
+  SerializedVerseRef,
+  setUserSetting,
   waitForEditorControllerMethod,
 } from '../../../fixtures/settled-positions-helpers';
 import {
@@ -131,6 +140,45 @@ const WORD_AFTER_TARGET = 'Whatever';
 /** John 2:25, the chapter's last verse, addressed by its own reference for the chapter-end step. */
 const LAST_VERSE_REFERENCE = 'John 2:25';
 const LAST_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 25 };
+
+/**
+ * John 2:6 ("Now there were six water pots of stone...") is a plain sentence, untouched by any
+ * earlier step. The last step types an INCOMPLETE `\w` marker literal into it — no closing quote,
+ * no closer — right after its own first word, so that word stays in the exact SAME Lexical text
+ * node as the pending caret (nothing has split it off yet). John 2:7, in the SAME paragraph (a USJ
+ * `\p` here spans several verses), gives an ALREADY-SEPARATE text node for the control case.
+ */
+const TYPING_PROBE_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 6 };
+/**
+ * The saved, untouched word the first `setAnnotation` targets: right before the pending edit, in
+ * the SAME text node as the caret.
+ */
+const SAME_NODE_WORD = 'Now';
+/**
+ * Same paragraph as {@link TYPING_PROBE_VERSE_REF} (a USJ `\p` spans several verses here), but its
+ * own, already-separate text node — the control.
+ */
+const CONTROL_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 7 };
+/**
+ * The saved word the control `setAnnotation` targets, inside {@link CONTROL_VERSE_REF}'s own text
+ * node.
+ */
+const CONTROL_WORD = 'Jesus';
+/** The marker content this step types mid-edit and never finishes. */
+const INCOMPLETE_MARKER_WORD = 'myrrh';
+/** The unfinished prefix of the `lemma` value this step types — no closing quote, no `\w*` closer. */
+const INCOMPLETE_ATTRIBUTE_VALUE_PREFIX = 'my';
+const SAME_NODE_ANNOTATION_ID = 'same-node-word-probe';
+const CONTROL_ANNOTATION_ID = 'different-node-word-probe';
+
+/**
+ * `platformScriptureEditor.markerSettleDelayMs`, EXPERIMENTAL: how long the editor's idle clock
+ * waits before settling a pending marker edit on its own, in editable marker views. `-1` turns that
+ * clock off, so only the caret leaving can settle an edit — see `use-marker-settle-delay.hook.ts`.
+ */
+const MARKER_SETTLE_DELAY_SETTING_KEY = 'platformScriptureEditor.markerSettleDelayMs';
+/** The editor's own built-in idle delay — an unset setting behaves identically to this value. */
+const DEFAULT_MARKER_SETTLE_DELAY_MS = 1000;
 
 test.use({
   interfaceMode: 'power',
@@ -487,6 +535,162 @@ test.describe('scripture editor settled positions', () => {
       // Undo the probe so later steps and specs see the original text.
       await editorInput.press('Backspace');
       await pollLastVerseText(lastText);
+    });
+
+    await test.step('a setAnnotation on an already-saved word does not interrupt an unrelated marker edit still being typed', async () => {
+      const verseSixText = findVerseText(chapterUsj.content ?? [], '6');
+      if (!verseSixText) throw new Error("No plain text found for John 2:6 in the chapter's USJ");
+      if (!verseSixText.text.startsWith(`${SAME_NODE_WORD} `))
+        throw new Error(
+          `Expected John 2:6's text to start with "${SAME_NODE_WORD} ", got: ${verseSixText.text}`,
+        );
+      // Right after the saved word and its following space — the front of the text's own
+      // second word, and still the SAME Lexical text node the saved word itself is part of,
+      // since nothing has been typed into this verse yet.
+      const insertionOffset = SAME_NODE_WORD.length + 1;
+
+      const controlVerseText = findVerseText(chapterUsj.content ?? [], '7');
+      if (!controlVerseText)
+        throw new Error("No plain text found for John 2:7 in the chapter's USJ");
+      if (!controlVerseText.text.startsWith(CONTROL_WORD))
+        throw new Error(
+          `Expected John 2:7's text to start with "${CONTROL_WORD}", got: ${controlVerseText.text}`,
+        );
+
+      // Turn the idle settle clock off BEFORE typing anything below, so no idle timeout can
+      // settle this edit at any point — only a caret departure could (never attempted in this
+      // step), which isolates whatever effect the setAnnotation calls below have on their own.
+      await setUserSetting(MARKER_SETTLE_DELAY_SETTING_KEY, -1);
+      try {
+        // Place the caret by position, the same collapsed-placement path the very first
+        // scenario above verifies.
+        const insertionCaret = chapterLocation(
+          TYPING_PROBE_VERSE_REF,
+          verseSixText.jsonPath,
+          insertionOffset,
+        );
+        await sendToEditorController(editorId, 'selectRange', [
+          { start: insertionCaret, end: insertionCaret },
+        ]);
+        await expect
+          .poll(async () => (await readSelection())?.start?.documentLocation, {
+            timeout: 30_000,
+          })
+          .toEqual({ jsonPath: verseSixText.jsonPath, offset: insertionOffset });
+
+        // Type an INCOMPLETE `\w` marker literal — content, then an attribute key and an
+        // unfinished value, with no closing quote and no `\w*` closer — and stop there. The
+        // caret sits at its own end, mid-edit.
+        const incompleteLiteral = `\\${WORD_MARKER} ${INCOMPLETE_MARKER_WORD}|lemma="${INCOMPLETE_ATTRIBUTE_VALUE_PREFIX}`;
+        await editorInput.pressSequentially(incompleteLiteral, { delay: 30 });
+        await expect(editorInput).toContainText(incompleteLiteral, { timeout: 15_000 });
+
+        // The incomplete literal gives its own paragraph's content array a new slot for the
+        // pending node, shifting every LATER sibling's own index in that SAME paragraph —
+        // including John 2:7's, several verses later in the same USJ `\p`. Re-read the chapter
+        // fresh right before each setAnnotation below, rather than reusing the indexes read at
+        // the top of this spec, before any of this spec's own edits.
+        const findFreshVerseText = async (verseNumber: string, verseRef: SerializedVerseRef) => {
+          const freshChapter = await getChapterUsj(verseRef);
+          const freshVerseText = findVerseText(freshChapter.content ?? [], verseNumber);
+          if (!freshVerseText)
+            throw new Error(`No plain text found for John 2:${verseNumber} in a fresh read`);
+          return freshVerseText;
+        };
+
+        const assertLiteralSurvives = async (failureMessage: string) => {
+          // Poll every 100 ms for 1.5 s, inverted: the poll only stops early if a read is found
+          // MISSING the still-unfinished literal (recording that read's live text), and
+          // otherwise exhausts the full window.
+          let collapsedToLiveText: string | undefined;
+          try {
+            await expect
+              .poll(
+                async () => {
+                  const liveText = (await editorInput.textContent()) ?? '';
+                  if (liveText.includes(incompleteLiteral)) return false;
+                  collapsedToLiveText = liveText;
+                  return true;
+                },
+                { timeout: 1_500, intervals: [100] },
+              )
+              .toBe(true);
+          } catch {
+            // Timed out without ever finding the literal missing: it survived the whole window.
+          }
+          expect(collapsedToLiveText, failureMessage).toBeUndefined();
+        };
+
+        const assertCaretStillExtendsLiteralInPlace = async () => {
+          // The caret is still exactly where the literal left it: one more keystroke extends
+          // the SAME literal in place, rather than landing elsewhere or starting a fresh edit.
+          await editorInput.pressSequentially('r', { delay: 30 });
+          await expect(editorInput).toContainText(`${incompleteLiteral}r`, { timeout: 5_000 });
+          await editorInput.press('Backspace');
+          await expect(editorInput).toContainText(incompleteLiteral, { timeout: 5_000 });
+        };
+
+        // The saved word this verse started with is untouched by any of the above, but its
+        // JSONPath may not be: the incomplete literal's own new slot can shift it, so re-read
+        // fresh rather than trusting the pre-typing path.
+        const sameNodeVerseText = await findFreshVerseText('6', TYPING_PROBE_VERSE_REF);
+        if (!sameNodeVerseText.text.startsWith(SAME_NODE_WORD))
+          throw new Error(
+            `Expected the fresh John 2:6 text to start with "${SAME_NODE_WORD}", got: ${sameNodeVerseText.text}`,
+          );
+        await sendToEditorController(editorId, 'setAnnotation', [
+          {
+            start: chapterLocation(TYPING_PROBE_VERSE_REF, sameNodeVerseText.jsonPath, 0),
+            end: chapterLocation(
+              TYPING_PROBE_VERSE_REF,
+              sameNodeVerseText.jsonPath,
+              SAME_NODE_WORD.length,
+            ),
+          },
+          ANNOTATION_TYPE,
+          SAME_NODE_ANNOTATION_ID,
+        ]);
+        await assertLiteralSurvives(
+          'a setAnnotation on a saved word in the SAME text node as the pending caret must not disturb typing still in progress',
+        );
+        await assertCaretStillExtendsLiteralInPlace();
+
+        const sameNodeMark = editorInput.locator(`mark.annotationId-${SAME_NODE_ANNOTATION_ID}`);
+        await expect(sameNodeMark).toHaveCount(1, { timeout: 15_000 });
+        expect(await sameNodeMark.textContent()).toBe(SAME_NODE_WORD);
+
+        // Control: the same kind of call, but against a word in a DIFFERENT, already-separate
+        // text node of the same paragraph (a USJ `\p` here spans several verses) — isolating
+        // whether it is specifically a split of the pending caret's OWN node that matters. Read
+        // fresh again: the SAME-node annotation just above adds its own new slot too.
+        const controlVerseTextFresh = await findFreshVerseText('7', CONTROL_VERSE_REF);
+        if (!controlVerseTextFresh.text.startsWith(CONTROL_WORD))
+          throw new Error(
+            `Expected the fresh John 2:7 text to start with "${CONTROL_WORD}", got: ${controlVerseTextFresh.text}`,
+          );
+        await sendToEditorController(editorId, 'setAnnotation', [
+          {
+            start: chapterLocation(CONTROL_VERSE_REF, controlVerseTextFresh.jsonPath, 0),
+            end: chapterLocation(
+              CONTROL_VERSE_REF,
+              controlVerseTextFresh.jsonPath,
+              CONTROL_WORD.length,
+            ),
+          },
+          ANNOTATION_TYPE,
+          CONTROL_ANNOTATION_ID,
+        ]);
+        await assertLiteralSurvives(
+          'a setAnnotation on a saved word in a DIFFERENT text node must not disturb typing still in progress either',
+        );
+        await assertCaretStillExtendsLiteralInPlace();
+
+        const controlMark = editorInput.locator(`mark.annotationId-${CONTROL_ANNOTATION_ID}`);
+        await expect(controlMark).toHaveCount(1, { timeout: 15_000 });
+        expect(await controlMark.textContent()).toBe(CONTROL_WORD);
+      } finally {
+        await setUserSetting(MARKER_SETTLE_DELAY_SETTING_KEY, DEFAULT_MARKER_SETTLE_DELAY_MS);
+      }
     });
   });
 });
