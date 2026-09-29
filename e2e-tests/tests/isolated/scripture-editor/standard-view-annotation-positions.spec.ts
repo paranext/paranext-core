@@ -35,12 +35,13 @@
  *   untouched.
  * - A position at the very end of the chapter's last text resolves to that text's own path and
  *   offset, not to the preceding verse's own `['number']` location.
- * - A `setAnnotation` on an already-saved word does not interrupt an UNRELATED marker edit still
- *   being typed earlier in the same text node, with the editor's own idle-settle clock switched off
- *   so only the caret leaving (never attempted here) could settle it: the typed literal survives
- *   verbatim, further keystrokes still extend it in place, and the annotation lands on exactly the
- *   saved word — checked once against a word in the SAME text node as the pending caret, and once
- *   more, as a control, against a word in a DIFFERENT text node of the same paragraph.
+ * - A `setAnnotation` on a char span's own SAVED content word does not interrupt an UNFINISHED
+ *   attribute the user is still typing into that SAME span, right after that word, with the
+ *   editor's own idle-settle clock switched off so only the caret leaving (never attempted here)
+ *   could settle it: the typed literal survives verbatim, a further keystroke still extends it in
+ *   place, and the annotation lands on exactly the saved word — checked once against the word
+ *   sharing the pending caret's own text node, and once more, as a control, against a word in a
+ *   DIFFERENT text node of the same paragraph.
  *
  * Every scenario that calls `setAnnotation` or `selectRange` talks to the editor through the
  * scripture editor's web view controller network object (`object:webViewController<webViewId>.…`),
@@ -143,17 +144,21 @@ const LAST_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 25 };
 
 /**
  * John 2:6 ("Now there were six water pots of stone...") is a plain sentence, untouched by any
- * earlier step. The last step types an INCOMPLETE `\w` marker literal into it — no closing quote,
- * no closer — right after its own first word, so that word stays in the exact SAME Lexical text
- * node as the pending caret (nothing has split it off yet). John 2:7, in the SAME paragraph (a USJ
- * `\p` here spans several verses), gives an ALREADY-SEPARATE text node for the control case.
+ * earlier step, that the last step types a FRESH, COMPLETE `\w` span into (content plus closer) —
+ * the same shape {@link SPAN_VERSE_REF}'s span already proved settles into its own carrier
+ * immediately (its closer completes the marker, one of the engine's own IMMEDIATE-rebuild triggers;
+ * see `markerEditTier2Trigger.utils.ts`'s "backslash sequence completed by a separator or `*`
+ * closer" case). Typing an attribute onto that span's content AFTER its closer already exists is a
+ * DIFFERENT case in the same engine: a bare `|…` bounded by an existing closer carries no
+ * backslash, so the immediate-rebuild path never fires — it just pends the CONTENT node's own key
+ * for caret-departure settling, so the span's saved word and the pending attribute bytes stay in
+ * that one, same, unsplit text node — confirmed, while this step was under development, by reading
+ * each DOM node's own Lexical key (its `__lexicalKey_<editorKey>` own property) for both the caret
+ * and the span's saved word right before the setAnnotation call below and finding them equal; that
+ * one-off check is not part of the committed step. John 2:7, in the SAME paragraph (a USJ `\p` here
+ * spans several verses), gives an ALREADY-SEPARATE text node for the control case.
  */
 const TYPING_PROBE_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 6 };
-/**
- * The saved, untouched word the first `setAnnotation` targets: right before the pending edit, in
- * the SAME text node as the caret.
- */
-const SAME_NODE_WORD = 'Now';
 /**
  * Same paragraph as {@link TYPING_PROBE_VERSE_REF} (a USJ `\p` spans several verses here), but its
  * own, already-separate text node — the control.
@@ -537,17 +542,16 @@ test.describe('scripture editor settled positions', () => {
       await pollLastVerseText(lastText);
     });
 
-    await test.step('a setAnnotation on an already-saved word does not interrupt an unrelated marker edit still being typed', async () => {
+    await test.step("a setAnnotation on a char span's own saved word does not interrupt an unfinished attribute typed into that SAME span, right after that word", async () => {
       const verseSixText = findVerseText(chapterUsj.content ?? [], '6');
       if (!verseSixText) throw new Error("No plain text found for John 2:6 in the chapter's USJ");
-      if (!verseSixText.text.startsWith(`${SAME_NODE_WORD} `))
+      // The offset right after the text's first word and its following space — the front of
+      // the text's own second word, where the fresh span below is inserted.
+      const insertionOffset = verseSixText.text.indexOf(' ') + 1;
+      if (insertionOffset <= 0)
         throw new Error(
-          `Expected John 2:6's text to start with "${SAME_NODE_WORD} ", got: ${verseSixText.text}`,
+          `Expected at least two words in John 2:6's text, got: ${verseSixText.text}`,
         );
-      // Right after the saved word and its following space — the front of the text's own
-      // second word, and still the SAME Lexical text node the saved word itself is part of,
-      // since nothing has been typed into this verse yet.
-      const insertionOffset = SAME_NODE_WORD.length + 1;
 
       const controlVerseText = findVerseText(chapterUsj.content ?? [], '7');
       if (!controlVerseText)
@@ -557,9 +561,10 @@ test.describe('scripture editor settled positions', () => {
           `Expected John 2:7's text to start with "${CONTROL_WORD}", got: ${controlVerseText.text}`,
         );
 
-      // Turn the idle settle clock off BEFORE typing anything below, so no idle timeout can
-      // settle this edit at any point — only a caret departure could (never attempted in this
-      // step), which isolates whatever effect the setAnnotation calls below have on their own.
+      // Turn the idle settle clock off before typing anything below, so no idle timeout can
+      // settle either edit at any point — only a caret departure could, and this step
+      // deliberately never attempts one: it is the spec's last step, against a throwaway
+      // isolated project, so neither the span nor its unfinished attribute needs cleaning up.
       await setUserSetting(MARKER_SETTLE_DELAY_SETTING_KEY, -1);
       try {
         // Place the caret by position, the same collapsed-placement path the very first
@@ -578,18 +583,54 @@ test.describe('scripture editor settled positions', () => {
           })
           .toEqual({ jsonPath: verseSixText.jsonPath, offset: insertionOffset });
 
-        // Type an INCOMPLETE `\w` marker literal — content, then an attribute key and an
-        // unfinished value, with no closing quote and no `\w*` closer — and stop there. The
-        // caret sits at its own end, mid-edit.
-        const incompleteLiteral = `\\${WORD_MARKER} ${INCOMPLETE_MARKER_WORD}|lemma="${INCOMPLETE_ATTRIBUTE_VALUE_PREFIX}`;
-        await editorInput.pressSequentially(incompleteLiteral, { delay: 30 });
+        // Type a FRESH, COMPLETE `\w` span — content and closer both — the same
+        // literal-USFM-typing technique the pending-attribute step above uses. Its own closer
+        // completes the marker, one of the engine's immediate-rebuild triggers, so it settles
+        // into its own carrier right away, independent of the idle clock above.
+        await editorInput.pressSequentially(
+          `\\${WORD_MARKER} ${INCOMPLETE_MARKER_WORD}\\${WORD_MARKER}*`,
+          { delay: 30 },
+        );
+        await expect(editorInput).toContainText(INCOMPLETE_MARKER_WORD, { timeout: 15_000 });
+        // `.last()`: the pending-attribute step above already settled its own `\w` span in
+        // John 2:5, earlier in the document than this one.
+        const wCloser = editorInput.locator(`span.closing[data-marker="${WORD_MARKER}"]`).last();
+        await expect(wCloser).toBeAttached({ timeout: 15_000 });
+
+        // Click just inside the left edge of the new span's own closer — the same boundary the
+        // pending-attribute step above clicks to append after a span's own text.
+        const closerBox = await wCloser.boundingBox();
+        if (!closerBox) throw new Error('The new \\w span closing glyph has no bounding box');
+        await wCloser.click({ position: { x: 1, y: closerBox.height / 2 } });
+
+        // The settled span splits this text's own array slot into three (text before, the new
+        // marker, text after) in place, so the span's own path is this text's index chain with
+        // its own last index moved forward by 1 — the same arithmetic the display-bytes step
+        // above uses for its own span.
+        const textIndex = verseSixText.indexes.at(-1);
+        if (textIndex === undefined) throw new Error('findVerseText returned an empty index chain');
+        const spanPath = contentJsonPath([...verseSixText.indexes.slice(0, -1), textIndex + 1]);
+        // The span's own content — its saved word — one level deeper than the span's own
+        // element.
+        const spanContentPath = `${spanPath}.content[0]`;
+
+        // Type an UNFINISHED attribute onto the span's own content, right after its saved word
+        // — no closing quote, and no need for a new closer since the span's own closer already
+        // exists. A bare `|…` bounded by an existing closer carries no backslash, so the
+        // engine's immediate-rebuild path never fires for it — it just pends the content node's
+        // own key for caret-departure settling, in place, rather than restructuring anything.
+        // The caret sits at its own end, mid-edit.
+        const incompleteLiteral = `${INCOMPLETE_MARKER_WORD}|lemma="${INCOMPLETE_ATTRIBUTE_VALUE_PREFIX}`;
+        await editorInput.pressSequentially(`|lemma="${INCOMPLETE_ATTRIBUTE_VALUE_PREFIX}`, {
+          delay: 30,
+        });
         await expect(editorInput).toContainText(incompleteLiteral, { timeout: 15_000 });
 
-        // The incomplete literal gives its own paragraph's content array a new slot for the
-        // pending node, shifting every LATER sibling's own index in that SAME paragraph —
+        // The incomplete literal, and the span itself, each give this paragraph's content
+        // array a new slot, shifting every LATER sibling's own index in that SAME paragraph —
         // including John 2:7's, several verses later in the same USJ `\p`. Re-read the chapter
-        // fresh right before each setAnnotation below, rather than reusing the indexes read at
-        // the top of this spec, before any of this spec's own edits.
+        // fresh right before the control setAnnotation below, rather than reusing the index
+        // read at the top of this spec, before any of this spec's own edits.
         const findFreshVerseText = async (verseNumber: string, verseRef: SerializedVerseRef) => {
           const freshChapter = await getChapterUsj(verseRef);
           const freshVerseText = findVerseText(freshChapter.content ?? [], verseNumber);
@@ -599,8 +640,8 @@ test.describe('scripture editor settled positions', () => {
         };
 
         const assertLiteralSurvives = async (failureMessage: string) => {
-          // Poll every 100 ms for 1.5 s, inverted: the poll only stops early if a read is found
-          // MISSING the still-unfinished literal (recording that read's live text), and
+          // Poll every 100 ms for 1.5 s, inverted: the poll only stops early if a read is
+          // found MISSING the still-unfinished literal (recording that read's live text), and
           // otherwise exhausts the full window.
           let collapsedToLiveText: string | undefined;
           try {
@@ -616,7 +657,8 @@ test.describe('scripture editor settled positions', () => {
               )
               .toBe(true);
           } catch {
-            // Timed out without ever finding the literal missing: it survived the whole window.
+            // Timed out without ever finding the literal missing: it survived the whole
+            // window.
           }
           expect(collapsedToLiveText, failureMessage).toBeUndefined();
         };
@@ -630,39 +672,33 @@ test.describe('scripture editor settled positions', () => {
           await expect(editorInput).toContainText(incompleteLiteral, { timeout: 5_000 });
         };
 
-        // The saved word this verse started with is untouched by any of the above, but its
-        // JSONPath may not be: the incomplete literal's own new slot can shift it, so re-read
-        // fresh rather than trusting the pre-typing path.
-        const sameNodeVerseText = await findFreshVerseText('6', TYPING_PROBE_VERSE_REF);
-        if (!sameNodeVerseText.text.startsWith(SAME_NODE_WORD))
-          throw new Error(
-            `Expected the fresh John 2:6 text to start with "${SAME_NODE_WORD}", got: ${sameNodeVerseText.text}`,
-          );
+        // The span's own saved word shares the pending caret's own text node (see this file's
+        // own {@link TYPING_PROBE_VERSE_REF} doc comment): typing a bare `|…` after an existing
+        // closer pends that content node in place instead of restructuring the paragraph.
         await sendToEditorController(editorId, 'setAnnotation', [
           {
-            start: chapterLocation(TYPING_PROBE_VERSE_REF, sameNodeVerseText.jsonPath, 0),
+            start: chapterLocation(TYPING_PROBE_VERSE_REF, spanContentPath, 0),
             end: chapterLocation(
               TYPING_PROBE_VERSE_REF,
-              sameNodeVerseText.jsonPath,
-              SAME_NODE_WORD.length,
+              spanContentPath,
+              INCOMPLETE_MARKER_WORD.length,
             ),
           },
           ANNOTATION_TYPE,
           SAME_NODE_ANNOTATION_ID,
         ]);
         await assertLiteralSurvives(
-          'a setAnnotation on a saved word in the SAME text node as the pending caret must not disturb typing still in progress',
+          "a setAnnotation on the span's own saved word must not disturb the attribute still being typed into that SAME span",
         );
         await assertCaretStillExtendsLiteralInPlace();
 
         const sameNodeMark = editorInput.locator(`mark.annotationId-${SAME_NODE_ANNOTATION_ID}`);
         await expect(sameNodeMark).toHaveCount(1, { timeout: 15_000 });
-        expect(await sameNodeMark.textContent()).toBe(SAME_NODE_WORD);
+        expect(await sameNodeMark.textContent()).toBe(INCOMPLETE_MARKER_WORD);
 
         // Control: the same kind of call, but against a word in a DIFFERENT, already-separate
-        // text node of the same paragraph (a USJ `\p` here spans several verses) — isolating
-        // whether it is specifically a split of the pending caret's OWN node that matters. Read
-        // fresh again: the SAME-node annotation just above adds its own new slot too.
+        // text node of the same paragraph — isolating whether it is specifically a split of
+        // the pending caret's OWN node that matters.
         const controlVerseTextFresh = await findFreshVerseText('7', CONTROL_VERSE_REF);
         if (!controlVerseTextFresh.text.startsWith(CONTROL_WORD))
           throw new Error(
