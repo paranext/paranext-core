@@ -6,6 +6,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { WebViewProps } from '@papi/core';
+import type { PickerResource } from './downloaded-resources.utils';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — must be before any import that touches the component
@@ -19,6 +20,7 @@ const {
   mockUseInstallDblResource,
   mockUseProjectData,
   mockFindCachedDblResource,
+  mockUseScrollGroupScrRef,
 } = vi.hoisted(() => ({
   mockUseEffectiveResourceReferenceList: vi.fn(),
   mockUseDblResourceAutoInstall: vi.fn(),
@@ -27,6 +29,7 @@ const {
   mockUseInstallDblResource: vi.fn(),
   mockUseProjectData: vi.fn(),
   mockFindCachedDblResource: vi.fn(),
+  mockUseScrollGroupScrRef: vi.fn(),
 }));
 
 // @papi/frontend — papi default export used for themes subscription and commands
@@ -75,6 +78,7 @@ vi.mock('@papi/frontend/react', () => ({
   useSetting: vi.fn(() => ['simple', false]),
   useDialogCallback: vi.fn(() => vi.fn()),
   usePromise: vi.fn(() => [undefined, false]),
+  useScrollGroupScrRef: (...args: unknown[]) => mockUseScrollGroupScrRef(...args),
 }));
 
 // platform-bible-react — keep UI components real; stub hooks that hit runtime
@@ -193,10 +197,6 @@ function makeProps(
         return [defaultValue, vi.fn()];
       },
     ),
-    useWebViewScrollGroupScrRef: vi.fn(() => [
-      { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
-      vi.fn(),
-    ]),
     ...overrides,
   } as unknown as WebViewProps;
 }
@@ -261,6 +261,10 @@ function resetPanelHooks() {
   mockUseInstallDblResource.mockImplementation(() => vi.fn(async () => {}));
   mockUseProjectData.mockReturnValue({ ChapterUSJ: vi.fn(() => [undefined, false]) });
   mockFindCachedDblResource.mockReturnValue(undefined);
+  mockUseScrollGroupScrRef.mockReturnValue([
+    { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
+    vi.fn(),
+  ]);
   // Module-scoped, so it outlives `restoreAllMocks` and has to be cleared explicitly.
   setUsjSpy.mockClear();
 }
@@ -437,5 +441,73 @@ describe('ResourceTextPanel — install against a stale catalog', () => {
 
     await waitFor(() => expect(setUsjSpy).toHaveBeenCalledWith(CHAPTER_USJ));
     expect(mockUseProjectData).toHaveBeenLastCalledWith('platformScripture.USJ_Chapter', 'WEB1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Versification conversion frame
+// ---------------------------------------------------------------------------
+
+/**
+ * A picker row for a project-reference resource whose project is `projectId` — i.e. a resource that
+ * lives in a DIFFERENT project from the panel's own container project.
+ */
+function makeProjectRow(projectId: string | undefined): PickerResource {
+  return {
+    reference: { type: 'project', name: 'Vulgate', id: 'resource-reference-id' },
+    source: 'user',
+    isAdminLocked: false,
+    type: 'ScriptureResource',
+    installed: true,
+    projectId,
+  };
+}
+
+/** Renders the panel over `rows`, with the referenced list settled so selection can resolve. */
+function renderWithRows(rows: PickerResource[]) {
+  mockUseEffectiveResourceReferenceList.mockReturnValue({
+    status: 'ready',
+    list: { dataVersion: '1.0.0', items: [] },
+  });
+  mockUseResourcePickerResources.mockReturnValue([rows, false]);
+
+  const ResourceTextPanel = getResourceTextPanel();
+  return render(<ResourceTextPanel {...makeProps()} />);
+}
+
+/** The conversion-frame argument of every `useScrollGroupScrRef` call made during a render. */
+function conversionFrames(): unknown[] {
+  return mockUseScrollGroupScrRef.mock.calls.map((call) => call[2]);
+}
+
+// The panel's own `projectId` prop is the CONTAINER project whose reference list is shown; the
+// chapter on screen comes from the selected resource's project, which may use a different
+// versification. Converting into the container's frame would show the wrong verse and would stamp
+// the container as the scroll group's source on a verse click. Asserted on the conversion-frame
+// argument rather than on rendered text because the conversion itself lives in the platform hook,
+// which is mocked here — what belongs to this consumer is which project it asks to convert into.
+describe('ResourceTextPanel — versification conversion frame', () => {
+  it('follows the scroll group in the displayed resource’s versification, not the container project’s', () => {
+    renderWithRows([makeProjectRow('resource-project-id')]);
+
+    expect(mockUseScrollGroupScrRef).toHaveBeenCalled();
+    expect(conversionFrames()).toContain('resource-project-id');
+    expect(conversionFrames()).not.toContain('test-project-id');
+  });
+
+  it('passes no conversion frame before a resource resolves', () => {
+    renderWithRows([]);
+
+    expect(mockUseScrollGroupScrRef).toHaveBeenCalled();
+    conversionFrames().forEach((frame) => expect(frame).toBeUndefined());
+  });
+
+  // A row can be in the list with no local project yet (a DBL resource still installing). There is
+  // nothing to convert into, and passing the container project would reintroduce the wrong frame.
+  it('passes no conversion frame for a selected row that has no project yet', () => {
+    renderWithRows([makeProjectRow(undefined)]);
+
+    expect(mockUseScrollGroupScrRef).toHaveBeenCalled();
+    conversionFrames().forEach((frame) => expect(frame).toBeUndefined());
   });
 });
