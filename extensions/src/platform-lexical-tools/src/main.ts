@@ -35,6 +35,10 @@ const dictionaryWebViewProvider: IWebViewProvider = {
 
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
+    // Re-read every call so mode changes are picked up at open/replace/restore time, matching the
+    // other fixed Column 3 panels (e.g. comment-list-panel-web-view.factory.ts).
+    const interfaceMode = await papi.settings.get('platform.interfaceMode');
+
     return {
       ...savedWebView,
       title: '%platformLexicalTools_dictionary_title_sdbhSdbg%',
@@ -42,7 +46,13 @@ const dictionaryWebViewProvider: IWebViewProvider = {
       styles: tailwindCssStyles,
       shouldShowToolbar: true,
       projectId,
-      scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
+      // In Simple mode this is the pinned Column 3 tab, forced onto scroll group 0 to stay
+      // verse-synced with the Scripture editor (also forced to 0 there) regardless of which editor
+      // last invoked `openDictionary` — matches Bible Texts/Commentaries/Comments' own forcing.
+      // Power mode preserves whichever scroll group the invoking editor asked to follow.
+      scrollGroupScrRef: interfaceMode === 'simple' ? 0 : getWebViewOptions.editorScrollGroupId,
+      iconUrl: 'papi-extension://platformLexicalTools/assets/text-initial.svg',
+      isClosable: interfaceMode === 'power',
     };
   },
 };

@@ -148,6 +148,7 @@ describe('shipped Simple-mode Column 3 order', () => {
     expect(columnWebViewTypes(simpleLayout, 2)).toEqual([
       'platformScriptureEditor.bibleTexts',
       'platformScriptureEditor.commentaries',
+      'platformLexicalTools.dictionary',
       'legacyCommentManager.commentListPanel',
       'platformScripture.find',
     ]);
@@ -221,6 +222,7 @@ describe('shipped Simple-mode Column 3 order', () => {
       platformScripture: 'extensions/src/platform-scripture/src',
       platformScriptureEditor: 'extensions/src/platform-scripture-editor/src',
       legacyCommentManager: 'extensions/src/legacy-comment-manager/src',
+      platformLexicalTools: 'extensions/src/platform-lexical-tools/src',
     };
 
     /**
@@ -265,6 +267,7 @@ describe('shipped Simple-mode Column 3 order', () => {
     expect(columnWebViewTypes(merged, 2)).toEqual([
       'platformScriptureEditor.bibleTexts',
       'platformScriptureEditor.commentaries',
+      'platformLexicalTools.dictionary',
       'legacyCommentManager.commentListPanel',
       'platformScriptureEditor.scriptureTextGrid',
       'platformScripture.find',

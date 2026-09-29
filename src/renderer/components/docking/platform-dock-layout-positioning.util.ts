@@ -103,6 +103,7 @@ const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
   [SCRIPTURE_EDITOR_WEBVIEW_TYPE]: HEADLESS_GROUP,
   'platformScriptureEditor.bibleTexts': TAB_GROUP_RESOURCES,
   'platformScriptureEditor.commentaries': TAB_GROUP_RESOURCES,
+  'platformLexicalTools.dictionary': TAB_GROUP_RESOURCES,
   'legacyCommentManager.commentListPanel': TAB_GROUP_RESOURCES,
   'platformScriptureEditor.scriptureTextGrid': TAB_GROUP_RESOURCES,
   'platformScripture.find': TAB_GROUP_RESOURCES,
