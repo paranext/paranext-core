@@ -511,8 +511,10 @@ export function OverlayCommandPalettePresentational({
   // Passive mode: focus never leaves the requesting WebView — the session owner there claims the
   // keystrokes and feeds them back through `filterText` — so the input is a read-only display of
   // that query and is kept out of the tab order. Making it editable would break the palette: a
-  // focused input means the WebView is NOT focused, and both session owners gate their keydown
-  // tables on editor focus, so every ratified Space/Enter/Escape semantic would stop running.
+  // focused input here takes the keystrokes out of the requesting WebView's document, and both
+  // session owners (the web view and the footnote editor) route keys into the session only from
+  // their own editor or page — the input lock blurs the editor while a session is open, so its keys
+  // land on the page — so every ratified Space/Enter/Escape semantic would stop running.
   const searchInput = (
     <CommandInput
       ref={passive ? undefined : inputRef}
@@ -529,10 +531,9 @@ export function OverlayCommandPalettePresentational({
     />
   );
 
-  // PT-4611: passive mode renders plain elements instead of cmdk items, so cmdk's own
-  // `scrollIntoView` on the selected item never runs — the host-driven highlight moved with the
-  // arrows while the visible rows stayed put, and Enter then committed a marker the user had never
-  // seen (reproduced: `\li2`, ~15 rows below the fold). Keep the highlighted row in view here.
+  // Passive mode renders plain elements instead of cmdk items, so cmdk's own `scrollIntoView` on
+  // the selected item never runs. Without this, the host-driven highlight can move below the fold
+  // while the visible rows stay put, and Enter then commits an item the user never saw.
   // `block: 'nearest'` so a row that is already visible does not jump the list under the pointer.
   const highlightedDomId = highlightedItem ? getPassiveItemDomId(highlightedItem.id) : undefined;
   useEffect(() => {
@@ -669,12 +670,11 @@ export function OverlayCommandPalettePresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-command-palette
-        // PT-4611: the `Command` inside already paints the whole panel — opaque `bg-popover`, a 1px
-        // border, and `rounded-xl!`. PopoverContent's own base paints a second one at the same rect
-        // (`bg-popover`, `ring-1 ring-foreground/10`, `rounded-lg`), so both were stacked, and
-        // because the radii differ (lg = base radius, xl = base + 4px) the outer's corners, ring and
-        // shadow showed around the inner's border as a second panel edge — on every open of every
-        // palette, which is what PT-4611 reported as "two palettes stacked".
+        // The `Command` inside already paints the whole panel — opaque `bg-popover`, a 1px border,
+        // and `rounded-xl!`. PopoverContent's own base paints a second one at the same rect
+        // (`bg-popover`, `ring-1 ring-foreground/10`, `rounded-lg`), and because the radii differ
+        // (lg = base radius, xl = base + 4px) the outer's corners, ring and shadow would show
+        // around the inner's border as a second panel edge, reading as two stacked palettes.
         //
         // Keep only the drop shadow here (this IS the floating surface): transparent background,
         // no ring (the inner's border is the one outline), and `rounded-xl` to match the inner's

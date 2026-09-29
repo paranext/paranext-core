@@ -1086,7 +1086,7 @@ export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
  * - `'enter'` — the Enter-split menu at a collapsed caret, for choosing the marker of the paragraph
  *   the split creates. Its only commit is the highlighted item (Enter or Tab). Forwarded, so the
  *   table owns its filter characters, Backspace and arrows; nothing it accepts may reach the
- *   document, because the overlay cannot rely on holding browser focus (PT-4188, PT-4611).
+ *   document, because the overlay cannot rely on holding browser focus (PT-4188).
  * - `'selection'` — the selection-wrap palette, opened with text selected. EVERY non-chord key is
  *   claimed, because anything that landed would replace the wrapped selection. Space wraps the
  *   selection in the marker the filter names exactly (ignoring case and the `+` nesting prefix);
@@ -1180,13 +1180,8 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
 export type MarkerPaletteKeyOutcome = "passed" | "continue" | "ended";
 /**
  * The session kinds whose FILTER and per-key semantics this forwarding table drives — every kind.
- *
- * `'enter'` was excluded until PT-4611, on the premise that the Enter-split palette is always
- * FOCUSED and its own input owns every key, so only the sub-frame race before the overlay took
- * focus could reach this table. That premise does not hold: the overlay never wins that race, so
- * the keys this table passed through landed in the document instead. Keeping every kind forwarded
- * means no palette depends on holding browser focus, which is the constraint PT-4188 documented
- * (Lexical re-grabs focus on every reconcile).
+ * Every kind is forwarded so that no palette depends on holding browser focus, which it cannot do
+ * reliably: Lexical re-grabs focus on every reconcile (PT-4188).
  */
 export type ForwardedSessionKind = MarkerPaletteSessionKind;
 /**
@@ -1208,7 +1203,7 @@ export type ForwardedSessionKind = MarkerPaletteSessionKind;
  * pins the reverse direction, failing on a listed key the handler no longer acts on. Pure modifiers
  * are excluded: the table only passes them through, and claiming them would break `+` chords.
  *
- * Both kinds currently claim the SAME set — the per-kind parameter is deliberate room for the key
+ * Every kind currently claims the SAME set — the per-kind parameter is deliberate room for the key
  * sets to diverge later, not a difference today.
  */
 export declare function getMarkerPaletteClaimedKeys(kind: ForwardedSessionKind): string[];
@@ -1278,8 +1273,7 @@ export declare function createMarkerPaletteInputLock(): MarkerPaletteInputLock;
 export interface MarkerPaletteOpenSession<TItem extends {
 	marker: string;
 }> extends MarkerPaletteSessionState {
-	/** Only the two forwarded kinds: the Enter-split (`'enter'`) palette has its own open path. */
-	kind: ForwardedSessionKind;
+	kind: MarkerPaletteSessionKind;
 	/** Identifies this session to async settle-time cleanup, from the consumer's monotonic counter. */
 	token: number;
 	items: readonly TItem[];
@@ -1298,11 +1292,11 @@ export interface RunMarkerPaletteSessionOptions<TItem extends {
 	 */
 	items: readonly TItem[];
 	/**
-	 * Selects the session flavor: `true` opens the collapsed-caret `'backslash'` session (shown in
-	 * the overlay's non-focus-stealing display), `false` the FOCUSED selection-wrap `'selection'`
-	 * session.
+	 * The session's kind (see `MarkerPaletteSessionKind`). `'selection'` is the one FOCUSED palette;
+	 * the others are shown in the overlay's non-focus-stealing (passive) display, and the consumer's
+	 * `show` must display them that way.
 	 */
-	passive: boolean;
+	kind: MarkerPaletteSessionKind;
 	/**
 	 * See {@link MarkerPaletteSessionState.shouldSpaceCommit}. Attached to `'backslash'` sessions only
 	 * — Space over a selection is the wrap commit, which has no typed-literal route to except.
@@ -1310,9 +1304,8 @@ export interface RunMarkerPaletteSessionOptions<TItem extends {
 	shouldSpaceCommit?: (filter: string) => boolean;
 	/**
 	 * The consumer's monotonic token allocator. Caller-owned (not module state) so ALL of a
-	 * consumer's palette opens — including kinds outside this spine, like the web view's Enter-split
-	 * palette — draw from ONE sequence and stale-settlement cleanup stays totally ordered across
-	 * them.
+	 * consumer's palette opens draw from ONE sequence and stale-settlement cleanup stays totally
+	 * ordered across them.
 	 */
 	sessionCounterRef: React$1.MutableRefObject<number>;
 	/** Stores the freshly created session as the consumer's current one. */

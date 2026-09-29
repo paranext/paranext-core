@@ -1,11 +1,12 @@
 /**
- * Shared open-session orchestration for standard-view `\` marker palettes — the ONE spine behind
- * BOTH consumers' `openMarkerPalette` flows (`platform-scripture-editor.web-view.tsx` and
- * `footnote-editor.component.tsx`), the same way `marker-palette-keydown.util.ts` is the one
- * while-open forwarding table. Neither consumer may carry its own copy: the spine owns session
- * token allocation, session construction, the key-forwarding declaration, and the show promise's
- * settlement handling — the commit ordering (restore the caret, focus, apply), the dismissal
- * refocus, and the failure cleanup — so the two palettes cannot drift apart in any of those.
+ * Shared open-session orchestration for standard-view marker palettes — the ONE spine behind every
+ * palette both consumers open (`platform-scripture-editor.web-view.tsx`'s `\` and Enter-split
+ * palettes, and `footnote-editor.component.tsx`'s `\` palette), the same way
+ * `marker-palette-keydown.util.ts` is the one while-open forwarding table. Neither consumer may
+ * carry its own copy: the spine owns session token allocation, session construction, the
+ * key-forwarding declaration, and the show promise's settlement handling — the commit ordering
+ * (restore the caret, focus, apply), the dismissal refocus, and the failure cleanup — so the two
+ * palettes cannot drift apart in any of those.
  *
  * What GENUINELY differs between the consumers stays caller-supplied through
  * {@link RunMarkerPaletteSessionOptions}:
@@ -16,15 +17,16 @@
  *   focus-out capture, and only the popover has a meaningful last-resort target (the end of its
  *   single note).
  * - The `'backslash'` Space exception (`shouldSpaceCommit`), the failure logging (`onShowError`), and
- *   the editor-side `focusEditor`/`applyItem` handles.
+ *   the editor-side `focusEditor`/`applyItem` handles (the Enter-split palette's apply splits the
+ *   paragraph).
  */
 
 import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import type { MutableRefObject } from 'react';
 import {
   getMarkerPaletteClaimedKeys,
-  type ForwardedSessionKind,
   type MarkerPaletteKeyEvent,
+  type MarkerPaletteSessionKind,
   type MarkerPaletteSessionState,
 } from '@/components/advanced/marker-palette-keydown.util';
 
@@ -36,8 +38,7 @@ import {
  */
 export interface MarkerPaletteOpenSession<TItem extends { marker: string }>
   extends MarkerPaletteSessionState {
-  /** Only the two forwarded kinds: the Enter-split (`'enter'`) palette has its own open path. */
-  kind: ForwardedSessionKind;
+  kind: MarkerPaletteSessionKind;
   /** Identifies this session to async settle-time cleanup, from the consumer's monotonic counter. */
   token: number;
   items: readonly TItem[];
@@ -55,11 +56,11 @@ export interface RunMarkerPaletteSessionOptions<TItem extends { marker: string }
    */
   items: readonly TItem[];
   /**
-   * Selects the session flavor: `true` opens the collapsed-caret `'backslash'` session (shown in
-   * the overlay's non-focus-stealing display), `false` the FOCUSED selection-wrap `'selection'`
-   * session.
+   * The session's kind (see `MarkerPaletteSessionKind`). `'selection'` is the one FOCUSED palette;
+   * the others are shown in the overlay's non-focus-stealing (passive) display, and the consumer's
+   * `show` must display them that way.
    */
-  passive: boolean;
+  kind: MarkerPaletteSessionKind;
   /**
    * See {@link MarkerPaletteSessionState.shouldSpaceCommit}. Attached to `'backslash'` sessions only
    * — Space over a selection is the wrap commit, which has no typed-literal route to except.
@@ -67,9 +68,8 @@ export interface RunMarkerPaletteSessionOptions<TItem extends { marker: string }
   shouldSpaceCommit?: (filter: string) => boolean;
   /**
    * The consumer's monotonic token allocator. Caller-owned (not module state) so ALL of a
-   * consumer's palette opens — including kinds outside this spine, like the web view's Enter-split
-   * palette — draw from ONE sequence and stale-settlement cleanup stays totally ordered across
-   * them.
+   * consumer's palette opens draw from ONE sequence and stale-settlement cleanup stays totally
+   * ordered across them.
    */
   sessionCounterRef: MutableRefObject<number>;
   /** Stores the freshly created session as the consumer's current one. */
@@ -120,7 +120,7 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
 ): void {
   const {
     items,
-    passive,
+    kind,
     shouldSpaceCommit,
     sessionCounterRef,
     setSession,
@@ -135,7 +135,10 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
 
   sessionCounterRef.current += 1;
   const token = sessionCounterRef.current;
-  const kind: ForwardedSessionKind = passive ? 'backslash' : 'selection';
+  // Focus goes back to the editor when a palette is dismissed, except after a `\` palette: there
+  // the user dismissed a palette they opened mid-typing, and focus is left to the overlay host's
+  // own focus restore.
+  const refocusOnDismiss = kind !== 'backslash';
   const session: MarkerPaletteOpenSession<TItem> = { kind, token, filter: '', items };
   if (kind === 'backslash' && shouldSpaceCommit) session.shouldSpaceCommit = shouldSpaceCommit;
   setSession(session);
@@ -162,9 +165,7 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
         focusEditor();
         const selected = items.find((item) => item.marker === id);
         if (selected) applyItem(selected);
-      } else if (!passive) {
-        // Focused palette dismissed: focus never left the passive case, but the focused palette's
-        // own search input had it, so bring it back to the editor.
+      } else if (refocusOnDismiss) {
         focusEditor();
       }
       return undefined;
@@ -173,7 +174,7 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
       // Replaced by a newer overlay request (PlatformError code ABORTED) or any other rejection —
       // treat the same as an explicit dismissal.
       clearSessionIfCurrent(token);
-      if (!passive) focusEditor();
+      if (refocusOnDismiss) focusEditor();
       onShowError(error);
     });
 }

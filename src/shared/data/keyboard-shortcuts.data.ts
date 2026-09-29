@@ -358,9 +358,10 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Enter and Tab are one commit gesture, matching the editor package's own menus. Over a
     // zero-match filter both are claimed no-ops (PT9 parity — the menu stays open). Enter also
-    // commits the Enter-triggered paragraph menu, through the forwarding table that now drives it.
-    // Only an UNMODIFIED Enter (or Tab) commits there: a chorded Ctrl/Cmd/Alt+Enter is claimed but
-    // inert, because only selecting a marker may change the scripture text (PT-4611 ruling).
+    // commits the Enter-triggered paragraph menu, through the same forwarding table. Only an
+    // UNMODIFIED Enter (or Tab) commits there: Enter or Tab with any modifier (Ctrl, Cmd, Alt or
+    // Shift) is claimed but inert, because only selecting a marker may change the scripture text
+    // (PT-4611 ruling).
     keys: { macOS: '⏎ / ⇥', windows: 'Enter / Tab', linux: 'Enter / Tab' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },
@@ -371,7 +372,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context:
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Arrow keys move the highlighted entry; Backspace widens the typed filter, or closes the
-    // menu when nothing is typed. Marker characters (letters, digits, `+`, `-`) narrow it.
+    // menu when nothing is typed. Marker characters (letters, digits, `+`, `-`) narrow it. In the
+    // Enter-triggered paragraph menu a Backspace with nothing typed is claimed but inert: closing
+    // there would discard the pending split, so only Escape dismisses it.
     keys: {
       macOS: '↑ / ↓ / ⌫',
       windows: 'Up / Down / Backspace',
@@ -389,7 +392,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // with no terminating space. Over a non-collapsed selection the selected content is replaced,
     // which is what typing a closing marker by hand has always done. In the Enter-triggered
     // paragraph menu it is claimed but inert: it is not a paragraph-marker gesture, and letting it
-    // through discarded the pending split (PT-4611).
+    // through would discard the pending split.
     keys: { macOS: '*', windows: '*', linux: '*' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },
@@ -401,7 +404,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Commits like Space but without the terminating space, then reopens for the backslash just
     // pressed, so a paired marker is one continuous flow. With nothing typed there is nothing to
-    // commit and the backslash lands as an ordinary character.
+    // commit and the backslash lands as an ordinary character. In the Enter-triggered paragraph
+    // menu it is claimed but inert, typed or not: only selecting a marker may change the scripture
+    // text there (PT-4611 product ruling), so nothing lands and the menu stays open.
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },

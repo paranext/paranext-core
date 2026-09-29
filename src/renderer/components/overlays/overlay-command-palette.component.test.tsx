@@ -822,6 +822,37 @@ describe('OverlayCommandPalettePresentational', () => {
       );
     });
 
+    it('should scroll the newly highlighted item into view when selectedIndex changes', () => {
+      // Passive items are plain elements, so cmdk's own scroll-to-selected never runs; without the
+      // palette doing it, a host-driven highlight can move below the fold unseen.
+      const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+      const { rerender } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={0}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      scrollIntoView.mockClear();
+
+      rerender(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={2}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const newlyHighlighted = screen.getByText('Close Tab').closest('[data-slot="command-item"]');
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+      expect(scrollIntoView.mock.contexts).toContain(newlyHighlighted);
+      scrollIntoView.mockRestore();
+    });
+
     it('should render items with role="option" and point the listbox aria-activedescendant at the highlighted item', () => {
       render(
         <OverlayCommandPalettePresentational

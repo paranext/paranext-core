@@ -78,29 +78,41 @@ subsequent typing filters the palette rather than reaching the document.
 `\f` specifically commits like Enter on Space, emergently: `\f ` tokenizes to the full note. An
 unknown marker settles as typed at a caret, and cannot be committed from the list.
 
-**The Enter-split palette (`'enter'` kind) is PASSIVE and fully table-driven** (PT-4611). It was
-designed as a focused palette owning its own keys, but the overlay never won the cross-frame focus
-fight, so every key the table passed through landed in the scripture text instead.
+**The Enter-split palette (`'enter'` kind) is PASSIVE and fully table-driven.** Its overlay does
+not hold browser focus, so the forwarding table owns every key of the session, as it does for
+`'backslash'`.
 
-It now guards its keys the way `'selection'` does, and for the same reason: it holds something that a
+It guards its keys the way `'selection'` does, and for the same reason: it holds something that a
 landing key would destroy. The web view claims the Enter and WITHHOLDS the paragraph split until the
-palette commits, so a key that reaches Lexical both lands in the text and discards the split.
-Therefore **nothing lands and nothing dismisses implicitly**: filter characters narrow the list,
-**Only selecting a marker may change the scripture text** (product ruling, PT-4611). Enter and Tab
-commit the highlighted item — that is a selection — and Escape dismisses. Everything else is claimed
-and ignored with the palette left open: filter characters narrow the list, and Space, `*`, `\`,
-a CHORDED Ctrl/Cmd/Alt+Enter, punctuation, navigation keys and anything outside the marker alphabet
-do nothing at all. Space in
-particular does NOT commit here, unlike in the `\` palette.
+palette commits, so a key that reached Lexical would both land in the text and discard the split.
+The product ruling is that **only selecting a marker may change the scripture text**, so nothing
+lands and nothing dismisses implicitly. "Inert" below means claimed and ignored, with the palette
+left open:
 
-**Composition keys are ignored, like every other non-selection key.** PT9's palette ignores
-non-basic-Latin and PT10 matches (product ruling, PT-4611). The character is not intercepted —
-measured in this Electron build, `beforeinput` for `insertCompositionText` is not cancelable and
-`compositionstart` accepts `preventDefault()` and composes regardless. Instead each editor that
+| Key                                                                            | Enter-split palette                                                                |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `a`–`z`, `A`–`Z`, `0`–`9`, `+`, `-`                                            | narrows the filter                                                                 |
+| Backspace                                                                      | widens the filter; with nothing typed, inert                                       |
+| ArrowUp / ArrowDown                                                            | moves the highlight                                                                |
+| Enter / Tab, unmodified                                                        | commits the highlighted item; with 0 matches, inert                                |
+| Enter / Tab with any modifier (Ctrl, Cmd, Alt or Shift)                        | inert                                                                              |
+| Escape                                                                         | closes the palette, document untouched                                             |
+| Space, `*`, `\`                                                                | inert — Space does NOT commit here, unlike in the `\` palette                      |
+| any other chord (Ctrl/Cmd/Alt + a key, e.g. Cmd+S, Cmd+C)                      | passed through unclaimed; the palette stays open and the chord does its normal job |
+| modifier-only, IME composition and dead keys                                   | passed through unclaimed; the palette stays open                                   |
+| every other key (punctuation, non-Latin and accented letters, navigation keys) | inert                                                                              |
+
+**Non-basic-Latin input is ignored, like every other non-selection key.** PT9's palette ignores
+non-basic-Latin and PT10 matches (product ruling). The table cannot stop a composed character on its
+own — measured in this Electron build, `beforeinput` for `insertCompositionText` is not cancelable
+and `compositionstart` accepts `preventDefault()` and composes regardless. Instead each editor that
 hosts a palette (the web view's main editor and the footnote popover) makes its content element
-non-editable for the life of a palette session, so composed input has nowhere to land. The same lock
-cancels `paste`, `cut` and `drop` into the element, which the editor would otherwise still apply,
-because it checks its own editable flag rather than the DOM attribute. Both come from the shared
+non-editable for the life of any palette session, so composed input has nowhere to land. With the
+element non-editable the browser starts no composition at all, so a dead key arrives as an ordinary
+keydown carrying its physical key code rather than 229, and the table passes it through with nothing
+to land. The same lock cancels `paste`, `cut` and `drop` into the element, which the editor would
+otherwise still apply because it checks its own editable flag rather than the DOM attribute; that is
+what keeps a passed-through Cmd+V or Cmd+X from changing the text. Both come from the shared
 `createMarkerPaletteInputLock` (`marker-palette-input-lock.util.ts` in `platform-bible-react`).
 
 With the editor blurred by the lock, keys land on the page, so both editors route a session's keys
@@ -108,12 +120,9 @@ from the page and from the editor, but never from any other element (a comment b
 editor turns read-only mid-session (an automatic Send/Receive), the web view ends the session, and
 until it does only Escape is routed: the editor's commit methods throw in read-only mode.
 
-One consequence worth knowing: with the element non-editable the browser starts no composition, so a
-dead key arrives as an ordinary keydown carrying its physical key code rather than 229. It therefore
-reaches the forwarding table, which ignores it rather than treating it as a commit.
-
-Contrast `'backslash'`, which deliberately lets an unrelated key land while dismissing: its `\` is
-already in the document, so nothing is pending and nothing is lost.
+Contrast `'backslash'`: an unrelated key dismisses that palette and lands, and Backspace with nothing
+typed dismisses it. That is safe there because nothing is pending — the `\` trigger never landed and
+no split is withheld — so dismissing discards only the palette itself.
 
 Every keyboard handler change here must also update `src/shared/data/keyboard-shortcuts.data.ts` — see
 `.claude/rules/keyboard-shortcuts-catalog.md`.

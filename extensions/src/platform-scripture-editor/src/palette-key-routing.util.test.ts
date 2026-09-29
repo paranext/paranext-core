@@ -12,13 +12,12 @@ const base = {
 
 describe('shouldRoutePaletteKey', () => {
   it('routes keys while a session is open even though the locked editor has lost focus', () => {
-    // PT-4611 regression guard. While a palette is open the editor is made non-editable so that
-    // non-basic-Latin cannot land (the only mechanism that works — `beforeinput` for
-    // `insertCompositionText` is not cancelable, and `compositionstart` accepts preventDefault and
-    // composes anyway). Making it non-editable blurs it, so a focus-only gate silently stopped
-    // routing: filtering died, Enter did nothing, and Escape could not even close the palette,
-    // leaving the editor locked. The table's own tests could not catch that — they call the table
-    // directly, so they stayed green while nothing reached it.
+    // While a palette is open the editor is made non-editable so that non-basic-Latin cannot land
+    // (the only mechanism that works — `beforeinput` for `insertCompositionText` is not
+    // cancelable, and `compositionstart` accepts preventDefault and composes anyway). That blurs
+    // it, so a focus-only gate would stop routing: no filtering, no Enter, and no Escape to close
+    // the palette, leaving the editor locked. The table's own tests cannot catch that — they call
+    // the table directly, so they stay green while nothing reaches it.
     expect(shouldRoutePaletteKey({ ...base, hasOpenSession: true, isEditorFocused: false })).toBe(
       true,
     );

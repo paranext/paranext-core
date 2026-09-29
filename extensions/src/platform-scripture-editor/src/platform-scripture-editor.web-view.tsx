@@ -77,10 +77,10 @@ import {
 import {
   clearPaletteSessionIfCurrent,
   createMarkerPaletteInputLock,
-  getMarkerPaletteClaimedKeys,
   handleMarkerPaletteSessionKeyDown,
   type MarkerPaletteKeyEvent,
   type MarkerPaletteOpenSession,
+  type MarkerPaletteSessionKind,
   runMarkerPaletteSession,
 } from 'platform-bible-react/experimental';
 import {
@@ -547,24 +547,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * which blurs the editor, so its caret is hidden until the session ends. The selection-wrap `\`
    * trigger opens a _focused_ palette tracked as `'selection'`.
    *
-   * `'enter'` guards against a second Enter re-opening a palette while the first request's
-   * round-trip to the overlay service is still in flight, and since PT-4611 its palette is PASSIVE
-   * like the `\` one — the forwarding table is its only key path, not a safety net (it was opened
-   * focused before, and the focus it relied on never arrived). `'selection'` still carries the
-   * capture-phase forwarding table as a SAFETY NET: focused palettes are designed to be driven by
-   * the renderer overlay's own input, but the cross-frame focus handoff can lose (the editor iframe
-   * re-grabs focus on Lexical commits), and without the safety net the keystrokes then hit the
-   * document instead — typing REPLACED the wrapped selection and Escape fell through to Lexical.
+   * `'enter'` is the Enter-split palette's session. It also guards against a second Enter
+   * re-opening a palette while the first request's round-trip to the overlay service is still in
+   * flight, and its palette is PASSIVE like the `\` one — the forwarding table is its only key
+   * path, not a safety net. `'selection'` still carries the capture-phase forwarding table as a
+   * SAFETY NET: focused palettes are designed to be driven by the renderer overlay's own input, but
+   * the cross-frame focus handoff can lose (the editor iframe re-grabs focus on Lexical commits),
+   * and without the safety net the keystrokes then hit the document instead — typing REPLACED the
+   * wrapped selection and Escape fell through to Lexical.
    *
    * `token` (allocated from the monotonic counter below) identifies which session an async
    * show-promise settlement belongs to, so a stale promise's cleanup can only clear its own
    * session, never a newer one (see `clearPaletteSessionIfCurrent`).
    */
-  const paletteSession = useRef<
-    | MarkerPaletteOpenSession<MarkerMenuItem>
-    | { kind: 'enter'; token: number; filter: string; items: MarkerMenuItem[] }
-    | undefined
-  >(undefined);
+  const paletteSession = useRef<MarkerPaletteOpenSession<MarkerMenuItem> | undefined>(undefined);
 
   /** Monotonic allocator for {@link paletteSession} tokens. */
   const paletteSessionCounter = useRef(0);
@@ -901,10 +897,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [paletteInputLock],
   );
 
-  /** Keeps the input lock in step with whether a palette session is open. */
-  const syncPaletteInputLock = useCallback(() => {
-    setPaletteInputLock(!!paletteSession.current);
-  }, [setPaletteInputLock]);
+  /**
+   * The ONLY writers of {@link paletteSession}: each keeps the input lock in step with it, so the
+   * editor is locked exactly while a palette session is open. A write that skipped the lock would
+   * leave the editor non-editable (and blurred) with no session left to release it.
+   */
+  const setPaletteSession = useCallback(
+    (session: MarkerPaletteOpenSession<MarkerMenuItem> | undefined) => {
+      paletteSession.current = session;
+      setPaletteInputLock(!!session);
+    },
+    [setPaletteInputLock],
+  );
+  /** Clears {@link paletteSession} only if it still holds the session `token` identifies. */
+  const clearPaletteSession = useCallback(
+    (token: number) => {
+      clearPaletteSessionIfCurrent(paletteSession, token);
+      setPaletteInputLock(!!paletteSession.current);
+    },
+    [setPaletteInputLock],
+  );
 
   /**
    * Ends the open marker-palette session the way the keydown table's Escape branch does — clear the
@@ -919,17 +931,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const dismissPaletteSessionIfOpen = useCallback(() => {
     if (!paletteSession.current) return;
-    paletteSession.current = undefined;
-    // Release the input lock with the session. Every other clear site does this; missing it here
-    // left the editor permanently `contenteditable="false"` when a scroll-group book/chapter change
-    // dismissed the palette, and `dismissCommandPalette` is a no-op if no palette is active yet, so
-    // the show promise may never settle to release it later. A locked editor also blurs, so no key
-    // routes anywhere and the user cannot type until the web view remounts.
-    setPaletteInputLock(false);
+    // Releases the input lock with the session. It cannot wait for the show promise to settle:
+    // `dismissCommandPalette` is a no-op if no palette is active yet, so that promise may never
+    // settle.
+    setPaletteSession(undefined);
     papi.overlays.dismissCommandPalette(webViewId).catch((error) => {
       logger.warn(`Error dismissing marker palette: ${getErrorMessage(error)}`);
     });
-  }, [webViewId, setPaletteInputLock]);
+  }, [webViewId, setPaletteSession]);
 
   // Book/chapter navigation replaces the document the palette was typing into, and it can arrive
   // with no input gesture in this window at all (a scroll group update driven from elsewhere), so
@@ -2040,17 +2049,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [showMarkersMenu]);
 
   /**
-   * Opens a marker-menu palette (the standard-view `\` trigger's apply path — see
-   * `EditorRef.applyMarkerMenuSelection`). Takes the already-resolved context/items so it can be
-   * reused wherever a marker menu needs to be shown from a `MarkerMenuContext` (e.g. the
-   * marker-glyph click popover), not just from the live keydown flow below.
-   *
-   * `passive` selects the collapsed-caret flavor: a `'backslash'` session driven entirely by the
-   * while-open forwarding table, shown in the overlay's non-focus-stealing (`passive: true`)
-   * display. Both flavors are ACTIVE — the caller claims the trigger and the table claims every
-   * filter character, so nothing of the palette's ever lands in the document.
-   */
-  /**
    * Always-current {@link runPaletteSessionKey} (assigned below, once it exists). The palette
    * captures its forwarded-key callback ONCE, when shown, while the handler it must run is rebuilt
    * whenever the session or its dependencies change — the ref is what keeps a long-lived callback
@@ -2058,26 +2056,36 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const runPaletteSessionKeyRef = useRef<(event: MarkerPaletteKeyEvent) => void>(() => {});
 
+  /**
+   * Opens a marker-menu palette of the given kind through the shared session spine. Takes the
+   * already-resolved context/items so it can be reused wherever a marker menu needs to be shown
+   * from a `MarkerMenuContext`, not just from the live keydown flow below.
+   *
+   * - `'backslash'` / `'selection'` — the `\` trigger's palettes (collapsed caret / text selected),
+   *   applied through `EditorRef.applyMarkerMenuSelection`.
+   * - `'enter'` — the Enter-triggered paragraph-split palette (`getEnterMenuItems`), applied through
+   *   `EditorRef.splitParagraphWithMarker`. The web view claimed the Enter, so the split is pending
+   *   until an item is chosen.
+   *
+   * Every kind is ACTIVE — the caller claims the trigger and the table claims every filter
+   * character, so nothing of the palette's ever lands in the document. Every kind but `'selection'`
+   * is shown PASSIVE: the overlay cannot hold browser focus against Lexical's reconciles (PT-4188),
+   * so the host drives its filter and highlight from the keys this web view forwards.
+   */
   const openMarkerPalette = useCallback(
-    (ctx: MarkerMenuAnchorContext, items: MarkerMenuItem[], openOptions: { passive: boolean }) => {
-      const { passive } = openOptions;
+    (ctx: MarkerMenuAnchorContext, items: MarkerMenuItem[], kind: MarkerPaletteSessionKind) => {
+      const isEnter = kind === 'enter';
       runMarkerPaletteSession({
         items,
-        passive,
+        kind,
         // Space COMMITS (like Enter) when the typed filter exactly names a NOTE marker:
         // materializing the typed `\f ` literal instead would hand it to the Tier-2
         // tokenizer, which mid-text absorbs the following word into the new footnote as its
         // caller. Committing inserts an empty footnote exactly like `\f` + Enter.
         shouldSpaceCommit: (filter) => shouldSpaceCommitNoteMarker(items, filter),
         sessionCounterRef: paletteSessionCounter,
-        setSession: (session) => {
-          paletteSession.current = session;
-          syncPaletteInputLock();
-        },
-        clearSessionIfCurrent: (token) => {
-          clearPaletteSessionIfCurrent(paletteSession, token);
-          syncPaletteInputLock();
-        },
+        setSession: setPaletteSession,
+        clearSessionIfCurrent: clearPaletteSession,
         // Through the ref so the palette always runs the CURRENT handler — the callback is
         // captured once, at show time, while the session it drives is replaced on every reopen.
         runSessionKey: (event) => runPaletteSessionKeyRef.current(event),
@@ -2090,7 +2098,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               // during that await were dropped.
               items: markerMenuItemsToResolvedPaletteItems(items, localizedStrings),
               anchor: ctx.anchorRect,
-              passive,
+              passive: kind !== 'selection',
               // Marker palettes filter on the label ONLY (the label IS the marker): an exact
               // typed marker must never be buried under items whose descriptions contain the
               // typed text.
@@ -2100,9 +2108,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               // "Search...". Passed as the key, not a resolved string: the overlay renders in the
               // renderer frame and localizes it there (the palette-open path only awaits
               // localization for ITEM text, so a key here does not reintroduce the
-              // dropped-keystroke window). Inert for the passive flavor, which has no search
-              // field.
-              placeholder: '%markerMenu_searchPlaceholder%',
+              // dropped-keystroke window). The paragraph menu has its own key, which says what
+              // that menu does.
+              placeholder: isEnter
+                ? '%markerMenu_searchPlaceholder_paragraph%'
+                : '%markerMenu_searchPlaceholder%',
               keyForwarding,
               // Exact containment only: typing a marker and pressing Space must agree
               // byte-for-byte with the rendered list (keyForwarding already forces this;
@@ -2118,17 +2128,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         restoreSelectionIfLost: () =>
           restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current),
         focusEditor: () => editorRef.current?.focus(),
-        applyItem: (selected) =>
+        applyItem: (selected) => {
+          if (isEnter) {
+            editorRef.current?.splitParagraphWithMarker(selected.marker);
+            return;
+          }
           editorRef.current?.applyMarkerMenuSelection(selected, {
             trigger: 'backslash',
             // ACTIVE palette: the trigger was claimed and never landed, so there is never a
             // literal prefix for the apply to clean up.
             literalPrefixLanded: false,
-          }),
-        onShowError: (error) => warnUnlessReplaced('marker palette', error),
+          });
+        },
+        onShowError: (error) =>
+          warnUnlessReplaced(isEnter ? 'Enter palette' : 'marker palette', error),
       });
     },
-    [webViewId, localizedStrings, syncPaletteInputLock],
+    [webViewId, localizedStrings, setPaletteSession, clearPaletteSession],
   );
 
   /**
@@ -2141,7 +2157,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (!ctx) return false;
     const items = getMarkerMenuItems(styleInfo ?? defaultStyleInfo, ctx);
     if (items.length === 0) return false;
-    openMarkerPalette(ctx, items, { passive: !ctx.hasTextSelection });
+    openMarkerPalette(ctx, items, ctx.hasTextSelection ? 'selection' : 'backslash');
     return true;
   }, [openMarkerPalette, styleInfo]);
 
@@ -2200,12 +2216,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       });
       // Clear only if this session is still the current one: a `\` commit opens a REPLACEMENT
       // session synchronously inside the table call, and an unconditional clear would kill it.
-      if (outcome === 'ended') {
-        clearPaletteSessionIfCurrent(paletteSession, session.token);
-        syncPaletteInputLock();
-      }
+      if (outcome === 'ended') clearPaletteSession(session.token);
     },
-    [webViewId, openMarkerPaletteAtCaret, syncPaletteInputLock],
+    [webViewId, openMarkerPaletteAtCaret, clearPaletteSession],
   );
 
   useEffect(() => {
@@ -2213,84 +2226,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [runPaletteSessionKey]);
 
   /**
-   * Opens the Enter-triggered paragraph-split palette (`getEnterMenuItems` /
-   * `EditorRef.splitParagraphWithMarker`). PASSIVE, like the collapsed-caret `\` palette: the
-   * overlay cannot hold browser focus against Lexical's reconciles (PT-4188), so the host drives
-   * both its filter and its highlight and this web view's capture listener forwards the keys.
-   * Opened FOCUSED until PT-4611, which is why typed characters landed in the scripture text under
-   * the open palette and the arrows moved the document caret instead of the highlight.
-   */
-  const openEnterPalette = useCallback(
-    (ctx: MarkerMenuAnchorContext, items: MarkerMenuItem[]) => {
-      paletteSessionCounter.current += 1;
-      const token = paletteSessionCounter.current;
-      paletteSession.current = { kind: 'enter', token, filter: '', items };
-      syncPaletteInputLock();
-
-      papi.overlays
-        .showCommandPalette(
-          {
-            // Pre-resolved for the same reason as the `\` palette above: no localization await,
-            // so the palette is drivable the moment it is requested.
-            items: markerMenuItemsToResolvedPaletteItems(items, localizedStrings),
-            anchor: ctx.anchorRect,
-            passive: true,
-            // Marker palette: label-only matching, same as the `\` palette above.
-            searchFields: ['label'],
-            // PT-4611: passive palettes DO render a search box (read-only, mirroring the host's
-            // filter text), so this one was captioned with the platform-generic "Search..." while
-            // the `\` palette beside it read "Type a style or search.". This key is the
-            // paragraph-specific one and says what the menu actually does.
-            placeholder: '%markerMenu_searchPlaceholder_paragraph%',
-            // Exact containment only, same as the `\` palette: what the host filters and what the
-            // commit resolves against must be the same list.
-            disableFuzzyMatching: true,
-            // Declared for the same reason the `\` palette declares it while passive: inert while
-            // the palette holds no focus, but it means a palette that unexpectedly DOES receive a
-            // key routes it to the session's table rather than acting on it itself. Without it,
-            // `spaceSelectsHighlightedItem` (`!keyForwarding`) would come out true for this palette
-            // alone, which contradicts the session's own Space semantics (PT-4611: claim, close,
-            // commit nothing).
-            keyForwarding: {
-              keys: getMarkerPaletteClaimedKeys('enter'),
-              onKey: (event) => runPaletteSessionKeyRef.current(event),
-            },
-          },
-          webViewId,
-        )
-        .then((id) => {
-          clearPaletteSessionIfCurrent(paletteSession, token);
-          syncPaletteInputLock();
-          // The palette is passive since PT-4611, so the editor normally keeps focus and its
-          // selection — but a MOUSE click on the palette still blurs it (the overlay renders
-          // outside the editor's document), and Lexical's blur processing can null the live
-          // selection. A nulled selection makes the split land at the document end (focus() cannot
-          // restore it). Put the caret back from the focus-out capture before splitting, same as
-          // the `\` palette above.
-          restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
-          if (id !== undefined) editorRef.current?.splitParagraphWithMarker(id);
-          editorRef.current?.focus();
-          return undefined;
-        })
-        .catch((error: unknown) => {
-          clearPaletteSessionIfCurrent(paletteSession, token);
-          syncPaletteInputLock();
-          editorRef.current?.focus();
-          warnUnlessReplaced('Enter palette', error);
-        });
-    },
-    [webViewId, localizedStrings, syncPaletteInputLock],
-  );
-
-  /**
    * `FootnoteEditor`'s marker-palette driver, wrapping `papi.overlays.*` with this web view's
    * `webViewId`. Built once and passed down so the popover's own editor gets the same PT9-parity
    * `\` palette as the main editor without `platform-bible-react` depending on the overlay service
-   * directly. Unlike `openMarkerPalette`/`openEnterPalette` above, this carries no session tracking
-   * of its own — the popover's `FootnoteEditor` owns its own session state and only needs the four
-   * overlay primitives forwarded through. Anchor coordinates from the popover's own inner editor
-   * are already iframe-relative (same iframe as this web view), so they're passed straight through
-   * with no translation.
+   * directly. Unlike `openMarkerPalette` above, this carries no session tracking of its own — the
+   * popover's `FootnoteEditor` owns its own session state and only needs the four overlay
+   * primitives forwarded through. Anchor coordinates from the popover's own inner editor are
+   * already iframe-relative (same iframe as this web view), so they're passed straight through with
+   * no translation.
    */
   const footnoteMarkerPalette = useMemo<FootnoteEditorMarkerPalette>(
     () => ({
@@ -2414,11 +2357,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Scoped to the MAIN editor instance via `isFocused()`, not a global `.editor-input` query:
       // the footnote-editor popover renders its own `.editor-input`, and a captured element goes
       // stale across an editor remount. Evaluated per-event so it always reflects current focus.
-      // PT-4611: an OPEN session admits keys whether or not the editor holds focus. While a palette
-      // is open the editor is deliberately non-editable (see `setPaletteInputLock`), which blurs it,
-      // so gating on `isFocused()` alone stopped every forwarded key — filtering, Enter and even
-      // Escape, leaving the palette stuck open and the editor locked. Opening a palette still
-      // requires focus: the trigger branches below are only reachable when no session is open.
+      // An OPEN session admits keys whether or not the editor holds focus: while a palette is open
+      // the editor is deliberately non-editable (see `setPaletteInputLock`), which blurs it, so a
+      // focus gate would stop every forwarded key — filtering, Enter and even Escape — leaving the
+      // palette stuck open and the editor locked. Opening a palette still requires focus: the
+      // trigger branches below are only reachable when no session is open.
       if (
         shouldRoutePaletteKey({
           viewType,
@@ -2468,7 +2411,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           if (items.length === 0) return;
           event.preventDefault();
           event.stopPropagation();
-          openEnterPalette(ctx, items);
+          openMarkerPalette(ctx, items, 'enter');
         }
       }
     };
@@ -2498,9 +2441,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
           (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
       if (isInsertCommentHotkey && !paletteSession.current) {
-        // Not while a marker palette is open (PT-4611). The table passes ordinary chords through
-        // unclaimed so Cmd+S and friends keep working, which let this ungated branch run behind an
-        // open palette: the comment anchors against an editor the palette has blurred (so its
+        // Not while a marker palette is open. The table passes ordinary chords through unclaimed so
+        // Cmd+S and friends keep working, so without this gate the branch would run behind an open
+        // palette: the comment anchors against an editor the palette has blurred (so its
         // Lexical selection may be null, landing the comment at the document tail), its popover
         // opens stacked on the palette, and dismissing the palette then pulls focus back out of the
         // comment box mid-typing. The Ctrl+T branch below is already gated this way.
@@ -2559,7 +2502,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     viewType,
     styleInfo,
     openMarkerPaletteAtCaret,
-    openEnterPalette,
+    openMarkerPalette,
   ]);
 
   // #endregion Keydown Routing

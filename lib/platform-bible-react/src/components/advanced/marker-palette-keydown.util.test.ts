@@ -194,12 +194,9 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
   });
 
   it('enter session ranks as a PASSIVE palette — the host drives its filter and highlight', () => {
-    // PT-4611 follow-up. Measured after making 'enter' forwarded: typing filtered correctly and
-    // nothing landed in the document, but Down moved neither the caret nor the palette's
-    // highlight. The arrow was claimed and `moveSelection` was sent; it rendered nowhere because
-    // the palette was opened active (`passive: false`), where cmdk owns the highlight and only
-    // responds to keys it receives directly — and a forwarded palette never has focus. A
-    // forwarded kind must rank passive so its commit agrees with the list the host is filtering.
+    // A forwarded palette never has focus, so it is opened passive and the host drives its filter
+    // and highlight (an active palette's highlight belongs to cmdk, which only responds to keys it
+    // receives directly). Its commit must therefore count matches the way the host filters.
     // 'd' PREFIXES nothing in these items (passive => zero matches => Enter no-ops), while a
     // focused/active palette would find 'd' CONTAINED in 'nd' and commit.
     const items = [{ marker: 'nd' }, { marker: 'add' }];
@@ -508,7 +505,7 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.commit).not.toHaveBeenCalled();
   });
 
-  it('Backspace on an empty filter is CLAIMED and closes the palette for every forwarded kind', () => {
+  it('Backspace on an empty filter is CLAIMED and closes the backslash and selection palettes', () => {
     // Editor-palette parity: with nothing typed there is nothing to widen — Backspace closes the
     // menu. Under the active palette nothing of the palette's ever landed, so an unclaimed
     // Backspace would eat a real document character (the passive palette relied on it deleting
@@ -547,12 +544,9 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
   });
 
   it('enter session: the palette owns its keys — filter, Backspace and arrows never reach the document', () => {
-    // PT-4611. This test previously pinned the opposite: 'enter' was excluded from forwarding on
-    // the assumption that the overlay is "always FOCUSED", so every key but Enter/Escape was
-    // passed through for a sub-frame focus race. Measured in the running app, the overlay never
-    // wins that race — typed characters were inserted into the scripture text under the open
-    // palette and Down moved the document caret instead of the palette highlight. 'enter' is now
-    // forwarded like the other kinds, so the table owns these keys.
+    // The overlay cannot hold browser focus against the editor, so the table owns these keys:
+    // an unclaimed filter character would land in the scripture text under the open palette, and
+    // an unclaimed arrow would move the document caret instead of the palette highlight.
     const driver = makeDriver();
 
     const filterChar = makeEvent('1');
@@ -573,13 +567,8 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
   });
 
   it('enter session: a printable key builds the filter instead of landing in the document', () => {
-    // PT-4611. The Enter-split palette was excluded from key forwarding on the assumption that it
-    // is "always FOCUSED with no key forwarding", so every key but Enter/Escape was passed
-    // through for the duration of a sub-frame focus race. Measured in Power/Standard view against
-    // an editable project, the overlay never wins that race: the palette shows its items, the
-    // filter stays empty, and each character typed at it is inserted into the SCRIPTURE TEXT
-    // underneath. Pressing Down moves the document caret rather than the palette's highlight.
-    // The palette must own its own keys the way 'backslash' and 'selection' do.
+    // The palette owns its own keys the way 'backslash' and 'selection' do; an unclaimed
+    // character would be inserted into the scripture text underneath the open palette.
     const driver = makeDriver();
     const state = session('enter', '');
     const event = makeEvent('q');
@@ -590,13 +579,11 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
   });
 
   it('enter session: nothing lands and the palette stays open — it guards a pending split like selection guards a selection', () => {
-    // PT-4611. 'enter' was modelled on 'backslash', the one kind that can safely let an unrelated
-    // key land ("backslash sessions let unrelated keys land while dismissing") because nothing is
-    // pending for it — its `\` is already in the document. 'enter' is the opposite: the web view
-    // CLAIMS the Enter and withholds the split until the palette commits, so a key that lands also
-    // discards the user's paragraph break. Same requirement 'selection' has, where a landing key
-    // would replace the wrapped text. Confirmed in the running app: `.` `,` `(` `?` `/` and every
-    // non-Latin character were inserted into the verse AND the split was lost.
+    // Unlike 'backslash', which can let an unrelated key land while dismissing because nothing is
+    // pending for it, 'enter' holds the user's paragraph split: the web view claims the Enter and
+    // withholds the split until the palette commits, so a key that landed would also discard the
+    // paragraph break. Same requirement 'selection' has, where a landing key would replace the
+    // wrapped text — except that dismissing is destructive here too, so the key is ignored.
     ['.', ',', '(', '?', '/', 'é', 'ñ', 'п', 'ArrowLeft', 'Home', 'Delete'].forEach((key) => {
       const driver = makeDriver();
       const state = session('enter', 'q');
@@ -611,16 +598,14 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     });
   });
 
-  it('enter session: a composition or dead key is ignored — PT9 parity, non-basic-Latin never lands', () => {
+  it('enter session: a composition or dead key neither commits nor dismisses — PT9 parity', () => {
     // Product ruling (Vladimir, PT-4611): "Palette's typing field just ignores non-basic-Latin" in
-    // PT9, and PT10 should match. An earlier attempt had composition COMMIT the split first, on the
-    // reasoning that it was the only option that could not lose the pending break. That was wrong:
-    // nothing but selecting a marker may change the scripture text, so the character is simply
-    // swallowed and the palette stays open.
+    // PT9, and PT10 should match. Nothing but selecting a marker may change the scripture text, so
+    // the key does not commit the pending split, and the palette stays open.
     //
-    // NOTE: claiming the keydown is not sufficient on its own — a composed character arrives
-    // through the editor's input path, not only as a keydown — so the web view also rejects
-    // non-basic-Latin input while a session is open. This pins the table half.
+    // The table passes the key through unclaimed: a composed character arrives through the
+    // editor's input path rather than as a keydown, and what keeps it out of the document is the
+    // consumer's input lock (`marker-palette-input-lock.util.ts`). This pins the table half.
     const cases = [
       { label: 'dead key', event: makeEvent('Dead') },
       { label: 'composition (keyCode 229)', event: makeEvent('Process', { keyCode: 229 }) },
@@ -629,7 +614,7 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     cases.forEach(({ label, event }) => {
       const driver = makeDriver();
       const outcome = handleMarkerPaletteSessionKeyDown(event, session('enter', 'q1'), driver);
-      expect({ label, outcome }).toEqual({ label, outcome: 'continue' });
+      expect({ label, outcome }).toEqual({ label, outcome: 'passed' });
       expect({ label, commits: driver.commit.mock.calls.length }).toEqual({ label, commits: 0 });
       expect(driver.dismiss).not.toHaveBeenCalled();
     });
@@ -642,10 +627,9 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     // opens this palette (PT9 parity), so an unclaimed one reaching Lexical would perform the
     // unmarked plain split the palette exists to prevent.
     //
-    // SHIFT counts as a modifier here. The chord guard tests only ctrl/meta/alt, so Shift+Enter and
-    // Shift+Tab previously fell through and committed — contradicting both this ruling and the
-    // keyboard-shortcuts catalog's "Only an UNMODIFIED Enter (or Tab) commits there". Shift+Tab in
-    // particular is "focus previous" everywhere else in the app and must not split a paragraph.
+    // SHIFT counts as a modifier here, matching the keyboard-shortcuts catalog's "Only an UNMODIFIED
+    // Enter (or Tab) commits there". Shift+Tab in particular is "focus previous" everywhere else in
+    // the app and must not split a paragraph.
     (['ctrlKey', 'metaKey', 'altKey', 'shiftKey'] as const).forEach((modifier) => {
       const driver = makeDriver();
       const event = makeEvent('Enter', { [modifier]: true });
@@ -664,12 +648,9 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
   });
 
   it('enter session: Backspace on an EMPTY filter is inert — it must not discard the pending split', () => {
-    // PT-4611 review. The kind-agnostic "Backspace on an empty filter closes the menu" branch was
-    // reachable for 'enter', so the natural "never mind" keystroke dismissed the palette, threw
-    // away the paragraph split the web view was withholding, AND was claimed so it did not delete
-    // the character before the caret either. Two keystrokes, nothing to show for them.
-    //
-    // It contradicts this kind's own rule: nothing dismisses implicitly, only Escape does.
+    // For the other kinds an empty-filter Backspace closes the menu. Here that would throw away the
+    // paragraph split the web view is withholding, and because the key is claimed it would not
+    // delete the character before the caret either. Only Escape dismisses this palette.
     const driver = makeDriver();
     const state = session('enter', '');
     const event = makeEvent('Backspace');
@@ -700,12 +681,10 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     });
   });
 
-  it('enter session: Enter commits during the focus race instead of reaching the document', () => {
-    // Enter-Enter is the whole gesture — open the split menu, accept its preselected choice — and
-    // the second Enter lands inside the palette's own focus retry window (up to twenty animation
-    // frames). Passing it through is not neutral: it reaches Lexical, which performs the unmarked
-    // plain split this palette exists to prevent, and leaves the palette open with nothing
-    // committed.
+  it('enter session: Enter with nothing typed commits the highlighted item', () => {
+    // Enter-Enter is the whole gesture — open the split menu, accept its preselected choice.
+    // Claimed: an Enter that reached Lexical would perform the unmarked plain split this palette
+    // exists to prevent.
     const driver = makeDriver();
     const event = makeEvent('Enter');
     expect(handleMarkerPaletteSessionKeyDown(event, session('enter', ''), driver)).toBe('ended');
@@ -714,8 +693,8 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.dismiss).not.toHaveBeenCalled();
   });
 
-  it('enter session: Escape dismisses during the focus race', () => {
-    // The counterpart: Escape means "no split", and passing it through leaves the palette open.
+  it('enter session: Escape dismisses the palette', () => {
+    // The counterpart: Escape means "no split".
     const driver = makeDriver();
     const event = makeEvent('Escape');
     expect(handleMarkerPaletteSessionKeyDown(event, session('enter', ''), driver)).toBe('ended');
@@ -872,7 +851,7 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     });
   });
 
-  it('Backspace edits a non-empty filter — claimed for every forwarded kind (nothing landed to delete)', () => {
+  it('Backspace edits a non-empty filter — claimed in backslash and selection sessions (nothing landed to delete)', () => {
     (['backslash', 'selection'] as const).forEach((kind) => {
       const driver = makeDriver();
       const state = session(kind, 'wj');
@@ -922,9 +901,8 @@ describe('getMarkerPaletteClaimedKeys', () => {
   // handler's branches; if the two drift, the forwarded half of a session behaves differently
   // from the focused one. The sweep below pins one drift direction behaviorally.
   it('claims every key the table acts on, for each forwarded session kind', () => {
-    // 'enter' is included as of PT-4611: the Enter-split palette is forwarded like the others, so
-    // it must claim the same keys or a focused palette consumes them instead of forwarding them
-    // back to the session.
+    // Every kind is forwarded, so each must claim these keys, or a palette that does receive focus
+    // consumes them instead of forwarding them back to the session.
     (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
       const keys = getMarkerPaletteClaimedKeys(kind);
       // The control keys the owner named explicitly, plus the ones the table has branches for.
@@ -961,8 +939,9 @@ describe('getMarkerPaletteClaimedKeys', () => {
     // filter), so a fallen-through key shows up here as an unclaimed dismissal. The 'selection'
     // kind's catch-all claims every key by design, so 'backslash' is the discriminating half of
     // the sweep; 'selection' still verifies every listed key is acted on rather than passed.
-    // 'enter' joined the forwarded kinds in PT-4611, so it belongs in this sweep too: its palette
-    // forwards every listed key back, and any key without a branch would land in the document.
+    // 'enter' rides along for the same limited reason as 'selection': its catch-all claims and
+    // ignores every key, so a stale entry is indistinguishable here from a listed one. For 'enter'
+    // the sweep verifies only that no listed key is passed through unclaimed.
     (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
       getMarkerPaletteClaimedKeys(kind).forEach((key) => {
         const driver = makeDriver();

@@ -800,7 +800,7 @@ export default function FootnoteEditor({
       const { passive } = openOptions;
       runMarkerPaletteSession({
         items,
-        passive,
+        kind: passive ? 'backslash' : 'selection',
         // No `shouldSpaceCommit`, deliberately: the Space note-marker exception exists for
         // Standard-view BODY text, where a materialized `\f ` literal absorbs the following word
         // as the new footnote's caller. This palette offers note-INTERNAL markers for content

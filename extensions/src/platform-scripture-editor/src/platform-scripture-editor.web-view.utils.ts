@@ -237,14 +237,18 @@ export interface EditingSessionActivityInput {
  * A palette session carries no time bound here: its lifecycle is owned by the overlay service's
  * show promise, which settles on select, dismiss, or replacement rejection.
  *
- * That guarantee is weaker since PT-4611. An `'enter'` session used to be dismissed by any
- * unrelated keystroke; now only Escape, a commit, a chapter change, or a gesture that reaches the
- * overlay service closes one, because nothing may implicitly discard the paragraph split it is
- * holding. So a palette left open and untouched keeps `isActive` true — deferring incoming PDP
- * updates and skipping the debounced save — for as long as it stays open. It is at least visible on
- * screen while that is true, unlike an orphaned note-session key, which is why this still has no
- * bound; if that proves insufficient, give palette sessions the same refreshed-at treatment the
- * note session has rather than reinstating dismiss-on-any-key.
+ * Settling is not bounded in time, though: an open palette closes only on Escape, a commit, a
+ * chapter change, or a gesture that reaches the overlay service, so a palette the user leaves open
+ * and untouched keeps `isActive` true for as long as it stays open. Known gap: while it does,
+ * `useEditorPdpSync` treats every differing same-document PDP update as an echo to defer — it keeps
+ * the incoming update unapplied and pushes the editor's content back up through
+ * `saveUsjToPdpIfUpdated`, which writes whatever differs from the incoming update. An external
+ * change that lands meanwhile (e.g. a Send/Receive merge delivering a collaborator's edit) is
+ * therefore overwritten by the editor's pre-merge content as soon as a write is accepted (a push
+ * made while an automatic Send/Receive holds the backend write gate is rejected; one after it
+ * clears is not). The window-blur flush of the debounced save is the only save path a palette
+ * session suppresses. Closing the gap means giving palette sessions a staleness bound like the note
+ * session's refreshed-at bound, not dismissing the palette on unrelated keys.
  *
  * @returns `isActive` — whether any live session should keep deferring incoming PDP updates;
  *   `isNoteSessionStale` — whether an open note session exceeded the bound (the caller must clear
