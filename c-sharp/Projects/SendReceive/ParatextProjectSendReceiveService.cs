@@ -1,5 +1,4 @@
 using Paranext.DataProvider.Services;
-using Paranext.DataProvider.Users;
 using static Paranext.DataProvider.NetworkObjects.Documentation.ExperimentalMethodDocumentation;
 
 namespace Paranext.DataProvider.Projects.SendReceive;
@@ -117,9 +116,7 @@ internal class ParatextProjectSendReceiveService(
 
     public async Task InitializeAsync()
     {
-        // Set up commands on the PAPI. The commands that contact the Send/Receive server check the
-        // internet setting here, at registration, rather than in their bodies: the Paratext 10
-        // Studio patch replaces the bodies, and the check must survive that.
+        // Set up commands on the PAPI
         await Task.WhenAll(
             PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.commitChanges",
@@ -131,11 +128,7 @@ internal class ParatextProjectSendReceiveService(
             ),
             PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.syncProjects",
-                (String[]? projectIds) =>
-                {
-                    InternetServicesGate.ThrowIfBlocked(PapiClient);
-                    SyncProjects(projectIds);
-                },
+                SyncProjects,
                 s_sendReceiveTimeout
             ),
             PapiClient.RegisterRequestHandlerAsync(
@@ -144,11 +137,7 @@ internal class ParatextProjectSendReceiveService(
             ),
             PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.breakSyncLock",
-                (List<string> projectIds) =>
-                {
-                    InternetServicesGate.ThrowIfBlocked(PapiClient);
-                    return BreakSyncLock(projectIds);
-                },
+                BreakSyncLock,
                 s_sendReceiveTimeout,
                 documentation: Create(
                     "Breaks (releases) the Send/Receive server-side repository lock for each given "
