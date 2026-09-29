@@ -33,7 +33,10 @@ export type ProjectSelectorProject = {
    * selection but can't toggle it again.
    */
   isDisabled?: boolean;
-  /** Human-readable explanation surfaced in the row tooltip when `isDisabled` is true. */
+  /**
+   * Human-readable explanation surfaced in the row tooltip, and to screen readers as the row's
+   * description, when `isDisabled` is true.
+   */
   disabledReason?: string;
   /**
    * Consumer-owned extra fields read by `ProjectSelectorGrouping.getGroupKey` implementations. The
@@ -208,8 +211,8 @@ export type ProjectRow = {
   isMuted: boolean;
   /**
    * True for a synthetic row representing a currently-selected (projectId, scrollGroupId) pair
-   * whose tab is not currently open. Rendered with a struck-through chip and an "Open" button that
-   * reopens the tab via `onOpenProjectInGroup`.
+   * whose tab is not currently open. Rendered with a struck-through chip and, unless the row is
+   * disabled, an "Open" button that reopens the tab via `onOpenProjectInGroup`.
    */
   isBoundButClosed: boolean;
   /**

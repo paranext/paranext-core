@@ -22,7 +22,7 @@ import {
   ResourceType,
 } from 'platform-bible-utils';
 import { ChevronDown } from 'lucide-react';
-import { ComponentProps, useCallback, useEffect, useMemo, useRef } from 'react';
+import { ComponentProps, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
@@ -220,6 +220,12 @@ export type ResourceTextPanelProps = {
   onShowResourcePicker: () => void;
   /** Logger forwarded to the editor (the web view supplies the PAPI logger; tests may omit it). */
   logger?: ComponentProps<typeof Editorial>['logger'];
+  /**
+   * The selected resource's copyright notice, shown under the selector whatever the content state
+   * (loading, missing book, error or text). The web view supplies it because reading the notice
+   * needs PAPI.
+   */
+  copyrightNotice?: ReactNode;
 };
 
 /**
@@ -265,6 +271,7 @@ export function ResourceTextPanel({
   isOnline,
   onShowResourcePicker,
   logger,
+  copyrightNotice,
 }: ResourceTextPanelProps) {
   // #region Content state
 
@@ -726,6 +733,8 @@ export function ResourceTextPanel({
           '%webView_resourcePanel_downloadResources%',
         )}
       />
+
+      {copyrightNotice}
 
       <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderContent()}</div>
     </div>

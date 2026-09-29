@@ -125,6 +125,7 @@ internal class DblResourcesDataProvider(
             ("installDblResource", InstallDblResource),
             ("uninstallDblResource", UninstallDblResource),
             ("isGetDblResourcesAvailable", IsGetDblResourcesAvailable),
+            ("listModelTextRestrictions", ListModelTextRestrictions),
         ];
     }
 
@@ -163,6 +164,42 @@ internal class DblResourcesDataProvider(
     #endregion
 
     #region Private properties and methods
+
+    /// <summary>
+    /// Which texts pickers must not offer as a model or base text. Answers from Biblica's list and
+    /// the installed projects alone, so it works offline and before the DBL catalog has loaded.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately does not take <see cref="_providerGate"/>. It only reads ScrTextCollection,
+    /// whose ScrTexts() copies the collection under ParatextData's own lock, so an install or
+    /// uninstall running alongside cannot fault the scan; it can only answer from just before or
+    /// just after it. Waiting on the gate would stall pickers behind an unbounded catalog download,
+    /// and giving up on a contended gate would have to answer "nothing is restricted".
+    /// </remarks>
+    internal Task<ModelTextRestrictions> ListModelTextRestrictions() =>
+        // Reading every installed project's settings can take a while; keep it off the JSON-RPC
+        // reading thread
+        Task.Run(() =>
+        {
+            List<string> projectIds = [];
+            foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.AllAccessible))
+            {
+                try
+                {
+                    if (BiblicaLicensing.IsRestricted(scrText))
+                        projectIds.Add(scrText.Guid.ToString().ToUpperInvariant());
+                }
+                catch (Exception e)
+                {
+                    // One unreadable project must not cost every picker its restrictions. It is
+                    // not named here because reading it is what just failed.
+                    Console.Error.WriteLine(
+                        $"Could not check a project's license for model text restrictions: {e}"
+                    );
+                }
+            }
+            return new ModelTextRestrictions([.. BiblicaLicensing.RestrictedTextIds], projectIds);
+        });
 
     /// <summary>
     /// Detect if DBL credentials have been configured. Does not check these credentials for

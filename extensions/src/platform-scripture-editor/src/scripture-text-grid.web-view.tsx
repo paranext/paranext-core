@@ -67,6 +67,7 @@ import { toGridResources } from './scripture-text-grid/grid-resources.utils';
 import { getGridBodyState } from './scripture-text-grid/grid-body-state.utils';
 import { isNonDblResource } from './resource-reference.utils';
 import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
+import { isEscapeForChapterContext } from './scripture-text-grid/chapter-context-escape.utils';
 import { useResourceContentZoom } from './scripture-text-grid/use-resource-content-zoom.hook';
 import {
   ZOOM_IN_KEY,
@@ -227,7 +228,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   }, [localizedStrings]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || chapterContext === undefined || viewMode !== 'verse') return;
+      if (chapterContext === undefined || viewMode !== 'verse' || !isEscapeForChapterContext(event))
+        return;
       event.preventDefault();
       event.stopPropagation();
       handleCloseChapterContext();
