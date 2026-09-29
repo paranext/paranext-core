@@ -97,6 +97,9 @@ internal class DblResourcesDataProvider(
     private const string DBL_UNREACHABLE_MESSAGE =
         "Could not retrieve the resource list from the DBL.";
 
+    private const string NO_COMPATIBLE_RESOURCES_MESSAGE =
+        "The resource list from the DBL contained no compatible resources.";
+
     // Replaceable so tests can drive the provider's fetch-failure handling without a live DBL.
     private readonly Func<List<InstallableResource>> _fetchCatalog =
         fetchCatalog ?? FetchAvailableDBLResources;
@@ -237,8 +240,9 @@ internal class DblResourcesDataProvider(
     }
 
     /// <summary>
-    /// Loads the DBL catalog into <see cref="_resources"/>, surfacing Paratext's trace-only 401 and
-    /// an unreachable DBL as an exception, and leaving <see cref="_resources"/> and
+    /// Loads the DBL catalog into <see cref="_resources"/>, surfacing Paratext's trace-only 401, an
+    /// unreachable DBL and a catalog with no whitelisted resource as an exception, and leaving
+    /// <see cref="_resources"/> and
     /// <see cref="_hasFetchedResources"/> untouched when it does. Call only while holding
     /// <see cref="_providerGate"/> (it touches the global Trace.Listeners bracket) and from a
     /// background thread (the network call blocks and has no timeout).
@@ -261,12 +265,19 @@ internal class DblResourcesDataProvider(
                 traceListener.FoundText,
                 alertScope.Entries
             );
-            _resources = fetched.Where(r => DblResourceWhiteList.IsValidResource(r)).ToList();
-            var excludedResources = fetched.Except(_resources).Select(r => r.Name).ToList();
+            var compatible = fetched.Where(r => DblResourceWhiteList.IsValidResource(r)).ToList();
+            var excludedResources = fetched.Except(compatible).Select(r => r.Name).ToList();
             excludedResources.Sort();
             Console.WriteLine(
                 $"Excluded resources (not confirmed to be compatible): {string.Join(", ", excludedResources)}\n"
             );
+            // A catalog the whitelist emptied is no catalog either. Accepting it would mark the
+            // catalog fetched, which stops install status answering from disk while the empty
+            // catalog reports nothing installed.
+            if (compatible.Count == 0)
+                throw new Exception(NO_COMPATIBLE_RESOURCES_MESSAGE);
+
+            _resources = compatible;
             _hasFetchedResources = true;
         }
         finally

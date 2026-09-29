@@ -566,4 +566,65 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
     // `LoadingView` renders) must be what's shown instead of the catalog-error view being absent.
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
+
+  it('shows the catalog-error view, and keeps a saved DBL selection, when only an unrelated resource resolved', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
+
+    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
+      selectedResourceId: `dbl:${CONFIGURED_DBL_REFERENCE.id}`,
+    });
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(screen.getByText('%webView_resourcePanel_catalogUnavailable%')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Local Project/ })).not.toBeInTheDocument();
+    const setSelectedResourceId = setters.get('selectedResourceId');
+    expect(setSelectedResourceId).toBeDefined();
+    expect(setSelectedResourceId).not.toHaveBeenCalled();
+  });
+
+  it('shows the catalog-error view for a saved DBL selection even when nothing is referenced', () => {
+    // A downloaded DBL resource picked while online is saved as `dbl:`, without being referenced.
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
+
+    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
+      selectedResourceId: 'dbl:downloaded-dbl-uid',
+    });
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(screen.getByText('%webView_resourcePanel_catalogUnavailable%')).toBeInTheDocument();
+    expect(setters.get('selectedResourceId')).not.toHaveBeenCalled();
+  });
+
+  it('renders a saved selection that resolved locally when the catalog failed', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
+
+    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
+      selectedResourceId: `project:${DOWNLOADED_ROW.projectId}`,
+    });
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(
+      screen.queryByText('%webView_resourcePanel_catalogUnavailable%'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Local Project/ })).toBeInTheDocument();
+    expect(setters.get('selectedResourceId')).not.toHaveBeenCalled();
+  });
 });
