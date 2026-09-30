@@ -1547,6 +1547,49 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Only the zoomability is held per open menu, not the whole item list, because Power mode's window targets arrive after the menu opens.
 - **Source:** UX feedback 2026-09-22; epic PT-4575.
 
+## adr-copy-limit-rule-lives-downstream: The copy-limit mechanism ships in public code; the rule that drives it ships in a private patch
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** Paratext 9 limits how much text can be copied at once from some texts, and its rule
+  was in closed code. Platform.Bible (`paranext-core`) is open source, so the rule cannot live in
+  this repo in any form.
+- **Decision:** Public code provides only the mechanism, and answers "no limit" everywhere:
+  - a read-only project data type, `platformScripture.CopyLimit` / `BookCopyLimits`, one array per
+    book with one entry per chapter, each a count of UTF-16 code units;
+  - a core hook, `useChapterCopyLimit`, that subscribes once per book and resolves the limit for
+    the chapter on screen;
+  - the editor option `EditorOptions.copyLimit`, whose plugin shortens an over-limit copy or cut
+    and blocks the Select All shortcut while a limit is set;
+  - an unknown limit — still loading, or the request failed — blocks copying for every text.
+
+  The Paratext 10 Studio patch supplies the actual rule by replacing the public "no limit" answer.
+- **Alternatives:**
+  - **A private extension implementing the whole feature** — rejected: it cannot tell "no
+    provider is installed" apart from "the answer just hasn't arrived yet."
+  - **The rule itself in public code** — rejected per the Product Owner's preference, given P10 is
+    open source.
+  - **Limiting the selection as it is made**, rather than at copy time — not chosen: Paratext 9
+    limits at copy time, and this keeps parity with it.
+  - **A per-chapter data type** (one request per chapter instead of per book) — rejected: it would
+    cause a blocked moment on every chapter change while the new chapter's limit is fetched.
+- **Consequences:**
+  - TSDoc and other public-facing docs describe only what a caller can observe — never the rule
+    itself. See `adr-closed-source-command-doc-altitude` for the same altitude discipline applied
+    to a different closed-source-backed command.
+  - Public tests exercise the mechanism with arbitrary limits, not real ones.
+  - Copy limits are refetched on every update the Paratext project data provider sends.
+  - A view passes a limit of `0` while its displayed chapter's text is still loading, because the
+    per-book limit can arrive before the new chapter's text does — so a chapter navigation blocks
+    copying for a moment even on an unlimited text.
+  - `BookCopyLimits` is indexed like the chapter-text endpoints, by the project's own chapter
+    numbers: only the selector's book is read, and its versification, chapter and verse are
+    ignored. The chapter-text endpoints fetch a chapter by its number in the project's own
+    versification, so a view indexes the limits with the same chapter number it fetches text with.
+  - A view showing chapter 0 (a book's introduction, shown with chapter 1) uses chapter 1's limit.
+
+- **Source:** [PT-4730](https://paratextstudio.atlassian.net/browse/PT-4730).
+
 ## adr-core-does-not-distribute-a-binary: `paranext-core` builds installers but publishes none
 
 - **Date:** 2026-09-04
@@ -1633,6 +1676,37 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   mismatched result where the two projects' versifications diverge at that reference. That gap is
   accepted as a consequence of this decision, not a defect in it, until PT-4031 lands.
 - **Source:** external code review, finding 16.
+## adr-data-update-scope-hook: A data type every update must refresh is added by an overridable hook on the base data provider
+
+- **Date:** 2026-09-30
+- **Status:** Accepted
+- **Context:** Some data a C# data provider serves is derived from other data it serves, so any
+  change to the provider's data may change it. `BookCopyLimits` on `ParatextProjectDataProvider`
+  is one: its subscribers must refetch it whenever the provider sends an update, and the provider
+  sends updates from dozens of call sites, each naming only the data types it changed.
+- **Decision:** `DataProvider.SendDataUpdateEventAsync` (`c-sharp/NetworkObjects/DataProvider.cs`)
+  calls a protected virtual hook, `ExpandDataUpdateScope(List<string> dataTypes)`, on every
+  update that names data types, and sends the list it returns. The base class decodes the scope
+  first: `"*"` already refreshes every data type, so it is sent without reaching the hook, and
+  nothing is sent for a blank data type or an empty list, before or after the hook. The hook gets a
+  list the base class owns, so an override may add to it and return it. A subclass adds the data
+  types it must always refresh there.
+- **Alternatives:**
+  - **A wrapper that call sites use instead of `SendDataUpdateEvent`** — rejected: every existing
+    call site would have to change, and a new one that calls the base method directly would skip
+    the refresh with nothing to catch it.
+  - **Naming the derived data type at every call site** — rejected for the same reason.
+  - **A test that scans the source for update calls that leave the data type out** — rejected: a
+    text match catches only the call shapes it was written for, while the hook makes the refresh
+    structural, so no call site can leave it out.
+- **Consequences:**
+  - Each subscriber to a data type added this way refetches it on every update the provider sends.
+    Narrow the hook to the scopes that can change the derived data if that cost starts to matter.
+  - An override should call `base.ExpandDataUpdateScope` first, so that a hook added lower in the
+    hierarchy keeps working; nothing enforces it.
+  - The hook sees decoded data types, never the wire encoding of the scope, so a change to that
+    encoding (see issue #443 in `paranext/paranext-core`) touches only the base class.
+
 ## adr-dbl-cache-recompute-on-read: The DBL resource cache recomputes derived flags on read, not on write
 
 - **Date:** 2026-09-01

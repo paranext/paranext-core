@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
@@ -24,8 +24,12 @@ import {
  */
 const setUsjSpy = vi.fn();
 
+/** Collects the `options` prop passed to each Editorial render. */
+const capturedEditorOptions = vi.fn();
+
 vi.mock('@eten-tech-foundation/platform-editor', () => ({
-  Editorial: React.forwardRef((_props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+  Editorial: React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+    capturedEditorOptions(props.options);
     React.useImperativeHandle(ref, () => ({ setUsj: setUsjSpy }));
     return <div data-testid="editorial" />;
   }),
@@ -143,6 +147,7 @@ function makeProps(overrides: Partial<ModelTextPanelProps> = {}): ModelTextPanel
     setUserModelTexts: vi.fn(async () => {}),
     showResourcePicker: vi.fn(async () => undefined),
     getResourceChapter: vi.fn(async () => ({ usj: undefined, textDirection: 'ltr' })),
+    resourceCopyLimit: undefined,
     ...overrides,
   };
 }
@@ -177,6 +182,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   // Module-scoped, so it outlives `restoreAllMocks` and has to be cleared explicitly.
   setUsjSpy.mockClear();
+  capturedEditorOptions.mockClear();
 });
 
 describe('ModelTextPanel', () => {
@@ -848,5 +854,72 @@ describe('ModelTextPanel', () => {
     expect(marker).not.toBe(scrollBox);
     expect(scrollBox.contains(marker)).toBe(true);
     expect(scrollBox.closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`)).toBeNull();
+  });
+
+  it('passes the resource copy limit into the editor options once the chapter has loaded', async () => {
+    renderPanel({
+      modelTextsState: readyState(configuredModelText('uid-web')),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter: vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' })),
+      resourceCopyLimit: 6,
+    });
+
+    await waitFor(() =>
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ copyLimit: 6 }),
+      ),
+    );
+  });
+
+  it('blocks copying from the render that changes chapter until the new chapter has loaded', async () => {
+    let resolveChapter2: (value: {
+      usj: typeof SAMPLE_USJ;
+      textDirection: string;
+    }) => void = () => {};
+    const getResourceChapter = vi.fn(async (_projectId: string, ref: { chapterNum: number }) =>
+      ref.chapterNum === 1
+        ? { usj: SAMPLE_USJ, textDirection: 'ltr' }
+        : new Promise<{ usj: typeof SAMPLE_USJ; textDirection: string }>((resolve) => {
+            resolveChapter2 = resolve;
+          }),
+    );
+    const props = {
+      modelTextsState: readyState(configuredModelText('uid-web')),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter,
+      resourceCopyLimit: 6,
+    };
+    const { rerender } = renderPanel({
+      ...props,
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
+    });
+    await waitFor(() =>
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ copyLimit: 6 }),
+      ),
+    );
+    const rendersBeforeChange = capturedEditorOptions.mock.calls.length;
+
+    // The new chapter's limit is already known when the reference changes.
+    rerender(
+      <ModelTextPanel
+        {...makeProps({
+          ...props,
+          scrRef: { book: 'GEN', chapterNum: 2, verseNum: 1, versificationStr: 'English' },
+          resourceCopyLimit: 20,
+        })}
+      />,
+    );
+
+    const [[optionsOnChange]] = capturedEditorOptions.mock.calls.slice(rendersBeforeChange);
+    expect(optionsOnChange).toEqual(expect.objectContaining({ copyLimit: 0 }));
+    expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ copyLimit: 0 }),
+    );
+
+    await act(async () => resolveChapter2({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
+    expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ copyLimit: 20 }),
+    );
   });
 });

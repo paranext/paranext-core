@@ -991,6 +991,71 @@ declare module 'platform-scripture' {
 
   // #endregion Scripture Edit Permissions Types
 
+  // #region Copy Limit Types
+
+  /** Data types for limiting how much text can be copied at once */
+  export type CopyLimitProjectInterfaceDataTypes = {
+    /**
+     * Read-only. Maximum number of UTF-16 code units (JavaScript string length, not grapheme
+     * clusters) that may be copied at once from each chapter of the selected book, indexed like the
+     * chapter-text endpoints, by the project's own chapter numbers (index 0 is unused). A missing
+     * entry, or an `undefined` result, means no limit; a limit of `0` means nothing may be copied.
+     * An implementation may impose a per-chapter limit on some texts. Copy surfaces showing this
+     * project's text should enforce it. Subscribe to react to changes; do not assume a cached value
+     * stays valid.
+     *
+     * The selector names the book (`book`); its `versificationStr`, `chapterNum` and `verseNum` are
+     * ignored, so pass `1` for both numbers.
+     */
+    BookCopyLimits: DataProviderDataType<
+      SerializedVerseRef,
+      (number | undefined)[] | undefined,
+      never
+    >;
+  };
+
+  /** Provides per-chapter copy limits for this project */
+  export type ICopyLimitProjectDataProvider =
+    IProjectDataProvider<CopyLimitProjectInterfaceDataTypes> & {
+      /**
+       * Gets the most UTF-16 code units that may be copied at once from each chapter of the book
+       * `verseRef` names. See {@link CopyLimitProjectInterfaceDataTypes.BookCopyLimits}.
+       *
+       * @param verseRef Names the book. Its `versificationStr`, `chapterNum` and `verseNum` are
+       *   ignored; pass `1` for both numbers.
+       * @returns The limits, indexed like the chapter-text endpoints, by the project's own chapter
+       *   numbers (index 0 is unused). A missing entry, or `undefined` for the whole book, means no
+       *   limit; `0` means nothing may be copied from that chapter.
+       */
+      getBookCopyLimits(verseRef: SerializedVerseRef): Promise<(number | undefined)[] | undefined>;
+      /**
+       * This data cannot be changed. The C# project data provider registers `setBookCopyLimits`
+       * only to satisfy the data provider contract, and every call rejects at runtime.
+       */
+      setBookCopyLimits(
+        verseRef: SerializedVerseRef,
+        limits: never,
+      ): Promise<DataProviderUpdateInstructions<CopyLimitProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when the copy limits of the book `verseRef` names
+       * change
+       *
+       * @param verseRef Names the book. Its `versificationStr`, `chapterNum` and `verseNum` are
+       *   ignored; pass `1` for both numbers.
+       * @param callback Function to run with the updated limits, indexed as
+       *   {@link ICopyLimitProjectDataProvider.getBookCopyLimits} returns them
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function
+       */
+      subscribeBookCopyLimits(
+        verseRef: SerializedVerseRef,
+        callback: (limits: (number | undefined)[] | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
+  // #endregion Copy Limit Types
+
   // #region Find History Types
 
   /**
@@ -2982,6 +3047,7 @@ declare module 'papi-shared-types' {
     ITextConnectionSettingsProjectDataProvider,
     IUserEditorSettingsProjectDataProvider,
     IScriptureEditPermissionsProjectDataProvider,
+    ICopyLimitProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
     IInventoryDataProvider,
@@ -3016,6 +3082,7 @@ declare module 'papi-shared-types' {
     'platformScripture.textConnectionSettings': ITextConnectionSettingsProjectDataProvider;
     'platformScripture.userEditorSettings': IUserEditorSettingsProjectDataProvider;
     'platformScripture.scriptureEditPermissions': IScriptureEditPermissionsProjectDataProvider;
+    'platformScripture.CopyLimit': ICopyLimitProjectDataProvider;
   }
 
   export interface DataProviders {

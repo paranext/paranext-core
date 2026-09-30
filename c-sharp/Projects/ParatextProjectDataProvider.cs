@@ -182,6 +182,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("getFinalVerseNumbersInBook", GetFinalVerseNumbersInBook));
         retVal.Add(("setFinalVerseNumbersInBook", SetFinalVerseNumbersInBook));
 
+        retVal.Add(("getBookCopyLimits", GetBookCopyLimits));
+        retVal.Add(("setBookCopyLimits", SetBookCopyLimits));
+
         // PT9 interlinear methods are only registered when this PDP advertises
         // platformScripture.Pt9Interlinear. Published PDPs do not advertise it, so they skip
         // registration entirely instead of exposing methods their interface list never promised.
@@ -403,6 +406,18 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         _paratextProjects.Initialize();
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Adds <see cref="ProjectDataType.BOOK_COPY_LIMITS"/> to every update this provider sends that
+    /// names data types, so copy limits are refetched whenever any project data changes.
+    /// </summary>
+    protected override List<string> ExpandDataUpdateScope(List<string> dataTypes)
+    {
+        dataTypes = base.ExpandDataUpdateScope(dataTypes);
+        if (!dataTypes.Contains(ProjectDataType.BOOK_COPY_LIMITS))
+            dataTypes.Add(ProjectDataType.BOOK_COPY_LIMITS);
+        return dataTypes;
     }
 
     #endregion
@@ -2712,6 +2727,34 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// </summary>
     public bool SetFinalVerseNumbersInBook(int bookNum, int[] value) =>
         throw new NotSupportedException(VersificationReadOnlyMessage);
+
+    #endregion
+
+    #region Copy Limit (platformScripture.CopyLimit)
+
+    /// <summary>
+    /// Where <see cref="GetBookCopyLimits"/> gets its answer: always
+    /// <see cref="ResourceCopyLimit.GetBookCopyLimits"/> outside tests, which replace it to see
+    /// what is asked for.
+    /// </summary>
+    internal Func<ScrText, int, int?[]?> BookCopyLimitsSource { get; set; } =
+        ResourceCopyLimit.GetBookCopyLimits;
+
+    /// <summary>
+    /// Maximum number of UTF-16 code units that may be copied at once from each chapter of the book
+    /// <paramref name="verseRef"/> names, or <c>null</c> for no limit. Indexed like the chapter-text
+    /// endpoints, by the project's own chapter numbers (index 0 unused);
+    /// <paramref name="verseRef"/>'s versification, chapter and verse are ignored. Read-only.
+    /// </summary>
+    public int?[]? GetBookCopyLimits(VerseRef verseRef) =>
+        BookCopyLimitsSource(
+            LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id),
+            verseRef.BookNum
+        );
+
+    /// <summary>Read-only — always throws.</summary>
+    public bool SetBookCopyLimits(VerseRef verseRef, int?[]? value) =>
+        throw new NotSupportedException("Copy limits are read-only.");
 
     #endregion
 

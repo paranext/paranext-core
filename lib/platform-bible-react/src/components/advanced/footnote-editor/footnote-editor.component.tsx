@@ -38,7 +38,13 @@ import {
   RefObject,
 } from 'react';
 import '@/components/advanced/footnote-editor/editor-overrides.css';
-import { ABORTED, getErrorMessage, isPlatformError, type PaletteItem } from 'platform-bible-utils';
+import {
+  ABORTED,
+  getErrorMessage,
+  isPlatformError,
+  truncateToCopyLimit,
+  type PaletteItem,
+} from 'platform-bible-utils';
 import type { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -622,10 +628,16 @@ export default function FootnoteEditor({
     }
   }, [scrRef.book, scrRef.chapterNum]);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     const editorInput = editorParentRef.current?.getElementsByClassName('editor-input')[0];
-    if (editorInput?.textContent) {
-      navigator.clipboard.writeText(editorInput.textContent);
+    if (!editorInput?.textContent) return;
+    // The Copy button honors the same copy limit as a copy from the editor itself.
+    const text = truncateToCopyLimit(editorInput.textContent, editorOptions.copyLimit);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.warn(`Could not copy the footnote to the clipboard: ${getErrorMessage(error)}`);
     }
   };
 

@@ -131,6 +131,7 @@ export {
   transformAndEnsureRegExpRegExpArray,
   collapseMiddleWords,
 } from './string-util';
+export { truncateToCopyLimit } from './copy-limit.util';
 export { getPaneSizeLimits } from './pane-utils';
 export { newPlatformError, isPlatformError } from './platform-error';
 export { default as deepEqual } from './equality-checking';

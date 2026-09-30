@@ -1,11 +1,9 @@
-import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useDataProvider,
   useDialogCallback,
   useLocalizedStrings,
-  useProjectData,
   useProjectDataProvider,
   useProjectSetting,
   useSetting,
@@ -21,6 +19,7 @@ import {
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ResourceReferenceList } from 'platform-scripture';
+import { useChapterUsjWithCopyLimit } from './copy-limit/use-chapter-usj-with-copy-limit.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
@@ -356,27 +355,16 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // #endregion
 
-  // #region USJ Fetch
+  // #region USJ Fetch and copy limit
 
   // Chapter view: the whole chapter goes to Editorial, which navigates to scrRef. Deliberately NOT
   // sliced by scripture-text-grid/verse-display.utils — slicing would blank the verse-0 front
   // matter (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve
   // verse 0 to verse 1; whole-chapter surfaces like this one must not (see
   // `adr-single-verse-surfaces-resolve-verse-zero-to-one`).
-  const [usjPossiblyError, , isUsjLoading] = useProjectData(
-    'platformScripture.USJ_Chapter',
+  const { usjPossiblyError, isUsjLoading, copyLimit } = useChapterUsjWithCopyLimit(
     resourceProjectId,
-  ).ChapterUSJ(
-    useMemo(
-      () => ({
-        book: scrRef.book,
-        chapterNum: scrRef.chapterNum,
-        verseNum: 1,
-        versificationStr: scrRef.versificationStr,
-      }),
-      [scrRef.book, scrRef.chapterNum, scrRef.versificationStr],
-    ),
-    EMPTY_USJ,
+    scrRef,
   );
 
   // #endregion
@@ -497,6 +485,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       usjPossiblyError={usjPossiblyError}
       isUsjLoading={isUsjLoading}
       textDirection={textDirection}
+      copyLimit={copyLimit}
       isSelecting={isSelecting}
       isInstalling={isInstalling}
       installFailed={installFailed}
