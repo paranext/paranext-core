@@ -242,6 +242,45 @@ export function markerMenuItemToPaletteItem(item: EditorMarkerMenuItem): Palette
   };
 }
 
+/** How many units of a document `ops` insert: a string's length, one per embed. */
+function deltaOpsLength(ops: DeltaOp[]): number {
+  return ops.reduce(
+    (length, op) => length + (typeof op.insert === 'string' ? op.insert.length : 1),
+    0,
+  );
+}
+
+/** `ops` split into single units: one op per UTF-16 code unit of text, one per embed. */
+function deltaOpUnits(ops: DeltaOp[]): DeltaOp[] {
+  return ops.flatMap((op) =>
+    typeof op.insert === 'string'
+      ? op.insert
+          .split('')
+          .map((unit) =>
+            op.attributes ? { insert: unit, attributes: op.attributes } : { insert: unit },
+          )
+      : [op],
+  );
+}
+
+/** Whether `ops` begin with exactly the content `prefix` inserts, however either splits its text. */
+function deltaOpsStartWith(ops: DeltaOp[], prefix: DeltaOp[]): boolean {
+  const units = deltaOpUnits(ops);
+  const prefixUnits = deltaOpUnits(prefix);
+  return (
+    prefixUnits.length <= units.length &&
+    prefixUnits.every((unit, index) => deepEqual(unit, units[index]))
+  );
+}
+
+/** Whether `op` is an UNCLOSED note (`closed: "false"`, written with no closer). */
+function isUnclosedNoteOp(op: DeltaOp | undefined): boolean {
+  if (!op || !isInsertEmbedOpOfType('note', op)) return false;
+  // `closed` rides on the embed as an unknown attribute; the embed's type does not declare it.
+  const { note } = op.insert;
+  return !!note && 'closed' in note && note.closed === 'false';
+}
+
 /**
  * Function to convert a footnote/endnote type node to a cross-reference type node
  *
@@ -251,14 +290,6 @@ export function markerMenuItemToPaletteItem(item: EditorMarkerMenuItem): Palette
  *
  * @param op The node to be converted
  */
-/** How many units of a document `ops` insert: a string's length, one per embed. */
-function deltaOpsLength(ops: DeltaOp[]): number {
-  return ops.reduce(
-    (length, op) => length + (typeof op.insert === 'string' ? op.insert.length : 1),
-    0,
-  );
-}
-
 function footnoteToCrossReferenceOp(op: DeltaOp) {
   // The built-in type for the delta note ops does not contain the types for the attributes
   // so have to cast it here
@@ -448,21 +479,73 @@ export default function FootnoteEditor({
   const lastAppliedNoteOpRef = useRef<DeltaOpInsertNoteEmbed | undefined>(undefined);
 
   /**
-   * Text that has left the note but not yet reached the parent editor. This editor's paragraph
-   * holds the note alone, so anything that turns up after the note has left it - typing the note's
-   * closer (`\f*`) in the middle of an unclosed note closes the note there, and the rest of what
-   * was in it belongs after the note in the Scripture text. It is taken out of this editor as soon
-   * as it appears and goes to the parent with the next apply, after the note.
+   * Text that has left the note and belongs right after it in the Scripture text. This editor's
+   * paragraph holds the note alone, so anything that turns up after the note has left it - typing
+   * the note's closer (`\f*`) in the middle of an unclosed note closes the note there, and the rest
+   * of what was in it belongs after the note. It is taken out of this editor as soon as it appears
+   * (see {@link takeTextAfterNote}) and reaches the parent with the next apply.
+   *
+   * Kept in step with this editor's undo history (see {@link followCarriedTextThroughHistory}): the
+   * undo that opens the note again puts the text back in it, so none belongs after the note until a
+   * redo closes it again.
    */
-  const pendingOpsAfterNoteRef = useRef<DeltaOp[]>([]);
+  const carriedTextRef = useRef<DeltaOp[]>([]);
+  /** What the parent holds right after the note from {@link carriedTextRef}, as last applied. */
+  const appliedCarriedTextRef = useRef<DeltaOp[]>([]);
+  /**
+   * Carried text an undo put back into the note, with the note as it was on either side of that
+   * undo, so a redo from exactly there carries the text out again. Dropped once the note changes in
+   * any other way, which is also when this editor's redo history is gone.
+   */
+  const undoneCarryRef = useRef<
+    { text: DeltaOp[]; closedNoteOp: DeltaOp; openNoteOp: DeltaOp } | undefined
+  >(undefined);
+  /** The note as of the last content change, to tell an undo or redo that opens or closes it. */
+  const lastNoteOpRef = useRef<DeltaOp | undefined>(undefined);
 
-  const moveOpsAfterNoteOut = useCallback(() => {
-    const opsAfterNote = editorRef.current?.getOpsAfterNote(0);
-    if (!opsAfterNote?.length) return;
-    pendingOpsAfterNoteRef.current = [...pendingOpsAfterNoteRef.current, ...opsAfterNote];
-    // The note is the paragraph's first unit (OT index 0; see the load below).
-    editorRef.current?.applyUpdate([{ retain: 1 }, { delete: deltaOpsLength(opsAfterNote) }]);
+  const takeTextAfterNote = useCallback(() => {
+    // Taken as part of the undo step that closed the note, so one undo opens it again with the
+    // text back inside rather than bringing the text back after it (where it would be taken again).
+    const taken = editorRef.current?.takeOpsAfterNote(0);
+    if (!taken?.length) return;
+    carriedTextRef.current = [...carriedTextRef.current, ...taken];
+    undoneCarryRef.current = undefined;
   }, []);
+
+  /**
+   * Follows the carried text through an undo or redo that crosses the note's close. Only an undo
+   * opens a closed note here - this editor protects the closer - and only the redo of that undo
+   * closes it again with nothing left after it; any other change ends the chance of that redo.
+   */
+  const followCarriedTextThroughHistory = useCallback(
+    (previousNoteOp: DeltaOp | undefined, noteOp: DeltaOp) => {
+      if (!previousNoteOp) return;
+      const wasOpen = isUnclosedNoteOp(previousNoteOp);
+      const isOpen = isUnclosedNoteOp(noteOp);
+      if (!wasOpen && isOpen) {
+        undoneCarryRef.current = {
+          text: carriedTextRef.current,
+          closedNoteOp: previousNoteOp,
+          openNoteOp: noteOp,
+        };
+        carriedTextRef.current = [];
+        return;
+      }
+      const undone = undoneCarryRef.current;
+      if (!undone) return;
+      if (
+        wasOpen &&
+        !isOpen &&
+        deepEqual(previousNoteOp, undone.openNoteOp) &&
+        deepEqual(noteOp, undone.closedNoteOp) &&
+        !editorRef.current?.getOpsAfterNote(0)?.length
+      ) {
+        carriedTextRef.current = undone.text;
+        undoneCarryRef.current = undefined;
+      } else if (!deepEqual(noteOp, undone.openNoteOp)) undoneCarryRef.current = undefined;
+    },
+    [],
+  );
 
   const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
 
@@ -650,19 +733,32 @@ export default function FootnoteEditor({
           // behind its back with content it already has would silently strand the session. The
           // popover deliberately keeps applying unconditionally: its Save is also what confirms a
           // newly inserted note, which would otherwise be discarded as abandoned on close.
-          const opsAfterNote = pendingOpsAfterNoteRef.current;
+          const carriedText = carriedTextRef.current;
+          const appliedCarriedText = appliedCarriedTextRef.current;
+          const isCarriedTextChanged = !deepEqual(carriedText, appliedCarriedText);
           if (
             inline &&
-            opsAfterNote.length === 0 &&
+            !isCarriedTextChanged &&
             deepEqual(currentNoteOp, lastAppliedNoteOpRef.current)
           )
             return;
           lastAppliedNoteOpRef.current = currentNoteOp;
-          pendingOpsAfterNoteRef.current = [];
-          parentEditorRef.current?.replaceEmbedUpdate(noteKeyRef.current, [
-            currentNoteOp,
-            ...opsAfterNote,
-          ]);
+          const replaceOps: DeltaOp[] = [currentNoteOp];
+          if (isCarriedTextChanged) {
+            // What an earlier apply put after the note is replaced only while it is still there as
+            // applied: text since edited in the Scripture text is the user's, and stays.
+            const isAppliedTextInPlace =
+              appliedCarriedText.length > 0 &&
+              deltaOpsStartWith(
+                parentEditorRef.current?.getOpsAfterNote(noteKeyRef.current) ?? [],
+                appliedCarriedText,
+              );
+            if (isAppliedTextInPlace)
+              replaceOps.push({ delete: deltaOpsLength(appliedCarriedText) });
+            replaceOps.push(...carriedText);
+            appliedCarriedTextRef.current = carriedText;
+          }
+          parentEditorRef.current?.replaceEmbedUpdate(noteKeyRef.current, replaceOps);
         }
       }
     },
@@ -775,7 +871,10 @@ export default function FootnoteEditor({
     const noteOp = noteOps?.at(0);
     // The note about to be loaded is, by definition, what the parent already holds.
     lastAppliedNoteOpRef.current = noteOp;
-    pendingOpsAfterNoteRef.current = [];
+    carriedTextRef.current = [];
+    appliedCarriedTextRef.current = [];
+    undoneCarryRef.current = undefined;
+    lastNoteOpRef.current = undefined;
     if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
       const rawCaller = noteOp.insert.note?.caller;
       // Parses the current caller
@@ -1062,13 +1161,16 @@ export default function FootnoteEditor({
         if (!hasInitializedEditor.current) {
           hasInitializedEditor.current = true;
           initialNoteOpsJson.current = JSON.stringify(noteOp);
+          lastNoteOpRef.current = noteOp;
           setIsAtInitialState(true);
           return;
         }
 
         hasUserEditsRef.current = true;
+        followCarriedTextThroughHistory(lastNoteOpRef.current, noteOp);
+        lastNoteOpRef.current = noteOp;
         // Deferred like the extra-node cleanup above: this runs from the editor's change listener.
-        if (editorRef.current?.getOpsAfterNote(0)?.length) setTimeout(moveOpsAfterNoteOut, 0);
+        if (editorRef.current?.getOpsAfterNote(0)?.length) setTimeout(takeTextAfterNote, 0);
         // Track whether the user has undone all their edits back to the initial state
         setIsAtInitialState(JSON.stringify(noteOp) === initialNoteOpsJson.current);
 
@@ -1082,7 +1184,13 @@ export default function FootnoteEditor({
         setIsAtInitialState(true);
       }
     },
-    [inline, saveCurrentNoteOp, schedulePendingApply, moveOpsAfterNoteOut],
+    [
+      inline,
+      saveCurrentNoteOp,
+      schedulePendingApply,
+      followCarriedTextThroughHistory,
+      takeTextAfterNote,
+    ],
   );
 
   const showInlineMarkersMenu = useCallback(() => {

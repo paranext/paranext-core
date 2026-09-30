@@ -38,6 +38,7 @@ const editorRefMock = {
   applyUpdate: vi.fn(),
   getNoteOps: vi.fn(),
   getOpsAfterNote: vi.fn(),
+  takeOpsAfterNote: vi.fn(),
   focus: vi.fn(),
   selectNote: vi.fn(),
   selectNoteTextOffset: vi.fn(),
@@ -154,7 +155,10 @@ function makeKeyReorderedNoteOps(text: string): DeltaOpInsertNoteEmbed[] {
  * keep reading `parentRef.current.replaceEmbedUpdate` for their assertions.
  */
 function makeParentRef(parentRef: {
-  current: { replaceEmbedUpdate: ReturnType<typeof vi.fn> };
+  current: {
+    replaceEmbedUpdate: ReturnType<typeof vi.fn>;
+    getOpsAfterNote?: ReturnType<typeof vi.fn>;
+  };
 }): RefObject<EditorRef | null> {
   // The stub above only implements `replaceEmbedUpdate`, not the full EditorRef surface.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -388,31 +392,60 @@ describe('FootnoteEditor inline live-apply', () => {
   describe('text that leaves the note (a closer typed mid-note)', () => {
     const paraUsj: Usj = { type: 'USJ', version: '3.1', content: [{ type: 'para' }] };
 
+    function openNoteOp(text: string): DeltaOpInsertNoteEmbed {
+      const { note } = makeNoteOps(text)[0].insert;
+      if (!note) throw new Error('expected a note');
+      // `closed` rides on the embed as an unknown attribute; the embed's type does not declare it.
+      const unclosedNote = { ...note, closed: 'false' };
+      return { insert: { note: unclosedNote } };
+    }
+
+    /** The row editor reports `noteOp` as its note after a change, with nothing after it. */
+    function changeNoteTo(noteOp: DeltaOpInsertNoteEmbed) {
+      editorRefMock.getNoteOps.mockReturnValue([noteOp]);
+      editorRefMock.getOpsAfterNote.mockReturnValue([]);
+      latestEditorialProps.onUsjChange?.(paraUsj);
+    }
+
     async function editThatClosesTheNote() {
       vi.useFakeTimers();
-      const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+      const parentRef = {
+        current: {
+          replaceEmbedUpdate: vi.fn(),
+          getOpsAfterNote: vi.fn(() => [{ insert: ' beta' }]),
+        },
+      };
       const view = renderEditor({
         inline: true,
+        noteOps: [openNoteOp('alpha beta')],
         parentEditorRef: makeParentRef(parentRef),
         noteKey: 'key-close',
       });
       await vi.runOnlyPendingTimersAsync(); // initial load
-      primeCurrentOps('alpha beta');
+      editorRefMock.getNoteOps.mockReturnValue([openNoteOp('alpha beta')]);
       latestEditorialProps.onUsjChange?.(paraUsj); // snapshot call
 
       // The note now ends at the typed closer, and what followed it sits after the note.
-      primeCurrentOps('alpha');
+      editorRefMock.getNoteOps.mockReturnValue(makeNoteOps('alpha'));
       editorRefMock.getOpsAfterNote.mockReturnValue([{ insert: ' beta' }]);
+      editorRefMock.takeOpsAfterNote.mockReturnValue([{ insert: ' beta' }]);
       latestEditorialProps.onUsjChange?.(paraUsj);
       await vi.advanceTimersByTimeAsync(0);
       editorRefMock.getOpsAfterNote.mockReturnValue([]);
       return { ...view, parentRef };
     }
 
+    /** The last ops applied to the parent. */
+    function lastApplied(parentRef: { current: { replaceEmbedUpdate: ReturnType<typeof vi.fn> } }) {
+      const [key, ops] = parentRef.current.replaceEmbedUpdate.mock.calls.at(-1) ?? [];
+      expect(key).toBe('key-close');
+      return ops;
+    }
+
     it('takes that text out of this editor, which holds just the note', async () => {
       await editThatClosesTheNote();
 
-      expect(editorRefMock.applyUpdate).toHaveBeenLastCalledWith([{ retain: 1 }, { delete: 5 }]);
+      expect(editorRefMock.takeOpsAfterNote).toHaveBeenCalledWith(0);
     });
 
     it('applies it to the parent right after the note', async () => {
@@ -421,9 +454,7 @@ describe('FootnoteEditor inline live-apply', () => {
       await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
 
       expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
-      const [key, ops] = parentRef.current.replaceEmbedUpdate.mock.calls[0];
-      expect(key).toBe('key-close');
-      expect(ops).toEqual([makeNoteOps('alpha')[0], { insert: ' beta' }]);
+      expect(lastApplied(parentRef)).toEqual([makeNoteOps('alpha')[0], { insert: ' beta' }]);
     });
 
     it('applies it once, and applies it even when the note is otherwise unchanged', async () => {
@@ -438,6 +469,81 @@ describe('FootnoteEditor inline live-apply', () => {
         JSON.stringify(ops).includes(' beta'),
       );
       expect(withText).toHaveLength(1);
+    });
+
+    it('an undo that opens the note again takes the text back out of the parent', async () => {
+      const { parentRef } = await editThatClosesTheNote();
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+
+      changeNoteTo(openNoteOp('alpha beta')); // the undo
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+
+      expect(parentRef.current.getOpsAfterNote).toHaveBeenCalledWith('key-close');
+      expect(lastApplied(parentRef)).toEqual([openNoteOp('alpha beta'), { delete: 5 }]);
+      // Nothing is taken again: the text is back inside the note.
+      expect(editorRefMock.takeOpsAfterNote).toHaveBeenCalledTimes(1);
+    });
+
+    it('an undo before anything reached the parent leaves the parent as it was', async () => {
+      const { parentRef } = await editThatClosesTheNote();
+
+      changeNoteTo(openNoteOp('alpha beta')); // the undo, inside the apply debounce
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+
+      expect(parentRef.current.replaceEmbedUpdate).not.toHaveBeenCalled();
+    });
+
+    it('leaves text after the note that was edited in the text since it was applied', async () => {
+      const { parentRef } = await editThatClosesTheNote();
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      parentRef.current.getOpsAfterNote.mockReturnValue([{ insert: ' bet' }]);
+
+      changeNoteTo(openNoteOp('alpha beta')); // the undo
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+
+      expect(lastApplied(parentRef)).toEqual([openNoteOp('alpha beta')]);
+    });
+
+    it('the redo of that undo carries the text out again', async () => {
+      const { parentRef } = await editThatClosesTheNote();
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      changeNoteTo(openNoteOp('alpha beta')); // the undo
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      parentRef.current.getOpsAfterNote.mockReturnValue([]);
+
+      changeNoteTo(makeNoteOps('alpha')[0]); // the redo
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+
+      expect(lastApplied(parentRef)).toEqual([makeNoteOps('alpha')[0], { insert: ' beta' }]);
+    });
+
+    it('an edit after the undo ends its redo, even one that comes back to the same text', async () => {
+      const { parentRef } = await editThatClosesTheNote();
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      changeNoteTo(openNoteOp('alpha beta')); // the undo
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      parentRef.current.getOpsAfterNote.mockReturnValue([]);
+
+      changeNoteTo(openNoteOp('alpha betax')); // typed...
+      changeNoteTo(openNoteOp('alpha beta')); // ...and deleted again
+      changeNoteTo(makeNoteOps('alpha')[0]); // " beta" replaced by a pasted closer
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+
+      expect(lastApplied(parentRef)).toEqual([makeNoteOps('alpha')[0]]);
+    });
+
+    it('closing the note some other way after the undo carries nothing', async () => {
+      const { parentRef } = await editThatClosesTheNote();
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      changeNoteTo(openNoteOp('alpha beta')); // the undo
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      parentRef.current.getOpsAfterNote.mockReturnValue([]);
+
+      changeNoteTo(openNoteOp('alpha')); // the user deletes " beta"...
+      changeNoteTo(makeNoteOps('alpha')[0]); // ...and types the closer at the end
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+
+      expect(lastApplied(parentRef)).toEqual([makeNoteOps('alpha')[0]]);
     });
   });
 

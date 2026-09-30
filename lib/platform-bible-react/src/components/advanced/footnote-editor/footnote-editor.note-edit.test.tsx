@@ -93,6 +93,7 @@ function renderFootnoteEditor(onNoteEdit: () => void) {
     // shared instance would let one test's save leak into another's initial-state snapshot.
     getNoteOps: vi.fn(() => [structuredClone(sentinelNoteOp)]),
     getOpsAfterNote: vi.fn(() => []),
+    takeOpsAfterNote: vi.fn(() => []),
     selectNote: vi.fn(),
   } as unknown as EditorRef;
 

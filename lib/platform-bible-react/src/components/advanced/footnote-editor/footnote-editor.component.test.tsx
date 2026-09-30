@@ -209,6 +209,7 @@ function renderFootnoteEditor(
     insertNote: vi.fn(),
     getNoteOps: vi.fn(() => []),
     getOpsAfterNote: vi.fn(() => []),
+    takeOpsAfterNote: vi.fn(() => []),
     selectNote: vi.fn(),
   } as unknown as EditorRef;
 
