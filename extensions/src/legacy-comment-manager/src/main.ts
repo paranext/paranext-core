@@ -15,7 +15,7 @@ import type {
   OpenCommentListWebViewOptions,
   ScopeFilter,
 } from 'legacy-comment-manager';
-import { serialize } from 'platform-bible-utils';
+import { getErrorMessage, serialize } from 'platform-bible-utils';
 import commentListWebView from './comment-list.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
 import { presetToLabelKey, scopeFilterToLabelKey } from './comment-list-filters.model';
@@ -165,6 +165,53 @@ async function openCommentListPanel(projectId: string | undefined): Promise<stri
   }
 
   // Panel not yet open (shouldn't happen in Simple mode where it's always in the layout).
+  const openOptions: CommentListPanelOptions = { projectId };
+  return papi.webViews.openWebView(commentListPanelWebViewType, { type: 'tab' }, openOptions);
+}
+
+/**
+ * Raises an open tab of the requested type without reloading it, and creates nothing when none is
+ * open. Mirrors `showOrCreateTab` in
+ * `extensions/src/platform-scripture-editor/src/show-panel.util.ts`, which the scripture editor's
+ * other Simple Tools items use; keep the two in step so every Tools item raises its tab the same
+ * way.
+ */
+const RAISE_EXISTING_TAB_ONLY: OpenWebViewOptions = {
+  existingId: '?',
+  createNewIfNotFound: false,
+  bringToFront: true,
+};
+
+/**
+ * Brings the Comments tab to the front, the way clicking it would. An open tab is raised, never
+ * reloaded, so an in-progress comment edit survives. If no tab is open, opens one for the editor's
+ * project.
+ *
+ * @param editorWebViewId The scripture editor the request came from
+ * @returns The Comments web view's ID, or `undefined` if it couldn't be shown
+ */
+async function showCommentListPanel(
+  editorWebViewId: string | undefined,
+): Promise<string | undefined> {
+  const existingId = await papi.webViews.openWebView(
+    commentListPanelWebViewType,
+    undefined,
+    RAISE_EXISTING_TAB_ONLY,
+  );
+  if (existingId) return existingId;
+  let projectId: string | undefined;
+  if (editorWebViewId) {
+    // getOpenWebViewDefinition throws if no window claimed the web view and some window could not be
+    // asked. That is not this command's problem to fail over — degrade to "no project id" so a new
+    // Comments tab still opens, unlabeled, rather than rejecting the whole show request.
+    try {
+      projectId = (await papi.webViews.getOpenWebViewDefinition(editorWebViewId))?.projectId;
+    } catch (e) {
+      logger.warn(
+        `Could not resolve the project for web view ${editorWebViewId}: ${getErrorMessage(e)}`,
+      );
+    }
+  }
   const openOptions: CommentListPanelOptions = { projectId };
   return papi.webViews.openWebView(commentListPanelWebViewType, { type: 'tab' }, openOptions);
 }
@@ -396,6 +443,29 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const showCommentListPanelPromise = papi.commands.registerCommand(
+    'legacyCommentManager.showCommentListPanel',
+    showCommentListPanel,
+    {
+      method: {
+        summary: 'Bring the Comments tab to the front, opening it if it is not open',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary: 'The scripture editor the request came from',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the Comments web view, or undefined if it could not be shown',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   const openCommentListPromise = papi.commands.registerCommand(
     'legacyCommentManager.openCommentList',
     openCommentList,
@@ -494,6 +564,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openCommentListPromise,
     await openCommentListPanelPromise,
     await selectCommentThreadInPanelPromise,
+    await showCommentListPanelPromise,
     await commentsUsjPdpefPromise,
   );
 

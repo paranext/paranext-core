@@ -93,6 +93,12 @@
   "%general_open%": {
     "fallbackKey": "%Paratext.Base.CommonForms.SelectScrTextsForm.SelectScrTextsForm.Text%"
   },
+  "%getResources_errorInstallResource_resourceAlreadyInstalled%": {
+    "deprecationInfo": {
+      "date": "2026-09-22",
+      "message": "Installing a resource that is already installed and up to date now succeeds as a no-op instead of failing, so there is no error to show and no replacement key. A stale catalog used to make this the only outcome a retry could ever reach."
+    }
+  },
   "%mainMenu_helpInfo_visitFAQsPage%": {
     "fallbackKey": "%mainMenu_helpInfo_visitCommunitySupportPage%",
     "deprecationInfo": {

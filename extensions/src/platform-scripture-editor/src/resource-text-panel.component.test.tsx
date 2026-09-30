@@ -63,6 +63,8 @@ const STRINGS = {
   '%webView_resourcePanel_installFailed%': "The resource couldn't be installed.",
   '%webView_resourcePanel_installFailedOffline%':
     "The resource couldn't be installed. Check your connection and try again.",
+  '%webView_resourcePanel_installedButUnavailable%':
+    "The resource is installed but couldn't be opened.",
   '%webView_resourcePanel_retry%': 'Try again',
   '%webView_resourcePanel_settingsUnavailable%': "Couldn't load your resources.",
   '%webView_resourcePanel_loading%': 'Loading…',
@@ -168,6 +170,7 @@ function makeProps(overrides: Partial<ResourceTextPanelProps> = {}): ResourceTex
     isSelecting: false,
     isInstalling: false,
     installFailed: false,
+    installFailureReason: undefined,
     retryInstall: vi.fn(),
     isOnline: true,
     // The panel's whole picker surface: it reports the activation and the web view owns the pick.
@@ -479,5 +482,29 @@ describe('ResourceTextPanel pick in flight', () => {
 
     expect(screen.getByText(SELECTING)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: PICK_BIBLE_TEXTS })).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceTextPanel install failure', () => {
+  it('hints at the connection when an install was rejected while offline', () => {
+    renderPanel({ installFailed: true, installFailureReason: 'installRejected', isOnline: false });
+
+    expect(
+      screen.getByText(STRINGS['%webView_resourcePanel_installFailedOffline%']),
+    ).toBeInTheDocument();
+  });
+
+  it('says the resource is installed, with no connection hint, when the catalog has not caught up', () => {
+    // The download worked, so "couldn't be installed, check your connection" would be wrong twice.
+    renderPanel({
+      installFailed: true,
+      installFailureReason: 'listNotConverging',
+      isOnline: false,
+    });
+
+    expect(
+      screen.getByText(STRINGS['%webView_resourcePanel_installedButUnavailable%']),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't be installed/)).not.toBeInTheDocument();
   });
 });

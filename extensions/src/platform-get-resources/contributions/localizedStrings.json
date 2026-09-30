@@ -4,6 +4,7 @@
     "en": {
       "%new_tab_dialog_title%": "New Tab",
       "%resources_action%": "Action",
+      "%resources_actionDidNotTakeEffect%": "This change couldn't be confirmed. The list of resources may be out of date. Try again.",
       "%resources_activity%": "Activity",
       "%resources_any_language%": "Any",
       "%resources_any_type%": "Any",
@@ -65,6 +66,7 @@
     "es": {
       "%new_tab_dialog_title%": "Nueva pestaña",
       "%resources_action%": "Acción",
+      "%resources_actionDidNotTakeEffect%": "No se pudo confirmar este cambio. Es posible que la lista de recursos esté desactualizada. Inténtelo de nuevo.",
       "%resources_activity%": "Actividad",
       "%resources_any_language%": "Sin filtro",
       "%resources_any_type%": "Sin filtro",

@@ -16,11 +16,11 @@ import {
 import { EllipsisVertical, GripVertical } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import { ReactNode, useCallback, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { buildAlignedZoomStyle } from './aligned-grid.styles';
 import { ResourceCellState } from './resource-cell.utils';
 import {
   BOOK_NOT_AVAILABLE_KEY,
   COPY_KEY,
-  EMPTY_KEY,
   FAILED_KEY,
   LOADING_KEY,
   NOT_INSTALLED_KEY,
@@ -37,6 +37,8 @@ export {
   FAILED_KEY,
   BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
+  NO_VERSES_TO_SHOW_KEY,
+  CHAPTER_EMPTY_KEY,
   ZOOM_IN_KEY,
   ZOOM_OUT_KEY,
   RESET_ZOOM_KEY,
@@ -51,6 +53,9 @@ export type ResourceNameDisplay = 'inline' | 'header';
 
 /** Localized copy for the zoom actions (the "⋮" dropdown and the right-click context menu). */
 export type ZoomMenuLabels = { zoomIn: string; zoomOut: string; reset: string; options: string };
+
+/** Where a cell's zoom level lands; see {@link ResourceCellViewProps.zoomTarget}. */
+export type ZoomTarget = 'box' | 'blocks';
 
 export type ResourceCellViewProps = {
   /** Which visual state to render; only `ready` shows the editor. */
@@ -69,8 +74,12 @@ export type ResourceCellViewProps = {
   localizedStrings: ResourceCellLocalizedStrings;
   /** The editor rendered when `state` is `ready` (the connected cell supplies `Editorial`). */
   editor: ReactNode;
-  /** When true (verse mode, slice empty), render the empty label instead of the editor. */
-  isVerseEmpty?: boolean;
+  /**
+   * Message to render instead of the editor when the resource has text but none of it belongs in
+   * this view — the focused verse is missing in verse mode, the chapter has no verses to align in
+   * the aligned grid. Omit to render the editor.
+   */
+  emptyMessage?: string;
   /**
    * How to show the resource name. `'header'` (default) is a compact header line above the content,
    * used by chapter contexts (single-resource full-width + chapter-context split). `'inline'` hangs
@@ -78,6 +87,20 @@ export type ResourceCellViewProps = {
    * render outside `Editorial` (paranext-core only).
    */
   nameDisplay?: ResourceNameDisplay;
+  /**
+   * Who scrolls this cell's content. `'auto'` (default) is the cell itself. `'visible'` hands it to
+   * an ancestor, which the aligned grid needs: a scroll container's children cannot take part in an
+   * ancestor's grid, and cells that scrolled separately would drift out of alignment anyway.
+   */
+  contentOverflow?: 'auto' | 'visible';
+  /**
+   * Where the zoom level lands. `'box'` (default) leaves it to the platform, which scales the
+   * element marking this resource's text. `'blocks'` publishes the area's level as a custom
+   * property for the verse blocks to take, which is what the aligned grid needs: there the marker
+   * generates no box and the wrapper around it is a subgrid box, whose shared row tracks must not
+   * scale with the text (`ALIGNED_ZOOM_PROPERTY`).
+   */
+  zoomTarget?: ZoomTarget;
   /** False when the resource's level is at MAX_ZOOM_FACTOR. */
   canZoomIn?: boolean;
   /** False when the resource's level is at MIN_ZOOM_FACTOR. */
@@ -106,6 +129,13 @@ export type ResourceCellViewProps = {
   reorderHint?: string;
   /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
   onReorderKeyDown?: (event: KeyboardEvent) => void;
+  /**
+   * Makes the header band the drag source for a reorder. It is deliberately the header and not the
+   * whole cell: a `draggable` ancestor makes its entire subtree draggable, so a column-wide drag
+   * source turns a click-drag across the text into a reorder instead of a selection — and selecting
+   * a passage down a column is the reason this view renders one editor per column.
+   */
+  headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
 };
 
 function ZoomItemsShared({
@@ -204,8 +234,10 @@ export function ResourceCellView({
   textDirection,
   localizedStrings,
   editor,
-  isVerseEmpty,
+  emptyMessage,
   nameDisplay = 'header',
+  contentOverflow = 'auto',
+  zoomTarget = 'box',
   canZoomIn = true,
   canZoomOut = true,
   canReset = true,
@@ -218,12 +250,22 @@ export function ResourceCellView({
   reorderHandleLabel,
   reorderHint,
   onReorderKeyDown,
+  headerDrag,
 }: ResourceCellViewProps) {
   let readyContent: ReactNode = editor;
-  if (isVerseEmpty) {
+  if (emptyMessage) {
     readyContent = (
-      <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:text-center">
-        <span className="tw:text-sm tw:text-muted-foreground">{localizedStrings[EMPTY_KEY]}</span>
+      // Not `EmptyState`, which renders its message in a `role="status"` live region. That is right
+      // for a view-level zero state (the web view's own empty state uses it, once), but this one is
+      // per cell: with several resources in the list, a reference change would queue one
+      // announcement per cell that lacks the verse and starve the grid's reorder announcer. The cell
+      // is already named by its enclosing region or listitem, and the sibling placeholder states
+      // below are plain text for the same reason.
+      <div
+        data-cell-placeholder
+        className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center"
+      >
+        <span className="tw:text-center tw:text-sm tw:text-muted-foreground">{emptyMessage}</span>
       </div>
     );
   }
@@ -267,7 +309,10 @@ export function ResourceCellView({
     state === 'ready' ? (
       readyContent
     ) : (
-      <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center">
+      <div
+        data-cell-placeholder
+        className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center"
+      >
         {unavailableContent}
       </div>
     );
@@ -299,9 +344,17 @@ export function ResourceCellView({
     ? formatReplacementString(zoomMenuLabels.options, { resourceName: label })
     : undefined;
 
+  const contentStyle = zoomTarget === 'blocks' ? buildAlignedZoomStyle(zoomArea) : undefined;
+  const contentOverflowClass =
+    contentOverflow === 'visible' ? 'tw:overflow-visible' : 'tw:overflow-auto';
+
   return (
     <div
       onContextMenuCapture={hasRightClickMenu ? handleCellContextMenu : undefined}
+      // The `data-cell-*` attributes here and below are what the aligned grid's stylesheet hooks
+      // onto to turn this flex chrome into its subgrid chain (`aligned-grid.styles.ts`) — layout
+      // anchors, not test ids.
+      data-cell-root
       // `group` powers the hover/focus-within reveal of the "⋮" button. Activation (opening the
       // chapter split) is owned by the parent verse `listitem` in ScriptureTextGrid — this cell is
       // presentational.
@@ -315,7 +368,7 @@ export function ResourceCellView({
         // remaining min-w-0 column. Only the verse text scales with zoom; the hanging name is fixed.
         <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
           <ResourceNameLabel label={label} className="tw:max-w-24 tw:min-w-0 tw:text-sm" />
-          <div className="tw:min-w-0 tw:flex-1 tw:overflow-auto">
+          <div className={`tw:min-w-0 tw:flex-1 ${contentOverflowClass}`} style={contentStyle}>
             <ContentZoomRoot area={zoomArea} label={label}>
               {stateContent}
             </ContentZoomRoot>
@@ -327,7 +380,14 @@ export function ResourceCellView({
         // inline-end, above the content. Long labels truncate; the tooltip reveals the full name
         // only when actually clipped. Only the content scales with zoom, not the header.
         <>
-          <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-0.5">
+          <div
+            data-cell-header
+            data-testid={headerDrag ? 'scripture-text-grid-column-drag-source' : undefined}
+            draggable={headerDrag ? true : undefined}
+            onDragStart={headerDrag?.onDragStart}
+            onDragEnd={headerDrag?.onDragEnd}
+            className={`tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-0.5${headerDrag ? ' tw:cursor-grab' : ''}`}
+          >
             {showDragHandle ? (
               // Nested tooltip on the grip so `reorderHint` shows on hover AND keyboard focus.
               // Its own provider/tooltip keeps it independent of the name-truncation tooltip.
@@ -392,8 +452,13 @@ export function ResourceCellView({
               </TooltipProvider>
             ) : undefined}
           </div>
-          <div className="tw:flex-1 tw:overflow-auto" dir={textDirection}>
-            <div className="tw:p-2">
+          <div
+            data-cell-content
+            className={`tw:flex-1 ${contentOverflowClass}`}
+            style={contentStyle}
+            dir={textDirection}
+          >
+            <div data-cell-pad className="tw:p-2">
               <ContentZoomRoot area={zoomArea} label={label}>
                 {stateContent}
               </ContentZoomRoot>

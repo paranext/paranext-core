@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { getShippedLocaleTags } from '@node/utils/locale-assets.test-helper';
+import { getShippedLocaleTags } from '@node/utils/locale-assets.test-utils';
 import { languageDetails } from './language-details.data';
 
 // Real shipped locale files drive this test so a NEW locale added without a curated autonym fails

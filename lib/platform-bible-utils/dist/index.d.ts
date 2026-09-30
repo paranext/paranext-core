@@ -1696,6 +1696,15 @@ export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
 export type MenuColumnWithHeader = OrderedExtensibleContainer & {
 	/** Key that represents the text of the header text of the column */
 	label: LocalizeKey;
+	/**
+	 * Set to `true` to show this column's items without its header text in the menu that opens when
+	 * you click on the top left corner of a tab (`topMenu`), which heads each section with its
+	 * column's header. While that menu shows two or more sections, the label still names this section
+	 * for assistive technology; a section left on its own, including one left alone by interface-mode
+	 * filtering, gets neither a heading nor a name. Give it a real label regardless. The application
+	 * menubar ignores this, because there the header is what opens the column.
+	 */
+	isHeaderHidden?: boolean;
 };
 export type MenuItemBase = OrderedItem & {
 	/** Menu group to which this menu item belongs */
@@ -1938,6 +1947,10 @@ export declare const menuDocumentSchema: {
 							type: string;
 						};
 						isExperimental: {
+							description: string;
+							type: string;
+						};
+						isHeaderHidden: {
 							description: string;
 							type: string;
 						};
@@ -4025,6 +4038,20 @@ export declare function isBlockMarker(marker: string): boolean;
  *   marker codes.
  */
 export declare function isCharacterMarker(marker: string): boolean;
+/**
+ * True when a marker is a paragraph-style marker, including _true_ discourse paragraphs, others
+ * that begin a block of text (poetry lines, blank lines, list entries, etc.) and chapter-level or
+ * book-level identification, metadata, or other such structural markers.
+ *
+ * Paragraph markers are identified by their {@link MarkerType.Paragraph} type in {@link usfmMarkers}
+ * rather than a hand-maintained list.
+ *
+ * @param marker Marker code to check, without its leading backslash (e.g. `p`, not `\p`)
+ * @returns `true` when the marker is a known USFM marker of type {@link MarkerType.Paragraph}.
+ *   `false` for anything else: character markers, note markers (`f`/`fe`/`x`), numbering markers
+ *   (`v`/`va`/`vp`/`ca`), and for empty or unknown marker codes.
+ */
+export declare function isParagraphMarker(marker: string): boolean;
 /**
  * Clamping, rounding and stepping for a content-zoom factor, plus the range and step those
  * operations enforce. The platform's per-pane content zoom and the Interface scaling setting both

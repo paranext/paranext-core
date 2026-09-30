@@ -144,6 +144,7 @@ import {
   scrollToAnnotation,
   scrollToVerse,
 } from './editor-dom.util';
+import { handleEditMenuCommand, isEditMenuCommand } from './edit-menu-actions.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
@@ -156,7 +157,6 @@ import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   availableScrollGroupIds,
-  blockMarkerToBlockNames,
   buildChapterScaffoldOps,
   canAddChapterNumber,
   correctEditorUsjVersion,
@@ -165,15 +165,19 @@ import {
   formatEditorTitle,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
+  hasDisplayableParagraphMarkerTitle,
   isChapterBlank,
   isMissingBookError,
   isMissingBookInfoOnScreen,
   isOverrunProjectIdParse,
   openCommentListAndSelectThreadSafe,
+  paragraphMarkerNameKey,
   parseMissingBookError,
+  PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
   resolveAddChapterNumberClick,
   resolveViewTypeForInterfaceMode,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  selectableParagraphMarkers,
   selectCommentThreadInPanelSafe,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
@@ -198,6 +202,8 @@ import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import {
   commitVersionHistorySnapshot,
+  EDIT_ACTION_BLOCKED_KEY,
+  notifyEditMenuActionBlocked,
   notifySyncEditBlocked as sendSyncEditBlockedNotification,
   SYNC_EDIT_BLOCKED_KEY,
 } from './editor-side-effects.utils';
@@ -259,9 +265,13 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // recent-searches labels, and the show-more-books/not-in-project strings that appear once a
   // book outside this project is reachable.
   ...BOOK_CHAPTER_CONTROL_STRING_KEYS,
+  // Keys for Paragraph style titles (as displayed in tooltips, Paragraph combo box trigger/switcher,
+  // etc.) Some titles may not be displayed in all possible contexts.
+  ...[...selectableParagraphMarkers, ...PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS].map(
+    paragraphMarkerNameKey,
+  ),
   // The footnotes pane's name on the zoom indicator.
   FOOTNOTES_ZOOM_AREA_LABEL_KEY,
-  ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
     .filter((item) => !!item),
@@ -279,6 +289,8 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // bar's removal action shows the same notice through the same helper and deliberately does not
   // re-list the key.
   SYNC_EDIT_BLOCKED_KEY,
+  // Same reasoning as SYNC_EDIT_BLOCKED_KEY above, for the Edit flyout's blocked-action notice.
+  EDIT_ACTION_BLOCKED_KEY,
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   ...PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
@@ -3588,6 +3600,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const menuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
+      // The Edit flyout acts on this editor, and the clipboard needs the click's user activation,
+      // so it runs here rather than as a PAPI command
+      if (isEditMenuCommand(projectMenuCommand.command)) {
+        handleEditMenuCommand(
+          projectMenuCommand.command,
+          editorRef.current ?? undefined,
+          { isReadOnly: isReadOnlyEffective, isDurablyReadOnly, isSyncBlocked },
+          {
+            notifyActionBlocked: () => notifyEditMenuActionBlocked(localizedStrings),
+            notifySyncEditBlocked,
+            restoreSelectionIfLost: (editor) =>
+              restoreSelectionIfLost(editor, lastFocusOutSelectionRef.current),
+            onActionError: (e) => logger.warn(`Edit menu action failed: ${getErrorMessage(e)}`),
+            focusEditor: () => requestAnimationFrame(() => editorRef.current?.focus()),
+          },
+        );
+        return;
+      }
       // Find is the one menu command that needs more than the tab id: it carries this tab's current
       // text selection so the Find panel pre-fills and searches it, matching Ctrl+F. The source
       // project is deliberately left off — `openFind` resolves it from this editor's own web view
@@ -3606,11 +3636,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           );
         return;
       }
-      // Assuming that the project menu command is one of the registered command handlers in papi
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      papi.commands.sendCommand(projectMenuCommand.command as keyof CommandHandlers, webViewId);
+      papi.commands
+        // Assuming that the project menu command is one of the registered command handlers in papi
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        .sendCommand(projectMenuCommand.command as keyof CommandHandlers, webViewId)
+        .catch((e) =>
+          logger.warn(
+            `Failed to run ${projectMenuCommand.command} from the editor tab menu: ${getErrorMessage(e)}`,
+          ),
+        );
     },
-    [getMenuFindSelectionText, webViewId],
+    [
+      getMenuFindSelectionText,
+      isDurablyReadOnly,
+      isReadOnlyEffective,
+      isSyncBlocked,
+      localizedStrings,
+      notifySyncEditBlocked,
+      webViewId,
+    ],
   );
 
   function renderEditor() {
@@ -3833,13 +3877,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * Localized name of the current paragraph style, or the generic fallback. Undefined until the
    * localized strings resolve — `ParagraphStyleLabel` renders the marker code alone until then.
    *
-   * `Object.hasOwn`, not a bare lookup: a marker named `constructor` or `toString` would otherwise
-   * find an inherited `Object.prototype` member and take the wrong branch.
+   * Uses `hasDisplayableParagraphMarkerTitle`, not `selectableParagraphMarkers.includes`, so `id`
+   * still reads "id - Book identifier" here even though it's excluded from the switcher menu
+   * itself.
+   *
+   * Deliberately not `getParagraphMarkerTitle(blockMarker, localizedStrings) ?? misc`: that would
+   * collapse "known marker, string still loading" (should render blank, per the above) into the
+   * same branch as "marker with no title at all" (should render the misc fallback), so the
+   * membership check stays inline here instead.
    */
-  const blockMarkerName =
-    blockMarker && Object.hasOwn(blockMarkerToBlockNames, blockMarker)
-      ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
-      : localizedStrings['%paragraphMenu_misc_markerDescription%'];
+  const blockMarkerNameKey: LocalizeKey | undefined =
+    blockMarker && hasDisplayableParagraphMarkerTitle(blockMarker)
+      ? paragraphMarkerNameKey(blockMarker)
+      : undefined;
+  const blockMarkerName = blockMarkerNameKey
+    ? localizedStrings[blockMarkerNameKey]
+    : localizedStrings['%paragraphMenu_misc_markerDescription%'];
 
   const scrollGroupSelector = isPowerMode ? (
     <ScrollGroupSelector

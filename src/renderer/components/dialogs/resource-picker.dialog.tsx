@@ -45,6 +45,10 @@ function ResourcePickerDialogWrapper({
     hasSettled: hasDblSettled,
     refetch: refetchDblCatalog,
   } = useRetryablePromise(
+    // Deliberately not refreshed before this read. The flags can be one refresh behind, and acting
+    // on a stale one now costs a redundant install that succeeds as a no-op and corrects itself —
+    // where awaiting the refresh would hold the dialog's first paint on a backend call, which is
+    // the blocking `getCachedResources` was written to avoid.
     useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
   );
 

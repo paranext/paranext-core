@@ -23,18 +23,17 @@
  * Harness: reuses the cdp.fixture, waitForAppReady, and all helpers from test-helpers.ts verbatim.
  * No new fixtures or helpers are introduced.
  */
-import { FrameLocator } from '@playwright/test';
 import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
+import { closeAllNonHomeDockTabs } from './test-helpers';
 import {
-  closeAllNonHomeDockTabs,
   discoverAdminTextConnectionProject,
   flagResourcesAndOpenScriptureTextGrid,
   openScriptureTextGrid,
   restoreScriptureTextGridProjectSettings,
   ScriptureTextGrid,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-} from './test-helpers';
+} from './scripture-text-grid.page';
 
 // ---------------------------------------------------------------------------
 // Env-var driven resource IDs (same pattern as scripture-text-grid.spec.ts)
@@ -45,32 +44,26 @@ const REAL_RESOURCE_IDS = (process.env.E2E_TEST_RESOURCE_IDS ?? '')
   .filter(Boolean);
 
 // ---------------------------------------------------------------------------
-// Helper: read the ordered cell labels by reading the aria-label attribute
-// on each [role="gridcell"] element (the `aria-label` equals the resource
-// label set in ResourceCellView). Returns labels in DOM order.
+// Helper: read the ordered resource ids from the verse listitems, in DOM order.
 //
-// The draggable wrappers carry `data-testid="scripture-text-grid-cell-draggable"`.
+// Each draggable wrapper (`data-testid="scripture-text-grid-cell-draggable"`) carries its
+// resource's id in `data-resource-id`. The id is read instead of the accessible name because the
+// name is the localized `{resourceName}, {reference}` template, so it does not equal the resource
+// name the tests configure.
 // ---------------------------------------------------------------------------
-async function getCellAriaLabels(frame: FrameLocator): Promise<string[]> {
-  const gridcells = frame.locator(
-    '[data-testid="scripture-text-grid-cell-draggable"] [role="gridcell"]',
-  );
-  const count = await gridcells.count();
-  const labels: string[] = [];
-  // Reading the gridcell attributes must happen sequentially over Playwright's locator API;
-  // there is no batch getAttribute, so awaiting inside the loop is intentional here.
+async function getCellResourceIds(stg: ScriptureTextGrid): Promise<string[]> {
+  const cells = stg.frame.locator('[data-testid="scripture-text-grid-cell-draggable"]');
+  const count = await cells.count();
+  const ids: string[] = [];
+  // Reading the attributes must happen sequentially over Playwright's locator API; there is no
+  // batch getAttribute, so awaiting inside the loop is intentional here.
   /* eslint-disable no-await-in-loop */
   for (let i = 0; i < count; i++) {
-    const label = await gridcells.nth(i).getAttribute('aria-label');
-    labels.push((label ?? '').trim());
+    const id = await cells.nth(i).getAttribute('data-resource-id');
+    ids.push(id ?? '');
   }
   /* eslint-enable no-await-in-loop */
-  return labels;
-}
-
-/** Convenience wrapper: get cell labels from a {@link ScriptureTextGrid} page object. */
-function getCellLabels(stg: ScriptureTextGrid): Promise<string[]> {
-  return getCellAriaLabels(stg.frame);
+  return ids;
 }
 
 test.describe('Scripture Text Grid — cell drag-reorder and persistence', () => {
@@ -131,8 +124,8 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     // Wait for both draggable cells to appear.
     await expect(stg.cellDraggable).toHaveCount(2, { timeout: 15_000 });
 
-    const labelsBefore = await getCellLabels(stg);
-    expect(labelsBefore).toHaveLength(2);
+    const idsBefore = await getCellResourceIds(stg);
+    expect(idsBefore).toHaveLength(2);
 
     // Drag the second cell (index 1) onto the first cell (index 0). Playwright's dragTo
     // moves source → target using pointer events; the grid's onDragStart/onDrop handlers
@@ -142,11 +135,11 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     // Wait for React to re-render the reordered row.
     await mainPage.waitForTimeout(500);
 
-    const labelsAfter = await getCellLabels(stg);
-    expect(labelsAfter).toHaveLength(2);
+    const idsAfter = await getCellResourceIds(stg);
+    expect(idsAfter).toHaveLength(2);
     // The order should be reversed: what was second is now first.
-    expect(labelsAfter[0]).toBe(labelsBefore[1]);
-    expect(labelsAfter[1]).toBe(labelsBefore[0]);
+    expect(idsAfter[0]).toBe(idsBefore[1]);
+    expect(idsAfter[1]).toBe(idsBefore[0]);
   });
 
   // ---------------------------------------------------------------------------
@@ -172,14 +165,14 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     const stg = await openScriptureTextGrid(mainPage, projectId);
     await expect(stg.cellDraggable).toHaveCount(2, { timeout: 15_000 });
 
-    const labelsBefore = await getCellLabels(stg);
+    const idsBefore = await getCellResourceIds(stg);
 
     // Drag second → first.
     await stg.cellDraggable.nth(1).dragTo(stg.cellDraggable.nth(0));
     await mainPage.waitForTimeout(500);
 
-    const labelsAfterDrag = await getCellLabels(stg);
-    expect(labelsAfterDrag[0]).toBe(labelsBefore[1]);
+    const idsAfterDrag = await getCellResourceIds(stg);
+    expect(idsAfterDrag[0]).toBe(idsBefore[1]);
 
     // Reload the web view via PAPI. Grab the webViewId first, then reload it.
     const reloadedId = await mainPage.evaluate(async (webViewType) => {
@@ -209,10 +202,10 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     const stgAfterReload = await openScriptureTextGrid(mainPage, projectId);
     await expect(stgAfterReload.cellDraggable).toHaveCount(2, { timeout: 20_000 });
 
-    const labelsAfterReload = await getCellLabels(stgAfterReload);
+    const idsAfterReload = await getCellResourceIds(stgAfterReload);
     // The reordered sequence must survive the reload (CellOrder persisted via C#).
-    expect(labelsAfterReload[0]).toBe(labelsBefore[1]);
-    expect(labelsAfterReload[1]).toBe(labelsBefore[0]);
+    expect(idsAfterReload[0]).toBe(idsBefore[1]);
+    expect(idsAfterReload[1]).toBe(idsBefore[0]);
   });
 
   // NOTE: Restart persistence (drag to reorder → fully restart the app → order restored) is not
@@ -265,10 +258,10 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
 
     // Two cells must be visible; B must be LAST (appended, not prepended).
     await expect(stg.cellDraggable).toHaveCount(2, { timeout: 15_000 });
-    const labelsWithTwo = await getCellLabels(stg);
-    expect(labelsWithTwo).toHaveLength(2);
-    expect(labelsWithTwo[0]).toBe('Resource A');
-    expect(labelsWithTwo[1]).toBe('Resource B');
+    const idsWithTwo = await getCellResourceIds(stg);
+    expect(idsWithTwo).toHaveLength(2);
+    expect(idsWithTwo[0]).toBe(idA);
+    expect(idsWithTwo[1]).toBe(idB);
 
     // Close the popover.
     await mainPage.keyboard.press('Escape');
@@ -283,10 +276,10 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     await stg.cellDraggable.nth(1).dragTo(stg.cellDraggable.nth(0));
     await mainPage.waitForTimeout(500);
 
-    const labelsAfterDrag = await getCellLabels(stg);
-    expect(labelsAfterDrag).toHaveLength(2);
-    expect(labelsAfterDrag[0]).toBe('Resource B');
-    expect(labelsAfterDrag[1]).toBe('Resource A');
+    const idsAfterDrag = await getCellResourceIds(stg);
+    expect(idsAfterDrag).toHaveLength(2);
+    expect(idsAfterDrag[0]).toBe(idB);
+    expect(idsAfterDrag[1]).toBe(idA);
 
     // Uncheck Resource B (currently FIRST). The row should collapse to just A.
     await stg.viewOptionsButton.click();
@@ -299,12 +292,12 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     await mainPage.keyboard.press('Escape');
 
     await expect(stg.cellDraggable).toHaveCount(1, { timeout: 10_000 });
-    const labelsAfterUncheck = await getCellLabels(stg);
-    expect(labelsAfterUncheck).toHaveLength(1);
-    expect(labelsAfterUncheck[0]).toBe('Resource A');
+    const idsAfterUncheck = await getCellResourceIds(stg);
+    expect(idsAfterUncheck).toHaveLength(1);
+    expect(idsAfterUncheck[0]).toBe(idA);
 
     // Re-check Resource B. Keep-the-slot: B must return to index 0 (its remembered slot).
-    // If the implementation appended B instead, the row would be ['Resource A', 'Resource B']
+    // If the implementation appended B instead, the row would be [idA, idB]
     // (B at index 1), making this assertion fail — the test is genuinely falsifiable.
     await stg.viewOptionsButton.click();
     await expect(stg.frame.getByText('Texts')).toBeVisible({ timeout: 10_000 });
@@ -316,12 +309,12 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     await mainPage.keyboard.press('Escape');
 
     await expect(stg.cellDraggable).toHaveCount(2, { timeout: 10_000 });
-    const labelsAfterRecheck = await getCellLabels(stg);
-    expect(labelsAfterRecheck).toHaveLength(2);
+    const idsAfterRecheck = await getCellResourceIds(stg);
+    expect(idsAfterRecheck).toHaveLength(2);
     // B must be back at index 0 — its saved slot from the drag. If it were at index 1
     // the keep-the-slot invariant would be broken.
-    expect(labelsAfterRecheck[0]).toBe('Resource B');
-    expect(labelsAfterRecheck[1]).toBe('Resource A');
+    expect(idsAfterRecheck[0]).toBe(idB);
+    expect(idsAfterRecheck[1]).toBe(idA);
   });
 });
 
