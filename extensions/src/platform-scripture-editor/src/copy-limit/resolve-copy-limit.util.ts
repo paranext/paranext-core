@@ -4,6 +4,10 @@ import { isPlatformError, PlatformError } from 'platform-bible-utils';
  * Turns the backend's per-book copy limits into the editor's `copyLimit` for one chapter. While the
  * limits are unknown (loading or failed) nothing may be copied, for any text, so a slow or failed
  * request can't open a gap.
+ *
+ * Chapter 0 (a book's introduction and headings) is shown as the start of chapter 1, so it takes
+ * chapter 1's limit. A chapter with no entry, including one past the end of the book, which has no
+ * text to copy, has no limit.
  */
 export function resolveCopyLimit({
   value,
@@ -15,7 +19,7 @@ export function resolveCopyLimit({
   chapterNum: number;
 }): number | undefined {
   if (isLoading || isPlatformError(value)) return 0;
-  return value?.[chapterNum] ?? undefined;
+  return value?.[chapterNum === 0 ? 1 : chapterNum] ?? undefined;
 }
 
 /**

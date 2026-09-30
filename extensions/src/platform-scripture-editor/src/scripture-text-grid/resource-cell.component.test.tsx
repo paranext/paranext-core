@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -9,6 +9,7 @@ import { Canon } from '@sillsdev/scripture';
 import { ResourceCell } from './resource-cell.component';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
 import { useChapterCopyLimit } from '../copy-limit/use-chapter-copy-limit.hook';
+import { resetCopyLimitLookupsBeforeEach } from '../copy-limit/copy-limit.test-utils';
 
 const {
   mockUseProjectData,
@@ -234,9 +235,11 @@ function renderResourceCell(
   render(<ResourceCell {...props} {...rest} />);
 }
 
+resetCopyLimitLookupsBeforeEach();
+
 // The copy limit looks up each project's metadata once per web view. Settle that lookup for this
-// file's project up front, so no test ends with it still in flight.
-beforeAll(async () => {
+// file's project before each test, so no test starts or ends with it still in flight.
+beforeEach(async () => {
   setUsjResult(chapter, false);
   const { unmount } = renderHook(() =>
     useChapterCopyLimit(props.resourceRef.projectId, scrRef, 'applied-by-caller'),
@@ -374,8 +377,12 @@ describe('ResourceCell copy limit', () => {
 
     rerender(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 2 }} />);
 
-    const [[optionsOnChange]] = capturedEditorOptions.mock.calls.slice(rendersBeforeChange);
-    expect(optionsOnChange).toEqual(expect.objectContaining({ copyLimit: 0 }));
+    // The previous chapter's text is not shown on that render, and any editor render there was
+    // could copy nothing.
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    capturedEditorOptions.mock.calls
+      .slice(rendersBeforeChange)
+      .forEach(([options]) => expect(options).toEqual(expect.objectContaining({ copyLimit: 0 })));
 
     rerender(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 2 }} />);
     expect(capturedEditorOptions).toHaveBeenLastCalledWith(
@@ -394,6 +401,24 @@ describe('ResourceCell copy limit', () => {
   // (non-zero) limit already resolved, so a future change to `deriveCellState` that let a loading
   // cell fall through to `'ready'` would be caught here rather than silently exposing stale text
   // under the wrong limit.
+  it("does not show the previous resource's text under a new resource before the new text has loaded", () => {
+    setUsjResult(chapter, false);
+    const { rerender } = render(<ResourceCell {...props} />);
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+
+    // The chapter fetch still holds the previous resource's text and reports it settled.
+    const otherResource = { ...props.resourceRef, projectId: 'other-project' };
+    rerender(<ResourceCell {...props} resourceRef={otherResource} />);
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+
+    // The new resource's text loads and arrives.
+    setUsjResult(chapter, true);
+    rerender(<ResourceCell {...props} resourceRef={otherResource} />);
+    setUsjResult(chapter, false);
+    rerender(<ResourceCell {...props} resourceRef={otherResource} />);
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+  });
+
   it('never mounts the editor while the chapter text is loading, even once the limit is known', () => {
     setUsjResult(chapter, true, [[undefined, 7], vi.fn(), false]);
     render(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 1 }} />);

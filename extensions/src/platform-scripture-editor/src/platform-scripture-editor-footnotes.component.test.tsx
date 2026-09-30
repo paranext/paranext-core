@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen } from '@testing-library/react';
 import type { UseWebViewStateHook } from '@papi/core';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
@@ -145,8 +145,12 @@ const USJ_WITH_FOOTNOTE: Usj = {
   ],
 };
 
-/** Selects everything in the footnotes pane, copies, and returns what was put on the clipboard. */
-function copyWholePane(container: HTMLElement) {
+/**
+ * Selects everything in the footnotes pane, copies, and returns what was put on the clipboard.
+ *
+ * @param hasClipboardData `false` to copy with no `clipboardData`, as some copy events carry.
+ */
+function copyWholePane(container: HTMLElement, hasClipboardData = true) {
   const pane = container.querySelector('[data-platform-content-zoom-root="footnotes"]');
   if (!pane) throw new Error('footnotes pane not rendered');
   const range = document.createRange();
@@ -154,7 +158,13 @@ function copyWholePane(container: HTMLElement) {
   window.getSelection()?.removeAllRanges();
   window.getSelection()?.addRange(range);
   const setData = vi.fn();
-  const notCancelled = fireEvent.copy(pane, { clipboardData: { setData } });
+  const event = createEvent.copy(pane);
+  Object.defineProperty(event, 'clipboardData', {
+    // A copy event with no clipboard data carries `null`, not `undefined`
+    // eslint-disable-next-line no-null/no-null
+    value: hasClipboardData ? { setData } : null,
+  });
+  const notCancelled = fireEvent(pane, event);
   window.getSelection()?.removeAllRanges();
   return { setData, isCancelled: !notCancelled, selectedText: range.toString() };
 }
@@ -178,6 +188,39 @@ describe('FootnotesLayout copy limit', () => {
     const [format, text] = setData.mock.calls[0];
     expect(format).toBe('text/plain');
     expect(text).toHaveLength(5);
+  });
+
+  it('leaves a copy from the pane alone when it is within the copy limit', () => {
+    const { container } = render(
+      <FootnotesLayout
+        usj={USJ_WITH_FOOTNOTE}
+        showMarkers
+        useWebViewState={bottomStub}
+        copyLimit={1000}
+      />,
+    );
+
+    const { setData, isCancelled, selectedText } = copyWholePane(container);
+
+    // A positive control: the pane had text to copy, so a native copy would carry it.
+    expect(selectedText.length).toBeGreaterThan(0);
+    expect(isCancelled).toBe(false);
+    expect(setData).not.toHaveBeenCalled();
+  });
+
+  it('still blocks an over-limit copy from the pane that carries no clipboard data', () => {
+    const { container } = render(
+      <FootnotesLayout
+        usj={USJ_WITH_FOOTNOTE}
+        showMarkers
+        useWebViewState={bottomStub}
+        copyLimit={5}
+      />,
+    );
+
+    const { isCancelled } = copyWholePane(container, false);
+
+    expect(isCancelled).toBe(true);
   });
 
   it('copies nothing from the pane while the copy limit is 0', () => {

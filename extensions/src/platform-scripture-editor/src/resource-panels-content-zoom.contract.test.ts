@@ -84,9 +84,14 @@ describe('content zoom markers (Text Collection grid)', () => {
       ),
     ).toHaveLength(2);
     // The scroll box's overflow class is chosen per view (the Grid view hands scrolling to its root),
-    // so the inline layout is pinned by the element's other classes.
+    // so the inline layout is pinned by the element's other classes. In both layouts the scroll box
+    // carries `contentRef`, which the right-click Copy reads its selection within, so the resource
+    // name beside it is not copied.
     expect(cell).toMatch(
-      /<div (?:ref={contentRef} )?className={`tw:min-w-0 tw:flex-1 \$\{contentOverflowClass\}`} style={contentStyle} ?> <ContentZoomRoot area={zoomArea}/,
+      /<div ref={contentRef} className={`tw:min-w-0 tw:flex-1 \$\{contentOverflowClass\}`} style={contentStyle} ?> <ContentZoomRoot area={zoomArea}/,
+    );
+    expect(cell).toMatch(
+      /<div ref={contentRef} data-cell-content className={`tw:flex-1 \$\{contentOverflowClass\}`} style={contentStyle}/,
     );
     expect(cell).toContain(
       '<div data-cell-pad className="tw:p-2"> <ContentZoomRoot area={zoomArea}',

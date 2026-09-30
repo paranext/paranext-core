@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
@@ -10,8 +11,9 @@ namespace TestParanextDataProvider.Projects
     /// Unit tests for the <see cref="ParatextProjectDataProvider"/> copy-limit methods — i.e. the
     /// methods registered under the <c>platformScripture.CopyLimit</c> projectInterface.
     ///
-    /// <c>GetBookCopyLimits</c> delegates to <see cref="ResourceCopyLimit.GetBookCopyLimits"/>,
-    /// whose public-build body always returns <c>null</c> (no limit); <c>SetBookCopyLimits</c>
+    /// <c>GetBookCopyLimits</c> delegates to <see cref="ResourceCopyLimit.GetBookCopyLimits"/>
+    /// (through <c>BookCopyLimitsSource</c>, which tests replace), whose public-build body always
+    /// returns <c>null</c> (no limit); <c>SetBookCopyLimits</c>
     /// exists only to satisfy the canonical DataProvider get/set contract and always throws.
     /// </summary>
     [ExcludeFromCodeCoverage]
@@ -54,13 +56,63 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void GetBookCopyLimits_RequestInAnotherVersification_PublicBuild_ReturnsNoLimit()
+        public void GetBookCopyLimits_AsksForTheBookOfThisProject_AndReturnsTheAnswerAsItIs()
         {
+            // The project and the request are in different versifications, and the request names a
+            // chapter and verse, to show that only the book is used: the answer stays indexed by the
+            // project's own chapter numbers, as the chapter-text endpoints are.
             _scrText.Settings.Versification = ScrVers.English;
-            Assert.That(
-                _provider.GetBookCopyLimits(new VerseRef("MAL", "1", "1", ScrVers.Original)),
-                Is.Null
+            var limits = new int?[] { null, 11, 22, 33, 44 };
+            var requests = new List<(ScrText scrText, int bookNum)>();
+            _provider.BookCopyLimitsSource = (scrText, bookNum) =>
+            {
+                requests.Add((scrText, bookNum));
+                return limits;
+            };
+
+            var result = _provider.GetBookCopyLimits(
+                new VerseRef("MAL", "3", "5", ScrVers.Original)
             );
+
+            Assert.That(result, Is.SameAs(limits));
+            Assert.That(requests, Has.Count.EqualTo(1));
+            Assert.That(requests[0].scrText, Is.SameAs(_scrText));
+            Assert.That(requests[0].bookNum, Is.EqualTo(Canon.BookIdToNumber("MAL")));
+        }
+
+        [Test]
+        public void BookCopyLimitsSource_DefaultsToResourceCopyLimit()
+        {
+            Assert.That(
+                _provider.BookCopyLimitsSource.Method,
+                Is.EqualTo(
+                    typeof(ResourceCopyLimit).GetMethod(nameof(ResourceCopyLimit.GetBookCopyLimits))
+                )
+            );
+        }
+
+        [Test]
+        public void ResourceCopyLimit_KeepsTheSignatureTheDownstreamPatchReplaces()
+        {
+            // Looked up by name rather than through `typeof`, so a rename or a move fails here
+            // rather than being carried along by a refactoring tool.
+            var type = typeof(ParatextProjectDataProvider).Assembly.GetType(
+                "Paranext.DataProvider.Projects.ResourceCopyLimit"
+            );
+            Assert.That(type, Is.Not.Null, "ResourceCopyLimit must keep its name and namespace");
+
+            var method = type!.GetMethod(
+                "GetBookCopyLimits",
+                BindingFlags.Public | BindingFlags.Static
+            );
+            Assert.That(method, Is.Not.Null, "GetBookCopyLimits must stay public and static");
+            Assert.That(
+                method!.GetParameters().Select(parameter => parameter.ParameterType),
+                Is.EqualTo(new[] { typeof(ScrText), typeof(int) })
+            );
+            Assert.That(method.ReturnType, Is.EqualTo(typeof(int?[])));
+            var nullability = new NullabilityInfoContext().Create(method.ReturnParameter);
+            Assert.That(nullability.ReadState, Is.EqualTo(NullabilityState.Nullable));
         }
 
         [Test]

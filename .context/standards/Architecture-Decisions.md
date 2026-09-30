@@ -1556,7 +1556,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   this repo in any form.
 - **Decision:** Public code provides only the mechanism, and answers "no limit" everywhere:
   - a read-only project data type, `platformScripture.CopyLimit` / `BookCopyLimits`, one array per
-    book with one entry per chapter;
+    book with one entry per chapter, each a count of UTF-16 code units;
   - a core hook, `useChapterCopyLimit`, that subscribes once per book and resolves the limit for
     the chapter on screen;
   - the editor option `EditorOptions.copyLimit`, whose plugin shortens an over-limit copy or cut
@@ -1582,11 +1582,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - A view passes a limit of `0` while its displayed chapter's text is still loading, because the
     per-book limit can arrive before the new chapter's text does — so a chapter navigation blocks
     copying for a moment even on an unlimited text.
-  - The `BookCopyLimits` selector carries the caller's book and versification. The downstream
-    rule answers per chapter of the project's own versification, and C# re-indexes that answer
-    into the requested versification, so a view indexes it with the same chapter number it fetches
-    text with. A requested chapter that spans several project chapters, in its own book or in
-    another book its verses map into, takes the smallest of their limits.
+  - `BookCopyLimits` is indexed like the chapter-text endpoints, by the project's own chapter
+    numbers: only the selector's book is read, and its versification, chapter and verse are
+    ignored. The chapter-text endpoints fetch a chapter by its number in the project's own
+    versification, so a view indexes the limits with the same chapter number it fetches text with.
+  - A view showing chapter 0 (a book's introduction, shown with chapter 1) uses chapter 1's limit.
 
 - **Source:** [PT-4730](https://paratextstudio.atlassian.net/browse/PT-4730).
 
@@ -1676,6 +1676,37 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   mismatched result where the two projects' versifications diverge at that reference. That gap is
   accepted as a consequence of this decision, not a defect in it, until PT-4031 lands.
 - **Source:** external code review, finding 16.
+## adr-data-update-scope-hook: A data type every update must refresh is added by an overridable hook on the base data provider
+
+- **Date:** 2026-09-30
+- **Status:** Accepted
+- **Context:** Some data a C# data provider serves is derived from other data it serves, so any
+  change to the provider's data may change it. `BookCopyLimits` on `ParatextProjectDataProvider`
+  is one: its subscribers must refetch it whenever the provider sends an update, and the provider
+  sends updates from dozens of call sites, each naming only the data types it changed.
+- **Decision:** `DataProvider.SendDataUpdateEventAsync` (`c-sharp/NetworkObjects/DataProvider.cs`)
+  calls a protected virtual hook, `ExpandDataUpdateScope(List<string> dataTypes)`, on every
+  update that names data types, and sends the list it returns. The base class decodes the scope
+  first: `"*"` already refreshes every data type, so it is sent without reaching the hook, and
+  nothing is sent for a blank data type or an empty list, before or after the hook. The hook gets a
+  list the base class owns, so an override may add to it and return it. A subclass adds the data
+  types it must always refresh there.
+- **Alternatives:**
+  - **A wrapper that call sites use instead of `SendDataUpdateEvent`** — rejected: every existing
+    call site would have to change, and a new one that calls the base method directly would skip
+    the refresh with nothing to catch it.
+  - **Naming the derived data type at every call site** — rejected for the same reason.
+  - **A test that scans the source for update calls that leave the data type out** — rejected: a
+    text match catches only the call shapes it was written for, while the hook makes the refresh
+    structural, so no call site can leave it out.
+- **Consequences:**
+  - Each subscriber to a data type added this way refetches it on every update the provider sends.
+    Narrow the hook to the scopes that can change the derived data if that cost starts to matter.
+  - An override should call `base.ExpandDataUpdateScope` first, so that a hook added lower in the
+    hierarchy keeps working; nothing enforces it.
+  - The hook sees decoded data types, never the wire encoding of the scope, so a change to that
+    encoding (see issue #443 in `paranext/paranext-core`) touches only the base class.
+
 ## adr-dbl-cache-recompute-on-read: The DBL resource cache recomputes derived flags on read, not on write
 
 - **Date:** 2026-09-01

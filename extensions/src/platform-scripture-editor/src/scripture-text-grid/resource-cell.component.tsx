@@ -115,12 +115,12 @@ export function ResourceCell({
 
   // #region Chapter fetch and copy limit
   // `projectId` may be undefined for unavailable resources; the hook must still be called
-  // unconditionally (Rules of Hooks). The editor is not mounted while `deriveCellState` below
-  // reports `'downloading'`, but that reads the fetch's own loading flag, which is still unset on
-  // the render that changes chapter, so the copy limit blocks copying on that render as well.
+  // unconditionally (Rules of Hooks). `isChapterTextLoading` is also set while the fetch still
+  // holds the previous chapter's or resource's text, so `deriveCellState` below reports
+  // `'downloading'` rather than showing that text under this cell's resource.
   const {
     usjPossiblyError,
-    isUsjLoading: isLoading,
+    isChapterTextLoading: isLoading,
     copyLimit,
   } = useChapterUsjWithCopyLimit(resourceRef.projectId, scrRef);
   // #endregion

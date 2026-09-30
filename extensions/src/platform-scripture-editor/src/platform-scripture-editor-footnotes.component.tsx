@@ -52,9 +52,9 @@ export type FootnotesLayoutProps = PropsWithChildren<{
    */
   zoomAreaLabel?: string;
   /**
-   * The most characters a copy from the pane may put on the clipboard; `undefined` is unlimited.
-   * The pane shows the chapter's own text, so pass the editor's `copyLimit`, `0` while loading
-   * included. Required so a caller states it.
+   * The most UTF-16 code units a copy from the pane may put on the clipboard; `undefined` is
+   * unlimited. The pane shows the chapter's own text, so pass the editor's `copyLimit`, `0` while
+   * loading included. Required so a caller states it.
    */
   copyLimit: number | undefined;
 }>;
@@ -275,13 +275,19 @@ export function FootnotesLayout({
   );
 
   // The pane is outside the editor, whose own copy guard handles only selections that reach into
-  // the editor, so the pane shortens its own copies.
+  // the editor, so the pane shortens its own copies. A copy within the limit is left to the
+  // browser, with all its usual clipboard formats; only one that needs shortening is written, as
+  // plain text.
   const handleFootnotesCopy = useCallback(
     (event: ClipboardEvent<HTMLDivElement>) => {
       if (copyLimit === undefined) return;
+      const selectedText = window.getSelection()?.toString() ?? '';
+      const text = truncateToCopyLimit(selectedText, copyLimit);
+      if (text === selectedText) return;
       event.preventDefault();
-      const text = truncateToCopyLimit(window.getSelection()?.toString() ?? '', copyLimit);
-      if (text) event.clipboardData.setData('text/plain', text);
+      // React types `clipboardData` as always present, but some copy events carry none; the copy
+      // stays blocked rather than letting the browser copy the whole selection.
+      if (text && event.clipboardData) event.clipboardData.setData('text/plain', text);
     },
     [copyLimit],
   );

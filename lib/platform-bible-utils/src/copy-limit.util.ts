@@ -7,6 +7,10 @@ import { graphemeSegments } from 'unicode-segmenter/grapheme';
  * the longest start of `text` that fits and ends at a cluster boundary, so it can be shorter than
  * `copyLimit`.
  *
+ * Segmentation contract: cuts only at grapheme-cluster boundaries as `unicode-segmenter` finds
+ * them, measured in UTF-16 code units, the same contract `EditorOptions.copyLimit` follows, so a
+ * copy cut here and one the editor cuts end at the same place.
+ *
  * @param text The text to shorten.
  * @param copyLimit The most UTF-16 code units the result may have, or `undefined` for no limit.
  * @returns `text` itself when it fits or there is no limit, otherwise its longest start that fits.

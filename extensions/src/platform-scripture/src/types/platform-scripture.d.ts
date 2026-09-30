@@ -997,17 +997,15 @@ declare module 'platform-scripture' {
   export type CopyLimitProjectInterfaceDataTypes = {
     /**
      * Read-only. Maximum number of UTF-16 code units (JavaScript string length, not grapheme
-     * clusters) that may be copied at once from each chapter of the selected book, indexed by
-     * chapter number (index 0 is unused). A missing entry, or an `undefined` result, means no
-     * limit. An implementation may impose a per-chapter limit on some texts. Copy surfaces showing
-     * this project's text should enforce it. Subscribe to react to changes; do not assume a cached
-     * value stays valid.
+     * clusters) that may be copied at once from each chapter of the selected book, indexed like the
+     * chapter-text endpoints, by the project's own chapter numbers (index 0 is unused). A missing
+     * entry, or an `undefined` result, means no limit; a limit of `0` means nothing may be copied.
+     * An implementation may impose a per-chapter limit on some texts. Copy surfaces showing this
+     * project's text should enforce it. Subscribe to react to changes; do not assume a cached value
+     * stays valid.
      *
-     * The selector names the book (`book`) and the versification the caller works in
-     * (`versificationStr`); its `chapterNum` and `verseNum` are ignored, so pass `1` for both. The
-     * result is indexed by chapter in that versification, so a caller can index it with the chapter
-     * number of the reference it fetches chapter text with. Omit `versificationStr` to get the
-     * result indexed in the project's own versification.
+     * The selector names the book (`book`); its `versificationStr`, `chapterNum` and `verseNum` are
+     * ignored, so pass `1` for both numbers.
      */
     BookCopyLimits: DataProviderDataType<
       SerializedVerseRef,
@@ -1018,7 +1016,43 @@ declare module 'platform-scripture' {
 
   /** Provides per-chapter copy limits for this project */
   export type ICopyLimitProjectDataProvider =
-    IProjectDataProvider<CopyLimitProjectInterfaceDataTypes>;
+    IProjectDataProvider<CopyLimitProjectInterfaceDataTypes> & {
+      /**
+       * Gets the most UTF-16 code units that may be copied at once from each chapter of the book
+       * `verseRef` names. See {@link CopyLimitProjectInterfaceDataTypes.BookCopyLimits}.
+       *
+       * @param verseRef Names the book. Its `versificationStr`, `chapterNum` and `verseNum` are
+       *   ignored; pass `1` for both numbers.
+       * @returns The limits, indexed like the chapter-text endpoints, by the project's own chapter
+       *   numbers (index 0 is unused). A missing entry, or `undefined` for the whole book, means no
+       *   limit; `0` means nothing may be copied from that chapter.
+       */
+      getBookCopyLimits(verseRef: SerializedVerseRef): Promise<(number | undefined)[] | undefined>;
+      /**
+       * This data cannot be changed. The C# project data provider registers `setBookCopyLimits`
+       * only to satisfy the data provider contract, and every call rejects at runtime.
+       */
+      setBookCopyLimits(
+        verseRef: SerializedVerseRef,
+        limits: never,
+      ): Promise<DataProviderUpdateInstructions<CopyLimitProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when the copy limits of the book `verseRef` names
+       * change
+       *
+       * @param verseRef Names the book. Its `versificationStr`, `chapterNum` and `verseNum` are
+       *   ignored; pass `1` for both numbers.
+       * @param callback Function to run with the updated limits, indexed as
+       *   {@link ICopyLimitProjectDataProvider.getBookCopyLimits} returns them
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function
+       */
+      subscribeBookCopyLimits(
+        verseRef: SerializedVerseRef,
+        callback: (limits: (number | undefined)[] | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
 
   // #endregion Copy Limit Types
 

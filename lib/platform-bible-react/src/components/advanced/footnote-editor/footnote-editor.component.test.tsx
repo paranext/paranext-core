@@ -265,8 +265,10 @@ describe('FootnoteEditor width lock', () => {
 });
 
 describe('FootnoteEditor Copy button', () => {
-  function clickCopy(copyLimit: number | undefined) {
-    const writeText = vi.fn().mockResolvedValue(undefined);
+  function clickCopy(
+    copyLimit: number | undefined,
+    writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined),
+  ) {
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText },
       writable: true,
@@ -295,6 +297,21 @@ describe('FootnoteEditor Copy button', () => {
 
   it('copies nothing while the copy limit is 0', () => {
     expect(clickCopy(0)).not.toHaveBeenCalled();
+  });
+
+  it('reports a clipboard write that fails rather than leaving it unhandled', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const writeText = clickCopy(
+        undefined,
+        vi.fn<(text: string) => Promise<void>>().mockRejectedValue(new Error('denied')),
+      );
+      expect(writeText).toHaveBeenCalledWith('note text');
+      await act(async () => {});
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('denied'));
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

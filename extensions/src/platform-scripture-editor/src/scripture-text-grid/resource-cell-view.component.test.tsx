@@ -504,6 +504,42 @@ describe('ResourceCellView right-click menu', () => {
     getSelectionSpy.mockRestore();
   });
 
+  it('still opens the menu, with Copy disabled, when the selection cannot be read', () => {
+    // A selection left anchored in nodes the editor has since replaced throws when it is read.
+    // The component reads only these members; the rest of `Selection` is irrelevant here.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      rangeCount: 1,
+      getRangeAt: () => {
+        throw new DOMException('The index is not in the allowed range.', 'IndexSizeError');
+      },
+      toString: () => 'selected text',
+    } as unknown as Selection);
+
+    try {
+      renderCells(
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>verse</span>}
+        />,
+      );
+
+      fireEvent.contextMenu(screen.getByText('verse'));
+
+      expect(screen.getByRole('menuitem', { name: 'Copy' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    } finally {
+      getSelectionSpy.mockRestore();
+    }
+  });
+
   it('selecting Copy writes the selected text to the clipboard', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const writeText = vi.fn().mockResolvedValue(undefined);

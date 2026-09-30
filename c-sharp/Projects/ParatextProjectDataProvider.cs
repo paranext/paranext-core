@@ -408,6 +408,18 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Adds <see cref="ProjectDataType.BOOK_COPY_LIMITS"/> to every update this provider sends that
+    /// names data types, so copy limits are refetched whenever any project data changes.
+    /// </summary>
+    protected override List<string> ExpandDataUpdateScope(List<string> dataTypes)
+    {
+        dataTypes = base.ExpandDataUpdateScope(dataTypes);
+        if (!dataTypes.Contains(ProjectDataType.BOOK_COPY_LIMITS))
+            dataTypes.Add(ProjectDataType.BOOK_COPY_LIMITS);
+        return dataTypes;
+    }
+
     #endregion
 
     #region Extension Data
@@ -2503,30 +2515,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         SendDataUpdateEvent("*", "full project updated event");
     }
 
-    /// <summary>
-    /// Adds <see cref="ProjectDataType.BOOK_COPY_LIMITS"/> to every update this provider sends, so
-    /// copy limits are refetched whenever any project data changes. <c>"*"</c> already covers every
-    /// data type, and a scope the base class would not send (an empty list or a blank string) is
-    /// passed through unchanged.
-    /// </summary>
-    protected override object ExpandDataUpdateScope(object dataScope)
-    {
-        List<string>? dataTypes = dataScope switch
-        {
-            string dataType when !string.IsNullOrWhiteSpace(dataType) && dataType != "*" =>
-            [
-                dataType,
-            ],
-            List<string> list when list.Count > 0 => [.. list],
-            _ => null,
-        };
-        if (dataTypes == null)
-            return dataScope;
-        if (!dataTypes.Contains(ProjectDataType.BOOK_COPY_LIMITS))
-            dataTypes.Add(ProjectDataType.BOOK_COPY_LIMITS);
-        return dataTypes;
-    }
-
     #endregion
 
     #region USFM
@@ -2745,23 +2733,24 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     #region Copy Limit (platformScripture.CopyLimit)
 
     /// <summary>
-    /// Maximum number of UTF-16 code units that may be copied at once from each chapter of the book
-    /// <paramref name="verseRef"/> names, indexed by chapter number in <paramref name="verseRef"/>'s
-    /// versification (index 0 unused), or <c>null</c> for no limit. A <paramref name="verseRef"/>
-    /// with no versification means the project's own. Its chapter and verse are ignored. Read-only.
+    /// Where <see cref="GetBookCopyLimits"/> gets its answer: always
+    /// <see cref="ResourceCopyLimit.GetBookCopyLimits"/> outside tests, which replace it to see
+    /// what is asked for.
     /// </summary>
-    public int?[]? GetBookCopyLimits(VerseRef verseRef)
-    {
-        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-        var projectVersification = scrText.Settings.Versification;
-        var requestVersification = verseRef.Versification ?? projectVersification;
-        return CopyLimitVersificationMapper.MapToVersification(
-            bookNum => ResourceCopyLimit.GetBookCopyLimits(scrText, bookNum),
-            verseRef.BookNum,
-            projectVersification,
-            requestVersification
+    internal Func<ScrText, int, int?[]?> BookCopyLimitsSource { get; set; } =
+        ResourceCopyLimit.GetBookCopyLimits;
+
+    /// <summary>
+    /// Maximum number of UTF-16 code units that may be copied at once from each chapter of the book
+    /// <paramref name="verseRef"/> names, or <c>null</c> for no limit. Indexed like the chapter-text
+    /// endpoints, by the project's own chapter numbers (index 0 unused);
+    /// <paramref name="verseRef"/>'s versification, chapter and verse are ignored. Read-only.
+    /// </summary>
+    public int?[]? GetBookCopyLimits(VerseRef verseRef) =>
+        BookCopyLimitsSource(
+            LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id),
+            verseRef.BookNum
         );
-    }
 
     /// <summary>Read-only — always throws.</summary>
     public bool SetBookCopyLimits(VerseRef verseRef, int?[]? value) =>

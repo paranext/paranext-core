@@ -339,6 +339,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⌘A', windows: 'Ctrl+A', linux: 'Ctrl+A' },
     locations: [
       'extensions/src/platform-scripture-editor/src/copy-limit/use-chapter-copy-limit.hook.ts',
+      'extensions/src/platform-scripture-editor/src/copy-limit/use-chapter-usj-with-copy-limit.hook.ts',
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
       'extensions/src/platform-scripture-editor/src/resource-text-panel.web-view.tsx',
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell.component.tsx',

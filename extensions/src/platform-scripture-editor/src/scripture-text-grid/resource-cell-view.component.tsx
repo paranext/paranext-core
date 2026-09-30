@@ -80,7 +80,7 @@ export type ResourceCellViewProps = {
   /** Localized strings; import `RESOURCE_CELL_STRING_KEYS` to resolve them. */
   localizedStrings: ResourceCellLocalizedStrings;
   /**
-   * The max characters the right-click Copy item may write to the clipboard; `undefined` is
+   * The most UTF-16 code units the right-click Copy item may write to the clipboard; `undefined` is
    * unlimited. See `EditorOptions.copyLimit`. Required so a caller states it.
    */
   copyLimit: number | undefined;
@@ -152,42 +152,48 @@ export type ResourceCellViewProps = {
 
 /**
  * The text of the page's current selection that lies inside `root`. A selection dragged across
- * several cells is cut to this cell, so only text this cell's copy limit governs is copied.
+ * several cells is cut to this cell, so only text this cell's copy limit governs is copied. Reading
+ * it briefly replaces the live selection and then puts it back. A selection that cannot be read,
+ * such as one left anchored in nodes the editor has since replaced, reads as `''`.
  */
 function getSelectedTextWithin(root: Node): string {
   const selection = window.getSelection();
   if (!selection) return '';
-  const rootRange = document.createRange();
-  rootRange.selectNodeContents(root);
-  const ranges = Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i));
-  const isInsideRoot = (range: Range) =>
-    rootRange.comparePoint(range.startContainer, range.startOffset) === 0 &&
-    rootRange.comparePoint(range.endContainer, range.endOffset) === 0;
-  if (ranges.every(isInsideRoot)) return selection.toString();
+  try {
+    const rootRange = document.createRange();
+    rootRange.selectNodeContents(root);
+    const ranges = Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i));
+    const isInsideRoot = (range: Range) =>
+      rootRange.comparePoint(range.startContainer, range.startOffset) === 0 &&
+      rootRange.comparePoint(range.endContainer, range.endOffset) === 0;
+    if (ranges.every(isInsideRoot)) return selection.toString();
 
-  // `Selection.toString` keeps the line breaks between blocks that `Range.toString` drops, so read
-  // the text through the selection itself, cut to `root`, and then put the original ranges back.
-  const clampedRanges = ranges
-    .filter((range) => range.intersectsNode(root))
-    .map((range) => {
-      const clamped = range.cloneRange();
-      if (rootRange.comparePoint(range.startContainer, range.startOffset) < 0)
-        clamped.setStart(rootRange.startContainer, rootRange.startOffset);
-      if (rootRange.comparePoint(range.endContainer, range.endOffset) > 0)
-        clamped.setEnd(rootRange.endContainer, rootRange.endOffset);
-      return clamped;
-    });
-  // A range has no direction, so put the original selection back from its anchor and focus, which
-  // keep a backward selection backward.
-  const { anchorNode, anchorOffset, focusNode, focusOffset } = selection;
-  selection.removeAllRanges();
-  clampedRanges.forEach((range) => selection.addRange(range));
-  const text = selection.toString();
-  selection.removeAllRanges();
-  if (anchorNode && focusNode)
-    selection.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset);
-  else ranges.forEach((range) => selection.addRange(range));
-  return text;
+    // `Selection.toString` keeps the line breaks between blocks that `Range.toString` drops, so
+    // read the text through the selection itself, cut to `root`, and then put the original ranges
+    // back.
+    const clampedRanges = ranges
+      .filter((range) => range.intersectsNode(root))
+      .map((range) => {
+        const clamped = range.cloneRange();
+        if (rootRange.comparePoint(range.startContainer, range.startOffset) < 0)
+          clamped.setStart(rootRange.startContainer, rootRange.startOffset);
+        if (rootRange.comparePoint(range.endContainer, range.endOffset) > 0)
+          clamped.setEnd(rootRange.endContainer, rootRange.endOffset);
+        return clamped;
+      });
+    // A range has no direction, so put the original selection back from its anchor and focus,
+    // which keep a backward selection backward. A selection with a range has both.
+    const { anchorNode, anchorOffset, focusNode, focusOffset } = selection;
+    selection.removeAllRanges();
+    clampedRanges.forEach((range) => selection.addRange(range));
+    const text = selection.toString();
+    selection.removeAllRanges();
+    if (anchorNode && focusNode)
+      selection.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset);
+    return text;
+  } catch {
+    return '';
+  }
 }
 
 function ZoomItemsShared({

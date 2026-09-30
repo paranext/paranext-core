@@ -628,12 +628,17 @@ export default function FootnoteEditor({
     }
   }, [scrRef.book, scrRef.chapterNum]);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     const editorInput = editorParentRef.current?.getElementsByClassName('editor-input')[0];
     if (!editorInput?.textContent) return;
     // The Copy button honors the same copy limit as a copy from the editor itself.
     const text = truncateToCopyLimit(editorInput.textContent, editorOptions.copyLimit);
-    if (text) navigator.clipboard.writeText(text);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.warn(`Could not copy the footnote to the clipboard: ${getErrorMessage(error)}`);
+    }
   };
 
   const handleCallerChange = useCallback(
