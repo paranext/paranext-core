@@ -5,10 +5,9 @@ import {
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
   IScrollGroupService,
 } from '@shared/services/scroll-group.service-model';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
-import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { networkObjectService } from '@shared/services/network-object.service';
+import { createCachedInitializer, createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 const onDidUpdateScrRef = getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_SCR_REF);
 const onDidChangeReferenceHistory = getNetworkEvent(EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY);
