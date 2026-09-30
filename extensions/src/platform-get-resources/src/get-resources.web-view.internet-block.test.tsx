@@ -78,6 +78,22 @@ beforeEach(() => {
   };
 });
 
+/**
+ * Routes the web view's commands: `getCachedResources` answers from `serveCatalog`, and the flag
+ * refresh the dialog runs once per mount is held in flight. That refresh refetches the list when it
+ * settles, which re-renders the table under a click and retries a failed fetch before the test can
+ * — and none of these cases is about it.
+ */
+function serveCommands(serveCatalog: () => Promise<unknown>) {
+  mockSendCommand.mockImplementation(async (command: string) => {
+    if (command === 'platformGetResources.getCachedResources') return serveCatalog();
+    if (command === 'platformGetResources.refreshResourceFlags') return new Promise(() => {});
+    return undefined;
+  });
+}
+
+const serveAvailableCatalog = async () => ({ status: 'available', resources: [RESOURCE] });
+
 function renderWebView() {
   // globalThis is a special interface; cast to read the property the web view file added at runtime.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -93,7 +109,9 @@ function renderWebView() {
 
 describe('Get Resources web view', () => {
   it('reports a blocked catalog fetch with the notification that opens the setting', async () => {
-    mockSendCommand.mockRejectedValue(new Error(SERVICES_BLOCKED_ERROR));
+    serveCommands(async () => {
+      throw new Error(SERVICES_BLOCKED_ERROR);
+    });
 
     renderWebView();
 
@@ -109,7 +127,7 @@ describe('Get Resources web view', () => {
   });
 
   it('reports a blocked install with the notification that opens the setting', async () => {
-    mockSendCommand.mockResolvedValue({ status: 'available', resources: [RESOURCE] });
+    serveCommands(serveAvailableCatalog);
     mockInstallDblResource.mockRejectedValue(new Error(ALL_ACCESS_DISABLED_ERROR));
 
     renderWebView();
@@ -130,9 +148,12 @@ describe('Get Resources web view', () => {
   // fetch's own catch, so a retry that succeeds does not leave a block notification standing over a
   // list that loaded fine — and does not raise a second one.
   it('does not report the block again once a retry succeeds', async () => {
-    mockSendCommand
-      .mockRejectedValueOnce(new Error(SERVICES_BLOCKED_ERROR))
-      .mockResolvedValue({ status: 'available', resources: [RESOURCE] });
+    serveCommands(
+      vi
+        .fn()
+        .mockRejectedValueOnce(new Error(SERVICES_BLOCKED_ERROR))
+        .mockImplementation(serveAvailableCatalog),
+    );
 
     renderWebView();
 
@@ -145,7 +166,7 @@ describe('Get Resources web view', () => {
   });
 
   it('stays quiet for a failure that is not an internet block', async () => {
-    mockSendCommand.mockResolvedValue({ status: 'available', resources: [RESOURCE] });
+    serveCommands(serveAvailableCatalog);
     mockInstallDblResource.mockRejectedValue(
       new Error('JSON-RPC Request error (-32000): This resource is no longer available'),
     );
