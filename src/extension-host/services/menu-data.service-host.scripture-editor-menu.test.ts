@@ -147,6 +147,7 @@ describe("The scripture editor's Project menu, per mode", () => {
         [
           'platformScriptureEditor.insertFootnoteAtSelection',
           'platformScriptureEditor.insertCrossReferenceAtSelection',
+          'platformScriptureEditor.insertEndnoteAtSelection',
           'platformScriptureEditor.insertCommentAtSelection',
         ],
       ],
@@ -183,6 +184,7 @@ describe("The scripture editor's Project menu, per mode", () => {
         [
           'platformScriptureEditor.insertFootnoteAtSelection',
           'platformScriptureEditor.insertCrossReferenceAtSelection',
+          'platformScriptureEditor.insertEndnoteAtSelection',
           'platformScriptureEditor.insertCommentAtSelection',
         ],
       ],
