@@ -11,6 +11,9 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_step_syncConsent_heading%',
   '%firstRun_step_syncConsent_body%',
   '%firstRun_button_sync%',
+  '%firstRun_button_dontSyncYet%',
+  '%firstRun_button_back%',
+  '%firstRun_step_syncProgress_heading%',
 ];
 
 // Demo/UX mode: resolve immediately without touching the real S/R backend so the wizard
@@ -21,49 +24,54 @@ const defaultSyncFn = (): Promise<void> =>
     : sendCommand('paratextBibleSendReceive.syncProjects', undefined);
 
 /**
- * Sync consent wizard step. Presents "Sync" as the primary action; skip is surfaced by the shell
- * footer (signalled via `setCanSkip(true)`). Advancing via "Sync" runs
- * `paratextBibleSendReceive.syncProjects` then calls `onNext`.
+ * Sync consent wizard step. Renders its own footer: Back on the left, and "Don't sync yet" beside
+ * the primary "Sync" on the right, so declining reads as a peer choice rather than an afterthought.
+ * "Sync" runs `paratextBibleSendReceive.syncProjects` then calls `onNext`. "Don't sync yet" calls
+ * the shell-supplied `onDeclineSync`, which withholds automatic sync for the rest of the session
+ * and finishes the wizard.
  *
- * `setCanProceed(undefined)` hides the shell's generic Next/Finish button — this step owns its
- * primary action (Sync). `setCanSkip(true)` tells the shell to show a Skip button in its footer,
- * which calls `completeFirstRun({ skippedStep: 'syncConsent' })`. The shell's `isBusy` guard
- * disables Skip while any async action (including the skip itself) is in flight.
+ * On mount the step calls `setCanDeclineSync(true)` so the shell supplies `onDeclineSync`,
+ * `setCanProceed(undefined)` to hide the shell's generic Next/Finish, and
+ * `setManagesOwnFooter(true)` so the shell does not stack its own footer beneath this one. "Don't
+ * sync yet" is withdrawn while a sync is in flight, and the footer is disabled while the shell is
+ * busy finishing the wizard.
  *
  * `onSync` is injectable for Storybook and unit-test isolation.
  */
 function SyncConsentStep({
   onNext,
+  onBack,
+  onDeclineSync,
   setCanProceed,
-  setCanSkip,
+  setCanDeclineSync,
+  setManagesOwnFooter,
+  isBusy = false,
   onSync = defaultSyncFn,
 }: FirstRunStepProps & { onSync?: () => Promise<void> }) {
   const [strings] = useLocalizedStrings(KEYS);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState('');
 
-  // Tell the shell to show a Skip button. useEffect (async) is fine — a brief delay before Skip
-  // appears is harmless.
+  // useEffect (async) is fine here — a brief delay before "Don't sync yet" appears is harmless.
   useEffect(() => {
-    setCanSkip?.(true);
-  }, [setCanSkip]);
-  // Hide the shell's generic Next/Finish button — this step owns its primary action (Sync).
-  // The shell footer still renders, showing the Skip button (and Back if applicable) — the shell's
-  // isBusy guard is responsible for disabling Skip while an async action is in flight.
+    setCanDeclineSync?.(true);
+  }, [setCanDeclineSync]);
+  // Before the first paint, so the shell's own footer never flashes beneath this one.
   useLayoutEffect(() => {
     setCanProceed?.(undefined);
-  }, [setCanProceed]);
+    setManagesOwnFooter?.(true);
+  }, [setCanProceed, setManagesOwnFooter]);
 
   const handleSync = async () => {
     setError('');
-    setCanSkip?.(false); // prevent Skip while sync is in-flight
+    setCanDeclineSync?.(false); // withdraw the decline while the sync is in flight
     setIsSyncing(true);
     try {
       await onSync();
       onNext();
     } catch (e) {
       setError(getErrorMessage(e));
-      setCanSkip?.(true); // re-enable Skip so the user can still bail after a failed sync
+      setCanDeclineSync?.(true); // restore it so the user can still decline after a failed sync
     } finally {
       setIsSyncing(false);
     }
@@ -73,15 +81,33 @@ function SyncConsentStep({
     <WizardStepForm
       heading={strings['%firstRun_step_syncConsent_heading%']}
       error={error}
+      backButton={
+        onBack && (
+          <Button variant="outline" onClick={onBack} disabled={isBusy}>
+            {strings['%firstRun_button_back%']}
+          </Button>
+        )
+      }
       primaryButton={
-        <Button onClick={handleSync} disabled={isSyncing}>
-          {isSyncing && <Spinner />}
-          {strings['%firstRun_button_sync%']}
-        </Button>
+        <div className="tw:flex tw:gap-2">
+          {onDeclineSync && !isSyncing && (
+            <Button variant="outline" onClick={onDeclineSync} disabled={isBusy}>
+              {strings['%firstRun_button_dontSyncYet%']}
+            </Button>
+          )}
+          <Button onClick={handleSync} disabled={isSyncing || isBusy}>
+            {isSyncing && <Spinner />}
+            {strings['%firstRun_button_sync%']}
+          </Button>
+        </div>
       }
     >
       <p className="tw:text-sm tw:text-muted-foreground">
         {strings['%firstRun_step_syncConsent_body%']}
+      </p>
+      {/* Otherwise the in-flight sync is visible only as the button's spinner. */}
+      <p className="tw:sr-only" aria-live="polite">
+        {isSyncing ? strings['%firstRun_step_syncProgress_heading%'] : ''}
       </p>
     </WizardStepForm>
   );
