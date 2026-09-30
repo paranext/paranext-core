@@ -6,7 +6,7 @@ const facts = (overrides: Partial<FirstRunFacts>): FirstRunFacts => ({
   firstRunComplete: false,
   wizardActive: false,
   registrationValidity: 'invalid',
-  justRegistered: false,
+  wizardJustRestarted: false,
   ...overrides,
 });
 
@@ -22,7 +22,7 @@ describe('decideFirstRun', () => {
           firstRunComplete: true,
           wizardActive: true,
           registrationValidity: 'valid',
-          justRegistered: true,
+          wizardJustRestarted: true,
         }),
       ),
     ).toEqual({ action: 'showApp' });
@@ -45,31 +45,33 @@ describe('decideFirstRun', () => {
     });
   });
 
-  it('resumes at sync consent on the launch right after the wizard registered and restarted', () => {
+  it('resumes at sync consent on the launch right after a restart the wizard triggered', () => {
     expect(
       decideFirstRun(
-        facts({ registrationValidity: 'valid', wizardActive: true, justRegistered: true }),
+        facts({ registrationValidity: 'valid', wizardActive: true, wizardJustRestarted: true }),
       ),
     ).toEqual({ action: 'startWizard', step: 'syncConsent' });
   });
 
   it('starts at the language step when a registered user reopens an unfinished wizard', () => {
-    // Also what a hand-set `firstRunWizardActive` flag on a registered machine produces.
+    // Also covers a wizard-active flag with no restart behind it, e.g. one left from an earlier run.
     expect(decideFirstRun(facts({ registrationValidity: 'valid', wizardActive: true }))).toEqual({
       action: 'startWizard',
       step: 'language',
     });
   });
 
-  it('starts at the language step when just-registered is set without an active wizard', () => {
-    expect(decideFirstRun(facts({ registrationValidity: 'valid', justRegistered: true }))).toEqual({
+  it('starts at the language step when the wizard-restarted flag is set without an active wizard', () => {
+    expect(
+      decideFirstRun(facts({ registrationValidity: 'valid', wizardJustRestarted: true })),
+    ).toEqual({
       action: 'startWizard',
       step: 'language',
     });
   });
 
   it('restarts a mid-wizard, still-unregistered user at the language step', () => {
-    expect(decideFirstRun(facts({ wizardActive: true, justRegistered: true }))).toEqual({
+    expect(decideFirstRun(facts({ wizardActive: true, wizardJustRestarted: true }))).toEqual({
       action: 'startWizard',
       step: 'language',
     });

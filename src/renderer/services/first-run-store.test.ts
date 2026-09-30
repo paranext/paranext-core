@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
 import { settingsService } from '@shared/services/settings.service';
+import * as commandService from '@shared/services/command.service';
 import { getCurrentLocale } from 'platform-bible-utils';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -14,8 +15,11 @@ import {
   completeFirstRun,
   continueWithoutRegistration,
   getFirstRunStatus,
+  haveInternetSettingsChanged,
+  markInternetSettingsChanged,
   markJustRegistered,
   markRegisteredInWizard,
+  markWizardRestarting,
   resetFirstRunStore,
   resolveFirstRunState,
   retryFirstRunResolution,
@@ -24,6 +28,8 @@ import {
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn(), set: vi.fn() },
 }));
+// Only `paratextRegistration.isRegistrationCopiedFromParatext9` is sent from this store.
+vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -45,6 +51,7 @@ const mockResolveReg = vi.mocked(resolver.resolveRegistrationValidity);
 const mockGetCurrentLocale = vi.mocked(getCurrentLocale);
 const mockGetSetupDialogLanguages = vi.mocked(localizationService.getSetupDialogLanguages);
 const mockLogger = vi.mocked(logger);
+const mockSendCommand = vi.mocked(commandService.sendCommand);
 
 /** SettingsService.get is keyed; return the right value per setting. */
 function stubSettings({
@@ -79,6 +86,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetCurrentLocale.mockReturnValue('en-US');
   mockGetSetupDialogLanguages.mockResolvedValue({ en: { autonym: 'English' } });
+  // Registration entered in Platform.Bible unless a test says it came from Paratext 9.
+  mockSendCommand.mockResolvedValue(false);
   localStorage.clear();
   // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
   mockSet.mockResolvedValue(undefined);
@@ -108,6 +117,7 @@ describe('resolveFirstRunState', () => {
   it('shows the full wizard to a user whose registration was copied from Paratext 9', async () => {
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('valid'); // wizardActive is false (localStorage cleared)
+    mockSendCommand.mockResolvedValue(true);
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({
       kind: 'wizard',
@@ -134,10 +144,11 @@ describe('resolveFirstRunState', () => {
   });
 
   it('starts a registered user at the language step when a stale wizard-active flag is set', async () => {
-    // The reported repro: firstRunWizardActive set by hand on a registered machine.
+    // A wizard-active flag with no restart behind it — e.g. one left from an earlier run.
     localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('valid');
+    mockSendCommand.mockResolvedValue(true);
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toMatchObject({
       kind: 'wizard',
@@ -151,6 +162,8 @@ describe('resolveFirstRunState', () => {
     localStorage.setItem('platform-bible.firstRunRegisteredInWizard', 'true');
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('valid');
+    // Still the copied registration on disk as far as the data provider knows.
+    mockSendCommand.mockResolvedValue(true);
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toMatchObject({
       kind: 'wizard',
@@ -201,6 +214,50 @@ describe('resolveFirstRunState', () => {
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(localStorage.getItem('platform-bible.firstRunWizardActive')).toBeNull();
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
+  });
+
+  it('does not describe a registration entered in Platform.Bible as copied from Paratext 9', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('valid');
+
+    await resolveFirstRunState();
+
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextRegistration.isRegistrationCopiedFromParatext9',
+    );
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      registrationValidAtStart: true,
+      registrationPreexisting: false,
+    });
+  });
+
+  it('still starts the wizard, without the banner, when the copied-from check fails', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('valid');
+    mockSendCommand.mockRejectedValue(new Error('provider down'));
+
+    await resolveFirstRunState();
+
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'language',
+      registrationPreexisting: false,
+    });
+    expect(mockLogger.warn).toHaveBeenCalled();
+  });
+
+  it('resumes at sync consent after the wizard restarted to apply internet settings', async () => {
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    markWizardRestarting();
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('valid');
+
+    await resolveFirstRunState();
+
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard', step: 'syncConsent' });
+    // One launch only: the flag is spent.
+    expect(localStorage.getItem('platform-bible.firstRunWizardRestarted')).toBe('false');
   });
 
   it('resumes at sync consent after the registration relaunch (wizardActive persisted)', async () => {
@@ -839,6 +896,14 @@ describe('OS-language default on fresh first-run', () => {
   });
 });
 
+describe('internet settings changed this run', () => {
+  it('is false until the Internet settings step records a change', () => {
+    expect(haveInternetSettingsChanged()).toBe(false);
+    markInternetSettingsChanged();
+    expect(haveInternetSettingsChanged()).toBe(true);
+  });
+});
+
 describe('registered-in-wizard marker', () => {
   it('is written by markRegisteredInWizard and cleared when first run completes', async () => {
     markRegisteredInWizard();
@@ -855,6 +920,7 @@ describe('clearFirstRunLocalState', () => {
       'platform-bible.firstRunWizardActive',
       'platform-bible.firstRunJustRegistered',
       'platform-bible.firstRunRegisteredInWizard',
+      'platform-bible.firstRunWizardRestarted',
       'platform-bible.syncOnStartupDisabled',
     ];
     firstRunKeys.forEach((key) => localStorage.setItem(key, 'true'));

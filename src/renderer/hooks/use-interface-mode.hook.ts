@@ -33,6 +33,19 @@ export function readCachedInterfaceMode(): InterfaceMode | undefined {
   return undefined;
 }
 
+/**
+ * Forgets the cached mode, so the next startup waits for the setting instead of seeding from a mode
+ * that may no longer be true. Used by the developer reset (`platform.resetFirstRun`), which
+ * switches to Simple mode behind the cache's back.
+ */
+export function clearCachedInterfaceMode(): void {
+  try {
+    localStorage.removeItem(INTERFACE_MODE_CACHE_KEY);
+  } catch {
+    // Storage unavailable: nothing was cached either.
+  }
+}
+
 function writeCachedInterfaceMode(mode: InterfaceMode): void {
   try {
     localStorage.setItem(INTERFACE_MODE_CACHE_KEY, mode);

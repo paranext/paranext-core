@@ -2388,10 +2388,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   just-registered flag), which resumes at sync consent. Back reaches every earlier step, except
   in re-register mode, whose "Continue without registration" escape hatch replaces Back. A
   registration that is valid when the wizard starts counts language, internet settings and identify
-  as complete (check marks; Next moves through them). The Identify step shows it read-only with
-  Next, because the backend only returns the code masked and a masked code cannot be validated.
-  A banner says it was copied from Paratext 9 when the registration existed before this wizard
-  (the `firstRunRegisteredInWizard` flag tells the two apart). Only finishing the wizard
+  as complete (check marks; Next moves through them). The Identify step shows it read-only,
+  because the backend only returns the code masked and a masked code cannot be validated; it
+  follows the gate's startup answer instead of re-asking the backend, so it agrees with a resume
+  the gate's just-registered allowance drove. Its primary action is Next, or "Restart and
+  continue" when the Internet settings step saved a change: those settings only take effect after
+  a restart, which the registering path's "Save and restart" otherwise provides, and that restart
+  resumes at sync consent too. A banner says the values were copied from Paratext 9 when the data
+  provider recorded copying the registration from Paratext 9
+  (`paratextRegistration.isRegistrationCopiedFromParatext9`) and this wizard has not replaced it
+  (`firstRunRegisteredInWizard`). Only finishing the wizard
   completes first run. The OS-language seed now only replaces the default `['en']`, since a fresh
   start can follow a real language choice. A developer reset (`platform.resetFirstRun`) restores
   the first-run state, optionally re-copying or clearing the registration.
@@ -2405,8 +2411,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   full wizard on upgrade — mainly installs from before the wizard existed that ran in Power mode and
   later switch to Simple. Accepted: they have never been through Simple onboarding or sync consent.
   Users already silently completed on earlier builds keep auto-syncing without having consented;
-  they are not re-onboarded. The banner's signal is not true Paratext 9 detection: someone who
-  registered in Platform.Bible outside the wizard before finishing it also sees it.
+  they are not re-onboarded. Installs seeded before the copy was recorded never show the banner.
+  `platform.resetFirstRun` is callable by any PAPI client and can delete the registration; it is
+  documented as a developer and tester tool.
 
 ## adr-focus-in-a-background-window-is-latent: A `focus()` call inside a backgrounded window sets the active element without raising the window
 
@@ -4263,10 +4270,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** `PlatformParatextInfo` (`c-sharp/ParatextUtils/`) subclasses `ParatextInfo` and is
   installed as `ParatextInfo.Default` at the top of `Program.Main`, before anything touches
   ParatextData. Its `GetAppDataFolder()` returns a fixed `Paratext100`, independent of the version,
-  kept because existing installs already store their data there. When that folder is missing or
-  empty it copies the same four files ParatextData would, from the numerically newest `Paratext8x`/
-  `Paratext9x` folder with a registration. It never reads a `Paratext10x` folder, never overwrites,
-  and on a copy error logs and continues unseeded rather than using the Paratext 9 folder. Decompiled
+  kept because existing installs already store their data there. When that folder has none of the
+  four files ParatextData would carry over (other files, such as the auto-replace list, do not
+  count), it copies them from the numerically newest `Paratext8x`/`Paratext9x` folder with a
+  registration and writes a `CopiedFromParatext9.txt` marker. It never reads a `Paratext10x`
+  folder, never overwrites, and never uses the Paratext 9 folder itself. It never throws either:
+  `AppDataFolder` is read at startup and the result is cached, so a file-system failure is logged
+  and ParatextData's own reads and writes fail later instead. Decompiled
   ParatextData 9.5.0.24 confirms that only `ParatextInfo` builds this path and that every consumer
   goes through the virtual method.
 - **Alternatives:** **Pin the version's minor instead** — rejected: `ParatextVersion` also drives

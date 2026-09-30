@@ -9,6 +9,7 @@ import {
 import { useData, useDataProvider, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useDelayedFlag } from '@renderer/hooks/use-delayed-flag.hook';
 import { logger } from '@shared/services/logger.service';
+import { markInternetSettingsChanged } from '@renderer/services/first-run-store';
 import {
   getErrorMessage,
   isPlatformError,
@@ -46,8 +47,9 @@ const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
 
 /**
  * First-run wizard step that lets the user configure internet access before registration. Saves
- * immediately on each selection change (immediate-apply model). The identify step's restart applies
- * the chosen setting — no second restart is needed here.
+ * immediately on each selection change (immediate-apply model). The settings only take effect after
+ * a restart, which the Identify step performs: "Save and restart" when registering, or "Restart and
+ * continue" for an existing registration once this step has recorded a change.
  *
  * Availability: `useDataProvider` returns `undefined` until the C# InternetSettingsDataProvider
  * registers, giving a natural spinner without any startup-race retry heuristics.
@@ -170,6 +172,7 @@ function InternetSettingsLoaded({
       setCanProceed?.(false);
       try {
         await setData(next);
+        markInternetSettingsChanged();
         if (!isMounted.current) return;
         lastGood.current = next;
         setIsSaving(false);

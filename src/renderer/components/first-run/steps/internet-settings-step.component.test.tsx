@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event';
 import { useDataProvider, useData } from '@renderer/hooks/papi-hooks';
 import { logger } from '@shared/services/logger.service';
 import { newPlatformError } from 'platform-bible-utils';
+import { markInternetSettingsChanged } from '@renderer/services/first-run-store';
 import type { FirstRunStepProps } from '../first-run-step-props.model';
 import { InternetSettingsStep } from './internet-settings-step.component';
 
@@ -30,6 +31,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useData: vi.fn(),
 }));
 
+vi.mock('@renderer/services/first-run-store', () => ({ markInternetSettingsChanged: vi.fn() }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn() },
 }));
@@ -191,6 +193,28 @@ describe('InternetSettingsStep', () => {
     expect(setData).toHaveBeenCalledWith(
       expect.objectContaining({ permittedInternetUse: 'Enabled' }),
     );
+  });
+
+  it('records a saved change so the wizard restarts to apply it', async () => {
+    configureHooks({ value: MOCK_SETTINGS });
+    renderStep();
+
+    await userEvent.click(screen.getByTestId('option-list'));
+
+    await waitFor(() => expect(markInternetSettingsChanged).toHaveBeenCalledOnce());
+  });
+
+  it('does not record a change that failed to save', async () => {
+    configureHooks({
+      value: MOCK_SETTINGS,
+      setData: vi.fn().mockRejectedValue(new Error('save rejected')),
+    });
+    renderStep();
+
+    await userEvent.click(screen.getByTestId('option-list'));
+
+    await waitFor(() => expect(screen.getByText(/save rejected/i)).toBeInTheDocument());
+    expect(markInternetSettingsChanged).not.toHaveBeenCalled();
   });
 
   it('shows a save-error alert and disables Next when setData rejects', async () => {

@@ -113,7 +113,7 @@ namespace TestParanextDataProvider.ParatextUtils
         }
 
         [Test]
-        public void DoesNotReseed_WhenThePinnedFolderAlreadyHasFiles()
+        public void DoesNotReseed_WhenThePinnedFolderHasAnyFileSeedingCopies()
         {
             MakeParatextFolder("Paratext95", "<reg from=\"95\"/>");
             var pinned = Path.Combine(_root, "Paratext100");
@@ -127,6 +127,57 @@ namespace TestParanextDataProvider.ParatextUtils
             Assert.That(
                 File.ReadAllText(Path.Combine(folder, "InternetSettings.xml")),
                 Is.EqualTo("<net own=\"true\"/>")
+            );
+        }
+
+        [Test]
+        public void Seeds_WhenThePinnedFolderHasOnlyFilesSeedingDoesNotCopy()
+        {
+            MakeParatextFolder("Paratext95", "<reg from=\"95\"/>");
+            var pinned = Path.Combine(_root, "Paratext100");
+            Directory.CreateDirectory(pinned);
+            File.WriteAllText(Path.Combine(pinned, "autoReplace.txt"), "own list");
+
+            var folder = new PlatformParatextInfo(_root).ResolvedAppDataFolder;
+
+            Assert.That(
+                File.ReadAllText(Path.Combine(folder, "RegistrationInfo.xml")),
+                Is.EqualTo("<reg from=\"95\"/>")
+            );
+            Assert.That(
+                File.ReadAllText(Path.Combine(folder, "autoReplace.txt")),
+                Is.EqualTo("own list")
+            );
+        }
+
+        [Test]
+        public void DoesNotThrow_WhenTheFolderCannotBeCreated()
+        {
+            // The "local app data" root is a file, so nothing can be created under it.
+            var fileAsRoot = Path.Combine(_root, "not-a-folder");
+            File.WriteAllText(fileAsRoot, "");
+            var info = new PlatformParatextInfo(fileAsRoot);
+
+            Assert.That(info.ResolvedAppDataFolder, Is.EqualTo(info.AppDataFolderPath));
+        }
+
+        [Test]
+        public void RecordsThatTheRegistrationWasCopiedFromParatext9()
+        {
+            MakeParatextFolder("Paratext95", "<reg from=\"95\"/>");
+
+            Assert.That(new PlatformParatextInfo(_root).IsRegistrationCopiedFromParatext9, Is.True);
+        }
+
+        [Test]
+        public void DoesNotClaimARegistrationEnteredInPlatformBibleWasCopied()
+        {
+            MakeParatextFolder("Paratext95", "<reg from=\"95\"/>");
+            MakeParatextFolder("Paratext100", "<reg own=\"true\"/>");
+
+            Assert.That(
+                new PlatformParatextInfo(_root).IsRegistrationCopiedFromParatext9,
+                Is.False
             );
         }
 

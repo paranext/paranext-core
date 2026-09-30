@@ -50,4 +50,10 @@ export interface FirstRunStepProps {
    * "Don't show this on startup again" suppression checkbox. Unset/false in normal first-run.
    */
   allowContinueWithoutRegistration?: boolean;
+  /**
+   * The registration was valid when this wizard run started (as the startup gate decided, including
+   * its allowance for a registration saved just before a restart). The Identify step then shows it
+   * read-only instead of the form.
+   */
+  registrationValidAtStart?: boolean;
 }

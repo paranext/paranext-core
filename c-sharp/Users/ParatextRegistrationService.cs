@@ -50,6 +50,10 @@ internal class ParatextRegistrationService(
             "command:paratextRegistration.resetForFirstRun",
             (string mode) => ResetForFirstRun(mode)
         );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.isRegistrationCopiedFromParatext9",
+            IsRegistrationCopiedFromParatext9
+        );
 
         // Deprecated: retained as thin wrappers that delegate to InternetSettingsDataProvider so
         // out-of-repo extensions still calling these commands keep working. New code should use the
@@ -235,13 +239,21 @@ internal class ParatextRegistrationService(
     }
 
     /// <summary>
+    /// Whether Platform.Bible's current registration was copied from Paratext 9 when its own
+    /// ParatextData folder was first set up (false if it was entered in Platform.Bible instead).
+    /// </summary>
+    internal static bool IsRegistrationCopiedFromParatext9() =>
+        ParatextInfo.Default is PlatformParatextInfo platformParatextInfo
+        && platformParatextInfo.IsRegistrationCopiedFromParatext9;
+
+    /// <summary>
     /// Developer reset: puts Platform.Bible's own registration into the state a Paratext 9 user has
     /// on their first Platform.Bible launch. The app must be restarted afterwards. Only ever touches
     /// Platform.Bible's pinned ParatextData folder — Paratext 9's registration is never changed.
     /// </summary>
     /// <param name="mode">
-    /// <c>copyFromParatext9</c>: clear Platform.Bible's folder so the next startup copies the
-    /// Paratext 9 registration and internet settings again. <c>clear</c>: remove only
+    /// <c>copyFromParatext9</c>: delete Platform.Bible's copies of the registration and internet
+    /// settings so the next startup copies them from Paratext 9 again. <c>clear</c>: remove only
     /// Platform.Bible's registration (an unregistered Paratext 9 user). <c>keep</c>: do nothing.
     /// </param>
     internal static void ResetForFirstRun(string mode)
@@ -263,7 +275,7 @@ internal class ParatextRegistrationService(
         switch (mode)
         {
             case "copyFromParatext9":
-                platformParatextInfo.DeleteAppDataFilesForReseed();
+                platformParatextInfo.DeleteSeededFiles();
                 break;
             case "clear":
                 RegistrationInfo.DeleteRegistration();

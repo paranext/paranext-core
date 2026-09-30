@@ -313,10 +313,12 @@ declare module 'papi-shared-types' {
 
     // This command is provided in `first-run.service-router.ts` (main)
     /**
-     * Developer reset: forget first-run progress and restart into the first-run wizard, in Simple
-     * mode, as a new user — or a Paratext 9 user launching Platform.Bible for the first time —
-     * would see it. Also clears the orientation tour's completion. Works in installed builds: press
-     * F12 and run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     * Developer and tester tool, not for extensions to call: it can delete the user's registration.
+     *
+     * Forget first-run progress and restart into the first-run wizard, in Simple mode, as a new
+     * user — or a Paratext 9 user launching Platform.Bible for the first time — would see it. Also
+     * clears the orientation tour's completion. Works in installed builds: press F12 and run `await
+     * papi.commands.sendCommand('platform.resetFirstRun')` in the console.
      *
      * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
      * @experimental This command is unstable and may change or disappear without notice

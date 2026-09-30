@@ -13,6 +13,9 @@ vi.mock('@renderer/services/first-run-store', () => ({
   // Required by IdentifyStep when rendered via DEFAULT_STEP_COMPONENTS
   isDemoMode: vi.fn(() => false),
   markJustRegistered: vi.fn(),
+  markRegisteredInWizard: vi.fn(),
+  markWizardRestarting: vi.fn(),
+  haveInternetSettingsChanged: vi.fn(() => false),
   continueWithoutRegistration: vi.fn(),
 }));
 vi.mock('@shared/services/settings.service', () => ({
@@ -629,6 +632,22 @@ describe('FirstRunShell', () => {
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument(),
     );
+  });
+
+  it('tells the steps whether the registration was valid as the wizard started', () => {
+    let received: boolean | undefined;
+    const Spy = ({ registrationValidAtStart }: FirstRunStepProps) => {
+      received = registrationValidAtStart;
+      return undefined;
+    };
+    render(
+      <FirstRunShell
+        entryStep="identify"
+        registrationValidAtStart
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: Spy }}
+      />,
+    );
+    expect(received).toBe(true);
   });
 
   it('forwards allowContinueWithoutRegistration to the entry step component', () => {

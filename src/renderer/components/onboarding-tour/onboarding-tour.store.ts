@@ -70,12 +70,12 @@ function handleStorageEvent(event: StorageEvent) {
 }
 
 /**
- * Clears the completion flag so the tour shows again on the next mount.
- *
- * WARNING: Test-only. @internal
+ * Clears the completion flag so the tour shows again on the next mount. Used by the developer reset
+ * (`platform.resetFirstRun`) as well as tests and stories.
  */
 export function resetTourDone(): void {
   clearBooleanFlag(ONBOARDING_TOUR_DONE_KEY);
+  window.dispatchEvent(new Event(TOUR_DONE_SYNC_EVENT));
 }
 
 /**

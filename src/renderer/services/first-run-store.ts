@@ -1,3 +1,4 @@
+import * as commandService from '@shared/services/command.service';
 import { settingsService } from '@shared/services/settings.service';
 import { logger } from '@shared/services/logger.service';
 import { localizationService } from '@shared/services/localization.service';
@@ -26,9 +27,9 @@ export type FirstRunStatus =
        */
       registrationValidAtStart?: boolean;
       /**
-       * A valid registration existed that this wizard did not create — in practice the one
-       * Platform.Bible copied from Paratext 9 on its first launch. Shows the "copied from Paratext
-       * 9" banner.
+       * The registration is the one Platform.Bible copied from Paratext 9 when it first set up its
+       * own folder, and this wizard has not replaced it. Shows the "copied from Paratext 9"
+       * banner.
        */
       registrationPreexisting?: boolean;
     }
@@ -55,6 +56,10 @@ const JUST_REGISTERED_KEY = 'platform-bible.firstRunJustRegistered';
 // cleared when first run completes. Unlike JUST_REGISTERED_KEY it lasts for the whole wizard run,
 // so a registration this wizard created is never mistaken for one copied from Paratext 9.
 const REGISTERED_IN_WIZARD_KEY = 'platform-bible.firstRunRegisteredInWizard';
+// Written by the Identify step immediately before it restarts the app to apply changed internet
+// settings for an already-registered user; consumed on the next startup, which then resumes at sync
+// consent the same way a restart after registering does. See consumeWizardRestartedFlag.
+const WIZARD_RESTARTED_KEY = 'platform-bible.firstRunWizardRestarted';
 
 // Guards startBackgroundRegistrationRecheck so the completed-user re-check runs at most once per
 // startup even if resolveInternal is re-entered (e.g. via retryFirstRunResolution).
@@ -65,6 +70,14 @@ let backgroundRecheckStarted = false;
 // Retry button re-enters resolveInternal), and the transient 'invalid' the flag exists to absorb
 // can just as easily land on the retry as on the first probe. See consumeJustRegisteredFlag.
 let justRegisteredThisStartup = false;
+
+// Same one-shot-but-remembered handling as justRegisteredThisStartup, for WIZARD_RESTARTED_KEY.
+let wizardRestartedThisStartup = false;
+
+// Internet settings only take effect after a restart. Set when the wizard's Internet settings step
+// saves a change, so the Identify step knows the user's Next has to restart the app. In memory only:
+// the restart it triggers is what applies the change.
+let internetSettingsChangedThisRun = false;
 
 /** Demo/UX mode — see {@link DEMO_MODE_KEY}. Enablement only; never true in shipped builds. */
 export function isDemoMode(): boolean {
@@ -87,6 +100,24 @@ export function markJustRegistered(): void {
  */
 export function markRegisteredInWizard(): void {
   writeBooleanFlag(REGISTERED_IN_WIZARD_KEY, true);
+}
+
+/**
+ * Records that the wizard is about to restart the app to apply changed internet settings, so the
+ * next startup resumes at sync consent instead of the first step.
+ */
+export function markWizardRestarting(): void {
+  writeBooleanFlag(WIZARD_RESTARTED_KEY, true);
+}
+
+/** Records that the wizard's Internet settings step saved a change that needs a restart. */
+export function markInternetSettingsChanged(): void {
+  internetSettingsChangedThisRun = true;
+}
+
+/** Whether the wizard's Internet settings step saved a change since the app started. */
+export function haveInternetSettingsChanged(): boolean {
+  return internetSettingsChangedThisRun;
 }
 
 function computeInitialStatus(): FirstRunStatus {
@@ -265,6 +296,7 @@ async function resolveInternal(generation: number): Promise<void> {
     // Consume the just-registered flag before resolving validity: the user set it just before
     // calling platform.restart(), so 'invalid' here is almost certainly a transient backend fluke.
     const justRegistered = consumeJustRegisteredFlag();
+    const wizardRestarted = consumeWizardRestartedFlag();
     const registrationValidity = await refreshRegistrationValidity();
     const effectiveValidity =
       justRegistered && registrationValidity === 'invalid' ? 'valid' : registrationValidity;
@@ -283,7 +315,7 @@ async function resolveInternal(generation: number): Promise<void> {
       firstRunComplete: false,
       wizardActive,
       registrationValidity: effectiveValidity,
-      justRegistered,
+      wizardJustRestarted: justRegistered || wizardRestarted,
     });
 
     // The registration probe above is the long await where the watchdog reveals the escape hatch, so
@@ -299,6 +331,12 @@ async function resolveInternal(generation: number): Promise<void> {
         break;
       case 'startWizard': {
         const registrationValidAtStart = effectiveValidity === 'valid';
+        const registrationPreexisting =
+          registrationValidAtStart &&
+          !readBooleanFlag(REGISTERED_IN_WIZARD_KEY) &&
+          (await isRegistrationCopiedFromParatext9());
+        // Another await a bail could land across; see the seed below.
+        if (isSuperseded()) return;
         // Fresh start at the language step: default to the OS language if it has enough setup-dialog
         // localization. `wizardActive` here is the pre-transition value, so this runs once per
         // wizard run, and the seed itself never replaces a language already chosen. Seeding the
@@ -318,8 +356,7 @@ async function resolveInternal(generation: number): Promise<void> {
           kind: 'wizard',
           step: decision.step,
           registrationValidAtStart,
-          registrationPreexisting:
-            registrationValidAtStart && !readBooleanFlag(REGISTERED_IN_WIZARD_KEY),
+          registrationPreexisting,
         });
         break;
       }
@@ -332,6 +369,24 @@ async function resolveInternal(generation: number): Promise<void> {
   } catch (e) {
     logger.warn(`resolveFirstRunState failed: ${getErrorMessage(e)}`);
     applyStatus({ kind: 'error' });
+  }
+}
+
+/**
+ * Asks the data provider whether the registration was copied from Paratext 9 when Platform.Bible
+ * first set up its own ParatextData folder. Best-effort: only the banner depends on it, so any
+ * failure answers false.
+ */
+async function isRegistrationCopiedFromParatext9(): Promise<boolean> {
+  try {
+    return await commandService.sendCommand(
+      'paratextRegistration.isRegistrationCopiedFromParatext9',
+    );
+  } catch (e) {
+    logger.warn(
+      `Could not tell whether the registration came from Paratext 9: ${getErrorMessage(e)}`,
+    );
+    return false;
   }
 }
 
@@ -375,6 +430,18 @@ function consumeJustRegisteredFlag(): boolean {
     justRegisteredThisStartup = true;
   }
   return justRegisteredThisStartup;
+}
+
+/**
+ * Reads and clears the wizard-restarted flag, returning whether it was set at any point during this
+ * startup — cleared on first read, remembered for Retry, like {@link consumeJustRegisteredFlag}.
+ */
+function consumeWizardRestartedFlag(): boolean {
+  if (readBooleanFlag(WIZARD_RESTARTED_KEY)) {
+    writeBooleanFlag(WIZARD_RESTARTED_KEY, false);
+    wizardRestartedThisStartup = true;
+  }
+  return wizardRestartedThisStartup;
 }
 
 /**
@@ -488,6 +555,7 @@ export function clearFirstRunLocalState(): void {
     WIZARD_ACTIVE_KEY,
     JUST_REGISTERED_KEY,
     REGISTERED_IN_WIZARD_KEY,
+    WIZARD_RESTARTED_KEY,
     SYNC_ON_STARTUP_DISABLED_CACHE_KEY,
   ].forEach(clearBooleanFlag);
 }
@@ -512,5 +580,7 @@ export function resetFirstRunStore(): void {
   resolving = false;
   backgroundRecheckStarted = false;
   justRegisteredThisStartup = false;
+  wizardRestartedThisStartup = false;
+  internetSettingsChangedThisRun = false;
   listeners.clear();
 }
