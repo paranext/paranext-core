@@ -131,9 +131,9 @@ export function runOnFirstLoad(callback: () => void): Unsubscriber {
  *
  * The scroll container is discovered, not assumed: wrapper elements between the web view's sized
  * flex column and `.editor-container` leave `.editor-container` auto-height, so it grows to its
- * content height and scrolling it is a silent no-op — the web view's outer `tw:overflow-auto`
- * wrapper is what actually scrolls (regression diagnosed 2026-07-09). If a future layout change
- * re-constrains `.editor-container`, discovery resolves there instead — correct either way.
+ * content height and scrolling it is a silent no-op — the Scripture text's panel in
+ * `FootnotesLayout` is what actually scrolls. If a future layout change re-constrains
+ * `.editor-container`, discovery resolves there instead — correct either way.
  *
  * @param fromElement Element whose scroll container to find
  * @param options `requireOverflow` (default `true`) also requires the candidate to actually
@@ -869,6 +869,32 @@ export function scrollToAnnotation(id: string): HTMLElement | undefined {
  */
 export function scrollToNoteCaller(noteElement: HTMLElement): void {
   scrollElementIntoScrollContainer(noteElement);
+}
+
+/**
+ * Runs `action`, then puts the scroll container of `textElement` back where it was before it ran.
+ *
+ * For handing focus back to the text without moving the reader's view: the editor engine scrolls
+ * the caret into view on every focus, so focusing the text after the reader has scrolled away from
+ * the caret would otherwise carry the view back to the caret. The engine commits (and scrolls) on a
+ * microtask, so the position is put back on the next animation frame, which runs before that frame
+ * is painted.
+ *
+ * @param textElement An element inside the text whose scroll position to keep (e.g. its
+ *   `.editor-container`); when it has no scroll container, `action` simply runs
+ * @param action What to run, e.g. focusing the text
+ */
+export function keepScrollPositionAcross(
+  textElement: HTMLElement | undefined,
+  action: () => void,
+): void {
+  const scrollContainer = textElement ? findScrollContainer(textElement) : undefined;
+  const scrollTop = scrollContainer?.scrollTop;
+  action();
+  if (!scrollContainer || scrollTop === undefined) return;
+  requestAnimationFrame(() => {
+    scrollContainer.scrollTop = scrollTop;
+  });
 }
 
 /**

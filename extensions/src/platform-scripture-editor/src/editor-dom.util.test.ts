@@ -28,6 +28,7 @@ import {
   isEchoOfPublishedScrRef,
   isSameScrollGeometry,
   isSameVerseRef,
+  keepScrollPositionAcross,
   measureAnnotation,
   measureBaselineOffset,
   focusPaneSelectedRow,
@@ -200,6 +201,49 @@ function buildNotesDom(options: EditorDomOptions = {}): EditorDom & { notes: HTM
 afterEach(() => {
   document.body.innerHTML = '';
   vi.clearAllMocks();
+});
+
+describe('keepScrollPositionAcross', () => {
+  /** Runs the frame callbacks `requestAnimationFrame` was handed, in order. */
+  function captureAnimationFrames() {
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    return () => frames.splice(0).forEach((callback) => callback(0));
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.replaceChildren();
+  });
+
+  it('puts the text back where it was after the action scrolls it, on the next frame', () => {
+    const { wrapper, editorContainer } = buildEditorDom();
+    wrapper.scrollTop = 800;
+    const runFrames = captureAnimationFrames();
+
+    keepScrollPositionAcross(editorContainer, () => {
+      // What focusing the text does when its caret is elsewhere: scrolls the caret into view.
+      wrapper.scrollTop = 0;
+    });
+    expect(wrapper.scrollTop).toBe(0);
+
+    runFrames();
+    expect(wrapper.scrollTop).toBe(800);
+  });
+
+  it('just runs the action when the text has no scroll container', () => {
+    const { editorContainer } = buildEditorDom({ wrapperScrolls: false });
+    const action = vi.fn();
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame');
+
+    keepScrollPositionAcross(editorContainer, action);
+
+    expect(action).toHaveBeenCalledOnce();
+    expect(requestFrame).not.toHaveBeenCalled();
+  });
 });
 
 describe('findScrollContainer', () => {

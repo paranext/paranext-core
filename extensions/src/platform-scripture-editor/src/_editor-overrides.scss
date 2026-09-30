@@ -15,9 +15,9 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
 
 // NOTE: `height: 100%` / `overflow-y: auto` below are currently inert. Wrapper divs between the
 // web view's sized flex column and this element (EditorKeyboardShortcuts, the paragraph-marker
-// tooltip overlay) leave it auto-height, so it grows to its content and the web view's outer
-// `tw:overflow-auto` wrapper is what actually scrolls. Scroll code must not assume this element
-// scrolls — editor-dom.util.ts discovers the scroll container dynamically (findScrollContainer).
+// tooltip overlay) leave it auto-height, so it grows to its content and the Scripture text's panel
+// in `FootnotesLayout` is what actually scrolls. Scroll code must not assume this element scrolls —
+// editor-dom.util.ts discovers the scroll container dynamically (findScrollContainer).
 .editor-container {
   height: 100%;
   max-width: none;

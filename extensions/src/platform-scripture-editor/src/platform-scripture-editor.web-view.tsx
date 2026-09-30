@@ -148,6 +148,7 @@ import {
   createPendingCommentCenterAnchorSource,
   focusPaneSelectedRow,
   getVerseElement,
+  keepScrollPositionAcross,
   runOnFirstLoad,
   scrollToAnnotation,
   scrollToNoteCaller,
@@ -970,10 +971,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * Whether the footnotes pane is ACTUALLY rendered — `footnotesPaneVisible && usjFromPdp`, not the
    * visibility toggle alone (a caller click routed to a pane that is not really rendered is a dead
    * click). Mirrors the single `footnotesPaneRendered` value (derived next to the `usjFromPdp`
-   * derivation) that also gates the `FootnotesLayout` render, so the click routing and the render
-   * gate cannot drift apart.
+   * derivation) that also gates the pane's render, so the click routing and the render gate cannot
+   * drift apart.
    */
   const footnotesPaneRenderedRef = useRef(false);
+
+  /**
+   * Key of the note whose caller is brought back into view once the pane that its caller click or
+   * insert asked for has opened. The pane takes its room from the text's panel, so a caller near
+   * the edge the pane opens from would otherwise end up underneath it.
+   */
+  const noteToRevealWhenPaneOpensRef = useRef<string | undefined>(undefined);
 
   /**
    * Requests that the footnotes pane select/highlight a given note index, mirroring a real pane-row
@@ -1359,6 +1367,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // click time; a focus request sent while the pane's data is still mounting is retried
         // when it repopulates.
         if (decision.showPane) {
+          noteToRevealWhenPaneOpensRef.current = noteNodeKey;
           setFootnotesPaneVisible(true);
           // The focus request below addresses the LIVE document, and the pane mounts on whatever
           // document it is handed; seed it now rather than a render later (the reveal effect), or
@@ -3500,7 +3509,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // one step too late, leaving the note's last edit to arrive as an unattributed insert.
     if (paneEditingIndexRef.current !== undefined) closeFootnoteEditor(false);
     setFootnotesPaneVisible(false);
-    returnFocusToScriptureText();
+    // Closing the pane leaves the text where the reader has it: focus goes back to the caret, but
+    // the view does not jump to the caret when the reader has scrolled away from it.
+    keepScrollPositionAcross(
+      editorContainerRef.current?.querySelector<HTMLElement>('.editor-container') ?? undefined,
+      () => returnFocusToScriptureText(),
+    );
   }, [closeFootnoteEditor, setFootnotesPaneVisible, returnFocusToScriptureText]);
 
   /** Called by FootnoteEditor's onClose prop (X button or save-then-close). */
@@ -3591,14 +3605,35 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     paneSelectedIndexRef.current = undefined;
     paneHasFocusRef.current = false;
     paneFocusedRowIndexRef.current = undefined;
-    // The request belongs to the pane it was made for. `FootnotesLayout` tracks which one it has
-    // applied in its own state, so a re-mounted pane treats a surviving request as new and
-    // re-selects that row — and in a read-only Standard view takes DOM focus for it — on a plain
-    // "show the footnotes pane", with no caller click behind it.
+    // The request belongs to the pane it was made for. The pane tracks which one it has applied in
+    // its own state and is re-mounted each time it is shown, so it treats a surviving request as
+    // new and re-selects that row — and in a read-only Standard view takes DOM focus for it — on a
+    // plain "show the footnotes pane", with no caller click behind it.
     setFootnotePaneFocusRequest(undefined);
     editorRef.current?.highlightNote(undefined);
     if (paneEditingIndexRef.current !== undefined) closeFootnoteEditor(false);
   }, [footnotesPaneRendered, closeFootnoteEditor]);
+
+  // Opening the pane leaves the text's scroll position alone (the text keeps its panel), so all
+  // that is left to do is bring back into view the caller the opening click or insert was about.
+  // Hidden case: only a click or an insert in the visible text arms this, and the pane opens on the
+  // commit right after. A tab hidden in between gets the scroll when its animation frames resume,
+  // which is when the caller can be seen again, so no separate catch-up is needed.
+  useEffect(() => {
+    if (!footnotesPaneRendered) return undefined;
+    const noteKey = noteToRevealWhenPaneOpensRef.current;
+    noteToRevealWhenPaneOpensRef.current = undefined;
+    if (!noteKey) return undefined;
+    // Two frames: the panel group sizes the new pane after it mounts, and the caller's position is
+    // final only once the text's panel has given up that room.
+    let frameId = requestAnimationFrame(() => {
+      frameId = requestAnimationFrame(() => {
+        const noteElement = editorRef.current?.getElementByKey(noteKey);
+        if (noteElement) scrollToNoteCaller(noteElement);
+      });
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [footnotesPaneRendered]);
 
   /**
    * Ends a row-editing session from INSIDE the row editor (its Escape dismissal, or its own close
@@ -3694,7 +3729,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }
           // The pane may not be rendered yet: it mounts on the next render with this row already
           // marked as the editing row, and the row editor places its caret as it mounts.
-          if (!footnotesPaneVisibleRef.current) setFootnotesPaneVisible(true);
+          if (!footnotesPaneVisibleRef.current) {
+            noteToRevealWhenPaneOpensRef.current = insertedNodeKey;
+            setFootnotesPaneVisible(true);
+          }
           startPaneNoteEdit(index, insertedNodeKey, noteOp, 'end', true);
           return;
         }
@@ -4742,50 +4780,46 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 </Alert>
               ))}
 
-              {footnotesPaneRendered ? (
-                <FootnotesLayout
-                  // The editor's live document when it has one: the pane and the editor's
-                  // `getNoteIndex` must index the same document, and `usjFromPdp` lags the editor
-                  // by the save debounce.
-                  usj={liveEditorUsj ?? usjFromPdp}
-                  onFootnoteSelected={handleFootnoteSelected}
-                  useWebViewState={useWebViewState}
-                  localizedStrings={localizedStrings}
-                  onClose={hideFootnotesPane}
-                  showMarkers={options.view?.markerMode !== 'hidden'}
-                  focusRequest={footnotePaneFocusRequest}
-                  editingFootnoteIndex={
-                    noteEditingSurface === 'pane' ? paneEditingIndex : undefined
-                  }
-                  renderEditingFootnote={renderPaneFootnoteEditor}
-                  // Only where the pane IS the editing surface: elsewhere (and in a read-only text)
-                  // a row click selects rather than opens a row editor.
-                  onFootnoteEditRequested={
-                    noteEditingSurface === 'pane' ? handleFootnoteEditRequested : undefined
-                  }
-                  onSelectedFootnoteChange={handleSelectedFootnoteChange}
-                  onFocusedFootnoteChange={handleFocusedFootnoteChange}
-                  onPaneFocusLeft={handlePaneFocusLeft}
-                  // A caller click in a read-only Standard view has nowhere else to put focus, and
-                  // PT9 still moves the caret into the note — so the pane takes it, which is what
-                  // turns the caller highlight on. Everywhere else the click's own editor (the row
-                  // editor or the popover) owns focus and the pane must not pull it away.
-                  focusRowOnFocusRequest={viewType === 'standard' && noteEditingSurface === 'none'}
-                  onPaneFocusChange={handlePaneFocusChange}
-                  // The placeholder the data hook serves until the chapter arrives, while the text
-                  // beside it shows a spinner.
-                  isLoading={!liveEditorUsj && usjFromPdp === defaultUsj}
-                  zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
-                >
-                  {/* Render the editor inside the container decorations without re-mounting on re-parent */}
-                  <OutPortal node={editorPortalNode} />
-                </FootnotesLayout>
-              ) : (
-                <>
-                  {/* Render the editor inside the container decorations without re-mounting on re-parent */}
-                  <OutPortal node={editorPortalNode} />
-                </>
-              )}
+              {/* Rendered whether or not the pane is shown, so the Scripture text keeps one
+                  scrolling element (its panel's) and its scroll position when the pane opens or
+                  closes. */}
+              <FootnotesLayout
+                isPaneVisible={footnotesPaneRendered}
+                // The editor's live document when it has one: the pane and the editor's
+                // `getNoteIndex` must index the same document, and `usjFromPdp` lags the editor
+                // by the save debounce. The pane is shown only once `usjFromPdp` exists, so the
+                // placeholder is never what it lists.
+                usj={liveEditorUsj ?? usjFromPdp ?? defaultUsj}
+                onFootnoteSelected={handleFootnoteSelected}
+                useWebViewState={useWebViewState}
+                localizedStrings={localizedStrings}
+                onClose={hideFootnotesPane}
+                showMarkers={options.view?.markerMode !== 'hidden'}
+                focusRequest={footnotePaneFocusRequest}
+                editingFootnoteIndex={noteEditingSurface === 'pane' ? paneEditingIndex : undefined}
+                renderEditingFootnote={renderPaneFootnoteEditor}
+                // Only where the pane IS the editing surface: elsewhere (and in a read-only text)
+                // a row click selects rather than opens a row editor.
+                onFootnoteEditRequested={
+                  noteEditingSurface === 'pane' ? handleFootnoteEditRequested : undefined
+                }
+                onSelectedFootnoteChange={handleSelectedFootnoteChange}
+                onFocusedFootnoteChange={handleFocusedFootnoteChange}
+                onPaneFocusLeft={handlePaneFocusLeft}
+                // A caller click in a read-only Standard view has nowhere else to put focus, and
+                // PT9 still moves the caret into the note — so the pane takes it, which is what
+                // turns the caller highlight on. Everywhere else the click's own editor (the row
+                // editor or the popover) owns focus and the pane must not pull it away.
+                focusRowOnFocusRequest={viewType === 'standard' && noteEditingSurface === 'none'}
+                onPaneFocusChange={handlePaneFocusChange}
+                // The placeholder the data hook serves until the chapter arrives, while the text
+                // beside it shows a spinner.
+                isLoading={!liveEditorUsj && usjFromPdp === defaultUsj}
+                zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
+              >
+                {/* Render the editor inside the container decorations without re-mounting on re-parent */}
+                <OutPortal node={editorPortalNode} />
+              </FootnotesLayout>
             </div>
           </div>,
         )}

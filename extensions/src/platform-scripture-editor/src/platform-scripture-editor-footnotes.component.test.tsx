@@ -4,8 +4,9 @@ import { render, screen, fireEvent, act, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
-import { ComponentProps, useEffect, useRef, useState } from 'react';
+import { ComponentProps, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import { FOOTNOTES_PANE_ATTRIBUTE } from './editor-dom.util';
 
@@ -119,6 +120,112 @@ describe('FootnotesLayout pane element', () => {
     expect(paneElement).not.toBeNull();
     expect(paneElement).toContainElement(screen.getByRole('listbox'));
   });
+});
+
+describe('FootnotesLayout Scripture text across pane visibility', () => {
+  /**
+   * The style-only lookup `findScrollContainer(element, { requireOverflow: false })` makes: the
+   * nearest ancestor styled to scroll. Re-stated here because jsdom does not expand the `overflow`
+   * shorthand the panel library sets inline into `overflowY`, which is all `findScrollContainer`
+   * reads, so the real helper finds nothing in jsdom.
+   */
+  function findStyledScroller(fromElement: HTMLElement): HTMLElement | undefined {
+    let candidate: HTMLElement | undefined = fromElement;
+    while (candidate) {
+      const { overflow, overflowY } = window.getComputedStyle(candidate);
+      if ([overflow, overflowY].some((value) => value === 'auto' || value === 'scroll'))
+        return candidate;
+      candidate = candidate.parentElement ?? undefined;
+    }
+    return undefined;
+  }
+
+  function renderLayout(isPaneVisible: boolean, children = <div data-testid="editor" />) {
+    return (
+      <FootnotesLayout
+        usj={usjWithTwoNotes}
+        showMarkers
+        useWebViewState={useWebViewStateMock}
+        localizedStrings={localizedStrings}
+        onClose={() => {}}
+        isPaneVisible={isPaneVisible}
+      >
+        {children}
+      </FootnotesLayout>
+    );
+  }
+
+  // The text's scroll position lives on its scrolling element. Replacing that element, or moving
+  // the text to another one, is what sends the text back to the top of the chapter.
+  it('keeps the text and its scrolling element the same nodes while the pane opens and closes', () => {
+    const { rerender } = render(renderLayout(false));
+    expect(screen.queryByRole('listbox')).toBeNull();
+    const editor = screen.getByTestId('editor');
+    const scroller = findStyledScroller(editor);
+    expect(scroller).toBeDefined();
+    expect(scroller?.closest('[data-panel]')).not.toBeNull();
+
+    rerender(renderLayout(true));
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+    expect(screen.getByTestId('editor')).toBe(editor);
+    expect(findStyledScroller(editor)).toBe(scroller);
+
+    rerender(renderLayout(false));
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(screen.getByTestId('editor')).toBe(editor);
+    expect(findStyledScroller(editor)).toBe(scroller);
+    expect(scroller?.isConnected).toBe(true);
+  });
+
+  it('shows no resize handle while the pane is hidden', () => {
+    const { container, rerender } = render(renderLayout(false));
+    expect(container.querySelector('[data-slot="resizable-handle"]')).toBeNull();
+    rerender(renderLayout(true));
+    expect(container.querySelector('[data-slot="resizable-handle"]')).not.toBeNull();
+  });
+
+  // The character-marker bar, the paragraph-marker tooltip and the two-step-delete tooltip each
+  // look up the text's scroll container once, on mount, from inside the editor's reverse portal —
+  // the same arrangement as the web view. Whatever they found must still be what scrolls the text
+  // after the pane has opened and closed.
+  it.each([false, true])(
+    'gives a once-on-mount scroll container lookup inside a reverse portal the element that keeps scrolling the text (pane initially shown: %s)',
+    (initiallyVisible) => {
+      let resolvedOnMount: HTMLElement | undefined;
+      function ScrollContainerLookup() {
+        // The ref needs to start out with null for it to work as an element ref
+        // eslint-disable-next-line no-null/no-null
+        const ref = useRef<HTMLDivElement>(null);
+        useEffect(() => {
+          if (ref.current) resolvedOnMount = findStyledScroller(ref.current);
+        }, []);
+        return <div ref={ref} data-testid="overlay-anchor" />;
+      }
+      function Harness({ isPaneVisible }: { isPaneVisible: boolean }) {
+        const portalNode = useMemo(
+          () => createHtmlPortalNode({ attributes: { class: 'tw:contents' } }),
+          [],
+        );
+        return (
+          <>
+            <InPortal node={portalNode}>
+              <ScrollContainerLookup />
+            </InPortal>
+            {renderLayout(isPaneVisible, <OutPortal node={portalNode} />)}
+          </>
+        );
+      }
+
+      const { rerender } = render(<Harness isPaneVisible={initiallyVisible} />);
+      expect(resolvedOnMount).toBeDefined();
+      rerender(<Harness isPaneVisible={!initiallyVisible} />);
+      rerender(<Harness isPaneVisible={initiallyVisible} />);
+
+      const anchor = screen.getByTestId('overlay-anchor');
+      expect(resolvedOnMount?.isConnected).toBe(true);
+      expect(findStyledScroller(anchor)).toBe(resolvedOnMount);
+    },
+  );
 });
 
 describe('FootnotesLayout close button', () => {

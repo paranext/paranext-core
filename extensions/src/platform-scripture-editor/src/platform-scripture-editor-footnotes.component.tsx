@@ -153,13 +153,36 @@ export type FootnotesLayoutProps = PropsWithChildren<{
    * indicator shows the level alone.
    */
   zoomAreaLabel?: string;
+  /**
+   * Whether the footnotes pane is shown beside the Scripture text. The text (`children`) stays in
+   * the same panel either way, so its scroll position survives the pane opening and closing:
+   * everything that scrolls the text, and every overlay that caches its scroll container, relies on
+   * that panel's scrolling element never being replaced. Defaults to `true`.
+   */
+  isPaneVisible?: boolean;
 }>;
 
-export function FootnotesLayout({
-  children,
+/** Panel id of the Scripture text in the layout group. Stable, so its panel never remounts. */
+const SCRIPTURE_TEXT_PANEL_ID = 'scripture-text';
+/** Panel id of the footnotes pane in the layout group; the key its size is read from. */
+const FOOTNOTES_PANE_PANEL_ID = 'footnotes-pane';
+
+type FootnotesPaneProps = Omit<
+  FootnotesLayoutProps,
+  'children' | 'useWebViewState' | 'isPaneVisible'
+> & {
+  /** How the note list lays out its rows: `horizontal` for a pane below the text. */
+  listLayout: 'horizontal' | 'vertical';
+};
+
+/**
+ * The footnotes pane's own content: the note list, its selection and focus bookkeeping, and the
+ * close button. Mounted only while the pane is shown, so none of its effects run (and none of its
+ * callbacks fire) while the pane is hidden, and each opening starts from a fresh selection.
+ */
+function FootnotesPane({
   usj,
   showMarkers,
-  useWebViewState,
   localizedStrings,
   onClose,
   onFootnoteSelected,
@@ -174,7 +197,8 @@ export function FootnotesLayout({
   onPaneFocusLeft,
   isLoading = false,
   zoomAreaLabel,
-}: FootnotesLayoutProps) {
+  listLayout,
+}: FootnotesPaneProps) {
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
 
   /**
@@ -338,148 +362,6 @@ export function FootnotesLayout({
     endedEditingFootnoteIndexRef.current = undefined;
   }, [editingFootnoteIndex]);
 
-  const [containerHeight, setContainerHeight] = useState(0);
-  const [containerWidth, setContainerWidth] = useState(0);
-
-  const observerRef = useRef<ResizeObserver | undefined>(undefined);
-
-  const setContainerRef = useCallback((node: HTMLDivElement | null) => {
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-      observerRef.current = undefined;
-    }
-
-    // If node is undefined, we're unmounting - cleanup already done above
-    if (!node) return;
-
-    const observer = new ResizeObserver(() => {
-      setContainerHeight(node.clientHeight);
-      setContainerWidth(node.clientWidth);
-    });
-
-    observer.observe(node);
-    setContainerHeight(node.clientHeight);
-    setContainerWidth(node.clientWidth);
-
-    observerRef.current = observer;
-  }, []);
-
-  const [footnotesPanePosition, setFootnotesPanePosition] = useWebViewState<'bottom' | 'trailing'>(
-    'footnotesPanePosition',
-    'bottom',
-  );
-
-  const footnotesPanePositionRef = useRef(footnotesPanePosition);
-
-  useEffect(() => {
-    footnotesPanePositionRef.current = footnotesPanePosition;
-  }, [footnotesPanePosition]);
-
-  // listen to messages from the web view controller
-  useEffect(() => {
-    const webViewMessageListener = ({
-      data: editorMessage,
-    }: MessageEvent<EditorWebViewMessage>) => {
-      switch (editorMessage.method) {
-        case 'changeFootnotesPaneLocation': {
-          const { current } = footnotesPanePositionRef;
-          setFootnotesPanePosition(current === 'bottom' ? 'trailing' : 'bottom');
-          break;
-        }
-        default:
-          // Probably handled elsewhere
-          break;
-      }
-    };
-
-    window.addEventListener('message', webViewMessageListener);
-
-    return () => {
-      window.removeEventListener('message', webViewMessageListener);
-    };
-  }, [setFootnotesPanePosition]);
-
-  const [footnotesPaneSizePercent, setFootnotesPaneSizePercent] = useWebViewState<number>(
-    'footnotesPaneSizePercent',
-    20,
-  );
-
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  const debouncedSetFootnotesPaneSize = useCallback(
-    (size: number) => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => setFootnotesPaneSizePercent(size), 50);
-    },
-    [setFootnotesPaneSizePercent],
-  );
-
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      if (observerRef.current) observerRef.current.disconnect();
-    };
-  }, []);
-
-  const {
-    minPercent: calculatedFootnotesPaneMinPercent,
-    maxPercent: calculatedFootnotesPaneMaxPercent,
-  } =
-    footnotesPanePosition === 'bottom'
-      ? getPaneSizeLimits(containerHeight, {
-          // The close button floats over the list rather than taking a row of its own, so the
-          // pane's floor is whichever of the two is taller, not their sum.
-          secondaryPaneMinSizePx: Math.max(footnoteRowHeightPx, footnoteCloseButtonSizePx),
-          mainPaneMinSizePx: minimumEditorHeightPx,
-        })
-      : getPaneSizeLimits(containerWidth, {
-          secondaryPaneMinSizePx: footnoteHeaderWidthPx,
-          mainPaneMinSizePx: minimumEditorWidthPx,
-          absoluteMinPercent: minimumFootnotesPaneWidthPercent,
-          absoluteMaxPercent: maximumFootnotesPaneWidthPercent,
-        });
-
-  // Make sure the calculated range accommodates the current saved size. There is an off-chance this
-  // could allow for the splitter to get dragged to a size we're not happy about, but it is very
-  // unlikely and this is better than having the size jump around unexpectedly. I assume it could
-  // only happen if for some reason the WebView came up at a very different size than when it was
-  // last used and the split percentage was saved.
-  const footnotesPaneMaxPercent = Math.max(
-    calculatedFootnotesPaneMaxPercent,
-    footnotesPaneSizePercent,
-  );
-  const footnotesPaneMinPercent = Math.min(
-    calculatedFootnotesPaneMinPercent,
-    footnotesPaneSizePercent,
-  );
-
-  useEffect(() => {
-    if (containerHeight <= 0) return;
-
-    const clampedSize = Math.min(
-      Math.max(footnotesPaneSizePercent, calculatedFootnotesPaneMinPercent),
-      calculatedFootnotesPaneMaxPercent,
-    );
-
-    if (clampedSize !== footnotesPaneSizePercent) {
-      setFootnotesPaneSizePercent(clampedSize);
-    }
-  }, [
-    containerHeight,
-    footnotesPaneSizePercent,
-    setFootnotesPaneSizePercent,
-    calculatedFootnotesPaneMaxPercent,
-    calculatedFootnotesPaneMinPercent,
-  ]);
-
-  const onLayoutFootnotesPane = useCallback(
-    (sizes: number[]) => {
-      if (!sizes || sizes.length < 2) return;
-      debouncedSetFootnotesPaneSize(sizes[1]);
-    },
-    [debouncedSetFootnotesPaneSize],
-  );
-
   /** Handle a footnote selection request. */
   const handleFootnoteSelected = useCallback(
     (_footnote: MarkerObject, index: number, listId: string | number) => {
@@ -626,109 +508,291 @@ export function FootnotesLayout({
   }, [selectedFootnote, onSelectedFootnoteChange]);
 
   return (
-    <div ref={setContainerRef} className="tw:h-full tw:w-full tw:min-h-0">
+    <div
+      ref={paneContainerRef}
+      // Kept as a literal rather than `{...{ [FOOTNOTES_PANE_ATTRIBUTE]: '' }}`:
+      // `react/jsx-props-no-spreading` forbids spreading onto a DOM element. Must match
+      // `FOOTNOTES_PANE_ATTRIBUTE` in `editor-dom.util.ts`, which `focusPaneSelectedRow`
+      // queries for — pinned by a test that finds this element through that constant.
+      data-footnotes-pane=""
+      className="tw:relative tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
+      onFocus={handlePaneFocus}
+      onBlur={handlePaneBlur}
+    >
+      {/* Floats over the list's top trailing corner (leading corner in RTL, which
+          `inset-inline-end` follows on its own) rather than taking a row of its own, so the
+          pane spends all of its height on notes. Held clear of the scrollbar so that stays
+          grabbable, and carrying the pane's own background so the note text it covers does
+          not read through it. */}
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="tw:absolute tw:top-0 tw:z-20 tw:h-6 tw:w-6 tw:bg-sidebar"
+              style={{ insetInlineEnd: listScrollbarWidthPx }}
+              aria-label={localizedStrings['%webView_footnoteList_close%']}
+              onClick={onClose}
+            >
+              <X className="tw:h-4 tw:w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{localizedStrings['%webView_footnoteList_close%']}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      {/* The close button floats over whichever row is scrolled to the top of the list, so
+          every row reserves trailing room for it - the pane keeps all of its height for
+          notes without the button painting over (or a click aimed at the text landing on)
+          a note. */}
+      {/* Footnotes zoom area: the close button above, the pane's own padding (on the
+          ResizablePanel) and its resize handle stay outside so they keep their size while
+          the list content scales. */}
+      <ContentZoomRoot
+        ref={setFootnoteListWrapperRef}
+        area="footnotes"
+        label={zoomAreaLabel}
+        className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0 tw:[&_li]:pe-7"
+      >
+        {footnotes.length === 0 && !isLoading && (
+          <EmptyState
+            className="tw:p-2"
+            message={localizedStrings['%webView_footnoteList_empty%']}
+          />
+        )}
+        <FootnoteList
+          classNameForItems="scripture-font"
+          listId={footnoteListKey}
+          layout={listLayout}
+          footnotes={footnotes}
+          showMarkers={showMarkers}
+          formatCaller={showMarkers ? (c) => c : undefined}
+          ariaLabel={localizedStrings['%webView_footnoteList_header%']}
+          selectedFootnote={selectedFootnote?.footnote}
+          // Minted fresh on every selection application (pane click or focus request), so a
+          // repeat focusRequest for the same footnote re-scrolls even though the derived
+          // footnote object and index are unchanged.
+          selectionRequest={selectedFootnote?.request}
+          onFootnoteSelected={handleFootnoteSelected}
+          onFocusedFootnoteChange={onFocusedFootnoteChange}
+          onFootnoteEditRequested={
+            onFootnoteEditRequested ? handleFootnoteEditRequested : undefined
+          }
+          // Clamped for the one commit in which a note inserted ahead of the edited LAST row
+          // has moved the index but not yet the list (derived in an effect below): out of
+          // range, no row would be the editing row and the row editor would remount.
+          editingFootnoteIndex={
+            editingFootnoteIndex === undefined
+              ? undefined
+              : Math.min(editingFootnoteIndex, footnotes.length - 1)
+          }
+          renderEditingFootnote={renderEditingFootnote}
+        />
+      </ContentZoomRoot>
+    </div>
+  );
+}
+
+export function FootnotesLayout({
+  children,
+  isPaneVisible = true,
+  useWebViewState,
+  ...paneProps
+}: FootnotesLayoutProps) {
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  const observerRef = useRef<ResizeObserver | undefined>(undefined);
+
+  const setContainerRef = useCallback((node: HTMLDivElement | null) => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = undefined;
+    }
+
+    // If node is undefined, we're unmounting - cleanup already done above
+    if (!node) return;
+
+    const observer = new ResizeObserver(() => {
+      setContainerHeight(node.clientHeight);
+      setContainerWidth(node.clientWidth);
+    });
+
+    observer.observe(node);
+    setContainerHeight(node.clientHeight);
+    setContainerWidth(node.clientWidth);
+
+    observerRef.current = observer;
+  }, []);
+
+  const [footnotesPanePosition, setFootnotesPanePosition] = useWebViewState<'bottom' | 'trailing'>(
+    'footnotesPanePosition',
+    'bottom',
+  );
+
+  const footnotesPanePositionRef = useRef(footnotesPanePosition);
+
+  useEffect(() => {
+    footnotesPanePositionRef.current = footnotesPanePosition;
+  }, [footnotesPanePosition]);
+
+  // listen to messages from the web view controller. Only while the pane is shown: moving a pane
+  // nobody can see would change where it opens next without any visible effect.
+  useEffect(() => {
+    if (!isPaneVisible) return undefined;
+    const webViewMessageListener = ({
+      data: editorMessage,
+    }: MessageEvent<EditorWebViewMessage>) => {
+      switch (editorMessage.method) {
+        case 'changeFootnotesPaneLocation': {
+          const { current } = footnotesPanePositionRef;
+          setFootnotesPanePosition(current === 'bottom' ? 'trailing' : 'bottom');
+          break;
+        }
+        default:
+          // Probably handled elsewhere
+          break;
+      }
+    };
+
+    window.addEventListener('message', webViewMessageListener);
+
+    return () => {
+      window.removeEventListener('message', webViewMessageListener);
+    };
+  }, [isPaneVisible, setFootnotesPanePosition]);
+
+  const [footnotesPaneSizePercent, setFootnotesPaneSizePercent] = useWebViewState<number>(
+    'footnotesPaneSizePercent',
+    20,
+  );
+
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const debouncedSetFootnotesPaneSize = useCallback(
+    (size: number) => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => setFootnotesPaneSizePercent(size), 50);
+    },
+    [setFootnotesPaneSizePercent],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (observerRef.current) observerRef.current.disconnect();
+    };
+  }, []);
+
+  // A size still waiting out the debounce when the pane closes is dropped, so nothing is written to
+  // the stored split while the pane is hidden.
+  useEffect(() => {
+    if (isPaneVisible || !timeoutRef.current) return;
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = undefined;
+  }, [isPaneVisible]);
+
+  const {
+    minPercent: calculatedFootnotesPaneMinPercent,
+    maxPercent: calculatedFootnotesPaneMaxPercent,
+  } =
+    footnotesPanePosition === 'bottom'
+      ? getPaneSizeLimits(containerHeight, {
+          // The close button floats over the list rather than taking a row of its own, so the
+          // pane's floor is whichever of the two is taller, not their sum.
+          secondaryPaneMinSizePx: Math.max(footnoteRowHeightPx, footnoteCloseButtonSizePx),
+          mainPaneMinSizePx: minimumEditorHeightPx,
+        })
+      : getPaneSizeLimits(containerWidth, {
+          secondaryPaneMinSizePx: footnoteHeaderWidthPx,
+          mainPaneMinSizePx: minimumEditorWidthPx,
+          absoluteMinPercent: minimumFootnotesPaneWidthPercent,
+          absoluteMaxPercent: maximumFootnotesPaneWidthPercent,
+        });
+
+  // Make sure the calculated range accommodates the current saved size. There is an off-chance this
+  // could allow for the splitter to get dragged to a size we're not happy about, but it is very
+  // unlikely and this is better than having the size jump around unexpectedly. I assume it could
+  // only happen if for some reason the WebView came up at a very different size than when it was
+  // last used and the split percentage was saved.
+  const footnotesPaneMaxPercent = Math.max(
+    calculatedFootnotesPaneMaxPercent,
+    footnotesPaneSizePercent,
+  );
+  const footnotesPaneMinPercent = Math.min(
+    calculatedFootnotesPaneMinPercent,
+    footnotesPaneSizePercent,
+  );
+
+  // Clamped only while the pane is shown: the limits follow the container's size, and the text
+  // alone resizing while the pane is hidden must not rewrite the split the pane reopens at.
+  useEffect(() => {
+    if (!isPaneVisible || containerHeight <= 0) return;
+
+    const clampedSize = Math.min(
+      Math.max(footnotesPaneSizePercent, calculatedFootnotesPaneMinPercent),
+      calculatedFootnotesPaneMaxPercent,
+    );
+
+    if (clampedSize !== footnotesPaneSizePercent) {
+      setFootnotesPaneSizePercent(clampedSize);
+    }
+  }, [
+    isPaneVisible,
+    containerHeight,
+    footnotesPaneSizePercent,
+    setFootnotesPaneSizePercent,
+    calculatedFootnotesPaneMaxPercent,
+    calculatedFootnotesPaneMinPercent,
+  ]);
+
+  // Read by panel id rather than position: the group holds the text's panel alone while the pane is
+  // hidden, and a layout without the pane's panel says nothing about the split to restore.
+  const onLayoutChangeFootnotesPane = useCallback(
+    (layout: { [panelId: string]: number }) => {
+      if (!isPaneVisible) return;
+      const paneSizePercent = layout[FOOTNOTES_PANE_PANEL_ID];
+      if (paneSizePercent === undefined) return;
+      debouncedSetFootnotesPaneSize(paneSizePercent);
+    },
+    [isPaneVisible, debouncedSetFootnotesPaneSize],
+  );
+
+  return (
+    // Fills whatever its flex-column parent has left after any headers above it, rather than the
+    // parent's full height: a full-height layout under a header would overflow the parent and put a
+    // second scrollbar outside the text's own.
+    <div ref={setContainerRef} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0 tw:w-full">
       <ResizablePanelGroup
         direction={footnotesPanePosition === 'bottom' ? 'vertical' : 'horizontal'}
-        className="tw:h-full tw:w-full tw:min-h-0"
-        onLayout={onLayoutFootnotesPane}
+        className="tw:flex-1 tw:min-h-0"
+        onLayoutChange={onLayoutChangeFootnotesPane}
       >
+        {/* Rendered first and unconditionally, with a stable id, so showing or hiding the pane
+            only adds or removes a sibling: this panel and the scrolling element inside it stay the
+            same DOM nodes, and the text keeps its scroll position. */}
         {children && (
+          <ResizablePanel id={SCRIPTURE_TEXT_PANEL_ID} className="tw:flex tw:flex-col tw:min-h-0">
+            <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{children}</div>
+          </ResizablePanel>
+        )}
+        {isPaneVisible && (
           <>
-            <ResizablePanel className="tw:flex tw:flex-col tw:min-h-0">
-              <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{children}</div>
+            {children && <ResizableHandle />}
+            <ResizablePanel
+              id={FOOTNOTES_PANE_PANEL_ID}
+              defaultSize={footnotesPaneSizePercent}
+              className="tw:bg-sidebar tw:pl-2 tw:pt-2 tw:pb-0 tw:pr-0 tw:flex tw:flex-col tw:min-h-0"
+              minSize={footnotesPaneMinPercent}
+              maxSize={footnotesPaneMaxPercent}
+            >
+              <FootnotesPane
+                {...paneProps}
+                listLayout={footnotesPanePosition === 'bottom' ? 'horizontal' : 'vertical'}
+              />
             </ResizablePanel>
-            <ResizableHandle />
           </>
         )}
-        <ResizablePanel
-          defaultSize={footnotesPaneSizePercent}
-          className="tw:bg-sidebar tw:pl-2 tw:pt-2 tw:pb-0 tw:pr-0 tw:flex tw:flex-col tw:min-h-0"
-          minSize={footnotesPaneMinPercent}
-          maxSize={footnotesPaneMaxPercent}
-        >
-          <div
-            ref={paneContainerRef}
-            // Kept as a literal rather than `{...{ [FOOTNOTES_PANE_ATTRIBUTE]: '' }}`:
-            // `react/jsx-props-no-spreading` forbids spreading onto a DOM element. Must match
-            // `FOOTNOTES_PANE_ATTRIBUTE` in `editor-dom.util.ts`, which `focusPaneSelectedRow`
-            // queries for — pinned by a test that finds this element through that constant.
-            data-footnotes-pane=""
-            className="tw:relative tw:flex tw:flex-col tw:flex-1 tw:min-h-0"
-            onFocus={handlePaneFocus}
-            onBlur={handlePaneBlur}
-          >
-            {/* Floats over the list's top trailing corner (leading corner in RTL, which
-                `inset-inline-end` follows on its own) rather than taking a row of its own, so the
-                pane spends all of its height on notes. Held clear of the scrollbar so that stays
-                grabbable, and carrying the pane's own background so the note text it covers does
-                not read through it. */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="tw:absolute tw:top-0 tw:z-20 tw:h-6 tw:w-6 tw:bg-sidebar"
-                    style={{ insetInlineEnd: listScrollbarWidthPx }}
-                    aria-label={localizedStrings['%webView_footnoteList_close%']}
-                    onClick={onClose}
-                  >
-                    <X className="tw:h-4 tw:w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{localizedStrings['%webView_footnoteList_close%']}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {/* The close button floats over whichever row is scrolled to the top of the list, so
-                every row reserves trailing room for it - the pane keeps all of its height for
-                notes without the button painting over (or a click aimed at the text landing on)
-                a note. */}
-            {/* Footnotes zoom area: the close button above, the pane's own padding (on the
-                ResizablePanel) and its resize handle stay outside so they keep their size while
-                the list content scales. */}
-            <ContentZoomRoot
-              ref={setFootnoteListWrapperRef}
-              area="footnotes"
-              label={zoomAreaLabel}
-              className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0 tw:[&_li]:pe-7"
-            >
-              {footnotes.length === 0 && !isLoading && (
-                <EmptyState
-                  className="tw:p-2"
-                  message={localizedStrings['%webView_footnoteList_empty%']}
-                />
-              )}
-              <FootnoteList
-                classNameForItems="scripture-font"
-                listId={footnoteListKey}
-                layout={footnotesPanePosition === 'bottom' ? 'horizontal' : 'vertical'}
-                footnotes={footnotes}
-                showMarkers={showMarkers}
-                formatCaller={showMarkers ? (c) => c : undefined}
-                ariaLabel={localizedStrings['%webView_footnoteList_header%']}
-                selectedFootnote={selectedFootnote?.footnote}
-                // Minted fresh on every selection application (pane click or focus request), so a
-                // repeat focusRequest for the same footnote re-scrolls even though the derived
-                // footnote object and index are unchanged.
-                selectionRequest={selectedFootnote?.request}
-                onFootnoteSelected={handleFootnoteSelected}
-                onFocusedFootnoteChange={onFocusedFootnoteChange}
-                onFootnoteEditRequested={
-                  onFootnoteEditRequested ? handleFootnoteEditRequested : undefined
-                }
-                // Clamped for the one commit in which a note inserted ahead of the edited LAST row
-                // has moved the index but not yet the list (derived in an effect below): out of
-                // range, no row would be the editing row and the row editor would remount.
-                editingFootnoteIndex={
-                  editingFootnoteIndex === undefined
-                    ? undefined
-                    : Math.min(editingFootnoteIndex, footnotes.length - 1)
-                }
-                renderEditingFootnote={renderEditingFootnote}
-              />
-            </ContentZoomRoot>
-          </div>
-        </ResizablePanel>
       </ResizablePanelGroup>
     </div>
   );
