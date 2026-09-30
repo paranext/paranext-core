@@ -5,6 +5,7 @@ import { act, renderHook } from '@testing-library/react';
 import { useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  EDITOR_LOAD_DELAY_TIME,
   getEditorSelectionRange,
   measureRangeScrollGeometry,
   RangeScrollGeometry,
@@ -51,6 +52,7 @@ function measured(geometry: RangeScrollGeometry): RangeScrollMeasurement {
 
 const GEN_10_19: SerializedVerseRef = { book: 'GEN', chapterNum: 10, verseNum: 19 };
 const GEN_10_3: SerializedVerseRef = { book: 'GEN', chapterNum: 10, verseNum: 3 };
+const GEN_10_25: SerializedVerseRef = { book: 'GEN', chapterNum: 10, verseNum: 25 };
 const MATCH: SelectionRange = {
   start: { jsonPath: '$.content[40].content[2]', offset: 120 },
   end: { jsonPath: '$.content[40].content[2]', offset: 125 },
@@ -79,13 +81,21 @@ function createFakeEditor() {
   };
 }
 
-type HookProps = { editorChapterKey: string | undefined; isViewVisible: boolean };
+type HookProps = {
+  editorChapterKey: string | undefined;
+  isViewVisible: boolean;
+  /**
+   * The web view's own reference. Defaults to {@link GEN_10_19}, the verse most rows jump to, so a
+   * row about something else starts with the web view already on its target verse.
+   */
+  scrRef?: SerializedVerseRef;
+};
 
 function renderScrollToRange(editor: EditorRef, initialProps: HookProps) {
   return renderHook(
-    (props: HookProps) => {
+    ({ scrRef = GEN_10_19, ...props }: HookProps) => {
       const editorRef = useRef<EditorRef | null>(editor);
-      return useScrollToRange({ editorRef, ...props });
+      return useScrollToRange({ editorRef, scrRef, ...props });
     },
     { initialProps },
   );
@@ -384,7 +394,7 @@ describe('useScrollToRange', () => {
         // Mirrors a callback ref being (re)assigned on every render, the way the real web view's
         // `ref={editorRef}` would be as the editor mounts.
         editorRef.current = mountedEditor;
-        return useScrollToRange({ editorRef, ...props });
+        return useScrollToRange({ editorRef, scrRef: GEN_10_19, ...props });
       },
       { initialProps: { editorChapterKey: 'GEN 10', isViewVisible: false } },
     );
@@ -414,7 +424,7 @@ describe('useScrollToRange', () => {
         // The real `ref` is null until the element mounts, which is the state under test.
         // eslint-disable-next-line no-null/no-null
         const editorRef = useRef<EditorRef | null>(null);
-        return useScrollToRange({ editorRef, ...props });
+        return useScrollToRange({ editorRef, scrRef: GEN_10_19, ...props });
       },
       { initialProps: { editorChapterKey: 'GEN 10', isViewVisible: true } },
     );
@@ -661,6 +671,138 @@ describe('useScrollToRange', () => {
     expect(result.current.consumeRangeScrollClaimFor({ ...GEN_10_19 })).toBe(true);
     expect(result.current.consumeRangeScrollClaimFor(GEN_10_3)).toBe(false);
     expect(result.current.consumeRangeScrollClaimFor(GEN_10_19)).toBe(false);
+  });
+
+  describe("waits for the web view to be on the range's own verse", () => {
+    /**
+     * Renders the web view on a new reference the way the engine meets it: the engine places its
+     * caret at the new verse's start in its own effect, before this hook's effect runs.
+     */
+    function navigateTo(
+      fake: ReturnType<typeof createFakeEditor>,
+      rerender: (props: HookProps) => void,
+      scrRef: SerializedVerseRef,
+    ) {
+      fake.replaceSelection(undefined);
+      rerender({ editorChapterKey: 'GEN 10', isViewVisible: true, scrRef });
+    }
+
+    it('a request that arrives before the navigation to its verse has rendered waits for that verse', async () => {
+      const fake = createFakeEditor();
+      const { result, rerender } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 10',
+        isViewVisible: true,
+        scrRef: GEN_10_25,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      await runFrames(SCROLL_MAX_WAIT_MS / 2);
+      expect(fake.setSelection).not.toHaveBeenCalled();
+      expect(scrollToRange).not.toHaveBeenCalled();
+
+      navigateTo(fake, rerender, GEN_10_19);
+      await runFrames(EDITOR_LOAD_DELAY_TIME + 100);
+
+      expect(fake.setSelection).toHaveBeenCalledTimes(1);
+      expect(fake.editor.getSelection()).toEqual(MATCH);
+      expect(scrollToRange).toHaveBeenCalledTimes(1);
+      expect(scrollToVerse).not.toHaveBeenCalled();
+    });
+
+    it('a flip back to the previous verse before the target settles neither consumes nor loses the request', async () => {
+      const fake = createFakeEditor();
+      const { result, rerender } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 10',
+        isViewVisible: true,
+        scrRef: GEN_10_25,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      navigateTo(fake, rerender, GEN_10_19);
+      await runFrames(50);
+      // A stale echo of an older scroll group write takes the web view back for a moment.
+      navigateTo(fake, rerender, GEN_10_25);
+      await runFrames(50);
+      navigateTo(fake, rerender, GEN_10_19);
+      await runFrames(EDITOR_LOAD_DELAY_TIME + 100);
+
+      expect(fake.editor.getSelection()).toEqual(MATCH);
+      expect(fake.setSelection).toHaveBeenCalledTimes(1);
+      expect(scrollToRange).toHaveBeenCalledTimes(1);
+    });
+
+    it('the newest request wins across verses, even when the web view passes through the older one', async () => {
+      const fake = createFakeEditor();
+      const { result, rerender } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 10',
+        isViewVisible: true,
+        scrRef: GEN_10_25,
+      });
+
+      act(() => result.current.requestScrollToRange(OTHER_MATCH, GEN_10_3));
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      navigateTo(fake, rerender, GEN_10_3);
+      await runFrames(EDITOR_LOAD_DELAY_TIME + 100);
+      navigateTo(fake, rerender, GEN_10_19);
+      await runFrames(EDITOR_LOAD_DELAY_TIME + 100);
+
+      expect(fake.setSelection).not.toHaveBeenCalledWith(OTHER_MATCH);
+      expect(fake.setSelection).toHaveBeenCalledTimes(1);
+      expect(fake.editor.getSelection()).toEqual(MATCH);
+      expect(scrollToRange).toHaveBeenCalledTimes(1);
+    });
+
+    it('a request for the verse the web view is already on applies at once', () => {
+      const fake = createFakeEditor();
+      const { result } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 10',
+        isViewVisible: true,
+        scrRef: GEN_10_19,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+
+      expect(fake.setSelection).toHaveBeenCalledWith(MATCH);
+    });
+
+    it('gives up without scrolling when the web view never reaches the verse within the bound', async () => {
+      const fake = createFakeEditor();
+      const { result } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 10',
+        isViewVisible: true,
+        scrRef: GEN_10_25,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      await runFrames(SCROLL_MAX_WAIT_MS * 2);
+
+      expect(fake.setSelection).not.toHaveBeenCalled();
+      expect(scrollToRange).not.toHaveBeenCalled();
+      // The web view is showing some other verse; scrolling to the target would drag it away.
+      expect(scrollToVerse).not.toHaveBeenCalled();
+      act(() => {
+        expect(result.current.consumeRangeScrollClaimFor(GEN_10_19)).toBe(false);
+      });
+    });
+
+    it('does not bound the wait for the verse while the view is hidden', async () => {
+      const fake = createFakeEditor();
+      const { result, rerender } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 10',
+        isViewVisible: false,
+        scrRef: GEN_10_25,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      await runFrames(SCROLL_MAX_WAIT_MS * 3);
+      expect(fake.setSelection).not.toHaveBeenCalled();
+
+      // Hidden case: the selection is data, so it is applied while hidden once the verse is shown.
+      fake.replaceSelection(undefined);
+      rerender({ editorChapterKey: 'GEN 10', isViewVisible: false, scrRef: GEN_10_19 });
+      await runFrames(EDITOR_LOAD_DELAY_TIME + 100);
+      expect(fake.editor.getSelection()).toEqual(MATCH);
+    });
   });
 });
 

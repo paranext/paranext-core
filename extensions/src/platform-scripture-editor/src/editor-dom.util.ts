@@ -915,6 +915,15 @@ export function hasNewScrollTarget(
 }
 
 /**
+ * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
+ * to listen for the editor to finish loading
+ *
+ * This is best used for when the editor is transitioning between loads. For the first time the
+ * editor loads, use {@link runOnFirstLoad} instead
+ */
+export const EDITOR_LOAD_DELAY_TIME = 200;
+
+/**
  * Max ms to wait for a verse scroll to become possible before giving up — the rAF retry in the
  * model text panel, the settle loop in the resource text panel, and the settle loop in
  * `useScrollToRange` (this extension's range-jump hook) all bound themselves with it. The usual

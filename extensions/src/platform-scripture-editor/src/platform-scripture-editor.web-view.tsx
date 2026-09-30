@@ -83,7 +83,6 @@ import {
 } from 'platform-bible-react/experimental';
 import {
   ABORTED,
-  compareScrRefs,
   formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
@@ -139,6 +138,7 @@ import {
   createNoteAnchorSource,
   createPendingCommentAnchorSource,
   createPendingCommentCenterAnchorSource,
+  EDITOR_LOAD_DELAY_TIME,
   getVerseElement,
   runOnFirstLoad,
   scrollToAnnotation,
@@ -222,15 +222,6 @@ import {
 function PortalContents({ children }: PropsWithChildren) {
   return children;
 }
-
-/**
- * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
- * to listen for the editor to finish loading
- *
- * This is best used for when the editor is transitioning between loads. For the first time the
- * editor loads, use {@link runOnFirstLoad} instead
- */
-const EDITOR_LOAD_DELAY_TIME = 200;
 
 /**
  * Trailing-edge debounce for the keystroke-driven PDP save, in milliseconds. Chosen to kill the
@@ -1329,12 +1320,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // `computeRangeScrollTop` in editor-dom.util.ts for exactly where it lands.
   //
   // Hidden case: those panels drive this editor from elsewhere, and in Power mode they can share its
-  // tab stack. The selection is applied at once; the scroll waits for this tab to be shown, then
-  // runs once, instantly, for the latest request. See `useScrollToRange`.
+  // tab stack. The selection is applied as soon as this web view shows the range's verse, hidden or
+  // not (it is data, with no geometry); the scroll waits for this tab to be shown, then runs once,
+  // instantly, for the latest request. See `useScrollToRange`.
   const { requestScrollToRange, consumeRangeScrollClaimFor } = useScrollToRange({
     editorRef,
     editorChapterKey,
     isViewVisible,
+    scrRef,
   });
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
@@ -1689,8 +1682,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // Requested before navigating, so the jump records the chapter it started from.
           requestScrollToRange(range, targetScrRef);
           // Keeps the scroll group on the range's verse. The verse scroll this sets off stands down
-          // for a reference a range scroll owns (see the scroll effect below).
-          if (compareScrRefs(scrRef, targetScrRef) !== 0) setScrRefWithScroll(targetScrRef);
+          // for a reference a range scroll owns (see the scroll effect below). Always asserted, even
+          // when this web view already shows the verse: the `scrRef` rendered here can lag the
+          // scroll group, which another view may have just moved elsewhere. A no-op when the group
+          // is already there.
+          setScrRefWithScroll(targetScrRef);
           break;
         }
         case 'updateDecorations': {
