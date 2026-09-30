@@ -83,10 +83,14 @@ describe('content zoom markers (Text Collection grid)', () => {
         /<ContentZoomRoot area={zoomArea} label={label}> ?{stateContent} ?<\/ContentZoomRoot>/g,
       ),
     ).toHaveLength(2);
-    expect(cell).toContain(
-      '<div className="tw:min-w-0 tw:flex-1 tw:overflow-auto"> <ContentZoomRoot area={zoomArea}',
+    // The scroll box's overflow class is chosen per view (the Grid view hands scrolling to its root),
+    // so the inline layout is pinned by the element's other classes.
+    expect(cell).toMatch(
+      /<div className={`tw:min-w-0 tw:flex-1 \$\{contentOverflowClass\}`} style={contentStyle}> <ContentZoomRoot area={zoomArea}/,
     );
-    expect(cell).toContain('<div className="tw:p-2"> <ContentZoomRoot area={zoomArea}');
+    expect(cell).toContain(
+      '<div data-cell-pad className="tw:p-2"> <ContentZoomRoot area={zoomArea}',
+    );
     // The shared `text-collection` area is only the grid's fallback, never a literal in the cell.
     expect(cell).not.toContain('area="text-collection"');
   });
@@ -111,7 +115,7 @@ describe('content zoom markers (Text Collection grid)', () => {
   it('has no source that reads the retired per-resource zoom state key', () => {
     // A static sweep, not a mount: with no reader left, a level saved under this key has no effect.
     // Positive control: the sweep sees the web view's other state keys, spelled the same way.
-    expect(grid).toContain("useWebViewState<ResourceCollectionViewMode>('viewMode'");
+    expect(grid).toMatch(/useWebViewState<ResourceCollectionViewMode>\( ?'viewMode'/);
     const readers = gridSources
       .filter(({ text }) => text.includes('zoomByResourceId'))
       .map(({ filePath }) => filePath);

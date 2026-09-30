@@ -98,6 +98,7 @@ describe('Dock Layout Component', () => {
         'legacyCommentManager.commentListPanel',
         'platformScriptureEditor.scriptureTextGrid',
         'platformScripture.find',
+        'platformScripture.checksSidePanel',
       ].forEach((webViewType) => {
         expect(getTabGroup(makeWebViewTabInfo(webViewType, false))).toBe(TAB_GROUP_RESOURCES);
       });

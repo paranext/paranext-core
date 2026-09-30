@@ -1,5 +1,6 @@
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { RESOURCE_PANEL_TYPED_STRING_KEYS } from './resource-panel-strings.utils';
+import type { InstallFailureMessageKeys } from './install-failure-message.utils';
 
 /**
  * Object containing all keys used for localization in the resource text panel. Pass these keys into
@@ -29,6 +30,7 @@ export const RESOURCE_PANEL_STRING_KEYS = Object.freeze([
   '%webView_resourcePanel_selecting%',
   '%webView_resourcePanel_installFailed%',
   '%webView_resourcePanel_installFailedOffline%',
+  '%webView_resourcePanel_installedButUnavailable%',
   '%webView_resourcePanel_retry%',
   '%webView_resourcePanel_settingsUnavailable%',
   '%webView_resourcePanel_loading%',
@@ -49,3 +51,11 @@ export type ResourcePanelLocalizedStringKey = (typeof RESOURCE_PANEL_STRING_KEYS
 export type ResourcePanelLocalizedStrings = {
   [key in ResourcePanelLocalizedStringKey]?: LocalizedStringValue;
 };
+
+/** The resource panel's install-failed messages, for `getInstallFailureMessageKey`. */
+export const RESOURCE_PANEL_INSTALL_FAILURE_KEYS: InstallFailureMessageKeys<ResourcePanelLocalizedStringKey> =
+  {
+    failed: '%webView_resourcePanel_installFailed%',
+    failedOffline: '%webView_resourcePanel_installFailedOffline%',
+    installedButUnavailable: '%webView_resourcePanel_installedButUnavailable%',
+  };

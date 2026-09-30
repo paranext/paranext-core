@@ -171,6 +171,92 @@ step, no automation. Just a record.
   OS focus, only serves callers with no window, such as the extension host.
 - **Source:** PT-4238; PR #2736.
 
+## adr-aligned-grid-flattens-the-editor-dom: The verse-aligned grid flattens the editor's own DOM into its subgrid chain, and places verses by explicit row
+
+- **Date:** 2026-09-07
+- **Status:** Accepted
+- **Context:** PT-4184 adds a Scripture Text Grid view where verse N of every resource shares a row.
+  Selecting and copying a passage down a column has to keep working, which means one editor per
+  column rather than one per cell — so the elements the layout must position
+  (`div.verse-block[data-verse-start|-end]`, from PT-4304 upstream) sit inside
+  `@eten-tech-foundation/platform-editor`'s DOM: `.editor-container` > `.editor-inner` >
+  `.editor-input`. CSS subgrid reaches a descendant only if every level between it and the grid root
+  stops generating a box, and a scroll container's children cannot take part in an ancestor's grid
+  at all. PT-4304's proof showed the chain survives this repo's own cell chrome, but modelled only
+  those wrappers, not the editor's three.
+- **Decision:** Flatten the whole chain — this repo's cell padding wrapper and the editor's three
+  wrappers — with `display: contents`, from one stylesheet
+  (`extensions/src/platform-scripture-editor/src/scripture-text-grid/aligned-grid.styles.ts`)
+  injected only while this view is mounted, and give the cell content wrapper a `contentOverflow`
+  prop so it stops being a scroll container here. Place each verse block by an explicit `grid-row`
+  derived from its own `data-verse-start`/`-end`, through generated static rules rather than JS:
+  subgrid alone lays blocks out in document order, so one resource missing a verse would shift every
+  row below it. Declare a fixed 200 verse rows on the root; unoccupied rows collapse to zero height,
+  so no chapter has to be measured first.
+- **Alternatives considered:** **One editor per cell**, which would keep the editor's DOM out of the
+  chain — rejected because it breaks copying a continuous passage down a column, the reason PT-4064
+  chose this approach. **JS height synchronisation** — rejected: the view is meant to align natively,
+  and measurement degrades exactly where per-resource zoom puts columns at different font sizes,
+  which native rows handle for free. **Asking upstream for a flat DOM** — a change to a shared editor
+  for one consumer; revisit if a second consumer needs it. **Computing the row count from the
+  chapter** — an async versification lookup, or lifting each cell's USJ into the parent, to save rows
+  that cost nothing.
+- **Consequences:** This view is coupled to three class names it does not own, and a rename upstream
+  breaks alignment *silently* — the grid still renders, just unaligned. Three things watch for that:
+  a unit test pins the selectors, a contract test reads the installed editor bundle and fails when a
+  name or export the layout depends on is gone, a Storybook story reproduces the markup so Chromatic
+  sees the layout, and an e2e test measures real block geometry across columns in the running app.
+  Scrolling to a reference is explicit, because Lexical skips the DOM-selection write — and the
+  scroll-into-view inside it — for a read-only editor. Placement is opt-in: verse blocks are hidden
+  by default and shown by the row rule that places them, so a block the rules cannot place — one
+  upstream emitted with no parsable range, or a verse numbered above 200 — is dropped rather than
+  auto-placed into the first free row of the shared grid, which would silently misalign that column
+  from there down. Such a verse is therefore not readable in this view (it still is in Verse and
+  Chapter view); revisit the row count if a versification ever exceeds 200. Per-resource zoom lands
+  on the verse blocks here rather than on the resource's content-zoom marker as it does in the
+  other views (`adr-text-collection-resources-are-zoom-areas`). The marker sits inside the chain, so
+  it must be `display: contents`, and the column's content wrapper around it is a subgrid box, where
+  `zoom` would scale the used value of the shared row tracks it inherits. So the stylesheet pins the
+  marker's own zoom to 1, overriding the platform's rule for it, and the verse blocks take the area's
+  level from the platform's `--platform-content-zoom-<area>` variable. The marker stays rendered, so
+  the resource is still a zoom area the platform reports, names in its indicator and targets with
+  Ctrl+wheel and the zoom menus. The coupling is to that variable's name, which PAPI documents for
+  web views to read, and to the platform's marker rule staying less specific than the stylesheet's.
+
+  Three decisions follow from the row model rather than from taste, so they are recorded here:
+
+  - **Everything between verse blocks is hidden**, not section headings alone: the rule suppresses
+    every non-verse-block child of the editor root, so chapter descriptions and intro material
+    inside the chapter go with them. All of it sits between verse blocks, so it has no row of its
+    own, and it is translation-specific — showing it per column would put a heading beside verse 5
+    in one text and verse 6 in another. Placing it instead on the row of the verse it precedes is
+    not expressible in CSS (no selector reaches a following sibling's attributes) and would need JS.
+    The model still carries it, so a later pass can span one across a full-width row keyed to a
+    reference resource; until then the reference screenshot's clean look is what ships.
+  - **Rows are visual, not announced.** The grid is a group of labeled column regions. ARIA table
+    semantics would need a row-major DOM, which the one-editor-per-column requirement rules out;
+    verse numbers rendered at the start of each block are what let a screen-reader user correlate
+    columns. Flagged for AT validation with the rest of this surface.
+  - **A reference scrolls flush under the sticky header**, with no context above it. The Scripture
+    editor deliberately leaves `VERSE_NUMBER_SCROLL_OFFSET` (80px, `editor-dom.util.ts`) above the
+    verse, so in Simple mode the two surfaces land the same reference differently — on purpose; do
+    not "fix" either to match the other. Flush-to-top shows the whole aligned row with every column
+    starting at the same verse boundary, which is what the grid is for, and spends none of a short
+    port on preceding verses (80px is a quarter of a ~300px chapter cell). The cost is that poetry
+    or a continued sentence starts mid-thought. The Text Collection's chapter surfaces follow the
+    same answer (PT-4543). Agreed in review of #2781, 2026-09-23.
+
+  `BLOCK_VERSE_VIEW_MODE` and the `verse-block` DOM exist only in the editor built from
+  `scripture-editors`' `platform-yalc` branch, which `dev-packages.json` names and
+  `stage-dev-packages` builds into `dev-packages/staging/platform-editor`, the `file:` dependency both
+  manifests declare (`adr-dev-packages-staged-file-deps`). There is no registry version to bump for
+  it. A tree whose staged editor is stale or was never built — `npm ci --ignore-scripts` without
+  `npm run stage-dev-packages` first — gets an editor without the mode, and this view then renders
+  empty columns; `upstream-editor-contract.test.ts` fails by name in that case rather than leaving
+  it to be diagnosed from the layout.
+- **Source:** PT-4184, building on PT-4304's subgrid-chain proof and extending it to the editor's own
+  wrappers.
+
 ## adr-all-projects-routes-to-home: the title bar's "more projects" affordance routes to Home rather than making the project picker send/receive-aware
 
 _The affordance is labelled "More projects…" in the title bar today; the PRD calls it "All projects…"
@@ -889,7 +975,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   would flash the Text Collection forward and then away; and the module-level pending slot adds
   hidden coupling with a forgot-to-clear failure mode. **Register a public command** like the other
   four — rejected as surface area for nobody: the Text Collection has no menu entry and no external
-  caller.
+  caller. *(Superseded by `adr-menu-per-mode-layout-via-mode-gated-columns`: PT-4534 registers
+  `platformScriptureEditor.showTextCollectionPanel` and gives it a Simple-mode menu entry, so this
+  alternative is what shipped.)*
 - **Consequences:** The scroll group's source project is now documented at its call site as *not* an
   active-editor signal, which is the trap that produced this bug; any future panel that reaches for
   it should be re-pointed explicitly instead. *(Amended 2026-09-18: that call site is gone — PT-4238
@@ -1431,6 +1519,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     is greppable rather than living only in this log — a slug rather than a `PT-XXXX` for the same
     reason `TODO(main-renderer-shutdown-relay)` above is one.
 
+- **Amended 2026-09-24 (PT-1641):** With the renderer on a MessagePort (`adr-renderer-papi-transport-is-messageport`), an OS suspend no longer trips this banner; its remaining normal trigger is main closing the port on purpose without a close frame, or a port that dies with main. The per-window port main now holds is the natural carrier for the `main-renderer-shutdown-relay` deferral above; wiring it is still a separate ticket.
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
 
@@ -1636,6 +1725,56 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   method it calls through are now marked `@experimental` / `'x-experimental': true`, because this
   recompute contract remains untested beyond its one caller.
 - **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
+
+## adr-dbl-install-is-idempotent: Installing an already-installed DBL resource succeeds, and `installed` is a hint
+
+- **Date:** 2026-09-22
+- **Status:** Accepted
+- **Context:** The Model Text panel auto-installs a configured resource its cached catalog reports as
+  not installed. `InstallDblResourceCore` threw "Resource is already installed and up to date" in
+  that case, so a stale flag produced an install-failed view whose **Try again** re-ran the same
+  call forever — PT-4588 recorded 14 identical failures in four minutes against a resource that was
+  on disk and readable in the same session. The flag can be stale whatever its source: it is
+  computed when the catalog is fetched, and `adr-dbl-install-status-from-backend` reconciles it only
+  when something asks.
+- **Decision:** Four rules.
+  1. **Install is idempotent.** An already-installed, up-to-date resource is a no-op success. The
+     question is asked twice, either side of `ScrTextCollection.RefreshScrTexts()`:
+     `InstallableResource.Installed` resolves `ExistingScrText` against the live collection on every
+     read, so the first answer describes the collection as it stands — possibly from before another
+     process removed the project — and only the second describes the disk now. Refreshing
+     unconditionally would put a full rescan in front of every ordinary install, so the cheap answer
+     gates the expensive one. The no-op sends the same notifications a real install does, because
+     the caller's view is the thing that was wrong.
+  2. **`installed` is a hint, so a caller that acts on it refreshes first — unless acting on a
+     stale one is cheap.** The resource panels and the text grid await
+     `platformGetResources.refreshResourceFlags` and then read the catalog, rather than acting on a
+     snapshot that is one refresh behind. The resource and team-layout pickers deliberately do not:
+     awaiting the refresh would hold the dialog's first paint on a backend call, and a stale flag
+     there costs only a redundant install that rule 1 turns into a no-op that corrects it. A listing
+     does not bother either: showing the previous snapshot costs nothing it cannot correct on the
+     next read.
+  3. **A resolved install is not re-fired for the same uid.** An idempotent install plus a catalog
+     that never converges would otherwise loop. The panel offers a retry instead, and says the
+     resource is installed but could not be opened — not that the install failed, which would send
+     the user to check a network connection that is not the problem.
+  4. **An action the list never reflects ends as an error, not a spinner.** The Get Resources row's
+     progress indicator stops only when the list agrees with the action, so the dialog holds each
+     action until a list fetched after it settles the question, then reports a failure the user can
+     see and retry. Rule 1 removes the error that used to end this case; without a replacement the
+     row simply spun.
+- **Alternatives:** *Treat the "already installed" message as success in TypeScript* — rejected: a
+  cross-process string match that breaks on localization. *Keep throwing and have callers recover* —
+  rejected: every caller would need the same recovery, and the one that mattered could not recover
+  at all, because re-reading the catalog returned the same stale flag. *Have the dialog clear its
+  own progress indicator without an error* — rejected: an action that silently does nothing is
+  indistinguishable from one that worked.
+- **Consequences:** A stale catalog corrects itself without a remount. Callers cannot tell "installed
+  now" from "already there", and none needs to. The retired error string
+  `%getResources_errorInstallResource_resourceAlreadyInstalled%` has a `deprecationInfo` entry with
+  no replacement, since the case no longer produces an error. **Revisit** if a caller ever needs to
+  know which of the two happened.
+- **Source:** PT-4588.
 
 ## adr-dbl-install-status-from-backend: The backend is the authority on which DBL resources are installed, and on which project id
 
@@ -3335,6 +3474,80 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4535, after the ring was measured in the running app and two earlier mechanisms were
   found not to work in the shipped runtime.
 
+## adr-menu-per-mode-layout-via-mode-gated-columns: A menu's per-mode layout is built from mode-gated items in mode-specific columns
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** Simple's scripture editor Project menu needed a different section structure from
+  Power's (Project / Edit ▸ / View / Insert / Tools / Quality checks vs Project / Edit / Options /
+  Tools / Insert), with Power
+  unchanged. Both modes are served from one menu document, and `hiddenInterfaceModes` exists on
+  items only; columns and groups have no per-mode switch.
+- **Decision:** A mode that needs its own sections gets its own columns (e.g.
+  `platformScriptureEditor.simpleView`, `simpleTools`) holding items hidden in the other mode, and
+  items that belong only to the other mode's sections gain `hiddenInterfaceModes` for this one.
+  Items identical in both modes stay shared (the Insert column). Column orders interleave with
+  decimals (4.5, 5.5) because orders must be unique per menu. Empty-column suppression
+  (`adr-menu-section-headings-from-column-labels`) makes each mode's unused columns vanish.
+  Simple's Comments entry is a new item that fronts the third-column Comments tab; the Power item
+  (`legacyCommentManager.openCommentList`, which opens a separate Comment List web view) stays
+  hidden in Simple. The Edit flyout's
+  Undo/Redo/Cut/Copy/Paste are menu command ids handled inside
+  the editor web view (`menuCommandHandler`) through `EditorRef`, not PAPI commands: they act on that
+  web view's own editor, and the clipboard needs the click's user activation, which a PAPI round
+  trip loses.
+- **Alternatives:** `hiddenInterfaceModes` on columns/groups — rejected for now: a schema change
+  plus a change to the shared mode-filtering pipeline every menu consumer runs, for one consumer's
+  need (unlike `isHeaderHidden` in the 2026-09-23 amendment below, which is render-only and which
+  the menubar ignores). Per-mode menu documents — rejected: duplicates every
+  shared item and splits the contribution surface. Reordering Power to match Simple — rejected:
+  Power must not change. Un-hiding the Power Comments item in Simple — rejected: it opens a
+  different web view from the tab Simple's Tools section points at.
+- **Consequences:** A few items are declared twice (once per mode), so a command change must touch
+  both copies; `menu-data.service-host.scripture-editor-menu.test.ts` pins both modes by command id
+  and order, and checks that a command served in both modes carries the same label in each, so a
+  missed, reordered or relabelled copy fails there. Simple's Tools order is pinned to the
+  third-column tab order (`shipped-simple-layout-order.test.ts`), so adding a third-column tab (e.g.
+  Dictionary) fails that test until a Tools item exists. Hiding a Power-only item without re-adding
+  it to a Simple column removes its only entry point: Simple now has no menu route at all to the
+  four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
+  no quality tools in the Project menu; UX has not yet confirmed it. Auto-show footnote pane
+  (`platformScriptureEditor.toggleFootnotesAutoShow`) is Power-only too, because Simple keeps PT9's
+  manual footnotes pane: Show footnotes opens it and it stays open. The Edit flyout's ids are not
+  registered commands, and `KeyboardShortcutEntry.command` is typed to registered commands, so
+  those items cannot show a shortcut hint even though Ctrl+Z, Ctrl+Y and the clipboard chords work
+  in the editor.
+- **Amended 2026-09-23 (PT-4534, review of #2847):** Three changes to Simple's menu.
+  - **Edit ▸ has a section of its own, with no heading,** between Project and View. The v0 demo
+    (https://10simple-project-menu.vercel.app/) renders it that way: the Edit submenu sits outside
+    the Project group, between two dividers. The ticket's 2026-09-18 transcription had listed it
+    inside Project. So columns take an optional `isHeaderHidden` flag: `TabDropdownMenu` still
+    divides that section and keeps its label as a visually hidden heading that names the group, the
+    same `aria-labelledby` route every headed section uses. It names the section only while two or
+    more sections are shown, like every heading. The section's label is "Edit", the same as its only
+    item, so a screen reader announces "Edit" twice; that is deliberate, since a column must have a
+    real label and the section holds nothing but the Edit flyout. Rejected for the unheaded section:
+    making a column's `label` optional — the menubar needs it to open the column, and the section
+    would lose its accessible name; an empty localized string as the label — it hides the heading by
+    accident of the data, not by intent, and still leaves the section unnamed; an `aria-label` on the
+    group instead of a hidden heading — a second naming mechanism beside `aria-labelledby`, and the
+    only `aria-label` on a menu group in the repo.
+  - **Simple shows Open Checks, under a Quality checks section,** as product asked on 2026-09-23. In
+    Simple it opens the Checks side panel as a tab in the third column rather than a split beside the
+    editor, and fronts that tab on later clicks (`adr-simple-column-3-tools-open-on-demand`). The
+    Checking assistant the v0 design names is left out of Simple until PT-4734 integrates the
+    assistant itself. The four Inventories and Markers Checklist stay Power-only, so Simple still
+    has no menu route to them.
+  - **Per-pane zoom (`platform.webViewContentZoomIn`/`Out`/`Reset`) is Simple-only, in a Zoom
+    section of its own** (`platformScriptureEditor.zoomSection`), which lands between Edit and View.
+    The editor's tab title is hidden in Simple, so this menu is its only mouse route to zoom; Power
+    reaches zoom from the tab menu instead (`adr-simple-mode-tab-menu-offers-zoom-only`). The zoom
+    items stay out of the Options column: every other item there is Power-only, and a column is
+    served whenever ANY of its items is visible, so a single ungated item there would put the whole
+    Options column — heading and all — back into Simple. Anything added to a Power-only column
+    needs `hiddenInterfaceModes` even when the command itself is harmless in Simple.
+- **Source:** PT-4534 (parent PT-4530); decisions recorded on the ticket 2026-09-18 and 2026-09-23.
+
 ## adr-menu-section-headings-from-column-labels: Menu sections are headed by their column label, only when two or more are non-empty
 
 - **Date:** 2026-09-11
@@ -3574,6 +3787,18 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   rung is the "hide undo/redo" alternative rejected below, which needs UX sign-off, and that has not
   changed. Measure `restore` at the 297px floor before choosing between adding that rung and
   accepting the residual overrun.
+- **Amended 2026-09-21:** `blockMarkerToBlockNames`, cited above, no longer exists — PT-4488/PT-4539
+  replaced it with `selectableParagraphMarkers` (`platform-scripture-editor.utils`), a full,
+  minimally filtered derivation from `usfmMarkers` rather than a hand-maintained list. The
+  substantive conclusion above is unaffected: `selectableParagraphMarkers` is the *offered*
+  (selectable) set, not a bound on `blockMarker`, which is still read verbatim off the USJ para node
+  and isn't bounded by `usfm.sty` either — a project-custom marker, or one entered by mistake, can
+  be any string. The **7-character** figure holds only for standard USFM markers (`pubinfo`,
+  `restore`) — `usfmMarkers` doesn't even cover every marker `usfm.sty` itself defines (e.g. it has
+  no `tr` entry at all), so it was never a tighter bound than the hand list it replaced. If
+  anything, the widened offered set makes the longer markers more reachable day-to-day for standard
+  markers, since `restore`, `toca#`, `imte#`, etc. are now selectable from the switcher itself
+  rather than only arriving via imported/typed USFM.
 - **Consequences:** Every marker length now fits at the column floor with ≥16px spare, and the
   `min-content` floor is deliberately applied *only* at `SHRINK_STEP.MINIMUM`: while the style name
   is still rendered it contributes its longest word to `min-content`, and a floor there makes the
@@ -5663,6 +5888,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   process that unexpectedly disappeared, which a deliberate `location.reload()` navigation is not,
   so the main-process handler that spends the budget never runs on this path.
 
+## adr-renderer-papi-transport-is-messageport: The renderer talks to main over an Electron MessagePort, not a WebSocket
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** PT-1641. After an OS sleep the renderer's PAPI WebSocket to main died with 1006 at both ends and nothing recovered; the extension host and the .NET data provider on the same server survived. Chromium's `net::TCPClientSocket` observes power-suspend events and `OnSuspend()` closes every connected or connecting client socket, failing pending I/O with `ERR_NETWORK_IO_SUSPENDED` (`net/socket/tcp_client_socket.{h,cc}`, define `TCP_CLIENT_SOCKET_OBSERVES_SUSPEND`, all platforms but Android; verified at Chromium 142.0.7444.265 = Electron 39.8.8 and at 128.0.6613.162 = Electron 32.1.2). It is compile-time, has no feature flag or switch, exempts nothing (loopback included) and has no resume path. A renderer WebSocket is a network-service `WebSocketChannel` over such a socket; the extension host (`ws` on libuv) and .NET (`ClientWebSocket`) hold plain OS sockets, which loopback preserves across sleep. Reported to Electron as #19993 (2019) and #38405 (2023), never addressed. `HttpNetworkSession`'s own suspend observer is Windows-only and closes idle connections only; it is not the mechanism here.
+- **Decision:** Take the renderer-to-main link off Chromium's network stack. Each window asks main for an Electron `MessageChannelMain` port through the preload (`src/main/preload.ts`, channels `electronAPI:papi.*`); main's `papi-port-broker.service` answers only while the window has no open port (one live channel per window) and only requests from the window's page frame, which a same-origin web view can still drive through the bridge, and serves its end through `RpcWebSocketListener.acceptLocalClient` as `renderer:<windowId>`; the page's `MessagePortWebSocket` presents the other end as the DOM `WebSocket` `RpcClient` already uses (`web-socket.factory.ts` selects it when the bridge exists). Mojo pipes observe no power events (no `PowerMonitor` reference anywhere in `mojo/core`; Chromium's own suspend broadcast to the network service travels over Mojo during the transition). Close intent travels in an in-band close frame (`PAPI_PORT_CLOSE_FRAME_TYPE`) because a port close carries no code; a port that closes with no frame is 1006, so `isCleanCloseEvent` and the connection-lost banner work unchanged. The `ws` server on 8876 stays for the extension host, .NET, e2e fixtures and tooling.
+- **Alternatives:** Reconnect after resume: a state machine on a link guaranteed to fail, needing a replay of every registration after main has already announced the window's death, plus the four blockers `adr-renderer-websocket-suspend-disconnect` records; both Electron reporters did this and still had trouble on Windows. Plain `ipcRenderer`/`ipcMain` channels: survive sleep too, but have no per-connection close signal and copy every payload through the context bridge; a port maps one-to-one onto the per-socket `RpcServer`. WebTransport over QUIC: escapes the TCP observer, but QUIC's idle timeout (30 s by default) expires during any real sleep, Node 22 has no HTTP/3 server, and it requires a certificate even on loopback. `powerSaveBlocker`: cannot stop a user-initiated sleep and drains the battery. A Chromium flag: none exists.
+- **Consequences:** Main has two accept paths (`onClientConnect` for `ws`, `acceptLocalClient` for ports) sharing `serveClient`. The renderer's connection is no longer observable from outside the process (`lsof`/`netstat` on 8876 show two clients, not three). The renderer-side `MessagePort` `close` event exists only because Electron force-enables Chromium's `MessagePortCloseEvent` feature (upstream status `test` in M142, `shell/renderer/renderer_client_base.cc`); an Electron upgrade that dropped it would turn a main-side port close into silence in the page, which the manual sleep/close checks would show. Same-origin web views can reach `window.top.electronAPI.papi.requestPort()`; the broker answers only while the window has no open port and the adapter keeps its first port, so the worst an extension can do is nothing it could not already do through `window.papi`. `ServerSocketLike`, `IRpcLocalClientAcceptor`, `acceptLocalClient` and the `papi-port.model` shapes are `@experimental`. Tightening the renderer CSP now that the page itself opens no WebSocket is a follow-up, pending a review of web views' own WebSocket use. The per-window port is also the natural carrier for the deferred `main-renderer-shutdown-relay`; not done here.
+- **Source:** PT-1641; design by Matt Lyons (2026-09-10) with corrections recorded in the PRD folder; verified on Windows by sleep test before merge (log excerpt in the PR).
+
 ## adr-renderer-registers-no-names: Renderer platform code registers no command or request names; routers call shard methods
 
 - **Date:** 2026-08-07
@@ -5791,6 +6026,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences (two of three peers, not three):** "Diagnosable from the log" holds for the renderer and the extension host. The .NET data provider is outside this scheme: `c-sharp/PapiClient.cs` logs `JSONRPC disconnected: Reason = …` with no close code and no clean/abnormal classification, and the only close-status handling anywhere in `c-sharp/` is the `NormalClosure` it sends — which lands on `isCleanCloseCode`'s clean list by coincidence rather than by contract. Not urgent (the .NET socket survives a suspend, per the evidence above), but a third peer disconnecting is currently less diagnosable than the two this work covers.
 - **Consequences (the `shutdown` power marker costs a Linux inhibitor):** `POWER_EVENTS` registers Electron's `shutdown` listener, which is what separates "the OS took the app down" from "the app died" in a log that simply stops — the NN-6 distinction. Subscribing to it makes Electron hold a logind shutdown-delay inhibitor for the session on Linux. Nothing is actually delayed: the handler only logs and never calls `preventDefault()`, so the OS proceeds on its own schedule. The marker is judged worth that, since without it an OS-initiated shutdown is indistinguishable from a crash. Revisit if the inhibitor is ever observed to change shutdown behavior on a supported Linux target.
 - **Consequences (the shutdown signal is injected, not imported):** `RpcServer` reads whether the app is coming down through `setAppShutdownSignal`, wired from `src/main/main.ts`, rather than importing `shutdown-latch.service` directly. Every module `rpc-server` imports is reachable from `papi.d.ts`'s entry points, so the direct import published the shutdown latch and the window-state service it depends on — `resetForTesting()` included — as extension-facing API on the generated surface and the TypeDoc site. Any future main-process-only state a shared or client-reachable module needs should come in through the same kind of seam.
+- **Amended 2026-09-24 (PT-1641):** Root cause identified: Chromium's `TCPClientSocket::OnSuspend` closes the renderer's socket on the OS suspend signal; see `adr-renderer-papi-transport-is-messageport`, which supersedes the reconnect direction for the renderer (the renderer no longer uses a WebSocket). Shape 3, the 17-minute `forEach` stall, is consistent with shape 1 observed on Windows with the log straddling the sleep: the close arrives, main logs one removal line, Windows freezes the process within its ~2 s allotment, and on resume the loop finishes in 60 ms while the extension host's overdue hourly timer fires in the same second. The January 2025 log predates the power-monitor logging, so the suspend is inferred, not recorded. The heartbeat deferral stands, on stronger ground. The four reconnect blockers remain true statements about `RpcClient` and now apply to the extension host only.
 - **Source:** PT-4434; diagnosed on macOS 2026-08-26. Reviewed in PR #2731, which is where the severity, unreachable-4000 and third-peer consequences above were established.
 
 ## adr-resource-missing-book-message: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
@@ -6506,6 +6742,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   that asked for it. Revisit when design rules on the fade as a general affordance; the change then
   is a default flip, not a rewrite.
 
+## adr-shared-utils-live-in-platform-bible-utils: A utility that extensions need lives in `platform-bible-utils`, not in `src/shared/utils`
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** `createCachedInitializer` runs an async initializer at most once and caches the promise, so concurrent callers share one attempt and a failure is retried rather than pinned. Eighteen core services use it. Extensions need exactly this to wait on a network object owned by a process that is still starting up, but could not import it. Hand-rolled, the easy mistake is to cache only the resolved value: that cache stays empty until the look-up settles, so every caller that arrives while the owning process is still starting begins a look-up (and a wait) of its own.
+- **Decision:** Move it to `lib/platform-bible-utils/src/promises/`, alongside `AsyncVariable`, `Mutex` and `PromiseChainingMap`, and export it from `platform-bible-utils`. Core imports it from the package like any other consumer.
+- **Alternatives:** **Re-export from `platform-bible-utils`, source left in `src/shared/utils/`** — not available: the package is standalone and cannot import from core's `src/`. **Export through `@papi/core`** — that surface is types-only (an empty default object plus `export type` lines); a runtime function does not belong there. **Leave it core-internal and let each extension hand-roll it** — the zero-diff option, and it hands every extension the same promise-versus-value caching bug.
+- **Consequences:** Such a utility is now held to the `lib/platform-bible-utils/` API-surface TSDoc bar rather than core-internal expectations. Each further move costs a repoint of every core import plus a `papi.d.ts` regeneration, so batch them. A utility needing both extension reach and a core-only dependency cannot follow: nothing in `platform-bible-utils` can import from `src/`.
+
 ## adr-shrink-step-override-context: The shrink-step test seam is a context, not a prop on every toolbar
 
 - **Date:** 2026-08-26
@@ -6537,6 +6782,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   two are documented in terms of each other, and the override is the only one a test should ever
   reach for.
 - **Source:** PT-4466, deferred from PT-4344 (PR #2701).
+
+## adr-simple-column-3-tools-open-on-demand: An on-demand tool joins Simple's third column as one pinned tab, reused on every later open
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** Simple's three columns are fixed. Checks, opened from Simple's Quality checks menu
+  section, was opened as `{ type: 'panel', direction: 'right' }` beside the editor, which split the
+  editor's column into a new pane on every click. Checks is not part of Simple's starting layout,
+  and nothing before it added a web view to the third column while the app runs.
+- **Decision:** In Simple, the opener first probes with `{ existingId: '?', createNewIfNotFound:
+  false }` and brings an existing tab to the front, reloading it only if it shows another project
+  or editor. If there is none, it opens `{ type: 'tab', parentTabGroupId: 'simple-panel-resources' }`,
+  the third column's rc-dock panel id. The extension cannot import renderer source, so it keeps a
+  copy of that id (`simple-resources-panel-id.const.ts` in `platform-scripture`), and
+  `simple-layout.data.test.ts` fails if the copy drifts from `SIMPLE_PANEL_ID_RESOURCES`. The tab is
+  pinned like its neighbors (`isClosable: false` in Simple, and listed in
+  `FIXED_LAYOUT_WEBVIEW_GROUPS` under `TAB_GROUP_RESOURCES`). An open tab follows a project switch the
+  way Find does, through `platformScripture.updateChecksSidePanelProject`, except that, like the
+  Text Collection, it does not follow a published resource (`updateRelatedChecksSidePanel` reads
+  `platform.isPublished`, not `isEditable`, so an `Editable=F` translation project is followed).
+  Power keeps the panel beside the editor, and deliberately does not probe either, so each click
+  still opens another panel there: layout is free-form in Power, and extra panels are the user's to
+  close. Reference: `open-checks-side-panel.utils.ts`.
+- **Alternatives:** A static tab in `simple-layout.data.ts` or a `default-layout-supplement.json`
+  entry — rejected: both change what every Simple user sees at startup for a tool few open. A
+  `panel` layout targeting a third-column tab — rejected: it splits the third column instead. A
+  closable tab — rejected for now: its rc-dock group would be `TAB_GROUP` inside a
+  `TAB_GROUP_RESOURCES` panel, a mix whose drag and lock behavior is unverified. Moving the panel id
+  into `src/shared` so the extension can import it — rejected: it would grow `papi.d.ts` for one
+  constant.
+- **Consequences:** Once opened, the Checks tab stays until the Simple layout is next rebuilt
+  (for example on restart or a mode switch). If the copied panel id drifts and the test is skipped,
+  the dock logs a warning and falls back to its default placement, which can add a pane on top of a
+  column. The next on-demand third-column tool should reuse this shape and its panel-id constant.
+- **Source:** PT-4534 (review of #2847).
 
 ## adr-simple-mode-column-minimums: Simple-mode column minimums are derived from the window minimum, dividers included
 
@@ -8018,6 +8298,31 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   once concrete), at `PRDs/donna-multi-monitor/2026-08-07-small-items-ledger.md` under the shared
   PRD folder. Not a repo path; named here so a later reader knows the entry is real and where to
   ask for it, not so they can open it from a clone.
+
+## adr-web-view-load-focus-skips-hidden-tabs: A web view focuses its tab on load only when the tab is shown
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** Every web view calls `windowService.setFocus({ focusType: 'tab', id })` when its
+  iframe loads, and that focus makes the tab the active one in its group. A reload with
+  `bringToFront: false` keeps the tab where it is, but the reload remounts the iframe, so the tab
+  came to the front anyway once its content loaded. In Simple mode a project switch reloads the
+  Find and Checks tabs in Column 3 this way, and whichever loaded last took the column from the tab
+  the user was on.
+- **Decision:** `web-view.component.tsx` skips the on-load focus when the iframe has no client
+  rects. rc-dock keeps an inactive tab's pane mounted with `display: none`, so a hidden tab's iframe
+  has none. A tab that was asked to come to the front is already active by the time its content
+  loads, so its focus is unchanged.
+- **Alternatives:** A dock method answering whether a tab is its group's active tab — rejected: it
+  widens `PapiDockLayout`, which is in `papi.d.ts`, for one renderer caller. Carrying the reload's
+  `bringToFront` to the component — rejected: the component remounts from the tab definition and
+  has no record of why it loaded. Stopping the Checks re-point from reloading — rejected: it fixes
+  Checks only, and Find has the same problem.
+- **Consequences:** A web view that loads while hidden takes no focus, including one restored with
+  the layout at startup into an inactive tab. It is focused when the user brings the tab forward.
+  The mount-time focus in `platform-panel.component.tsx` is unchanged, since a reload does not
+  remount the panel.
+- **Source:** PT-4534 (review of #2847), found checking the Checks tab in the running app.
 
 ## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it
 

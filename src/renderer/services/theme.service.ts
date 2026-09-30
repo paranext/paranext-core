@@ -29,8 +29,8 @@ import {
   USER_THEMES_STORAGE_KEY,
 } from '@shared/services/theme.service-model';
 import { DEFAULT_THEME } from '@shared/utils/built-in-themes.util';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import {
+  createCachedInitializer,
   createSyncProxyForAsyncObject,
   deserialize,
   getErrorMessage,

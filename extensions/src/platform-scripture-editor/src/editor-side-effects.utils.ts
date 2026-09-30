@@ -60,6 +60,36 @@ export async function notifySyncEditBlocked(localizedStrings: LanguageStrings): 
 }
 
 /**
+ * The one definition of the Edit flyout's blocked-action message key.
+ *
+ * Owned here for the same reason as {@link SYNC_EDIT_BLOCKED_KEY}: the key and the "warning"
+ * severity it drives cannot drift apart across call sites.
+ */
+export const EDIT_ACTION_BLOCKED_KEY: LocalizeKey =
+  '%webView_platformScriptureEditor_error_editActionBlocked%';
+
+/**
+ * Show the standard "editing isn't available" warning notification for the Project menu's Edit
+ * flyout, for when `runEditMenuAction` reports that the chosen action did not run. One message
+ * covers every reason the editor can be read-only here (no permission, permission still loading, an
+ * automatic Send/Receive in progress, or the markers view) rather than naming which.
+ *
+ * Takes `localizedStrings` rather than a resolved message so {@link EDIT_ACTION_BLOCKED_KEY} is
+ * named exactly once in the codebase.
+ *
+ * @param localizedStrings The web view's resolved strings. Must include
+ *   {@link EDIT_ACTION_BLOCKED_KEY}; the key itself is shown if it is missing.
+ */
+export async function notifyEditMenuActionBlocked(
+  localizedStrings: LanguageStrings,
+): Promise<void> {
+  await notifyEditorWarning(
+    localizedStrings[EDIT_ACTION_BLOCKED_KEY] ?? EDIT_ACTION_BLOCKED_KEY,
+    'edit-menu-action-blocked',
+  );
+}
+
+/**
  * Commit a version-history snapshot before an edit — the user's undo of last resort.
  *
  * Best-effort by design: a version history that is unavailable (an older host that does not

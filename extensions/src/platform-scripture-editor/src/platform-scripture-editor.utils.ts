@@ -33,6 +33,7 @@ import {
   formatReplacementString,
   getErrorMessage,
   isLocalizeKey,
+  isParagraphMarker,
   isPlatformError,
   LanguageStrings,
   LocalizeKey,
@@ -855,37 +856,58 @@ export async function convertScriptureRangeToEditorRange(
  */
 export const availableScrollGroupIds = [undefined, ...new Array(5).keys()];
 
-export type BlockMarkerBlockNames = typeof blockMarkerToBlockNames;
+/**
+ * `MarkerType.Paragraph` markers that are never valid to select via a plain paragraph-style retag,
+ * because they are instead applied through dedicated, structure-aware mechanisms.
+ */
+export const PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS: ReadonlySet<string> = new Set(['id', 'c']);
 
-// This list is incomplete.
-export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
-  cl: '%paragraphMenu_cl_markerDescription%',
-  h: '%paragraphMenu_h_markerDescription%',
-  h1: '%paragraphMenu_h1_markerDescription%',
-  h2: '%paragraphMenu_h2_markerDescription%',
-  h3: '%paragraphMenu_h3_markerDescription%',
-  ide: '%paragraphMenu_ide_markerDescription%',
-  m: '%paragraphMenu_m_markerDescription%',
-  ms: '%paragraphMenu_ms_markerDescription%',
-  ms1: '%paragraphMenu_ms1_markerDescription%',
-  ms2: '%paragraphMenu_ms2_markerDescription%',
-  ms3: '%paragraphMenu_ms3_markerDescription%',
-  mt: '%paragraphMenu_mt_markerDescription%',
-  mt1: '%paragraphMenu_mt1_markerDescription%',
-  mt2: '%paragraphMenu_mt2_markerDescription%',
-  mt3: '%paragraphMenu_mt3_markerDescription%',
-  mt4: '%paragraphMenu_mt4_markerDescription%',
-  nb: '%paragraphMenu_nb_markerDescription%',
-  p: '%paragraphMenu_p_markerDescription%',
-  pi: '%paragraphMenu_pi_markerDescription%',
-  q1: '%paragraphMenu_q1_markerDescription%',
-  q2: '%paragraphMenu_q2_markerDescription%',
-  r: '%paragraphMenu_r_markerDescription%',
-  s: '%paragraphMenu_s_markerDescription%',
-  toc1: '%paragraphMenu_toc1_markerDescription%',
-  toc2: '%paragraphMenu_toc2_markerDescription%',
-  toc3: '%paragraphMenu_toc3_markerDescription%',
-};
+/**
+ * Every USFM paragraph-style marker known to {@link usfmMarkers} that a user can validly choose to
+ * apply via a plain paragraph-style retag. (Excludes
+ * {@link PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS}.)
+ */
+export const selectableParagraphMarkers: readonly string[] = Object.keys(usfmMarkers)
+  .filter(
+    (marker) =>
+      isParagraphMarker(marker) && !PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has(marker),
+  )
+  .sort();
+
+/**
+ * True when a marker has a real (potentially localized) title available via
+ * {@link getParagraphMarkerTitle} (as displayed in tooltips, the Paragraph combo box
+ * trigger/switcher, etc.) Some titles may not be displayed in all possible contexts.
+ */
+export function hasDisplayableParagraphMarkerTitle(marker: string): boolean {
+  return isParagraphMarker(marker);
+}
+
+/**
+ * Builds the localize key for a paragraph marker's description.
+ *
+ * @param marker Marker code, without its leading backslash (e.g. `p`, not `\p`)
+ */
+export function paragraphMarkerNameKey(marker: string): LocalizeKey {
+  return `%paragraphMenu_${marker}_markerDescription%`;
+}
+
+/**
+ * Resolves the localized title for a paragraph marker. Returns `undefined` when no title is
+ * available at all ({@link hasDisplayableParagraphMarkerTitle} is `false`) — when the marker isn't a
+ * paragraph marker in `usfmMarkers` at all. Otherwise, returns whatever `localizedStrings`
+ * currently has for the marker's key (from the `useLocalizedStrings` hook).
+ *
+ * @param marker Marker code to look up, without its leading backslash (e.g. `p`, not `\p`)
+ * @param localizedStrings The localized strings to resolve the title from
+ */
+export function getParagraphMarkerTitle(
+  marker: string,
+  localizedStrings: LanguageStrings,
+): string | undefined {
+  if (!hasDisplayableParagraphMarkerTitle(marker)) return undefined;
+  return localizedStrings[paragraphMarkerNameKey(marker)];
+}
 
 /**
  * Generates the marker menu list items specifically inserting appropriate action functions using
@@ -917,7 +939,7 @@ export function generateParagraphMenuListItems(
   notifyStructureProtected: () => void,
   restoreSelection?: () => void,
 ): MarkerMenuItem[] {
-  return Object.entries(blockMarkerToBlockNames).map(([marker, title]) => {
+  return selectableParagraphMarkers.map((marker) => {
     // The trailing detail column would otherwise sit empty for exactly the menu this feature is
     // named after. `usfmMarkers[marker].description` is a localize key the web view already
     // resolves (it loads every marker description), so this needs no new key and no new
@@ -925,7 +947,7 @@ export function generateParagraphMenuListItems(
     const descriptionKey = usfmMarkers[marker]?.description;
     const markerMenuItem: MarkerMenuItem = {
       marker,
-      title: localizedStrings[title] ?? title,
+      title: getParagraphMarkerTitle(marker, localizedStrings) ?? marker,
       subtitle: descriptionKey ? localizedStrings[descriptionKey] : undefined,
       action: () => {
         // Defense-in-depth: unreachable while the paragraph control is disabled
@@ -1714,13 +1736,14 @@ export function resolveGridProviderProjectId(
  * - Never follows a published resource (see `isProjectPublished`): a resource has no collection of
  *   its own, so following it would cost a reload, and the in-memory state it drops, for an empty
  *   panel. The rule lives here rather than in a caller so every re-point path applies it.
- * - Never creates a panel when none is open. The Text Collection has no open command and no menu
- *   entry: its only open path is the default-layout supplement, which puts it in Column 3 from
- *   startup. So "not open" means the tab was closed in Power mode or the
- *   `platformScriptureEditor.enableScriptureTextGrid` setting is off, and neither is a state a
- *   project switch should reverse. (Both callers are Simple-mode-only — `openOrUpdateRelatedPanels`
- *   for an editor-column switch and `finalizeProjectSwitch` for a Power→Simple one — so this guard
- *   is a contract, not a hot path.)
+ * - Never creates a panel when none is open, unlike the Text Collection's menu command
+ *   (`platformScriptureEditor.showTextCollectionPanel`), which does create one on demand. A project
+ *   switch closing a tab the user deliberately closed in Power mode, or one the
+ *   `platformScriptureEditor.enableScriptureTextGrid` setting has kept from ever existing, is not
+ *   something a re-point should reverse — only a direct request to show the panel should create it.
+ *   (Both callers are Simple-mode-only — `openOrUpdateRelatedPanels` for an editor-column switch
+ *   and `finalizeProjectSwitch` for a Power→Simple one — so this guard is a contract, not a hot
+ *   path.)
  * - Skips the reload when the panel already shows `projectId`, because rebuilding the iframe drops
  *   the grid's in-memory React state for no gain. State held through `useWebViewState` —
  *   `viewMode`, per-cell zoom — survives, since a reload reuses the same web view id.
@@ -1848,6 +1871,51 @@ export async function updateRelatedFindPanel(
     );
   } catch (e) {
     papi.logger.warn(`Error updating find panel project: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
+ * Re-points an open Checks side panel at `projectId`, the Checks counterpart of
+ * {@link updateRelatedFindPanel} and called at the same point for the same reason: the panel holds
+ * the editor's web view id to focus the editor and select a clicked result, so it needs the id of
+ * the editor the switch produced.
+ *
+ * Creates nothing. In Simple mode Checks joins Column 3 only when the user opens it, and a project
+ * switch is not a request to open it.
+ *
+ * Never follows a published resource (see `isProjectPublished`), the same rule as
+ * {@link updateRelatedTextCollectionPanel}: a resource is not something the user checks, so Checks
+ * stays on the translation project. A translation project with editing switched off is followed
+ * like any other.
+ *
+ * Only Simple mode re-points Checks, read fresh here for the same reason as in
+ * {@link updateRelatedFindPanel}. In Power mode each Checks panel is docked beside the editor it was
+ * opened for, so re-pointing "the" open one would retarget whichever editor's panel the probe
+ * happened to find.
+ *
+ * Never throws: a failure here is logged and swallowed, because the project switch itself has
+ * already succeeded by this point.
+ *
+ * @param papi The instance of papi to read the interface mode and project kind with and send the
+ *   command
+ * @param projectId The id of the project Checks should check from now on
+ * @param editorWebViewId Id of the editor web view the switch produced
+ */
+export async function updateRelatedChecksSidePanel(
+  papi: typeof PapiBackend,
+  projectId: string,
+  editorWebViewId: string | undefined,
+): Promise<void> {
+  try {
+    if ((await papi.settings.get('platform.interfaceMode')) !== 'simple') return;
+    if (await isProjectPublished(papi, projectId)) return;
+    await papi.commands.sendCommand(
+      'platformScripture.updateChecksSidePanelProject',
+      projectId,
+      editorWebViewId,
+    );
+  } catch (e) {
+    papi.logger.warn(`Error updating checks side panel project: ${getErrorMessage(e)}`);
   }
 }
 

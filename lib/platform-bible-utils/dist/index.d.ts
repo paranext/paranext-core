@@ -1696,6 +1696,15 @@ export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
 export type MenuColumnWithHeader = OrderedExtensibleContainer & {
 	/** Key that represents the text of the header text of the column */
 	label: LocalizeKey;
+	/**
+	 * Set to `true` to show this column's items without its header text in the menu that opens when
+	 * you click on the top left corner of a tab (`topMenu`), which heads each section with its
+	 * column's header. While that menu shows two or more sections, the label still names this section
+	 * for assistive technology; a section left on its own, including one left alone by interface-mode
+	 * filtering, gets neither a heading nor a name. Give it a real label regardless. The application
+	 * menubar ignores this, because there the header is what opens the column.
+	 */
+	isHeaderHidden?: boolean;
 };
 export type MenuItemBase = OrderedItem & {
 	/** Menu group to which this menu item belongs */
@@ -1938,6 +1947,10 @@ export declare const menuDocumentSchema: {
 							type: string;
 						};
 						isExperimental: {
+							description: string;
+							type: string;
+						};
+						isHeaderHidden: {
 							description: string;
 							type: string;
 						};
@@ -4026,6 +4039,20 @@ export declare function isBlockMarker(marker: string): boolean;
  */
 export declare function isCharacterMarker(marker: string): boolean;
 /**
+ * True when a marker is a paragraph-style marker, including _true_ discourse paragraphs, others
+ * that begin a block of text (poetry lines, blank lines, list entries, etc.) and chapter-level or
+ * book-level identification, metadata, or other such structural markers.
+ *
+ * Paragraph markers are identified by their {@link MarkerType.Paragraph} type in {@link usfmMarkers}
+ * rather than a hand-maintained list.
+ *
+ * @param marker Marker code to check, without its leading backslash (e.g. `p`, not `\p`)
+ * @returns `true` when the marker is a known USFM marker of type {@link MarkerType.Paragraph}.
+ *   `false` for anything else: character markers, note markers (`f`/`fe`/`x`), numbering markers
+ *   (`v`/`va`/`vp`/`ca`), and for empty or unknown marker codes.
+ */
+export declare function isParagraphMarker(marker: string): boolean;
+/**
  * Clamping, rounding and stepping for a content-zoom factor, plus the range and step those
  * operations enforce. The platform's per-pane content zoom and the Interface scaling setting both
  * scale within the same `[0.5, 3]` range in steps of `0.1`, so both read these from here rather
@@ -4845,6 +4872,40 @@ export declare function compareProjectsByName(a: ProjectNames, b: ProjectNames):
  * @returns The full name, or `undefined` when it is absent, blank, or not a string.
  */
 export declare function normalizeFullName(fullName: unknown): string | undefined;
+/**
+ * Creates a function that runs an asynchronous initializer at most once, caching the promise so
+ * concurrent and subsequent calls share the same initialization attempt. If the initializer fails,
+ * the cached promise is cleared so the next call starts a fresh attempt instead of failing forever
+ * with the same error. This is useful for initializing access to a resource that may not be
+ * available yet, like a network object owned by a process that is still starting up.
+ *
+ * Note that calls that awaited the failed attempt all reject with its error; only calls arriving
+ * after the rejection settles retry. The initializer must therefore be safe to run again after a
+ * failure, e.g. it should not leave partial registrations behind.
+ *
+ * @example
+ *
+ * ```typescript
+ * const getEntryService = createCachedInitializer(async () => {
+ *   await papi.networkObjectStatus.waitForNetworkObject(
+ *     { id: 'lexicon.entryService' },
+ *     10_000,
+ *   );
+ *   const service = await papi.networkObjects.get<LexiconEntryService>('lexicon.entryService');
+ *   // Throw rather than return `undefined`: a resolved value is cached, a rejection is retried
+ *   if (!service) throw new Error('lexicon.entryService is not available');
+ *   return service;
+ * });
+ *
+ * // One wait and one fetch, however many callers arrive while it is still in flight
+ * const [service, sameService] = await Promise.all([getEntryService(), getEntryService()]);
+ * ```
+ *
+ * @param initializer Asynchronous function that performs the initialization
+ * @returns Function that returns the cached initialization promise, starting a new initialization
+ *   attempt if there is no cached promise
+ */
+export declare function createCachedInitializer<T = void>(initializer: () => Promise<T>): () => Promise<T>;
 /**
  * Get a localized string representation of the time between two dates
  *

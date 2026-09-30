@@ -454,6 +454,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
     command: 'platformScriptureEditor.insertCommentAtSelection',
   },
+  // TODO(PT-4735): Show hints on the rest of Simple's Project menu. ⌃T and ⌃⇧T below need a
+  // `command` that works in every view; the design's ⌃J, ⌃E and F7 have no editor handler or entry
+  // here yet. A new `command` also needs its row in `EXPECTED_MENU_HINTS`.
   {
     id: 'scripture-insert-footnote',
     purpose: 'Insert a footnote at the selection (Standard view, editable)',
@@ -563,17 +566,20 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-text-grid-reorder-cell',
-    purpose:
-      'Reorder the focused Scripture Text Grid cell one position (verse view: up/down; chapter view: left/right)',
+    // The reorder grip is rendered only by the header-band layout, which is the chapter and grid
+    // views; the verse view hangs its resource name inline and shows no grip, so there is nothing
+    // to focus there and the arrow keys never reach the handler. Tracked as PT-4184 follow-up.
+    purpose: 'Reorder the focused Scripture Text Grid column one position (chapter and grid views)',
     category: 'View',
     context: 'Scripture Text Grid web view',
     keys: {
-      macOS: '↑ / ↓ / ← / →',
-      windows: '↑ / ↓ / ← / →',
-      linux: '↑ / ↓ / ← / →',
+      macOS: '← / →',
+      windows: '← / →',
+      linux: '← / →',
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
     ],
   },
   {
