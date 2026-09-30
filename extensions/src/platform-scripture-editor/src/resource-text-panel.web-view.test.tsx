@@ -8,6 +8,7 @@ import type { DblResourceData } from 'platform-bible-utils';
 import type { UseWebViewScrollGroupScrRefHook, WebViewProps } from '@papi/core';
 import { usePromise } from 'platform-bible-react';
 import type { PickerResource } from './downloaded-resources.utils';
+import { resetCopyLimitLookupsBeforeEach } from './copy-limit/copy-limit.test-utils';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — must be before any import that touches the component
@@ -299,6 +300,7 @@ function resetPanelHooks() {
   setUsjSpy.mockClear();
 }
 
+resetCopyLimitLookupsBeforeEach();
 beforeEach(resetPanelHooks);
 
 afterEach(() => {

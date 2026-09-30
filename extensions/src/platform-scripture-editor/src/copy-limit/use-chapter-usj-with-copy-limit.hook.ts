@@ -11,6 +11,8 @@ import { useIsProjectDataLoading } from './use-is-project-data-loading.hook';
  * needs no new request. `projectId` may be `undefined`, as for a resource that is not installed.
  *
  * @returns `usjPossiblyError` and `isUsjLoading`, the data and loading flag `ChapterUSJ` returned;
+ *   `isChapterTextLoading`, which is also `true` while `usjPossiblyError` may still be a previous
+ *   chapter's or project's text (see `useIsProjectDataLoading`), so gate showing the text on it;
  *   and `copyLimit`, as `useChapterCopyLimit` resolves it, `0` while the chapter text loads (see
  *   `blockCopyWhileChapterLoads`).
  */
@@ -41,5 +43,5 @@ export function useChapterUsjWithCopyLimit(
   });
   const copyLimit = useChapterCopyLimit(projectId, scrRef, isChapterTextLoading);
 
-  return { usjPossiblyError, isUsjLoading, copyLimit };
+  return { usjPossiblyError, isUsjLoading, isChapterTextLoading, copyLimit };
 }

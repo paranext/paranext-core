@@ -90,18 +90,37 @@ describe('useChapterCopyLimit', () => {
     rerender({ ref: scrRef({ chapterNum: 2, verseNum: 5, versificationStr: 'English' }) });
     expect(result.current).toBe(20);
 
-    // The selector names only the book and the versification, so navigating within a book keeps
-    // the same selector and needs no new subscription.
-    expect(firstSelector).toEqual({
-      book: 'GEN',
-      chapterNum: 1,
-      verseNum: 1,
-      versificationStr: 'English',
-    });
+    // The selector names only the book, so navigating within a book keeps the same selector and
+    // needs no new subscription.
+    expect(firstSelector).toStrictEqual({ book: 'GEN', chapterNum: 1, verseNum: 1 });
     bookCopyLimits.mock.calls.forEach((call) => expect(call[0]).toBe(firstSelector));
   });
 
-  it('omits versificationStr from the selector when the reference has none', async () => {
+  it('keeps the same subscription when the reference changes versification', async () => {
+    // The limits are indexed by the project's own chapter numbers, like the chapter text, whatever
+    // the reference's versification.
+    const bookCopyLimits = vi.fn<(selector: SerializedVerseRef) => unknown[]>(() => [
+      [undefined, 10],
+      vi.fn(),
+      false,
+    ]);
+    mockUseProjectData.mockReturnValue({ BookCopyLimits: bookCopyLimits });
+
+    const { rerender } = renderHook(
+      ({ ref }: { ref: SerializedVerseRef }) =>
+        useChapterCopyLimit('project-1b', ref, 'applied-by-caller'),
+      { initialProps: { ref: scrRef({ book: 'MAL', versificationStr: 'English' }) } },
+    );
+    await act(async () => {});
+    rerender({ ref: scrRef({ book: 'MAL', versificationStr: 'Original' }) });
+    rerender({ ref: scrRef({ book: 'MAL' }) });
+
+    const firstSelector = bookCopyLimits.mock.calls[0][0];
+    expect(firstSelector).toStrictEqual({ book: 'MAL', chapterNum: 1, verseNum: 1 });
+    bookCopyLimits.mock.calls.forEach((call) => expect(call[0]).toBe(firstSelector));
+  });
+
+  it('names only the book in the selector when the reference has no versification', async () => {
     const bookCopyLimits = vi.fn<(selector: SerializedVerseRef) => unknown[]>(() => [
       [undefined, 10],
       vi.fn(),

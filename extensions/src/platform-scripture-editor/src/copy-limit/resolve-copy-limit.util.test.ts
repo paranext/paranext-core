@@ -12,12 +12,21 @@ describe('resolveCopyLimit', () => {
     expect(resolveCopyLimit({ value: undefined, isLoading: false, chapterNum: 1 })).toBeUndefined();
   });
   it('treats a missing or null entry as no limit', () => {
-    // A `null` chapter entry is how the value arrives over the wire (C# `null` serializes to JSON
-    // null); the mock literal isn't structurally typed as `(number | undefined)[]`.
+    // PAPI deserializes a C# `null` entry to `undefined`, so the declared type has no `null`; a
+    // `null` that got through anyway must still read as no limit, so the literal is cast.
     // eslint-disable-next-line no-null/no-null, no-type-assertion/no-type-assertion
     const value = [undefined, null, 5] as unknown as (number | undefined)[];
     expect(resolveCopyLimit({ value, isLoading: false, chapterNum: 1 })).toBeUndefined();
-    expect(resolveCopyLimit({ value, isLoading: false, chapterNum: 9 })).toBeUndefined();
+  });
+  it('treats a chapter past the end of the book as no limit, since it has no text', () => {
+    expect(
+      resolveCopyLimit({ value: [undefined, 12, 30], isLoading: false, chapterNum: 9 }),
+    ).toBeUndefined();
+  });
+  it("uses chapter 1's limit for chapter 0, which is shown as the start of chapter 1", () => {
+    expect(resolveCopyLimit({ value: [undefined, 12, 30], isLoading: false, chapterNum: 0 })).toBe(
+      12,
+    );
   });
   it('blocks copying while loading', () => {
     expect(resolveCopyLimit({ value: undefined, isLoading: true, chapterNum: 1 })).toBe(0);

@@ -74,10 +74,9 @@ function lookUpCopyLimitSupport(projectId: string): Promise<boolean | undefined>
 }
 
 /**
- * The editor `copyLimit` for the chapter `scrRef` points to in `projectId`. The limits are looked
- * up in `scrRef`'s versification, so they match the chapter text fetched with the same reference.
- * Subscribes once per book and versification, so changing chapter within a book needs no new
- * request.
+ * The editor `copyLimit` for the chapter `scrRef` points to in `projectId`. The limits are indexed
+ * like the chapter text, by the project's own chapter numbers, so `scrRef`'s versification is not
+ * used. Subscribes once per book, so changing chapter within a book needs no new request.
  *
  * @param isChapterTextLoading Whether the text of the chapter `scrRef` points to is still loading;
  *   the result is also `0` while it is true (see `blockCopyWhileChapterLoads`). Pass
@@ -92,15 +91,10 @@ export function useChapterCopyLimit(
   scrRef: SerializedVerseRef,
   isChapterTextLoading: boolean | 'applied-by-caller',
 ): number | undefined {
-  const { book, versificationStr } = scrRef;
+  const { book } = scrRef;
   const bookSelector = useMemo<SerializedVerseRef>(
-    () => ({
-      book,
-      chapterNum: 1,
-      verseNum: 1,
-      ...(versificationStr !== undefined && { versificationStr }),
-    }),
-    [book, versificationStr],
+    () => ({ book, chapterNum: 1, verseNum: 1 }),
+    [book],
   );
   // One resolved provider backs both the subscription and the loading check below.
   const copyLimitProvider = useProjectDataProvider(COPY_LIMIT_PROJECT_INTERFACE, projectId);

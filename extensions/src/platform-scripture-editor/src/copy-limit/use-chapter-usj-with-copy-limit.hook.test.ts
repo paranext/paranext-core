@@ -126,8 +126,11 @@ describe('useChapterUsjWithCopyLimit', () => {
     // The fetch has not been told about chapter 2 yet, so it still reports settled.
     chapterResult = [USJ, vi.fn(), false];
     rerender({ ref: scrRef({ chapterNum: 2 }) });
+    expect(result.current.isUsjLoading).toBe(false);
+    expect(result.current.isChapterTextLoading).toBe(true);
     expect(result.current.copyLimit).toBe(0);
     rerender({ ref: scrRef({ chapterNum: 2 }) });
+    expect(result.current.isChapterTextLoading).toBe(false);
     expect(result.current.copyLimit).toBe(8);
   });
 
@@ -150,6 +153,8 @@ describe('useChapterUsjWithCopyLimit', () => {
     rerender({ projectId: 'project-2' });
     areCopyLimitsLoading = false;
     rerender({ projectId: 'project-2' });
+    expect(result.current.isUsjLoading).toBe(false);
+    expect(result.current.isChapterTextLoading).toBe(true);
     expect(result.current.copyLimit).toBe(0);
 
     // The new project's chapter provider arrives, loads and delivers.
@@ -159,6 +164,7 @@ describe('useChapterUsjWithCopyLimit', () => {
     expect(result.current.copyLimit).toBe(0);
     chapterResult = [USJ, vi.fn(), false];
     rerender({ projectId: 'project-2' });
+    expect(result.current.isChapterTextLoading).toBe(false);
     expect(result.current.copyLimit).toBe(5);
   });
 });
