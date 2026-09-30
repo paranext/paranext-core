@@ -39,6 +39,7 @@ afterAll(() => {
  */
 
 const STRINGS = {
+  '%data_loading_error_internetAccess_disabled_2%': 'Internet access is disabled, translated',
   '%resources_noResults%': 'No resources found',
   '%resources_noResultsError%': 'Unable to search for resources',
   '%resources_retry%': 'Try again',
@@ -323,6 +324,107 @@ describe('GetResources', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Get' }));
 
     expect(await screen.findByText('This resource is no longer available')).toBeInTheDocument();
+  });
+
+  // Blocked installs show the message that points at the setting, not the raw text: ParatextData's
+  // describes ParatextData, and the gate's carries a sentinel. Installing a resource is the Get
+  // Resources action that runs into them.
+  it.each([
+    {
+      block: 'ParatextData blocks it',
+      rawMessage:
+        'JSON-RPC Request error (-32000): Bug in Paratext caused attempted access to Internet. Request has been blocked.',
+    },
+    {
+      block: 'the internet setting gate blocks it',
+      rawMessage:
+        'JSON-RPC Request error (-32000): Internet access is off. (INTERNET_SERVICES_BLOCKED)',
+    },
+  ])(
+    'explains a blocked install when $block instead of showing the raw message',
+    async ({ rawMessage }) => {
+      const resource = {
+        dblEntryUid: 'uid-1',
+        displayName: 'NIV',
+        fullName: 'New International Version',
+        bestLanguageName: 'English',
+        type: 'ScriptureResource' as const,
+        size: 1000,
+        installed: false,
+        updateAvailable: false,
+        projectId: 'proj-1',
+      };
+
+      render(
+        <GetResources
+          localizedStringsWithLoadingState={[STRINGS, false]}
+          resources={[resource]}
+          selectedTypes={['ScriptureResource']}
+          selectedLanguages={['English']}
+          onInstallOrRemoveResource={() => Promise.reject(new Error(rawMessage))}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Get' }));
+
+      expect(
+        await screen.findByText('Internet access is disabled, translated'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText(/INTERNET_SERVICES_BLOCKED|Bug in Paratext/),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  // Localized strings arrive asynchronously, and `useLocalizedStrings` fills each key with the key
+  // itself until then — so a block that lands first must show the failure's own message, not the
+  // `%data_loading_error_...%` key.
+  it('shows the failure message rather than a localize key when strings have not loaded', async () => {
+    const resource = {
+      dblEntryUid: 'uid-1',
+      displayName: 'NIV',
+      fullName: 'New International Version',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1000,
+      installed: false,
+      updateAvailable: false,
+      projectId: 'proj-1',
+    };
+
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[
+          {
+            '%data_loading_error_internetAccess_disabled_2%':
+              '%data_loading_error_internetAccess_disabled_2%',
+            '%resources_get%': '%resources_get%',
+          },
+          true,
+        ]}
+        resources={[resource]}
+        selectedTypes={['ScriptureResource']}
+        selectedLanguages={['English']}
+        onInstallOrRemoveResource={() =>
+          Promise.reject(
+            new Error(
+              'JSON-RPC Request error (-32000): Bug in Paratext caused attempted access to Internet. Request has been blocked.',
+            ),
+          )
+        }
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '%resources_get%' }));
+
+    expect(
+      await screen.findByText(
+        'Bug in Paratext caused attempted access to Internet. Request has been blocked.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('%data_loading_error_internetAccess_disabled_2%'),
+    ).not.toBeInTheDocument();
   });
 });
 

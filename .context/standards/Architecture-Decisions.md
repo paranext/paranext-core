@@ -2906,6 +2906,53 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`2026-09-02-pt-4286-mode-switch-spec.md`); amends nothing in
   `adr-primary-window-owns-app-lifetime`, which it depends on for the primary role.
 
+## adr-internet-services-gate: Platform.Bible gates Send/Receive and DBL access on the saved internet setting
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** The Internet & connectivity settings offer "Disable access to some Bible translation
+  services", which saves ParatextData's `InternetUse.VpnRequired` to the machine-wide
+  `InternetSettings.xml` and says it disables the Registry, Send/Receive, and the Digital Bible
+  Library. ParatextData does not do that: `RESTClient.VerifyUri` → `InternetAccess.VerifySafety`
+  blocks only when the effective `InternetAccess.Status` is `Disabled`, and `Status` resolves
+  `VpnRequired` by geolocating the machine's public IP against `CountryStatuses.xml` — `Disabled`
+  where the country is marked `blocked` or cannot be determined, `Enabled` everywhere else. So from
+  most locations the setting blocked nothing, and DBL resources still downloaded. Product direction
+  (PT-4590, 2026-09-18) is to keep the options PT10 offers today and make this one do what it says;
+  "sensitive locations" and "Disable all internet access" stay unavailable.
+- **Decision:** Add a Platform.Bible-side gate, `InternetServicesGate` (`c-sharp/Users/`), that reads
+  the saved value (`InternetAccess.RawStatus`) and refuses when it is `VpnRequired` or `Disabled`.
+  Every C# entry point that reaches Send/Receive or the DBL calls `ThrowIfBlocked` first. In core
+  that is the DBL catalog fetch and install in `DblResourcesDataProvider`. Send/Receive is
+  implemented only in the Paratext 10 Studio patch (core's `ParatextProjectSendReceiveService`
+  commands are stubs that throw `PlatformUnimplementedException`), so the patch calls the gate in
+  each of its Send/Receive entry points. Registry traffic happens inside those two services, so it is
+  covered by the same calls. `ThrowIfBlocked` localizes its message with a blocking papi round trip,
+  so callers invoke it from their `Task.Run` worker, never on the JSON-RPC dispatch thread. The
+  rejection is a localized message ending in the `(INTERNET_SERVICES_BLOCKED)` sentinel (the
+  `(SR_EDIT_BLOCKED)` pattern), and `isErrorMessageAboutParatextBlockingInternetAccess` matches it
+  alongside ParatextData's own message, so the existing "internet access is disabled" message and its
+  link to the setting cover both.
+- **Alternatives:** **Relabel `VpnRequired` to say it only blocks in sensitive locations, and leave
+  enforcement to ParatextData** — rejected by product: it keeps a setting whose purpose most users
+  cannot use, and turns the fix into documenting the gap. **Save `Disabled` when the user picks this
+  option** — rejected: a co-installed Paratext 9 reads the same file and would switch to "Disable
+  ALL Internet use", and the option would then block ParatextData's other internet uses too, not
+  just these services. **Wrap core's `syncProjects` / `breakSyncLock` registrations in the gate** —
+  rejected: the Studio patch replaces the whole registration block as well as the method bodies, so
+  the wrapper broke the patch without gating anything, and core's stubs reach no server.
+- **Consequences:** PT10 and a co-installed Paratext 9 now treat `VpnRequired` differently: PT10
+  blocks these services everywhere, while PT9 keeps its location-dependent behavior. Send/Receive is
+  blocked only once the Studio patch calls the gate in `syncProjects`, `sendReceiveProjects`,
+  `getSharedProjects`, `breakSyncLock`, and its scheduled session sync; core cannot enforce it. A DBL
+  resource cannot be removed while the setting is on unless the catalog already loaded this session,
+  because removal looks the resource up in the catalog — the same limitation as being offline. The
+  setting governs ParatextData-backed services only — network use by the Node and Chromium
+  processes (extension host, renderers) is not covered. Automatic syncs that hit the gate fail the
+  way other automatic-sync failures do: logged, with no user-facing error.
+- **Source:** PT-4590. ParatextData's internals above were read from decompiled ParatextData
+  9.5.0.24, which this repo consumes as a binary package.
+
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
 - **Formerly:** ADR-0018
