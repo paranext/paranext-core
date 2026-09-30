@@ -143,8 +143,7 @@ const SPAN_INSERTION_ANCHOR = 'servants';
 /** The word after the span, in the SAME sentence, that `setAnnotation` addresses while pending. */
 const WORD_AFTER_TARGET = 'Whatever';
 
-/** John 2:25, the chapter's last verse, addressed by its own reference for the chapter-end step. */
-const LAST_VERSE_REFERENCE = 'John 2:25';
+/** John 2:25, the chapter's last verse. */
 const LAST_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 25 };
 
 /**
@@ -165,11 +164,8 @@ const CROSS_VERSE_CARET_OFFSET = 5;
  * DIFFERENT case in the same engine: a bare `|…` bounded by an existing closer carries no
  * backslash, so the immediate-rebuild path never fires — it just pends the CONTENT node's own key
  * for caret-departure settling, so the span's saved word and the pending attribute bytes stay in
- * that one, same, unsplit text node — confirmed, while this step was under development, by reading
- * each DOM node's own Lexical key (its `__lexicalKey_<editorKey>` own property) for both the caret
- * and the span's saved word right before the setAnnotation call below and finding them equal; that
- * one-off check is not part of the committed step. John 2:7, in the SAME paragraph (a USJ `\p` here
- * spans several verses), gives an ALREADY-SEPARATE text node for the control case.
+ * that one, same, unsplit text node. John 2:7, in the SAME paragraph (a USJ `\p` here spans several
+ * verses), gives an ALREADY-SEPARATE text node for the control case.
  */
 const TYPING_PROBE_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 6 };
 /**
@@ -492,7 +488,8 @@ test.describe('scripture editor settled positions', () => {
       await expect(editorInput).toContainText(`${SPAN_WORD}|${SPAN_WORD}\\${WORD_MARKER}*`);
 
       const versePath = findVersePath(chapterUsj.content ?? [], String(TARGET_VERSE_REF.verseNum));
-      if (!versePath) throw new Error('No verse 4 marker in the chapter USJ');
+      if (!versePath)
+        throw new Error(`No verse ${TARGET_VERSE_REF.verseNum} marker in the chapter USJ`);
       await sendToEditorController(editorId, 'setAnnotation', [
         {
           start: chapterPropertyLocation(TARGET_VERSE_REF, `${versePath}['number']`, 0),
@@ -565,17 +562,6 @@ test.describe('scripture editor settled positions', () => {
       if (!lastVerseText) throw new Error("No plain text found for John 2:25 in the chapter's USJ");
       const { jsonPath: lastTextPath, text: lastText } = lastVerseText;
 
-      // Navigate to the SAME verseRef the position below addresses, and wait for the app-global
-      // scroll group — which this freshly opened editor is subscribed to by default, and which
-      // `navigateToolbarBcv` drives — to confirm the commit, before sending any position command.
-      // A `selectRange` whose verseRef differs from the web view's OWN current scrRef is applied
-      // only after a deferred scroll, and a second scrRef change before that deferred apply runs
-      // can silently drop the range (an unreproduced host race). Matching the verseRef up front
-      // keeps the editor already on this reference, so the command below applies immediately
-      // instead of through that deferred path.
-      await navigateToolbarBcv(mainPage, LAST_VERSE_REFERENCE);
-      await expect.poll(getScrollGroupRef, { timeout: 30_000 }).toMatchObject(LAST_VERSE_REF);
-
       const endLocation = chapterLocation(LAST_VERSE_REF, lastTextPath, lastText.length);
       await sendToEditorController(editorId, 'selectRange', [
         { start: endLocation, end: endLocation },
@@ -596,13 +582,16 @@ test.describe('scripture editor settled positions', () => {
           .toBe(expectedText);
       };
 
-      await editorInput.pressSequentially('!');
-      // Exact, not `endsWith`: proves the caret was really at the end, with nothing after it.
-      await pollLastVerseText(`${lastText}!`);
-
-      // Undo the probe so later steps and specs see the original text.
-      await editorInput.press('Backspace');
-      await pollLastVerseText(lastText);
+      try {
+        await editorInput.pressSequentially('!');
+        // Exact, not `endsWith`: proves the caret was really at the end, with nothing after it.
+        await pollLastVerseText(`${lastText}!`);
+      } finally {
+        // Undo the probe so later steps and specs see the original text, even if the assertion
+        // above failed.
+        await editorInput.press('Backspace');
+        await pollLastVerseText(lastText);
+      }
     });
 
     await test.step("a setAnnotation on a char span's own saved word does not interrupt an unfinished attribute typed into that SAME span, right after that word", async () => {
@@ -689,11 +678,12 @@ test.describe('scripture editor settled positions', () => {
         });
         await expect(editorInput).toContainText(incompleteLiteral, { timeout: 15_000 });
 
-        // The incomplete literal, and the span itself, each give this paragraph's content
-        // array a new slot, shifting every LATER sibling's own index in that SAME paragraph —
-        // including John 2:7's, several verses later in the same USJ `\p`. Re-read the chapter
-        // fresh right before the control setAnnotation below, rather than reusing the index
-        // read at the top of this spec, before any of this spec's own edits.
+        // The span itself gives this paragraph's content array a new slot, shifting every LATER
+        // sibling's own index in that SAME paragraph — including John 2:7's, several verses later
+        // in the same USJ `\p`. The incomplete literal only extends the span's OWN content; it
+        // adds no slot to the paragraph. Re-read the chapter fresh right before the control
+        // setAnnotation below, rather than reusing the index read at the top of this spec, before
+        // any of this spec's own edits.
         const findFreshVerseText = async (verseNumber: string, verseRef: SerializedVerseRef) => {
           const freshChapter = await getChapterUsj(verseRef);
           const freshVerseText = findVerseText(freshChapter.content ?? [], verseNumber);

@@ -238,16 +238,24 @@ const SCROLL_GROUP_A_ID = 0;
 
 /**
  * Scroll group A's current reference, read from the app-global scroll group service — the same
- * service an editor's own scroll-group state is chained to. A caller that just navigated through
- * `navigateToolbarBcv` and needs the editor to already be showing that reference before sending a
- * position command (rather than a DIFFERENT one, which the editor applies only after a deferred
- * scroll — see `standard-view-annotation-positions.spec.ts`'s chapter-end step) polls this until it
- * matches.
+ * service an editor's own scroll-group state is chained to. A caller can poll this to wait for a
+ * navigation (e.g. through `navigateToolbarBcv`) to reach the group before addressing the editor by
+ * position.
  */
 export async function getScrollGroupRef(): Promise<Partial<SerializedVerseRef> | undefined> {
   return sendPapiRequestOnce<Partial<SerializedVerseRef> | undefined>(
     'object:ScrollGroupService.getScrRef',
     [SCROLL_GROUP_A_ID],
+    WEBSOCKET_PORT,
+    REQUEST_TIMEOUT_MS,
+  );
+}
+
+/** Move scroll group A to `scrRef` through the app-global scroll group service. */
+export async function setScrollGroupRef(scrRef: SerializedVerseRef): Promise<boolean> {
+  return sendPapiRequestOnce<boolean>(
+    'object:ScrollGroupService.setScrRef',
+    [SCROLL_GROUP_A_ID, scrRef],
     WEBSOCKET_PORT,
     REQUEST_TIMEOUT_MS,
   );
