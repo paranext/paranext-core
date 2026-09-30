@@ -14,6 +14,13 @@ import { getCaretPositionFromClick } from './footnote-caret.utils';
 const EDITING_ROW_KEY = 'editing-row';
 
 /**
+ * How long after a row starts being edited the list keeps the whole row in view as it grows. The
+ * editor rendered in the row loads its note after it mounts, so the row reaches its full height
+ * only after the first reveal.
+ */
+const EDITING_ROW_REVEAL_MS = 1000;
+
+/**
  * Returns the nearest row index adjacent to `from` in `direction`, hopping over `editingIndex` -
  * that row isn't a selectable option while it's being edited, and it renders no `ref`/`tabIndex`
  * for keyboard focus to land on. Falls back to `from` if there's no other row to move to (e.g. a
@@ -65,6 +72,9 @@ export function FootnoteList({
   const editingRowIndex = renderEditingFootnote ? editingFootnoteIndex : undefined;
 
   const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
+  // React's ref API requires `null` as the initial value for DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const editingRowRef = useRef<HTMLLIElement>(null);
 
   const handleFootnoteClick = (
     footnote: MarkerObject,
@@ -221,6 +231,24 @@ export function FootnoteList({
     rowRefs.current[selectedIndex]?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex, selectionRequest]);
 
+  // Bring the WHOLE row being edited into view when editing starts on it (or it is asked for again),
+  // not just the editor's caret, which is all the editor's own focus would reveal. The row keeps
+  // growing while its editor loads, so it is revealed again as it grows, for a moment.
+  useEffect(() => {
+    const row = editingRowRef.current;
+    if (editingRowIndex === undefined || !row) return undefined;
+    const reveal = () => row.scrollIntoView({ block: 'nearest' });
+    reveal();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(reveal);
+    observer.observe(row);
+    const stopTimeout = setTimeout(() => observer.disconnect(), EDITING_ROW_REVEAL_MS);
+    return () => {
+      clearTimeout(stopTimeout);
+      observer.disconnect();
+    };
+  }, [editingRowIndex, selectionRequest]);
+
   /*
    * TODO(PT-3743): After upgrading to Tailwind v4, move to using @container and @sm/@lg css
    * styling to replace the use of the `layout` variable to distinguish between
@@ -273,6 +301,7 @@ export function FootnoteList({
             return (
               <Fragment key={key}>
                 <li
+                  ref={editingRowRef}
                   data-state="editing"
                   className={cn(
                     'tw:gap-x-3 tw:gap-y-1 tw:p-2',

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { FootnoteList } from '@/components/advanced/footnotes/footnote-list.component';
 import { getFormatCallerFunction } from 'platform-bible-utils';
@@ -190,6 +190,80 @@ export const EditingRow: Story = {
         {`Host-supplied editor for note ${index + 1} (\\${footnote.marker})`}
       </div>
     ),
+  },
+};
+
+/** Stands in for a row editor that reaches its full height only after it loads its note. */
+function GrowingEditor({ index }: { index: number }) {
+  const [isLoaded, setIsLoaded] = useState(false);
+  useEffect(() => {
+    const timeout = setTimeout(() => setIsLoaded(true), 150);
+    return () => clearTimeout(timeout);
+  }, []);
+  return (
+    <div
+      className="tw:rounded-[6px] tw:border-2 tw:border-ring tw:p-2 tw:text-sm"
+      style={{ height: isLoaded ? 180 : 40 }}
+    >
+      {`Editor for note ${index + 1}`}
+    </div>
+  );
+}
+
+function EditingRowRevealTemplate(args: Story['args'] = {}) {
+  const [editingIndex, setEditingIndex] = useState(usjFootnotes.length - 1);
+  return (
+    <div className="tw:flex tw:h-full tw:flex-col">
+      <button type="button" onClick={() => setEditingIndex(0)}>
+        Edit the first note
+      </button>
+      <div className="tw:min-h-0 tw:flex-1">
+        <FootnoteList
+          {...args}
+          footnotes={usjFootnotes}
+          listId="storybook-EditingRowRevealed"
+          editingFootnoteIndex={editingIndex}
+          renderEditingFootnote={(_footnote, index) => <GrowingEditor key={index} index={index} />}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Whether `element` lies wholly inside `container`'s visible box. */
+function isWhollyInside(element: Element, container: Element) {
+  const box = element.getBoundingClientRect();
+  const view = container.getBoundingClientRect();
+  return box.top >= view.top - 0.5 && box.bottom <= view.bottom + 0.5;
+}
+
+/**
+ * The row being edited is brought wholly into view when editing starts on it - also once the editor
+ * inside it has loaded and grown, and when editing moves to another row.
+ */
+export const EditingRowRevealed: Story = {
+  render: EditingRowRevealTemplate,
+  args: { showMarkers: false, layout: 'horizontal' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const list = canvas.getByRole('listbox');
+    const editingRow = () => {
+      const row = list.querySelector('[data-state="editing"]');
+      if (!row) throw new Error('no editing row');
+      return row;
+    };
+
+    await waitFor(() => {
+      expect(editingRow().getBoundingClientRect().height).toBeGreaterThan(180);
+      expect(isWhollyInside(editingRow(), list)).toBe(true);
+    });
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit the first note' }));
+    await waitFor(() => {
+      expect(editingRow().textContent).toContain('Editor for note 1');
+      expect(editingRow().getBoundingClientRect().height).toBeGreaterThan(180);
+      expect(isWhollyInside(editingRow(), list)).toBe(true);
+    });
   },
 };
 
