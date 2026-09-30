@@ -37,7 +37,7 @@ import {
   normalizeFullName,
 } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
 import {
   isShownByProjectResourceFilter,
@@ -131,6 +131,8 @@ export type SortConfig = {
   direction: 'ascending' | 'descending';
 };
 
+const DEFAULT_SORT_CONFIG: SortConfig = { key: 'language', direction: 'ascending' };
+
 export type LocalProjectInfo = {
   projectId: string;
   isPublished: boolean;
@@ -218,10 +220,10 @@ export type HomeProps = {
    */
   remoteProjectsState?: RemoteProjectsState;
   /**
-   * Which items the type filter starts on. The user can change it from there. Entry points that are
-   * answering "get me to one of my projects" — the title bar's project picker footer — start on
-   * `paratextProject`; Home's own entry points leave this unset and start on `all`. Read once, on
-   * mount: a later change to it does not move a filter the user may already have changed.
+   * Which items the type filter starts on. The user can change it from there. The Home web view
+   * passes the filter it last showed, which an opener's preset replaces — the title bar's project
+   * picker footer asks for `paratextProject`. Unset starts on `all`. Read once, on mount: a later
+   * change to it does not move a filter the user may already have changed.
    */
   initialProjectResourceFilter?: ProjectResourceFilterValue;
   /** Called with the new filter each time the user changes it, including through Clear Filters. */
@@ -405,7 +407,11 @@ export function Home({
   const [projectResourceFilter, setProjectResourceFilter] = useState<ProjectResourceFilterValue>(
     initialProjectResourceFilter,
   );
+  const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT_CONFIG);
   const changeProjectResourceFilter = (filter: ProjectResourceFilterValue) => {
+    // Re-picking the checked option would otherwise write the same value through to the web view's
+    // state, which saves the layout for nothing.
+    if (filter === projectResourceFilter) return;
     setProjectResourceFilter(filter);
     onProjectResourceFilterChange(filter);
   };
@@ -418,14 +424,9 @@ export function Home({
     [paratextProjectsText, resourcesText],
   );
 
-  const [sortConfig, setSortConfig] = useState<SortConfig>({
-    key: 'language',
-    direction: 'ascending',
-  });
-
-  const filteredAndSortedProjects = useMemo(() => {
+  const filteredProjects = useMemo(() => {
     if (!mergedProjectInfo) return [];
-    const textFilteredProjects = mergedProjectInfo.filter((project) => {
+    return mergedProjectInfo.filter((project) => {
       if (!isShownByProjectResourceFilter(projectResourceFilter, project.isPublished)) return false;
       const filter = textFilter.toLowerCase();
       return (
@@ -434,8 +435,14 @@ export function Home({
         project.language.toLowerCase().includes(filter)
       );
     });
+  }, [mergedProjectInfo, textFilter, projectResourceFilter]);
 
-    return textFilteredProjects.sort((a, b) => {
+  // Only send/receive rows have an activity, so the column exists only while one is listed.
+  const hasActivityColumn = filteredProjects.some((project) => project.isSendReceivable);
+
+  const filteredAndSortedProjects = useMemo(() => {
+    // Copied because `sort` works in place and `filteredProjects` is a memoized value.
+    return [...filteredProjects].sort((a, b) => {
       switch (sortConfig.key) {
         case 'shortName':
           if (a.name < b.name) {
@@ -466,17 +473,23 @@ export function Home({
             return sortConfig.direction === 'ascending' ? 1 : -1;
           }
           return 0;
-        case 'activity':
-          if (!a.lastSendReceiveDate || !b.lastSendReceiveDate) {
-            return 0;
+        case 'activity': {
+          // A total order: rows with no activity (never synced, or not send/receive at all) go last
+          // in either direction, and ties fall back to language. Treating an undated row as equal to
+          // every other row left the list only partly sorted, and a list with no dated rows at all
+          // (the Resources filter hides every send/receive row) in the order it arrived.
+          const aDate = a.lastSendReceiveDate || undefined;
+          const bDate = b.lastSendReceiveDate || undefined;
+          if (aDate && !bDate) return -1;
+          if (!aDate && bDate) return 1;
+          if (aDate && bDate && aDate !== bDate) {
+            const dateOrder = aDate < bDate ? -1 : 1;
+            return sortConfig.direction === 'ascending' ? dateOrder : -dateOrder;
           }
-          if (a.lastSendReceiveDate < b.lastSendReceiveDate) {
-            return sortConfig.direction === 'ascending' ? -1 : 1;
-          }
-          if (a.lastSendReceiveDate > b.lastSendReceiveDate) {
-            return sortConfig.direction === 'ascending' ? 1 : -1;
-          }
+          if (a.language < b.language) return -1;
+          if (a.language > b.language) return 1;
           return 0;
+        }
         case 'action':
           // To be implemented later
           return 0;
@@ -484,24 +497,48 @@ export function Home({
           return 0;
       }
     });
-  }, [mergedProjectInfo, textFilter, sortConfig, projectResourceFilter]);
+  }, [filteredProjects, sortConfig]);
 
   const isTypeFiltered = projectResourceFilter !== 'all';
 
-  // What to say when items exist but none survive the filters. A search gets the search message,
-  // which quotes the query; the type filter alone gets a message naming what it hid, since the
-  // search message would quote an empty query at someone who never searched.
+  // What to say when items exist but none survive the filters. An active type filter is named, with
+  // or without a search, since it may be what hid the item searched for — "Nothing found." would
+  // tell the user it is not installed. With no type filter, the search is the only explanation.
   const typeFilterEmptyTexts: Record<ProjectResourceFilterValue, string | undefined> = {
     all: undefined,
     paratextProject: noParatextProjectsFoundText,
     resource: noResourcesFoundText,
   };
-  const noFilterResultsText =
-    (!textFilter && typeFilterEmptyTexts[projectResourceFilter]) || noSearchResultsText;
+  const noFilterResultsText = typeFilterEmptyTexts[projectResourceFilter] ?? noSearchResultsText;
+  // While the user is asking for projects, getting a resource is not the answer — the filter would
+  // hide it the moment it arrived — so no empty state under that filter offers it.
+  const isAskingForProjects = projectResourceFilter === 'paratextProject';
   // Only resources are installed and the user asked for their projects: as far as getting a
-  // project goes, that is an empty Home. Getting a resource is not the answer, and the filter would
-  // hide one anyway, so the advice and buttons leave it out.
-  const isShowingNoProjects = !textFilter && projectResourceFilter === 'paratextProject';
+  // project goes, that is an empty Home, so it gets the empty Home's advice.
+  const isShowingNoProjects = !textFilter && isAskingForProjects;
+  // The mirror image: while the user is asking for resources, joining a project is not the answer.
+  const isAskingForResources = projectResourceFilter === 'resource';
+
+  // Whether the list has finished its first load. The announcement below keys on this rather than
+  // on the loading flag itself: every completed sync reloads the list, and dropping the message for
+  // the reload and restoring it after would announce it again each time.
+  const [hasListLoaded, setHasListLoaded] = useState(false);
+  useEffect(() => {
+    if (!isLoading) setHasListLoaded(true);
+  }, [isLoading]);
+  // Items exist, but none survive the filters.
+  const isFilteredToNothing =
+    hasListLoaded && mergedProjectInfo.length > 0 && filteredAndSortedProjects.length === 0;
+  // The message a filter or search that empties the list swaps in, for the live region below. When
+  // the server half is missing, its banner's title goes with it: "No Paratext projects found." on
+  // its own tells an offline user they have none, and the banner itself is inserted with its
+  // content, which a screen reader often does not announce. Joined with a newline, the one join the
+  // style guide allows, so each piece stays a translatable whole.
+  let filteredToNothingAnnouncement = '';
+  if (isFilteredToNothing && !isLocalizedStringsLoading)
+    filteredToNothingAnnouncement = missingServerHalfTitleText
+      ? `${noFilterResultsText}\n${missingServerHalfTitleText}`
+      : noFilterResultsText;
 
   const clearFilters = () => {
     setTextFilter('');
@@ -590,7 +627,8 @@ export function Home({
         )}
       >
         <div className="tw:flex tw:flex-wrap tw:justify-between tw:gap-4">
-          <div className="tw:flex tw:flex-col tw:gap-4 tw:max-w-72 tw:w-full">
+          {/* `max-w-sm` rather than `max-w-72`: the filter button shares the search row. */}
+          <div className="tw:flex tw:flex-col tw:gap-4 tw:max-w-sm tw:w-full">
             <div className="tw:flex tw:gap-4 tw:items-center tw:[@media(max-height:28rem)]:!hidden tw:max-[300px]:!hidden">
               {headerContent}
             </div>
@@ -647,6 +685,15 @@ export function Home({
           </Alert>
         </div>
       )}
+      {/*
+       * A filter or search that empties the list swaps the table for a message, which a screen
+       * reader gets no other notice of. The region is always mounted and holds only the message:
+       * a live region inserted with its content is often not announced, and one that included the
+       * quoted search or the buttons would be re-announced on every keystroke.
+       */}
+      <div role="status" aria-live="polite" aria-atomic="true" className="tw:sr-only">
+        {filteredToNothingAnnouncement}
+      </div>
       {isLoading ? (
         <CardContent className="tw:flex tw:flex-grow tw:flex-col tw:items-center tw:justify-center tw:gap-2">
           <Spinner />
@@ -662,11 +709,15 @@ export function Home({
             {mergedProjectInfo.length === 0 ? (
               <div className="tw:flex-grow tw:h-full tw:border tw:border-muted tw:rounded-lg tw:p-6 tw:text-center tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-1">
                 <Label className="tw:text-muted-foreground">{noProjectsText}</Label>
-                <Label className="tw:text-muted-foreground tw:font-normal">
-                  {noProjectsInstructionText}
-                </Label>
+                {!isAskingForResources && (
+                  <Label className="tw:text-muted-foreground tw:font-normal">
+                    {isAskingForProjects
+                      ? noProjectsInstructionWithoutResourcesText
+                      : noProjectsInstructionText}
+                  </Label>
+                )}
 
-                {showGetResourcesButton && (
+                {showGetResourcesButton && !isAskingForProjects && (
                   <Button
                     onClick={onOpenGetResources}
                     className="tw:mt-4"
@@ -692,7 +743,7 @@ export function Home({
                       <Button variant="ghost" onClick={clearFilters}>
                         {isTypeFiltered ? clearFiltersText : clearSearchText}
                       </Button>
-                      {showGetResourcesButton && !isShowingNoProjects && (
+                      {showGetResourcesButton && !isAskingForProjects && (
                         <Button
                           onClick={onOpenGetResources}
                           variant="ghost"
@@ -710,7 +761,7 @@ export function Home({
                         {buildTableHead('shortName', shortNameText, 'tw:ps-4')}
                         {buildTableHead('fullName', fullNameText, 'tw:hidden tw:md:!table-cell')}
                         {buildTableHead('language', languageText, 'tw:hidden tw:sm:!table-cell')}
-                        {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
+                        {hasActivityColumn &&
                           buildTableHead('activity', activityText, 'tw:hidden tw:sm:!table-cell')}
                         {buildTableHead('action', actionText)}
                       </TableRow>
@@ -782,7 +833,7 @@ export function Home({
                           <TableCell className="tw:hidden tw:sm:!table-cell tw:cursor-default">
                             {project.language}
                           </TableCell>
-                          {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
+                          {hasActivityColumn && (
                             <TableCell className="tw:hidden tw:sm:!table-cell tw:cursor-default">
                               {project.lastSendReceiveDate &&
                                 formatTimeSpan(
@@ -815,12 +866,10 @@ export function Home({
                 )}
               </div>
             )}
+            {/* About the one item on screen, so only while that item is actually listed. */}
             {mergedProjectInfo.length === 1 &&
-              mergedProjectInfo[0].name === 'WEB' &&
-              isShownByProjectResourceFilter(
-                projectResourceFilter,
-                mergedProjectInfo[0].isPublished,
-              ) && (
+              filteredAndSortedProjects.length === 1 &&
+              filteredAndSortedProjects[0].name === 'WEB' && (
                 <div className="tw:flex tw:flex-col tw:gap-4 tw:items-center tw:w-auto">
                   <p className="tw:text-muted-foreground tw:font-normal">
                     {getStartedDescriptionText}

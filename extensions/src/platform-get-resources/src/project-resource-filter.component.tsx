@@ -5,6 +5,10 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from 'platform-bible-react';
 import { ChevronDown, Filter } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
@@ -42,8 +46,8 @@ export type ProjectResourceFilterProps = {
   options: ProjectResourceFilterOption[];
   localizedAllText: string;
   /**
-   * Accessible name and tooltip for the trigger, which shows only an icon. A format string whose
-   * `{filter}` is replaced with the selected option's label, e.g. "Filter by: {filter}".
+   * Accessible name and tooltip text for the trigger, which shows only an icon. A format string
+   * whose `{filter}` is replaced with the selected option's label, e.g. "Filter by: {filter}".
    */
   localizedFilterByValueText: string;
 };
@@ -51,7 +55,8 @@ export type ProjectResourceFilterProps = {
 /**
  * Icon-only dropdown that picks one of "all", Paratext projects, or resources. The trigger shows
  * the selected option's icon, and switches to the filled `secondary` look while anything is
- * filtered out, so a narrowed list is visible at a glance.
+ * filtered out, so a narrowed list is visible at a glance. Its label is in a tooltip, which icon
+ * buttons require, and in `aria-label`.
  */
 export function ProjectResourceFilter({
   value,
@@ -67,18 +72,27 @@ export function ProjectResourceFilter({
   });
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant={selectedOption ? 'secondary' : 'outline'}
-          className="tw:shrink-0 tw:gap-1 tw:px-2"
-          aria-label={triggerLabel}
-          title={triggerLabel}
-        >
-          <Icon className="tw:h-4 tw:w-4" />
-          <ChevronDown className="tw:h-3 tw:w-3 tw:opacity-50" />
-        </Button>
-      </DropdownMenuTrigger>
+    // `modal={false}` because a modal Radix menu sets `pointer-events: none` on the page, and this one
+    // sits beside the search box: the first click into it would only close the menu.
+    <DropdownMenu modal={false}>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant={selectedOption ? 'secondary' : 'outline'}
+                className="tw:shrink-0 tw:gap-1 tw:px-2"
+                aria-label={triggerLabel}
+              >
+                <Icon className="tw:size-4" />
+                {/* `size-3` rather than `h-3 w-3`: Button sizes any svg without a `size-` class. */}
+                <ChevronDown className="tw:size-3 tw:opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{triggerLabel}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <DropdownMenuContent align="start">
         <DropdownMenuRadioGroup
           value={value}

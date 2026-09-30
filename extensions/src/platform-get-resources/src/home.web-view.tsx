@@ -29,10 +29,10 @@ const SEND_RECEIVE_ATTEMPTS = 4;
 const SEND_RECEIVE_RETRY_MS = 2000;
 
 globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewProps) {
-  // Seeded by the web view provider from the caller's open options, and reset to `all` on every
-  // open that does not ask for a preset — so a projects-only launch cannot survive into a later menu
-  // open or a restored layout. The user's changes are written back so `openHome` can tell whether
-  // the filter on screen still matches what a later caller asks for. See `buildHomeWebViewState`.
+  // Set by the web view provider from an opener's preset, and otherwise kept as the user left it.
+  // The user's changes are written back so it survives window moves and reloads, and so `openHome`
+  // can tell whether the filter on screen matches what a later caller asks for. See
+  // `buildHomeWebViewState`.
   const [savedProjectResourceFilter, setProjectResourceFilter] =
     useWebViewState<ProjectResourceFilterValue>('projectResourceFilter', 'all');
   // Saved state is untyped at rest, and a layout from another build may carry a value this one does

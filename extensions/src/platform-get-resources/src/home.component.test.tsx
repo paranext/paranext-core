@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { SharedProjectsInfo } from 'platform-scripture';
@@ -12,6 +12,18 @@ import {
   type RemoteProjectsState,
 } from './home.component';
 import type { ProjectResourceFilterValue } from './project-resource-filter.component';
+
+// jsdom has no ResizeObserver, which Radix's popper positioning needs. The type filter's tooltip
+// opens on the hover `userEvent` sends before each click, so every filter pick depends on it.
+beforeAll(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
+  );
+});
+afterAll(() => {
+  vi.unstubAllGlobals();
+});
 
 /*
  * `onSendReceiveProject`'s contract is that a rejection surfaces to the user: the prop's TSDoc says
@@ -63,6 +75,7 @@ const SERVER_UNREACHABLE_DESCRIPTION = enString('%resources_serverUnreachable_de
 const SERVER_PROJECTS_UNAVAILABLE_TITLE = enString('%resources_serverProjectsUnavailable_title%');
 const NOTHING_HERE = enString('%resources_noProjects%');
 const NOTHING_FOUND = enString('%resources_noSearchResults%');
+const SEARCHED_FOR = enString('%resources_searchedFor%');
 const NO_PROJECTS_INSTRUCTION = enString('%resources_noProjectsInstruction%');
 const NO_PROJECTS_INSTRUCTION_WITHOUT_RESOURCES = enString(
   '%resources_noProjectsInstructionWithoutResources%',
@@ -80,6 +93,7 @@ function renderHomeList({
   onProjectResourceFilterChange,
   showGetResourcesButton = true,
   isLoadingLocalProjects = false,
+  isLocalizedStringsLoading = false,
 }: {
   remoteProjectsState?: RemoteProjectsState;
   localProjectsInfo?: LocalProjectInfo[];
@@ -88,6 +102,7 @@ function renderHomeList({
   onProjectResourceFilterChange?: (filter: ProjectResourceFilterValue) => void;
   showGetResourcesButton?: boolean;
   isLoadingLocalProjects?: boolean;
+  isLocalizedStringsLoading?: boolean;
 } = {}) {
   return render(
     <Home
@@ -99,9 +114,29 @@ function renderHomeList({
       onProjectResourceFilterChange={onProjectResourceFilterChange}
       showGetResourcesButton={showGetResourcesButton}
       isLoadingLocalProjects={isLoadingLocalProjects}
-      localizedStringsWithLoadingState={[EN_STRINGS, false]}
+      localizedStringsWithLoadingState={[EN_STRINGS, isLocalizedStringsLoading]}
     />,
   );
+}
+
+/**
+ * What Home's live region is announcing. Found by `aria-live` rather than by role, since the server
+ * banner is a `role="status"` region too.
+ */
+function announcement(): string {
+  const liveRegion = screen
+    .getAllByRole('status')
+    .find((element) => element.hasAttribute('aria-live'));
+  if (!liveRegion) throw new Error('Home rendered no live region');
+  return liveRegion.textContent ?? '';
+}
+
+/**
+ * Whether an empty-state message is on screen. Home also repeats the message in an off-screen live
+ * region so screen readers hear it, which `queryByText` would count as a second match.
+ */
+function isShownText(text: string): boolean {
+  return screen.queryAllByText(text).some((element) => !element.closest('[aria-live]'));
 }
 
 /**
@@ -254,7 +289,7 @@ describe('Home empty state', () => {
     renderHomeList();
 
     expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
-    expect(screen.queryByText(NOTHING_FOUND)).toBeNull();
+    expect(isShownText(NOTHING_FOUND)).toBe(false);
   });
 
   it('leaves the Get resources button out of the guidance when the caller suppresses it', () => {
@@ -289,7 +324,7 @@ describe('Home empty state', () => {
     // SearchBar renders a plain text input, so this is the only textbox on the card.
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'no such project' } });
 
-    expect(screen.queryByText(NOTHING_FOUND)).not.toBeNull();
+    expect(isShownText(NOTHING_FOUND)).toBe(true);
     expect(screen.queryByText(NOTHING_HERE)).toBeNull();
   });
 });
@@ -398,9 +433,9 @@ describe('Home project/resource filter', () => {
 
     // The user has items; the filter hid them. "Nothing here" would say they have none, and the
     // search message would quote an empty query at someone who never searched.
-    expect(screen.queryByText(NO_PARATEXT_PROJECTS_FOUND)).not.toBeNull();
+    expect(isShownText(NO_PARATEXT_PROJECTS_FOUND)).toBe(true);
     expect(screen.queryByText(NOTHING_HERE)).toBeNull();
-    expect(screen.queryByText(NOTHING_FOUND)).toBeNull();
+    expect(isShownText(NOTHING_FOUND)).toBe(false);
     // Someone with only resources who asked for their projects still needs to hear how to get one —
     // and not to get resources, which the filter would hide as soon as they arrived.
     expect(screen.queryByText(NO_PROJECTS_INSTRUCTION_WITHOUT_RESOURCES)).not.toBeNull();
@@ -420,7 +455,7 @@ describe('Home project/resource filter', () => {
 
     await pickFilter(RESOURCES);
 
-    expect(screen.queryByText(NO_RESOURCES_FOUND)).not.toBeNull();
+    expect(isShownText(NO_RESOURCES_FOUND)).toBe(true);
     // The project-joining advice answers a different question; Get Resources is the answer here.
     expect(screen.queryByText(NO_PROJECTS_INSTRUCTION)).toBeNull();
     expect(screen.queryByText(NO_PROJECTS_INSTRUCTION_WITHOUT_RESOURCES)).toBeNull();
@@ -442,16 +477,16 @@ describe('Home project/resource filter', () => {
 
   it('keeps the WEB getting-started prompt off a list that is filtering WEB out', () => {
     const GET_STARTED_DESCRIPTION = enString('%resources_getStartedDescription%');
-    const WEB: LocalProjectInfo = { ...RESOURCE, projectId: 'web', name: 'WEB' };
+    const WEB: LocalProjectInfo = { ...PROJECT, projectId: 'web', name: 'WEB' };
 
-    renderHomeList({ localProjectsInfo: [WEB], initialProjectResourceFilter: 'paratextProject' });
+    renderHomeList({ localProjectsInfo: [WEB], initialProjectResourceFilter: 'resource' });
     // The prompt is about the one item on screen; with that item hidden it has nothing to refer to.
     expect(screen.queryByText(GET_STARTED_DESCRIPTION)).toBeNull();
   });
 
   it('shows the WEB getting-started prompt while WEB is listed', () => {
     const GET_STARTED_DESCRIPTION = enString('%resources_getStartedDescription%');
-    const WEB: LocalProjectInfo = { ...RESOURCE, projectId: 'web', name: 'WEB' };
+    const WEB: LocalProjectInfo = { ...PROJECT, projectId: 'web', name: 'WEB' };
 
     // Positive control for the case above.
     renderHomeList({ localProjectsInfo: [WEB] });
@@ -463,7 +498,7 @@ describe('Home project/resource filter', () => {
 
     // An empty Home is empty whatever the filter says, and the guidance is what helps there.
     expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
-    expect(screen.queryByText(NO_PARATEXT_PROJECTS_FOUND)).toBeNull();
+    expect(isShownText(NO_PARATEXT_PROJECTS_FOUND)).toBe(false);
   });
 
   it('counts send/receive projects as Paratext projects, never as resources', async () => {
@@ -500,13 +535,212 @@ describe('Home project/resource filter', () => {
     expect(listedShortNames()).toEqual(['CCC', 'BBB', 'AAA']);
   });
 
+  it('announces the list emptying when a filter hides everything', async () => {
+    renderHomeList({ localProjectsInfo: [PROJECT] });
+    // The region is there, and silent, before the swap: one inserted with its message already in
+    // it is often not announced at all.
+    expect(announcement()).toBe('');
+
+    await pickFilter(RESOURCES);
+
+    // The message replaces a populated table — a content swap a screen reader gets no other notice
+    // of — so it has to sit in a status region.
+    expect(announcement()).toBe(NO_RESOURCES_FOUND);
+  });
+
+  it('announces nothing for an empty Home, which is not a swap', () => {
+    renderHomeList({ initialProjectResourceFilter: 'paratextProject' });
+
+    // Positive control: the empty Home rendered.
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(announcement()).toBe('');
+  });
+
+  it('announces nothing while the list is still loading', () => {
+    renderHomeList({
+      localProjectsInfo: [RESOURCE],
+      initialProjectResourceFilter: 'paratextProject',
+      remoteProjectsState: 'loading',
+    });
+
+    expect(announcement()).toBe('');
+  });
+
+  it('announces nothing while its strings are still loading', () => {
+    renderHomeList({
+      localProjectsInfo: [RESOURCE],
+      initialProjectResourceFilter: 'paratextProject',
+      isLocalizedStringsLoading: true,
+    });
+
+    // A raw `%resources_…%` key would otherwise be read out, then the real text after it.
+    expect(announcement()).toBe('');
+  });
+
+  it('announces the missing server half along with an empty filtered list', () => {
+    renderHomeList({
+      localProjectsInfo: [RESOURCE],
+      initialProjectResourceFilter: 'paratextProject',
+      remoteProjectsState: 'unreachable',
+    });
+
+    // "No Paratext projects found." alone tells an offline user they have none. The banner that
+    // qualifies it is inserted with its content, which a screen reader often does not announce.
+    expect(announcement()).toContain(NO_PARATEXT_PROJECTS_FOUND);
+    expect(announcement()).toContain(SERVER_UNREACHABLE_TITLE);
+  });
+
+  it('names the type filter when a search under it comes up empty', () => {
+    renderHomeList({
+      localProjectsInfo: [RESOURCE],
+      initialProjectResourceFilter: 'paratextProject',
+    });
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'PUB' } });
+
+    // PUB is installed; the filter hid it. "Nothing found." would say the search failed to find it.
+    expect(isShownText(NO_PARATEXT_PROJECTS_FOUND)).toBe(true);
+    expect(isShownText(NOTHING_FOUND)).toBe(false);
+    expect(screen.queryByText(`${SEARCHED_FOR} "PUB".`)).not.toBeNull();
+  });
+
+  it('does not report a search nobody made', () => {
+    renderHomeList({
+      localProjectsInfo: [RESOURCE],
+      initialProjectResourceFilter: 'paratextProject',
+    });
+
+    expect(isShownText(NO_PARATEXT_PROJECTS_FOUND)).toBe(true);
+    expect(screen.queryByText(new RegExp(`^${SEARCHED_FOR}`))).toBeNull();
+  });
+
+  it('leaves the project advice out of an empty Home asked for resources only', async () => {
+    renderHomeList();
+
+    await pickFilter(RESOURCES);
+
+    // The mirror of the projects-only rule: a project the user joined would be hidden at once.
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(NO_PROJECTS_INSTRUCTION)).toBeNull();
+    expect(screen.queryByText(NO_PROJECTS_INSTRUCTION_WITHOUT_RESOURCES)).toBeNull();
+    // Get Resources is the answer here, in the empty state as well as the header.
+    expect(
+      screen.getAllByRole('button', { name: `+ ${enString('%resources_getResources%')}` }),
+    ).toHaveLength(2);
+  });
+
+  it('reports no change when the user re-picks the filter already selected', async () => {
+    const onProjectResourceFilterChange = vi.fn();
+    renderHomeList({ localProjectsInfo: [PROJECT], onProjectResourceFilterChange });
+
+    await pickFilter(ALL);
+
+    expect(onProjectResourceFilterChange).not.toHaveBeenCalled();
+  });
+
+  it('leaves the resources advice out of an empty Home asked for projects only', () => {
+    renderHomeList({ initialProjectResourceFilter: 'paratextProject' });
+
+    // Nothing at all is installed, but the user asked for projects: a resource fetched from here
+    // would be hidden by the filter the moment it arrived.
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(NO_PROJECTS_INSTRUCTION_WITHOUT_RESOURCES)).not.toBeNull();
+    expect(screen.queryByText(NO_PROJECTS_INSTRUCTION)).toBeNull();
+    // Only the header's own button.
+    expect(
+      screen.getAllByRole('button', { name: `+ ${enString('%resources_getResources%')}` }),
+    ).toHaveLength(1);
+  });
+
+  it('keeps Get resources out of a search that comes up empty under the projects filter', () => {
+    renderHomeList({
+      localProjectsInfo: [RESOURCE],
+      initialProjectResourceFilter: 'paratextProject',
+    });
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'PUB' } });
+
+    // Positive control: this is the empty state of a search under the filter.
+    expect(screen.queryByText(`${SEARCHED_FOR} "PUB".`)).not.toBeNull();
+    expect(
+      screen.getAllByRole('button', { name: `+ ${enString('%resources_getResources%')}` }),
+    ).toHaveLength(1);
+  });
+
+  it('sorts by Activity with never-synced projects last in either direction', () => {
+    const shared = (id: string, lastSendReceiveDate: string) => ({
+      id,
+      name: id,
+      fullName: `Project ${id}`,
+      language: 'en',
+      editedStatus: '' as const,
+      lastSendReceiveDate,
+    });
+    renderHomeList({
+      sharedProjectsInfo: {
+        MAR: shared('MAR', '2026-03-01T00:00:00.000Z'),
+        NONE: shared('NONE', ''),
+        JAN: shared('JAN', '2026-01-01T00:00:00.000Z'),
+      },
+    });
+    const activityHeader = screen.getByRole('button', { name: enString('%resources_activity%') });
+
+    fireEvent.click(activityHeader);
+    expect(listedShortNames()).toEqual(['JAN', 'MAR', 'NONE']);
+
+    // An undated row that compared equal to everything left the rows where they were, so the
+    // descending click flipped the chevron and moved nothing.
+    fireEvent.click(activityHeader);
+    expect(listedShortNames()).toEqual(['MAR', 'JAN', 'NONE']);
+  });
+
+  it('keeps an Activity sort ordered when the Resources filter hides that column', async () => {
+    const SHARED_ONLY: SharedProjectsInfo = {
+      shared1: {
+        id: 'shared1',
+        name: 'SHR',
+        fullName: 'Shared Project',
+        language: 'mm',
+        editedStatus: '',
+        lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
+      },
+    };
+    renderHomeList({
+      sharedProjectsInfo: SHARED_ONLY,
+      localProjectsInfo: [
+        { ...RESOURCE, projectId: 'rzz', name: 'RZZ', fullName: 'Resource Z', language: 'zz' },
+        { ...RESOURCE, projectId: 'raa', name: 'RAA', fullName: 'Resource A', language: 'aa' },
+      ],
+    });
+    const ACTIVITY = enString('%resources_activity%');
+    fireEvent.click(screen.getByRole('button', { name: ACTIVITY }));
+
+    await pickFilter(RESOURCES);
+
+    // Only send/receive rows have an activity; with them filtered out every row is undated, and an
+    // Activity sort still has to leave the list in an order rather than the one it arrived in.
+    expect(screen.queryByRole('button', { name: ACTIVITY })).toBeNull();
+    expect(listedShortNames()).toEqual(['RAA', 'RZZ']);
+  });
+
+  it('keeps the WEB getting-started prompt off a search that hides WEB', () => {
+    const GET_STARTED_DESCRIPTION = enString('%resources_getStartedDescription%');
+    const WEB: LocalProjectInfo = { ...PROJECT, projectId: 'web', name: 'WEB' };
+    renderHomeList({ localProjectsInfo: [WEB] });
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'no such thing' } });
+
+    expect(isShownText(NOTHING_FOUND)).toBe(true);
+    expect(screen.queryByText(GET_STARTED_DESCRIPTION)).toBeNull();
+  });
+
   it('counts what is shown against the total while anything is filtered out', () => {
     renderHomeList({
       localProjectsInfo: [RESOURCE, PROJECT],
       initialProjectResourceFilter: 'paratextProject',
     });
 
-    expect(screen.queryByText('1 out of 2 items')).not.toBeNull();
+    expect(screen.queryByText('1 of 2')).not.toBeNull();
   });
 
   it('counts just the items while nothing is filtered out', () => {

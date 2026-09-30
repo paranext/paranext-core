@@ -9,10 +9,9 @@ const savedHome = (state?: Record<string, unknown>): SavedWebViewDefinition => (
 });
 
 /*
- * The filter answers the question the opener asked, not a preference of the tab, and it rides in
- * the persisted web view `state` — so the rule that matters is the reset: an open that does not ask
- * for a preset must clear the filter the previous open (or the user) left behind, including on a
- * layout restore, which calls the provider with no options at all.
+ * The provider runs whenever Home is built, and most of those builds — moving Home to a new window,
+ * an extension reload, a layout restore — pass no preset. So only an opener's preset may change the
+ * filter; without one, the filter Home last had stays.
  */
 describe('buildHomeWebViewState', () => {
   it('presets the filter the caller asks for', () => {
@@ -21,10 +20,18 @@ describe('buildHomeWebViewState', () => {
     ).toEqual({ projectResourceFilter: 'paratextProject' });
   });
 
-  it('clears a filter left by a previous open', () => {
+  it("keeps the user's filter when rebuilt without a preset", () => {
     expect(buildHomeWebViewState(savedHome({ projectResourceFilter: 'resource' }), {})).toEqual({
-      projectResourceFilter: 'all',
+      projectResourceFilter: 'resource',
     });
+  });
+
+  it("replaces the user's filter with an opener's preset", () => {
+    expect(
+      buildHomeWebViewState(savedHome({ projectResourceFilter: 'resource' }), {
+        initialProjectResourceFilter: 'paratextProject',
+      }),
+    ).toEqual({ projectResourceFilter: 'paratextProject' });
   });
 
   it('keeps every other key the saved state carries', () => {
@@ -35,10 +42,8 @@ describe('buildHomeWebViewState', () => {
     ).toEqual({ somethingElse: 'keep me', projectResourceFilter: 'resource' });
   });
 
-  it('drops the projects-only flag that layouts saved before the filter still carry', () => {
-    expect(buildHomeWebViewState(savedHome({ shouldShowProjectsOnly: true }), {})).toEqual({
-      projectResourceFilter: 'all',
-    });
+  it('drops the projects-only flag that older saved layouts carry', () => {
+    expect(buildHomeWebViewState(savedHome({ shouldShowProjectsOnly: true }), {})).toEqual({});
   });
 });
 
@@ -58,11 +63,11 @@ describe('shouldReloadHomeForFilterPreset', () => {
     expect(
       shouldReloadHomeForFilterPreset(
         savedHome({ projectResourceFilter: 'paratextProject' }),
-        'all',
+        undefined,
       ),
     ).toBe(false);
     expect(
-      shouldReloadHomeForFilterPreset(savedHome({ projectResourceFilter: 'resource' }), 'all'),
+      shouldReloadHomeForFilterPreset(savedHome({ projectResourceFilter: 'resource' }), undefined),
     ).toBe(false);
   });
 
@@ -87,6 +92,6 @@ describe('shouldReloadHomeForFilterPreset', () => {
   });
 
   it('leaves an unfiltered Home alone when asked for no preset', () => {
-    expect(shouldReloadHomeForFilterPreset(savedHome(), 'all')).toBe(false);
+    expect(shouldReloadHomeForFilterPreset(savedHome(), undefined)).toBe(false);
   });
 });

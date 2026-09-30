@@ -482,7 +482,10 @@ export async function activate(context: ExecutionActivationContext) {
   const openHomeWebViewCommandPromise = papi.commands.registerCommand(
     'platformGetResources.openHome',
     async (shouldShowProjectsOnly?: boolean) => {
-      const initialProjectResourceFilter = shouldShowProjectsOnly ? 'paratextProject' : 'all';
+      // Strictly `true`: the macOS native menubar calls every menu command with the item's group
+      // key as its first argument, and a truthy string must not read as "projects only".
+      const initialProjectResourceFilter =
+        shouldShowProjectsOnly === true ? 'paratextProject' : undefined;
       const options: HomeWebViewOptions = {
         initialProjectResourceFilter,
         // Focus existing one if one exists
@@ -497,11 +500,12 @@ export async function activate(context: ExecutionActivationContext) {
         },
         options,
       );
-      if (!homeWebViewId) return homeWebViewId;
+      // With no preset there is nothing to compare: Home is raised showing whatever filter it had.
+      if (!homeWebViewId || !initialProjectResourceFilter) return homeWebViewId;
 
       // Reusing an existing Home raises its tab without consulting the provider, so the preset
-      // this call asked for never reaches it. Reload only when this call asks for a filter Home is
-      // not showing — a rebuilt iframe is the slowest thing this command can do.
+      // this call asked for never reaches it. Reload only when Home is showing a different filter —
+      // a rebuilt iframe is the slowest thing this command can do.
       const existingWebView = await papi.webViews.getOpenWebViewDefinition(homeWebViewId);
       if (
         existingWebView &&

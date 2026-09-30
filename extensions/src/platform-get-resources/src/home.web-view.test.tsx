@@ -54,6 +54,7 @@ vi.mock('./use-local-projects.hook', () => ({
  */
 vi.mock('./home.component', async (importOriginal) => {
   const original = await importOriginal<typeof import('./home.component')>();
+  const { useState } = await import('react');
   return {
     // The real key list, so the web view still requests what Home actually renders.
     HOME_STRING_KEYS: original.HOME_STRING_KEYS,
@@ -65,17 +66,23 @@ vi.mock('./home.component', async (importOriginal) => {
       remoteProjectsState?: string;
       initialProjectResourceFilter?: string;
       onProjectResourceFilterChange?: (filter: string) => void;
-    }) => (
-      <div
-        data-testid="home"
-        data-remote-state={String(remoteProjectsState)}
-        data-initial-filter={String(initialProjectResourceFilter)}
-      >
-        <button type="button" onClick={() => onProjectResourceFilterChange?.('resource')}>
-          filter to resources
-        </button>
-      </div>
-    ),
+    }) => {
+      // The real Home reads its initial filter once, into state, so a value that only arrives after
+      // the first render never reaches it. Kept the same way here, or a regression that delivers
+      // the preset late would pass.
+      const [filterAtMount] = useState(initialProjectResourceFilter);
+      return (
+        <div
+          data-testid="home"
+          data-remote-state={String(remoteProjectsState)}
+          data-initial-filter={String(filterAtMount)}
+        >
+          <button type="button" onClick={() => onProjectResourceFilterChange?.('resource')}>
+            filter to resources
+          </button>
+        </div>
+      );
+    },
   };
 });
 
@@ -281,9 +288,9 @@ describe('HomeWebView shared project fetch', () => {
 
 /*
  * The title bar's "More projects…" is asking "get me to one of my projects", so Home starts filtered
- * to projects on that path alone. The preset rides in the web view's `state`, which the provider
- * seeds from the open options and scrubs on every other open — so this pair is what keeps the
- * preset tied to the launch path rather than to Home itself.
+ * to projects on that path. The filter rides in the web view's `state`, which the provider sets from
+ * an opener's preset; these pin that the web view reads it, falls back safely, and writes the user's
+ * changes back.
  */
 describe('HomeWebView filter preset', () => {
   beforeEach(() => {

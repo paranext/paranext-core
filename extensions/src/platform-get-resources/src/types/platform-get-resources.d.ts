@@ -139,14 +139,15 @@ declare module 'papi-shared-types' {
     'platformGetResources.openGetResources': () => Promise<string | undefined>;
 
     /**
-     * Opens a new Home web view and returns the WebView id
+     * Opens Home, or raises it if it is already open, and returns its WebView id
      *
-     * @param shouldShowProjectsOnly Open Home with its type filter set to Paratext projects,
-     *   leaving out the published resources that otherwise share its list. The user can change the
-     *   filter from there. Set by entry points that are asking "get me to one of my projects";
-     *   Home's own entry points omit it and start on everything. Applies to the open it is passed
-     *   on only — it does not stick to the tab.
-     * @returns WebView id for new Home WebView or `undefined` if not created
+     * @param shouldShowProjectsOnly `true` sets Home's type filter to Paratext projects, leaving
+     *   out the published resources that otherwise share its list, and reloads an already-open Home
+     *   that is showing another filter. Set by entry points that are asking "get me to one of my
+     *   projects". Omitted or any other value asks for Home as it is: a new Home starts on
+     *   everything, and an open one is raised showing whatever filter it last had. The user can
+     *   change the filter either way.
+     * @returns WebView id for the Home WebView or `undefined` if none was opened
      */
     'platformGetResources.openHome': (
       shouldShowProjectsOnly?: boolean,
