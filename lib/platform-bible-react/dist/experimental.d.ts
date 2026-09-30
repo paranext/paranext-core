@@ -1381,6 +1381,24 @@ export declare function filterAndRankPaletteItems<T extends {
 	label: string;
 }>(items: readonly T[], filterText: string | undefined, mode: PaletteFilterMode): T[];
 /**
+ * Whether ONE editor's own right-click context menu (`ContextMenuPlugin`) is open, scoped to that
+ * editor rather than to the document as a whole.
+ *
+ * The menu itself renders through a `ReactDOM.createPortal` to `document.body`, and every
+ * `ContextMenuPlugin` instance on the page — the main Standard-view editor and the footnote-editor
+ * popover each mount their own — shares the same portal classes
+ * (`.typeahead-popover.auto-embed-menu`), so a bare `document.querySelector` for that class cannot
+ * tell whose menu is open. The editor package instead marks the FOCUSED editor's own root with
+ * `aria-controls="editor-context-menu"` for exactly as long as its menu stays open (removed again
+ * on close), which is the one signal that is genuinely per-editor.
+ */
+/**
+ * @param editorRoot The editor's own DOM root (the `.editor-input` element the menu marks), or a
+ *   container that contains it. `undefined`/`null` (editor not yet mounted) answers `false`.
+ * @returns Whether THIS editor's right-click context menu is open.
+ */
+export declare function isEditorContextMenuOpenFor(editorRoot: Element | null | undefined): boolean;
+/**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
  * localized strings and pass them into the localizedStrings prop of this component.
