@@ -158,12 +158,10 @@ export const RestartPending: Story = {
  * moves on with Next, without saving or restarting. "Change registration" opens the empty form.
  */
 export const ExistingRegistration: Story = {
-  args: { onBack: fn() },
+  args: { onBack: fn(), registrationValidAtStart: true },
   beforeEach: () => {
     setCommandServiceMock((command) => {
       switch (command) {
-        case 'paratextRegistration.doesUserHaveValidRegistration':
-          return true;
         case 'paratextRegistration.getParatextRegistrationData':
           return {
             name: 'Pat Translator',
@@ -179,7 +177,8 @@ export const ExistingRegistration: Story = {
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await expect(await canvas.findByLabelText(/registration name/i)).toHaveValue('Pat Translator');
+    const nameInput = await canvas.findByLabelText(/registration name/i);
+    await waitFor(() => expect(nameInput).toHaveValue('Pat Translator'));
     await userEvent.click(canvas.getByRole('button', { name: 'Next' }));
     await expect(args.onNext).toHaveBeenCalled();
   },

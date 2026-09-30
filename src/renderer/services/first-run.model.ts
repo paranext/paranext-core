@@ -22,8 +22,8 @@ export interface FirstRunFacts {
   wizardActive: boolean;
   registrationValidity: RegistrationValidity;
   /**
-   * The Identify step saved a registration and restarted the app immediately before this launch (a
-   * one-launch flag).
+   * The wizard restarted the app immediately before this launch — to apply a registration it saved,
+   * or changed internet settings (a one-launch flag).
    */
-  justRegistered: boolean;
+  wizardJustRestarted: boolean;
 }

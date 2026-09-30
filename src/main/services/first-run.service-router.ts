@@ -82,15 +82,20 @@ async function resetFirstRun(options?: ResetFirstRunOptions): Promise<void> {
       `Unknown registration option '${registration}'. Use one of: ${REGISTRATION_MODES.join(', ')}`,
     );
 
+  // Everything that can refuse goes first, so a refusal leaves nothing half reset: without a window
+  // to clear the renderer's cache in, the next launch would read that cache as "first run complete"
+  // and skip the wizard anyway; and the data provider refuses a registration reset when ParatextData
+  // is not on Platform.Bible's own folder.
+  const firstRunShard = await getTargetFirstRunShard();
   logger.info(`Resetting first run (registration: ${registration})`);
+  if (registration !== 'keep')
+    await commandService.sendCommand('paratextRegistration.resetForFirstRun', registration);
   // The wizard only runs in Simple mode, and only until first run is complete.
   await settingsService.set('platform.firstRunComplete', false);
   await settingsService.set('platform.interfaceMode', 'simple');
   await settingsService.set('platform.syncOnStartup', true);
   await settingsService.set('platform.showRegistrationReminderOnStartup', true);
-  if (registration !== 'keep')
-    await commandService.sendCommand('paratextRegistration.resetForFirstRun', registration);
-  await (await getTargetFirstRunShard()).clearLocalState();
+  await firstRunShard.clearLocalState();
   await commandService.sendCommand('platform.restart');
 }
 

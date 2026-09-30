@@ -44,6 +44,12 @@ internal sealed class PlatformParatextInfo : ParatextInfo
     private const string REGISTRATION_FILE_NAME = "RegistrationInfo.xml";
 
     /// <summary>
+    /// Written next to the seeded files, holding the name of the Paratext 9 folder they came from.
+    /// Not one of <see cref="SEEDED_FILE_NAMES"/>, so it never stops a re-seed.
+    /// </summary>
+    private const string COPIED_FROM_PARATEXT9_MARKER_FILE_NAME = "CopiedFromParatext9.txt";
+
+    /// <summary>
     /// Paratext 8.x and 9.x app-data folders (<c>Paratext80</c>–<c>Paratext99</c>). Only these are
     /// seeding sources; a <c>Paratext10x</c> folder is never read.
     /// </summary>
@@ -88,42 +94,74 @@ internal sealed class PlatformParatextInfo : ParatextInfo
     /// </summary>
     internal static void Restore(ParatextInfo previous) => Default = previous;
 
-    /// <summary>The pinned app-data folder, seeded from Paratext 9 on first use if it is empty.</summary>
+    /// <summary>
+    /// The pinned app-data folder, seeded from Paratext 9 on first use if it has none of the
+    /// <see cref="SEEDED_FILE_NAMES"/>.
+    /// </summary>
     internal string ResolvedAppDataFolder => _appDataFolder.Value;
 
     protected override string GetAppDataFolder() => _appDataFolder.Value;
 
     /// <summary>
-    /// Deletes the files at the top level of the pinned app-data folder so that the next startup
-    /// seeds it from Paratext 9 again, the way a Paratext 9 user's first launch does. Only ever
-    /// touches <see cref="AppDataFolderPath"/>; subfolders are left alone.
+    /// Whether the registration Platform.Bible has was copied from Paratext 9 by
+    /// <see cref="PlatformParatextInfo"/> (as opposed to entered in Platform.Bible, or copied by an
+    /// older version before this was recorded).
     /// </summary>
-    internal void DeleteAppDataFilesForReseed()
-    {
-        if (!Directory.Exists(AppDataFolderPath))
-            return;
+    internal bool IsRegistrationCopiedFromParatext9 =>
+        File.Exists(Path.Combine(ResolvedAppDataFolder, COPIED_FROM_PARATEXT9_MARKER_FILE_NAME))
+        && File.Exists(Path.Combine(ResolvedAppDataFolder, REGISTRATION_FILE_NAME));
 
-        foreach (var file in Directory.EnumerateFiles(AppDataFolderPath))
-            // SR-write-gate: exempt — per-user ParatextData settings, not project data
-            File.Delete(file);
+    /// <summary>
+    /// Deletes the files seeding copies from Paratext 9 (and their <c>.BAK</c> backups and the
+    /// copied-from marker) so that the next startup seeds the folder again, the way a Paratext 9
+    /// user's first launch does. Every other file in the folder — e.g. the user's auto-replace
+    /// list — is kept.
+    /// </summary>
+    internal void DeleteSeededFiles()
+    {
+        var fileNames = SEEDED_FILE_NAMES
+            .SelectMany(fileName => new[] { fileName, fileName + ".BAK" })
+            .Append(COPIED_FROM_PARATEXT9_MARKER_FILE_NAME);
+        foreach (var fileName in fileNames)
+        {
+            var path = Path.Combine(AppDataFolderPath, fileName);
+            if (File.Exists(path))
+                // SR-write-gate: exempt — per-user ParatextData settings, not project data
+                File.Delete(path);
+        }
     }
 
+    /// <summary>
+    /// Never throws: this runs inside <see cref="ParatextInfo.AppDataFolder"/>, which the data
+    /// provider reads at startup before it can report anything, and a <see cref="Lazy{T}"/> would
+    /// rethrow a failure on every later read. If the folder cannot be seeded or even created, the
+    /// failure is logged and ParatextData's own reads and writes there fail later instead.
+    /// </summary>
     private string ResolveAppDataFolder()
     {
-        if (
-            !Directory.Exists(AppDataFolderPath)
-            || !Directory.EnumerateFiles(AppDataFolderPath).Any()
-        )
-            SeedFromParatext9();
-
-        Directory.CreateDirectory(AppDataFolderPath);
+        try
+        {
+            if (
+                !SEEDED_FILE_NAMES.Any(fileName =>
+                    File.Exists(Path.Combine(AppDataFolderPath, fileName))
+                )
+            )
+                SeedFromParatext9();
+            Directory.CreateDirectory(AppDataFolderPath);
+        }
+        catch (Exception e) when (IsFileSystemFailure(e))
+        {
+            Console.WriteLine(
+                $"Could not prepare the ParatextData app-data folder {AppDataFolderPath}: {e.Message}"
+            );
+        }
         return AppDataFolderPath;
     }
 
     /// <summary>
     /// Copies the files ParatextData would carry over from the newest Paratext 8/9 app-data folder
-    /// that has a registration. Only reads from that folder. A failure is logged and leaves the
-    /// folder unseeded — there is deliberately no fallback to using the Paratext 9 folder itself.
+    /// that has a registration, and records that it did. Only reads from that folder — there is
+    /// deliberately no fallback to using the Paratext 9 folder itself.
     /// </summary>
     private void SeedFromParatext9()
     {
@@ -131,26 +169,21 @@ internal sealed class PlatformParatextInfo : ParatextInfo
         if (source == null)
             return;
 
-        try
+        Directory.CreateDirectory(AppDataFolderPath);
+        foreach (var fileName in SEEDED_FILE_NAMES)
         {
-            Directory.CreateDirectory(AppDataFolderPath);
-            foreach (var fileName in SEEDED_FILE_NAMES)
-            {
-                var sourcePath = Path.Combine(source, fileName);
-                var destinationPath = Path.Combine(AppDataFolderPath, fileName);
-                if (File.Exists(sourcePath) && !File.Exists(destinationPath))
-                    File.Copy(sourcePath, destinationPath);
-            }
-            Console.WriteLine(
-                $"Copied Paratext registration and internet settings from {source} to {AppDataFolderPath}"
-            );
+            var sourcePath = Path.Combine(source, fileName);
+            var destinationPath = Path.Combine(AppDataFolderPath, fileName);
+            if (File.Exists(sourcePath) && !File.Exists(destinationPath))
+                File.Copy(sourcePath, destinationPath);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            Console.WriteLine(
-                $"Could not copy Paratext settings from {source} to {AppDataFolderPath}: {e.Message}"
-            );
-        }
+        File.WriteAllText(
+            Path.Combine(AppDataFolderPath, COPIED_FROM_PARATEXT9_MARKER_FILE_NAME),
+            Path.GetFileName(source)
+        );
+        Console.WriteLine(
+            $"Copied Paratext registration and internet settings from {source} to {AppDataFolderPath}"
+        );
     }
 
     private string? FindParatext9SeedFolder()
@@ -175,4 +208,7 @@ internal sealed class PlatformParatextInfo : ParatextInfo
             .Select(candidate => candidate.directory)
             .FirstOrDefault();
     }
+
+    private static bool IsFileSystemFailure(Exception e) =>
+        e is IOException or UnauthorizedAccessException or System.Security.SecurityException;
 }

@@ -9,7 +9,7 @@
  */
 
 import { resetTourDone } from '@renderer/components/onboarding-tour/onboarding-tour.store';
-import { INTERFACE_MODE_CACHE_KEY } from '@renderer/hooks/use-interface-mode.hook';
+import { clearCachedInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { clearFirstRunLocalState } from '@renderer/services/first-run-store';
 import {
   FIRST_RUN_SERVICE_SHARD_NETWORK_OBJECT_NAME,
@@ -27,11 +27,7 @@ const firstRunServiceShard: IFirstRunServiceShard = {
     resetTourDone();
     // A stale cached 'power' would show the app for a moment before the settings read routes the
     // reset profile into the wizard.
-    try {
-      localStorage.removeItem(INTERFACE_MODE_CACHE_KEY);
-    } catch {
-      // Storage unavailable: nothing was cached either.
-    }
+    clearCachedInterfaceMode();
   },
 };
 

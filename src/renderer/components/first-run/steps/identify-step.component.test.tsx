@@ -44,6 +44,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_identify_keepRegistration%': 'Keep current registration',
       '%firstRun_button_next%': 'Next',
       '%firstRun_button_back%': 'Back',
+      '%firstRun_step_identify_restartToApply%': 'Restart and continue',
+      '%firstRun_step_identify_restartToApplyNote%':
+        'Your new internet settings take effect after a restart.',
     },
     false,
   ]),
@@ -52,6 +55,8 @@ vi.mock('@renderer/services/first-run-store', () => ({
   isDemoMode: vi.fn(() => false),
   markJustRegistered: vi.fn(),
   markRegisteredInWizard: vi.fn(),
+  markWizardRestarting: vi.fn(),
+  haveInternetSettingsChanged: vi.fn(() => false),
   continueWithoutRegistration: vi.fn(),
 }));
 vi.mock('@shared/services/settings.service', () => ({
@@ -164,6 +169,8 @@ vi.mock('lucide-react', () => ({
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 const mockIsDemoMode = vi.mocked(firstRunStore.isDemoMode);
 const mockMarkRegisteredInWizard = vi.mocked(firstRunStore.markRegisteredInWizard);
+const mockMarkWizardRestarting = vi.mocked(firstRunStore.markWizardRestarting);
+const mockHaveInternetSettingsChanged = vi.mocked(firstRunStore.haveInternetSettingsChanged);
 const mockLogger = vi.mocked(logger);
 
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
@@ -181,18 +188,16 @@ function mockCommands(
     validateError?: Error;
     saveError?: Error;
     url?: string;
-    /** A valid registration already exists under this name (e.g. copied from Paratext 9). */
+    /** The name on the existing registration (e.g. copied from Paratext 9). */
     existingName?: string;
+    /** Reading the existing registration fails. */
     existingError?: Error;
   } = {},
 ) {
   mockSendCommand.mockImplementation((command: string) => {
     switch (command) {
-      case 'paratextRegistration.doesUserHaveValidRegistration':
-        return overrides.existingError
-          ? Promise.reject(overrides.existingError)
-          : Promise.resolve(!!overrides.existingName);
       case 'paratextRegistration.getParatextRegistrationData':
+        if (overrides.existingError) return Promise.reject(overrides.existingError);
         return Promise.resolve({
           name: overrides.existingName ?? '',
           code: overrides.existingName ? MASKED_CODE : '',
@@ -228,6 +233,7 @@ beforeEach(() => {
   mockSendCommand.mockReset();
   mockCommands();
   mockIsDemoMode.mockReturnValue(false);
+  mockHaveInternetSettingsChanged.mockReturnValue(false);
   // Module-global and shared with the toolbar, so a value published by one test would otherwise be
   // the starting state of the next.
   resetRegistrationValidityStore();
@@ -768,7 +774,9 @@ describe('IdentifyStep with an existing registration', () => {
 
   it('shows the existing registration read-only with the masked code', async () => {
     mockCommands({ existingName: 'Pat Translator' });
-    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(
+      <IdentifyStep onNext={onNext} setCanProceed={setCanProceed} registrationValidAtStart />,
+    );
 
     expect(screen.getByText('Your registration')).toBeInTheDocument();
     expect(screen.getByLabelText(/registration name/i)).toHaveValue('Pat Translator');
@@ -778,11 +786,40 @@ describe('IdentifyStep with an existing registration', () => {
     expect(screen.queryByRole('button', { name: /save and restart/i })).not.toBeInTheDocument();
   });
 
+  it('follows the startup decision rather than asking the backend whether it is valid', async () => {
+    // The gate may have counted a just-saved registration as valid while the backend still said
+    // otherwise; the step must agree with the gate, which is what resumed the wizard.
+    mockCommands({ existingName: 'Pat Translator' });
+    await renderSettled(
+      <IdentifyStep onNext={onNext} setCanProceed={setCanProceed} registrationValidAtStart />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'paratextRegistration.doesUserHaveValidRegistration',
+    );
+  });
+
+  it('shows the form when the registration was not valid as the wizard started', async () => {
+    mockCommands({ existingName: 'Pat Translator' });
+    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    expect(screen.getByRole('button', { name: /save and restart/i })).toBeInTheDocument();
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'paratextRegistration.getParatextRegistrationData',
+    );
+  });
+
   it('moves on with Next without saving or restarting', async () => {
     const user = setupUser();
     mockCommands({ existingName: 'Pat Translator' });
     await renderSettled(
-      <IdentifyStep onNext={onNext} onBack={onBack} setCanProceed={setCanProceed} />,
+      <IdentifyStep
+        onNext={onNext}
+        onBack={onBack}
+        setCanProceed={setCanProceed}
+        registrationValidAtStart
+      />,
     );
 
     await user.click(screen.getByRole('button', { name: 'Next' }));
@@ -795,11 +832,42 @@ describe('IdentifyStep with an existing registration', () => {
     expect(mockSendCommand).not.toHaveBeenCalledWith('platform.restart');
   });
 
+  it('restarts to apply changed internet settings instead of moving on', async () => {
+    const user = setupUser();
+    mockHaveInternetSettingsChanged.mockReturnValue(true);
+    mockCommands({ existingName: 'Pat Translator' });
+    const onRestartAfterSave = vi.fn().mockReturnValue(new Promise<never>(() => {}));
+    await renderSettled(
+      <IdentifyStep
+        onNext={onNext}
+        setCanProceed={setCanProceed}
+        registrationValidAtStart
+        onRestartAfterSave={onRestartAfterSave}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Restart and continue' }));
+
+    expect(mockMarkWizardRestarting).toHaveBeenCalledOnce();
+    expect(onRestartAfterSave).toHaveBeenCalledOnce();
+    expect(onNext).not.toHaveBeenCalled();
+    expect(mockSendCommand).not.toHaveBeenCalledWith(
+      'paratextRegistration.setParatextRegistrationData',
+      expect.anything(),
+    );
+  });
+
   it('offers Back to the previous step', async () => {
     const user = setupUser();
     mockCommands({ existingName: 'Pat Translator' });
     await renderSettled(
-      <IdentifyStep onNext={onNext} onBack={onBack} setCanProceed={setCanProceed} />,
+      <IdentifyStep
+        onNext={onNext}
+        onBack={onBack}
+        setCanProceed={setCanProceed}
+        registrationValidAtStart
+      />,
     );
 
     await user.click(screen.getByRole('button', { name: 'Back' }));
@@ -810,7 +878,9 @@ describe('IdentifyStep with an existing registration', () => {
   it('switches to an empty form on Change registration, and back on Keep current registration', async () => {
     const user = setupUser();
     mockCommands({ existingName: 'Pat Translator' });
-    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    await renderSettled(
+      <IdentifyStep onNext={onNext} setCanProceed={setCanProceed} registrationValidAtStart />,
+    );
 
     await user.click(screen.getByRole('button', { name: 'Change registration' }));
 
@@ -823,6 +893,17 @@ describe('IdentifyStep with an existing registration', () => {
 
     expect(screen.getByLabelText(/registration name/i)).toHaveValue('Pat Translator');
     expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+  });
+
+  it('keeps the registered view, with the name blank, when the name cannot be read', async () => {
+    mockCommands({ existingError: new Error('backend down') });
+    await renderSettled(
+      <IdentifyStep onNext={onNext} setCanProceed={setCanProceed} registrationValidAtStart />,
+    );
+
+    expect(screen.getByLabelText(/registration name/i)).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+    expect(mockLogger.warn).toHaveBeenCalled();
   });
 
   it('marks a registration saved during onboarding as registered in the wizard', async () => {
@@ -847,28 +928,28 @@ describe('IdentifyStep with an existing registration', () => {
     await waitFor(() => expect(mockMarkRegisteredInWizard).toHaveBeenCalledOnce());
   });
 
-  it('falls back to the form when the existing registration cannot be read', async () => {
-    mockCommands({ existingError: new Error('backend down') });
-    await renderSettled(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
-
-    expect(screen.getByRole('button', { name: /save and restart/i })).toBeInTheDocument();
-    expect(mockLogger.warn).toHaveBeenCalled();
-  });
-
   it('never shows the registered view in re-register mode', async () => {
     mockCommands({ existingName: 'Pat Translator' });
     await renderSettled(
       <IdentifyStep
         onNext={onNext}
         setCanProceed={setCanProceed}
+        registrationValidAtStart
         allowContinueWithoutRegistration
       />,
     );
 
     expect(screen.getByRole('button', { name: /save and restart/i })).toBeInTheDocument();
-    expect(mockSendCommand).not.toHaveBeenCalledWith(
-      'paratextRegistration.doesUserHaveValidRegistration',
+  });
+
+  it('never shows the registered view in demo mode', async () => {
+    mockIsDemoMode.mockReturnValue(true);
+    mockCommands({ existingName: 'Pat Translator' });
+    await renderSettled(
+      <IdentifyStep onNext={onNext} setCanProceed={setCanProceed} registrationValidAtStart />,
     );
+
+    expect(screen.getByRole('button', { name: /save and restart/i })).toBeInTheDocument();
   });
 
   it('does not mark a re-registration as registered in the wizard', async () => {

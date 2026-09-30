@@ -26,7 +26,7 @@ namespace TestParanextDataProvider.Users
         }
 
         [Test]
-        public void CopyFromParatext9_EmptiesOnlyThePinnedFolder_SoTheNextStartupReseeds()
+        public void CopyFromParatext9_DeletesOnlyTheCopiedFiles_SoTheNextStartupReseeds()
         {
             var paratext9 = Path.Combine(_root, "Paratext95");
             Directory.CreateDirectory(paratext9);
@@ -41,6 +41,7 @@ namespace TestParanextDataProvider.Users
                 Path.Combine(pinned, "RegistrationInfo.xml.BAK"),
                 "<reg old=\"true\"/>"
             );
+            File.WriteAllText(Path.Combine(pinned, "autoReplace.txt"), "own list");
 
             var previous = PlatformParatextInfo.Install(info);
             try
@@ -52,7 +53,10 @@ namespace TestParanextDataProvider.Users
                 PlatformParatextInfo.Restore(previous);
             }
 
-            Assert.That(Directory.EnumerateFiles(pinned), Is.Empty);
+            Assert.That(
+                Directory.EnumerateFiles(pinned).Select(Path.GetFileName),
+                Is.EquivalentTo(new[] { "autoReplace.txt" })
+            );
             Assert.That(
                 File.ReadAllText(Path.Combine(paratext9, "RegistrationInfo.xml")),
                 Is.EqualTo("<reg from=\"95\"/>")

@@ -128,8 +128,8 @@ describe('First-run service router', () => {
       await resetHandler()({ registration });
 
       expect(mocks.steps).toEqual([
-        ...SETTINGS_RESET,
         `command paratextRegistration.resetForFirstRun ["${registration}"]`,
+        ...SETTINGS_RESET,
         'clear renderer state',
         'command platform.restart',
       ]);
@@ -145,12 +145,21 @@ describe('First-run service router', () => {
     expect(mocks.steps).toEqual([]);
   });
 
-  test('does not restart when the renderer state could not be cleared', async () => {
-    // With no window to clear localStorage in, a restart would come back to a stale cache that
-    // still says first run is complete.
+  test('changes nothing when there is no window to clear the renderer state in', async () => {
+    // Without that, the next launch would read the renderer's cache as "first run complete".
     mocks.getTargetWindowId.mockReturnValue(undefined);
 
-    await expect(resetHandler()()).rejects.toThrow('No windows available');
-    expect(mocks.steps).not.toContain('command platform.restart');
+    await expect(resetHandler()({ registration: 'clear' })).rejects.toThrow('No windows available');
+    expect(mocks.steps).toEqual([]);
+  });
+
+  test('changes no settings when the data provider refuses the registration reset', async () => {
+    withWindows({ 2: firstRunShard() });
+    mocks.sendCommand.mockImplementationOnce(async () => {
+      throw new Error('Refusing to reset registration');
+    });
+
+    await expect(resetHandler()({ registration: 'clear' })).rejects.toThrow('Refusing');
+    expect(mocks.steps).toEqual([]);
   });
 });

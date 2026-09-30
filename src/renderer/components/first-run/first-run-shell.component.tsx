@@ -251,6 +251,7 @@ export function FirstRunShell({
           setCanSkip={setCanSkip}
           setManagesOwnFooter={setManagesOwnFooter}
           allowContinueWithoutRegistration={allowContinueWithoutRegistration}
+          registrationValidAtStart={registrationValidAtStart}
         />
 
         {error && (
