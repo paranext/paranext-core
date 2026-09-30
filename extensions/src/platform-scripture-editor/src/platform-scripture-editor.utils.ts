@@ -797,9 +797,9 @@ export function selectProjectIdsForOpenMode(
 
 /**
  * Outcome of a single picker attempt. Every outcome other than `'filled'` is a "may retry on the
- * next trigger" — the driver in {@link startDefaultProjectPicker} re-invokes on web-view-open and
- * sync-completion events, so transient causes (sync still in flight, layout not loaded yet) clear
- * themselves naturally.
+ * next trigger" — the driver in {@link startDefaultProjectPicker} re-invokes on web-view-open,
+ * sync-completion and project-set-change events, so transient causes (sync still in flight, layout
+ * not loaded yet) clear themselves naturally.
  *
  * - `'wrong-mode'` — `platform.interfaceMode` is not `'simple'`; the picker does nothing until it is.
  * - `'no-empty'` — no empty Scripture Editor (no `projectId`) is currently open. The driver may retry
@@ -810,8 +810,8 @@ export function selectProjectIdsForOpenMode(
  * - `'failed'` — the open command rejected; logged at warn. The driver may retry on the next trigger.
  * - `'no-candidate'` — S/R was reachable, but no shared project passed the activity / `editedStatus`
  *   filter. Projects with `editedStatus` of `'new'` (not yet downloaded locally) or
- *   `'unregistered'` (limited/provisional license) are excluded, as are projects with no
- *   `lastSendReceiveDate`. The driver may retry after a sync completes.
+ *   `'unregistered'` (limited/provisional license) are excluded. The driver may retry after a sync
+ *   completes or the project set changes.
  * - `'filled'` — the picker successfully called the open command for the top candidate.
  */
 export type DefaultProjectPickerOutcome =
@@ -886,7 +886,7 @@ async function tryOpenFromRecentlyOpened(
  *
  * Idempotent: each invocation re-reads the dock and the shared-projects list. The driver in
  * {@link startDefaultProjectPicker} is responsible for re-invoking on events that change those
- * inputs (web-view opens, sync completions).
+ * inputs (web-view opens, sync completions, project-set changes).
  *
  * @param papi The PAPI backend handle. Injected for testability.
  * @returns The outcome of this attempt — see {@link DefaultProjectPickerOutcome}.
@@ -1037,6 +1037,9 @@ export async function openDefaultActiveProjectIfApplicable(
  * - `paratextBibleSendReceive.onSyncStateChanged` (when `isSyncing` is `false`) — handles a sync
  *   finishing. Newly-added shared projects look ineligible (`editedStatus === 'new'`, no
  *   `lastSendReceiveDate`) until the first sync settles, so the picker has to re-check after that.
+ * - `platform.onDidChangeProjects` — handles the project set changing, including through the syncs
+ *   that raise no `onSyncStateChanged` (see `adr-toolbar-sync-status-is-local`). Not debounced
+ *   here: its emitter (`LocalParatextProjects`, C#) already debounces it.
  *
  * Cold-start gap: there is no explicit "S/R command registered" signal, so if
  * `paratextBibleSendReceive` activates after `platformScriptureEditor` but before any of the
@@ -1126,6 +1129,16 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
       );
   });
 
+  const unsubFromProjectsChanged = papi.network.getNetworkEvent('platform.onDidChangeProjects')(
+    () => {
+      tryPicker().catch((e) =>
+        papi.logger.warn(
+          `Default active project picker: projects-changed handler threw unexpectedly: ${getErrorMessage(e)}`,
+        ),
+      );
+    },
+  );
+
   // Cover the case where the empty editor and an eligible synced project are already in place
   // (e.g., second startup after a successful first run).
   tryPicker().catch((e) =>
@@ -1134,7 +1147,12 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     ),
   );
 
-  return aggregateUnsubscribers([unsubFromWebViewOpen, unsubFromWebViewUpdate, unsubFromSync]);
+  return aggregateUnsubscribers([
+    unsubFromWebViewOpen,
+    unsubFromWebViewUpdate,
+    unsubFromSync,
+    unsubFromProjectsChanged,
+  ]);
 }
 
 // #endregion Default Active Project Picker

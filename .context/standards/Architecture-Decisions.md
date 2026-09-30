@@ -3589,6 +3589,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** project backup-and-restore port (restore-to-new-project scope cut, PT10 source grep
   2026-05-19).
 
+## adr-no-projects-guidance-in-empty-editor: A user with no projects is told how to get one in the empty Scripture editor, and only on a positive "none"
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** A new user can finish the setup wizard with no projects (unregistered, a Basic-tier
+  registration, an organization that isn't available). The wizard opens no tab; the user lands in
+  the fixed Simple layout (`simple-layout.data.ts`), whose centre column is a Scripture editor with
+  no `projectId`. Several tickets need the same "register, or ask your project administrator"
+  wording (PT-4323, PT-4324), so it needs one home.
+- **Decision:** The centre editor's no-project branch is that home. `NoProjectView`
+  (`extensions/src/platform-scripture-editor/src/no-project-view.component.tsx`) shows the guidance
+  only when `useProjectPresence` (`use-project-presence.hook.ts`) answers `none` in Simple mode, on
+  every launch; otherwise it says "No project selected". `none` is a positive claim, so anything
+  uncertain reads `unknown`: a failed lookup, a running or not-yet-known sync
+  (`paratextBibleSendReceive.getSyncActivity`), or an empty answer.
+  `LocalParatextProjects.Initialize` (C#) installs the sample WEB project whenever it finds no
+  projects, so an empty answer means the Paratext factory has not answered yet, and the sample is
+  excluded by its fixed ID along with resources (`isPublished`).
+  `startDefaultProjectPicker` also re-runs on `platform.onDidChangeProjects`, so an arriving project
+  opens in the editor if the picker can find it (a recent project, or one Send/Receive lists).
+- **Alternatives:** Count only editable projects, which also excludes the read-only sample —
+  rejected: a real project an administrator has locked would not count, so its owner would be told
+  they have none. Open Home, or
+  a one-time dialog, after the wizard — rejected: a relaunched user would not see either. Show it
+  only right after the wizard — rejected: nothing marks that moment
+  (`onboarding-tour.component.tsx`), and the guidance is as true on the tenth launch. A "looking
+  for your projects…" state during a sync — deferred: only Paratext 10 builds report sync activity,
+  and on relaunch it would announce a search that usually ends in "none".
+- **Consequences:** Surfaces that need this wording should reuse these localized strings; Home and
+  New Tab still carry their own, different no-projects wording (`platform-get-resources`), not
+  reconciled here. Power mode keeps the plain text, since the guidance is written for Simple mode's
+  first-run experience. **Revisit** when the Sample project (PT-4324) lands: unless it reuses the
+  sample WEB's ID, it will count as a project until this rule learns to exclude it.
+- **Source:** PT-4311 implementation (2026-09-25).
+
 ## adr-node-dom-globals-polyfill: Node processes install `@xmldom/xmldom` DOM globals; the extension host does it in a first-import side-effect module
 
 - **Date:** 2026-08-22
