@@ -112,6 +112,19 @@ internal sealed class PlatformParatextInfo : ParatextInfo
         && File.Exists(Path.Combine(ResolvedAppDataFolder, REGISTRATION_FILE_NAME));
 
     /// <summary>
+    /// Forgets that the registration was copied from Paratext 9. Call whenever Platform.Bible
+    /// changes or removes the registration, so a registration entered here is never described as
+    /// copied.
+    /// </summary>
+    internal void ForgetCopiedFromParatext9()
+    {
+        var markerPath = Path.Combine(AppDataFolderPath, COPIED_FROM_PARATEXT9_MARKER_FILE_NAME);
+        if (File.Exists(markerPath))
+            // SR-write-gate: exempt — per-user ParatextData settings, not project data
+            File.Delete(markerPath);
+    }
+
+    /// <summary>
     /// Deletes the files seeding copies from Paratext 9 (and their <c>.BAK</c> backups and the
     /// copied-from marker) so that the next startup seeds the folder again, the way a Paratext 9
     /// user's first launch does. Every other file in the folder — e.g. the user's auto-replace

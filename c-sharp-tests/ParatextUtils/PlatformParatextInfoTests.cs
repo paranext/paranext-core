@@ -170,6 +170,22 @@ namespace TestParanextDataProvider.ParatextUtils
         }
 
         [Test]
+        public void ForgetsTheCopyOnceTheRegistrationIsReplaced()
+        {
+            MakeParatextFolder("Paratext95", "<reg from=\"95\"/>");
+            var info = new PlatformParatextInfo(_root);
+            Assert.That(info.IsRegistrationCopiedFromParatext9, Is.True);
+
+            info.ForgetCopiedFromParatext9();
+
+            Assert.That(info.IsRegistrationCopiedFromParatext9, Is.False);
+            Assert.That(
+                File.Exists(Path.Combine(info.ResolvedAppDataFolder, "RegistrationInfo.xml")),
+                Is.True
+            );
+        }
+
+        [Test]
         public void DoesNotClaimARegistrationEnteredInPlatformBibleWasCopied()
         {
             MakeParatextFolder("Paratext95", "<reg from=\"95\"/>");

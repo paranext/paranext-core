@@ -74,6 +74,18 @@ const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProvid
 const PLATFORM_APP_DATA_FOLDER_NAME = 'Paratext100';
 
 /**
+ * The files the app copies from Paratext 8/9 into its own directory; it copies them only while none
+ * of them is there. Kept in sync with `SEEDED_FILE_NAMES` in
+ * `c-sharp/ParatextUtils/PlatformParatextInfo.cs`.
+ */
+const SEEDED_FILE_NAMES = [
+  'RegistrationInfo.xml',
+  'InternetSettings.xml',
+  'ReleaseStage.txt',
+  'PTXprintPath.txt',
+];
+
+/**
  * Paratext 8 and 9 app-data directories (`Paratext80`–`Paratext99`), which the app seeds its own
  * directory from. The two digits are the major and minor version, so they order the versions.
  */
@@ -110,15 +122,15 @@ function localApplicationDataRoot(): string | undefined {
 
 /**
  * The registration file the app reads, choosing the way `PlatformParatextInfo` does: the app's own
- * directory once it has any files, otherwise the newest Paratext 8/9 directory with a registration,
- * which the app copies from on its next start.
+ * directory once it holds any of the {@link SEEDED_FILE_NAMES}, otherwise the newest Paratext 8/9
+ * directory with a registration, which the app copies from on its next start.
  */
 function findCurrentRegistrationFile(root: string): string | undefined {
   const platformFolder = path.join(root, PLATFORM_APP_DATA_FOLDER_NAME);
-  const platformFolderHasFiles =
-    fs.existsSync(platformFolder) &&
-    fs.readdirSync(platformFolder, { withFileTypes: true }).some((entry) => entry.isFile());
-  if (platformFolderHasFiles) {
+  const platformFolderIsSeeded = SEEDED_FILE_NAMES.some((fileName) =>
+    fs.existsSync(path.join(platformFolder, fileName)),
+  );
+  if (platformFolderIsSeeded) {
     const registrationFile = path.join(platformFolder, 'RegistrationInfo.xml');
     return fs.existsSync(registrationFile) ? registrationFile : undefined;
   }

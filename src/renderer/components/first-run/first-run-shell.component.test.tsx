@@ -13,7 +13,6 @@ vi.mock('@renderer/services/first-run-store', () => ({
   // Required by IdentifyStep when rendered via DEFAULT_STEP_COMPONENTS
   isDemoMode: vi.fn(() => false),
   markJustRegistered: vi.fn(),
-  markRegisteredInWizard: vi.fn(),
   markWizardRestarting: vi.fn(),
   haveInternetSettingsChanged: vi.fn(() => false),
   continueWithoutRegistration: vi.fn(),
@@ -606,8 +605,8 @@ describe('FirstRunShell', () => {
   });
 
   it('does not render the Back button on syncProgress even when reached from an earlier step', async () => {
-    // entryStep="syncConsent" sets entryIndex=3; navigating to syncProgress takes index to 4.
-    // Without the interstitial guard, index(4) > entryIndex(3) would show Back — verify the guard fires.
+    // Back is otherwise offered on every step past the first, so on syncProgress (index 4) only the
+    // interstitial guard keeps it hidden — verify the guard fires.
     // SyncConsentStep hides the shell's Next (setCanProceed(undefined)) and owns its Sync button.
     render(
       <FirstRunShell

@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
-import { ChangeEvent, ReactNode } from 'react';
+import { ChangeEvent, ReactNode, Ref } from 'react';
 import * as commandService from '@shared/services/command.service';
 import * as firstRunStore from '@renderer/services/first-run-store';
 import {
@@ -45,6 +45,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_next%': 'Next',
       '%firstRun_button_back%': 'Back',
       '%firstRun_step_identify_restartToApply%': 'Restart and continue',
+      '%firstRun_step_identify_registrationValid%': 'Your registration is valid',
       '%firstRun_step_identify_restartToApplyNote%':
         'Your new internet settings take effect after a restart.',
     },
@@ -54,7 +55,6 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 vi.mock('@renderer/services/first-run-store', () => ({
   isDemoMode: vi.fn(() => false),
   markJustRegistered: vi.fn(),
-  markRegisteredInWizard: vi.fn(),
   markWizardRestarting: vi.fn(),
   haveInternetSettingsChanged: vi.fn(() => false),
   continueWithoutRegistration: vi.fn(),
@@ -77,12 +77,14 @@ vi.mock('platform-bible-react', () => ({
     children,
     onClick,
     disabled,
+    ref,
   }: {
     children: ReactNode;
     onClick?: () => void;
     disabled?: boolean;
+    ref?: Ref<HTMLButtonElement>;
   }) => (
-    <button type="button" onClick={onClick} disabled={disabled}>
+    <button type="button" onClick={onClick} disabled={disabled} ref={ref}>
       {children}
     </button>
   ),
@@ -90,7 +92,7 @@ vi.mock('platform-bible-react', () => ({
     id,
     value,
     onChange,
-    readOnly,
+    ref,
     'aria-invalid': ariaInvalid,
     'aria-describedby': ariaDescribedBy,
   }: {
@@ -98,7 +100,7 @@ vi.mock('platform-bible-react', () => ({
     id?: string;
     value?: string;
     onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
-    readOnly?: boolean;
+    ref?: Ref<HTMLInputElement>;
     'aria-invalid'?: boolean | 'false' | 'true' | 'grammar' | 'spelling';
     'aria-describedby'?: string;
   }) => (
@@ -106,7 +108,7 @@ vi.mock('platform-bible-react', () => ({
       id={id}
       value={value}
       onChange={onChange}
-      readOnly={readOnly}
+      ref={ref}
       aria-invalid={ariaInvalid}
       aria-describedby={ariaDescribedBy}
     />
@@ -168,7 +170,6 @@ vi.mock('lucide-react', () => ({
 
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 const mockIsDemoMode = vi.mocked(firstRunStore.isDemoMode);
-const mockMarkRegisteredInWizard = vi.mocked(firstRunStore.markRegisteredInWizard);
 const mockMarkWizardRestarting = vi.mocked(firstRunStore.markWizardRestarting);
 const mockHaveInternetSettingsChanged = vi.mocked(firstRunStore.haveInternetSettingsChanged);
 const mockLogger = vi.mocked(logger);
@@ -772,17 +773,17 @@ describe('IdentifyStep with an existing registration', () => {
     setCanProceed.mockReset();
   });
 
-  it('shows the existing registration read-only with the masked code', async () => {
+  it('shows the existing registration as text, with the code as the backend masks it', async () => {
     mockCommands({ existingName: 'Pat Translator' });
     await renderSettled(
       <IdentifyStep onNext={onNext} setCanProceed={setCanProceed} registrationValidAtStart />,
     );
 
     expect(screen.getByText('Your registration')).toBeInTheDocument();
-    expect(screen.getByLabelText(/registration name/i)).toHaveValue('Pat Translator');
-    expect(screen.getByLabelText(/registration name/i)).toHaveAttribute('readonly');
-    expect(screen.getByLabelText(/registration code/i)).toHaveValue(MASKED_CODE);
-    expect(screen.getByText('Registration accepted')).toBeInTheDocument();
+    expect(screen.getByText('Pat Translator')).toBeInTheDocument();
+    expect(screen.getByText(MASKED_CODE)).toBeInTheDocument();
+    expect(screen.getByText('Your registration is valid')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /save and restart/i })).not.toBeInTheDocument();
   });
 
@@ -891,41 +892,63 @@ describe('IdentifyStep with an existing registration', () => {
     await user.type(screen.getByLabelText(/registration name/i), 'Someone Else');
     await user.click(screen.getByRole('button', { name: 'Keep current registration' }));
 
-    expect(screen.getByLabelText(/registration name/i)).toHaveValue('Pat Translator');
+    expect(screen.getByText('Pat Translator')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
   });
 
-  it('keeps the registered view, with the name blank, when the name cannot be read', async () => {
+  it('moves focus into the view that replaced the button just pressed', async () => {
+    const user = setupUser();
+    mockCommands({ existingName: 'Pat Translator' });
+    await renderSettled(
+      <IdentifyStep onNext={onNext} setCanProceed={setCanProceed} registrationValidAtStart />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Change registration' }));
+    expect(screen.getByLabelText(/registration name/i)).toHaveFocus();
+
+    await user.click(screen.getByRole('button', { name: 'Keep current registration' }));
+    expect(screen.getByRole('button', { name: 'Change registration' })).toHaveFocus();
+  });
+
+  it('does not move focus when the step first opens', async () => {
+    mockCommands({ existingName: 'Pat Translator' });
+    await renderSettled(
+      <IdentifyStep onNext={onNext} setCanProceed={setCanProceed} registrationValidAtStart />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Change registration' })).not.toHaveFocus();
+  });
+
+  it('keeps the registered view, with the values blank, when they cannot be read', async () => {
     mockCommands({ existingError: new Error('backend down') });
     await renderSettled(
       <IdentifyStep onNext={onNext} setCanProceed={setCanProceed} registrationValidAtStart />,
     );
 
-    expect(screen.getByLabelText(/registration name/i)).toHaveValue('');
+    expect(screen.queryByText(MASKED_CODE)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
     expect(mockLogger.warn).toHaveBeenCalled();
   });
 
-  it('marks a registration saved during onboarding as registered in the wizard', async () => {
+  it('shows the error and stays on the step when the restart to apply settings fails', async () => {
     const user = setupUser();
-    mockCommands({ validate: true });
+    mockHaveInternetSettingsChanged.mockReturnValue(true);
+    mockCommands({ existingName: 'Pat Translator' });
     await renderSettled(
       <IdentifyStep
         onNext={onNext}
         setCanProceed={setCanProceed}
-        onRestartAfterSave={vi.fn().mockReturnValue(new Promise<never>(() => {}))}
+        registrationValidAtStart
+        onRestartAfterSave={vi.fn().mockRejectedValue(new Error('restart refused'))}
       />,
     );
 
-    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
-    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
-    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
-    );
-    await user.click(screen.getByRole('button', { name: /save and restart/i }));
+    await user.click(screen.getByRole('button', { name: 'Restart and continue' }));
 
-    await waitFor(() => expect(mockMarkRegisteredInWizard).toHaveBeenCalledOnce());
+    expect(await screen.findByText('restart refused')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restart and continue' })).toBeInTheDocument();
+    expect(screen.queryByText(/restarting/i)).not.toBeInTheDocument();
+    expect(onNext).not.toHaveBeenCalled();
   });
 
   it('never shows the registered view in re-register mode', async () => {
@@ -950,29 +973,5 @@ describe('IdentifyStep with an existing registration', () => {
     );
 
     expect(screen.getByRole('button', { name: /save and restart/i })).toBeInTheDocument();
-  });
-
-  it('does not mark a re-registration as registered in the wizard', async () => {
-    const user = setupUser();
-    mockCommands({ validate: true });
-    await renderSettled(
-      <IdentifyStep
-        onNext={onNext}
-        setCanProceed={setCanProceed}
-        allowContinueWithoutRegistration
-        onRestartAfterSave={vi.fn().mockReturnValue(new Promise<never>(() => {}))}
-      />,
-    );
-
-    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
-    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
-    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
-    );
-    await user.click(screen.getByRole('button', { name: /save and restart/i }));
-
-    await waitFor(() => expect(firstRunStore.markJustRegistered).toHaveBeenCalledOnce());
-    expect(mockMarkRegisteredInWizard).not.toHaveBeenCalled();
   });
 });

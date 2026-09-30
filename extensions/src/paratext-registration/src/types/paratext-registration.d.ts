@@ -86,6 +86,7 @@ declare module 'papi-shared-types' {
     InternetSettings,
     IInternetSettingsDataProvider,
   } from 'paratext-registration';
+  import type { ResetFirstRunRegistration } from 'papi-shared-types';
 
   export interface CommandHandlers {
     /**
@@ -144,20 +145,16 @@ declare module 'papi-shared-types' {
      */
     'paratextRegistration.isRegistrationCopiedFromParatext9': () => Promise<boolean>;
     /**
-     * Developer reset used by `platform.resetFirstRun`: puts Platform.Bible's own registration into
-     * the state a Paratext 9 user has on their first Platform.Bible launch. Only ever touches
-     * Platform.Bible's own ParatextData folder; Paratext 9's registration is never changed. The
-     * application must be restarted afterwards. Developer and tester tool, not for extensions to
-     * call: it can delete the user's registration.
+     * Registration half of `platform.resetFirstRun`, which is the command to call: it also resets
+     * first-run progress and restarts the app, which this needs afterwards. Developer and tester
+     * tool, not for extensions to call: it can delete the user's registration. Only ever touches
+     * Platform.Bible's own ParatextData folder; Paratext 9's registration is never changed.
      *
-     * @param mode `copyFromParatext9` copies Paratext 9's registration and internet settings again
-     *   on the next start; `clear` removes the registration; `keep` does nothing
+     * @param mode See {@link ResetFirstRunRegistration}
      * @throws If ParatextData is not using Platform.Bible's own folder
      * @experimental This command is unstable and may change or disappear without notice
      */
-    'paratextRegistration.resetForFirstRun': (
-      mode: 'keep' | 'copyFromParatext9' | 'clear',
-    ) => Promise<void>;
+    'paratextRegistration.resetForFirstRun': (mode: ResetFirstRunRegistration) => Promise<void>;
     /**
      * @deprecated Use the `paratextRegistration.internetSettingsDataProvider` data provider's
      *   `getInternetSettings` instead. Retained as a thin wrapper for backward compatibility and

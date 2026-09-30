@@ -226,6 +226,8 @@ export function FirstRunShell({
           <p className="tw:text-xs tw:text-muted-foreground" aria-live="polite">
             {indicator}
           </p>
+          {/* Its check marks are visual only. Screen-reader users learn a step is done from the step
+              itself, which shows its saved value (e.g. the Identify step's registered view). */}
           {!isInterstitial && (
             <WizardStepper
               currentStep={numberedIndex + 1}
