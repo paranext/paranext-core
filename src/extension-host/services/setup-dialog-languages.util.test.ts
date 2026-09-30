@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { describe, expect, test } from 'vitest';
 import { LanguageInfo } from 'platform-bible-react';
 import { LanguageStrings } from 'platform-bible-utils';
@@ -72,5 +74,24 @@ describe('computeSetupDialogLanguages', () => {
     expect(computeSetupDialogLanguages({}, () => ({}), loadedLocales)).toEqual({
       en: { autonym: 'English' },
     });
+  });
+});
+
+describe('the shipped localizations', () => {
+  const readLocale = (tag: string): LanguageStrings =>
+    JSON.parse(
+      fs.readFileSync(path.join(__dirname, '../../../assets/localization', `${tag}.json`), 'utf8'),
+    );
+
+  // A new `%firstRun_*` key added to en.json without translations can push a language below the
+  // threshold, which silently drops it from the first-run language picker. Spanish must keep up;
+  // other languages may drop out until they are translated.
+  test('keep Spanish in the first-run language picker', () => {
+    const qualifying = computeSetupDialogLanguages(readLocale('en'), readLocale, {
+      en: { autonym: 'English' },
+      es: { autonym: 'Español' },
+    });
+
+    expect(Object.keys(qualifying)).toContain('es');
   });
 });

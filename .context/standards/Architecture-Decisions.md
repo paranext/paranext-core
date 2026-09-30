@@ -2392,12 +2392,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   because the backend only returns the code masked and a masked code cannot be validated; it
   follows the gate's startup answer instead of re-asking the backend, so it agrees with a resume
   the gate's just-registered allowance drove. Its primary action is Next, or "Restart and
-  continue" when the Internet settings step saved a change: those settings only take effect after
-  a restart, which the registering path's "Save and restart" otherwise provides, and that restart
-  resumes at sync consent too. A banner says the values were copied from Paratext 9 when the data
-  provider recorded copying the registration from Paratext 9
-  (`paratextRegistration.isRegistrationCopiedFromParatext9`) and this wizard has not replaced it
-  (`firstRunRegisteredInWizard`). Only finishing the wizard
+  continue" when the internet settings saved in the wizard differ from the ones it started with:
+  those settings only take effect after a restart, which the registering path's "Save and restart"
+  otherwise provides, and that restart resumes at sync consent too. A banner says the registration
+  was copied from Paratext 9 when the data provider recorded that copy
+  (`paratextRegistration.isRegistrationCopiedFromParatext9`); it forgets the copy whenever the
+  registration is changed or cleared, so a registration entered in Platform.Bible never reads as
+  copied. Only finishing the wizard
   completes first run. The OS-language seed now only replaces the default `['en']`, since a fresh
   start can follow a real language choice. A developer reset (`platform.resetFirstRun`) restores
   the first-run state, optionally re-copying or clearing the registration.

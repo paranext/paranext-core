@@ -221,6 +221,7 @@ internal class ParatextRegistrationService(
 
             // Actually change the registration info
             RegistrationInfo.ChangeRegistrationData(newRegistrationData);
+            (ParatextInfo.Default as PlatformParatextInfo)?.ForgetCopiedFromParatext9();
 
             // registration code may have changed, so reset the registry server with the new user data
             Paratext.Data.RegistryServerAccess.RegistryServer.Default?.ResetServer(
@@ -279,6 +280,7 @@ internal class ParatextRegistrationService(
                 break;
             case "clear":
                 RegistrationInfo.DeleteRegistration();
+                platformParatextInfo.ForgetCopiedFromParatext9();
                 break;
             default:
                 throw new ArgumentException(

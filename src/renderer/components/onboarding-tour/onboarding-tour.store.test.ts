@@ -22,6 +22,18 @@ function simulateWriteFromAnotherWindow(key: string, newValue: string | undefine
 }
 
 describe('the tour completion flag as a subscribable store', () => {
+  test('notifies subscribers in this window when the flag is reset', () => {
+    // The developer reset (platform.resetFirstRun) clears it while the tour store is subscribed.
+    writeTourDone();
+    const listener = vi.fn();
+    subscribeToTourDone(listener);
+
+    resetTourDone();
+
+    expect(listener).toHaveBeenCalled();
+    expect(readTourDone()).toBe(false);
+  });
+
   test('notifies subscribers when another window records the tour as done', () => {
     // Simple mode is single-window by design, but a Power user with several windows open who
     // switches to Simple keeps them, and the flag is shared across same-origin renderers. Without

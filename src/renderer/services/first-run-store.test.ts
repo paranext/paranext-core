@@ -16,10 +16,10 @@ import {
   continueWithoutRegistration,
   getFirstRunStatus,
   haveInternetSettingsChanged,
-  markInternetSettingsChanged,
   markJustRegistered,
-  markRegisteredInWizard,
   markWizardRestarting,
+  noteInternetSettingsLoaded,
+  noteInternetSettingsSaved,
   resetFirstRunStore,
   resolveFirstRunState,
   retryFirstRunResolution,
@@ -154,21 +154,6 @@ describe('resolveFirstRunState', () => {
       kind: 'wizard',
       step: 'language',
       registrationPreexisting: true,
-    });
-  });
-
-  it('does not describe a registration this wizard created as copied from Paratext 9', async () => {
-    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
-    localStorage.setItem('platform-bible.firstRunRegisteredInWizard', 'true');
-    stubSettings({ firstRunComplete: false });
-    mockResolveReg.mockResolvedValue('valid');
-    // Still the copied registration on disk as far as the data provider knows.
-    mockSendCommand.mockResolvedValue(true);
-    await resolveFirstRunState();
-    expect(getFirstRunStatus()).toMatchObject({
-      kind: 'wizard',
-      registrationValidAtStart: true,
-      registrationPreexisting: false,
     });
   });
 
@@ -897,19 +882,30 @@ describe('OS-language default on fresh first-run', () => {
 });
 
 describe('internet settings changed this run', () => {
-  it('is false until the Internet settings step records a change', () => {
+  const START = {
+    selectedServer: 'Production',
+    permittedInternetUse: 'VpnRequired',
+    proxyPort: 0,
+  } as const;
+  const CHANGED = { ...START, permittedInternetUse: 'Enabled' } as const;
+
+  it('is false until a saved value differs from the one first loaded', () => {
+    noteInternetSettingsLoaded(START);
     expect(haveInternetSettingsChanged()).toBe(false);
-    markInternetSettingsChanged();
+
+    noteInternetSettingsSaved(CHANGED);
     expect(haveInternetSettingsChanged()).toBe(true);
   });
-});
 
-describe('registered-in-wizard marker', () => {
-  it('is written by markRegisteredInWizard and cleared when first run completes', async () => {
-    markRegisteredInWizard();
-    expect(localStorage.getItem('platform-bible.firstRunRegisteredInWizard')).toBe('true');
-    await completeFirstRun();
-    expect(localStorage.getItem('platform-bible.firstRunRegisteredInWizard')).toBeNull();
+  it('is false again once the settings are changed back', () => {
+    noteInternetSettingsLoaded(START);
+    noteInternetSettingsSaved(CHANGED);
+
+    // The step reloads the saved value when it is shown again; that must not move the baseline.
+    noteInternetSettingsLoaded(CHANGED);
+    noteInternetSettingsSaved({ ...START });
+
+    expect(haveInternetSettingsChanged()).toBe(false);
   });
 });
 
@@ -919,7 +915,6 @@ describe('clearFirstRunLocalState', () => {
       'platform-bible.firstRunComplete',
       'platform-bible.firstRunWizardActive',
       'platform-bible.firstRunJustRegistered',
-      'platform-bible.firstRunRegisteredInWizard',
       'platform-bible.firstRunWizardRestarted',
       'platform-bible.syncOnStartupDisabled',
     ];

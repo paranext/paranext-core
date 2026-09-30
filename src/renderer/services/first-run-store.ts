@@ -2,7 +2,13 @@ import * as commandService from '@shared/services/command.service';
 import { settingsService } from '@shared/services/settings.service';
 import { logger } from '@shared/services/logger.service';
 import { localizationService } from '@shared/services/localization.service';
-import { getCurrentLocale, getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import type { InternetSettings } from 'paratext-registration';
+import {
+  deepEqual,
+  getCurrentLocale,
+  getErrorMessage,
+  isPlatformError,
+} from 'platform-bible-utils';
 import { readCachedInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { clearBooleanFlag, readBooleanFlag, writeBooleanFlag } from './local-storage-flag.util';
 import { decideFirstRun } from './first-run.reducer';
@@ -28,8 +34,8 @@ export type FirstRunStatus =
       registrationValidAtStart?: boolean;
       /**
        * The registration is the one Platform.Bible copied from Paratext 9 when it first set up its
-       * own folder, and this wizard has not replaced it. Shows the "copied from Paratext 9"
-       * banner.
+       * own folder, and nothing has replaced it since (the data provider forgets the copy whenever
+       * the registration changes). Shows the "copied from Paratext 9" banner.
        */
       registrationPreexisting?: boolean;
     }
@@ -52,10 +58,6 @@ const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
 // resolveInternal reads and consumes it to guard against transient 'invalid' responses from the
 // registration backend: the user just registered, so 'invalid' is almost certainly a server fluke.
 const JUST_REGISTERED_KEY = 'platform-bible.firstRunJustRegistered';
-// Written when the Identify step saves a registration during onboarding (not re-register mode) and
-// cleared when first run completes. Unlike JUST_REGISTERED_KEY it lasts for the whole wizard run,
-// so a registration this wizard created is never mistaken for one copied from Paratext 9.
-const REGISTERED_IN_WIZARD_KEY = 'platform-bible.firstRunRegisteredInWizard';
 // Written by the Identify step immediately before it restarts the app to apply changed internet
 // settings for an already-registered user; consumed on the next startup, which then resumes at sync
 // consent the same way a restart after registering does. See consumeWizardRestartedFlag.
@@ -74,9 +76,10 @@ let justRegisteredThisStartup = false;
 // Same one-shot-but-remembered handling as justRegisteredThisStartup, for WIZARD_RESTARTED_KEY.
 let wizardRestartedThisStartup = false;
 
-// Internet settings only take effect after a restart. Set when the wizard's Internet settings step
-// saves a change, so the Identify step knows the user's Next has to restart the app. In memory only:
-// the restart it triggers is what applies the change.
+// Internet settings only take effect after a restart. The wizard's Internet settings step reports
+// the values it first loaded and every value it saves; the Identify step restarts the app when the
+// saved values differ from the first ones. In memory only: the restart is what applies the change.
+let internetSettingsAtStart: InternetSettings | undefined;
 let internetSettingsChangedThisRun = false;
 
 /** Demo/UX mode — see {@link DEMO_MODE_KEY}. Enablement only; never true in shipped builds. */
@@ -95,14 +98,6 @@ export function markJustRegistered(): void {
 }
 
 /**
- * Records that the onboarding wizard (not re-register mode) saved the user's registration, so the
- * rest of this wizard run does not describe that registration as copied from Paratext 9.
- */
-export function markRegisteredInWizard(): void {
-  writeBooleanFlag(REGISTERED_IN_WIZARD_KEY, true);
-}
-
-/**
  * Records that the wizard is about to restart the app to apply changed internet settings, so the
  * next startup resumes at sync consent instead of the first step.
  */
@@ -110,12 +105,24 @@ export function markWizardRestarting(): void {
   writeBooleanFlag(WIZARD_RESTARTED_KEY, true);
 }
 
-/** Records that the wizard's Internet settings step saved a change that needs a restart. */
-export function markInternetSettingsChanged(): void {
-  internetSettingsChangedThisRun = true;
+/**
+ * Records the internet settings the wizard's Internet settings step first loaded this run, as the
+ * baseline {@link noteInternetSettingsSaved} compares against. Later calls are ignored.
+ */
+export function noteInternetSettingsLoaded(settings: InternetSettings): void {
+  internetSettingsAtStart ??= settings;
 }
 
-/** Whether the wizard's Internet settings step saved a change since the app started. */
+/**
+ * Records internet settings the wizard just saved. They need a restart to take effect unless they
+ * are back to what the step first loaded.
+ */
+export function noteInternetSettingsSaved(settings: InternetSettings): void {
+  internetSettingsChangedThisRun =
+    internetSettingsAtStart === undefined || !deepEqual(settings, internetSettingsAtStart);
+}
+
+/** Whether the internet settings saved in the wizard differ from the ones it started with. */
 export function haveInternetSettingsChanged(): boolean {
   return internetSettingsChangedThisRun;
 }
@@ -176,7 +183,6 @@ async function markFirstRunComplete(): Promise<void> {
   }
   writeBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY, true);
   writeBooleanFlag(WIZARD_ACTIVE_KEY, false);
-  clearBooleanFlag(REGISTERED_IN_WIZARD_KEY);
 }
 
 /**
@@ -332,19 +338,17 @@ async function resolveInternal(generation: number): Promise<void> {
       case 'startWizard': {
         const registrationValidAtStart = effectiveValidity === 'valid';
         const registrationPreexisting =
-          registrationValidAtStart &&
-          !readBooleanFlag(REGISTERED_IN_WIZARD_KEY) &&
-          (await isRegistrationCopiedFromParatext9());
-        // Another await a bail could land across; see the seed below.
+          registrationValidAtStart && (await isRegistrationCopiedFromParatext9());
+        // A newer resolution may have superseded this one while that answer was on its way.
         if (isSuperseded()) return;
         // Fresh start at the language step: default to the OS language if it has enough setup-dialog
         // localization. `wizardActive` here is the pre-transition value, so this runs once per
         // wizard run, and the seed itself never replaces a language already chosen. Seeding the
         // setting *before* setStatus means the wizard's localized strings resolve straight to the
-        // OS language — the live-render bridge never has to fire a change. (The very first synchronous render still shows the
-        // English defaults that useLocalizedStrings/useSetting return before their async fetch
-        // resolves; that brief default-then-resolve is the same for the English case, so seeding
-        // introduces no new flash.)
+        // OS language — the live-render bridge never has to fire a change. (The very first
+        // synchronous render still shows the English defaults that useLocalizedStrings/useSetting
+        // return before their async fetch resolves; that brief default-then-resolve is the same
+        // for the English case, so seeding introduces no new flash.)
         if (!wizardActive && decision.step === 'language') {
           await seedInterfaceLanguageFromOsLocale();
           // seedInterfaceLanguageFromOsLocale is another await a bail could land across; re-check so
@@ -554,7 +558,6 @@ export function clearFirstRunLocalState(): void {
     FIRST_RUN_COMPLETE_CACHE_KEY,
     WIZARD_ACTIVE_KEY,
     JUST_REGISTERED_KEY,
-    REGISTERED_IN_WIZARD_KEY,
     WIZARD_RESTARTED_KEY,
     SYNC_ON_STARTUP_DISABLED_CACHE_KEY,
   ].forEach(clearBooleanFlag);
@@ -581,6 +584,7 @@ export function resetFirstRunStore(): void {
   backgroundRecheckStarted = false;
   justRegisteredThisStartup = false;
   wizardRestartedThisStartup = false;
+  internetSettingsAtStart = undefined;
   internetSettingsChangedThisRun = false;
   listeners.clear();
 }

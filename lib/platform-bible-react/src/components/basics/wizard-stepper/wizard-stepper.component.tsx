@@ -30,7 +30,9 @@ type StepState = 'active' | 'complete' | 'upcoming';
  * Displays a row of numbered step circles showing progress through a multi-step wizard. Purely
  * presentational — owns no navigation state. All circles are `aria-hidden`; the consuming shell is
  * responsible for a `sr-only` `aria-live` sibling that announces the current step to screen
- * readers.
+ * readers. Completion marks are visual only: when `completedSteps` marks steps out of order, a
+ * consumer whose users need that state should convey it another way too (e.g. in each step's own
+ * content).
  */
 export function WizardStepper({
   currentStep,

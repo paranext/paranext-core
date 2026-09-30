@@ -9,7 +9,10 @@ import {
 import { useData, useDataProvider, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useDelayedFlag } from '@renderer/hooks/use-delayed-flag.hook';
 import { logger } from '@shared/services/logger.service';
-import { markInternetSettingsChanged } from '@renderer/services/first-run-store';
+import {
+  noteInternetSettingsLoaded,
+  noteInternetSettingsSaved,
+} from '@renderer/services/first-run-store';
 import {
   getErrorMessage,
   isPlatformError,
@@ -30,6 +33,7 @@ const STRING_KEYS: LocalizeKey[] = [
   '%firstRun_step_internetSettings_connecting%',
   '%firstRun_step_internetSettings_heading%',
   '%firstRun_step_internetSettings_loadError%',
+  '%firstRun_step_internetSettings_restartNote%',
   ...INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
   ...DEVELOPER_SECTION_STRING_KEYS,
 ];
@@ -49,7 +53,8 @@ const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
  * First-run wizard step that lets the user configure internet access before registration. Saves
  * immediately on each selection change (immediate-apply model). The settings only take effect after
  * a restart, which the Identify step performs: "Save and restart" when registering, or "Restart and
- * continue" for an existing registration once this step has recorded a change.
+ * continue" for an existing registration when the saved settings differ from the ones this step
+ * first loaded. The step says so up front, so the restart is not a surprise.
  *
  * Availability: `useDataProvider` returns `undefined` until the C# InternetSettingsDataProvider
  * registers, giving a natural spinner without any startup-race retry heuristics.
@@ -79,6 +84,9 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
         </h2>
         <p className="tw:text-sm tw:text-muted-foreground">
           {localizedStrings['%firstRun_step_internetSettings_body%']}
+        </p>
+        <p className="tw:text-sm tw:text-muted-foreground">
+          {localizedStrings['%firstRun_step_internetSettings_restartNote%']}
         </p>
       </div>
       {provider === undefined ? (
@@ -152,6 +160,7 @@ function InternetSettingsLoaded({
       setCanProceed?.(false);
       return;
     }
+    noteInternetSettingsLoaded(value);
     setSettings(value);
     lastGood.current = value;
     setCanProceed?.(true);
@@ -172,7 +181,7 @@ function InternetSettingsLoaded({
       setCanProceed?.(false);
       try {
         await setData(next);
-        markInternetSettingsChanged();
+        noteInternetSettingsSaved(next);
         if (!isMounted.current) return;
         lastGood.current = next;
         setIsSaving(false);

@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Users;
+using Paratext.Data.Users;
 
 namespace TestParanextDataProvider.Users
 {
@@ -71,6 +72,39 @@ namespace TestParanextDataProvider.Users
                 ),
                 Is.EqualTo("<reg from=\"95\"/>")
             );
+        }
+
+        [Test]
+        public void Clear_RemovesOnlyTheRegistration_AndForgetsItWasCopied()
+        {
+            var paratext9 = Path.Combine(_root, "Paratext95");
+            Directory.CreateDirectory(paratext9);
+            File.WriteAllText(
+                Path.Combine(paratext9, "RegistrationInfo.xml"),
+                "<reg from=\"95\"/>"
+            );
+            File.WriteAllText(Path.Combine(paratext9, "InternetSettings.xml"), "<net/>");
+            var info = new PlatformParatextInfo(_root);
+            var pinned = info.ResolvedAppDataFolder;
+
+            var previous = PlatformParatextInfo.Install(info);
+            var previousRegistration = RegistrationInfo.Implementation;
+            // A fresh implementation so it reads and deletes through the installed folder.
+            RegistrationInfo.Implementation = new ParatextRegistrationInfo();
+            try
+            {
+                ParatextRegistrationService.ResetForFirstRun("clear");
+            }
+            finally
+            {
+                RegistrationInfo.Implementation = previousRegistration;
+                PlatformParatextInfo.Restore(previous);
+            }
+
+            Assert.That(File.Exists(Path.Combine(pinned, "RegistrationInfo.xml")), Is.False);
+            Assert.That(File.Exists(Path.Combine(pinned, "InternetSettings.xml")), Is.True);
+            Assert.That(info.IsRegistrationCopiedFromParatext9, Is.False);
+            Assert.That(File.Exists(Path.Combine(paratext9, "RegistrationInfo.xml")), Is.True);
         }
 
         [TestCase("copyFromParatext9")]

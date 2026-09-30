@@ -1,5 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { expect, fn, within, userEvent, waitFor } from 'storybook/test';
+import {
+  noteInternetSettingsLoaded,
+  noteInternetSettingsSaved,
+} from '@renderer/services/first-run-store';
 // Deep relative (not aliased) so tsc follows only the dependency-free channel, never the
 // webpack-only mock it drives. Same reasoning as the first-run language mock.
 import {
@@ -154,7 +158,7 @@ export const RestartPending: Story = {
 
 /**
  * A valid registration already exists — typically the one Platform.Bible copied from Paratext 9 on
- * its first launch. The step shows it read-only (the backend only ever returns the code masked) and
+ * its first launch. The step shows it as text (the backend only ever returns the code masked) and
  * moves on with Next, without saving or restarting. "Change registration" opens the empty form.
  */
 export const ExistingRegistration: Story = {
@@ -177,9 +181,47 @@ export const ExistingRegistration: Story = {
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    const nameInput = await canvas.findByLabelText(/registration name/i);
-    await waitFor(() => expect(nameInput).toHaveValue('Pat Translator'));
+    await expect(await canvas.findByText('Pat Translator')).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'Next' }));
     await expect(args.onNext).toHaveBeenCalled();
+  },
+};
+
+const INTERNET_SETTINGS_AT_START = {
+  selectedServer: 'Production',
+  permittedInternetUse: 'VpnRequired',
+  proxyPort: 0,
+} as const;
+
+/**
+ * An existing registration after the user changed something on the Internet settings step. Those
+ * settings only take effect after a restart, so the primary action is "Restart and continue", with
+ * a note saying why; the next launch resumes at sync consent.
+ */
+export const ExistingRegistrationWithChangedInternetSettings: Story = {
+  args: { onBack: fn(), registrationValidAtStart: true, onRestartAfterSave: fn() },
+  beforeEach: () => {
+    setCommandServiceMock((command) =>
+      command === 'paratextRegistration.getParatextRegistrationData'
+        ? {
+            name: 'Pat Translator',
+            code: '******-******-******-******-******',
+            email: '',
+            supporterName: '',
+          }
+        : undefined,
+    );
+    noteInternetSettingsLoaded(INTERNET_SETTINGS_AT_START);
+    noteInternetSettingsSaved({ ...INTERNET_SETTINGS_AT_START, permittedInternetUse: 'Enabled' });
+    return () => {
+      noteInternetSettingsSaved(INTERNET_SETTINGS_AT_START);
+      resetCommandServiceMock();
+    };
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      await canvas.findByRole('button', { name: /restart and continue/i }),
+    ).toBeInTheDocument();
   },
 };
