@@ -803,6 +803,114 @@ describe('useScrollToRange', () => {
       await runFrames(EDITOR_LOAD_DELAY_TIME + 100);
       expect(fake.editor.getSelection()).toEqual(MATCH);
     });
+
+    it('drops a request that leaves its target verse while hidden, rather than waiting for the scroll group to drift back onto it', async () => {
+      const fake = createFakeEditor();
+      const { result, rerender } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 10',
+        isViewVisible: false,
+        scrRef: GEN_10_19,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      await runFrames();
+      expect(fake.setSelection).toHaveBeenCalledTimes(1);
+      expect(scrollToRange).not.toHaveBeenCalled();
+
+      // The scroll group moves off the target verse while still hidden.
+      rerender({ editorChapterKey: 'GEN 10', isViewVisible: false, scrRef: GEN_10_3 });
+      await runFrames(SCROLL_MAX_WAIT_MS * 3);
+
+      // Much later, it drifts back onto the target — this must not resurrect the abandoned jump.
+      fake.replaceSelection(undefined);
+      rerender({ editorChapterKey: 'GEN 10', isViewVisible: true, scrRef: GEN_10_19 });
+      await runFrames(EDITOR_LOAD_DELAY_TIME + 100);
+
+      expect(fake.setSelection).toHaveBeenCalledTimes(1);
+      expect(scrollToRange).not.toHaveBeenCalled();
+      act(() => {
+        expect(result.current.consumeRangeScrollClaimFor(GEN_10_19)).toBe(false);
+      });
+    });
+  });
+
+  describe('cancelRangeJump', () => {
+    it('cancels a jump that is still settling, releasing its claim on the reference', async () => {
+      const fake = createFakeEditor();
+      const { result } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 10',
+        isViewVisible: true,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      expect(fake.setSelection).toHaveBeenCalledWith(MATCH);
+
+      // The user clicks elsewhere before the settle loop (still mid-wait) has decided anything.
+      act(() => result.current.cancelRangeJump());
+      await runFrames();
+
+      expect(scrollToRange).not.toHaveBeenCalled();
+      expect(scrollToVerse).not.toHaveBeenCalled();
+      act(() => {
+        expect(result.current.consumeRangeScrollClaimFor(GEN_10_19)).toBe(false);
+      });
+    });
+
+    it('cancels a jump that is waiting for its chapter while hidden', async () => {
+      const fake = createFakeEditor();
+      const { result, rerender } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 1',
+        isViewVisible: false,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      await runFrames(SCROLL_MAX_WAIT_MS * 3);
+      expect(fake.setSelection).not.toHaveBeenCalled();
+
+      act(() => result.current.cancelRangeJump());
+
+      rerender({ editorChapterKey: 'GEN 10', isViewVisible: true });
+      await runFrames();
+
+      expect(fake.setSelection).not.toHaveBeenCalled();
+      expect(scrollToRange).not.toHaveBeenCalled();
+      act(() => {
+        expect(result.current.consumeRangeScrollClaimFor(GEN_10_19)).toBe(false);
+      });
+    });
+
+    it('a later return to the target verse does not re-apply a cancelled jump', async () => {
+      const fake = createFakeEditor();
+      const { result, rerender } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 10',
+        isViewVisible: true,
+        scrRef: GEN_10_25,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      await runFrames(50);
+      expect(fake.setSelection).not.toHaveBeenCalled();
+
+      act(() => result.current.cancelRangeJump());
+
+      // The web view reaches the cancelled jump's verse well after it was given up on.
+      fake.replaceSelection(undefined);
+      rerender({ editorChapterKey: 'GEN 10', isViewVisible: true, scrRef: GEN_10_19 });
+      await runFrames(EDITOR_LOAD_DELAY_TIME + 100);
+
+      expect(fake.setSelection).not.toHaveBeenCalled();
+      expect(scrollToRange).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when no jump is pending', () => {
+      const fake = createFakeEditor();
+      const { result } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 10',
+        isViewVisible: true,
+      });
+
+      expect(() => act(() => result.current.cancelRangeJump())).not.toThrow();
+    });
   });
 });
 

@@ -189,6 +189,15 @@ export type UseScrollToRangeResult = {
    * it from an effect or an event handler, never during render.
    */
   consumeRangeScrollClaimFor: (scrRef: SerializedVerseRef) => boolean;
+  /**
+   * Gives up on the current jump request, if any, without scrolling anywhere — for a caller that
+   * knows the user has moved on before this hook's own effect would notice, such as a caret report
+   * from the editor itself. Releases the claim {@link consumeRangeScrollClaimFor} would otherwise
+   * answer for the abandoned request's verse, exactly as the hook's own bounded give-ups do, so the
+   * ordinary verse scroll for that reference is not suppressed forever. A no-op when no request is
+   * pending.
+   */
+  cancelRangeJump: () => void;
 };
 
 /**
@@ -235,6 +244,9 @@ export function useScrollToRange({
   scrRef,
 }: UseScrollToRangeOptions): UseScrollToRangeResult {
   const [request, setRequest] = useState<RangeScrollRequest | undefined>(undefined);
+  /** Mirrors `request` for `cancelRangeJump`, which is called from outside the effect below. */
+  const requestRef = useRef(request);
+  requestRef.current = request;
 
   const nextRequestIdRef = useRef(0);
   const editorChapterKeyRef = useRef(editorChapterKey);
@@ -270,8 +282,17 @@ export function useScrollToRange({
     return isTarget;
   }, []);
 
+  const cancelRangeJump = useCallback(() => {
+    const { current } = requestRef;
+    if (!current) return;
+    if (isSameVerseRef(targetVerseRef.current, current.verseRef))
+      targetVerseRef.current = undefined;
+    setRequest((latest) => (latest?.id === current.id ? undefined : latest));
+  }, []);
+
   useEffect(() => {
-    const isNavigation = !isSameVerseRef(lastSeenScrRefRef.current, scrRef);
+    const previousScrRef = lastSeenScrRefRef.current;
+    const isNavigation = !isSameVerseRef(previousScrRef, scrRef);
     lastSeenScrRefRef.current = scrRef;
     if (!request) return undefined;
 
@@ -355,11 +376,27 @@ export function useScrollToRange({
       // already applied for this request is gone: apply it again once the web view is back.
       selectedRequestIdRef.current = undefined;
       if (!isViewVisible) {
+        // A hidden wait that has never reached the target verse stays unbounded below — the tab may
+        // simply not have been shown yet, and there is no better time for it to wait for. One that
+        // just LEFT the target verse while hidden is different: the selection this request already
+        // applied is stale the moment the view moves on, so waiting for the scroll group to drift
+        // back onto the target later would risk re-applying a range nobody is asking for any more.
+        if (isNavigation && isSameVerseRef(previousScrRef, request.verseRef)) {
+          logger.warn(
+            `useScrollToRange: abandoning jump to ${serialize(request.verseRef)} — the web view ` +
+              `left that verse while hidden.`,
+          );
+          abandon();
+          return undefined;
+        }
         wasHiddenRef.current = true;
         return undefined;
       }
       const timeoutId = setTimeout(() => {
-        logger.debug(
+        // Never arrived within the bound even though the tab has been visible for it: `selectRange`
+        // already resolved successfully, so this is the only record that the jump could not land on
+        // the real target at all.
+        logger.warn(
           `useScrollToRange: abandoning jump to ${serialize(request.verseRef)} — the web view ` +
             `stayed on ${serialize(scrRef)} for ${SCROLL_MAX_WAIT_MS}ms.`,
         );
@@ -478,5 +515,5 @@ export function useScrollToRange({
     };
   }, [request, editorChapterKey, isViewVisible, editorRef, scrRef]);
 
-  return { requestScrollToRange, consumeRangeScrollClaimFor };
+  return { requestScrollToRange, consumeRangeScrollClaimFor, cancelRangeJump };
 }
