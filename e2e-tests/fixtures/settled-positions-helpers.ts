@@ -4,6 +4,7 @@
  * use. The offsets come from the chapter's own USJ, read from the project data provider that feeds
  * the editor — the offsets a real caller (a checks result, a comment anchor) computes.
  */
+import { type Page } from '@playwright/test';
 import {
   LAUNCH_PHASE_TIMEOUT_MS,
   sendPapiRequestOnce,
@@ -249,6 +250,34 @@ export async function getScrollGroupRef(): Promise<Partial<SerializedVerseRef> |
     [SCROLL_GROUP_A_ID],
     WEBSOCKET_PORT,
     REQUEST_TIMEOUT_MS,
+  );
+}
+
+/**
+ * Move scroll group A to `scrRef` from the RENDERER, through its own `papi.scrollGroups.setScrRef`
+ * — the renderer-side write another view or the toolbar makes, which predicts the new reference
+ * locally before the host confirms it. A web view subscribed to the group renders that reference
+ * only after the change reaches it, so right after this resolves the group and the web view can
+ * disagree about which verse is current.
+ */
+export async function setScrollGroupRefFromRenderer(
+  mainPage: Page,
+  scrRef: SerializedVerseRef,
+): Promise<void> {
+  await mainPage.evaluate(
+    async ({ groupId, ref }) => {
+      // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
+      const { papi } = window as unknown as {
+        papi: {
+          scrollGroups: {
+            setScrRef: (groupId: number, scrRef: unknown) => Promise<void>;
+          };
+        };
+      };
+      await papi.scrollGroups.setScrRef(groupId, ref);
+    },
+    { groupId: SCROLL_GROUP_A_ID, ref: scrRef },
   );
 }
 

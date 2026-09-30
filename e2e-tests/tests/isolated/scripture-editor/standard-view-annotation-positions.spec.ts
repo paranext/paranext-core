@@ -33,6 +33,10 @@
  *   propertyOffset …`) and over a verse number (`['number'] propertyOffset …`) holds each
  *   annotation on those display bytes — never wrapping them in a mark — and leaves the document
  *   untouched.
+ * - A collapsed `selectRange` into the web view's own verse, sent the instant after another view
+ *   moved the scroll group to a different verse, lands where it was asked to, stays there, and
+ *   brings the scroll group back to its verse: the newer request wins over the older move the web
+ *   view had not rendered yet.
  * - A position at the very end of the chapter's last text resolves to that text's own path and
  *   offset, not to the preceding verse's own `['number']` location.
  * - A `setAnnotation` on a char span's own SAVED content word does not interrupt an UNFINISHED
@@ -73,6 +77,7 @@ import {
   readEditorSelection,
   sendToEditorController,
   SerializedVerseRef,
+  setScrollGroupRefFromRenderer,
   setUserSetting,
   waitForEditorControllerMethod,
 } from '../../../fixtures/settled-positions-helpers';
@@ -141,6 +146,14 @@ const WORD_AFTER_TARGET = 'Whatever';
 /** John 2:25, the chapter's last verse, addressed by its own reference for the chapter-end step. */
 const LAST_VERSE_REFERENCE = 'John 2:25';
 const LAST_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 25 };
+
+/**
+ * A verse of the same chapter, well away from {@link TARGET_VERSE_REF}, that the scroll group is
+ * moved to right before a `selectRange` addressed to the web view's own verse.
+ */
+const AWAY_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 17 };
+/** An interior offset in the `\wj` span's text: not 0, which reports as the verse marker's end. */
+const CROSS_VERSE_CARET_OFFSET = 5;
 
 /**
  * John 2:6 ("Now there were six water pots of stone...") is a plain sentence, untouched by any
@@ -495,6 +508,56 @@ test.describe('scripture editor settled positions', () => {
       // assertion does not depend on which one the rendered text carries.
       const verseHolderText = (await verseHolder.textContent())?.replaceAll(NBSP, ' ');
       expect(verseHolderText?.startsWith('\\v 4')).toBe(true);
+    });
+
+    await test.step("a selectRange to the web view's own verse lands even while the scroll group has just moved away", async () => {
+      // Put the web view on John 2:4 and wait until it has RENDERED that verse, not just until the
+      // scroll group holds it: the reference scroll marks the verse `highlighted` only once the web
+      // view's own reference is 2:4.
+      await navigateToolbarBcv(mainPage, TARGET_REFERENCE);
+      await expect.poll(getScrollGroupRef, { timeout: 30_000 }).toMatchObject(TARGET_VERSE_REF);
+      await expect(
+        editorInput
+          .locator(`span[data-marker="v"][data-number="${TARGET_VERSE_REF.verseNum}"]`)
+          .first(),
+      ).toHaveClass(/(^|\s)highlighted(\s|$)/, { timeout: 15_000 });
+
+      // Another view moves the scroll group away, and a `selectRange` back into 2:4 follows at
+      // once — before the web view has rendered the move. The request must win: the caret lands in
+      // 2:4 and stays there, rather than the late navigation to 2:17 carrying it off to that verse.
+      await setScrollGroupRefFromRenderer(mainPage, AWAY_VERSE_REF);
+      const location = chapterLocation(TARGET_VERSE_REF, jsonPath, CROSS_VERSE_CARET_OFFSET);
+      await sendToEditorController(editorId, 'selectRange', [{ start: location, end: location }]);
+
+      const expectedLocation = { jsonPath, offset: CROSS_VERSE_CARET_OFFSET };
+      await expect
+        .poll(async () => (await readSelection())?.start?.documentLocation, { timeout: 5_000 })
+        .toEqual(expectedLocation);
+      // Still there a second later: a navigation that commits after the request must not move it.
+      await mainPage.waitForTimeout(1_000);
+      const selection = await readSelection();
+      expect(selection?.start?.documentLocation).toEqual(expectedLocation);
+      expect(selection?.end?.documentLocation).toEqual(expectedLocation);
+      // The scroll group follows the request back to 2:4 instead of staying on the move the
+      // request overtook, so every view in the group shows the verse the caret is in.
+      expect(await getScrollGroupRef()).toMatchObject(TARGET_VERSE_REF);
+
+      // The browser's own caret agrees: inside the span's text, one past the NBSP separator. The
+      // earlier annotation over the span's last two characters holds them in their own mark, so the
+      // text node the caret sits in ends just before them.
+      const browserCaret = await editorInput.evaluate((root) => {
+        const sel = root.ownerDocument.getSelection();
+        return {
+          anchorText: sel?.anchorNode?.textContent ?? undefined,
+          anchorOffset: sel?.anchorOffset ?? undefined,
+          isCollapsed: sel?.isCollapsed ?? undefined,
+        };
+      });
+      expect(browserCaret).toEqual({
+        anchorText: NBSP + charText.slice(0, -2),
+        anchorOffset: CROSS_VERSE_CARET_OFFSET + 1,
+        isCollapsed: true,
+      });
     });
 
     await test.step("a position at the end of the chapter's last text resolves and reports exactly", async () => {
