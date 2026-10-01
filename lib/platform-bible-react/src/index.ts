@@ -75,20 +75,16 @@ export type {
 } from './components/advanced/comment-list/conflict-note-card.types';
 export { CONFLICT_NOTE_STRING_KEYS } from './components/advanced/comment-list/conflict-note-card.types';
 export { ConflictNoteCard } from './components/advanced/comment-list/conflict-note-card.component';
+export { ContentZoomRoot } from './components/advanced/content-zoom-root.component';
+export type { ContentZoomRootProps } from './components/advanced/content-zoom-root.component';
 export {
-  ContentZoomAreaProvider,
-  ContentZoomRoot,
-  CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
-  CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
-  CONTENT_ZOOM_POPUP_ATTRIBUTE,
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
-  MAIN_CONTENT_ZOOM_AREA_ID,
-  useContentZoomArea,
-} from './components/advanced/content-zoom-root.component';
-export type {
-  ContentZoomAreaProviderProps,
-  ContentZoomRootProps,
-} from './components/advanced/content-zoom-root.component';
+  CONTENT_ZOOM_SCOPE_ATTRIBUTE,
+  ContentZoomTextProvider,
+  useContentZoomTextProps,
+} from './context/content-zoom-text.context';
+export type { ContentZoomTextProviderProps } from './context/content-zoom-text.context';
 export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
   ColumnDef,
@@ -166,6 +162,7 @@ export {
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
+export { isGroupUnderColumnOrSubMenu } from './components/advanced/menus/menu.util';
 export {
   default as SettingsSidebar,
   type SettingsSidebarProps,
@@ -352,6 +349,7 @@ export { ToggleGroup, ToggleGroupItem } from './components/shadcn-ui/toggle-grou
 export {
   Tooltip,
   TooltipContent,
+  TooltipPortalContainerProvider,
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
@@ -368,10 +366,10 @@ export { useStylesheet } from './hooks/use-stylesheet.hook';
 export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
 export { useViewVisibility } from './hooks/use-view-visibility.hook';
 export { useRunWhenVisible } from './hooks/use-run-when-visible.hook';
+export { useHasContentBelow } from './hooks/use-has-content-below.hook';
 export {
   useLivePopoverAnchor,
-  measureRange,
-  measureElement,
+  measureBox,
   leftEdgeRect,
   type LivePopoverAnchor,
   type LivePopoverAnchorSource,

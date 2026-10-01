@@ -56,6 +56,8 @@ import type {
   ModelTextPanelLocalizedStringKey,
   ModelTextPanelLocalizedStrings,
 } from './model-text-panel.const';
+import { MODEL_TEXT_PANEL_INSTALL_FAILURE_KEYS } from './model-text-panel.const';
+import { getInstallFailureMessageKey } from './install-failure-message.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -210,8 +212,17 @@ export function ModelTextPanel({
   // without it the panel spins forever with the picker unreachable. Skipped while a manual pick is
   // in flight (it installs the resource itself).
   const dblEntryUidToInstall = match && !match.installed ? match.dblEntryUid : undefined;
-  const { isInstalling, installFailed, retryInstall, markInstallFailed } =
-    useDblResourceAutoInstall(dblEntryUidToInstall, installResource, isSelecting);
+  const {
+    isInstalling,
+    installFailed,
+    installFailureReason,
+    retryInstall,
+    clearInstallFailure,
+    markInstallFailed,
+  } = useDblResourceAutoInstall(dblEntryUidToInstall, installResource, {
+    skipAutoInstall: isSelecting,
+    refreshResourceList: onRetryCatalog,
+  });
 
   // Only used to add a "check your connection" hint to the install-failed message when the machine
   // is definitely offline (the common cause of a failed download on first run).
@@ -444,7 +455,7 @@ export function ModelTextPanel({
       setIsSelecting(true);
       // A user-initiated pick is a fresh attempt: clear any prior auto-install failure so the
       // install-failed state doesn't stick.
-      retryInstall();
+      clearInstallFailure();
       try {
         await selectTextConnection(resource, getUserModelTexts, setUserModelTexts, async () => {
           try {
@@ -461,7 +472,7 @@ export function ModelTextPanel({
         setIsSelecting(false);
       }
     },
-    [getUserModelTexts, setUserModelTexts, installResource, retryInstall, markInstallFailed],
+    [getUserModelTexts, setUserModelTexts, installResource, clearInstallFailure, markInstallFailed],
   );
 
   const handlePickModelText = useCallback(async () => {
@@ -553,9 +564,11 @@ export function ModelTextPanel({
       <PanelRetryableErrorView
         message={localize(
           localizedStrings,
-          isOnline
-            ? '%webView_modelTextPanel_installFailed%'
-            : '%webView_modelTextPanel_installFailedOffline%',
+          getInstallFailureMessageKey(
+            installFailureReason,
+            isOnline,
+            MODEL_TEXT_PANEL_INSTALL_FAILURE_KEYS,
+          ),
         )}
         retryLabel={localize(localizedStrings, '%webView_modelTextPanel_retry%')}
         onRetry={retryInstall}
@@ -665,13 +678,22 @@ export function ModelTextPanel({
           className={message || isWaiting ? 'tw:hidden' : 'tw:flex-1 tw:overflow-auto'}
           dir={options.textDirection}
         >
-          <Editorial
-            ref={editorRef}
-            scrRef={scrRef}
-            onScrRefChange={handleScrRefChange}
-            options={options}
-            logger={logger}
-          />
+          {/* The zoom marker sits INSIDE the scroll box, never on it or above it:
+              `scrollToVerse` adds a `getBoundingClientRect()` distance (zoomed pixels) to the
+              box's `scrollTop` (unzoomed pixels), which agree only while the box itself is
+              unscaled. Named as its own zoom area ("model-text") so its remembered level is kept
+              apart from this project's other resource panes, which resolve to the same
+              kind/identity pair and would otherwise all read one remembered level. The messages
+              and the spinner are app chrome and stay unmarked. */}
+          <ContentZoomRoot area="model-text">
+            <Editorial
+              ref={editorRef}
+              scrRef={scrRef}
+              onScrRefChange={handleScrRefChange}
+              options={options}
+              logger={logger}
+            />
+          </ContentZoomRoot>
         </div>
       </>
     );
@@ -731,25 +753,10 @@ export function ModelTextPanel({
           </Tooltip>
         </TooltipProvider>
       )}
-      {/* Named as its own zoom area ("model-text") so its remembered level is kept apart from this
-          project's other resource panes, which resolve to the same kind/identity pair and would
-          otherwise all read one remembered level. The label row above stays outside so its pinned
-          42 px height — aligned with the editor's toolbar and Column 3's tab bar — doesn't scale
-          with the content.
-
-          This element is only reached once the panel has a project, has a configured readiness, has
-          resolved to a displayable resource, has not just failed an install, and is not mid-pick or
-          mid-install. None of the earlier returns for those states (no project; readiness not
-          configured; not found/unresolvable; install failed; selecting/installing) mark a zoom area,
-          so while any of them is on screen this pane reports no area and offers no per-pane zoom
-          control until content arrives; what the platform does with a pane that reports no areas is
-          core's to define and document. Acceptable: each of those states shows only chrome — a
-          prompt, a spinner or an error — with no scripture content to scale. Some of them (an
-          unconfigured readiness, a failed install) can stay on screen indefinitely without that
-          changing. */}
-      <ContentZoomRoot area="model-text" className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
-        {renderContent()}
-      </ContentZoomRoot>
+      {/* The label row stays outside the zoom area (marked inside the editor's scroll box in
+          `renderContent`) so its pinned 42 px height — aligned with the editor's toolbar and
+          Column 3's tab bar — doesn't scale with the content. */}
+      <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderContent()}</div>
     </div>
   );
 }

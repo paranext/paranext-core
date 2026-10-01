@@ -73,6 +73,15 @@ const DEFAULT_WEBVIEW_MENU = {
 
 const MARKERS_CHECKLIST_WEB_VIEW_TYPE = 'platformScripture.markersChecklist';
 
+/**
+ * Defaults for the array-valued `useWebViewState` slots, kept at one identity across renders
+ * because the values sit in effect dependency lists, as `useWebViewState`'s documentation in
+ * `web-view.model.ts` advises: a fresh `[]` reaching one of those lists would read as a changed
+ * comparative-texts selection and reload the checklist.
+ */
+const NO_COMPARATIVE_TEXTS: ChecklistComparativeTextRef[] = [];
+const NO_SELECTED_BOOK_IDS: string[] = [];
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 /**
@@ -235,7 +244,7 @@ global.webViewComponent = function ChecklistWebView({
   // vendored from draft PR #2223).
   const [comparativeTexts, setComparativeTexts] = useWebViewState<ChecklistComparativeTextRef[]>(
     'checklistComparativeTexts',
-    [],
+    NO_COMPARATIVE_TEXTS,
   );
   // R1 — mode-aware snapshot persistence (matches PT9's frozen-range model).
   // - `scope` drives the ScopeSelector display label; `verseRange` auto-follows `liveScrRef`
@@ -259,7 +268,7 @@ global.webViewComponent = function ChecklistWebView({
   );
   const [selectedBookIds, setSelectedBookIds] = useWebViewState<string[]>(
     'checklistSelectedBookIds',
-    [],
+    NO_SELECTED_BOOK_IDS,
   );
 
   // Note: `scope`, `setScope`, `rangeStart`, `setRangeStart`, `rangeEnd`,

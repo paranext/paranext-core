@@ -167,7 +167,7 @@ test.describe('Bible Texts panel content zoom', () => {
     // vacuous 0 — which would let the editor-untouched check below silently degrade to `0 === 0` if
     // the editor ever stopped setting this variable at all. `toBeGreaterThan(0)` rules out both the
     // race and the vacuous baseline, without assuming the Settings default is exactly 1 (the panel's
-    // own `before` factor below makes that same choice, for the same reason).
+    // own `before` factor below is guarded the same way).
     await expect.poll(() => readFactor(editorFrame, '')).toBeGreaterThan(0);
     const mainAreaBefore = await readFactor(editorFrame, '');
 
@@ -218,7 +218,10 @@ test.describe('Bible Texts panel content zoom', () => {
     expect(headerHasZoomRootAncestor).toBe(false);
 
     // Read this pane's own starting factor rather than assuming the Settings default is 1.0 — a
-    // prior local run can have left a different default behind.
+    // prior local run can have left a different default behind. Polled first for the same reason as
+    // the editor's `mainAreaBefore` above: the rendered verse proves only that the content mounted,
+    // not that the platform has written this area's variable yet, and a bare read would record 0.
+    await expect.poll(() => readFactor(bibleTextsFrame, BIBLE_TEXTS_AREA_ID)).toBeGreaterThan(0);
     const before = await readFactor(bibleTextsFrame, BIBLE_TEXTS_AREA_ID);
 
     let afterCtrlPlus = before;
@@ -271,10 +274,8 @@ test.describe('Bible Texts panel content zoom', () => {
 
     let afterWheel = afterCtrlPlus;
     await test.step('Ctrl+wheel over the marked area changes the same variable', async () => {
-      // Aimed at the area's own centre rather than a content element (the precedent's approach):
-      // safe only because the factor is still near 1 here, so the area's box still fits inside the
-      // window. A taller area, or a much larger accumulated factor, can put its centre outside the
-      // viewport, where the wheel event would land nowhere.
+      // Aimed at the area's own center: `areaBox` clips the area to the pane, so the wheel lands
+      // inside the pane however tall the area has grown.
       const box = await areaBox(bibleTextsFrame, BIBLE_TEXTS_AREA_ID);
       await ctrlWheel(mainPage, box, -120);
       await expect

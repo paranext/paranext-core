@@ -1,8 +1,7 @@
 import os from 'os';
 import { appService } from '@shared/services/app.service';
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage } from 'platform-bible-utils';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
+import { createCachedInitializer, getErrorMessage } from 'platform-bible-utils';
 
 const UNKNOWN_VERSION = 'unknown';
 

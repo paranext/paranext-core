@@ -7,23 +7,7 @@ import {
   excludeExtraMaterialBooks,
   UNKNOWN_FIND_BOOK_LISTS,
 } from './find-book-lists.utils';
-
-/**
- * Builds a `booksPresent` flag string of full canon length with the given books flagged present.
- *
- * Throws on an id the canon does not recognize. A silent no-op there would hollow out whichever
- * test used it: the flag would land outside the string, the assertion would pass for the wrong
- * reason, and the behavior under test would go uncovered.
- */
-function booksPresentFor(bookIds: string[]): string {
-  const flags = Array.from({ length: Canon.allBookIds.length }, () => '0');
-  bookIds.forEach((bookId) => {
-    const bookNumber = Canon.bookIdToNumber(bookId);
-    if (bookNumber <= 0) throw new Error(`booksPresentFor: '${bookId}' is not a canon book id`);
-    flags[bookNumber - 1] = '1';
-  });
-  return flags.join('');
-}
+import { booksPresentFor } from './find-book-lists.test-utils';
 
 /** Reads back the ids flagged present in a `booksPresent` flag string */
 function presentBookIds(booksPresent: string): string[] {
@@ -159,8 +143,8 @@ describe('deriveFindBookLists', () => {
     expect(lists.localizableBookIds).toEqual(['FRT', 'GLO']);
   });
 
-  // The distinction the prune depends on: an unknown list must not read as "this project has no
-  // books", or a transient read error would wipe the user's persisted selection for good.
+  // The distinction the narrowing depends on: an unknown list must not read as "this project has no
+  // books", or a transient read error would empty the derived display and search list.
   it('reports an unknown book list as undefined rather than empty', () => {
     const lists = deriveFindBookLists(undefined);
     expect(lists.availableBookIds).toBeUndefined();

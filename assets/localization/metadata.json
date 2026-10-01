@@ -93,6 +93,12 @@
   "%general_open%": {
     "fallbackKey": "%Paratext.Base.CommonForms.SelectScrTextsForm.SelectScrTextsForm.Text%"
   },
+  "%getResources_errorInstallResource_resourceAlreadyInstalled%": {
+    "deprecationInfo": {
+      "date": "2026-09-22",
+      "message": "Installing a resource that is already installed and up to date now succeeds as a no-op instead of failing, so there is no error to show and no replacement key. A stale catalog used to make this the only outcome a retry could ever reach."
+    }
+  },
   "%mainMenu_helpInfo_visitFAQsPage%": {
     "fallbackKey": "%mainMenu_helpInfo_visitCommunitySupportPage%",
     "deprecationInfo": {
@@ -169,6 +175,24 @@
   },
   "%settings_platform_group1_label_alternative%": {
     "fallbackKey": "%settings_platform_group1_label%"
+  },
+  "%settings_platform_webViewContentZoom_description%": {
+    "deprecationInfo": {
+      "date": "2026-09-23",
+      "message": "UX limited content zoom to project text, so the description no longer says every pane's content scales. The new key is %settings_platform_webViewContentZoom_description_2%."
+    }
+  },
+  "%settings_platform_webViewContentZoomTypesWithAreas_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-22",
+      "message": "The hidden per-type content-zoom record this labelled was removed: a pane now takes content zoom only if core declares it zoomable or it marks a zoom area, so nothing needs to remember which types mark areas."
+    }
+  },
+  "%settings_platform_zoomFactor_description%": {
+    "deprecationInfo": {
+      "date": "2026-09-23",
+      "message": "Interface scaling is now shown as a percentage, so the description gives its default and range in percent. The new key is %settings_platform_zoomFactor_description_2%."
+    }
   },
   "%settings_platform_zoomFactor_label%": {
     "deprecationInfo": {

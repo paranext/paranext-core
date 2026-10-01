@@ -16,7 +16,10 @@ export type ContentZoomChromeKeysDeps = {
   ) => Promise<void>;
   resetContentZoom: (webViewId: WebViewId | undefined, areaId?: ContentZoomAreaId) => Promise<void>;
   isWindowInputBlocked: () => boolean;
-  /** Whether a pane and an area resolve for a chord carrying no ids — see the service's own query. */
+  /**
+   * Whether the window's active pane is zoomable, for a chord carrying no ids — see the service's
+   * own query.
+   */
   canContentZoomAct: () => boolean;
 };
 
@@ -74,9 +77,9 @@ function actionFor(e: KeyboardEvent): ChordAction | undefined {
  * dialog stops nothing — the user keeps working in the panes behind it.
  *
  * Consumes the keystroke only when the action will really happen
- * ({@link ContentZoomChromeKeysDeps.canContentZoomAct}): a pane that marks no zoom area cannot zoom,
- * and swallowing the chord there would take it from whoever else might want it while giving the
- * user nothing back.
+ * ({@link ContentZoomChromeKeysDeps.canContentZoomAct}): a pane that is not zoomable (core does not
+ * declare it and it reports no area) cannot zoom, and swallowing the chord there would take it from
+ * whoever else might want it while giving the user nothing back.
  *
  * @param deps The zoom actions, the window-input-blocked query and the can-act query to call.
  * @returns A function that removes the listener.

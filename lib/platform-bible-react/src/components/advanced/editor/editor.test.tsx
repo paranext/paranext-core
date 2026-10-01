@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { expect, test } from 'vitest';
+import { ContentZoomTextProvider } from '@/context/content-zoom-text.context';
 import { Editor } from './editor';
 
 /**
@@ -80,4 +81,25 @@ test('actions stay keyboard reachable once inside the box', async () => {
 
   await userEvent.tab();
   expect(document.activeElement).toBe(submit);
+});
+
+test('inside a ContentZoomTextProvider, marks only the content area — not the format toolbar or the actions', () => {
+  const { container } = render(
+    <ContentZoomTextProvider>
+      <Editor actions={<button type="button">Send</button>} />
+    </ContentZoomTextProvider>,
+  );
+
+  const marked = container.querySelectorAll('[data-platform-content-zoom-root]');
+  expect(marked).toHaveLength(1);
+  expect(marked[0].getAttribute('data-platform-content-zoom-root')).toBe('');
+  const contentEditable = container.querySelector('[contenteditable]');
+  expect(contentEditable && marked[0].contains(contentEditable)).toBe(true);
+  expect(marked[0].contains(screen.getByTestId('editor-format-toolbar'))).toBe(false);
+  expect(marked[0].contains(screen.getByRole('button', { name: 'Send' }))).toBe(false);
+});
+
+test('outside a provider the editor marks nothing (the Scripture editor’s comment pop-up)', () => {
+  const { container } = render(<Editor actions={<button type="button">Send</button>} />);
+  expect(container.querySelectorAll('[data-platform-content-zoom-root]')).toHaveLength(0);
 });

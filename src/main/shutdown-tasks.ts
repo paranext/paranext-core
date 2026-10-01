@@ -334,6 +334,10 @@ async function performWindowCloseTasksInternal(closingWindows: ClosingWindowRead
  * are dropped because one window can have two editors on the same project, and because both
  * selections that use this merge every window's definitions into one list — the windows a close
  * sync covers, and the whole app at shutdown.
+ *
+ * TODO(PT-4786): Select by `platform.isPublished` instead. The saved `isReadOnly` is also set on a
+ * Scripture Editor for an `Editable=F` translation project opened with a project ID (it comes from
+ * `platform.isEditable`), and comments added to that project are left out of the sync.
  */
 function getWritableEditorProjectIds(definitions: SavedWebViewDefinition[]): string[] {
   const writableEditorProjectIds = definitions

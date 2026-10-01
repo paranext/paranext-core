@@ -114,6 +114,7 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
         fontStyle: string;
         lineHeight: string;
         letterSpacing: string;
+        zoom: string;
       }
     | undefined
   >(undefined);
@@ -223,6 +224,11 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     if (para && measuringElement && barContainer) {
       const paraStyle = window.getComputedStyle(para);
       const { fontFamily, fontSize, fontWeight, fontStyle, lineHeight, letterSpacing } = paraStyle;
+      // The paragraph sits inside the editor's content-zoom area and this measuring element does
+      // not, so it takes the paragraph's cumulative zoom to report the baseline in the same viewport
+      // pixels as `targetRect`. Part of the cache key: a zoom change leaves the computed metrics
+      // above untouched. jsdom does not implement `currentCSSZoom`.
+      const zoom = String(para.currentCSSZoom ?? 1);
       const cachedMetrics = fontMetricsRef.current;
       const metricsChanged =
         !cachedMetrics ||
@@ -231,7 +237,8 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
         cachedMetrics.fontWeight !== fontWeight ||
         cachedMetrics.fontStyle !== fontStyle ||
         cachedMetrics.lineHeight !== lineHeight ||
-        cachedMetrics.letterSpacing !== letterSpacing;
+        cachedMetrics.letterSpacing !== letterSpacing ||
+        cachedMetrics.zoom !== zoom;
 
       if (metricsChanged) {
         // Measured HERE rather than above the cache check, even though it is the trigger's half of
@@ -251,6 +258,7 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
           measuringElement.style.fontStyle = fontStyle;
           measuringElement.style.lineHeight = lineHeight;
           measuringElement.style.letterSpacing = letterSpacing;
+          measuringElement.style.zoom = zoom;
 
           const editorBaseline = measureBaselineOffset(measuringElement);
           if (editorBaseline !== undefined) {
@@ -262,6 +270,7 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
               fontStyle,
               lineHeight,
               letterSpacing,
+              zoom,
             };
           }
         }

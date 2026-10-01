@@ -159,6 +159,8 @@ const meta: Meta<typeof MultiSelectComboBox> = {
   ],
   argTypes: {
     placeholder: { control: 'text' },
+    searchPlaceholder: { control: 'text' },
+    showScrollCue: { control: 'boolean' },
     customSelectedText: { control: 'text' },
     selected: { control: 'object' },
     onChange: { action: 'selection changed' },
@@ -190,6 +192,7 @@ export const Default: Story = {
             selected={selectedTypes}
             onChange={setSelectedTypes}
             placeholder="Types"
+            searchPlaceholder="Search types…"
             customSelectedText={getCustomSelectedText()}
             icon={<Blocks />}
           />
@@ -231,6 +234,7 @@ export const BasicUsage: Story = {
           selected={selected}
           onChange={setSelected}
           placeholder="Select types"
+          searchPlaceholder="Search types…"
           icon={<Blocks />}
         />
       </div>
@@ -256,6 +260,7 @@ export const WithCounts: Story = {
           selected={selected}
           onChange={setSelected}
           placeholder="Select types"
+          searchPlaceholder="Search types…"
           icon={<Blocks />}
         />
       </div>
@@ -281,6 +286,7 @@ export const AllSelected: Story = {
           selected={selected}
           onChange={setSelected}
           placeholder="Types"
+          searchPlaceholder="Search types…"
           customSelectedText="All types selected"
           icon={<Blocks />}
         />
@@ -324,6 +330,7 @@ export const ResizableContainer: Story = {
             selected={selected}
             onChange={setSelected}
             placeholder="Select resource types"
+            searchPlaceholder="Search types…"
             customSelectedText={getCustomSelectedText()}
             icon={<Blocks />}
             hasToggleAllFeature

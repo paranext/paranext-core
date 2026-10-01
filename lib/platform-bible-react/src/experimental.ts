@@ -49,7 +49,12 @@ export {
   getResourcePickerBodyState,
   type ResourcePickerBodyState,
 } from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
-export { focusResourcePickerOnOpen } from './components/advanced/resource-picker-dialog/resource-picker-dialog.utils';
+export {
+  buildLanguageFilterOptions,
+  focusResourcePickerOnOpen,
+  matchesResourceType,
+  partitionFilterSelection,
+} from './components/advanced/resource-picker-dialog/resource-picker-dialog.utils';
 export type { ScopeSelectorVariant } from './components/advanced/scope-selector/scope-selector.component';
 export {
   getAvailableBookIds,
@@ -108,8 +113,12 @@ export {
 export {
   default as InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
+  isSupportedInternetUse,
 } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
-export type { InternetAccessOptionListProps } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
+export type {
+  InternetAccessOptionListProps,
+  InternetUse,
+} from './components/advanced/internet-access-option-list/internet-access-option-list.component';
 export {
   default as DeveloperSection,
   DEVELOPER_SECTION_STRING_KEYS,

@@ -392,8 +392,8 @@ export function isDifferentProjectSelection(
  * @param availableBookIds Book ids the selected project has, or `undefined` when not yet known.
  * @param selectedBookIds The currently selected book ids.
  * @returns The pruned ids, or the ORIGINAL `selectedBookIds` array reference when nothing needed
- *   removing — so callers can compare by identity to skip a redundant state write (which also keeps
- *   an effect that depends on this from re-triggering itself).
+ *   removing — so a caller such as `useFindBookScope`'s `useMemo` hands its consumers the same
+ *   array, and effects keyed on that identity do not re-fire.
  */
 export function prunePresentBookIds(
   availableBookIds: readonly string[] | undefined,

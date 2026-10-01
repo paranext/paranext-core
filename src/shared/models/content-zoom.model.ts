@@ -1,11 +1,19 @@
 import type { LocalizeKey, ReferencedItem } from 'platform-bible-utils';
-import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
+import {
+  DEFAULT_ZOOM_FACTOR,
+  MAX_ZOOM_FACTOR,
+  MIN_ZOOM_FACTOR,
+  ZOOM_STEP,
+} from '@shared/data/platform.data';
 import {
   CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
-  CONTENT_ZOOM_POPUP_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  CONTENT_ZOOM_SCOPE_ATTRIBUTE,
+  type ContentZoomAreaId,
+  FIND_WEBVIEW_TYPE,
   MAIN_CONTENT_ZOOM_AREA,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from '@shared/models/web-view.model';
@@ -18,21 +26,19 @@ import {
 export {
   CONTENT_ZOOM_CSS_VARIABLE_PREFIX,
   CONTENT_ZOOM_DEFAULT_CSS_VARIABLE,
+  CONTENT_ZOOM_LABEL_ATTRIBUTE,
   CONTENT_ZOOM_LEVELS_STATE_KEY,
-  CONTENT_ZOOM_POPUP_ATTRIBUTE,
   CONTENT_ZOOM_ROOT_ATTRIBUTE,
+  CONTENT_ZOOM_SCOPE_ATTRIBUTE,
 };
 export type { ContentZoomAreaId } from '@shared/models/web-view.model';
 
 /**
- * The allowed range and step for a content zoom factor, defined once alongside the rest of the
- * platform's zoom constants; core code reaches them from here rather than from `platform.data`
- * directly.
+ * The allowed range and step for a content zoom factor, defined once in `platform-bible-utils`
+ * (re-exported through `platform.data`); core code reaches them from here rather than from
+ * `platform.data` directly.
  */
-export { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR };
-
-/** Amount one zoom-in / zoom-out step changes a content zoom factor. */
-export const ZOOM_STEP = 0.1;
+export { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, ZOOM_STEP };
 
 /**
  * Web-view definition `state` key holding the kind and identity — `kind:identity`, the first two
@@ -43,7 +49,9 @@ export const ZOOM_STEP = 0.1;
  * by spreading its own saved state onto the new project, so the levels arrive at the new project
  * looking exactly like levels chosen for it. This stamp is what tells the two apart: a pane whose
  * stamp still names what it shows keeps its levels, and a pane whose stamp names something else is
- * re-seeded from the memory of the identity it shows now.
+ * re-seeded from the memory of the identity it shows now. A pane that commits a level while it
+ * resolves no identity is stamped with its kind alone (`kind:`), which reads as stale once it
+ * resolves one.
  *
  * Written and read only by the platform (`web-view-content-zoom.service.ts`). Unlike the levels
  * key, nothing outside core has a reason to read it, so it is not part of the extension-facing
@@ -52,10 +60,19 @@ export const ZOOM_STEP = 0.1;
 export const CONTENT_ZOOM_IDENTITY_STATE_KEY = 'platform.contentZoomIdentity';
 
 /**
- * Kinds of web view whose content zoom is remembered per project. A view's kind decides the memory
- * key it uses; views of a kind that shows no project fall back to remembering per kind.
+ * Kinds of web view whose content zoom is remembered per project (or, for Enhanced Resources, per
+ * resource). A view's kind is the first segment of its memory key, so two views of the same kind
+ * showing the same project share one level per area.
  */
-export type ContentZoomKind = 'editor' | 'resource' | 'notes';
+export type ContentZoomKind =
+  | 'editor'
+  | 'resource'
+  | 'notes'
+  | 'find'
+  | 'inventory'
+  | 'checks'
+  | 'checklist'
+  | 'dictionary';
 
 /**
  * Pattern a well-formed zoom area id must match: lower-case letters, digits and hyphens, starting
@@ -124,38 +141,93 @@ export function getContentZoomCssVariable(areaId: string): string {
 /** `id` of the `<style>` element the platform injects into each web view head for content zoom. */
 export const CONTENT_ZOOM_STYLE_ELEMENT_ID = 'platform-content-zoom-styles';
 
+/** What core knows about one first-party web view type that takes content zoom. */
+export type ContentZoomDeclaration = {
+  /** The memory kind the type's levels are remembered under. */
+  readonly kind: ContentZoomKind;
+  /**
+   * The area the chords, the wheel and the tab menu act on while the view renders no marked
+   * element, for example before a search, while loading, or when the list is empty. A view that
+   * marks its text with no `area` of its own uses this area.
+   *
+   * Omitted for a view whose areas exist only while it shows content, such as the Text Collection
+   * grid, where each resource is its own area. Such a view is zoomable only while it reports at
+   * least one area: with nothing shown there is nothing to zoom, no level to keep and no
+   * indicator.
+   */
+  readonly defaultArea?: ContentZoomAreaId;
+};
+
 /**
- * Which kind of memory a first-party web view type uses for its content zoom. Core lists extension
- * web-view types by string here because core code cannot import extension source (same pattern as
- * `SCRIPTURE_EDITOR_WEBVIEW_TYPE`).
+ * The first-party web view types that take content zoom, with their memory kind and default area. A
+ * pane is _zoomable_ when its type is listed here with a default area OR when it currently reports
+ * at least one zoom area (`isContentZoomable` in `web-view-content-zoom.service.ts`). A default
+ * area is what keeps a first-party view's zoom items, chords and wheel available from its first
+ * frame, including while it renders no marker. A pane that is not zoomable is never scaled.
  *
- * Every web view type listed here marks at least one platform zoom area — including
- * `platformEnhancedResources.enhancedResource` and `platformScriptureEditor.scriptureTextGrid` — so
- * every entry is live: each area's factor is read from the memory key the view's kind selects.
+ * Core lists extension web view types by string here because core code cannot import extension
+ * source. This follows the same pattern as `SCRIPTURE_EDITOR_WEBVIEW_TYPE` and
+ * `EDIT_BLOCKABLE_WEB_VIEW_TYPES`, and it may list types from other repositories too. A type is
+ * listed only once its view marks its text: Word List (paratext-bible-extensions) and Send/Receive
+ * Compare Versions (paratext-bible-internal-extensions) join this map, each with its own kind, when
+ * their markers land in those repositories.
  *
- * `platformScriptureEditor.scriptureTextGrid` is a documented exception, not a precedent: inside
- * its `text-collection` area, each resource cell still carries its own independent zoom
- * (Ctrl/Cmd+wheel, the right-click menu, the hover kebab — see `use-resource-zoom-input.hook.ts`).
- * That per-resource factor nests inside the area's CSS zoom and multiplies with it rather than
- * replacing it.
+ * Invariant, not checked at runtime: every listed type runs scripts. A declared pane opened with
+ * `allowScripts: false` would offer zoom items that can only write a variable nothing in the pane
+ * reads, because no bootstrap runs there to scale anything.
  */
-export const CONTENT_ZOOM_KIND_BY_WEB_VIEW_TYPE: ReadonlyMap<string, ContentZoomKind> = new Map<
+export const CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE: ReadonlyMap<
   string,
-  ContentZoomKind
->([
-  [SCRIPTURE_EDITOR_WEBVIEW_TYPE, 'editor'],
-  ['platformEnhancedResources.enhancedResource', 'resource'],
-  ['platformScriptureEditor.scriptureTextGrid', 'resource'],
-  ['platformScriptureEditor.modelText', 'resource'],
-  ['platformScriptureEditor.bibleTexts', 'resource'],
-  ['platformScriptureEditor.commentaries', 'resource'],
-  ['legacyCommentManager.commentList', 'notes'],
-  ['legacyCommentManager.commentListPanel', 'notes'],
+  ContentZoomDeclaration
+> = new Map<string, ContentZoomDeclaration>([
+  [SCRIPTURE_EDITOR_WEBVIEW_TYPE, { kind: 'editor', defaultArea: MAIN_CONTENT_ZOOM_AREA }],
+  [
+    'platformEnhancedResources.enhancedResource',
+    { kind: 'resource', defaultArea: MAIN_CONTENT_ZOOM_AREA },
+  ],
+  // No default area: each resource the grid shows is its own area (`resource-<id>`, or
+  // `text-collection` for an id that yields no area characters), and the grid has none of its own.
+  ['platformScriptureEditor.scriptureTextGrid', { kind: 'resource' }],
+  ['platformScriptureEditor.modelText', { kind: 'resource', defaultArea: 'model-text' }],
+  ['platformScriptureEditor.bibleTexts', { kind: 'resource', defaultArea: 'bible-texts' }],
+  ['platformScriptureEditor.commentaries', { kind: 'resource', defaultArea: 'commentaries' }],
+  ['legacyCommentManager.commentList', { kind: 'notes', defaultArea: MAIN_CONTENT_ZOOM_AREA }],
+  ['legacyCommentManager.commentListPanel', { kind: 'notes', defaultArea: MAIN_CONTENT_ZOOM_AREA }],
+  [FIND_WEBVIEW_TYPE, { kind: 'find', defaultArea: MAIN_CONTENT_ZOOM_AREA }],
+  // The four inventories share one kind and one area, so one project's inventories share a level:
+  // they show the same project's text in the same table shape.
+  [
+    'platformScripture.characterInventory',
+    { kind: 'inventory', defaultArea: MAIN_CONTENT_ZOOM_AREA },
+  ],
+  [
+    'platformScripture.repeatedWordsInventory',
+    { kind: 'inventory', defaultArea: MAIN_CONTENT_ZOOM_AREA },
+  ],
+  [
+    'platformScripture.markersInventory',
+    { kind: 'inventory', defaultArea: MAIN_CONTENT_ZOOM_AREA },
+  ],
+  [
+    'platformScripture.punctuationInventory',
+    { kind: 'inventory', defaultArea: MAIN_CONTENT_ZOOM_AREA },
+  ],
+  ['platformScripture.checksSidePanel', { kind: 'checks', defaultArea: MAIN_CONTENT_ZOOM_AREA }],
+  [
+    'platformScripture.markersChecklist',
+    { kind: 'checklist', defaultArea: MAIN_CONTENT_ZOOM_AREA },
+  ],
+  ['platformLexicalTools.dictionary', { kind: 'dictionary', defaultArea: MAIN_CONTENT_ZOOM_AREA }],
 ]);
 
-/** The content-zoom kind of a web view type, or `undefined` for a type with no per-project memory. */
+/** The declaration of a web view type, or `undefined` for a type core does not declare zoomable. */
+export function getContentZoomDeclaration(webViewType: string): ContentZoomDeclaration | undefined {
+  return CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE.get(webViewType);
+}
+
+/** The content-zoom kind of a web view type, or `undefined` for a type core does not declare. */
 export function getContentZoomKind(webViewType: string): ContentZoomKind | undefined {
-  return CONTENT_ZOOM_KIND_BY_WEB_VIEW_TYPE.get(webViewType);
+  return getContentZoomDeclaration(webViewType)?.kind;
 }
 
 /** Names of the three content-zoom commands (registered in the main-process web-view router). */

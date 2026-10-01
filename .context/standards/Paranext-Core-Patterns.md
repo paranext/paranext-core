@@ -377,6 +377,8 @@ projectInterfaces.includes(scriptureInterfaceName);
 
 (`src/shared/models/project-lookup.service-model.ts` uses the same `.includes(...)` check when matching PDP factories and enriching metadata.) Keep the interface-name constant in one shared place so the name convention is encoded once. This keeps an extension's new project type working with zero changes to a central enum, and avoids a wrong-shape "fetch a project-type setting" lookup. Each PT9 project variant maps cleanly onto a combination of interface checks.
 
+**One exception: telling a published resource from a translation project.** When the question really is "is this a published resource?" (for example, a resource has no Text Collection of its own), read the `platform.isPublished` project setting — see `isProjectPublished` in `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`. Do not use `platform.isEditable`: it is a project-wide switch on editing the Scripture text, so a translation project can have it off. And do not infer it from `projectInterfaces`: both Paratext factories advertise the same reading and text-connection interfaces, and the ones only unpublished projects add (comments, PT9 interlinear) describe capabilities that happen to coincide with being unpublished today, not the category itself. Rationale: `adr-column-3-panels-are-told-their-project` in [Architecture-Decisions.md](Architecture-Decisions.md).
+
 ### Test Infrastructure
 
 - **Framework:** NUnit 4.0.1

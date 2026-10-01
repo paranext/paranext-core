@@ -1,4 +1,4 @@
-import { act, render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ZoomStepper } from './zoom-stepper.component';
@@ -25,6 +25,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const PERCENT_LABEL = 'Percentage';
 const LABELS = {
   increase: 'Increase default zoom',
   decrease: 'Decrease default zoom',
@@ -32,6 +33,7 @@ const LABELS = {
   atMaximum: 'Already at the largest zoom (300 %)',
   atMinimum: 'Already at the smallest zoom (50 %)',
   atDefault: 'Already at the default zoom',
+  percentInput: PERCENT_LABEL,
 };
 const baseProps = {
   defaultValue: 1,
@@ -39,13 +41,26 @@ const baseProps = {
   groupLabel: 'Tab content default zoom',
 };
 
+/** The typeable percentage field. */
+const percentField = () => screen.getByRole('textbox', { name: PERCENT_LABEL });
+
+/**
+ * Matches a displayed percentage. Production puts a narrow no-break space (U+202F) before `%`, and
+ * `\s` in a Unicode regex matches it, so the plain-looking pattern is exact about everything else.
+ */
+const showsPercent = (percent: number) => new RegExp(`^${percent}\\s%$`, 'u');
+
+/** Types into the field and presses Enter, the way a user commits a percentage. */
+function typeAndEnter(text: string) {
+  fireEvent.change(percentField(), { target: { value: text } });
+  fireEvent.keyDown(percentField(), { key: 'Enter' });
+}
+
 describe('ZoomStepper', () => {
   it('shows 120 % for a factor of 1.2', () => {
     render(<ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
-    // Production formats with a narrow no-break space (U+202F); Testing Library's default
-    // normalizer collapses \s+ (which includes U+202F) to a single space, so the plain-space
-    // literal below matches.
-    expect(screen.getByText('120 %')).toBeInTheDocument();
+    // The field shows the factor as a whole percentage with a narrow no-break space before `%`.
+    expect(percentField()).toHaveDisplayValue(showsPercent(120));
   });
 
   it('+ emits the next step', () => {
@@ -138,7 +153,9 @@ describe('ZoomStepper', () => {
   it('stays focusable at its bound', () => {
     render(<ZoomStepper {...baseProps} value={3} onChange={vi.fn()} />);
     const increase = screen.getByRole('button', { name: LABELS.increase });
-    increase.focus();
+    act(() => {
+      increase.focus();
+    });
     expect(increase).toHaveFocus();
   });
 
@@ -154,31 +171,41 @@ describe('ZoomStepper', () => {
   it('names the limit rather than the button when the bound is reached', async () => {
     render(<ZoomStepper {...baseProps} value={3} onChange={vi.fn()} />);
     const increase = screen.getByRole('button', { name: LABELS.increase });
-    increase.focus();
+    act(() => {
+      increase.focus();
+    });
     expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.atMaximum);
   });
 
   it('names the lower limit on the decrease button at the minimum', async () => {
     render(<ZoomStepper {...baseProps} value={0.5} onChange={vi.fn()} />);
-    screen.getByRole('button', { name: LABELS.decrease }).focus();
+    act(() => {
+      screen.getByRole('button', { name: LABELS.decrease }).focus();
+    });
     expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.atMinimum);
   });
 
   it('names the default rather than the button when reset has nothing to reset', async () => {
     render(<ZoomStepper {...baseProps} value={1} onChange={vi.fn()} />);
-    screen.getByRole('button', { name: LABELS.reset }).focus();
+    act(() => {
+      screen.getByRole('button', { name: LABELS.reset }).focus();
+    });
     expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.atDefault);
   });
 
   it('names the reset button while there is something to reset', async () => {
     render(<ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
-    screen.getByRole('button', { name: LABELS.reset }).focus();
+    act(() => {
+      screen.getByRole('button', { name: LABELS.reset }).focus();
+    });
     expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.reset);
   });
 
   it('names the button when it is not at a bound', async () => {
     render(<ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
-    screen.getByRole('button', { name: LABELS.increase }).focus();
+    act(() => {
+      screen.getByRole('button', { name: LABELS.increase }).focus();
+    });
     expect(await screen.findByRole('tooltip')).toHaveTextContent(LABELS.increase);
   });
 
@@ -187,7 +214,9 @@ describe('ZoomStepper', () => {
     [LABELS.increase, LABELS.decrease, LABELS.reset].forEach((name) => {
       const button = screen.getByRole('button', { name });
       expect(button.tagName).toBe('BUTTON');
-      button.focus();
+      act(() => {
+        button.focus();
+      });
       expect(button).toHaveFocus();
     });
   });
@@ -206,7 +235,7 @@ describe('ZoomStepper', () => {
     expect(onChange.mock.calls).toEqual([[1.1], [1.2]]);
     // The readout follows the presses, not the prop: both have been made, so it reads 120 % while
     // the platform is still confirming the first one.
-    expect(screen.getByText('120 %')).toBeInTheDocument();
+    expect(percentField()).toHaveDisplayValue(showsPercent(120));
   });
 
   it('follows the prop once it catches up', () => {
@@ -235,9 +264,9 @@ describe('ZoomStepper', () => {
   });
 
   it('steps by the platform rule from an off-tenth factor', () => {
-    // The shared helper subtracts a whole step and then rounds the result to the nearest tenth, so
-    // 0.95 goes to 0.9. A rule that truncated the result to a tenth instead would land on 0.8,
-    // which is two steps away from where the user pressed once.
+    // The shared helper steps to the next tenth in the direction pressed, so 0.95 goes to 0.9. A
+    // rule that truncated the stepped result to a tenth instead would land on 0.8, two marks away
+    // from where the user pressed once.
     const onChange = vi.fn();
     render(<ZoomStepper {...baseProps} value={0.95} onChange={onChange} />);
     fireEvent.click(screen.getByRole('button', { name: LABELS.decrease }));
@@ -276,7 +305,7 @@ describe('ZoomStepper', () => {
       fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
       expect(onChange).toHaveBeenCalledTimes(2);
       expect(onChange).toHaveBeenLastCalledWith(1.1);
-      expect(screen.getByText('110 %')).toBeInTheDocument();
+      expect(percentField()).toHaveDisplayValue(showsPercent(110));
     } finally {
       vi.useRealTimers();
     }
@@ -298,7 +327,7 @@ describe('ZoomStepper', () => {
       rerender(<ZoomStepper {...baseProps} value={1} onChange={onChange} />);
       fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
       expect(onChange).toHaveBeenLastCalledWith(1.2);
-      expect(screen.getByText('120 %')).toBeInTheDocument();
+      expect(percentField()).toHaveDisplayValue(showsPercent(120));
     } finally {
       vi.useRealTimers();
     }
@@ -366,7 +395,7 @@ describe('ZoomStepper', () => {
   it('shows the pressed factor in the readout before the write lands', () => {
     render(<ZoomStepper {...baseProps} value={1} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
-    expect(screen.getByText('110 %')).toBeInTheDocument();
+    expect(percentField()).toHaveDisplayValue(showsPercent(110));
   });
 
   it('a foreign write wins immediately', () => {
@@ -378,8 +407,207 @@ describe('ZoomStepper', () => {
     // platform confirming the press above; the prop is authoritative, so both the display and the
     // baseline for the next press must follow it immediately.
     rerender(<ZoomStepper {...baseProps} value={2} onChange={onChange} />);
-    expect(screen.getByText('200 %')).toBeInTheDocument();
+    expect(percentField()).toHaveDisplayValue(showsPercent(200));
     fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
     expect(onChange).toHaveBeenCalledWith(2.1);
+  });
+});
+
+describe('ZoomStepper percentage field', () => {
+  it('commits a typed 137 on Enter as the factor 1.37', () => {
+    const onChange = vi.fn();
+    render(<ZoomStepper {...baseProps} value={1.2} onChange={onChange} />);
+    typeAndEnter('137');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(1.37);
+    expect(percentField()).toHaveDisplayValue(showsPercent(137));
+  });
+
+  it('accepts a trailing % and the spaces the field itself displays', () => {
+    const onChange = vi.fn();
+    render(<ZoomStepper {...baseProps} value={1} onChange={onChange} />);
+    typeAndEnter('137%');
+    typeAndEnter(' 90 % ');
+    typeAndEnter('125 %');
+    expect(onChange.mock.calls).toEqual([[1.37], [0.9], [1.25]]);
+  });
+
+  it('clamps a typed percentage to 50–300 %', () => {
+    const onChange = vi.fn();
+    render(<ZoomStepper {...baseProps} value={1} onChange={onChange} />);
+    typeAndEnter('20');
+    expect(percentField()).toHaveDisplayValue(showsPercent(50));
+    typeAndEnter('400');
+    expect(percentField()).toHaveDisplayValue(showsPercent(300));
+    expect(onChange.mock.calls).toEqual([[0.5], [3]]);
+  });
+
+  it.each(['13.7', 'abc', '', '%', '-120'])('reverts %j without committing anything', (text) => {
+    const onChange = vi.fn();
+    render(<ZoomStepper {...baseProps} value={1.2} onChange={onChange} />);
+    typeAndEnter(text);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(percentField()).toHaveDisplayValue(showsPercent(120));
+  });
+
+  it('commits on blur', () => {
+    const onChange = vi.fn();
+    render(<ZoomStepper {...baseProps} value={1.2} onChange={onChange} />);
+    fireEvent.change(percentField(), { target: { value: '90' } });
+    fireEvent.blur(percentField());
+    expect(onChange).toHaveBeenCalledWith(0.9);
+    expect(percentField()).toHaveDisplayValue(showsPercent(90));
+  });
+
+  it('Escape restores the last value and commits nothing, then or on blur', () => {
+    const onChange = vi.fn();
+    render(<ZoomStepper {...baseProps} value={1.2} onChange={onChange} />);
+    fireEvent.change(percentField(), { target: { value: '250' } });
+    fireEvent.keyDown(percentField(), { key: 'Escape' });
+    expect(percentField()).toHaveDisplayValue(showsPercent(120));
+    fireEvent.blur(percentField());
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('emits nothing for an unchanged value, including one that clamps to it', () => {
+    const atCurrent = vi.fn();
+    const { unmount } = render(<ZoomStepper {...baseProps} value={1.2} onChange={atCurrent} />);
+    typeAndEnter('120');
+    expect(atCurrent).not.toHaveBeenCalled();
+    unmount();
+
+    const atMaximum = vi.fn();
+    render(<ZoomStepper {...baseProps} value={3} onChange={atMaximum} />);
+    typeAndEnter('999');
+    expect(atMaximum).not.toHaveBeenCalled();
+    expect(percentField()).toHaveDisplayValue(showsPercent(300));
+  });
+
+  it('steps the buttons to the next 10 % mark from a typed off-grid value', () => {
+    const up = vi.fn();
+    const { unmount } = render(<ZoomStepper {...baseProps} value={1} onChange={up} />);
+    typeAndEnter('137');
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    expect(up.mock.calls).toEqual([[1.37], [1.4]]);
+    unmount();
+
+    const down = vi.fn();
+    render(<ZoomStepper {...baseProps} value={1} onChange={down} />);
+    typeAndEnter('137');
+    fireEvent.click(screen.getByRole('button', { name: LABELS.decrease }));
+    expect(down.mock.calls).toEqual([[1.37], [1.3]]);
+  });
+
+  it('blurring by pressing a button commits the typed value before the button steps', () => {
+    const onChange = vi.fn();
+    render(<ZoomStepper {...baseProps} value={1} onChange={onChange} />);
+    fireEvent.change(percentField(), { target: { value: '137' } });
+    // A pointer press on a button blurs the field first; jsdom does not do that on its own.
+    fireEvent.blur(percentField());
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    expect(onChange.mock.calls).toEqual([[1.37], [1.4]]);
+  });
+
+  it('keeps a typed commit through the confirmation of an earlier press', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<ZoomStepper {...baseProps} value={1} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    typeAndEnter('150');
+    // Leave the field so what it shows below comes from the control's value, not the edit text.
+    fireEvent.blur(percentField());
+    rerender(<ZoomStepper {...baseProps} value={1.1} onChange={onChange} />);
+    expect(onChange.mock.calls).toEqual([[1.1], [1.5]]);
+    expect(percentField()).toHaveDisplayValue(showsPercent(150));
+  });
+
+  it('keeps what the user is typing when the value changes elsewhere, and commits it on blur', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<ZoomStepper {...baseProps} value={1} onChange={onChange} />);
+    fireEvent.change(percentField(), { target: { value: '180' } });
+    rerender(<ZoomStepper {...baseProps} value={2} onChange={onChange} />);
+    expect(percentField()).toHaveDisplayValue('180');
+    fireEvent.blur(percentField());
+    expect(onChange).toHaveBeenCalledWith(1.8);
+  });
+
+  it('does not write a stale value back when an unedited field loses focus', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<ZoomStepper {...baseProps} value={1} onChange={onChange} />);
+    fireEvent.focus(percentField());
+    // The value changes elsewhere (another window, a zoom shortcut) while the field has focus.
+    rerender(<ZoomStepper {...baseProps} value={2} onChange={onChange} />);
+    fireEvent.blur(percentField());
+    expect(onChange).not.toHaveBeenCalled();
+    expect(percentField()).toHaveDisplayValue(showsPercent(200));
+  });
+
+  it('commits a typed value once and does not re-commit it over a later change', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<ZoomStepper {...baseProps} value={1} onChange={onChange} />);
+    typeAndEnter('137');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(1.37);
+    rerender(<ZoomStepper {...baseProps} value={2} onChange={onChange} />);
+    fireEvent.blur(percentField());
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(percentField()).toHaveDisplayValue(showsPercent(200));
+  });
+
+  it('clears the announcement when the value changes elsewhere', () => {
+    const { container, rerender } = render(
+      <ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    const liveRegion = container.querySelector('[aria-live="polite"]');
+    // Positive control: the press did announce, so an empty region below means it was cleared.
+    expect(liveRegion).toHaveTextContent(showsPercent(130));
+    rerender(<ZoomStepper {...baseProps} value={2} onChange={vi.fn()} />);
+    expect(liveRegion).toBeEmptyDOMElement();
+  });
+
+  it('disables the field along with the buttons', () => {
+    render(<ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} disabled />);
+    expect(percentField()).toBeDisabled();
+  });
+
+  it('is an ordinary numeric text field, not a spinbutton', () => {
+    render(<ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
+    expect(percentField()).toHaveAttribute('type', 'text');
+    expect(percentField()).toHaveAttribute('inputmode', 'numeric');
+    expect(screen.queryByRole('spinbutton')).toBeNull();
+  });
+
+  it('announces a button press in a live region that is not the field', () => {
+    render(<ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
+    // Nothing is announced before a press; the field's value is not text content.
+    expect(screen.queryByText(showsPercent(120))).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: LABELS.increase }));
+    expect(screen.getByText(showsPercent(130))).toHaveAttribute('aria-live', 'polite');
+    expect(percentField()).not.toHaveAttribute('aria-live');
+  });
+
+  it('does not announce a typed commit, which the focused field already shows', () => {
+    render(<ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
+    typeAndEnter('137');
+    expect(screen.queryByText(showsPercent(137))).toBeNull();
+  });
+
+  it('splits into a − + group and a percentage + reset group inside one wrapping group', () => {
+    render(<ZoomStepper {...baseProps} value={1.2} onChange={vi.fn()} />);
+    const outer = screen.getByRole('group', { name: 'Tab content default zoom' });
+    expect(outer.className).toContain('tw:flex-wrap');
+    const inner = within(outer).getAllByRole('group');
+    expect(inner).toHaveLength(2);
+    expect(
+      within(inner[0])
+        .getAllByRole('button')
+        .map((button) => button.getAttribute('aria-label')),
+    ).toEqual([LABELS.decrease, LABELS.increase]);
+    expect(within(inner[1]).getByRole('textbox', { name: PERCENT_LABEL })).toBeInTheDocument();
+    expect(
+      within(inner[1])
+        .getAllByRole('button')
+        .map((button) => button.getAttribute('aria-label')),
+    ).toEqual([LABELS.reset]);
   });
 });

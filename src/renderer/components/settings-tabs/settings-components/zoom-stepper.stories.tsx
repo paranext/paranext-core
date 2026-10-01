@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { fn } from 'storybook/test';
+import { expect, fn } from 'storybook/test';
 import { ZoomStepper } from './zoom-stepper.component';
 
 const LABELS = {
@@ -9,6 +9,7 @@ const LABELS = {
   atMaximum: 'Already at the largest zoom (300 %)',
   atMinimum: 'Already at the smallest zoom (50 %)',
   atDefault: 'Already at the default zoom',
+  percentInput: 'Percentage',
 };
 
 const meta: Meta<typeof ZoomStepper> = {
@@ -49,4 +50,35 @@ export const AtMaximum: Story = {
 /** Every button disabled, e.g. while the setting is read-only during a Send/Receive. */
 export const Disabled: Story = {
   args: { value: 1.2, disabled: true },
+};
+
+/**
+ * A container too narrow for both groups side by side: `−` and `+` stay on top, and the percentage
+ * field and reset wrap underneath.
+ */
+export const Narrow: Story = {
+  args: { value: 1.2 },
+  decorators: [
+    (Story) => (
+      <div style={{ width: '7rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
+};
+
+/** The percentage field takes a typed whole percentage, committed on Enter. */
+export const TypedPercentage: Story = {
+  args: { value: 1 },
+  play: async ({ args, canvas, userEvent, step }) => {
+    const field = canvas.getByRole('textbox', { name: 'Percentage' });
+    await step('Type 137 and press Enter', async () => {
+      await userEvent.clear(field);
+      await userEvent.type(field, '137{Enter}');
+    });
+    await step('The typed percentage is committed as a factor', async () => {
+      await expect(args.onChange).toHaveBeenCalledWith(1.37);
+      await expect(field).toHaveDisplayValue(/^137\s%$/u);
+    });
+  },
 };

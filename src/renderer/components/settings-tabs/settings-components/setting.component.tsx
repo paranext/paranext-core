@@ -1,4 +1,10 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { includeCurrentLanguages } from '@renderer/services/include-current-languages';
+import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
+import {
+  getOfferedLanguageDefaults,
+  switchInterfaceLanguage,
+} from '@shared/data/interface-languages.data';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { DEFAULT_ZOOM_FACTOR } from '@shared/models/content-zoom.model';
 import { localizationService } from '@shared/services/localization.service';
@@ -15,7 +21,6 @@ import {
   ErrorPopover,
   Input,
   Label,
-  LanguageInfo,
   Switch,
   Tooltip,
   TooltipContent,
@@ -31,8 +36,11 @@ import {
   PlatformError,
 } from 'platform-bible-utils';
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { ZoomStepper } from './zoom-stepper.component';
+import { ZoomStepper, type ZoomStepperProps } from './zoom-stepper.component';
 import './settings.component.scss';
+
+/** What the language selector offers while the offered languages load, or if they cannot be read. */
+const OFFERED_LANGUAGE_DEFAULTS = getOfferedLanguageDefaults();
 
 /** Props shared between the user and project setting components */
 type BaseSettingProps<TSettingKey, TSettingValue> = {
@@ -142,6 +150,39 @@ const SETTING_WRITE_DEBOUNCE_MS = 500;
  */
 const STEPPER_WRITE_DEBOUNCE_MS = 150;
 
+/** The settings the zoom stepper edits: both store a factor and are shown as a percentage. */
+type ZoomStepperSettingKey = 'platform.webViewContentZoom' | 'platform.zoomFactor';
+
+function isZoomStepperSettingKey(settingKey: string): settingKey is ZoomStepperSettingKey {
+  return settingKey === 'platform.webViewContentZoom' || settingKey === 'platform.zoomFactor';
+}
+
+/**
+ * Each stepper setting's own button names and bound explanations, so neither setting's control
+ * reads with the other's wording. The percentage field's name is shared and supplied separately.
+ */
+const ZOOM_STEPPER_LABEL_KEYS: Record<
+  ZoomStepperSettingKey,
+  Record<Exclude<keyof ZoomStepperProps['labels'], 'percentInput'>, LocalizeKey>
+> = {
+  'platform.webViewContentZoom': {
+    increase: '%settings_platform_webViewContentZoom_increase%',
+    decrease: '%settings_platform_webViewContentZoom_decrease%',
+    reset: '%settings_platform_webViewContentZoom_reset%',
+    atMaximum: '%settings_platform_webViewContentZoom_atMaximum%',
+    atMinimum: '%settings_platform_webViewContentZoom_atMinimum%',
+    atDefault: '%settings_platform_webViewContentZoom_atDefault%',
+  },
+  'platform.zoomFactor': {
+    increase: '%settings_platform_zoomFactor_increase%',
+    decrease: '%settings_platform_zoomFactor_decrease%',
+    reset: '%settings_platform_zoomFactor_reset%',
+    atMaximum: '%settings_platform_zoomFactor_atMaximum%',
+    atMinimum: '%settings_platform_zoomFactor_atMinimum%',
+    atDefault: '%settings_platform_zoomFactor_atDefault%',
+  },
+};
+
 /**
  * Marks a validated change that has no writer to send it to, so the catch below can show the
  * localized `%settings_errorMessages_notWritableYet%` message instead of the English sentence it
@@ -158,6 +199,12 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_platform_webViewContentZoom_decrease%',
   '%settings_platform_webViewContentZoom_increase%',
   '%settings_platform_webViewContentZoom_reset%',
+  '%settings_platform_zoomFactor_atDefault%',
+  '%settings_platform_zoomFactor_atMaximum%',
+  '%settings_platform_zoomFactor_atMinimum%',
+  '%settings_platform_zoomFactor_decrease%',
+  '%settings_platform_zoomFactor_increase%',
+  '%settings_platform_zoomFactor_reset%',
   '%settings_errorMessages_invalidNumber%',
   '%settings_errorMessages_invalidJSON%',
   '%settings_errorMessages_invalidValue%',
@@ -165,6 +212,7 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_errorMessages_errorOccurred%',
   '%settings_errorMessages_viewError%',
   '%settings_uiLanguageSelector_fallbackLanguages%',
+  '%settings_zoomStepper_percentInput%',
   ...ERROR_POPOVER_STRING_KEYS,
 ];
 
@@ -186,34 +234,22 @@ export function Setting({
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
-  // Although the full set of languages is likely to load more-or-less instantaneously, if there is
-  // a delay, we want to be sure to include at least any language(s) currently selected, so the user
-  // can't get into the weird state of dropping down the list and not seeing the current selection
-  // in the list.
-  const defaultLanguages = useMemo(() => {
-    const languages: Record<string, LanguageInfo> = {
-      en: { autonym: 'English', uiNames: { es: 'inglés' } },
-    };
+  const [offeredLanguagesPossiblyError] = useData(
+    localizationService.dataProviderName,
+  ).AvailableInterfaceLanguages(undefined, OFFERED_LANGUAGE_DEFAULTS);
 
-    if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
-      // Add hardcoded languages
-      languages.es = { autonym: 'Español', uiNames: { en: 'Spanish', fr: 'espagnol' } };
-      languages.fr = { autonym: 'Français', uiNames: { en: 'French', es: 'francés' } };
-
-      // Add dynamic languages from setting
-      setting.forEach((lang) => {
-        if (!languages[lang]) {
-          languages[lang] = { autonym: lang }; // Autonym is required, but we don't know it.
-        }
-      });
-    }
-
-    return languages;
-  }, [setting, settingKey]);
-
-  const [languages] = useData(localizationService.dataProviderName).AvailableInterfaceLanguages(
-    undefined,
-    defaultLanguages,
+  // List the user's current languages even when not offered, so the selection is never blank.
+  const knownUiLanguages = useMemo(
+    () =>
+      includeCurrentLanguages(
+        isPlatformError(offeredLanguagesPossiblyError)
+          ? OFFERED_LANGUAGE_DEFAULTS
+          : offeredLanguagesPossiblyError,
+        Array.isArray(setting) && settingKey === 'platform.interfaceLanguage'
+          ? setting.filter((tag): tag is string => typeof tag === 'string')
+          : [],
+      ),
+    [offeredLanguagesPossiblyError, setting, settingKey],
   );
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
@@ -247,8 +283,15 @@ export function Setting({
         // nothing to parse out of a target.
         newValue = event;
       } else if (Array.isArray(event)) {
-        // This event came from a `UiLanguageSelector` component
-        newValue = event;
+        // This event came from a `UiLanguageSelector` component, which reports the chosen language
+        // first. The pickers share one rule for what the rest of the list becomes.
+        newValue =
+          event.length > 0 && Array.isArray(setting)
+            ? switchInterfaceLanguage(
+                setting.filter((tag): tag is string => typeof tag === 'string'),
+                event[0],
+              )
+            : event;
       } else {
         // This event came from an `Input` component
         const { value } = event.target;
@@ -284,6 +327,12 @@ export function Setting({
           await setSetting(newValue);
           // Only a completed write earns a clear screen.
           setErrorMessage(undefined);
+          if (
+            settingKey === 'platform.interfaceLanguage' &&
+            Array.isArray(setting) &&
+            Array.isArray(newValue)
+          )
+            await offerRestartAfterInterfaceLanguageChange(setting, newValue);
         } else {
           setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
         }
@@ -320,31 +369,34 @@ export function Setting({
   const generateComponent = useCallback(() => {
     let component = <p>{localizedStrings['%settings_defaultMessage_noSettingComponent%']}</p>;
 
-    // The default pane zoom stores a factor but is edited as a percentage; the generic number
-    // branch below would put a raw decimal in a text box instead.
-    if (settingKey === 'platform.webViewContentZoom' && typeof setting === 'number')
+    // Both zoom settings store a factor but are edited as a percentage; the generic number branch
+    // below would put a raw decimal in a text box instead. `DEFAULT_ZOOM_FACTOR` is also each
+    // setting's declared default, so reset returns either one to 100 %.
+    if (isZoomStepperSettingKey(settingKey) && typeof setting === 'number') {
+      const labelKeys = ZOOM_STEPPER_LABEL_KEYS[settingKey];
       component = (
         <ZoomStepper
           key={settingKey}
           value={setting}
           defaultValue={DEFAULT_ZOOM_FACTOR}
-          // Without a writer the stepper has nothing to send a press to, and its readout moves and
-          // is announced (`aria-live`) the moment a button is pressed. Gating the buttons keeps the
-          // number on screen honest instead of reporting a percentage that was never written.
+          // Without a writer the stepper has nothing to send a press to, and its readout moves the
+          // moment a button is pressed. Gating the control keeps the number on screen honest
+          // instead of reporting a percentage that was never written.
           disabled={disabled || !setSetting}
           groupLabel={label}
           labels={{
-            increase: localizedStrings['%settings_platform_webViewContentZoom_increase%'],
-            decrease: localizedStrings['%settings_platform_webViewContentZoom_decrease%'],
-            reset: localizedStrings['%settings_platform_webViewContentZoom_reset%'],
-            atMaximum: localizedStrings['%settings_platform_webViewContentZoom_atMaximum%'],
-            atMinimum: localizedStrings['%settings_platform_webViewContentZoom_atMinimum%'],
-            atDefault: localizedStrings['%settings_platform_webViewContentZoom_atDefault%'],
+            increase: localizedStrings[labelKeys.increase],
+            decrease: localizedStrings[labelKeys.decrease],
+            reset: localizedStrings[labelKeys.reset],
+            atMaximum: localizedStrings[labelKeys.atMaximum],
+            atMinimum: localizedStrings[labelKeys.atMinimum],
+            atDefault: localizedStrings[labelKeys.atDefault],
+            percentInput: localizedStrings['%settings_zoomStepper_percentInput%'],
           }}
           onChange={debouncedHandleStepperChange}
         />
       );
-    else if (typeof setting === 'string' || typeof setting === 'number')
+    } else if (typeof setting === 'string' || typeof setting === 'number')
       component = (
         <Input
           key={settingKey}
@@ -370,7 +422,7 @@ export function Setting({
           <UiLanguageSelector
             className="language-selector"
             key={settingKey}
-            knownUiLanguages={isPlatformError(languages) ? defaultLanguages : languages}
+            knownUiLanguages={knownUiLanguages}
             primaryLanguage={setting[0]}
             fallbackLanguages={setting.slice(1)}
             onLanguagesChange={debouncedHandleChange}
@@ -413,8 +465,7 @@ export function Setting({
     debouncedHandleChange,
     debouncedHandleStepperChange,
     errorMessage,
-    languages,
-    defaultLanguages,
+    knownUiLanguages,
     disabled,
     setSetting,
   ]);

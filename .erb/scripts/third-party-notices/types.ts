@@ -46,6 +46,8 @@ export type Verdict = {
   usableDisallowedId: string | undefined;
   /** The license file `usableDisallowedId` was read from, which is not always `matchedFile`. */
   usableDisallowedFile: string | undefined;
+  /** The reviewed exception's per-operand credits, where it cleared this row - see `Exception`. */
+  copyrightByOperand?: Record<string, string>;
 };
 
 /** A curated determination about a package whose own metadata establishes nothing. */
@@ -107,6 +109,18 @@ export type Exception = {
   reviewer: string;
   date: string;
   textSha256: string;
+  /**
+   * The copyright notice(s) each operand of a conjunction's grant is made under, keyed by that
+   * operand's SPDX id, where they are not the package's first notice.
+   *
+   * The credit line beside a canonical text is otherwise the first notice in the package's license
+   * file - which, for a file stacking several grants, belongs to one of them. `posthog-node`'s
+   * LICENSE opens with PostHog's Apache-2.0 notice and carries its MIT grants for code vendored
+   * from Sentry, Meta, Expo and AgentCat further down, so without this the MIT section credits
+   * PostHog. Every key must be an operand of `spdx` (`applyException` refuses one that is not); an
+   * operand with no key keeps the package's own notice.
+   */
+  copyrightByOperand?: Record<string, string>;
 };
 
 /** The choice this project takes among a declared disjunction's operands. */

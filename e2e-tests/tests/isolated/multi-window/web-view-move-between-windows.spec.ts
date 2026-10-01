@@ -10,7 +10,7 @@
  * cannot exercise: mocks have no renderer to start, no dock to empty, and no emptiness report
  * racing the adopt.
  *
- * Three tests, each launching its own Electron instance (the isolated fixture is test-scoped and
+ * Four tests, each launching its own Electron instance (the isolated fixture is test-scoped and
  * each launch costs 30+ seconds, so related assertions are grouped into one instance):
  *
  * 1. Foreground withholding: a window a move creates to hold the destination web view is not something
@@ -35,6 +35,10 @@
  *    wrongly offering itself. That rides this instance because three windows are already standing
  *    by then. Ends with a graceful quit, so the whole flow is also swept for faults and duplicate
  *    registrations.
+ * 4. Content zoom follows the context-menu move route (as in test 2): a text area zoomed to its own
+ *    level before the move keeps that exact level in the window it arrives in, and arriving through
+ *    a move — not a user zoom gesture on the destination's own fresh pane — shows no zoom indicator
+ *    there.
  *
  * ## Asserting identity, not shape
  *
@@ -77,6 +81,19 @@
 import type { ElectronApplication, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { sendPapiRequestOnce, waitForAppReady } from '../../../fixtures/helpers';
+import {
+  INDICATOR_SELECTOR,
+  readContentZoomMemory,
+  zoomAreaTo,
+} from '../../../fixtures/content-zoom-helpers';
+import {
+  getEditorFrame,
+  makeSampleProjectEditable,
+  openEditableScriptureEditorForProject,
+  readFactor,
+  SAMPLE_WEB_PROJECT_ID,
+  waitForHomeTab,
+} from '../../../fixtures/scripture-editor-helpers';
 import {
   DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
@@ -646,5 +663,51 @@ test.describe('moving a web view between windows', () => {
     // everything captured — both moves included — for faults and duplicate registrations, with the
     // quit line itself as the positive control that the corpus is not empty.
     await quitAndExpectCleanExit(electronApp, output, logStep, 'quit after three moves');
+  });
+
+  test('a moved web view keeps its own text-area zoom level in the window it arrives in, with no indicator on it', async ({
+    electronApp,
+    mainPage,
+  }) => {
+    const logStep = createStepLogger('web-view-move-content-zoom');
+    await waitForAppReady(mainPage, { timeout: 180_000 });
+    await waitForHomeTab(mainPage);
+    await makeSampleProjectEditable();
+
+    const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
+    const editorFrame = await getEditorFrame(mainPage, editorId);
+    await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
+
+    await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1.4);
+    const normalizedId = SAMPLE_WEB_PROJECT_ID.toUpperCase();
+    await expect
+      .poll(async () => (await readContentZoomMemory(mainPage))[`editor:${normalizedId}:main`])
+      .toBe(1.4);
+    logStep('editor zoomed to 140% before the move');
+
+    // Same context-menu move route as the second test above — the user's own route to moving a tab.
+    const newWindowPromise = electronApp.waitForEvent('window', {
+      predicate: (page: Page) => page.url().includes('windowId='),
+      timeout: 180_000,
+    });
+    const movedWebViewId = await moveWebViewToNewWindow(editorId);
+    expect(movedWebViewId).toBe(editorId);
+    const page2 = await newWindowPromise;
+    await page2.waitForLoadState('domcontentloaded');
+    await page2
+      .locator(`iframe[data-web-view-id="${movedWebViewId}"]`)
+      .waitFor({ state: 'attached', timeout: 120_000 });
+    logStep('editor arrived in the new window');
+
+    const editorFrame2 = await getEditorFrame(page2, movedWebViewId);
+    await editorFrame2.locator('.editor-container').waitFor({ timeout: 60_000 });
+    await expect.poll(() => readFactor(editorFrame2, '')).toBe(1.4);
+    logStep('editor kept its 140% level in the destination window');
+
+    // Arriving through a move is not a user zoom gesture on the destination pane's own fresh
+    // bootstrap: the badge always exists once its script starts (`ensureIndicatorElements` runs
+    // unconditionally from `start()`), but must never have been told an area or a level.
+    const indicator = editorFrame2.locator(INDICATOR_SELECTOR);
+    await expect(indicator).not.toHaveAttribute('data-area', /.*/);
   });
 });

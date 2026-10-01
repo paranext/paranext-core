@@ -331,6 +331,35 @@ export const Markers: Story = {
   ],
 };
 
+const zoomedStyle: Record<string, string> = { '--platform-content-zoom-main': '2' };
+
+/**
+ * The character inventory with its project text at 200 % content zoom: the items and the occurrence
+ * snippets grow, while the toolbar, the column headers, the count and status columns and the
+ * reference cells keep their size. The stylesheet stands in for the rule the platform injects into
+ * every web view.
+ */
+export const ZoomedText: Story = {
+  // Storybook applies the first decorator innermost; the harness decorator ignores the story it
+  // wraps, so the zoom wrapper must come after it to surround the rendered inventory.
+  decorators: [
+    createDecorator({
+      kind: 'character',
+      items: characterSeed,
+      initialApproved: ['a'],
+      initialUnapproved: ['”'],
+    }),
+    (StoryComponent) => (
+      <div style={zoomedStyle}>
+        <style>
+          {'[data-platform-content-zoom-root] { zoom: var(--platform-content-zoom-main, 1); }'}
+        </style>
+        <StoryComponent />
+      </div>
+    ),
+  ],
+};
+
 /** Items are still loading — the inventory's loading state renders. */
 export const Loading: Story = {
   decorators: [createDecorator({ kind: 'character', items: characterSeed, loading: true })],

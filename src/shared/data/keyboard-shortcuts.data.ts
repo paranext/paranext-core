@@ -227,10 +227,10 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'content-zoom-in',
     purpose:
-      'Zoom the active zoom area of the pane in by 10 % (the area last clicked or focused; a click keeps its area even when the view answers it by moving focus elsewhere)',
+      'Zoom the active zoom area of the pane in by 10 % (the area last clicked or focused; a click keeps its area even when the view answers it by moving focus elsewhere, until the user presses a key there other than a lone modifier or a zoom chord)',
     category: 'Zoom',
     context:
-      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a later focus move or any key other than a modifier pressed on its own or a zoom chord); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
     // The macOS View menu binds ⌘= (what it renders) and, through a hidden duplicate item, ⇧⌘= —
     // which is how a Mac reports ⌘+. The in-view and window-chrome handlers also accept `=`, the
     // numpad `+`, and any Shift state.
@@ -248,7 +248,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Zoom the focused zoom area of the pane out by 10 %',
     category: 'Zoom',
     context:
-      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a later focus move or any key other than a modifier pressed on its own or a zoom chord); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
     // The handler also accepts the numpad `-` key. Shift is accepted too, which is what puts this
     // chord within reach on AZERTY and Czech layouts, where the top-row key is shifted.
     keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
@@ -266,7 +266,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Return the focused zoom area of the pane to the default zoom set in Settings (not to 100 %)',
     category: 'Zoom',
     context:
-      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a Tab or a later focus move); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a later focus move or any key other than a modifier pressed on its own or a zoom chord); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
     // The handler also accepts the numpad `0` key while NumLock is on; with NumLock off that key
     // reports itself as Insert and is left to Chromium's legacy Copy chord. Shift is accepted too,
     // which is what puts this chord within reach on AZERTY and Czech layouts, where the top-row key
@@ -286,7 +286,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Zoom the content of the pane in or out — one step per wheel notch, or by travel for a trackpad pinch',
     category: 'Zoom',
     context:
-      'Inside a web view — content zoom of the zoom area under the pointer (else the pane’s active area). A trackpad pinch also zooms with no modifier held — the browser synthesizes it as Ctrl+wheel, which the handler recognizes as pinch travel rather than a notch chord',
+      'Inside a web view — content zoom of the zoom area under the pointer, or whose zoom scope the pointer is in (else the pane’s active area). A trackpad pinch also zooms with no modifier held — the browser synthesizes it as Ctrl+wheel, which the handler recognizes as pinch travel rather than a notch chord',
     // The handler accepts Ctrl or ⌘ as the modifier on every platform, and ignores the gesture when
     // Shift or Alt is held as well.
     keys: { macOS: '⌘ wheel / ⌃ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
@@ -454,6 +454,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
     command: 'platformScriptureEditor.insertCommentAtSelection',
   },
+  // TODO(PT-4735): Show hints on the rest of Simple's Project menu. ⌃T and ⌃⇧T below need a
+  // `command` that works in every view; the design's ⌃J, ⌃E and F7 have no editor handler or entry
+  // here yet. A new `command` also needs its row in `EXPECTED_MENU_HINTS`.
   {
     id: 'scripture-insert-footnote',
     purpose: 'Insert a footnote at the selection (Standard view, editable)',
@@ -563,32 +566,20 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-text-grid-reorder-cell',
-    purpose:
-      'Reorder the focused Scripture Text Grid cell one position (verse view: up/down; chapter view: left/right)',
+    // The reorder grip is rendered only by the header-band layout, which is the chapter and grid
+    // views; the verse view hangs its resource name inline and shows no grip, so there is nothing
+    // to focus there and the arrow keys never reach the handler. Tracked as PT-4184 follow-up.
+    purpose: 'Reorder the focused Scripture Text Grid column one position (chapter and grid views)',
     category: 'View',
     context: 'Scripture Text Grid web view',
     keys: {
-      macOS: '↑ / ↓ / ← / →',
-      windows: '↑ / ↓ / ← / →',
-      linux: '↑ / ↓ / ← / →',
+      macOS: '← / →',
+      windows: '← / →',
+      linux: '← / →',
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
-    ],
-  },
-  {
-    id: 'scripture-text-grid-zoom-wheel',
-    purpose:
-      'Zoom one resource column of the Text Collection grid in or out — one step per wheel notch, or by travel for a trackpad pinch',
-    category: 'Zoom',
-    context:
-      'Inside the Text Collection grid — the resource column under the pointer. Registered capture-phase on the grid container and stops propagation, so it takes precedence over the pane-level content zoom (see content-zoom-wheel). A trackpad pinch also zooms the resource under the pointer with no modifier held — the browser synthesizes it as Ctrl+wheel, which the shared reader recognizes as pinch travel rather than a notch chord',
-    // Accepts Ctrl or ⌘ and still acts when Shift or Alt is held as well, unlike the pane-level
-    // handler. Keyboard zoom for this grid is deferred pending PT-4143.
-    keys: { macOS: '⌘ wheel / ⌃ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
-    locations: [
-      'extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts',
-      'lib/platform-bible-utils/src/content-zoom-wheel.util.ts',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
     ],
   },
   {
@@ -776,9 +767,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // Not a shortcut the app registers: the browser raises `contextmenu` at the focused tab, which
     // the tab title forwards into the menu's trigger. macOS has no Menu key and no Shift+F10
     // equivalent for this, so the menu is reached there by right-clicking (or Control-clicking) the
-    // tab. Forwarded whenever the tab has menu items, which holds in both interface modes — Simple
-    // mode's menu is narrowed to the content-zoom group.
-    context: 'Renderer (focused tab, Power or Simple mode)',
+    // tab. Forwarded whenever the tab has menu items. Simple mode's menu is narrowed to the
+    // content-zoom group, so a Simple-mode tab whose pane is not zoomable has no menu and Shift+F10
+    // opens nothing.
+    context:
+      'Renderer (focused tab with menu items — always in Power mode; in Simple mode only on a tab whose pane takes content zoom)',
     keys: { macOS: '— (no equivalent)', windows: 'Shift+F10 / Menu', linux: 'Shift+F10 / Menu' },
     locations: ['src/renderer/components/docking/platform-tab-title.component.tsx'],
   },

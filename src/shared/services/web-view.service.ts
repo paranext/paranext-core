@@ -1,4 +1,3 @@
-import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import { getNetworkEvent } from '@shared/services/network.service';
 import {
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
@@ -10,7 +9,7 @@ import {
 } from '@shared/services/web-view.service-model';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
+import { createCachedInitializer, createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 const onDidOpenWebView = getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW);
 

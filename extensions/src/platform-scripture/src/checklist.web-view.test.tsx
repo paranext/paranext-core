@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
 import type { WebViewProps } from '@papi/core';
+import type { IChecklistService } from 'platform-scripture';
 import { newPlatformError } from 'platform-bible-utils';
+import { useChecklistService } from './hooks/use-checklist';
 import { localizedValueFor } from './project-selector.test-utils';
 
 // ---------------------------------------------------------------------------
@@ -149,7 +151,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
   // Imported inside the factory, for the same reason as above. Aliased where the name is also
   // bound at the top level.
-  const { useEffect, useState: useStateInMock } = await import('react');
+  const { useEffect: useEffectInMock, useState: useStateInMock } = await import('react');
   return {
     ...original,
     // The real hook subscribes to a PAPI network event; the web view's only use of it is opening
@@ -159,7 +161,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     // async source resolves, so tests can drive the web view with a real project list.
     usePromise: (fn: () => Promise<unknown>, defaultValue: unknown) => {
       const [value, setValue] = useStateInMock(defaultValue);
-      useEffect(() => {
+      useEffectInMock(() => {
         let isCurrent = true;
         fn()
           .then((result) => {
@@ -503,5 +505,119 @@ describe('ChecklistWebView column full names', () => {
     expect(headers[1]).toHaveTextContent('P2');
     expect(headers[1].getAttribute('aria-label')).toContain('P2');
     expect(headers[1].getAttribute('aria-label')).not.toContain(' - ');
+  });
+});
+
+describe('ChecklistWebView data loading across web view definition updates', () => {
+  /**
+   * Props whose `useWebViewState` follows the platform hook's update semantics: every write to the
+   * web view's state is broadcast to every slot, and a slot whose key is absent from the broadcast
+   * state resets to the default the caller passed on its latest render. Content zoom writes its
+   * levels into the same state on every step, so a slot left at its default sees that reset on
+   * every zoom step.
+   */
+  function makePropsWithSharedState() {
+    let webViewState: Record<string, unknown> = {};
+    const scrRef = { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' };
+    const setScrRef = vi.fn();
+    const listeners = new Set<(state: Record<string, unknown>) => void>();
+    const writeState = (next: Record<string, unknown>) => {
+      webViewState = next;
+      listeners.forEach((listener) => listener(next));
+    };
+    function useSharedWebViewState(key: string, defaultValue: unknown) {
+      const defaultRef = useRef(defaultValue);
+      defaultRef.current = defaultValue;
+      const [value, setValue] = useState(() =>
+        key in webViewState ? webViewState[key] : defaultValue,
+      );
+      useEffect(() => {
+        const listener = (state: Record<string, unknown>) =>
+          setValue(key in state ? state[key] : defaultRef.current);
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      }, [key]);
+      // Stable per key, like the platform hook's setter.
+      const setState = useCallback(
+        (next: unknown) => writeState({ ...webViewState, [key]: next }),
+        [key],
+      );
+      return [value, setState];
+    }
+    // The literal supplies only the props the web view reads; the double cast avoids restating
+    // every optional field of WebViewProps.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const props = {
+      projectId: 'project-1',
+      updateWebViewDefinition: vi.fn(),
+      useWebViewState: useSharedWebViewState,
+      // The platform hook keeps the reference's identity until the reference changes.
+      useWebViewScrollGroupScrRef: () => [scrRef, setScrRef, undefined],
+    } as unknown as WebViewProps;
+    const writeContentZoomLevel = (level: number) =>
+      writeState({ ...webViewState, 'platform.contentZoomLevels': { main: level } });
+    return { props, writeContentZoomLevel };
+  }
+
+  const buildChecklistData = vi.fn(async () => ({
+    rows: [],
+    columnHeaders: [],
+    columnProjectIds: [],
+    excludedCount: 0,
+    truncated: false,
+  }));
+  const service = { buildChecklistData, validateMarkerSettings: vi.fn() };
+
+  async function waitForQuiet() {
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 400);
+      });
+    });
+  }
+
+  beforeEach(() => {
+    mockRecentProjects.value = [];
+    mockProjects.value = [];
+    mockOpenTabs.value = [];
+    vi.mocked(useChecklistService).mockImplementation(() => ({
+      // The mock supplies only the methods the web view calls.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      service: service as unknown as IChecklistService,
+      isEditable: false,
+    }));
+  });
+
+  afterEach(() => {
+    vi.mocked(useChecklistService).mockImplementation(() => ({
+      service: undefined,
+      isEditable: false,
+    }));
+  });
+
+  it('does not reload the checklist when a content zoom step writes the web view state', async () => {
+    const { props, writeContentZoomLevel } = makePropsWithSharedState();
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...props} />);
+
+    // Settle the mount-time loads: the first request, then the one for the verse range the
+    // auto-follow effect derives from the current reference.
+    await waitFor(() => expect(buildChecklistData.mock.calls.length).toBeGreaterThanOrEqual(2), {
+      timeout: 2000,
+    });
+    await waitForQuiet();
+    const callsBeforeZoom = buildChecklistData.mock.calls.length;
+
+    await act(async () => {
+      writeContentZoomLevel(1.1);
+    });
+    await act(async () => {
+      writeContentZoomLevel(1.2);
+    });
+    await waitForQuiet();
+
+    expect(buildChecklistData).toHaveBeenCalledTimes(callsBeforeZoom);
   });
 });

@@ -14,20 +14,15 @@ const GOOD_SETUP_LANGUAGES: Record<string, LanguageInfo> = {
   en: { autonym: 'English' },
   es: { autonym: 'Español', uiNames: { en: 'Spanish' } },
 };
-// All known interface languages (real autonyms), including one (km) that is NOT setup-qualifying.
-const GOOD_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
-  ...GOOD_SETUP_LANGUAGES,
-  km: { autonym: 'ខ្មែរ', uiNames: { en: 'Khmer' } },
-};
+// Spy asserted never to be called: the step labels the current language from `languageDetails`.
+const availableInterfaceLanguagesHook = vi.hoisted(() => vi.fn(() => [{}, () => {}, false]));
 const hookState: {
   interfaceLanguage: string[];
   setupLanguages: Record<string, LanguageInfo> | PlatformError;
-  availableLanguages: Record<string, LanguageInfo> | PlatformError;
   isLoading: boolean;
 } = {
   interfaceLanguage: ['en'],
   setupLanguages: GOOD_SETUP_LANGUAGES,
-  availableLanguages: GOOD_AVAILABLE_LANGUAGES,
   isLoading: false,
 };
 
@@ -46,7 +41,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useSetting: vi.fn(() => [hookState.interfaceLanguage, mockSetInterfaceLanguage, vi.fn()]),
   useData: vi.fn(() => ({
     SetupDialogLanguages: () => [hookState.setupLanguages, () => {}, hookState.isLoading],
-    AvailableInterfaceLanguages: () => [hookState.availableLanguages, () => {}, false],
+    AvailableInterfaceLanguages: availableInterfaceLanguagesHook,
   })),
 }));
 vi.mock('@shared/services/localization.service', () => ({
@@ -54,6 +49,10 @@ vi.mock('@shared/services/localization.service', () => ({
 }));
 vi.mock('@shared/services/logger.service', () => ({ logger: { warn: vi.fn() } }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+const offerRestart = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('@renderer/services/interface-language-restart-prompt', () => ({
+  offerRestartAfterInterfaceLanguageChange: offerRestart,
+}));
 
 // jsdom doesn't ship ResizeObserver; cmdk (used inside InterfaceLanguagePicker) instantiates one
 // on mount. A no-op stub is sufficient since the tests don't assert layout behavior. scrollIntoView
@@ -91,8 +90,17 @@ describe('LanguageStep', () => {
     vi.clearAllMocks();
     hookState.interfaceLanguage = ['en'];
     hookState.setupLanguages = GOOD_SETUP_LANGUAGES;
-    hookState.availableLanguages = GOOD_AVAILABLE_LANGUAGES;
     hookState.isLoading = false;
+  });
+
+  // Guards that the step stays titled at all — it renders the shared WizardStepHeading, but this
+  // asserts the heading's role and text, not its Tailwind weight: a weight assertion would mirror
+  // implementation, and the shared treatment is a visual check rather than a unit-test one.
+  test('titles the step with a level-2 heading', () => {
+    render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
+    expect(
+      screen.getByRole('heading', { name: 'Choose your language', level: 2 }),
+    ).toBeInTheDocument();
   });
 
   test('renders the qualifying languages by autonym', () => {
@@ -108,16 +116,40 @@ describe('LanguageStep', () => {
     expect(mockSetInterfaceLanguage).toHaveBeenCalledWith(['es', 'en']);
   });
 
-  test('shows the current language by its real autonym even if it does not qualify for setup', () => {
-    hookState.interfaceLanguage = ['km']; // a known locale, but not setup-qualifying
+  test('does not offer a restart, since setup handles the switch itself', async () => {
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
-    // km is resolved from AvailableInterfaceLanguages, so it shows its in-script autonym, not the code
-    expect(screen.getByRole('option', { name: /ខ្មែរ/ })).toHaveAttribute('aria-current', 'true');
-    expect(screen.queryByText('km')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByText('Español'));
+    // Positive control: the language was written.
+    expect(mockSetInterfaceLanguage).toHaveBeenCalled();
+    expect(offerRestart).not.toHaveBeenCalled();
   });
 
-  test('falls back to the raw tag when the current language is unknown even to available languages', () => {
-    hookState.interfaceLanguage = ['xyz']; // in neither the setup nor the available map
+  test('switching away from a language that is not offered drops it', async () => {
+    hookState.interfaceLanguage = ['fr'];
+    render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
+    await userEvent.click(screen.getByText('Español'));
+    expect(mockSetInterfaceLanguage).toHaveBeenCalledWith(['es']);
+  });
+
+  test('shows a current language that is not offered by its real autonym', () => {
+    hookState.interfaceLanguage = ['fr']; // has a locale file but is not offered
+    render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
+    expect(screen.getByRole('option', { name: /Français/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(screen.queryByText('fr')).not.toBeInTheDocument();
+  });
+
+  test('labels a hidden current language from the shared language details', () => {
+    hookState.interfaceLanguage = ['km'];
+    render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
+    expect(screen.getByRole('option', { name: /ខ្មែរ/ })).toHaveAttribute('aria-current', 'true');
+    expect(availableInterfaceLanguagesHook).not.toHaveBeenCalled();
+  });
+
+  test('falls back to the raw tag when the current language has no known details', () => {
+    hookState.interfaceLanguage = ['xyz']; // no language details for this tag
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
     expect(screen.getByRole('option', { name: /xyz/ })).toHaveAttribute('aria-current', 'true');
   });

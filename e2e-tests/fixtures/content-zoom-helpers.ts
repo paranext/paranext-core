@@ -1,10 +1,6 @@
 /**
- * Helpers shared by the three content-zoom e2e specs that import this module —
- * `tests/isolated/notes-content-zoom/comment-list-content-zoom.spec.ts`,
- * `tests/isolated/notes-content-zoom/comments-panel-content-zoom.spec.ts`, and
- * `tests/isolated/scripture-editor/content-zoom.spec.ts`: the wheel gesture every one of them
- * drives, the memory-setting reader every one of them polls, and the indicator/zoom-area selectors
- * every one of them reads.
+ * Helpers shared by the content-zoom e2e specs: the wheel gesture, the memory-setting reader, the
+ * indicator/zoom-area selectors, and the text measurements they share.
  */
 import { type Frame, type Locator, type Page, expect } from '@playwright/test';
 import { CONTENT_ZOOM_COMMANDS, readFactor, sendCommandWithId } from './scripture-editor-helpers';
@@ -22,7 +18,7 @@ export const CONTENT_ZOOM_MEMORY_SETTING = 'platform.webViewContentZoomMemory';
 export const INDICATOR_SELECTOR = '#platform-content-zoom-indicator';
 
 /**
- * Ctrl+wheel over the centre of `box` (main-frame-relative coordinates, as {@link areaBox} returns).
+ * Ctrl+wheel over the center of `box` (main-frame-relative coordinates, as {@link areaBox} returns).
  * `deltaY: -120` zooms in, `+120` zooms out (`web-view-content-zoom.bootstrap-script.ts`'s
  * `onWheel`: `e.deltaY < 0` is zoom-in). Does not itself wait for the effect — callers poll the
  * resulting factor, never a bare timeout, since geometry inside a zoomed frame moves and a fixed
@@ -58,18 +54,65 @@ export async function readIndicatorText(frame: Frame): Promise<string | undefine
   return text?.replace(/\s/gu, '');
 }
 
-/** Bounding box (main-frame-relative) of one zoom area's marked root element. */
+/**
+ * A box to aim a pointer gesture at one zoom area: the first element marked with that area id
+ * (several elements may share one id), clipped to the web view's frame so its center lies on screen
+ * even when the marked text is taller than the pane. Main-frame-relative.
+ */
 export async function areaBox(
   frame: Frame,
   areaId: string,
 ): Promise<{ x: number; y: number; width: number; height: number }> {
-  const box = await frame
-    .locator(
-      `[data-platform-content-zoom-root="${areaId}"]:not([data-platform-content-zoom-popup])`,
-    )
-    .boundingBox();
-  if (!box) throw new Error(`Zoom area "${areaId}" has no bounding box`);
-  return box;
+  return onScreenBox(
+    frame,
+    frame.locator(`[data-platform-content-zoom-root="${areaId}"]`).first(),
+    `Zoom area "${areaId}"`,
+  );
+}
+
+/**
+ * `element`'s box clipped to the web view's frame, so a gesture aimed at its center lands on screen
+ * even when the element is taller than the pane (a whole chapter of text is). An unclipped center
+ * can lie below the window, where the pointer reaches no element at all. Main-frame-relative;
+ * `description` names the element in the errors.
+ */
+export async function onScreenBox(
+  frame: Frame,
+  element: Locator,
+  description: string,
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await element.boundingBox();
+  if (!box) throw new Error(`${description} has no bounding box`);
+  const pane = await frameBox(frame);
+  const left = Math.max(box.x, pane.x);
+  const top = Math.max(box.y, pane.y);
+  const right = Math.min(box.x + box.width, pane.x + pane.width);
+  const bottom = Math.min(box.y + box.height, pane.y + pane.height);
+  if (right <= left || bottom <= top) throw new Error(`${description} is not on screen`);
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/**
+ * Height of the line box holding the first visible character inside `element`, in the frame's
+ * (zoomed) pixels. Under CSS `zoom` z a single line box grows by z, whereas a block of wrapped text
+ * also loses width to the zoom, wraps onto ~z× as many lines, and grows by ~z² — so a zoom-ratio
+ * assertion measures a line box, never the block.
+ */
+export async function firstLineBoxHeight(element: Locator): Promise<number> {
+  return element.evaluate((root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const offset = (node.textContent ?? '').search(/\S/u);
+      if (offset >= 0) {
+        const range = document.createRange();
+        range.setStart(node, offset);
+        range.setEnd(node, offset + 1);
+        const rect = range.getClientRects()[0];
+        if (rect && rect.height > 0) return rect.height;
+      }
+    }
+    throw new Error('No rendered text inside the element');
+  });
 }
 
 /**
@@ -119,7 +162,7 @@ export async function waitForPopupAnimations(popup: Locator): Promise<void> {
       element
         .getAnimations({ subtree: true })
         .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
-        // A cancelled animation rejects `finished`; it no longer transforms the box either.
+        // A canceled animation rejects `finished`; it no longer transforms the box either.
         .map((animation) => animation.finished.catch(() => undefined)),
     );
   });
@@ -215,4 +258,19 @@ export async function expectPopupBesideTriggerAndInsideFrame(
       overflow.scrollHeight,
       `content fits vertically in a pop-up that does not scroll (scroll ${overflow.scrollHeight}, client ${overflow.clientHeight}): ${boxes}`,
     ).toBeLessThanOrEqual(overflow.clientHeight + tolerance);
+}
+
+/**
+ * Closes a dock tab by web view id and waits for its title to disappear. `data-web-view-id` is on
+ * `.platform-tab-title` (`platform-tab-title.component.tsx`), not on rc-dock's own `.dock-tab`, so
+ * the close button is found through the title's `.dock-tab` ancestor. The click is dispatched
+ * rather than performed: on a crowded tab strip the button can sit outside the visible area, and
+ * rc-dock's `.dock-tab-hit-area` overlays the same region, so a real click can report it as not
+ * actionable.
+ */
+export async function closeDockTab(page: Page, webViewId: string): Promise<void> {
+  const tabTitle = page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
+  const dockTab = tabTitle.locator('xpath=ancestor::*[contains(@class,"dock-tab")][1]');
+  await dockTab.locator('.dock-tab-close-btn').dispatchEvent('click');
+  await expect(tabTitle).toBeHidden({ timeout: 10_000 });
 }

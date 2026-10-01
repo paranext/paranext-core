@@ -61,7 +61,6 @@ import {
   isFindQueryValid,
   isSimpleInterfaceMode,
   POLL_INTERVAL_MS,
-  prunePresentBookIds,
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
   resolveTargetEditorWebViewId,
@@ -90,6 +89,7 @@ import {
 } from './resource-panel-web-view-types.const';
 import { useFindSearchTriggers } from './find/use-find-search-triggers.hook';
 import { useAutoSearchDebounce } from './find/use-auto-search-debounce.hook';
+import { useFindBookScope } from './find/use-find-book-scope.hook';
 
 // Strings used by the webview's own replace / version-history-commit / toast logic, in addition to
 // the strings the presentational Find component needs (FIND_LOCALIZED_STRING_KEYS).
@@ -251,10 +251,7 @@ global.webViewComponent = function FindWebView({
     ? ''
     : lastSearchTermPossiblyError;
 
-  const [selectedBookIds, setSelectedBookIds] = useWebViewState<string[]>(
-    'findSelectedBookIds',
-    [],
-  );
+  const [savedBookIds, setSavedBookIds] = useWebViewState<string[]>('findSelectedBookIds', []);
   const [monitoredBookIds, setMonitoredBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useWebViewState<boolean>(
     'findShouldMatchCase',
@@ -720,8 +717,10 @@ global.webViewComponent = function FindWebView({
   //
   // A book list is "not known" while the setting is still resolving AND when the read fails.
   // `useProjectSetting` reports a delivered `PlatformError` as loaded, so the error branch has to be
-  // recognized explicitly: treating it as an answer would report zero available books, and the prune
-  // below would then wipe the user's persisted selection for good.
+  // recognized explicitly: treating it as an answer would report zero available books, and every
+  // consumer would read this project as having nothing to search. It also re-enters loading on a
+  // project change while still holding the previous project's value, so emptiness alone can never
+  // stand in for "not known" — `useFindBookScope` relies on that distinction.
   const bookLists = useMemo(() => {
     if (isBooksPresentLoading) return UNKNOWN_FIND_BOOK_LISTS;
     if (isPlatformError(booksPresentPossiblyError)) {
@@ -774,27 +773,15 @@ global.webViewComponent = function FindWebView({
   const isEditable: boolean =
     isEditableLoading || isPlatformError(isEditablePossiblyError) ? false : isEditablePossiblyError;
 
-  // `selectedBookIds` is persisted per web view, so a project switch can leave it naming books the
-  // NEW project doesn't have. The finder engine skips absent books gracefully (see
-  // `isScriptureNotFoundError` in the finder PDPE), so this is not a crash — but with
-  // `scope === 'selectedBooks'` the search would silently cover fewer books than the checkbox list
-  // shows. Prune the selection to what the newly selected project actually has.
-  //
-  // "Don't know the books yet" must not read as "the project has no books", so `availableBooksIds`
-  // is `undefined` until the setting resolves rather than inferred from an empty list, and the
-  // selection is then left untouched. `useProjectSetting` re-enters loading whenever the project
-  // changes, and holds the previous project's value in the meantime — so emptiness alone can't tell
-  // an unread list from a project that genuinely has nothing to search, which is a real case here
-  // because extra material is excluded above.
-  //
-  // Depends on `selectedBookIds` because `useWebViewState`'s setter takes a value, not an updater.
-  // That is safe: `prunePresentBookIds` returns the original array reference when nothing needs
-  // removing, so the identity check makes the write conditional and the effect converges after a
-  // single prune instead of re-triggering itself.
-  useEffect(() => {
-    const prunedBookIds = prunePresentBookIds(availableBooksIds, selectedBookIds);
-    if (prunedBookIds !== selectedBookIds) setSelectedBookIds(prunedBookIds);
-  }, [availableBooksIds, selectedBookIds, setSelectedBookIds]);
+  // The saved selection is persisted per web view and shared across every project Find points at,
+  // so it can name books the CURRENT project doesn't have. `searchableBookIds` is that selection
+  // narrowed to this project for display and search, while the saved list keeps the user's books —
+  // see `use-find-book-scope.hook.ts` for why the narrowing is never persisted.
+  const { searchableBookIds, selectBookIds } = useFindBookScope({
+    savedBookIds,
+    setSavedBookIds,
+    availableBookIds: availableBooksIds,
+  });
 
   const availableBooksLocalizationKeys = useMemo(() => {
     const keys: `%${string}%`[] = [];
@@ -1055,8 +1042,13 @@ global.webViewComponent = function FindWebView({
   // whether a job may start.
   const isSearchQueryValid = useMemo(
     () =>
-      isFindQueryValid({ searchTerm, scope, selectedBookIds, currentBookId: verseRefSetting.book }),
-    [scope, searchTerm, selectedBookIds, verseRefSetting.book],
+      isFindQueryValid({
+        searchTerm,
+        scope,
+        selectedBookIds: searchableBookIds,
+        currentBookId: verseRefSetting.book,
+      }),
+    [scope, searchTerm, searchableBookIds, verseRefSetting.book],
   );
 
   // Surface an unresolvable provider through the existing error path instead of leaving the panel
@@ -1087,13 +1079,13 @@ global.webViewComponent = function FindWebView({
         // Extra material is dropped here too, not only from the book picker. A selection restored
         // from a persisted tab is pruned against the project's book list, and that list arrives
         // asynchronously — this is the point the search cannot be built before.
-        return selectedBookIds
+        return searchableBookIds
           .filter((bookId) => !isExtraMaterialBookId(bookId))
           .map((bookId) => ({ bookId }));
       default:
         throw new Error(`Unsupported scope: ${scope}`);
     }
-  }, [scope, selectedBookIds, verseRefSetting]);
+  }, [scope, searchableBookIds, verseRefSetting]);
 
   /**
    * A stable string key capturing only the parts of scope/verseRef that affect the search query.
@@ -1102,10 +1094,10 @@ global.webViewComponent = function FindWebView({
    * setVerseRefSetting but stays within the already-searched book/chapter).
    */
   const relevantScopeKey = useMemo(() => {
-    if (scope === 'selectedBooks') return `selectedBooks:${selectedBookIds.join(',')}`;
+    if (scope === 'selectedBooks') return `selectedBooks:${searchableBookIds.join(',')}`;
     if (scope === 'book') return `book:${verseRefSetting.book}`;
     return `chapter:${verseRefSetting.book}:${verseRefSetting.chapterNum}`;
-  }, [scope, selectedBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
+  }, [scope, searchableBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
 
   // When search options change (not the search term itself), add the current term to history — the
   // user is intentionally refining how to search for it.
@@ -1240,7 +1232,7 @@ global.webViewComponent = function FindWebView({
 
         setMonitoredScope(scope);
         setMonitoredVerseRef(verseRefSetting);
-        setMonitoredBookIds(selectedBookIds);
+        setMonitoredBookIds(searchableBookIds);
 
         setFocusedResultIndex(undefined);
 
@@ -1275,7 +1267,7 @@ global.webViewComponent = function FindWebView({
       scope,
       searchTerm,
       searchTextType,
-      selectedBookIds,
+      searchableBookIds,
       shouldMatchCase,
       verseRefSetting,
       wordRestriction,
@@ -2248,7 +2240,7 @@ global.webViewComponent = function FindWebView({
       booksPresent={booksPresent}
       hasExcludedExtraMaterial={hasExcludedExtraMaterial}
       allowInvisibleCharacters={allowInvisibleCharacters}
-      selectedBookIds={selectedBookIds}
+      selectedBookIds={searchableBookIds}
       localizedBookData={localizedBookData}
       shouldMatchCase={shouldMatchCase}
       ignoreWhitespaceDifferences={ignoreWhitespaceDifferences}
@@ -2280,7 +2272,7 @@ global.webViewComponent = function FindWebView({
       onStartSearch={handleStartSearch}
       onStopSearch={handleStopSearch}
       setScope={setScope}
-      onSelectedBookIdsChange={setSelectedBookIds}
+      onSelectedBookIdsChange={selectBookIds}
       setSearchTextType={setSearchTextType}
       setWordRestriction={setWordRestriction}
       setShouldMatchCase={setShouldMatchCase}

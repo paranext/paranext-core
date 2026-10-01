@@ -1,4 +1,4 @@
-import { Button, Skeleton } from 'platform-bible-react';
+import { Button, Skeleton, useContentZoomTextProps } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import type { ArticleRendererData } from '../shared/article-renderer.component';
 import type { EncyclopediaEntryRefData } from './encyclopedia-display-item.component';
@@ -60,6 +60,7 @@ export function EncyclopediaEntryDetail({
 
   localizedStringsWithLoadingState = [{}, false],
 }: EncyclopediaEntryDetailProps) {
+  const contentZoomTextProps = useContentZoomTextProps();
   const getLocalizedString = (key: EncyclopediaEntryDetailLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
@@ -92,9 +93,15 @@ export function EncyclopediaEntryDetail({
     return (
       <div className="tw:flex tw:flex-col tw:gap-2">
         {paragraphsToShow.map((paragraph, idx) => (
-          // Paragraph order is the only stable identity; backend doesn't ship paragraph ids.
-          // eslint-disable-next-line react/no-array-index-key
-          <p key={idx} className="tw:text-sm tw:leading-relaxed">
+          <p
+            // Paragraph order is the only stable identity; backend doesn't ship paragraph ids.
+            // eslint-disable-next-line react/no-array-index-key
+            key={idx}
+            className="tw:text-sm tw:leading-relaxed"
+            // The hook returns only the content-zoom marker attribute, or nothing.
+            // eslint-disable-next-line react/jsx-props-no-spreading
+            {...contentZoomTextProps}
+          >
             {paragraph.text}
           </p>
         ))}
@@ -108,7 +115,14 @@ export function EncyclopediaEntryDetail({
       className="tw:flex tw:flex-col tw:gap-2 tw:pt-2"
     >
       <header className="tw:flex tw:items-baseline tw:justify-between tw:gap-2">
-        <h4 className="tw:text-sm tw:font-semibold">{entry.title}</h4>
+        <h4
+          className="tw:text-sm tw:font-semibold"
+          // The hook returns only the content-zoom marker attribute, or nothing.
+          // eslint-disable-next-line react/jsx-props-no-spreading
+          {...contentZoomTextProps}
+        >
+          {entry.title}
+        </h4>
       </header>
 
       {renderBody()}

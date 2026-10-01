@@ -694,6 +694,18 @@ declare module 'papi-shared-types' {
       threadId: string,
       bringToFront: boolean,
     ) => Promise<string | undefined>;
+
+    /**
+     * Brings the Comments tab to the front, the way clicking it would. An open tab is raised, never
+     * reloaded, so an in-progress comment edit survives. If no tab is open, opens one for the
+     * editor's project.
+     *
+     * @param editorWebViewId The scripture editor the request came from
+     * @returns The Comments web view's ID, or `undefined` if it couldn't be shown
+     */
+    'legacyCommentManager.showCommentListPanel': (
+      editorWebViewId?: string,
+    ) => Promise<string | undefined>;
   }
 
   export interface WebViewControllers {

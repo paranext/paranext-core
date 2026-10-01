@@ -70,7 +70,15 @@ declare module 'platform-get-resources' {
      */
     recomputeDblResourcesInstallStatus: () => Promise<DblResourceInstallStatus>;
     /**
-     * Installs or updates a DBL resource to the local filesystem
+     * Installs or updates a DBL resource to the local filesystem.
+     *
+     * Idempotent: a resource that is already installed and up to date resolves without doing
+     * anything, rather than rejecting. Callers cannot tell "installed now" from "already there",
+     * and none needs to — a caller whose catalog wrongly reports the resource missing would
+     * otherwise have no way out, since every retry would fail identically. "Already installed" is
+     * decided against a freshly refreshed project collection, so a resource removed outside this
+     * process is installed for real rather than reported as already present. See
+     * `adr-dbl-install-is-idempotent`.
      *
      * @param uid DBL Entry UID that is used to identify the resource
      */
@@ -184,9 +192,15 @@ declare module 'papi-shared-types' {
      * flags from before the change. Without it an updated resource keeps its "update available"
      * flag until the catalog is read a second time, because nothing else about the row changes.
      *
+     * @param shouldRecomputeUpdateStatus Whether to also refresh `updateAvailable`. Defaults to
+     *   `true`. It costs a second backend round trip, and only the Get Resources list renders that
+     *   flag, so a caller that reads `installed` alone — a panel, a picker, the text grid — should
+     *   pass `false` rather than wait on a value it discards.
      * @experimental
      */
-    'platformGetResources.refreshResourceFlags': () => Promise<void>;
+    'platformGetResources.refreshResourceFlags': (
+      shouldRecomputeUpdateStatus?: boolean,
+    ) => Promise<void>;
 
     /**
      * Returns locally-installed, read-only resources that are NOT in the DBL catalog (e.g. VULGP83,

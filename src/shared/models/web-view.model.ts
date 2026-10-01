@@ -367,8 +367,10 @@ export const CONTENT_ZOOM_LEVELS_STATE_KEY = 'platform.contentZoomLevels';
  * the bare prop in JSX; either way the area is `main`. The platform's injected stylesheet applies
  * `zoom: var(--platform-content-zoom-<area>)` to it. A marker inside another marker is ignored —
  * matched by neither the platform's stylesheet nor its report of the view's areas — so nesting
- * never compounds one area's zoom into another's. Web views without this attribute ignore per-area
- * zoom input and are scaled whole at the Settings default.
+ * never compounds one area's zoom into another's. A web view that renders no element with this
+ * attribute is not zoomed at all, unless core declares its web view type zoomable: it renders at
+ * 100 % content zoom, its tab menu has no zoom items, and the zoom chords and Ctrl/⌘+wheel do
+ * nothing there. Interface scaling still applies to it.
  *
  * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
  * writes the literal `'data-platform-content-zoom-root'` itself and keeps it equal to this
@@ -379,20 +381,34 @@ export const CONTENT_ZOOM_LEVELS_STATE_KEY = 'platform.contentZoomLevels';
 export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
 
 /**
- * Attribute that marks an element carrying {@link CONTENT_ZOOM_ROOT_ATTRIBUTE} as pop-up content
- * opened from that zoom area (a popover, menu or tooltip portaled out of the area element) rather
- * than a pane. The platform scales such an element with its area but never reports it as an area of
- * its own and never places the zoom indicator on it. `platform-bible-react`'s `PopoverContent`,
- * `DropdownMenuContent` and `TooltipContent` set it automatically; `SelectContent`,
- * `ContextMenuContent`, `MenubarContent` and `DropdownMenuSubContent` do not yet.
+ * Attribute a web view puts on an element that is not itself scaled — a row, a column, a card — to
+ * say that a click, a focus or a Ctrl/⌘+wheel anywhere inside it means one zoom area. The value is
+ * that area's id, spelled as for {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}. The platform consults it only
+ * where no zoom area's marked element encloses the target: a marked element always wins. It changes
+ * which area the chords, the wheel and the tab menu act on; it scales nothing, and a scope naming
+ * an area the view does not render is ignored.
  *
  * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
- * that marks its own pop-up content writes the literal `'data-platform-content-zoom-popup'` itself
- * and keeps it equal to this constant.
+ * writes the literal `'data-platform-content-zoom-scope'` itself (or imports the mirror from
+ * `platform-bible-react`) and keeps it equal to this constant.
  *
  * @experimental This constant is unstable and may change or disappear without notice
  */
-export const CONTENT_ZOOM_POPUP_ATTRIBUTE = 'data-platform-content-zoom-popup';
+export const CONTENT_ZOOM_SCOPE_ATTRIBUTE = 'data-platform-content-zoom-scope';
+
+/**
+ * Attribute a web view may add to an element carrying {@link CONTENT_ZOOM_ROOT_ATTRIBUTE} to name
+ * that zoom area for the user. The zoom indicator then reads `<label> · <level>` (for example `HSV
+ * · 120 %`) instead of the level alone. Plain text; the platform reads the first non-empty label
+ * among the area's marked elements. An area without a label shows the level alone.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * writes the literal `'data-platform-content-zoom-label'` itself (or uses `ContentZoomRoot`'s
+ * `label` prop) and keeps it equal to this constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const CONTENT_ZOOM_LABEL_ATTRIBUTE = 'data-platform-content-zoom-label';
 
 /**
  * Prefix of the CSS custom properties the platform sets on every web view's root element, one per
@@ -508,7 +524,11 @@ export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProp
  * returned to the latest `defaultStateValue`, and changing the `stateKey` will use the latest
  * `defaultStateValue`. However, if `defaultStateValue` is changed while a state is
  * `defaultStateValue` (meaning it is reset and has no value), the returned state value will not be
- * updated to the new `defaultStateValue`.
+ * updated to the new `defaultStateValue`. A state value showing `defaultStateValue` keeps that same
+ * object across updates to other keys of the web view state, but still pass a stable default
+ * (module-level or memoized) if the value is used in an effect's dependency list. Likewise, a saved
+ * value that is deeply equal to the current state value keeps the current object, so saving an
+ * equal new object does not give the state value a new identity.
  *
  * _＠returns_ `[stateValue, setStateValue, resetWebViewState]`
  *

@@ -2,10 +2,6 @@
  * Generic overlay modal shell. Renders any dialog component inside a modal overlay with backdrop,
  * focus trap, centering, and accessibility attributes. The dialog component receives its props
  * directly - the shell only provides the modal wrapper.
- *
- * Unlike the popover, command palette, and context menu overlays, this shell takes no content-zoom
- * scale and never applies one: a full-window modal is not anchored to the requesting pane's
- * content, so it draws at interface scale regardless of that pane's zoom.
  */
 
 import { VisuallyHidden } from 'radix-ui';

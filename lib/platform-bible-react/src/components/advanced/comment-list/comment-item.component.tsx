@@ -18,6 +18,7 @@ import {
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui/utils';
+import { useContentZoomTextProps } from '@/context/content-zoom-text.context';
 import { SerializedEditorState } from 'lexical';
 import { ArrowUp, MoreHorizontal, Pencil, Trash2, Undo2 } from 'lucide-react';
 import { formatRelativeDate, formatReplacementString, sanitizeHtml } from 'platform-bible-utils';
@@ -49,6 +50,7 @@ export function CommentItem({
   draftEditorState,
   onDraftEditorStateChange,
 }: CommentItemProps) {
+  const contentZoomTextProps = useContentZoomTextProps();
   // Sometimes-controlled: a consumer that supplies `draftEditorState` owns the in-progress edit, so
   // unmounting (a filter change) and remounting comes back showing the same edit instead of losing
   // it. `internalEditorState` is the fallback for callers that don't manage this draft.
@@ -417,6 +419,10 @@ export function CommentItem({
                     'tw:line-clamp-3': !isThreadExpanded,
                   },
                 )}
+                // The note body is project text; the author, date, badges and buttons around it
+                // keep interface scale.
+                // eslint-disable-next-line react/jsx-props-no-spreading
+                {...contentZoomTextProps}
                 // The comment content is stored in HTML so it needs to be set directly. To make sure
                 // it is safe we have sanitized it first.
                 // eslint-disable-next-line react/no-danger

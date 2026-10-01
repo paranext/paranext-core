@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { vi } from 'vitest';
 import { BoxData, PanelData } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
@@ -118,6 +120,28 @@ describe('simple-layout.data', () => {
           expect(data.isClosable).toBe(false);
         });
       });
+    });
+
+    it("keeps platform-scripture's mirrored Column 3 panel ID equal to SIMPLE_PANEL_ID_RESOURCES", () => {
+      // Opening Checks in Simple mode adds its tab to Column 3 by naming this panel ID as the tab
+      // layout's `parentTabGroupId`. Extensions cannot import renderer source, so platform-scripture
+      // keeps a copy; if it drifts, the dock silently falls back to its default placement and can add
+      // a pane on top of a column. Resolved from the repo root (Vitest runs with it as cwd).
+      const extensionSource = readFileSync(
+        resolve(
+          process.cwd(),
+          'extensions/src/platform-scripture/src/simple-resources-panel-id.const.ts',
+        ),
+        'utf8',
+      );
+      const match = extensionSource.match(
+        /export const SIMPLE_RESOURCES_PANEL_ID\s*=\s*['"]([^'"]+)['"]/,
+      );
+
+      // A null match means the constant moved or was renamed, so the mirror can no longer be
+      // verified — treated as drift.
+      expect(match).not.toBeNull();
+      expect(match?.[1]).toBe(SIMPLE_PANEL_ID_RESOURCES);
     });
 
     it('each column panel has the expected onboarding-tour panel ID', () => {

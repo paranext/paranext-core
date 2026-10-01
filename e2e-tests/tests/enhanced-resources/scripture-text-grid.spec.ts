@@ -16,17 +16,21 @@
  * NOT covered (need an app relaunch the CDP fixture can't do; verified manually): `useWebViewState`
  * restart-persistence, and feature-flag-OFF hiding the view (registration happens at activation).
  */
+import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
+import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 import {
-  closeAllNonHomeDockTabs,
   discoverAdminTextConnectionProject,
+  armColumnRenderMeasure,
+  flagResourcesAndOpenGrid,
   flagResourcesAndOpenScriptureTextGrid,
-  openEnhancedResource,
+  openAlignedGridWithResources,
+  readColumnRenderMs,
   openScriptureTextGrid,
   restoreScriptureTextGridProjectSettings,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-} from './test-helpers';
+} from './scripture-text-grid.page';
 
 test.describe('Scripture Text Grid (scaffold)', () => {
   test.beforeEach(async ({ mainPage }) => {
@@ -153,7 +157,7 @@ test.describe('Scripture Text Grid renderer', () => {
       },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await expect(stg.frame.locator('[role="list"]')).toBeVisible({ timeout: 15_000 });
     await expect(stg.frame.locator('[role="listitem"]').first()).toBeVisible({ timeout: 15_000 });
     await expect(stg.frame.locator('[role="toolbar"]')).toHaveCount(0);
@@ -175,7 +179,7 @@ test.describe('Scripture Text Grid renderer', () => {
       },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const firstCell = stg.frame.locator('[role="listitem"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
@@ -207,7 +211,7 @@ test.describe('Scripture Text Grid renderer', () => {
       },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await stg.frame.locator('[role="listitem"]').first().click();
     await expect(stg.frame.getByTestId('scripture-text-grid-chapter-context')).toBeVisible({
       timeout: 15_000,
@@ -230,7 +234,7 @@ test.describe('Scripture Text Grid renderer', () => {
       { type: 'project', name: 'KJV', id: 'rtl002', isInTextCollection: true },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await expect(stg.frame.locator('[role="list"]')).toBeVisible({ timeout: 15_000 });
 
     const directions = await stg.frame.locator('[role="list"]').evaluate((list) => {
@@ -274,7 +278,7 @@ test.describe('Scripture Text Grid renderer', () => {
       },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(validIds.length + 1, {
       timeout: 15_000,
     });
@@ -305,7 +309,7 @@ test.describe('Scripture Text Grid renderer', () => {
       })),
     );
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(2, { timeout: 15_000 });
 
     await mainPage.evaluate(async () => {
@@ -355,7 +359,7 @@ test.describe('Scripture Text Grid renderer', () => {
       })),
     );
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const elapsedMs = await stg.frame.locator('body').evaluate(async () => {
       const start = performance.now();
       await new Promise<void>((resolve) => {
@@ -387,7 +391,7 @@ test.describe('Scripture Text Grid renderer', () => {
       { type: 'project', name: 'KJV', id: 'chap002', isInTextCollection: true },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await stg.switchToChapterView();
 
     // The chapter group lays out as a horizontal row of columns and shows no chapter-context split.
@@ -424,7 +428,7 @@ test.describe('Scripture Text Grid renderer', () => {
       })),
     );
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await stg.switchToChapterView();
 
     await expect(stg.frame.locator('[role="region"]')).toHaveCount(2, { timeout: 15_000 });
@@ -460,23 +464,12 @@ test.describe('Scripture Text Grid renderer', () => {
       })),
     );
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
+    // Armed before the switch, read after it: the switch itself ends with an awaited keypress, so
+    // anything that starts the clock afterwards is measuring an already-finished render.
+    await armColumnRenderMeasure(stg.frame, 5);
     await stg.switchToChapterView();
-
-    const elapsedMs = await stg.frame.locator('body').evaluate(async () => {
-      const start = performance.now();
-      await new Promise<void>((resolve) => {
-        const observer = new MutationObserver(() => {
-          if (document.querySelectorAll('[role="region"]').length >= 5) {
-            observer.disconnect();
-            resolve();
-          }
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-        if (document.querySelectorAll('[role="region"]').length >= 5) resolve();
-      });
-      return performance.now() - start;
-    });
+    const elapsedMs = await readColumnRenderMs(stg.frame);
 
     await expect(stg.frame.locator('[role="region"]')).toHaveCount(5, { timeout: 15_000 });
     // Chapter mode renders full chapters (10–100x a verse cell), so the ~220ms verse threshold does
@@ -500,7 +493,7 @@ test.describe('Scripture Text Grid renderer', () => {
       { type: 'project', name: 'KJV', id: 'chaprtl2', isInTextCollection: true },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await stg.switchToChapterView();
 
     const grid = stg.frame.locator('[role="group"]');
@@ -541,11 +534,13 @@ test.describe('Scripture Text Grid empty state', () => {
     // Flag nothing → the effective list is empty → the grid renders the empty state, not cells.
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, []);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     await expect(stg.frame.getByTestId('scripture-text-grid-empty-state')).toBeVisible({
       timeout: 15_000,
     });
-    await expect(stg.frame.locator('[role="gridcell"]')).toHaveCount(0);
+    // The verse listitem is the cell; `[role="gridcell"]` has matched nothing since PT-4157 removed
+    // that role, so asserting zero of those could not fail.
+    await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(0);
   });
 });
 
@@ -584,7 +579,7 @@ test.describe('Scripture Text Grid accessibility', () => {
       },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const firstCell = stg.frame.locator('[role="listitem"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     // Accessible name is "<label>, <BOOK C:V>" — anchored so a stray substring can't match.
@@ -604,7 +599,7 @@ test.describe('Scripture Text Grid accessibility', () => {
       { type: 'project', name: 'Tab B', id: ACC_RESOURCE_B_ID, isInTextCollection: true },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const firstCell = stg.frame.locator('[role="listitem"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
 
@@ -636,7 +631,7 @@ test.describe('Scripture Text Grid accessibility', () => {
       { type: 'project', name: 'Ring B', id: ACC_RESOURCE_B_ID, isInTextCollection: true },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const firstCell = stg.frame.locator('[role="listitem"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     // The ring is `focus-visible`-gated, which Chromium applies only for keyboard-originated focus —
@@ -666,7 +661,7 @@ test.describe('Scripture Text Grid accessibility', () => {
       },
     ]);
 
-    const stg = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage, projectId);
     const status = stg.frame.locator('[role="status"]').first();
     const firstCell = stg.frame.locator('[role="listitem"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
@@ -686,6 +681,154 @@ test.describe('Scripture Text Grid accessibility', () => {
     // Closing announces a distinct "closed" message (a polite region needs a text change to re-fire).
     await expect(status).not.toHaveText('');
     expect(await status.textContent()).not.toBe(openedMessage);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Verse-aligned (Grid) view.
+//
+// Alignment can only be checked where there is layout, so these measure rendered geometry in the
+// running app: every column's block for verse N must have the same top. No unit test can make that
+// assertion (jsdom lays nothing out), and it fails if the subgrid chain breaks anywhere between the
+// grid root and the verse blocks — including inside the editor's own wrappers, which this repo does
+// not own.
+// ---------------------------------------------------------------------------
+test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
+  test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+  });
+
+  test.afterEach(async ({ mainPage }) => {
+    await restoreScriptureTextGridProjectSettings(mainPage);
+  });
+
+  /**
+   * Shared prerequisites: a local admin-writable project and enough downloaded resources. Returns
+   * the project id, or skips the test with a warning naming what is missing.
+   */
+  async function requireProjectAndResources(mainPage: Page, resourceCount: number) {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
+      REAL_RESOURCE_IDS.length < resourceCount,
+      `Set E2E_TEST_RESOURCE_IDS with at least ${resourceCount} downloaded resource IDs`,
+    );
+    return projectId;
+  }
+
+  test('verse N of every resource shares a row, natively', async ({ mainPage }) => {
+    const projectId = await requireProjectAndResources(mainPage, 2);
+    const stg = await openAlignedGridWithResources(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'Aligned',
+    );
+
+    const grid = stg.frame.getByTestId('scripture-text-grid-aligned');
+    await expect(stg.frame.locator('.verse-block[data-verse-start]').first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const topsByVerse = await grid.evaluate((root) => {
+      const tops: Record<string, number[]> = {};
+      root.querySelectorAll<HTMLElement>('.verse-block[data-verse-start]').forEach((block) => {
+        const verse = block.dataset.verseStart ?? '';
+        (tops[verse] ??= []).push(Math.round(block.getBoundingClientRect().top));
+      });
+      return tops;
+    });
+
+    // Positive control: some verse must be rendered by more than one column, or "every shared verse
+    // aligns" would hold vacuously over a grid where no verse is shared.
+    const sharedVerses = Object.entries(topsByVerse).filter(([, tops]) => tops.length > 1);
+    expect(sharedVerses.length).toBeGreaterThan(0);
+    sharedVerses.forEach(([verse, tops]) => {
+      expect(new Set(tops).size, `verse ${verse} tops: ${tops.join(', ')}`).toBe(1);
+    });
+  });
+
+  test('no interior grid lines between columns', async ({ mainPage }) => {
+    const projectId = await requireProjectAndResources(mainPage, 2);
+    const stg = await openAlignedGridWithResources(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'Borderless',
+    );
+
+    const columnBorders = await stg.frame
+      .getByTestId('scripture-text-grid-aligned')
+      .evaluate((root) =>
+        Array.from(root.children).map((column) => {
+          const style = getComputedStyle(column);
+          return [style.borderLeftWidth, style.borderRightWidth].join('/');
+        }),
+      );
+
+    expect(columnBorders.length).toBeGreaterThan(1);
+    columnBorders.forEach((borders) => expect(borders).toBe('0px/0px'));
+  });
+
+  test('columns run right-to-left under an RTL locale', async ({ mainPage }) => {
+    const projectId = await requireProjectAndResources(mainPage, 2);
+    const stg = await openAlignedGridWithResources(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'AlignedRtl',
+    );
+
+    // The chapter row's RTL guard asserts `flex-direction`, which this branch does not use: the
+    // columns here are grid tracks, and a track's inline axis follows `dir` only if nothing pins it
+    // to a physical side. Measure where the first column actually lands instead.
+    const firstColumnLeft = await stg.frame
+      .getByTestId('scripture-text-grid-aligned')
+      .evaluate((root) => {
+        const readFirstLeft = () => {
+          const [first] = Array.from(root.children);
+          return first.getBoundingClientRect().left;
+        };
+        document.documentElement.dir = 'ltr';
+        const ltr = readFirstLeft();
+        document.documentElement.dir = 'rtl';
+        const rtl = readFirstLeft();
+        document.documentElement.dir = 'ltr';
+        return { ltr, rtl };
+      });
+
+    // Same first column, opposite edge of the grid: in LTR it starts at the left, in RTL it starts
+    // further right, because the remaining columns now sit to its left.
+    expect(firstColumnLeft.rtl).toBeGreaterThan(firstColumnLeft.ltr);
+  });
+
+  test('grid frame budget: >=5 aligned columns render under the chapter-mode baseline', async ({
+    mainPage,
+  }) => {
+    const projectId = await requireProjectAndResources(mainPage, 5);
+    // Opened in Verse view, so the switch into Grid is a statement of its own that the measurement
+    // can bracket. `openAlignedGridWithResources` would switch and then await the grid, and the
+    // columns are the grid's own children from the same React pass — nothing left to measure.
+    const stg = await flagResourcesAndOpenGrid(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 5),
+      'AlignedPerf',
+    );
+
+    await armColumnRenderMeasure(stg.frame, 5);
+    await stg.switchToGridView();
+    const elapsedMs = await readColumnRenderMs(stg.frame);
+
+    await expect(stg.frame.locator('[role="region"]')).toHaveCount(5, { timeout: 15_000 });
+    // Same threshold as the chapter-mode budget: this renders the same five whole chapters, and
+    // alignment is native layout rather than measurement, so it should not cost materially more.
+    // eslint-disable-next-line no-console -- surfaces the measured baseline in CI/local logs
+    console.log(`[aligned frame budget] ${elapsedMs.toFixed(1)}ms for 5 aligned columns`);
+    expect(elapsedMs).toBeLessThan(2000);
   });
 });
 

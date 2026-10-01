@@ -1,12 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import {
-  leftEdgeRect,
-  measureElement,
-  measureRange,
-  useLivePopoverAnchor,
-} from './use-live-popover-anchor.hook';
+import { leftEdgeRect, measureBox, useLivePopoverAnchor } from './use-live-popover-anchor.hook';
 
 /** A rect the assertions can tell apart, in the shape `measure` returns. */
 function rect(x: number, y: number): DOMRect {
@@ -73,14 +68,15 @@ describe('useLivePopoverAnchor', () => {
 });
 
 /**
- * Gives `target` the client rects jsdom cannot lay out. `measureRange` reads `getClientRects()` and
+ * Gives `target` the client rects jsdom cannot lay out. `measureBox` reads `getClientRects()` and
  * `getBoundingClientRect()`, so a test supplies them directly.
  */
-function stubClientRects(target: Range, rects: DOMRect[]) {
+function stubClientRects(target: Range | Element, rects: DOMRect[]) {
   Object.defineProperty(target, 'getClientRects', { value: () => rects, configurable: true });
   Object.defineProperty(target, 'getBoundingClientRect', {
     configurable: true,
     value: () => {
+      if (rects.length === 0) return new DOMRect();
       const left = Math.min(...rects.map((r) => r.left));
       const top = Math.min(...rects.map((r) => r.top));
       const right = Math.max(...rects.map((r) => r.right));
@@ -99,7 +95,7 @@ function rectNumbers(rectValue: DOMRect | undefined) {
   return { x: rectValue.x, y: rectValue.y, width: rectValue.width, height: rectValue.height };
 }
 
-describe('measureRange', () => {
+describe('measureBox', () => {
   afterEach(() => {
     document.body.innerHTML = '';
   });
@@ -113,52 +109,41 @@ describe('measureRange', () => {
     return range;
   }
 
-  it('has no rect once the range no longer lies in rendered text', () => {
+  it('has no rect once a range no longer lies in rendered text', () => {
     // The editor replaces text nodes as it re-renders; the range then collapses to an element
     // boundary, which paints nothing.
     const range = addParagraphRange();
     stubClientRects(range, []);
 
-    expect(measureRange(range)).toBeUndefined();
+    expect(measureBox(range)).toBeUndefined();
   });
 
   it('is the range box while the text is rendered', () => {
     const range = addParagraphRange();
     stubClientRects(range, [new DOMRect(30, 60, 120, 18)]);
 
-    expect(rectNumbers(measureRange(range))).toEqual({
+    expect(rectNumbers(measureBox(range))).toEqual({
       x: 30,
       y: 60,
       width: 120,
       height: 18,
     });
   });
-});
 
-/** Gives `target` the client rects jsdom cannot lay out, in the shape `measureElement` reads them. */
-function stubElementClientRects(target: Element, rects: DOMRect[]) {
-  Object.defineProperty(target, 'getClientRects', { value: () => rects, configurable: true });
-  Object.defineProperty(target, 'getBoundingClientRect', {
-    configurable: true,
-    value: () => rects[0] ?? new DOMRect(),
-  });
-}
-
-describe('measureElement', () => {
-  it('has no rect once the element has no layout, as inside a display:none rc-dock tab pane', () => {
+  it('has no rect once an element has no layout, as inside a display:none rc-dock tab pane', () => {
     const element = document.createElement('div');
-    stubElementClientRects(element, []);
+    stubClientRects(element, []);
 
-    expect(measureElement(element)).toBeUndefined();
+    expect(measureBox(element)).toBeUndefined();
   });
 
   it('is the element box while it is laid out, even at zero width or height', () => {
     // A collapsed caret's element still occupies a real position; only "no box at all" (an empty
-    // getClientRects()) counts as unmeasurable, matching measureRange's rule.
+    // getClientRects()) counts as unmeasurable.
     const element = document.createElement('div');
-    stubElementClientRects(element, [new DOMRect(40, 100, 0, 40)]);
+    stubClientRects(element, [new DOMRect(40, 100, 0, 40)]);
 
-    expect(rectNumbers(measureElement(element))).toEqual({
+    expect(rectNumbers(measureBox(element))).toEqual({
       x: 40,
       y: 100,
       width: 0,

@@ -8,6 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
+import { useContentZoomTextProps } from '@/context/content-zoom-text.context';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { sanitizeHtml } from 'platform-bible-utils';
 import { useId, useMemo, useState } from 'react';
@@ -50,6 +51,7 @@ export function ConflictNoteCard({
   const staleNoticeId = useId();
   // Prefix for the per-option radio id (used for the stale reject aria-describedby wiring).
   const optionIdPrefix = useId();
+  const contentZoomTextProps = useContentZoomTextProps();
 
   // Options are still being fetched: render a skeleton, never the option cards or (worse) the
   // read-only "resolved" view, which would flash the accepted text before the real state lands.
@@ -151,7 +153,19 @@ export function ConflictNoteCard({
   // that decoded to an empty verse, or a merge with no mergedText).
   const noResultPreview = <p className="tw:text-muted-foreground">{noResultText}</p>;
   const renderResolvedText = (text: string | undefined) =>
-    text ? <p className="tw:whitespace-pre-wrap tw:text-foreground">{text}</p> : noResultPreview;
+    text ? (
+      <p
+        className="tw:whitespace-pre-wrap tw:text-foreground"
+        // The result is project verse text: it zooms with the comment it belongs to inside a
+        // ContentZoomTextProvider. The no-result notice is interface text and stays unmarked.
+        // eslint-disable-next-line react/jsx-props-no-spreading
+        {...contentZoomTextProps}
+      >
+        {text}
+      </p>
+    ) : (
+      noResultPreview
+    );
   const renderResolvedResult = () => {
     const outcome: ConflictResolutionOutcome = resolvedResolution ?? 'accept';
     if (outcome === 'merged')

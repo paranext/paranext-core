@@ -11,9 +11,8 @@ import { ButtonProps, buttonVariants } from '@/components/shadcn-ui/button';
 // selects, dropdown and context menus, the menubar) — or it renders behind the surface it
 // describes. The ordering is pinned by z-index.test.tsx.
 import { Z_INDEX_TOOLTIP } from '@/components/z-index';
-// CUSTOM: Import the content-zoom area context so a tooltip opened from zoomed content follows
-// that area's zoom
-import { getContentZoomPopupStyle, useContentZoomArea } from '@/context/content-zoom-area.context';
+// CUSTOM: Shared portal-container factory (also used by popover.tsx) so this workaround is defined once
+import { createPortalContainerContext } from '@/context/portal-container.context';
 
 // CUSTOM: Added @inheritdoc TSDoc pointing to Tooltip for documentation inheritance
 /** @inheritdoc Tooltip */
@@ -61,8 +60,49 @@ function TooltipTrigger({
   );
 }
 
+/* #region CUSTOM TooltipPortalContainerProvider — let descendant TooltipContent portal into a custom container instead of document.body */
+const { PortalContainerProvider, usePortalContainer: useTooltipPortalContainer } =
+  createPortalContainerContext();
+
+/**
+ * Keeps descendant {@link TooltipContent} inside `container` instead of `document.body`. Use it when
+ * a tooltip sits inside an ancestor that stacks _above_ the tooltip layer: content portalled to the
+ * body becomes a positioned sibling of that ancestor in the root stacking context, so the opaque
+ * first-run wizard gate at `Z_INDEX_FIRST_RUN` (700) hides tooltips at `Z_INDEX_TOOLTIP` (550)
+ * entirely.
+ *
+ * Contract:
+ *
+ * - Pass `null` for `container` until the ancestor element exists (the initial state of a
+ *   ref-callback `useState`) to keep Radix's `document.body` default; once it exists, later opens
+ *   portal into it.
+ * - The ancestor must wrap this provider, not the other way round, so only its own descendants are
+ *   redirected.
+ * - Only affects tooltips mounted as React descendants; already-open tooltips are not re-portalled.
+ *
+ * `PopoverPortalContainerProvider` in `popover.tsx` does the same for popovers.
+ *
+ * @example
+ *
+ * ```tsx
+ * const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+ *
+ * <Dialog open>
+ *   <DialogContent ref={setDialogEl} style={{ zIndex: Z_INDEX_FIRST_RUN }}>
+ *     <TooltipPortalContainerProvider container={dialogEl}>
+ *       <FirstRunShell ... />
+ *     </TooltipPortalContainerProvider>
+ *   </DialogContent>
+ * </Dialog>;
+ * ```
+ */
+const TooltipPortalContainerProvider = PortalContainerProvider;
+/* #endregion CUSTOM */
+
 // CUSTOM: Added @inheritdoc TSDoc pointing to Tooltip for documentation inheritance
 /** @inheritdoc Tooltip */
+// CUSTOM: Carries no content-zoom marker and reads no zoom area, so this pop-up keeps interface
+// scale when opened from zoomed content; pop-ups never follow content zoom (see ContentZoomRoot).
 function TooltipContent({
   className,
   sideOffset = 0,
@@ -86,10 +126,13 @@ function TooltipContent({
   // CUSTOM: arrowClassName prop — see comment above for full semantics
   arrowClassName?: string;
 }) {
-  // CUSTOM: Read the content-zoom area this tooltip was opened from (undefined outside every area)
-  const zoomArea = useContentZoomArea();
+  // CUSTOM: Read portal container override (see TooltipPortalContainerProvider above) so tooltips
+  // stay inside ancestors that stack above the tooltip layer (e.g. the first-run wizard gate).
+  const portalContainer = useTooltipPortalContainer();
   return (
-    <TooltipPrimitive.Portal>
+    // CUSTOM: When a TooltipPortalContainerProvider is in scope, portal into its container instead
+    // of the default document.body.
+    <TooltipPrimitive.Portal container={portalContainer}>
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
@@ -97,30 +140,12 @@ function TooltipContent({
         // must clear every layer that can hold its trigger — modal dialogs and the overlay layer
         // (popovers, selects, dropdown and context menus, the menubar) — or it renders behind the
         // surface it describes. The ordering is pinned by z-index.test.tsx.
-        // CUSTOM: Inside a content-zoom area, also carry the area's zoom factor for the width cap below
-        style={{
-          zIndex: Z_INDEX_TOOLTIP,
-          ...(zoomArea === undefined ? undefined : getContentZoomPopupStyle(zoomArea)),
-          ...style,
-        }}
+        style={{ zIndex: Z_INDEX_TOOLTIP, ...style }}
         className={cn(
           // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
           'pr-twp tw:inline-flex tw:w-fit tw:max-w-xs tw:origin-(--radix-tooltip-content-transform-origin) tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-foreground tw:px-3 tw:py-1.5 tw:text-xs tw:text-background tw:has-data-[slot=kbd]:pe-1.5 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:**:data-[slot=kbd]:relative tw:**:data-[slot=kbd]:isolate tw:**:data-[slot=kbd]:z-50 tw:**:data-[slot=kbd]:rounded-sm tw:data-[state=delayed-open]:animate-in tw:data-[state=delayed-open]:fade-in-0 tw:data-[state=delayed-open]:zoom-in-95 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95',
-          // CUSTOM: Inside a content-zoom area, keep the tooltip's usual 20rem limit (zoomed with its
-          // text) but never wider than the space Radix reports as available, divided by the area's
-          // zoom factor, so a zoomed tooltip stays inside the pane. Replaces the base max-w-xs.
-          // CUSTOM: Falls back to 100vw until Radix's size middleware publishes the real available
-          // width, so the measuring pass gets a real cap instead of an invalid var() computing to none
-          zoomArea !== undefined &&
-            'tw:max-w-[min(20rem,calc(var(--radix-tooltip-content-available-width,100vw)/var(--platform-content-zoom-popup-factor,1)))]',
           className,
         )}
-        // CUSTOM: Inside a content-zoom area, mark the content with that area so the platform's
-        // zoom rule scales it, and flag it as pop-up content so the platform never counts it as a
-        // pane. It is portaled out of the area element, so it is a marker of its own, not a nested
-        // one.
-        data-platform-content-zoom-root={zoomArea}
-        data-platform-content-zoom-popup={zoomArea === undefined ? undefined : ''}
         {...props}
       >
         {children}
@@ -164,4 +189,7 @@ function TooltipContent({
   );
 }
 
-export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger };
+// CUSTOM: Export TooltipPortalContainerProvider alongside the stock exports, so a consumer whose
+// tooltips sit under a higher-stacking ancestor can redirect where they portal without
+// reaching into this vendored file
+export { Tooltip, TooltipContent, TooltipPortalContainerProvider, TooltipProvider, TooltipTrigger };

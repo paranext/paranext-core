@@ -60,13 +60,15 @@ import {
   createCommentThreads,
   openCommentListPanel,
 } from '../../fixtures/comment-test-helpers';
+import {
+  openSimpleModeEditor,
+  SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE,
+} from '../../fixtures/simple-mode-columns.page';
 
 const SETTINGS_TIMEOUT_MS = 60_000;
 /**
- * `openScriptureEditor` triggers `openOrUpdateRelatedPanels`, which sequentially awaits five PAPI
- * commands (four for a read-only resource). Each command opens a panel and can take several
- * seconds; the combined response can exceed the default 30 s PAPI request timeout. Use a generous
- * timeout.
+ * Per-request timeout for the `openCommentListPanel` calls below, each of which can rebuild the
+ * dock.
  */
 const OPEN_EDITOR_TIMEOUT_MS = 150_000;
 
@@ -75,17 +77,6 @@ const OPEN_EDITOR_TIMEOUT_MS = 150_000;
  * src/renderer/components/docking/simple-layout.data.ts
  */
 const COMMENT_LIST_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
-
-/**
- * `webViewType` of the Column 2 scripture-editor slot in the simple layout. Source:
- * src/renderer/components/docking/simple-layout.data.ts
- *
- * `openScriptureEditor` replaces this slot with the project editor. It must be present in the dock
- * state before `openScriptureEditor` is called, otherwise the replace fails with "target tab not
- * found". Waiting for its tab title to be attached confirms the dock has fully processed the simple
- * layout — the slot is guaranteed to be in the dock state at that point.
- */
-const SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
 /**
  * Wait for the simple layout to be ready with all Column 2 and Column 3 tabs present, and the
@@ -97,7 +88,7 @@ const SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE = 'platformScriptureEditor.react';
  *
  * 1. The Comment List Panel tab title — confirms legacyCommentManager activated.
  * 2. The scripture editor slot tab title — confirms the dock processed the Column 2 slot so that
- *    `openScriptureEditor` can replace it without a "target tab not found" error.
+ *    `openSimpleModeEditor` can replace it without a "target tab not found" error.
  * 3. The workspace-updating overlay to be gone — confirms no dock rebuild is in progress that would
  *    block clicks or iframe loading.
  */
@@ -132,47 +123,13 @@ function commentsFrameLocator(mainPage: Page, commentListPanelId: string) {
   return mainPage.frameLocator(`iframe[data-web-view-id="${commentListPanelId}"]`);
 }
 
-/**
- * Calls `openScriptureEditor` via PAPI to open the main (editable) project, retrying up to
- * `maxRetries` times if the dock throws "Replacing tab failed". That error is a known transient
- * race condition: `openOrUpdateRelatedPanels` can trigger a dock rebuild that briefly removes the
- * editor slot from the layout, causing the subsequent replace to fail. A short delay and retry
- * reliably succeeds once the dock settles.
- */
-async function openScriptureEditor(
-  projectId: string,
-  port: number,
-  timeout: number,
-  maxRetries = 2,
-): Promise<void> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (attempt > 0)
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 2_000);
-      });
-    try {
-      await sendPapiRequestOnce(
-        'command:platformScriptureEditor.openScriptureEditor',
-        [projectId],
-        port,
-        timeout,
-      );
-      return;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (attempt >= maxRetries || !msg.includes('Replacing tab failed')) throw e;
-      // Otherwise fall through to the next loop iteration to retry after a short delay
-    }
-  }
-}
-
 // Own this spec's Electron app so it is not inherited from another spec that has already replaced
 // the Column 2 scripture-editor slot waitForSimpleLayout waits for. See comment.fixture.ts.
 test.use({ commentAppOwner: 'comments-tab' });
 
 test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   // First 3 tests: app startup (up to 180 s) + waitForSimpleLayout (up to 120 s) + test actions.
-  // "Project changes" test: two openScriptureEditor calls at 150 s each on top of startup.
+  // "Project changes" test: two openSimpleModeEditor calls at 150 s each on top of startup.
   // 7 minutes covers all cases.
   test.setTimeout(420_000);
   let project: CommentTestProject;
@@ -311,7 +268,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   });
 
   // NOTE: The keyboard and scope-filter tests below MUST stay ahead of the PT-4069 test. That test
-  // calls openScriptureEditor, which in Simple mode dispatches `replace-tab` and swaps the Column 2
+  // calls openSimpleModeEditor, which in Simple mode dispatches `replace-tab` and swaps the Column 2
   // scripture-editor slot (SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE) for a web view of a DIFFERENT type
   // (the project editor). Nothing re-applies the simple layout in-session and the Electron app is
   // worker-scoped, so any later test's waitForSimpleLayout would block the full timeout on a slot
@@ -421,7 +378,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   });
 
   test('Comments tab updates when the active project changes (PT-4069)', async ({ mainPage }) => {
-    // Two openScriptureEditor calls on top of normal startup. 10 minutes is comfortable.
+    // Two openSimpleModeEditor calls on top of normal startup. 10 minutes is comfortable.
     test.setTimeout(600_000);
     await waitForAppReady(mainPage, { timeout: 180_000 });
     const commentListPanelId = await waitForSimpleLayout(mainPage);
@@ -438,7 +395,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // Open Project A and wait for the dock rebuilds triggered by openOrUpdateRelatedPanels to
     // settle. The overlay intercepts pointer events while it is visible; clickCommentsTab fails
     // if called while a rebuild is in progress.
-    await openScriptureEditor(projectA.projectId, DEFAULT_WEBSOCKET_PORT, OPEN_EDITOR_TIMEOUT_MS);
+    await openSimpleModeEditor(projectA.projectId);
     await waitForOverlayGone(mainPage, 90_000);
 
     await clickCommentsTab(mainPage, commentListPanelId);
@@ -451,7 +408,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     });
 
     // Switch to Project B and wait for dock rebuilds to settle before asserting.
-    await openScriptureEditor(projectB.projectId, DEFAULT_WEBSOCKET_PORT, OPEN_EDITOR_TIMEOUT_MS);
+    await openSimpleModeEditor(projectB.projectId);
     await waitForOverlayGone(mainPage, 90_000);
 
     await expect(commentsFrame.locator('body')).toContainText('Project B unique comment text', {

@@ -1,3 +1,4 @@
+import { adjustZoomFactor } from 'platform-bible-utils';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,14 +7,36 @@ import {
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
 } from '@shared/models/content-zoom.model';
-import { adjustZoomFactor } from '@shared/utils/content-zoom.util';
-import { getContentZoomStyleElement } from './web-view-content-zoom.bootstrap-script';
+import {
+  getContentZoomBootstrapScript,
+  getContentZoomStyleElement,
+} from './web-view-content-zoom.bootstrap-script';
 import { install } from './web-view-content-zoom.bootstrap-script.test-utils';
 
 const TWO_AREAS =
   '<div id="toolbar">bar</div>' +
   '<div data-platform-content-zoom-root id="main"><p id="verse" tabindex="0">text</p></div>' +
   '<div data-platform-content-zoom-root="footnotes" id="foot"><p id="note" tabindex="0">note</p></div>';
+
+/**
+ * Two resources the way the Text Collection renders them: each row carries a zoom scope with its
+ * resource's area, and inside it an unscaled name and grip plus the marked text.
+ */
+const SCOPED_ROWS =
+  '<div id="outside" tabindex="0">outside</div>' +
+  '<div data-platform-content-zoom-scope="resource-a" id="row-a">' +
+  '<span id="name-a" tabindex="0">A</span>' +
+  '<div data-platform-content-zoom-root="resource-a" id="text-a"><p id="verse-a" tabindex="0">a</p></div>' +
+  '</div>' +
+  '<div data-platform-content-zoom-scope="resource-b" id="row-b">' +
+  '<span id="name-b" tabindex="0">B</span>' +
+  '<div data-platform-content-zoom-root="resource-b" id="text-b"><p id="verse-b" tabindex="0">b</p></div>' +
+  '</div>';
+
+/** One labelled area beside an unlabelled one. */
+const LABELLED_AREAS =
+  '<div data-platform-content-zoom-root="resource-a" data-platform-content-zoom-label="HSV" id="text-a"><p>a</p></div>' +
+  '<div data-platform-content-zoom-root="footnotes" id="foot"><p>note</p></div>';
 
 function key(init: KeyboardEventInit, target: EventTarget = window): KeyboardEvent {
   const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
@@ -43,15 +66,32 @@ function wheel(
  * Presses or releases a modifier key physically, which is the only thing that tells a real
  * Ctrl/⌘+wheel from the ctrl+wheel Chromium synthesizes for a trackpad pinch.
  */
-function modifierKey(type: 'keydown' | 'keyup', physicalKey: 'Control' | 'Meta'): void {
+function modifierKey(
+  type: 'keydown' | 'keyup',
+  physicalKey: 'Control' | 'Meta',
+  repeat = false,
+): void {
   window.dispatchEvent(
     new KeyboardEvent(type, {
       bubbles: true,
       key: physicalKey,
       ctrlKey: physicalKey === 'Control',
       metaKey: physicalKey === 'Meta',
+      repeat,
     }),
   );
+}
+
+let platformSpy: ReturnType<typeof vi.spyOn> | undefined;
+
+/**
+ * Makes the bootstrap installed next run on the given `navigator.platform`. The bootstrap reads it
+ * once, when it is installed, so this has to come before `install`. Jsdom's own value is empty,
+ * which the bootstrap reads as not macOS.
+ */
+function stubPlatform(platform: 'MacIntel' | 'Win32' | 'Linux x86_64'): void {
+  platformSpy?.mockRestore();
+  platformSpy = vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue(platform);
 }
 
 /**
@@ -157,6 +197,8 @@ describe('content-zoom bootstrap script', () => {
     // eslint-disable-next-line no-underscore-dangle
     window.__platformContentZoom?.destroy();
     window.matchMedia = originalMatchMedia;
+    platformSpy?.mockRestore();
+    platformSpy = undefined;
     vi.useRealTimers();
   });
 
@@ -267,6 +309,47 @@ describe('content-zoom bootstrap script', () => {
     key({ key: 'Tab' });
     key({ key: '0', ctrlKey: true });
     expect(bound.resetContentZoomById).toHaveBeenLastCalledWith('wv-tab-hands-back', 'main');
+  });
+
+  it('hands the chords and the active area back to the caret once the user types there', () => {
+    const { bound } = install('wv-typing-hands-back', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').focus();
+    // Typing in the text the view put the caret in is the user working there. The chord that
+    // follows arrives the way a keyboard sends it: the modifier on its own first, then the key.
+    key({ key: 'a' }, byId('verse'));
+    key({ key: 'Control', ctrlKey: true }, byId('verse'));
+    key({ key: '0', ctrlKey: true }, byId('verse'));
+    expect(bound.resetContentZoomById).toHaveBeenLastCalledWith('wv-typing-hands-back', 'main');
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    expect(window.__platformContentZoom?.activeArea).toBe('main');
+    expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith(
+      'wv-typing-hands-back',
+      'main',
+    );
+  });
+
+  it('keeps the clicked area through modifiers pressed on their own and through the chords themselves', () => {
+    const { bound } = install('wv-modifiers-keep', TWO_AREAS);
+    byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    byId('verse').focus();
+    // Every key the platform counts as a modifier, pressed on its own the way a keyboard sends the
+    // first half of a chord: none of them is typing.
+    ['Shift', 'Alt', 'AltGraph', 'Control', 'Meta', 'CapsLock', 'NumLock'].forEach((modifier) => {
+      key({ key: modifier }, byId('verse'));
+    });
+    // Ctrl+Shift+= as separate keydowns, then the same chord again: the first chord must not end
+    // the hold that decides where the second one lands.
+    key({ key: 'Control', ctrlKey: true }, byId('verse'));
+    key({ key: 'Shift', ctrlKey: true, shiftKey: true }, byId('verse'));
+    key({ key: '+', code: 'Equal', ctrlKey: true, shiftKey: true }, byId('verse'));
+    key({ key: '+', code: 'Equal', ctrlKey: true, shiftKey: true }, byId('verse'));
+    expect(bound.adjustContentZoomById.mock.calls).toEqual([
+      ['wv-modifiers-keep', 1, 'footnotes'],
+      ['wv-modifiers-keep', 1, 'footnotes'],
+    ]);
   });
 
   it('a click outside every zoom area does not hand the chords back to a caret the view moved', () => {
@@ -558,6 +641,34 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
   });
 
+  it('with a declared area and no marker rendered, takes the chords and the wheel for the declared area', async () => {
+    const added = vi.spyOn(window, 'addEventListener');
+    try {
+      const { bound } = install(
+        'wv-declared',
+        '<div id="toolbar">bar</div>',
+        undefined,
+        {},
+        'main',
+      );
+      await nextFrame();
+      expect(bound.reportContentZoomAreasById).toHaveBeenCalledWith('wv-declared', []);
+      expect(added.mock.calls.some(([type]) => type === 'wheel')).toBe(true);
+      expect(key({ key: '=', ctrlKey: true }).defaultPrevented).toBe(true);
+      expect(bound.adjustContentZoomById).toHaveBeenCalledWith('wv-declared', 1, 'main');
+      expect(wheel({ deltaY: -100, ctrlKey: true }).defaultPrevented).toBe(true);
+    } finally {
+      added.mockRestore();
+    }
+  });
+
+  it('a malformed declared area is ignored, as if the view were undeclared', async () => {
+    const { bound } = install('wv-bad-declared', '<div>text</div>', undefined, {}, 'Not An Id');
+    await nextFrame();
+    expect(key({ key: '=', ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+  });
+
   it('maps Ctrl+wheel to the area under the pointer (up = in, down = out), consuming the gesture; plain wheel passes; outside every area → active area', async () => {
     const { bound } = install('wv-5', TWO_AREAS);
     // A notch per frame, so each one is its own write: notches inside one frame are coalesced.
@@ -589,6 +700,7 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('takes one wheel notch as one zoom step on a macOS mouse, whose notch is a few pixels, however long the pause between notches', async () => {
+    stubPlatform('MacIntel');
     const { bound } = install('wv-notch-macos', TWO_AREAS);
     let now = 1000;
     const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
@@ -609,6 +721,7 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('takes a macOS notch as a notch while Ctrl is held with the focus outside this iframe', async () => {
+    stubPlatform('MacIntel');
     const { bound } = install('wv-notch-unfocused', TWO_AREAS);
     // The bootstrap runs inside the web view's iframe, so keydown only reaches it while that iframe
     // has focus — but a wheel is delivered by hit test, so Ctrl held while the focus sits in another
@@ -623,6 +736,7 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('lets what the pointer saw go stale, so one modified pointer event cannot outlaw pinching for good', () => {
+    stubPlatform('MacIntel');
     const { bound } = install('wv-pinch-stale', TWO_AREAS);
     let now = 1000;
     const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
@@ -644,6 +758,7 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('lets a real keyup overrule what the pointer saw, without waiting for that to go stale', () => {
+    stubPlatform('MacIntel');
     const { bound } = install('wv-pinch-keyup', TWO_AREAS);
     // The key really was down, and the pointer saw it — but a keyup is the event that ends a key,
     // and it is fresher than any reading taken before it. A pinch moves no cursor, so waiting for
@@ -697,6 +812,34 @@ describe('content-zoom bootstrap script', () => {
     await oneFrame();
     expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(2);
     expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-notch-fallback', 1, 'main');
+  });
+
+  it('falls back to the pixel delta when wheelDeltaY rounds to 0 on a slow Ctrl+two-finger scroll', async () => {
+    // `wheelDeltaY` is an integer rounded from the pixel delta, so every sub-pixel frame of a slow
+    // two-finger scroll reports 0 while its travel is real. On macOS the physically held Ctrl is
+    // what keeps these small frames off the pinch path, so they reach the tick count.
+    stubPlatform('MacIntel');
+    const { bound } = install('wv-notch-slow-scroll', TWO_AREAS);
+    const slowScrollFrames = (frames: number) => {
+      for (let i = 0; i < frames; i += 1)
+        wheel(
+          { deltaY: -0.3, deltaX: 0, deltaMode: 0, ctrlKey: true, wheelDeltaY: 0 },
+          byId('verse'),
+        );
+    };
+    modifierKey('keydown', 'Control');
+    try {
+      // 150 frames are 45 px of travel: under the half of a 100 px tick that rounds to a step.
+      slowScrollFrames(150);
+      await oneFrame();
+      expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+      // 50 more make 60 px: one step, and the carried remainder is too small for a second.
+      slowScrollFrames(50);
+      await oneFrame();
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-notch-slow-scroll', 1, 'main']]);
+    } finally {
+      modifierKey('keyup', 'Control');
+    }
   });
 
   it('keeps a part of a tick through a pause of any length', async () => {
@@ -857,7 +1000,8 @@ describe('content-zoom bootstrap script', () => {
     expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch-cold', 1, 'main']]);
   });
 
-  it('takes the very same events as wheel notches while a modifier key is physically held', async () => {
+  it('takes the very same events as wheel notches on macOS while a modifier key is physically held', async () => {
+    stubPlatform('MacIntel');
     const { bound } = install('wv-pinch-key', TWO_AREAS);
     modifierKey('keydown', 'Control');
     try {
@@ -881,6 +1025,7 @@ describe('content-zoom bootstrap script', () => {
   });
 
   it('forgets a modifier key the window was holding when it lost focus', () => {
+    stubPlatform('MacIntel');
     const { bound } = install('wv-pinch-blur', TWO_AREAS);
     // The keyup for a key held while focus moves away is delivered to somebody else, so a flag
     // left set here would send every later pinch down the notch path for the life of the pane.
@@ -890,6 +1035,73 @@ describe('content-zoom bootstrap script', () => {
       wheel({ deltaY: -2, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
     }
     expect(bound.adjustContentZoomById).toHaveBeenCalledTimes(4);
+  });
+
+  /**
+   * Replays a touchpad pinch made while Ctrl is physically held, frame by frame as Chromium on
+   * Windows delivers it: every frame a tiny `deltaY` carrying a whole tick of `wheelDeltaY`, and
+   * the held key's auto-repeat keydowns arriving in between.
+   */
+  function pinchWithCtrlHeld(frames: number, deltaY: number, target: HTMLElement): void {
+    for (let i = 0; i < frames; i += 1) {
+      modifierKey('keydown', 'Control', i > 0);
+      wheel(
+        { deltaY, deltaX: 0, deltaMode: 0, ctrlKey: true, wheelDeltaY: deltaY < 0 ? 120 : -120 },
+        target,
+      );
+    }
+  }
+
+  it.each(['Win32', 'Linux x86_64'] as const)(
+    'on %s takes a pinch made while Ctrl is held as travel through the zoom scale, not a step per frame',
+    async (platform) => {
+      stubPlatform(platform);
+      const { bound } = install('wv-pinch-ctrl-held', TWO_AREAS);
+      try {
+        // 20 frames of 0.2 px are 4 px of travel, short of the 9.53 px one step is worth. Read as
+        // notches, each frame's whole tick of wheelDeltaY would be a step of its own.
+        pinchWithCtrlHeld(20, -0.2, byId('verse'));
+        await oneFrame();
+        expect(bound.adjustContentZoomById).not.toHaveBeenCalled();
+        // 40 more make 12 px in all: one step.
+        pinchWithCtrlHeld(40, -0.2, byId('verse'));
+        await oneFrame();
+        expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-pinch-ctrl-held', 1, 'main']]);
+      } finally {
+        modifierKey('keyup', 'Control');
+      }
+    },
+  );
+
+  it('on Windows still takes a mouse notch made while Ctrl is held as one step', async () => {
+    stubPlatform('Win32');
+    const { bound } = install('wv-notch-ctrl-held-windows', TWO_AREAS);
+    try {
+      modifierKey('keydown', 'Control');
+      wheel({ deltaY: -100, deltaX: 0, ctrlKey: true, wheelDeltaY: 120 }, byId('verse'));
+      await oneFrame();
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([
+        ['wv-notch-ctrl-held-windows', 1, 'main'],
+      ]);
+    } finally {
+      modifierKey('keyup', 'Control');
+    }
+  });
+
+  it('on macOS takes the same small frames with Ctrl physically held as notches, a step each', async () => {
+    stubPlatform('MacIntel');
+    const { bound } = install('wv-notch-ctrl-held-macos', TWO_AREAS);
+    try {
+      // The very stream the Windows and Linux cases read as a pinch. A macOS mouse notch is small
+      // enough to pass for a pinch frame, so there the held key is what reads these as notches.
+      pinchWithCtrlHeld(20, -0.2, byId('verse'));
+      await oneFrame();
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([
+        ['wv-notch-ctrl-held-macos', 20, 'main'],
+      ]);
+    } finally {
+      modifierKey('keyup', 'Control');
+    }
   });
 
   it('cancels every modified wheel over a zoom area, including one too small to step', () => {
@@ -1130,8 +1342,7 @@ describe('content-zoom bootstrap script', () => {
     const markerScanCount = () =>
       spy.mock.calls.filter(([selector]) => selector === '[data-platform-content-zoom-root]')
         .length;
-    // A show scans once, in the frame it places the badge at its area's corner in; the count is
-    // taken after that frame so it already includes that scan, and the delta below isolates only
+    // The count is taken after the frame that places the badge, and the delta below isolates only
     // what the observer's callback does once the write's mutation record reaches it.
     api.showIndicator('main', '120 %');
     await nextFrame();
@@ -1141,7 +1352,7 @@ describe('content-zoom bootstrap script', () => {
     spy.mockRestore();
   });
 
-  it('measures the badge corner once per animation frame, however many levels arrive in one task', async () => {
+  it('places the badge once per animation frame, however many levels arrive in one task', async () => {
     // A show is the parent's answer to a zoom change, so a level arriving per call is the zoom
     // service calling back into the pane once it has written each one.
     install('wv-show-burst', TWO_AREAS);
@@ -1151,7 +1362,8 @@ describe('content-zoom bootstrap script', () => {
     // eslint-disable-next-line no-underscore-dangle
     const api = window.__platformContentZoom;
     if (!api) throw new Error('indicator api missing');
-    // The two reads that force style and layout when they run in the task that wrote the zoom.
+    // The read that forces a style recalculation when it runs in the task that wrote the zoom, and
+    // the layout read the fixed-corner badge never needs.
     const rects = vi.spyOn(Element.prototype, 'getBoundingClientRect');
     const computedStyles = vi.spyOn(window, 'getComputedStyle');
     let percent = 100;
@@ -1166,10 +1378,9 @@ describe('content-zoom bootstrap script', () => {
     expect(rects).not.toHaveBeenCalled();
 
     await oneFrame();
-    // One placement for the whole run of shows: one direction read, and one rect for the single
-    // element the target area has.
+    // One placement for the whole run of shows: one direction read, and no geometry at all.
     expect(computedStyles).toHaveBeenCalledTimes(1);
-    expect(rects).toHaveBeenCalledTimes(1);
+    expect(rects).not.toHaveBeenCalled();
     // And it places the badge for the level the run settled on.
     const badge = byId('platform-content-zoom-indicator');
     expect(badge.textContent).toBe('150 %');
@@ -1673,147 +1884,20 @@ describe('content-zoom bootstrap script', () => {
     expect(badge?.dataset.area).toBe('footnotes');
   });
 
-  it('leaves pop-up content out of the reported areas and warns about none of it', async () => {
-    const { bound, papi } = install('wv-popup', TWO_AREAS);
-    await nextFrame();
-    const popupForFootnotes = document.createElement('div');
-    popupForFootnotes.setAttribute('data-platform-content-zoom-root', 'footnotes');
-    popupForFootnotes.setAttribute('data-platform-content-zoom-popup', '');
-    const popupOnlyArea = document.createElement('div');
-    popupOnlyArea.setAttribute('data-platform-content-zoom-root', 'menu');
-    popupOnlyArea.setAttribute('data-platform-content-zoom-popup', '');
-    const nestedPopup = document.createElement('div');
-    nestedPopup.setAttribute('data-platform-content-zoom-root', '');
-    nestedPopup.setAttribute('data-platform-content-zoom-popup', '');
-    byId('main').appendChild(nestedPopup);
-    // Controls in the same batch: a real late pane is reported, a real nested marker still warns.
-    const late = document.createElement('aside');
-    late.setAttribute('data-platform-content-zoom-root', 'sidebar');
-    const nestedPane = document.createElement('div');
-    nestedPane.setAttribute('data-platform-content-zoom-root', 'inner');
-    byId('foot').appendChild(nestedPane);
-    document.body.append(popupForFootnotes, popupOnlyArea, late);
-    await nextFrame();
-    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-popup', [
-      'main',
-      'footnotes',
-      'sidebar',
-    ]);
-    const warnings = papi.logger.warn.mock.calls.map(([message]) => String(message));
-    expect(warnings.some((message) => message.includes('"inner"'))).toBe(true);
-    expect(warnings.filter((message) => message.includes('nested'))).toHaveLength(1);
+  it('has no notion of pop-up content: the script never looks for a pop-up flag', () => {
+    const script = getContentZoomBootstrapScript('wv-no-popup-flag');
+    // Positive control: the script does look for the area marker.
+    expect(script).toContain("'data-platform-content-zoom-root'");
+    expect(script).not.toContain('data-platform-content-zoom-popup');
   });
 
-  it('does not report a changed area list when a pop-up opens or closes', async () => {
-    const { bound } = install('wv-popup-churn', TWO_AREAS);
+  it('treats a marked element that also carries the unrecognized pop-up flag as an ordinary area', async () => {
+    const { bound } = install(
+      'wv-flagged',
+      '<div data-platform-content-zoom-root="notes" data-platform-content-zoom-popup id="flagged">x</div>',
+    );
     await nextFrame();
-    const reportsBefore = bound.reportContentZoomAreasById.mock.calls.length;
-    expect(reportsBefore).toBeGreaterThan(0);
-    const popup = document.createElement('div');
-    // An area id the pane never reported, so counting the pop-up as an area would change the list.
-    popup.setAttribute('data-platform-content-zoom-root', 'menu');
-    popup.setAttribute('data-platform-content-zoom-popup', '');
-    document.body.appendChild(popup);
-    await nextFrame();
-    popup.remove();
-    await nextFrame();
-    expect(bound.reportContentZoomAreasById.mock.calls.length).toBe(reportsBefore);
-  });
-
-  it('does not rescan the document when a pop-up opens or closes', async () => {
-    install('wv-popup-no-rescan', TWO_AREAS);
-    await nextFrame();
-    const spy = vi.spyOn(document, 'querySelectorAll');
-    const markerScanCount = () =>
-      spy.mock.calls.filter(([selector]) => selector === '[data-platform-content-zoom-root]')
-        .length;
-    try {
-      const popup = document.createElement('div');
-      popup.setAttribute('data-platform-content-zoom-root', 'menu');
-      popup.setAttribute('data-platform-content-zoom-popup', '');
-      const before = markerScanCount();
-      document.body.appendChild(popup);
-      await nextFrame();
-      popup.remove();
-      await nextFrame();
-      expect(markerScanCount() - before).toBe(0);
-    } finally {
-      spy.mockRestore();
-    }
-  });
-
-  it('keeps the indicator on the pane while a pop-up of the same area is open', async () => {
-    install('wv-popup-corner', TWO_AREAS);
-    const popup = document.createElement('div');
-    popup.setAttribute('data-platform-content-zoom-root', '');
-    popup.setAttribute('data-platform-content-zoom-popup', '');
-    document.body.appendChild(popup);
-    const rect = (top: number, left: number, right: number): DOMRect =>
-      DOMRect.fromRect({ x: left, y: top, width: right - left, height: 50 });
-    vi.spyOn(byId('main'), 'getBoundingClientRect').mockReturnValue(rect(100, 0, 500));
-    vi.spyOn(popup, 'getBoundingClientRect').mockReturnValue(rect(10, 600, 900));
-    // The bootstrap script defines this global; the double underscore marks it as an internal
-    // platform/pane contract, not a name this file invents.
-    // eslint-disable-next-line no-underscore-dangle
-    const api = window.__platformContentZoom;
-    if (!api) throw new Error('indicator api missing');
-    api.showIndicator('main', '200 %');
-    // A show asks for a placement rather than performing one, so the area's corner is measured in
-    // the frame that follows it.
-    await oneFrame();
-    const badge = byId('platform-content-zoom-indicator');
-    // Pane only: top 100 + 12, right edge 500 → innerWidth - 500 + 16. Including the pop-up would
-    // give top 22 and a right offset from 900.
-    expect(badge.style.top).toBe('112px');
-    expect(badge.style.right).toBe(`${window.innerWidth - 500 + 16}px`);
-  });
-
-  it('a click or Ctrl+wheel inside a pop-up targets the area the pop-up belongs to', async () => {
-    const { bound } = install('wv-popup-target', TWO_AREAS);
-    await nextFrame();
-    const popup = document.createElement('div');
-    popup.setAttribute('data-platform-content-zoom-root', 'footnotes');
-    popup.setAttribute('data-platform-content-zoom-popup', '');
-    popup.innerHTML = '<p id="popup-item">item</p>';
-    document.body.appendChild(popup);
-    await nextFrame();
-    // The bootstrap script defines this global; the double underscore marks it as an internal
-    // platform/pane contract, not a name this file invents.
-    // eslint-disable-next-line no-underscore-dangle
-    expect(window.__platformContentZoom?.activeArea).toBe('main');
-    byId('popup-item').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
-    // The bootstrap script defines this global; the double underscore marks it as an internal
-    // platform/pane contract, not a name this file invents.
-    // eslint-disable-next-line no-underscore-dangle
-    expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
-    const event = wheel({ ctrlKey: true, deltaY: -120 }, byId('popup-item'));
-    expect(event.defaultPrevented).toBe(true);
-    // A notch adds its step to a pending total that one adjustment per frame carries over.
-    await oneFrame();
-    expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith('wv-popup-target', 1, 'footnotes');
-  });
-
-  it('scales a top-level pop-up with its area’s rule but no rule matches a nested one', async () => {
-    install('wv-popup-css', TWO_AREAS);
-    const popup = document.createElement('div');
-    popup.id = 'popup';
-    popup.setAttribute('data-platform-content-zoom-root', 'footnotes');
-    popup.setAttribute('data-platform-content-zoom-popup', '');
-    document.body.appendChild(popup);
-    const nested = document.createElement('div');
-    nested.id = 'nestedPopup';
-    nested.setAttribute('data-platform-content-zoom-root', 'footnotes');
-    nested.setAttribute('data-platform-content-zoom-popup', '');
-    byId('main').appendChild(nested);
-    await nextFrame();
-    const sheet = document.querySelector<HTMLStyleElement>('#platform-content-zoom-styles')?.sheet;
-    const selectors = sheet
-      ? Array.from(sheet.cssRules).flatMap((rule) =>
-          rule instanceof CSSStyleRule ? [rule.selectorText] : [],
-        )
-      : [];
-    expect(selectors.some((selector) => byId('popup').matches(selector))).toBe(true);
-    expect(selectors.some((selector) => byId('nestedPopup').matches(selector))).toBe(false);
+    expect(bound.reportContentZoomAreasById).toHaveBeenLastCalledWith('wv-flagged', ['notes']);
   });
 
   it('anchors the indicator at inline-end: right for an LTR area, left for an RTL area', async () => {
@@ -1842,6 +1926,52 @@ describe('content-zoom bootstrap script', () => {
     await nextFrame();
     expect(badge.style.left).not.toBe('');
     expect(badge.style.right).toBe('');
+  });
+
+  it("keeps the indicator in the web view's top-right corner, wherever the zoomed area's text is", async () => {
+    install(
+      'wv-fixed-corner',
+      '<div id="list" style="overflow-y:auto">' +
+        '<div data-platform-content-zoom-root id="high">one</div>' +
+        '<div data-platform-content-zoom-root="footnotes" id="low">two</div>' +
+        '</div>',
+    );
+    const box = (top: number, left: number, bottom: number, right: number): DOMRect => ({
+      top,
+      left,
+      bottom,
+      right,
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+      toJSON: () => ({}),
+    });
+    // Text at different places in the pane: one area near the top, the other low down and partly
+    // scrolled out of its list, and neither reaching the viewport's right edge.
+    vi.spyOn(byId('list'), 'getBoundingClientRect').mockReturnValue(box(100, 0, 400, 500));
+    vi.spyOn(byId('high'), 'getBoundingClientRect').mockReturnValue(box(120, 40, 200, 300));
+    vi.spyOn(byId('low'), 'getBoundingClientRect').mockReturnValue(box(350, 60, 700, 480));
+    // The bootstrap script defines this global; the double underscore marks it as an internal
+    // platform/pane contract, not a name this file invents.
+    // eslint-disable-next-line no-underscore-dangle
+    const api = window.__platformContentZoom;
+    if (!api) throw new Error('indicator api missing');
+    const badge = byId('platform-content-zoom-indicator');
+
+    const expectCornerAfterShowing = async (areaId: string): Promise<void> => {
+      api.showIndicator(areaId, '150 %');
+      await nextFrame();
+      // Positive control: the show landed on this area.
+      expect(badge.dataset.area).toBe(areaId);
+      expect(badge.style.position).toBe('fixed');
+      expect(badge.style.top).toBe('12px');
+      expect(badge.style.right).toBe('16px');
+      expect(badge.style.left).toBe('');
+    };
+    await expectCornerAfterShowing('main');
+    await expectCornerAfterShowing('footnotes');
+    await expectCornerAfterShowing('main');
   });
 
   it('shows a transient indicator on the named area', () => {
@@ -2051,5 +2181,251 @@ describe('content-zoom bootstrap script', () => {
     expect(selectors.some((selector) => byId('malformed').matches(selector))).toBe(false);
     expect(selectors.some((selector) => byId('nestedFootnotes').matches(selector))).toBe(false);
     expect(selectors.some((selector) => byId('nestedMain').matches(selector))).toBe(false);
+  });
+
+  describe('zoom scope', () => {
+    it('makes the scope’s area active on a pointerdown on an unmarked element inside it, any button', () => {
+      const { bound } = install('wv-scope-click', SCOPED_ROWS);
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('resource-a');
+      // jsdom in this environment has no PointerEvent constructor; the listener only reads
+      // `event.target` and `event.button`, so a MouseEvent of the same type exercises it.
+      byId('name-b').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 2 }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('resource-b');
+      expect(bound.reportContentZoomActiveAreaById).toHaveBeenLastCalledWith(
+        'wv-scope-click',
+        'resource-b',
+      );
+      byId('row-a').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('resource-a');
+    });
+
+    it('makes the scope’s area active on a focus change into an unmarked element inside it', () => {
+      install('wv-scope-focus', SCOPED_ROWS);
+      byId('name-b').dispatchEvent(new Event('focusin', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('resource-b');
+    });
+
+    it('acts on the scope’s area for a chord with focus on an unmarked element inside it', () => {
+      const { bound } = install('wv-scope-chord', SCOPED_ROWS);
+      byId('name-b').focus();
+      expect(key({ key: '=', ctrlKey: true }).defaultPrevented).toBe(true);
+      expect(bound.adjustContentZoomById).toHaveBeenLastCalledWith(
+        'wv-scope-chord',
+        1,
+        'resource-b',
+      );
+    });
+
+    it('acts on the scope’s area for Ctrl+wheel over an unmarked element inside it', async () => {
+      const { bound } = install('wv-scope-wheel', SCOPED_ROWS);
+      expect(wheel({ deltaY: -100, ctrlKey: true }, byId('name-b')).defaultPrevented).toBe(true);
+      await oneFrame();
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-scope-wheel', 1, 'resource-b']]);
+    });
+
+    it('lets a marker inside a scope of another id decide, and ignores a scope inside a marker', () => {
+      const html =
+        '<div data-platform-content-zoom-root="resource-a" id="text-a">' +
+        '<span data-platform-content-zoom-scope="resource-b" id="scope-in-marker">s</span>' +
+        '</div>' +
+        '<div data-platform-content-zoom-scope="resource-a" id="row-a">' +
+        '<div data-platform-content-zoom-root="resource-b" id="text-b"><p id="inner-b">b</p></div>' +
+        '</div>';
+      install('wv-scope-marker-wins', html);
+      byId('inner-b').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('resource-b');
+      byId('scope-in-marker').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('resource-a');
+    });
+
+    it('reads a scope spelled with the empty value as the main area, the way a marker is read', () => {
+      const html = `${TWO_AREAS}<div data-platform-content-zoom-scope="" id="main-row"><span id="main-name">x</span></div>`;
+      install('wv-scope-main', html);
+      byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+      byId('main-name').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('main');
+    });
+
+    it('resolves a scope with an invalid id to nothing, warning once', () => {
+      const html = `${TWO_AREAS}<div data-platform-content-zoom-scope="Bad Scope!" id="bad-row"><span id="bad-name">x</span></div>`;
+      const { papi } = install('wv-scope-invalid', html);
+      byId('note').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      byId('bad-name').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      byId('bad-name').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('footnotes');
+      const scopeWarnings = papi.logger.warn.mock.calls
+        .map(([message]) => String(message))
+        .filter((message) => message.includes('zoom scope'));
+      expect(scopeWarnings).toEqual([
+        'Content zoom: ignoring zoom scope with invalid id "Bad Scope!"',
+      ]);
+    });
+
+    it('changes nothing for a scope naming an area the pane has not reported', async () => {
+      const html = `${TWO_AREAS}<div data-platform-content-zoom-scope="ghost" id="ghost-row"><span id="ghost-name">x</span></div>`;
+      const { bound } = install('wv-scope-unreported', html);
+      byId('ghost-name').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      expect(window.__platformContentZoom?.activeArea).toBe('main');
+      expect(bound.reportContentZoomActiveAreaById).not.toHaveBeenCalledWith(
+        'wv-scope-unreported',
+        'ghost',
+      );
+      expect(wheel({ deltaY: -100, ctrlKey: true }, byId('ghost-name')).defaultPrevented).toBe(
+        true,
+      );
+      await oneFrame();
+      expect(bound.adjustContentZoomById.mock.calls).toEqual([['wv-scope-unreported', 1, 'main']]);
+    });
+  });
+
+  describe('area label', () => {
+    function showIndicator(areaId: string, text: string): void {
+      // The bootstrap script defines this global; the double underscore marks it as an internal
+      // platform/pane contract, not a name this file invents.
+      // eslint-disable-next-line no-underscore-dangle
+      const api = window.__platformContentZoom;
+      if (!api) throw new Error('indicator api missing');
+      api.showIndicator(areaId, text);
+    }
+
+    function spyOnMarkerScans(): { count: () => number; restore: () => void } {
+      const spy = vi.spyOn(document, 'querySelectorAll');
+      return {
+        count: () =>
+          spy.mock.calls.filter(([selector]) => selector === '[data-platform-content-zoom-root]')
+            .length,
+        restore: () => spy.mockRestore(),
+      };
+    }
+
+    it('names and places the badge on a zoom step without scanning the document for markers', async () => {
+      install('wv-label-no-scan', LABELLED_AREAS);
+      await nextFrame();
+      const scans = spyOnMarkerScans();
+      try {
+        // A wheel gesture: many steps, each naming its area and asking for a placement.
+        showIndicator('resource-a', '110 %');
+        showIndicator('resource-a', '120 %');
+        showIndicator('footnotes', '130 %');
+        await nextFrame();
+        expect(scans.count()).toBe(0);
+        // Positive control: the steps did read the label and place the badge.
+        const badge = byId('platform-content-zoom-indicator');
+        expect(badge.dataset.area).toBe('footnotes');
+        showIndicator('resource-a', '140 %');
+        expect(badge.textContent).toBe('HSV · 140 %');
+        expect(scans.count()).toBe(0);
+      } finally {
+        scans.restore();
+      }
+    });
+
+    it('reads a renamed label from the next step, rescanning once for the rename', async () => {
+      install('wv-label-rename', LABELLED_AREAS);
+      await nextFrame();
+      const scans = spyOnMarkerScans();
+      try {
+        byId('text-a').setAttribute('data-platform-content-zoom-label', 'NIV');
+        await nextFrame();
+        expect(scans.count()).toBe(1);
+        showIndicator('resource-a', '120 %');
+        expect(byId('platform-content-zoom-indicator').textContent).toBe('NIV · 120 %');
+        byId('text-a').removeAttribute('data-platform-content-zoom-label');
+        await nextFrame();
+        showIndicator('resource-a', '130 %');
+        expect(byId('platform-content-zoom-indicator').textContent).toBe('130 %');
+      } finally {
+        scans.restore();
+      }
+    });
+
+    it('shows a labelled area as "<label> · <level>", in the badge and, once settled, the live region', () => {
+      install('wv-label', LABELLED_AREAS);
+      stubMatchMedia(false);
+      vi.useFakeTimers();
+      try {
+        showIndicator('resource-a', '120 %');
+        const badge = byId('platform-content-zoom-indicator');
+        expect(badge.textContent).toBe('HSV · 120 %');
+        expect(badge.dataset.area).toBe('resource-a');
+        vi.advanceTimersByTime(520);
+        expect(byId('platform-content-zoom-indicator-status').textContent).toBe('HSV · 120 %');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('shows an unlabelled area as the level alone, leaving no label behind from an earlier show', () => {
+      install('wv-label-none', LABELLED_AREAS);
+      showIndicator('resource-a', 'Default · 100 %');
+      const badge = byId('platform-content-zoom-indicator');
+      // Positive control: the labelled show did put a label element in the badge.
+      expect(badge.querySelector('bdi')).not.toBeNull();
+      showIndicator('footnotes', '120 %');
+      expect(badge.textContent).toBe('120 %');
+      expect(badge.querySelector('bdi')).toBeNull();
+    });
+
+    it('takes the first non-empty label among several markers of one area', () => {
+      const html =
+        '<div data-platform-content-zoom-root="resource-a" data-platform-content-zoom-label="" id="row"><p>a</p></div>' +
+        '<div data-platform-content-zoom-root="resource-a" data-platform-content-zoom-label="HSV" id="panel"><p>a</p></div>' +
+        '<div data-platform-content-zoom-root="resource-a" data-platform-content-zoom-label="Other" id="late"><p>a</p></div>';
+      install('wv-label-first', html);
+      showIndicator('resource-a', '130 %');
+      expect(byId('platform-content-zoom-indicator').textContent).toBe('HSV · 130 %');
+    });
+
+    it('isolates the label for bidi text, caps its width, and writes it as text', () => {
+      const html =
+        '<div data-platform-content-zoom-root="resource-he" data-platform-content-zoom-label="עברית" id="he"><p>א</p></div>' +
+        '<div data-platform-content-zoom-root="resource-x" data-platform-content-zoom-label="&lt;b&gt;x&lt;/b&gt;" id="x"><p>x</p></div>';
+      install('wv-label-bidi', html);
+      showIndicator('resource-he', '120 %');
+      const badge = byId('platform-content-zoom-indicator');
+      const name = badge.querySelector('bdi');
+      if (!name) throw new Error('label element missing');
+      expect(name.textContent).toBe('עברית');
+      // The level sits outside the isolated, capped name, so it is never reordered or cut.
+      expect(badge.textContent).toBe('עברית · 120 %');
+      expect(name.nextSibling?.textContent).toBe(' · 120 %');
+      expect(name.style.maxWidth).toBe('16em');
+      expect(name.style.overflow).toBe('hidden');
+      expect(name.style.whiteSpace).toBe('nowrap');
+      showIndicator('resource-x', '90 %');
+      expect(badge.textContent).toBe('<b>x</b> · 90 %');
+      expect(badge.querySelector('b')).toBeNull();
+    });
   });
 });

@@ -1,17 +1,46 @@
 import type { ReactNode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { newPlatformError, type PlatformError } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { logger } from '@shared/services/logger.service';
+import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
 import { Setting } from './setting.component';
 
-// Setting pulls in useData (only for the UI-language-selector fallback, unused by the string/
-// boolean cases below) and useLocalizedStrings; stub both so the component renders without a live
-// papi backend. Nothing under test reads their values.
+vi.mock('@renderer/services/interface-language-restart-prompt', () => ({
+  offerRestartAfterInterfaceLanguageChange: vi.fn(async () => {}),
+}));
+
+type LanguagesStub = Record<string, { autonym: string }>;
+type UiLanguageSelectorStubProps = {
+  knownUiLanguages: LanguagesStub;
+  primaryLanguage: string;
+  onLanguagesChange?: (newUiLanguages: string[]) => void;
+};
+
+// Lets a test stand in for the loaded offered languages; unset means "still loading", which hands
+// back the component's own default list the way useData does before data arrives.
+const availableLanguages = vi.hoisted(() => {
+  const state: { loaded?: LanguagesStub | PlatformError } = {};
+  return state;
+});
+// Records what the component hands UiLanguageSelector; renders nothing.
+const uiLanguageSelectorStub = vi.hoisted(() =>
+  vi.fn<(props: UiLanguageSelectorStubProps) => undefined>(() => undefined),
+);
+const lastSelectorProps = () => uiLanguageSelectorStub.mock.lastCall?.[0];
+
+// Setting pulls in useData (for the interface-language selector's offered languages) and
+// useLocalizedStrings; stub both so the component renders without a live papi backend. Only the
+// interface-language tests below read the offered languages.
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useData: vi.fn(() => ({
-    AvailableInterfaceLanguages: () => [{}, vi.fn(), false],
+    AvailableInterfaceLanguages: (_selector: undefined, defaultValue: unknown) => [
+      availableLanguages.loaded ?? defaultValue,
+      vi.fn(),
+      false,
+    ],
   })),
   useLocalizedStrings: vi.fn(() => [{}]),
 }));
@@ -29,6 +58,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
         <div data-testid="error-details">{errorDetails}</div>
       </>
     ),
+    UiLanguageSelector: uiLanguageSelectorStub,
   };
 });
 
@@ -43,6 +73,7 @@ const ZOOM_STRINGS = {
   '%settings_platform_webViewContentZoom_increase%': 'Increase default zoom',
   '%settings_platform_webViewContentZoom_decrease%': 'Decrease default zoom',
   '%settings_platform_webViewContentZoom_reset%': 'Reset default zoom',
+  '%settings_zoomStepper_percentInput%': 'Percentage',
 };
 
 // The error block renders two localized labels; the tests that assert an error is (still) on screen
@@ -53,6 +84,12 @@ const ERROR_STRINGS = {
   '%settings_errorMessages_invalidValue%': 'Invalid value',
   '%settings_errorMessages_notWritableYet%': 'Setting not writable yet',
 };
+
+/** The stepper's percentage field, which shows the factor as a whole percentage. */
+const percentField = () => screen.getByRole('textbox', { name: 'Percentage' });
+
+/** Matches a displayed percentage; `\s` covers the narrow no-break space production puts before `%`. */
+const showsPercent = (percent: number) => new RegExp(`^${percent}\\s%$`, 'u');
 
 // Props shared by every case below; only settingKey/setting/label (and `disabled`) differ per test,
 // so each spreads this and passes just those (same idea as the renderPanel helper in
@@ -70,6 +107,7 @@ const baseProps = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  availableLanguages.loaded = undefined;
 });
 
 describe('Setting disabled forwarding', () => {
@@ -352,10 +390,9 @@ describe('a setting with no writer', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Increase default zoom' }));
-    // The readout is `aria-live`, so a jump here is announced to a screen-reader user as a change
-    // that was never written.
-    expect(screen.getByText('120 %')).toBeInTheDocument();
-    expect(screen.queryByText('130 %')).toBeNull();
+    // A jump here would be a percentage shown (and, after a press, announced) that was never written.
+    expect(percentField()).toHaveDisplayValue(showsPercent(120));
+    expect(percentField()).toBeDisabled();
   });
 });
 
@@ -371,7 +408,7 @@ describe('platform.webViewContentZoom stepper', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
   });
 
-  it('renders the zoom stepper instead of a text box', () => {
+  it('renders the zoom stepper instead of a decimal text box', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([ZOOM_STRINGS, false]);
     render(
       <Setting
@@ -382,8 +419,9 @@ describe('platform.webViewContentZoom stepper', () => {
         label="Tab content default zoom"
       />,
     );
-    expect(screen.getByText('120 %')).toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.getByRole('group', { name: 'Tab content default zoom' })).toBeInTheDocument();
+    expect(percentField()).toHaveDisplayValue(showsPercent(120));
+    expect(screen.queryByDisplayValue('1.2')).toBeNull();
   });
 
   it('writes the stepped factor through setSetting', async () => {
@@ -435,8 +473,46 @@ describe('platform.webViewContentZoom stepper', () => {
       vi.useRealTimers();
     }
   });
+});
 
-  it('still renders a text box for the app-wide zoom factor', () => {
+const INTERFACE_SCALING_STRINGS = {
+  '%settings_platform_zoomFactor_increase%': 'Increase interface scaling',
+  '%settings_platform_zoomFactor_decrease%': 'Decrease interface scaling',
+  '%settings_platform_zoomFactor_reset%': 'Reset interface scaling',
+  '%settings_platform_zoomFactor_atMaximum%': 'Already at the largest interface scaling (300 %)',
+  '%settings_zoomStepper_percentInput%': 'Percentage',
+};
+
+describe('platform.zoomFactor stepper', () => {
+  beforeAll(() => {
+    // Radix Tooltip uses ResizeObserver; jsdom doesn't provide it.
+    global.ResizeObserver = class {
+      // jsdom stub: empty no-op intentionally has no `this` usage
+      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+      observe() {}
+      // jsdom stub: empty no-op intentionally has no `this` usage
+      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+      unobserve() {}
+      // jsdom stub: empty no-op intentionally has no `this` usage
+      // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+      disconnect() {}
+    };
+  });
+
+  beforeEach(() => {
+    // Both label families are available, so a stepper that borrowed the content-zoom wording
+    // would find it and the per-key assertions below would catch that.
+    vi.mocked(useLocalizedStrings).mockReturnValue([
+      { ...ZOOM_STRINGS, ...INTERFACE_SCALING_STRINGS },
+      false,
+    ]);
+  });
+
+  afterEach(() => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
+  });
+
+  it('shows Interface scaling as a percentage stepper instead of a decimal text box', () => {
     render(
       <Setting
         setSetting={baseProps.setSetting}
@@ -446,7 +522,201 @@ describe('platform.webViewContentZoom stepper', () => {
         label="Interface scaling"
       />,
     );
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Interface scaling' })).toBeInTheDocument();
+    expect(percentField()).toHaveDisplayValue(showsPercent(120));
+    expect(screen.queryByDisplayValue('1.2')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Increase interface scaling' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Increase default zoom' })).toBeNull();
+  });
+
+  it('writes the stepped factor through setSetting', async () => {
+    render(
+      <Setting
+        setSetting={baseProps.setSetting}
+        isLoading={baseProps.isLoading}
+        validateOtherSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platform.zoomFactor"
+        setting={1.2}
+        label="Interface scaling"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Increase interface scaling' }));
+    await waitFor(() => expect(baseProps.setSetting).toHaveBeenCalledWith(1.3));
+  });
+
+  it('resets Interface scaling to 100 %', async () => {
+    render(
+      <Setting
+        setSetting={baseProps.setSetting}
+        isLoading={baseProps.isLoading}
+        validateOtherSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platform.zoomFactor"
+        setting={1.2}
+        label="Interface scaling"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Reset interface scaling' }));
+    await waitFor(() => expect(baseProps.setSetting).toHaveBeenCalledWith(1));
+  });
+
+  it('commits a typed percentage as the stored factor', async () => {
+    render(
+      <Setting
+        setSetting={baseProps.setSetting}
+        isLoading={baseProps.isLoading}
+        validateOtherSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platform.zoomFactor"
+        setting={1}
+        label="Interface scaling"
+      />,
+    );
+    fireEvent.change(percentField(), { target: { value: '137' } });
+    fireEvent.keyDown(percentField(), { key: 'Enter' });
+    await waitFor(() => expect(baseProps.setSetting).toHaveBeenCalledWith(1.37));
+  });
+
+  it('names the Interface scaling limit, not the content-zoom one, at the maximum', async () => {
+    render(
+      <Setting
+        setSetting={baseProps.setSetting}
+        isLoading={baseProps.isLoading}
+        settingKey="platform.zoomFactor"
+        setting={3}
+        label="Interface scaling"
+      />,
+    );
+    act(() => {
+      screen.getByRole('button', { name: 'Increase interface scaling' }).focus();
+    });
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'Already at the largest interface scaling (300 %)',
+    );
+  });
+
+  it('still renders a text box for other number settings', () => {
+    render(
+      <Setting
+        setSetting={baseProps.setSetting}
+        isLoading={baseProps.isLoading}
+        settingKey="platform.requestTimeout"
+        setting={30}
+        label="Request timeout"
+      />,
+    );
+    expect(screen.getByDisplayValue('30')).toBeInTheDocument();
     expect(screen.queryByRole('group')).toBeNull();
+  });
+});
+
+describe('interface language selector', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const renderLanguageSetting = (setting: string[], setSetting = vi.fn()) =>
+    render(
+      // A user setting, so it takes validateOtherSetting rather than baseProps' project validator.
+      <Setting
+        setSetting={setSetting}
+        isLoading={false}
+        validateOtherSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platform.interfaceLanguage"
+        setting={setting}
+        label="Interface language"
+      />,
+    );
+
+  /** Picks `tag` as the primary language the way UiLanguageSelector reports it, then writes. */
+  const choosePrimary = async (tag: string, fallbackLanguages: string[]) => {
+    act(() => {
+      lastSelectorProps()?.onLanguagesChange?.([
+        tag,
+        ...fallbackLanguages.filter((language) => language !== tag),
+      ]);
+    });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+  };
+
+  it('switching the primary language keeps the other offered languages, the old primary included', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockResolvedValue(undefined);
+    renderLanguageSetting(['es', 'en'], setSetting);
+    await choosePrimary('en', ['en']);
+    expect(setSetting).toHaveBeenCalledWith(['en', 'es']);
+  });
+
+  it('switching the primary language drops languages that are not offered', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockResolvedValue(undefined);
+    renderLanguageSetting(['fr', 'zh-hans', 'es'], setSetting);
+    await choosePrimary('en', ['zh-hans', 'es']);
+    expect(setSetting).toHaveBeenCalledWith(['en', 'es']);
+  });
+
+  it('offers a restart once the new language has been written', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockResolvedValue(undefined);
+    renderLanguageSetting(['en'], setSetting);
+    await choosePrimary('es', []);
+    expect(offerRestartAfterInterfaceLanguageChange).toHaveBeenCalledWith(['en'], ['es', 'en']);
+  });
+
+  it('does not offer a restart when another list setting is written', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockResolvedValue(undefined);
+    render(
+      <Setting
+        setSetting={setSetting}
+        isLoading={false}
+        validateOtherSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platformGetResources.excludePdpFactoryIdsInHome"
+        setting={[]}
+        label="Excluded factories"
+      />,
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '["x"]' } });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    // Positive control: the list was written.
+    expect(setSetting).toHaveBeenCalledWith(['x']);
+    expect(offerRestartAfterInterfaceLanguageChange).not.toHaveBeenCalled();
+  });
+
+  it('does not offer a restart when writing the new language fails', async () => {
+    vi.useFakeTimers();
+    const setSetting = vi.fn().mockRejectedValue(new Error('write rejected'));
+    renderLanguageSetting(['en'], setSetting);
+    await choosePrimary('es', []);
+    // Positive control: the write was attempted.
+    expect(setSetting).toHaveBeenCalled();
+    expect(offerRestartAfterInterfaceLanguageChange).not.toHaveBeenCalled();
+  });
+
+  it('offers exactly English and Español when the offered languages cannot be read', () => {
+    availableLanguages.loaded = newPlatformError('Localization service unavailable');
+    renderLanguageSetting(['en']);
+    expect(Object.keys(lastSelectorProps()?.knownUiLanguages ?? {}).sort()).toEqual(['en', 'es']);
+  });
+
+  it('offers exactly English and Español while the languages load', () => {
+    renderLanguageSetting(['en']);
+    expect(Object.keys(lastSelectorProps()?.knownUiLanguages ?? {}).sort()).toEqual(['en', 'es']);
+  });
+
+  it('keeps a hidden current language, by its autonym, once the offered languages load', () => {
+    availableLanguages.loaded = { en: { autonym: 'English' }, es: { autonym: 'Español' } };
+    renderLanguageSetting(['fr']);
+    expect(lastSelectorProps()?.primaryLanguage).toBe('fr');
+    expect(lastSelectorProps()?.knownUiLanguages.fr?.autonym).toBe('Français');
+    expect(Object.keys(lastSelectorProps()?.knownUiLanguages ?? {}).sort()).toEqual([
+      'en',
+      'es',
+      'fr',
+    ]);
+  });
+
+  it('keeps hidden fallback languages too', () => {
+    availableLanguages.loaded = { en: { autonym: 'English' }, es: { autonym: 'Español' } };
+    renderLanguageSetting(['es', 'zh-hans']);
+    expect(lastSelectorProps()?.knownUiLanguages['zh-hans']?.autonym).toBe('中文（简体）');
   });
 });

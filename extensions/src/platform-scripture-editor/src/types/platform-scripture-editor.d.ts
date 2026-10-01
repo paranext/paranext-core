@@ -930,6 +930,36 @@ declare module 'papi-shared-types' {
       resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
       projectId?: string,
     ) => Promise<string | undefined>;
+    /**
+     * Brings the Bible texts tab to the front. If it isn't open, opens it for the editor's project.
+     * An open tab is raised, never reloaded, so it keeps its state.
+     *
+     * @param editorWebViewId The scripture editor the request came from
+     * @returns The Bible texts web view's ID, or `undefined` if it couldn't be shown
+     */
+    'platformScriptureEditor.showBibleTextsPanel': (
+      editorWebViewId?: string,
+    ) => Promise<string | undefined>;
+    /**
+     * Brings the Commentaries tab to the front. If it isn't open, opens it for the editor's
+     * project. An open tab is raised, never reloaded, so it keeps its state.
+     *
+     * @param editorWebViewId The scripture editor the request came from
+     * @returns The Commentaries web view's ID, or `undefined` if it couldn't be shown
+     */
+    'platformScriptureEditor.showCommentariesPanel': (
+      editorWebViewId?: string,
+    ) => Promise<string | undefined>;
+    /**
+     * Brings the Text collection tab to the front. If it isn't open, opens it; if the feature is
+     * unavailable (the provider was never registered), opens nothing and shows a warning instead.
+     *
+     * @param editorWebViewId The scripture editor the request came from (unused)
+     * @returns The Text collection web view's ID, or `undefined` if it could not be shown
+     */
+    'platformScriptureEditor.showTextCollectionPanel': (
+      editorWebViewId?: string,
+    ) => Promise<string | undefined>;
   }
 
   export interface DataProviders {

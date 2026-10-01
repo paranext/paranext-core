@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/shadcn-ui/card';
 import { DisabledTooltipWrapper } from '@/components/basics/disabled-tooltip-wrapper.component';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { cn } from '@/utils/shadcn-ui/utils';
+import { useContentZoomTextProps } from '@/context/content-zoom-text.context';
 import {
   SerializedEditorState,
   SerializedElementNode,
@@ -115,6 +116,7 @@ export const CommentThread = memo(function CommentThread({
   draft,
   onDraftChange,
 }: CommentThreadProps) {
+  const contentZoomTextProps = useContentZoomTextProps();
   // Sometimes-controlled: a consumer that supplies `draft` owns what is displayed here, so a
   // thread unmounted by a filter change and remounted comes back showing the same draft instead of
   // losing it. `internalDraft` is the fallback for callers (Storybook, most existing tests) that
@@ -758,7 +760,13 @@ export const CommentThread = memo(function CommentThread({
               ) : (
                 verseRef
               )}
-              <span className={classNameForVerseText}>
+              <span
+                className={classNameForVerseText}
+                // Only the scripture snippet zooms; the verse-reference button beside it in this
+                // paragraph keeps interface scale.
+                // eslint-disable-next-line react/jsx-props-no-spreading
+                {...contentZoomTextProps}
+              >
                 {firstComment.contextBefore}
                 <span className="tw:font-bold">{firstComment.selectedText}</span>
                 {firstComment.contextAfter}

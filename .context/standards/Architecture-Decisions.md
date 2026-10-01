@@ -171,6 +171,92 @@ step, no automation. Just a record.
   OS focus, only serves callers with no window, such as the extension host.
 - **Source:** PT-4238; PR #2736.
 
+## adr-aligned-grid-flattens-the-editor-dom: The verse-aligned grid flattens the editor's own DOM into its subgrid chain, and places verses by explicit row
+
+- **Date:** 2026-09-07
+- **Status:** Accepted
+- **Context:** PT-4184 adds a Scripture Text Grid view where verse N of every resource shares a row.
+  Selecting and copying a passage down a column has to keep working, which means one editor per
+  column rather than one per cell — so the elements the layout must position
+  (`div.verse-block[data-verse-start|-end]`, from PT-4304 upstream) sit inside
+  `@eten-tech-foundation/platform-editor`'s DOM: `.editor-container` > `.editor-inner` >
+  `.editor-input`. CSS subgrid reaches a descendant only if every level between it and the grid root
+  stops generating a box, and a scroll container's children cannot take part in an ancestor's grid
+  at all. PT-4304's proof showed the chain survives this repo's own cell chrome, but modelled only
+  those wrappers, not the editor's three.
+- **Decision:** Flatten the whole chain — this repo's cell padding wrapper and the editor's three
+  wrappers — with `display: contents`, from one stylesheet
+  (`extensions/src/platform-scripture-editor/src/scripture-text-grid/aligned-grid.styles.ts`)
+  injected only while this view is mounted, and give the cell content wrapper a `contentOverflow`
+  prop so it stops being a scroll container here. Place each verse block by an explicit `grid-row`
+  derived from its own `data-verse-start`/`-end`, through generated static rules rather than JS:
+  subgrid alone lays blocks out in document order, so one resource missing a verse would shift every
+  row below it. Declare a fixed 200 verse rows on the root; unoccupied rows collapse to zero height,
+  so no chapter has to be measured first.
+- **Alternatives considered:** **One editor per cell**, which would keep the editor's DOM out of the
+  chain — rejected because it breaks copying a continuous passage down a column, the reason PT-4064
+  chose this approach. **JS height synchronisation** — rejected: the view is meant to align natively,
+  and measurement degrades exactly where per-resource zoom puts columns at different font sizes,
+  which native rows handle for free. **Asking upstream for a flat DOM** — a change to a shared editor
+  for one consumer; revisit if a second consumer needs it. **Computing the row count from the
+  chapter** — an async versification lookup, or lifting each cell's USJ into the parent, to save rows
+  that cost nothing.
+- **Consequences:** This view is coupled to three class names it does not own, and a rename upstream
+  breaks alignment *silently* — the grid still renders, just unaligned. Three things watch for that:
+  a unit test pins the selectors, a contract test reads the installed editor bundle and fails when a
+  name or export the layout depends on is gone, a Storybook story reproduces the markup so Chromatic
+  sees the layout, and an e2e test measures real block geometry across columns in the running app.
+  Scrolling to a reference is explicit, because Lexical skips the DOM-selection write — and the
+  scroll-into-view inside it — for a read-only editor. Placement is opt-in: verse blocks are hidden
+  by default and shown by the row rule that places them, so a block the rules cannot place — one
+  upstream emitted with no parsable range, or a verse numbered above 200 — is dropped rather than
+  auto-placed into the first free row of the shared grid, which would silently misalign that column
+  from there down. Such a verse is therefore not readable in this view (it still is in Verse and
+  Chapter view); revisit the row count if a versification ever exceeds 200. Per-resource zoom lands
+  on the verse blocks here rather than on the resource's content-zoom marker as it does in the
+  other views (`adr-text-collection-resources-are-zoom-areas`). The marker sits inside the chain, so
+  it must be `display: contents`, and the column's content wrapper around it is a subgrid box, where
+  `zoom` would scale the used value of the shared row tracks it inherits. So the stylesheet pins the
+  marker's own zoom to 1, overriding the platform's rule for it, and the verse blocks take the area's
+  level from the platform's `--platform-content-zoom-<area>` variable. The marker stays rendered, so
+  the resource is still a zoom area the platform reports, names in its indicator and targets with
+  Ctrl+wheel and the zoom menus. The coupling is to that variable's name, which PAPI documents for
+  web views to read, and to the platform's marker rule staying less specific than the stylesheet's.
+
+  Three decisions follow from the row model rather than from taste, so they are recorded here:
+
+  - **Everything between verse blocks is hidden**, not section headings alone: the rule suppresses
+    every non-verse-block child of the editor root, so chapter descriptions and intro material
+    inside the chapter go with them. All of it sits between verse blocks, so it has no row of its
+    own, and it is translation-specific — showing it per column would put a heading beside verse 5
+    in one text and verse 6 in another. Placing it instead on the row of the verse it precedes is
+    not expressible in CSS (no selector reaches a following sibling's attributes) and would need JS.
+    The model still carries it, so a later pass can span one across a full-width row keyed to a
+    reference resource; until then the reference screenshot's clean look is what ships.
+  - **Rows are visual, not announced.** The grid is a group of labeled column regions. ARIA table
+    semantics would need a row-major DOM, which the one-editor-per-column requirement rules out;
+    verse numbers rendered at the start of each block are what let a screen-reader user correlate
+    columns. Flagged for AT validation with the rest of this surface.
+  - **A reference scrolls flush under the sticky header**, with no context above it. The Scripture
+    editor deliberately leaves `VERSE_NUMBER_SCROLL_OFFSET` (80px, `editor-dom.util.ts`) above the
+    verse, so in Simple mode the two surfaces land the same reference differently — on purpose; do
+    not "fix" either to match the other. Flush-to-top shows the whole aligned row with every column
+    starting at the same verse boundary, which is what the grid is for, and spends none of a short
+    port on preceding verses (80px is a quarter of a ~300px chapter cell). The cost is that poetry
+    or a continued sentence starts mid-thought. The Text Collection's chapter surfaces follow the
+    same answer (PT-4543). Agreed in review of #2781, 2026-09-23.
+
+  `BLOCK_VERSE_VIEW_MODE` and the `verse-block` DOM exist only in the editor built from
+  `scripture-editors`' `platform-yalc` branch, which `dev-packages.json` names and
+  `stage-dev-packages` builds into `dev-packages/staging/platform-editor`, the `file:` dependency both
+  manifests declare (`adr-dev-packages-staged-file-deps`). There is no registry version to bump for
+  it. A tree whose staged editor is stale or was never built — `npm ci --ignore-scripts` without
+  `npm run stage-dev-packages` first — gets an editor without the mode, and this view then renders
+  empty columns; `upstream-editor-contract.test.ts` fails by name in that case rather than leaving
+  it to be diagnosed from the layout.
+- **Source:** PT-4184, building on PT-4304's subgrid-chain proof and extending it to the editor's own
+  wrappers.
+
 ## adr-all-projects-routes-to-home: the title bar's "more projects" affordance routes to Home rather than making the project picker send/receive-aware
 
 _The affordance is labelled "More projects…" in the title bar today; the PRD calls it "All projects…"
@@ -1014,7 +1100,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-column-3-panels-are-told-their-project: A Column 3 panel is told its project by the switch; it never infers one from the scroll group
 
 - **Date:** 2026-08-27
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-18 — the Text Collection's follow gate is now decided by
+  project kind (`platform.isPublished`), not editability, and the editor's gate on Find's re-point
+  is removed, so Find follows every editor-column switch.
 - **Context:** Simple mode's Column 3 holds exactly five panels — Bible Texts, Commentaries,
   Comments, the Text Collection, and Find — pinned by `shipped-simple-layout-order.test.ts`. A
   project switch re-pointed three of them explicitly (`openOrUpdateRelatedPanels` sends two
@@ -1039,7 +1127,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `finalizeProjectSwitch`. The mode switch needs its own call because `buildSimpleLayoutForProject`
   stamps `projectId` only onto the static layout's tabs, while the Text Collection is merged in
   afterwards from the default-layout supplement, which carries none — so it is the one panel that
-  arrives unbound from a mode switch. Its *shape* — `getAllOpenWebViewDefinitions()` → `.find(webViewType)` →
+  arrives unbound from a mode switch. *(Amended 2026-09-18: no longer so. `runProjectBoundSimpleSwitch`
+  in `web-view.service-shard.ts` re-bakes `projectId` into the merged supplement tabs with
+  `applyProjectIdToTabs` before `finalizeProjectSwitch` runs, so the Text Collection arrives bound
+  and the finalize re-point returns at its skip guard. The call is kept as a safety net for a caller
+  that skips the bake. The one path by which a published resource can still reach the Text
+  Collection is an unbound grid seeding itself from `ActiveEditorProjectId` in
+  `resolveTextCollectionProjectId`, which does not classify the project.)* Its *shape* — `getAllOpenWebViewDefinitions()` → `.find(webViewType)` →
   `reloadWebView` — is the one `openResourceText` already uses (`main.ts`), not something novel. What
   it takes from **Find** is the *policy*: never open a panel that is not already there, skip the
   reload when the panel already shows the project, and never bring the tab to front. Find's own
@@ -1068,10 +1162,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   would flash the Text Collection forward and then away; and the module-level pending slot adds
   hidden coupling with a forgot-to-clear failure mode. **Register a public command** like the other
   four — rejected as surface area for nobody: the Text Collection has no menu entry and no external
-  caller.
+  caller. *(Superseded by `adr-menu-per-mode-layout-via-mode-gated-columns`: PT-4534 registers
+  `platformScriptureEditor.showTextCollectionPanel` and gives it a Simple-mode menu entry, so this
+  alternative is what shipped.)*
 - **Consequences:** The scroll group's source project is now documented at its call site as *not* an
   active-editor signal, which is the trap that produced this bug; any future panel that reaches for
-  it should be re-pointed explicitly instead. `adr-find-follows-editor-to-read-only` records Find as "the only
+  it should be re-pointed explicitly instead. *(Amended 2026-09-18: that call site is gone — PT-4238
+  (#2736) replaced the grid's scroll-group fallback — so no Column 3 panel reads the scroll group's
+  source project for its identity. The field tags which project's versification frame a reference
+  is in; a panel that needs a project should be told it explicitly.)*
+  `adr-find-follows-editor-to-read-only` records Find as "the only
   Column 3 panel that command re-points without also being able to open it"; that stays true, since
   the Text Collection is re-pointed by a direct call rather than a command. What changed is the
   narrower fact that Find is no longer the only panel re-pointed *without being openable*. Reloading the grid drops its in-memory React state (for example an
@@ -1092,7 +1192,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   needs no separate treatment. If a sixth Column 3 panel appears, the rule to apply is this one: add it to
   `openOrUpdateRelatedPanels` (or, if it needs the new editor's id, beside `updateRelatedFindPanel`)
   rather than giving it a signal to infer from. Five limits of this decision are recorded
-  deliberately rather than left to be re-derived:
+  deliberately rather than left to be re-derived *(amended 2026-09-18: two of the five are
+  superseded and two bullets are added, each marked below)*:
   - **Read-only resources are not followed.** `openOrUpdateRelatedPanels` takes
     `isProjectEditable` and skips the Text Collection re-point when it is false, so a published
     resource opened in the editor column does not re-point the grid at itself — a project with no
@@ -1100,6 +1201,46 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     Comments in Column 3, plus Model Text in Column 1) follows the editor either way. This upholds
     `adr-find-follows-editor-to-read-only`'s Context rather than changing it; the gate lives one
     level in from the call site that entry describes, which is the only detail that has shifted.
+    *(Superseded by the 2026-09-18 amendment: the gate now reads `platform.isPublished`, not
+    `isEditable`, so a read-only but unpublished project is followed. See the next bullet.)*
+  - **Added 2026-09-18 — published resources are not followed; read-only projects are.**
+    `updateRelatedTextCollectionPanel` reads `platform.isPublished` for the incoming project and
+    skips the re-point only when it is `true`: a published resource has no collection of its own, so
+    following it would cost a reload, and the in-memory state it drops, for an empty panel. The rule
+    lives in that function rather than in a caller, so both switch paths apply it. A translation
+    project with editing switched off is followed like any other. `platform.isEditable` is the wrong discriminator
+    for this: it is the project-wide `Editable` flag (`GetIsEditable` in
+    `c-sharp/Projects/ScrTextExtensions.cs`, forced false for resources), not a per-user permission
+    — that is `canUserEditScripture` — so gating on it stranded the Text Collection and Find on the
+    outgoing project whenever an `Editable=F` translation project was opened. A failed `isPublished`
+    read counts as not published — the setting's default, and what `resolveProjectIsPublished` in
+    `web-view.service-shard.ts` does — so the grid follows. The class newly followed is a plain
+    folder project carrying `<Editable>F</Editable>`, such as the bundled WEB sample; locally
+    installed `.p8z` resources load as resource projects (`GetAllResourceScrTexts` in
+    `LocalParatextProjects.cs` filters on `IsResourceProject`, which is exactly what
+    `platform.isPublished` reports), so they are published and stay skipped. Find follows every
+    editor-column switch, resources included, and withholds Replace itself per
+    `adr-find-follows-editor-to-read-only`. Everything else
+    `openOrUpdateRelatedPanels` drives (Bible Texts, Commentaries and Comments in Column 3, plus
+    Model Text in Column 1) follows the editor either way. A published resource cannot normally
+    reach the Power→Simple path at all, because `getMostRecentUsableProjectId` walks past published
+    candidates and `cacheLastOpenedSimpleProject` declines to cache them. The outgoing Send/Receive
+    on an editor-column switch follows the same rule: `syncOnProjectSwitch` skips it only for a
+    published resource, since an `Editable=F` project can still hold new comments. The window-close
+    and shutdown syncs do not draw that line yet: `getWritableEditorProjectIds` drops every editor
+    whose saved `isReadOnly` is set, and an editor opened with a project ID (Home, New Tab, the
+    title-bar picker) takes that flag from `platform.isEditable`, so an `Editable=F` project syncs
+    on a switch but not on a window close or a quit. PT-4786 tracks moving those syncs to the
+    published-resource rule. Following costs a reload the old gate avoided: a round
+    trip through a resource reloads Find twice, clearing its results, and an `Editable=F` project now
+    reloads the grid. How an unbound grid gets its first project, and what following costs
+    in Power mode, is recorded in `adr-active-editor-project-is-a-window-data-type`.
+  - **Added 2026-09-18 — what a followed `Editable=F` project's grid offers is unchecked.** Whether
+    the Text Collection exposes controls that write to such a project is an open question, tracked on
+    PT-4724, which should first settle where to run that check: `default-layout-supplement.json` lists
+    the Scripture Text Grid behind `platformScriptureEditor.enableScriptureTextGrid` (contributed
+    default `true`), while `default-layout-supplement.model.ts` and `filterEnabledSupplementEntries`
+    describe the supplement as empty in vanilla builds.
   - **The re-point targets one window.** `getAllOpenWebViewDefinitions()` flattens across every
     window, so `.find()` returns whichever Text Collection comes first, not the one in the window
     that switched. If that panel already shows the target project the skip guard returns early and a
@@ -1109,7 +1250,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - **A failed re-point no longer self-corrects.** `projectId` is not in
     `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS`, so once any re-point succeeds the panel's saved
     definition carries a project and `explicitProjectId` wins from then on — the scroll-group
-    fallback that used to fix a stale panel on the next navigation stops running. Because of that,
+    fallback that used to fix a stale panel on the next navigation stops running. *(Amended
+    2026-09-18: PT-4238 (#2736) has since removed that fallback altogether, so nothing but another
+    re-point moves the panel.)* Because of that,
     `updateRelatedTextCollectionPanel` checks `reloadWebView`'s return (it resolves `undefined`
     rather than throwing when the definition has gone or the provider declines) and logs failures at
     **error**, naming the project left on screen. It still does not recover; it just stops failing
@@ -1124,13 +1267,26 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     web views there — in Simple mode it calls `applyForProject` → `focusSharedLayoutDefaultTab`,
     which issues an `existingId: '?'` probe — so this adds a second enumeration and a reload to a
     path that had one probe. If both run for one switch the case-normalized skip guard makes the
-    second a no-op.
+    second a no-op. *(Amended 2026-09-18: the `finalizeProjectSwitch` path normally adds only the
+    enumeration. The Text Collection now arrives already bound from the mode switch (see the
+    Decision), so the re-point returns at its skip guard without a reload, and it reads
+    `platform.isPublished` only when a reload is still in question.)*
   - **The stale-held-setting path is narrowed, not closed.** Whenever the grid is still unbound it
     continues to change `projectId` in place through its latch effect, which is exactly the usage
     `useBufferedLayoutSetting` warns about: `shouldApply` is already `false` after the first apply,
     so the held admin list can stay on the outgoing project while the per-user list and overlay
-    resubscribe to the incoming one.
-- **Source:** PT-4423, which fixes PT-4238.
+    resubscribe to the incoming one. *(Superseded 2026-09-18: the path is now closed for the grid;
+    see the note after this list.)*
+
+  **Amended 2026-09-18 — the stale-held-setting path is closed for the grid.** The grid never
+  changes `projectId` in place, in either interface mode: an unbound grid is seeded once and keeps
+  its project, and only the switch's reload moves it. The Power-mode consequence — a grid there
+  cannot be re-pointed — and the alternatives rejected for it are recorded in
+  `adr-active-editor-project-is-a-window-data-type`.
+- **Source:** PT-4423, which fixes PT-4238. *(Corrected 2026-09-18: PT-4423 hardens the Simple-mode
+  re-point; PT-4238 (PR #2736) replaced the unbound grid's scroll-group fallback — see
+  `adr-active-editor-project-is-a-window-data-type`.)* Amended by PT-4716: the `isPublished` follow
+  rule.
 
 ## adr-comment-drafts-follow-filters: An uncommitted comment draft is filtered like any other thread, unlike Paratext 9
 
@@ -1550,8 +1706,33 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     is greppable rather than living only in this log — a slug rather than a `PT-XXXX` for the same
     reason `TODO(main-renderer-shutdown-relay)` above is one.
 
+- **Amended 2026-09-24 (PT-1641):** With the renderer on a MessagePort (`adr-renderer-papi-transport-is-messageport`), an OS suspend no longer trips this banner; its remaining normal trigger is main closing the port on purpose without a close frame, or a port that dies with main. The per-window port main now holds is the natural carrier for the `main-renderer-shutdown-relay` deferral above; wiring it is still a separate ticket.
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
+
+## adr-content-zoom-applies-only-to-zoomable-panes: A pane takes content zoom only if it is declared zoomable or marks a zoom area; nothing else is scaled, and only zoomable panes offer zoom
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** UX (2026-09-22) ruled that content zoom exists to make project text readable. Scaling views that show no project data (Home, New Tab), and offering greyed zoom items on them, is wrong.
+- **Decision:**
+  - A pane is *zoomable* when its web-view type is declared in core's content-zoom declaration map (`CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE`), or when it currently reports at least one zoom area.
+  - A pane that is not zoomable is never scaled: no iframe `zoom`, no default, no memory. Its tab menu has no zoom items (removed, not disabled), and its chords and wheel do nothing.
+  - A declared pane with no marker rendered right now is still zoomable. Its chords, wheel and menu act on its declared default area.
+  - Zoomability is published as a renderer-local change event (`onDidChangeContentZoomable`). The tab menu reads it reactively and holds it steady for one open.
+  - Simple mode's tab menu, which holds only the zoom group, therefore does not exist on a non-zoomable tab.
+- **Alternatives:**
+  - **Keep the whole-iframe fallback.** Rejected by UX: it scales chrome.
+  - **Reported areas only.** Rejected: views that mark per text element report no area while empty, so their items and chords would flicker.
+  - **Declared only.** Rejected: third-party views that mark areas would lose zoom.
+  - **Declared AND reported.** Rejected for both reasons.
+- **Consequences:**
+  - URL and area-less views render at 100 % content zoom.
+  - The per-type "marks areas" record and its hidden setting are removed.
+  - Third-party views are zoomable only while a marker is rendered (documented in `Extension-Development-Guide.md` and the `ContentZoomRoot` TSDoc).
+  - The macOS View-menu items stay always enabled and do nothing on a non-zoomable pane.
+  - Only the zoomability is held per open menu, not the whole item list, because Power mode's window targets arrive after the menu opens.
+- **Source:** UX feedback 2026-09-22; epic PT-4575.
 
 ## adr-core-does-not-distribute-a-binary: `paranext-core` builds installers but publishes none
 
@@ -1731,6 +1912,56 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   method it calls through are now marked `@experimental` / `'x-experimental': true`, because this
   recompute contract remains untested beyond its one caller.
 - **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
+
+## adr-dbl-install-is-idempotent: Installing an already-installed DBL resource succeeds, and `installed` is a hint
+
+- **Date:** 2026-09-22
+- **Status:** Accepted
+- **Context:** The Model Text panel auto-installs a configured resource its cached catalog reports as
+  not installed. `InstallDblResourceCore` threw "Resource is already installed and up to date" in
+  that case, so a stale flag produced an install-failed view whose **Try again** re-ran the same
+  call forever — PT-4588 recorded 14 identical failures in four minutes against a resource that was
+  on disk and readable in the same session. The flag can be stale whatever its source: it is
+  computed when the catalog is fetched, and `adr-dbl-install-status-from-backend` reconciles it only
+  when something asks.
+- **Decision:** Four rules.
+  1. **Install is idempotent.** An already-installed, up-to-date resource is a no-op success. The
+     question is asked twice, either side of `ScrTextCollection.RefreshScrTexts()`:
+     `InstallableResource.Installed` resolves `ExistingScrText` against the live collection on every
+     read, so the first answer describes the collection as it stands — possibly from before another
+     process removed the project — and only the second describes the disk now. Refreshing
+     unconditionally would put a full rescan in front of every ordinary install, so the cheap answer
+     gates the expensive one. The no-op sends the same notifications a real install does, because
+     the caller's view is the thing that was wrong.
+  2. **`installed` is a hint, so a caller that acts on it refreshes first — unless acting on a
+     stale one is cheap.** The resource panels and the text grid await
+     `platformGetResources.refreshResourceFlags` and then read the catalog, rather than acting on a
+     snapshot that is one refresh behind. The resource and team-layout pickers deliberately do not:
+     awaiting the refresh would hold the dialog's first paint on a backend call, and a stale flag
+     there costs only a redundant install that rule 1 turns into a no-op that corrects it. A listing
+     does not bother either: showing the previous snapshot costs nothing it cannot correct on the
+     next read.
+  3. **A resolved install is not re-fired for the same uid.** An idempotent install plus a catalog
+     that never converges would otherwise loop. The panel offers a retry instead, and says the
+     resource is installed but could not be opened — not that the install failed, which would send
+     the user to check a network connection that is not the problem.
+  4. **An action the list never reflects ends as an error, not a spinner.** The Get Resources row's
+     progress indicator stops only when the list agrees with the action, so the dialog holds each
+     action until a list fetched after it settles the question, then reports a failure the user can
+     see and retry. Rule 1 removes the error that used to end this case; without a replacement the
+     row simply spun.
+- **Alternatives:** *Treat the "already installed" message as success in TypeScript* — rejected: a
+  cross-process string match that breaks on localization. *Keep throwing and have callers recover* —
+  rejected: every caller would need the same recovery, and the one that mattered could not recover
+  at all, because re-reading the catalog returned the same stale flag. *Have the dialog clear its
+  own progress indicator without an error* — rejected: an action that silently does nothing is
+  indistinguishable from one that worked.
+- **Consequences:** A stale catalog corrects itself without a remount. Callers cannot tell "installed
+  now" from "already there", and none needs to. The retired error string
+  `%getResources_errorInstallResource_resourceAlreadyInstalled%` has a `deprecationInfo` entry with
+  no replacement, since the case no longer produces an error. **Revisit** if a caller ever needs to
+  know which of the two happened.
+- **Source:** PT-4588.
 
 ## adr-dbl-install-status-from-backend: The backend is the authority on which DBL resources are installed, and on which project id
 
@@ -2117,64 +2348,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 ## adr-editor-context-menu-follows-its-area-via-a-container: The editor library renders its context menu into an element the host supplies
 
-- **Date:** 2026-09-18
-- **Status:** Withdrawn (2026-09-23). The option this entry relies on, `EditorOptions.contextMenuContainer`,
-  is not part of the editor library: as of 2026-09-23 it is no longer pursued
-  (paranext/scripture-editors#17, to be closed unmerged), so no host hands the editor a container and
-  its right-click menu stays at interface scale. The entry is kept below as the record of what was
-  considered.
-- **Context:** The Scripture editor's right-click menu is drawn by `ContextMenuPlugin` in
-  `paranext/scripture-editors`, not by our `ContextMenuContent`. It portalled hand-built markup to
-  `document.body`, outside every zoom area, so at 200 % it stayed at interface scale beside text
-  twice its size — at the text pane and inside the footnote editor pop-up alike.
-- **Decision:** the library takes an optional `EditorOptions.contextMenuContainer?: () =>
-  HTMLElement | undefined` getter. It calls that getter once, inside its own `contextmenu`
-  handler, and stores the returned element in state — never during render. Inside that element the
-  menu inherits the area's CSS `zoom`; it divides its viewport coordinates by
-  `Element.currentCSSZoom`, clamps to the container's rect narrowed by every clipping ancestor and
-  the viewport, and caps its height to that box. Every host that mounts the editor inside a zoom
-  area supplies that area's `ContentZoomRoot` element: the editor web view for the text pane, the
-  Model Text panel, the Bible Texts / Commentaries panel, and the Enhanced Resources web view for
-  its scripture pane. `FootnoteEditor` overrides the container with its own root, because the web
-  view's value would otherwise flow through `FootnoteEditor`'s own `...editorOptions` spread and
-  bind the pop-up's menu against the text pane's box instead of the pop-up's own.
-- **Alternatives:**
-  - stamping `data-platform-content-zoom-root` + `data-platform-content-zoom-popup` on the
-    portalled element, as our own pop-ups do — rejected: it puts our attribute names and
-    `--platform-content-zoom-*` variable names inside a library that also serves Scribe and the
-    PERF demos, where `currentCSSZoom` is a standard property that needs no convention;
-  - a generic attribute bag the host fills in — the positioning still lives in the library, keyed
-    off an attribute it does not understand;
-  - positioning the menu from here — the plugin owns the `contextmenu` event and the clamp, and
-    the host cannot see the menu's measured size;
-  - dropping the menu's hard-coded 14px font and 200px width — measured irrelevant: CSS `zoom`
-    scales `px` lengths, so those already scale; changing them would restyle the menu at 100 %.
-- **Consequences:**
-  - the library gains no knowledge of this platform; the only shared vocabulary is a standard DOM
-    property;
-  - a fixed-position menu is not clipped by a scrolling ancestor, so staying inside the pane is
-    computed rather than inherited — the clipping-ancestor walk is load-bearing in split layouts;
-  - resolving the container lazily, inside the `contextmenu` handler, rather than reading it during
-    render is load-bearing, not incidental: an earlier shape that called the host's getter during
-    render made React Compiler abandon optimizing the whole component
-    (`react-hooks/preserve-manual-memoization`). The getter shape also lets both hosts pass a
-    stable `useCallback`, or a plain ref read, with no `useState` and no memo churn of their own;
-  - the capped menu's outer element gets `overflowY: auto` while the inner `<ul>` still carries
-    `editor.css`'s own `max-height: 200px; overflow-y: scroll`; a short pane at zoom 200 % or more
-    with a full menu can bind both constraints at once, producing two nested scroll regions with
-    only one visible scrollbar (`scrollbar-width: none` hides the inner one). Left as is:
-    collapsing the two caps would mean changing the library's own stylesheet for every host, and
-    the menu was usable in hand checks at 200 %. Revisit if a user reports a menu that will not
-    scroll to its last item;
-  - the fix reaches core through the `platform-yalc` pin, so the behaviour lives in
-    `scripture-editors` and core holds only the call sites;
-  - a host that mounts the editor inside a zoom area and does not supply its area's element leaves
-    its right-click menu at interface size against `document.body`, with no other signal, so each
-    host's tests pin its wiring. `scripture-text-grid`'s `resource-cell-view` is not a host of this
-    kind: it zooms its cells itself and intercepts `onContextMenuCapture` with its own menu — the
-    grid web view always supplies the labels that enable it, and only a story or test renders a cell
-    without them — so the editor's menu never opens there.
-- **Source:** PT-4713.
+- **Status:** Withdrawn. The slug is retired with the entry and will not be reused.
+- **Why the entry is not here:** it recorded an editor-library option proposed in
+  `paranext/scripture-editors#17` that was not adopted, because pop-ups stay at interface scale.
+  Left readable, it would look like an available approach to a survey of this log — by a person or
+  by `.claude/agents/pt10-reuse-scout.md`. Deleting it rather than marking it superseded is the
+  carve-out described under "Don't rewrite history" above. Git history keeps the text.
+- **What covers this ground instead:** `adr-pop-ups-stay-at-interface-scale`.
 
 ## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
 
@@ -2273,7 +2453,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Formerly:** ADR-0020
 - **Date:** 2026-08-17
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-18 — the `isEditable` gate this entry's Context describes was
+  removed wholesale by #2425 and reintroduced by PT-4059 as a Text-Collection-only parameter, which
+  PT-4716 replaced with a `platform.isPublished` check while dropping the editor's gate on Find's
+  re-point; Find now follows every editor-column switch, via `updateRelatedFindPanel` in `open()`
+  rather than from `openOrUpdateRelatedPanels`. Code assuming all Column 3 panels share one project
+  must still account for Find — Ctrl+F inside Bible Texts, Commentaries, Model Text or the Text
+  Collection rebinds it to the project that panel shows, or, in the Text Collection, the resource
+  under the caret (`useOpenFindShortcut`, `resolveFindInvocation`) — and now also for the Text
+  Collection, which stays put for a published resource. The Decision itself stands.
 - **Context:** Simple mode's Column 3 panels follow the *active translation project*: the editor gates
   `openOrUpdateRelatedPanels` on `projectForWebView.isEditable` precisely so that opening a published
   resource in the editor column does not switch the related panels over to the resource. Making Find a
@@ -2317,7 +2505,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Formerly:** ADR-0025
 - **Date:** 2026-08-24
 - **Status:** Accepted, amended 2026-09-14 — the deferral of the scope gate recorded in the Decision
-  below no longer holds, and PT-4415 is closed. Read the Decision together with the amendment.
+  below no longer holds, and PT-4415 is closed. Amended again 2026-09-18 — the narrowed selection is
+  no longer written back to the saved one. Read the Decision together with both amendments.
 - **Context:** Find reports a result's location by walking the `\c` and `\v` markers of the book it
   matched in. Extra material (GLO, FRT, INT, XXA, … — `Canon.nonCanonicalIds`) is organized by
   paragraph markers rather than verses, so every match in one resolves to the same useless reference
@@ -2351,7 +2540,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `availableBookIds: undefined` while the setting is unread OR its read errored, and only a genuine
   empty list prunes the user's persisted selection. Treating a delivered `PlatformError` as an
   answer would have wiped that selection permanently — `useProjectSetting` reports an error as
-  loaded, so the error branch has to be recognized on its own.
+  loaded, so the error branch has to be recognized on its own. *(Superseded in part by the
+  2026-09-18 amendment: nothing prunes the persisted selection any more. The unknown-vs-empty
+  distinction still decides what the narrowed list shows and searches.)*
 - **Source:** PT-3299, review of #2708.
 - **Amended 2026-09-14 (PT-3299 reopened; review of #2792):** The deferred gate landed, and covers
   every scope Find offers rather than only the reference-derived two.
@@ -2375,7 +2566,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   "filter `findScope`" alternative was adopted. A selection persisted with `useWebViewState`
   outlives the picker that produced it and is pruned against the project's book list only once that
   list resolves, so a restored tab can still name a glossary when the restore-path auto-search
-  fires. The gate therefore asks whether the selection still contains a searchable book (it does not
+  fires. *(Since the 2026-09-18 amendment the selection is narrowed, not pruned; the window is the
+  same.)* The gate therefore asks whether the selection still contains a searchable book (it does not
   modify the selection), and `findScope` drops extra material from the books it actually searches.
   Neither waits on `availableBookIds`, which is what closes the window. Two filters in two layers is
   exactly what the alternative was rejected for; it is accepted here because the two answer
@@ -2402,6 +2594,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   [Component-Builder-Patterns.md](Component-Builder-Patterns.md#explaining-why-a-control-is-disabled).
 
   PT-4414 still covers removing every half of the exclusion together.
+- **Amended 2026-09-18 (PT-4716):** The saved book selection is narrowed for display and search
+  only, never written back. `useFindBookScope`
+  (`extensions/src/platform-scripture/src/find/use-find-book-scope.hook.ts`) returns the saved
+  selection narrowed to the books the current project has; the picker shows that list and the
+  search runs over it, but the saved selection keeps every book the user picked. Persisting the
+  prune was the original decision. It was replaced because Find now follows the Simple-mode editor
+  across projects (`adr-find-follows-editor-to-read-only`), so a visit to a project lacking the
+  saved books, such as a New Testament resource, would otherwise empty the saved scope for good.
+  One deliberate exception: a picker edit made while books are hidden this way commits the visible
+  set and drops the hidden books, so that Select all and Clear all act on the whole scope.
 
 ## adr-find-searchable-tabs: Find searches what a tab declares it displays, and targets editors and reference panels differently
 
@@ -3362,6 +3564,80 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4535, after the ring was measured in the running app and two earlier mechanisms were
   found not to work in the shipped runtime.
 
+## adr-menu-per-mode-layout-via-mode-gated-columns: A menu's per-mode layout is built from mode-gated items in mode-specific columns
+
+- **Date:** 2026-09-18
+- **Status:** Accepted
+- **Context:** Simple's scripture editor Project menu needed a different section structure from
+  Power's (Project / Edit ▸ / View / Insert / Tools / Quality checks vs Project / Edit / Options /
+  Tools / Insert), with Power
+  unchanged. Both modes are served from one menu document, and `hiddenInterfaceModes` exists on
+  items only; columns and groups have no per-mode switch.
+- **Decision:** A mode that needs its own sections gets its own columns (e.g.
+  `platformScriptureEditor.simpleView`, `simpleTools`) holding items hidden in the other mode, and
+  items that belong only to the other mode's sections gain `hiddenInterfaceModes` for this one.
+  Items identical in both modes stay shared (the Insert column). Column orders interleave with
+  decimals (4.5, 5.5) because orders must be unique per menu. Empty-column suppression
+  (`adr-menu-section-headings-from-column-labels`) makes each mode's unused columns vanish.
+  Simple's Comments entry is a new item that fronts the third-column Comments tab; the Power item
+  (`legacyCommentManager.openCommentList`, which opens a separate Comment List web view) stays
+  hidden in Simple. The Edit flyout's
+  Undo/Redo/Cut/Copy/Paste are menu command ids handled inside
+  the editor web view (`menuCommandHandler`) through `EditorRef`, not PAPI commands: they act on that
+  web view's own editor, and the clipboard needs the click's user activation, which a PAPI round
+  trip loses.
+- **Alternatives:** `hiddenInterfaceModes` on columns/groups — rejected for now: a schema change
+  plus a change to the shared mode-filtering pipeline every menu consumer runs, for one consumer's
+  need (unlike `isHeaderHidden` in the 2026-09-23 amendment below, which is render-only and which
+  the menubar ignores). Per-mode menu documents — rejected: duplicates every
+  shared item and splits the contribution surface. Reordering Power to match Simple — rejected:
+  Power must not change. Un-hiding the Power Comments item in Simple — rejected: it opens a
+  different web view from the tab Simple's Tools section points at.
+- **Consequences:** A few items are declared twice (once per mode), so a command change must touch
+  both copies; `menu-data.service-host.scripture-editor-menu.test.ts` pins both modes by command id
+  and order, and checks that a command served in both modes carries the same label in each, so a
+  missed, reordered or relabelled copy fails there. Simple's Tools order is pinned to the
+  third-column tab order (`shipped-simple-layout-order.test.ts`), so adding a third-column tab (e.g.
+  Dictionary) fails that test until a Tools item exists. Hiding a Power-only item without re-adding
+  it to a Simple column removes its only entry point: Simple now has no menu route at all to the
+  four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
+  no quality tools in the Project menu; UX has not yet confirmed it. Auto-show footnote pane
+  (`platformScriptureEditor.toggleFootnotesAutoShow`) is Power-only too, because Simple keeps PT9's
+  manual footnotes pane: Show footnotes opens it and it stays open. The Edit flyout's ids are not
+  registered commands, and `KeyboardShortcutEntry.command` is typed to registered commands, so
+  those items cannot show a shortcut hint even though Ctrl+Z, Ctrl+Y and the clipboard chords work
+  in the editor.
+- **Amended 2026-09-23 (PT-4534, review of #2847):** Three changes to Simple's menu.
+  - **Edit ▸ has a section of its own, with no heading,** between Project and View. The v0 demo
+    (https://10simple-project-menu.vercel.app/) renders it that way: the Edit submenu sits outside
+    the Project group, between two dividers. The ticket's 2026-09-18 transcription had listed it
+    inside Project. So columns take an optional `isHeaderHidden` flag: `TabDropdownMenu` still
+    divides that section and keeps its label as a visually hidden heading that names the group, the
+    same `aria-labelledby` route every headed section uses. It names the section only while two or
+    more sections are shown, like every heading. The section's label is "Edit", the same as its only
+    item, so a screen reader announces "Edit" twice; that is deliberate, since a column must have a
+    real label and the section holds nothing but the Edit flyout. Rejected for the unheaded section:
+    making a column's `label` optional — the menubar needs it to open the column, and the section
+    would lose its accessible name; an empty localized string as the label — it hides the heading by
+    accident of the data, not by intent, and still leaves the section unnamed; an `aria-label` on the
+    group instead of a hidden heading — a second naming mechanism beside `aria-labelledby`, and the
+    only `aria-label` on a menu group in the repo.
+  - **Simple shows Open Checks, under a Quality checks section,** as product asked on 2026-09-23. In
+    Simple it opens the Checks side panel as a tab in the third column rather than a split beside the
+    editor, and fronts that tab on later clicks (`adr-simple-column-3-tools-open-on-demand`). The
+    Checking assistant the v0 design names is left out of Simple until PT-4734 integrates the
+    assistant itself. The four Inventories and Markers Checklist stay Power-only, so Simple still
+    has no menu route to them.
+  - **Per-pane zoom (`platform.webViewContentZoomIn`/`Out`/`Reset`) is Simple-only, in a Zoom
+    section of its own** (`platformScriptureEditor.zoomSection`), which lands between Edit and View.
+    The editor's tab title is hidden in Simple, so this menu is its only mouse route to zoom; Power
+    reaches zoom from the tab menu instead (`adr-simple-mode-tab-menu-offers-zoom-only`). The zoom
+    items stay out of the Options column: every other item there is Power-only, and a column is
+    served whenever ANY of its items is visible, so a single ungated item there would put the whole
+    Options column — heading and all — back into Simple. Anything added to a Power-only column
+    needs `hiddenInterfaceModes` even when the command itself is harmless in Simple.
+- **Source:** PT-4534 (parent PT-4530); decisions recorded on the ticket 2026-09-18 and 2026-09-23.
+
 ## adr-menu-section-headings-from-column-labels: Menu sections are headed by their column label, only when two or more are non-empty
 
 - **Date:** 2026-09-11
@@ -3601,6 +3877,18 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   rung is the "hide undo/redo" alternative rejected below, which needs UX sign-off, and that has not
   changed. Measure `restore` at the 297px floor before choosing between adding that rung and
   accepting the residual overrun.
+- **Amended 2026-09-21:** `blockMarkerToBlockNames`, cited above, no longer exists — PT-4488/PT-4539
+  replaced it with `selectableParagraphMarkers` (`platform-scripture-editor.utils`), a full,
+  minimally filtered derivation from `usfmMarkers` rather than a hand-maintained list. The
+  substantive conclusion above is unaffected: `selectableParagraphMarkers` is the *offered*
+  (selectable) set, not a bound on `blockMarker`, which is still read verbatim off the USJ para node
+  and isn't bounded by `usfm.sty` either — a project-custom marker, or one entered by mistake, can
+  be any string. The **7-character** figure holds only for standard USFM markers (`pubinfo`,
+  `restore`) — `usfmMarkers` doesn't even cover every marker `usfm.sty` itself defines (e.g. it has
+  no `tr` entry at all), so it was never a tighter bound than the hand list it replaced. If
+  anything, the widened offered set makes the longer markers more reachable day-to-day for standard
+  markers, since `restore`, `toca#`, `imte#`, etc. are now selectable from the switcher itself
+  rather than only arriving via imported/typed USFM.
 - **Consequences:** Every marker length now fits at the column floor with ≥16px spare, and the
   `min-content` floor is deliberately applied *only* at `SHRINK_STEP.MINIMUM`: while the style name
   is still rendered it contributes its longest word to `min-content`, and a floor there makes the
@@ -3995,6 +4283,51 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   emits module manifests, which is what lets `externalExtensions` become `itemized: true`; PT-4560
   is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
+
+## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit allowlist, not a coverage rule
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** Locale files ship for languages at very different stages. As of 2026-09-24, `es`
+  covered ~97% of the core strings (~75% app-wide, counting bundled extensions), `fr`/`zh-*` ~6%,
+  and `km` 0%. The first-run setup-dialog threshold (`setup-dialog-languages.util.ts`
+  `computeSetupDialogLanguages`) only measures the `%firstRun_` namespace, so a French or Chinese
+  OS was auto-switched into a mostly-English UI. Product decided to offer only English and Spanish
+  for the Nov 2026 release (PT-4751).
+- **Decision:** `OFFERED_INTERFACE_LANGUAGES` (`src/shared/data/interface-languages.data.ts`)
+  filters `getAvailableInterfaceLanguages` and `getSetupDialogLanguages`, so every picker and the
+  OS-locale default see only offered languages. Locale files, string resolution and the
+  setup-dialog threshold are unchanged. The `platform.interfaceLanguage` validator accepts any
+  loaded locale (`getAllLoadedInterfaceLanguages`), so a hidden language that is already set is
+  honored, never reset:
+  - Each picker keeps the current language listed (`includeCurrentLanguages`): Settings lists every
+    stored tag, since it shows the fallbacks too; the popover and the first-run step list only the
+    primary.
+  - Picking a language writes one value in all three pickers (`switchInterfaceLanguage`): the
+    chosen language first, then the other current languages that are offered. A hidden language is
+    dropped when the user switches away from it, since no picker can remove a fallback.
+  - The first-run OS-locale default writes only while the setting is still unset, empty or `['en']`.
+  - Some UI keeps the old language until restart (the main menu bar, PT-4503; the Settings labels),
+    so Settings and the popover offer a restart after a change of primary language, and withdraw
+    the offer when the user switches back to the language the window started with. The first-run
+    step does not offer one.
+- **Alternatives:** Filtering in each renderer surface (several places to keep in sync; PAPI
+  consumers would still see hidden languages). Excluding hidden locale files from the build (removes
+  the only way to test those translations; re-enabling means restoring assets). A coverage threshold
+  (the only existing one measures the setup dialog, which is what caused the bad auto-pick).
+  Resetting a hidden language to English on startup (overrides deliberate testers and translators
+  every launch). Keeping hidden languages as fallbacks after a switch (they could not be removed
+  again in any picker). Keeping `getAvailableInterfaceLanguages` unchanged and adding a separate
+  offered-languages data type or an `isOffered` flag (additive for extensions, but every core picker
+  would move to the new type, and nothing outside core was found using the getter).
+- **Consequences:** Offering a language is a one-line code change (plus the tests that pin the
+  list); `src/node/data/offered-interface-languages.test.ts` fails if an offered tag has no locale
+  file or misses the setup-dialog threshold. A value stored before this change keeps its
+  not-offered fallbacks until the user next picks a different language (e.g. `["es","fr"]` still
+  falls back to French). The public `getAvailableInterfaceLanguages` now means "offered", not "every
+  locale file"; PAPI has no way to list hidden languages. PT-4457 (offer languages by translation
+  coverage) is expected to supersede the list; its rule must measure app-wide coverage, not only
+  `%firstRun_`. Revisit when French is ready.
 
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
@@ -4473,7 +4806,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `platform.contentZoomIdentity` (`kind:identity`), written and removed with them, because a pane
   re-pointed at another project keeps its web view id and the view spreads its own saved state onto
   the new definition — so without the stamp the previous project's levels are indistinguishable from
-  levels chosen for the new one.
+  levels chosen for the new one. A pane of a remembered kind that commits a level while it resolves
+  no memory identity (for example the Simple-mode Comments panel before any project is opened) is
+  stamped with its kind alone, `kind:` (e.g. `notes:`). The empty identity segment names no project,
+  so the stamp never equals any resolvable `kind:identity`. As soon as the pane resolves an identity,
+  the seed, the definition-update re-seed, the head bake, the push and the sibling sync all treat
+  those levels as stale and replace them with what memory remembers for the new identity, or the
+  default. While the pane still resolves no identity, the stamp is not stale and its levels stay in
+  place. A stamp is judged stale only when the pane resolves an identity and the stamp names a
+  different one (`hasStaleStamp` in `web-view-content-zoom.service.ts`), so a stamped pane whose
+  project is gone keeps showing its own level. A pane of a kind that is not remembered carries no
+  stamp.
 - **Alternatives:** (a) **A per-view service with its own hidden `Record` store** — the April
   content-zoom prototype, PR #2211 — rejected: two stores for one value, and the one that is not the
   definition has to be taught by hand about every lifecycle event the definition gets for free.
@@ -4853,7 +5196,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-pop-ups-follow-their-content-zoom-area: A pop-up takes the zoom of the area it opens from
 
 - **Date:** 2026-09-17
-- **Status:** Accepted
+- **Status:** Superseded by adr-pop-ups-stay-at-interface-scale
 - **Context:** pop-ups portal to `document.body`, outside the zoom area, so they rendered at
   interface scale next to zoomed content, and a hand-wrapped editor popover was misplaced at
   200 %.
@@ -4894,7 +5237,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   fixed `tw:w-72` width, `tw:flex tw:flex-col tw:gap-2.5` layout and `tw:p-2.5` padding, and a
   pop-up's content renderers return fragments — so their children were direct flex items of that
   element. Moving the content inward moves it out of reach of every one of those, which is a
-  behaviour change at interface scale and not only when zoomed. So the wrapper must take over the
+  behavior change at interface scale and not only when zoomed. So the wrapper must take over the
   width, the flex layout and the padding together, with `width: 'auto'` and `tw:p-0` on
   `Popover.Content` so the fixed class cannot reassert itself over the wrapper. Splitting them —
   taking the padding inward and leaving the width and gap behind — silently resizes and respaces
@@ -4908,7 +5251,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `OverlayHost` is deliberately the one place that depends on the content-zoom
   service: `OverlayContextMenu` is part of the generated extension-facing declaration bundle, and an
   import of the service from there would publish it — including its test-only seams — to extension
-  authors. A command palette shown centred, with no anchor position, is not anchored to any pane's
+  authors. A command palette shown centered, with no anchor position, is not anchored to any pane's
   content and stays at interface scale, as does a modal dialog.
 - **Alternatives:**
   - per-call-site `ContentZoomRoot` wraps with a `zoomArea` prop threaded through the comment
@@ -4931,6 +5274,33 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     until it closes — accepted, not a bug to be fixed later.
 - **Source:** PT-4634; the outside-the-web-view extension (`papi.overlays` command palette,
   popover, context menu) by PT-4712.
+
+## adr-pop-ups-stay-at-interface-scale: Pop-ups keep interface scale next to zoomed content; only their position follows it
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** UX (2026-09-22) ruled that anything that pops up must not scale with content zoom.
+  This replaces `adr-pop-ups-follow-their-content-zoom-area`.
+- **Decision:**
+  - Library popovers, dropdown menus, tooltips, platform overlays, the editor's right-click menu and
+    the inline footnote and comment editors always render at interface scale.
+  - They stay anchored to live positions in the zoomed content (`useLivePopoverAnchor`, the
+    editor's anchor sources, the overlay anchor a pane measures). CSS `zoom` reports geometry in
+    viewport pixels, so an unscaled pop-up placed from a zoomed anchor lands correctly. The iframe
+    element itself is never scaled, so a pane-measured position or size maps to window pixels
+    one-to-one.
+  - No pop-up carries a zoom marker, and no library component reads a zoom area for sizing.
+- **Alternatives:**
+  - **Pop-ups follow their area.** The rule this entry replaces; rejected by UX.
+  - **Follow only for the inline editors.** Rejected: UX named them explicitly.
+- **Consequences:**
+  - The following are removed: the area context and pop-up attribute, the overlay `contentScale`
+    and `frameScale` props, `getWebViewIframeZoom` and the zoom factor in the overlay service's
+    `translateCoordinates`, and the editor's `contextMenuContainer` wiring.
+  - `paranext/scripture-editors#17` (the `contextMenuContainer` option) is no longer needed; it was
+    closed unmerged on 2026-09-23.
+  - Live anchoring stays, because anchors captured once go stale on scroll even at 100 %.
+- **Source:** UX feedback 2026-09-22; reverses PT-4712 and PT-4713; epic PT-4575.
 
 ## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
 
@@ -5653,6 +6023,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   process that unexpectedly disappeared, which a deliberate `location.reload()` navigation is not,
   so the main-process handler that spends the budget never runs on this path.
 
+## adr-renderer-papi-transport-is-messageport: The renderer talks to main over an Electron MessagePort, not a WebSocket
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** PT-1641. After an OS sleep the renderer's PAPI WebSocket to main died with 1006 at both ends and nothing recovered; the extension host and the .NET data provider on the same server survived. Chromium's `net::TCPClientSocket` observes power-suspend events and `OnSuspend()` closes every connected or connecting client socket, failing pending I/O with `ERR_NETWORK_IO_SUSPENDED` (`net/socket/tcp_client_socket.{h,cc}`, define `TCP_CLIENT_SOCKET_OBSERVES_SUSPEND`, all platforms but Android; verified at Chromium 142.0.7444.265 = Electron 39.8.8 and at 128.0.6613.162 = Electron 32.1.2). It is compile-time, has no feature flag or switch, exempts nothing (loopback included) and has no resume path. A renderer WebSocket is a network-service `WebSocketChannel` over such a socket; the extension host (`ws` on libuv) and .NET (`ClientWebSocket`) hold plain OS sockets, which loopback preserves across sleep. Reported to Electron as #19993 (2019) and #38405 (2023), never addressed. `HttpNetworkSession`'s own suspend observer is Windows-only and closes idle connections only; it is not the mechanism here.
+- **Decision:** Take the renderer-to-main link off Chromium's network stack. Each window asks main for an Electron `MessageChannelMain` port through the preload (`src/main/preload.ts`, channels `electronAPI:papi.*`); main's `papi-port-broker.service` answers only while the window has no open port (one live channel per window) and only requests from the window's page frame, which a same-origin web view can still drive through the bridge, and serves its end through `RpcWebSocketListener.acceptLocalClient` as `renderer:<windowId>`; the page's `MessagePortWebSocket` presents the other end as the DOM `WebSocket` `RpcClient` already uses (`web-socket.factory.ts` selects it when the bridge exists). Mojo pipes observe no power events (no `PowerMonitor` reference anywhere in `mojo/core`; Chromium's own suspend broadcast to the network service travels over Mojo during the transition). Close intent travels in an in-band close frame (`PAPI_PORT_CLOSE_FRAME_TYPE`) because a port close carries no code; a port that closes with no frame is 1006, so `isCleanCloseEvent` and the connection-lost banner work unchanged. The `ws` server on 8876 stays for the extension host, .NET, e2e fixtures and tooling.
+- **Alternatives:** Reconnect after resume: a state machine on a link guaranteed to fail, needing a replay of every registration after main has already announced the window's death, plus the four blockers `adr-renderer-websocket-suspend-disconnect` records; both Electron reporters did this and still had trouble on Windows. Plain `ipcRenderer`/`ipcMain` channels: survive sleep too, but have no per-connection close signal and copy every payload through the context bridge; a port maps one-to-one onto the per-socket `RpcServer`. WebTransport over QUIC: escapes the TCP observer, but QUIC's idle timeout (30 s by default) expires during any real sleep, Node 22 has no HTTP/3 server, and it requires a certificate even on loopback. `powerSaveBlocker`: cannot stop a user-initiated sleep and drains the battery. A Chromium flag: none exists.
+- **Consequences:** Main has two accept paths (`onClientConnect` for `ws`, `acceptLocalClient` for ports) sharing `serveClient`. The renderer's connection is no longer observable from outside the process (`lsof`/`netstat` on 8876 show two clients, not three). The renderer-side `MessagePort` `close` event exists only because Electron force-enables Chromium's `MessagePortCloseEvent` feature (upstream status `test` in M142, `shell/renderer/renderer_client_base.cc`); an Electron upgrade that dropped it would turn a main-side port close into silence in the page, which the manual sleep/close checks would show. Same-origin web views can reach `window.top.electronAPI.papi.requestPort()`; the broker answers only while the window has no open port and the adapter keeps its first port, so the worst an extension can do is nothing it could not already do through `window.papi`. `ServerSocketLike`, `IRpcLocalClientAcceptor`, `acceptLocalClient` and the `papi-port.model` shapes are `@experimental`. Tightening the renderer CSP now that the page itself opens no WebSocket is a follow-up, pending a review of web views' own WebSocket use. The per-window port is also the natural carrier for the deferred `main-renderer-shutdown-relay`; not done here.
+- **Source:** PT-1641; design by Matt Lyons (2026-09-10) with corrections recorded in the PRD folder; verified on Windows by sleep test before merge (log excerpt in the PR).
+
 ## adr-renderer-registers-no-names: Renderer platform code registers no command or request names; routers call shard methods
 
 - **Date:** 2026-08-07
@@ -5781,6 +6161,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences (two of three peers, not three):** "Diagnosable from the log" holds for the renderer and the extension host. The .NET data provider is outside this scheme: `c-sharp/PapiClient.cs` logs `JSONRPC disconnected: Reason = …` with no close code and no clean/abnormal classification, and the only close-status handling anywhere in `c-sharp/` is the `NormalClosure` it sends — which lands on `isCleanCloseCode`'s clean list by coincidence rather than by contract. Not urgent (the .NET socket survives a suspend, per the evidence above), but a third peer disconnecting is currently less diagnosable than the two this work covers.
 - **Consequences (the `shutdown` power marker costs a Linux inhibitor):** `POWER_EVENTS` registers Electron's `shutdown` listener, which is what separates "the OS took the app down" from "the app died" in a log that simply stops — the NN-6 distinction. Subscribing to it makes Electron hold a logind shutdown-delay inhibitor for the session on Linux. Nothing is actually delayed: the handler only logs and never calls `preventDefault()`, so the OS proceeds on its own schedule. The marker is judged worth that, since without it an OS-initiated shutdown is indistinguishable from a crash. Revisit if the inhibitor is ever observed to change shutdown behavior on a supported Linux target.
 - **Consequences (the shutdown signal is injected, not imported):** `RpcServer` reads whether the app is coming down through `setAppShutdownSignal`, wired from `src/main/main.ts`, rather than importing `shutdown-latch.service` directly. Every module `rpc-server` imports is reachable from `papi.d.ts`'s entry points, so the direct import published the shutdown latch and the window-state service it depends on — `resetForTesting()` included — as extension-facing API on the generated surface and the TypeDoc site. Any future main-process-only state a shared or client-reachable module needs should come in through the same kind of seam.
+- **Amended 2026-09-24 (PT-1641):** Root cause identified: Chromium's `TCPClientSocket::OnSuspend` closes the renderer's socket on the OS suspend signal; see `adr-renderer-papi-transport-is-messageport`, which supersedes the reconnect direction for the renderer (the renderer no longer uses a WebSocket). Shape 3, the 17-minute `forEach` stall, is consistent with shape 1 observed on Windows with the log straddling the sleep: the close arrives, main logs one removal line, Windows freezes the process within its ~2 s allotment, and on resume the loop finishes in 60 ms while the extension host's overdue hourly timer fires in the same second. The January 2025 log predates the power-monitor logging, so the suspend is inferred, not recorded. The heartbeat deferral stands, on stronger ground. The four reconnect blockers remain true statements about `RpcClient` and now apply to the extension host only.
 - **Source:** PT-4434; diagnosed on macOS 2026-08-26. Reviewed in PR #2731, which is where the severity, unreachable-4000 and third-peer consequences above were established.
 
 ## adr-resource-missing-book-message: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
@@ -5968,10 +6349,35 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   cannot silently drift apart. It does not compare their physical-modifier tracking (a held Control
   or ⌘, a pointer event reporting Ctrl, clearing on blur), which is what tells a macOS mouse notch
   from a trackpad pinch. Enhanced Resources has no leftover zoom fallback that could fall out of
-  step with the platform mechanism. The Scripture editor's right-click menu stays at interface scale in
+  step with the platform mechanism. The retired `scripturePaneZoom` web-view-state
+  key is left behind, unread and unpruned, in every web-view definition saved before this change
+  (`useWebViewState` removes a key only through an explicit `resetWebViewState()`); no migration
+  clears it. The Scripture editor's right-click menu stays at interface scale in
   every one of these panes; see `adr-editor-context-menu-follows-its-area-via-a-container` (withdrawn).
 - **Source:** PT-4582 (Text Collection grid, Bible Texts / Commentaries / Model Text panels),
   PT-4583 (Enhanced Resources viewer).
+- **Amended 2026-09-24 (`adr-text-collection-resources-are-zoom-areas`):** the area names and the
+  zoom menus have moved since the Decision above. Each cell marks its own resource's text with that
+  resource's area `resource-<sanitized id>` instead of the shared `text-collection`, which remains
+  only as the fallback area for a resource id that yields no area characters; core declares no
+  default area for the grid, so a grid showing no resource has nothing to zoom.
+  Its right-click zoom items and the chapter-view "⋮" run the platform's
+  `platform.webViewContentZoomIn`/`Out`/`Reset` commands against the resource's area, rather than a
+  zoom of its own: the grid has no inline zoom and registers no wheel listener of its own
+  (`use-resource-zoom-input.hook.ts`, `createContentZoomWheelReader` and
+  `web-view-content-zoom.wheel-parity.test.ts` do not exist), so the bootstrap's inlined reader is
+  the only wheel/pinch reader. That reader consults its physical-modifier tracking (a held Control
+  or ⌘, a pointer event reporting Ctrl, clearing on blur) on macOS only. On Windows and Linux a
+  touchpad pinch made while Ctrl is physically held arrives as the same ctrl+wheel frames as any
+  other pinch — a fraction of a pixel of `deltaY` each, with a whole tick of `wheelDeltaY` — and
+  reading the held key as evidence of a mouse notch would send every frame down the tick path at a
+  full zoom step per frame. There the size test alone tells the two apart: the frame that opens a
+  pinch sits within 5 % of a scale of 1 (under about 5 px of `deltaY`), and the running gesture
+  carries the rest, while a mouse notch (33 px or more) is far outside the window that opens a
+  pinch. On macOS, where a mouse notch can be as small as a pinch frame, the held key still decides.
+  The bootstrap reads the platform once, from `navigator.platform`.
+  `scriptureTextGrid.zoomByResourceId`, the grid's former per-resource level store, is left unread
+  in web-view state and not migrated.
 
 ## adr-retryable-error-view-is-the-shared-failure-zero-state: One icon+message+retry view for every surface
 
@@ -6372,6 +6778,114 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   data the snapshot is no longer following.
 - **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13); PT-4557 review round 4 (A-1 to A-4).
 
+## adr-shared-components-take-localized-strings: Shared components take localized strings; they never compose them
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `MultiSelectComboBox` built its dropdown search placeholder in code as
+  `` `Search ${placeholder.toLowerCase()}...` ``. That is English sentence-building — it assumes the
+  noun can be lowercased, that the verb precedes it, and that a placeholder is a noun at all — and
+  `toLowerCase()` is wrong in any locale with different casing rules. Its empty-list message was an
+  optional prop that several callers never passed, so those dropdowns showed the component's
+  English default.
+- **Decision:** A component in `platform-bible-react` never composes user-facing text from other
+  user-facing text. Each string is a separate prop the caller supplies already localized
+  (`searchPlaceholder`, `commandEmptyMessage`), which makes the localization contract part of the
+  component's API: adding one is a breaking-ish change every call site must answer, and the answer
+  is a key in that surface's own localized-strings file.
+- **Alternatives:** Keep composing but localize the template — rejected: a single template cannot
+  hold for every language, and the component cannot know the grammatical role of the caller's noun.
+  Have the component resolve keys itself — rejected: components in this library take strings, not
+  keys, so extensions and the host stay in charge of their own localization and fallback chains.
+- **Consequences:** Adding a user-facing string to a shared component means touching every caller,
+  including the ones in extensions; the compiler does not enforce it for optional props, so the
+  review question "did every call site get a real string?" is the check. This is what pulled two
+  extensions into PT-4430's diff, and it is the intended cost. The existing English defaults on
+  `MultiSelectComboBox` (`commandEmptyMessage`, `selectAllText`, `clearAllText`) were kept on
+  purpose: they are fallbacks, not composed text, and removing them would break callers outside the
+  repo. A caller should still never rely on one.
+- **Source:** PT-4430 (from bug PT-4135); PR #2746 review.
+
+## adr-shared-list-scope-predicate: One predicate decides which resources are "in play" for a filtered list
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** The resource picker and Get Resources both render a language filter over a resource
+  catalogue and both narrow the catalogue by resource type first. Each had its own notion of the
+  narrowed set: the picker filtered rows inline while the language options were built from the whole
+  catalogue, and Get Resources built its options from the unscoped list while its grid filtered by
+  the type multi-select. Either way the dropdown offered a language whose only entries were of a
+  type the grid was hiding, and selecting it landed on "No results" — the dead end PT-4135 reports.
+- **Decision:** The scope is one exported predicate (`matchesResourceType`, exported from
+  `platform-bible-react/experimental`), and each surface derives its rows, its filter options and its
+  result count from a single type-scoped list built with it. An empty array means "nothing is
+  filtering", so a multi-select with no selection reads naturally. A selected language that the
+  options no longer offer is held (the type filter is a deliberate exception; see Consequences): it
+  is hidden from the filter and ignored by the rows, so narrowing
+  the type filter cannot strand a persisted language selection on an empty grid, but it stays in
+  the saved selection — every change is written back as held values plus the new visible ones — and
+  applies again once the options offer it. `partitionFilterSelection` (same export) is the one
+  definition of that split.
+- **Alternatives:** Leave each surface to scope its own list — rejected: that is the bug, and the
+  two definitions drifted apart within one component. Reset the language selection when the type
+  filter changes — rejected: in Get Resources that selection is persisted web view state seeded from
+  installed resources, so a reset destroys a user's choice on a transient type change. Drop a
+  hidden value the next time the selection changes — rejected: it is the same loss by a different
+  route, and it makes the result depend on the path the user took: widening the type filter first
+  brings the language back, while toggling any other language first loses it. Pass the raw
+  `string[]` selection into the predicate — rejected: it would widen the signature to `string`, and
+  narrowing the persisted state against the canonical type list also drops values retired from it.
+- **Consequences:** A new surface with a resource list gets the scoping by using the predicate and
+  deriving from one list; the invariant is stated in the predicate's own TSDoc and testable at the
+  helper. Any future filter dimension on these lists must join the same scoped list rather than
+  filtering the raw catalogue, or the dead end returns by another route. Holding hidden values
+  means a user who widens the type filter can see the grid narrow to a language they picked earlier
+  and cannot currently see in the filter; that is the intended trade, since it was their choice. The
+  explicit "Clear filters" action in the resource picker clears held values too. The type filter
+  does not hold, and that asymmetry is deliberate rather than an inconsistency between the two
+  filters: a hidden language comes back the moment the type filter widens, but a type retired from
+  the build can never be offered again, so it is invalid rather than hidden. Get Resources narrows
+  the persisted types against its canonical type list, and an unrecognized type is gone from the
+  saved state after the next toggle.
+
+## adr-shared-option-list-affordances-opt-in: New visual affordances on shared option-list components ship opt-in
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** The resource picker's language dropdown clipped ~130 languages flush at a row
+  boundary, so a full list looked complete. The scrollbar alone was measured as too weak a signal —
+  with a few hundred options the thumb is ~7% of the track, and `command.tsx` already carries a
+  `// CUSTOM` note recording that `tw:no-scrollbar` was removed so the scrollbar is visible for
+  exactly this case. The fade cue that fixes it lives in `MultiSelectComboBox`, which every `Filter`
+  renders and which the Checks side panel reaches for directly — so a fix aimed at one dropdown
+  changed the look of every dropdown, with no entry in the design guidelines to point at.
+- **Decision:** A shared option-list component may host a new visual affordance, but it ships behind
+  an opt-in prop that defaults to off (`showScrollCue` on `MultiSelectComboBox`/`Filter`,
+  `lib/platform-bible-react/src/components/advanced/multi-select-combo-box.component.tsx`). Only the
+  surfaces whose ticket motivated it turn it on — here the two language filters PT-4135 names, not
+  the five-entry type filter beside one of them. Flipping the default to on is a separate change
+  that needs design sign-off.
+- **Alternatives:** Ship it app-wide by default — rejected: it makes an unreviewed visual change to
+  every dropdown, and the cue's gradient is painted in the popover's own background colour
+  (`tw:from-popover`), so a differently-themed popover would show it as a mismatched band. An
+  opt-out prop with the affordance on by default — rejected for the same reason; it still makes the
+  app-wide change the default. Keeping the cue out of the shared component and drawing it in the
+  dialog — rejected: the effect must run when Radix mounts the popover content, which only a
+  component inside the portal sees.
+- **Consequences:** Long lists elsewhere keep the weak scrollbar signal until someone opts in, which
+  is the intended trade: the blast radius of a component-library visual change stays with the team
+  that asked for it. Revisit when design rules on the fade as a general affordance; the change then
+  is a default flip, not a rewrite.
+
+## adr-shared-utils-live-in-platform-bible-utils: A utility that extensions need lives in `platform-bible-utils`, not in `src/shared/utils`
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** `createCachedInitializer` runs an async initializer at most once and caches the promise, so concurrent callers share one attempt and a failure is retried rather than pinned. Eighteen core services use it. Extensions need exactly this to wait on a network object owned by a process that is still starting up, but could not import it. Hand-rolled, the easy mistake is to cache only the resolved value: that cache stays empty until the look-up settles, so every caller that arrives while the owning process is still starting begins a look-up (and a wait) of its own.
+- **Decision:** Move it to `lib/platform-bible-utils/src/promises/`, alongside `AsyncVariable`, `Mutex` and `PromiseChainingMap`, and export it from `platform-bible-utils`. Core imports it from the package like any other consumer.
+- **Alternatives:** **Re-export from `platform-bible-utils`, source left in `src/shared/utils/`** — not available: the package is standalone and cannot import from core's `src/`. **Export through `@papi/core`** — that surface is types-only (an empty default object plus `export type` lines); a runtime function does not belong there. **Leave it core-internal and let each extension hand-roll it** — the zero-diff option, and it hands every extension the same promise-versus-value caching bug.
+- **Consequences:** Such a utility is now held to the `lib/platform-bible-utils/` API-surface TSDoc bar rather than core-internal expectations. Each further move costs a repoint of every core import plus a `papi.d.ts` regeneration, so batch them. A utility needing both extension reach and a core-only dependency cannot follow: nothing in `platform-bible-utils` can import from `src/`.
+
 ## adr-shrink-step-override-context: The shrink-step test seam is a context, not a prop on every toolbar
 
 - **Date:** 2026-08-26
@@ -6403,6 +6917,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   two are documented in terms of each other, and the override is the only one a test should ever
   reach for.
 - **Source:** PT-4466, deferred from PT-4344 (PR #2701).
+
+## adr-simple-column-3-tools-open-on-demand: An on-demand tool joins Simple's third column as one pinned tab, reused on every later open
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** Simple's three columns are fixed. Checks, opened from Simple's Quality checks menu
+  section, was opened as `{ type: 'panel', direction: 'right' }` beside the editor, which split the
+  editor's column into a new pane on every click. Checks is not part of Simple's starting layout,
+  and nothing before it added a web view to the third column while the app runs.
+- **Decision:** In Simple, the opener first probes with `{ existingId: '?', createNewIfNotFound:
+  false }` and brings an existing tab to the front, reloading it only if it shows another project
+  or editor. If there is none, it opens `{ type: 'tab', parentTabGroupId: 'simple-panel-resources' }`,
+  the third column's rc-dock panel id. The extension cannot import renderer source, so it keeps a
+  copy of that id (`simple-resources-panel-id.const.ts` in `platform-scripture`), and
+  `simple-layout.data.test.ts` fails if the copy drifts from `SIMPLE_PANEL_ID_RESOURCES`. The tab is
+  pinned like its neighbors (`isClosable: false` in Simple, and listed in
+  `FIXED_LAYOUT_WEBVIEW_GROUPS` under `TAB_GROUP_RESOURCES`). An open tab follows a project switch the
+  way Find does, through `platformScripture.updateChecksSidePanelProject`, except that, like the
+  Text Collection, it does not follow a published resource (`updateRelatedChecksSidePanel` reads
+  `platform.isPublished`, not `isEditable`, so an `Editable=F` translation project is followed).
+  Power keeps the panel beside the editor, and deliberately does not probe either, so each click
+  still opens another panel there: layout is free-form in Power, and extra panels are the user's to
+  close. Reference: `open-checks-side-panel.utils.ts`.
+- **Alternatives:** A static tab in `simple-layout.data.ts` or a `default-layout-supplement.json`
+  entry — rejected: both change what every Simple user sees at startup for a tool few open. A
+  `panel` layout targeting a third-column tab — rejected: it splits the third column instead. A
+  closable tab — rejected for now: its rc-dock group would be `TAB_GROUP` inside a
+  `TAB_GROUP_RESOURCES` panel, a mix whose drag and lock behavior is unverified. Moving the panel id
+  into `src/shared` so the extension can import it — rejected: it would grow `papi.d.ts` for one
+  constant.
+- **Consequences:** Once opened, the Checks tab stays until the Simple layout is next rebuilt
+  (for example on restart or a mode switch). If the copied panel id drifts and the test is skipped,
+  the dock logs a warning and falls back to its default placement, which can add a pane on top of a
+  column. The next on-demand third-column tool should reuse this shape and its panel-id constant.
+- **Source:** PT-4534 (review of #2847).
 
 ## adr-simple-mode-column-minimums: Simple-mode column minimums are derived from the window minimum, dividers included
 
@@ -6483,6 +7032,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   moments, and it is why the items are greyed rather than hidden — the shape of the menu does not
   change under the pointer.
 - **Source:** PT-4578 (PR #2821), epic PT-4575.
+- **Amended 2026-09-23 (`adr-content-zoom-applies-only-to-zoomable-panes`):** the zoom items are no
+  longer shown disabled on a tab whose web view marks no zoom area. They are removed on any pane
+  that is not zoomable, and the menu reads zoomability live rather than as a snapshot at open, holding
+  it steady only while one menu is open. The "shown disabled", "snapshot at open" and "greyed rather
+  than hidden" parts above are superseded by that entry, so in Simple mode a non-zoomable tab has no
+  tab menu at all. The zoom-only Simple menu and the hamburger as the Simple-mode editor's entry
+  point still stand; the hamburger's zoom items now sit in a column of their own and are hidden in
+  Power mode, where the tab menu carries them.
 
 ## adr-single-verse-surfaces-resolve-verse-zero-to-one: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
 
@@ -7125,6 +7682,101 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   this entry closes, in `~/Desktop/PT-4557-followup-close-button-discards-staged-edits.md`.
 - **Source:** PT-4557; design-document comment (Sebastian); PR #2835 review (findings 2, 5, 7, 8, 25; round 3 A1, A2, A3).
 
+## adr-text-collection-resources-are-zoom-areas: Each Text Collection resource is its own content zoom area; a click scope and an area label let the platform target and name it
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** On `main`, the Text Collection grid pairs two zoom mechanisms: the pane-wide
+  `text-collection` content-zoom area from `adr-resource-panes-name-their-zoom-areas`, and the
+  grid's own per-resource zoom (PT-4155) — a CSS `zoom` factor per resource, driven by a right-click
+  Zoom in / Zoom out / Reset zoom menu, a "⋮" in the chapter view header, and a grid-owned
+  Ctrl/⌘+wheel listener (`use-resource-zoom.hook.ts`, `use-resource-zoom-input.hook.ts`), stored per
+  tab under `scriptureTextGrid.zoomByResourceId`. The two multiply, so the pane's zoom and a
+  resource's own zoom compound. Consolidating them onto the one content-zoom mechanism every other
+  pane uses — one area per resource instead of a private CSS-zoom stack nested inside a pane-wide
+  area — retires the grid's own zoom and moves its resource-scoped menus onto the platform's zoom
+  commands. Two framework gaps stood in the way: the bootstrap resolved the area of a click, a focus
+  or a wheel only from the nearest marked ancestor, so a click on a resource's name, grip or a gap in
+  its row fell to the area used last; and the zoom indicator showed only the level, which cannot tell
+  one resource's area from another's.
+- **Decision:**
+  - Each resource's text is its own zoom area `resource-<id>`: the resource id lower-cased, every
+    character outside `[a-z0-9-]` replaced by `-` (`toResourceZoomAreaId`,
+    `extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-zoom-area.utils.ts`).
+    An id with no `[a-z0-9]` character left falls back to the shared `text-collection` area, with
+    one warning per id. The grid has no area of its own: its core declaration
+    (`CONTENT_ZOOM_DECLARATION_BY_WEB_VIEW_TYPE`) names its memory kind and no default area, so a
+    grid showing no resource is not zoomable — no zoom items, chords, wheel, level or indicator —
+    and it becomes zoomable when its first resource renders. A resource's verse row and its chapter view (chapter column or chapter panel)
+    carry the same id, so they always show one level. The markers, the scopes and the menus'
+    commands all resolve a resource's area through one function, `resourceZoomAreaOf` in the same
+    file, so they cannot disagree.
+  - The markers wrap each resource's text blocks, never its scroll box or column
+    (`adr-zoom-areas-mark-project-text`).
+  - New experimental attribute `data-platform-content-zoom-scope="<area>"`
+    (`CONTENT_ZOOM_SCOPE_ATTRIBUTE`, `src/shared/models/web-view.model.ts`, mirrored in
+    `platform-bible-react`) on an unscaled container tied to one area. The bootstrap's `areaOf`
+    falls back to the nearest scope only where no marker encloses the target, so a click, a focus, a
+    chord or the wheel anywhere in a resource's row or column means that resource. An invalid scope
+    id resolves to nothing and warns once; a scope naming an unreported area changes nothing. The
+    grid puts it on the single-resource region, each chapter column, each verse row and the chapter
+    panel.
+  - New experimental attribute `data-platform-content-zoom-label="<text>"`
+    (`CONTENT_ZOOM_LABEL_ATTRIBUTE`; `ContentZoomRoot`'s `label` prop) on a marker: the indicator
+    reads `<label> · <level>`, the name in a `<bdi>` capped at 16em with an ellipsis, written as
+    text; the live region hears the full text. Areas without a label are unchanged.
+  - The right-click menu and the "⋮" return unchanged in look, sending
+    `platform.webViewContentZoomIn/Out/Reset` with the tab's web view id and the resource's area
+    (`useResourceContentZoom`), and reading the level from `platform.contentZoomLevels` and the Tab
+    content default zoom. Reset is disabled while the resource has no level of its own.
+- **Alternatives:**
+  - **One pane-wide area, with no per-resource zoom.** Rejected: it takes away sizing one text
+    alone.
+  - **Restoring the grid's own zoom** (inline `zoom`, its wheel listener,
+    `scriptureTextGrid.zoomByResourceId`). Rejected: a second mechanism that multiplies with content
+    zoom, with no badge, no memory per project and no single reset.
+  - **A `scope` prop or wrapper component in `platform-bible-react`.** Rejected: a scope element must
+    not be scaled, so it cannot be a `ContentZoomRoot`, and the grid's scope elements are existing
+    containers with drag and click handlers; a wrapper would add a DOM level for nothing. Views
+    write the attribute.
+  - **Composing the label in the service.** Rejected: the name lives in the view's DOM, which the
+    bootstrap already reads; the service keeps passing the level text alone.
+  - **Writing the scope as an object spread of the exported constant**
+    (`{...{ [CONTENT_ZOOM_SCOPE_ATTRIBUTE]: zoomArea }}`), which the design first proposed. Rejected:
+    the repo's `react/jsx-props-no-spreading` rule (`['error', { custom: 'ignore' }]`) forbids spreads
+    on DOM elements. The grid writes the literal `data-platform-content-zoom-scope={zoomArea}`, as
+    other views write data attributes, and its tests read the attribute through the exported
+    constant, which keeps the literal and the constant equal.
+- **Consequences:**
+  - Levels are remembered per project × resource (`resource:<project id>:resource-<id>` in
+    `platform.webViewContentZoomMemory`), shared by every Text Collection tab of that project; a
+    removed resource's level comes back when it is added again. A Text Collection not yet pointed at
+    a project remembers nothing (known limit, as for the pane before).
+  - The zoom keys and the tab menu act on one resource — the one last clicked or focused, else the
+    first — where they used to act on the whole pane, through the pane-wide `text-collection` area
+    alone.
+  - Sibling resource panes of the same project (Bible Texts, Commentaries, Model Text) are seeded
+    with the grid's `resource-<id>` levels as unused CSS variables. Harmless and bounded.
+  - Levels stored by the removed per-column zoom (`scriptureTextGrid.zoomByResourceId`) are not
+    migrated: they are per tab and the new ones per project, and writing
+    `platform.contentZoomLevels` from the view would race the platform's seeding. Users re-zoom once.
+  - A grid-wide level remembered for `resource:<project id>:text-collection` before each resource
+    became its own area is not carried over to the resources either: no resource's text reads it
+    (only a resource whose id yields no area does), so those users also re-zoom once. Carrying it
+    over as a starting level for every resource was rejected as a second source of a resource's
+    level next to its own.
+  - PR #2781 (verse-aligned Grid view) can mark each `.verse-block` with its
+    resource's area and leave its subgrid box unmarked, but only if the cell does not also mark its
+    text: `ResourceCellView` wraps the whole editor in one `ContentZoomRoot`, a marker nested inside
+    another marker is ignored (with a warning) and gets no zoom, and the wrapper's own `div` is one
+    more level in the aligned view's subgrid/`display:contents` chain. So the aligned view must
+    either skip the cell's own text marker, or keep it and read the resource's level from
+    `var(--platform-content-zoom-resource-<id>, …)` with the wrapper's zoom neutralized. Its
+    adaptation stays in that PR.
+  - The two attributes serve any view with several areas the user cannot tell apart, or with
+    unscaled containers that belong to one area; a view that does not write them sees no change.
+- **Source:** PT-4585 (epic PT-4575); decisions with Rolf, 2026-09-24.
+
 ## adr-theme-hosted-in-main: The theme service is hosted in main, and each window caches the current theme
 
 - **Date:** 2026-08-07
@@ -7575,7 +8227,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   resolves the pane's *active* area rather than the area holding the caret; the bootstrap's
   `pointerdown`/`focusin` tracking re-converges the two, except while a click's own answering refocus
   into another area is being suppressed — that one move is held off so the clicked area stays the
-  target, and a Tab ends the suppression so a deliberate focus move retargets zoom at once. The
+  target, and a Tab or any other key ends the suppression — making the caret's area the active one — so
+  a deliberate focus move or the user working where the caret is — typing, a shortcut such as Ctrl+C,
+  an arrow key — retargets zoom at once; a modifier pressed on its own or a zoom chord does not end it. The
   window-chrome listener also stands down behind the three full-screen overlays that bypass
   `OverlayHost` (connection lost, workspace updating, first run), not only behind a modal dialog:
   the level is persisted, so a zoom made behind one of those would outlive it. The in-view bootstrap
@@ -7596,6 +8250,28 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   Home or an inventory, still ignores the chords, which remains an accurate example of the cost
   described above. And the forward reference to "the Text Collection grid in PT-4582, Enhanced
   Resources in PT-4583" is resolved: both landed together in this same work.
+- **Amended 2026-09-23 (`adr-content-zoom-applies-only-to-zoomable-panes`):** these statements
+  above no longer hold:
+  - The Consequences paragraph's "the platform scales such a view whole at the Settings default
+    instead" is superseded: an area-less, undeclared view is not scaled at all.
+  - Its "the bootstrap does not even register its wheel listener while a pane has no areas" is
+    superseded too: a declared pane — including the inventories — takes the chords and registers
+    the wheel listener even before a marker renders, acting on the pane's declared default area.
+  - The 2026-09-19 amendment's "A view that marks no area at all, such as Home or an inventory,
+    still ignores the chords" holds only for Home: an inventory is declared zoomable, so it takes
+    the chords; Home, which marks no area and is not declared, stays inert.
+  - The Consequences' example of a view that owns Ctrl+wheel for a sub-region — "the Text
+    Collection grid's per-resource zoom does exactly that (`…/use-resource-zoom-input.hook.ts`)" —
+    no longer exists. The grid registers no wheel listener, so the platform's bubble-phase listener
+    handles Ctrl+wheel over its cells. The bubble phase is still what keeps precedence for any view
+    that does claim a sub-region.
+
+  How the bootstrap tells a trackpad pinch from a wheel notch, and why a held modifier counts as
+  evidence only on macOS, is recorded in the amendment of `adr-resource-panes-name-their-zoom-areas`.
+- **Amended 2026-09-24 (`adr-text-collection-resources-are-zoom-areas`):** the 2026-09-19
+  amendment's "the Text Collection grid marks `text-collection`" no longer holds: each resource in
+  the grid marks its own area `resource-<id>`, and `text-collection` remains only the grid's
+  declared default area and the fallback for a resource id that yields no area characters.
 - **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
   chord ownership), epic PT-4575.
 
@@ -7757,6 +8433,31 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   once concrete), at `PRDs/donna-multi-monitor/2026-08-07-small-items-ledger.md` under the shared
   PRD folder. Not a repo path; named here so a later reader knows the entry is real and where to
   ask for it, not so they can open it from a clone.
+
+## adr-web-view-load-focus-skips-hidden-tabs: A web view focuses its tab on load only when the tab is shown
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** Every web view calls `windowService.setFocus({ focusType: 'tab', id })` when its
+  iframe loads, and that focus makes the tab the active one in its group. A reload with
+  `bringToFront: false` keeps the tab where it is, but the reload remounts the iframe, so the tab
+  came to the front anyway once its content loaded. In Simple mode a project switch reloads the
+  Find and Checks tabs in Column 3 this way, and whichever loaded last took the column from the tab
+  the user was on.
+- **Decision:** `web-view.component.tsx` skips the on-load focus when the iframe has no client
+  rects. rc-dock keeps an inactive tab's pane mounted with `display: none`, so a hidden tab's iframe
+  has none. A tab that was asked to come to the front is already active by the time its content
+  loads, so its focus is unchanged.
+- **Alternatives:** A dock method answering whether a tab is its group's active tab — rejected: it
+  widens `PapiDockLayout`, which is in `papi.d.ts`, for one renderer caller. Carrying the reload's
+  `bringToFront` to the component — rejected: the component remounts from the tab definition and
+  has no record of why it loaded. Stopping the Checks re-point from reloading — rejected: it fixes
+  Checks only, and Find has the same problem.
+- **Consequences:** A web view that loads while hidden takes no focus, including one restored with
+  the layout at startup into an inactive tab. It is focused when the user brings the tab forward.
+  The mount-time focus in `platform-panel.component.tsx` is unchanged, since a reload does not
+  remount the panel.
+- **Source:** PT-4534 (review of #2847), found checking the Checks tab in the running app.
 
 ## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it
 
@@ -7995,6 +8696,53 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   PR #2229 (placed a menu at `Z_INDEX_OVERLAY` underneath its own `Z_INDEX_ABOVE_DOCK` host) by
   adding the ordering tests in `z-index.test.tsx` and this decision record.
 
+## adr-zoom-areas-mark-project-text: A view marks the elements that render project text, sharing one area id, never the region around them
+
+- **Date:** 2026-09-22
+- **Status:** Accepted
+- **Context:** Marking a whole region (a card list, a grid body, a tab body) scaled buttons,
+  inputs and headers with the text. UX (2026-09-22) ruled that only project text zooms.
+- **Decision:**
+  - Flowing, editor-like text keeps one marker around each text body, with every control moved
+    out.
+  - Card, list and table views mark each text element, and all of them share one area id. The
+    platform already treats many elements with one id as one area.
+  - `ContentZoomRoot` can render a `span` (`as="span"`) for inline text.
+  - Library components that render project text mark it only inside a `ContentZoomTextProvider`,
+    which the hosting view opts into.
+  - Ambiguous elements are not marked unless they are project-language text. The comment composer
+    and USFM marker tokens are marked; the editor's comment pop-up is a pop-up and is not.
+  - A marker sits inside the box that scrolls its text, never on that box or above it. Scroll code
+    that adds a `getBoundingClientRect()` distance (zoomed pixels) to `scrollTop` (the box's own,
+    unzoomed pixels) overshoots by the zoom factor when the box or an ancestor is scaled. The
+    Scripture editor, the Bible Texts / Commentaries and Model Text panels
+    (`resource-text-panel.component.tsx`, `model-text-panel.component.tsx`) and the Text
+    Collection's cells mark the editor inside its scroll box; the two panels' component tests and
+    the cell's tests pin that.
+- **Alternatives:**
+  - **Dividing the scroll distance by the zoom factor** in each scroll routine instead of placing
+    the marker. Rejected: every routine that measures and scrolls would need it, and a new one
+    would silently overshoot; placement fixes all of them at once.
+  - **A font-size multiplier.** Rejected: rem sizes and specificity ties, and it contradicts
+    `adr-zoom-composition` (a).
+  - **Region markers with controls moved out.** Impossible for cards, where controls and text
+    interleave.
+- **Consequences:**
+  - More markers per view. A rescan costs one `querySelectorAll` per marker-changing commit.
+  - Highlight rings inside a marked span scale with it.
+  - Hosts must not nest a provider-marked subtree inside a `ContentZoomRoot`.
+  - A marker's own inline `zoom` replaces the platform's rule instead of multiplying, so any zoom a
+    view applies of its own belongs on an element inside the marker. No view carries one today.
+  - In a view with several areas, a click or wheel over an unmarked control or gap targets the area
+    used last, unless a zoom scope (`data-platform-content-zoom-scope`) encloses it, in which case
+    it targets the scope's area — a marker still wins over an enclosing scope. Otherwise the
+    bootstrap resolves the area from the nearest marked ancestor.
+  - Fixed-size geometry measured against, or reserved inside, zoomed text needs converting (the
+    editor's gutter reservation and the character-marker bar's baseline probe are the examples):
+    the Simple-mode gutter reservation divides by the area's factor, and the baseline probe takes
+    the paragraph's `currentCSSZoom`.
+- **Source:** UX feedback 2026-09-22; epic PT-4575.
+
 ## adr-zoom-composition: A pane shows Electron zoom × project font size × content zoom, and content zoom is CSS `zoom` on marked areas
 
 - **Date:** 2026-09-15
@@ -8049,3 +8797,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** Epic PT-4575, spikes S1/S2 on the Scripture editor; implemented in PT-4576 (PR #2803),
   recorded here by PT-4580; the chord-targeting exception added by PT-4711; the immediate fallback
   and the per-type expectation added by PT-4714.
+- **Amended 2026-09-23 (`adr-content-zoom-applies-only-to-zoomable-panes`,
+  `adr-zoom-areas-mark-project-text`):** the composition formula, CSS `zoom` on marked areas and
+  zoom areas as a platform capability stand. These parts no longer hold:
+  - Alternative (c)'s "it is kept only as the fallback for a view that marks no area, and for URL
+    views", and the whole consequence paragraph beginning "The whole-iframe fallback applies as soon
+    as a pane loads…": no view is scaled whole any more, and the per-type record is gone.
+  - The Decision's "with the Text Collection's per-resource factor multiplying inside the grid's
+    area", and the Consequences' "The Text Collection grid's per-resource zoom predates this
+    decision and stays … PT-4582 marks the grid pane's own area around it": the grid's own private
+    zoom factor is gone; each resource is its own content-zoom area `resource-<id>` instead
+    (`adr-text-collection-resources-are-zoom-areas`), with the pane-wide `text-collection` area kept
+    only as the declared default and the fallback for a resource id that yields no area characters.
+    No view carries a private zoom stack any more (Enhanced Resources' was retired by
+    `adr-resource-panes-name-their-zoom-areas`).

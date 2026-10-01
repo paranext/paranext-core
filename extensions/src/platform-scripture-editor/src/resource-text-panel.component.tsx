@@ -52,6 +52,9 @@ import type {
   ResourcePanelLocalizedStringKey,
   ResourcePanelLocalizedStrings,
 } from './resource-text-panel.const';
+import type { DblResourceInstallFailureReason } from './use-dbl-resource-auto-install.hook';
+import { RESOURCE_PANEL_INSTALL_FAILURE_KEYS } from './resource-text-panel.const';
+import { getInstallFailureMessageKey } from './install-failure-message.utils';
 
 /**
  * Falls back to the key itself, matching the idiom in `model-text-panel.component.tsx`. Falling
@@ -202,7 +205,9 @@ export type ResourceTextPanelProps = {
   isInstalling: boolean;
   /** Whether the last install attempt for the selected resource failed. */
   installFailed: boolean;
-  /** Clears the failed-install state and re-attempts the same resource. */
+  /** Why the install failed, when it did. Decides whether the connection hint applies. */
+  installFailureReason: DblResourceInstallFailureReason | undefined;
+  /** Re-reads the catalog and re-attempts the same resource. */
   retryInstall: () => void;
   /** Whether the machine is online. Only adds a "check your connection" hint to install failures. */
   isOnline: boolean;
@@ -255,6 +260,7 @@ export function ResourceTextPanel({
   isSelecting,
   isInstalling,
   installFailed,
+  installFailureReason,
   retryInstall,
   isOnline,
   onShowResourcePicker,
@@ -591,9 +597,11 @@ export function ResourceTextPanel({
       <PanelRetryableErrorView
         message={localize(
           localizedStrings,
-          isOnline
-            ? '%webView_resourcePanel_installFailed%'
-            : '%webView_resourcePanel_installFailedOffline%',
+          getInstallFailureMessageKey(
+            installFailureReason,
+            isOnline,
+            RESOURCE_PANEL_INSTALL_FAILURE_KEYS,
+          ),
         )}
         retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
         onRetry={retryInstall}
@@ -677,19 +685,26 @@ export function ResourceTextPanel({
         </div>
       );
 
+    // The zoom marker sits INSIDE the scroll box, never on it or above it: `scrollToVerse` adds a
+    // `getBoundingClientRect()` distance (zoomed pixels) to the box's `scrollTop` (unzoomed pixels),
+    // which agree only while the box itself is unscaled. The messages and the spinner above are app
+    // chrome and stay unmarked; while one of them shows, the pane reports no area and its declared
+    // default area stands in.
     return (
       <div
         className="tw:flex-1 tw:overflow-auto"
         dir={options.textDirection}
         data-testid={RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID}
       >
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={handleScrRefChange}
-          options={options}
-          logger={logger}
-        />
+        <ContentZoomRoot area={contentZoomArea}>
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={handleScrRefChange}
+            options={options}
+            logger={logger}
+          />
+        </ContentZoomRoot>
       </div>
     );
   };
@@ -698,15 +713,6 @@ export function ResourceTextPanel({
   // This panel (Bible Texts / Commentaries) is Simple-mode-only, so `editor-container-simple`
   // (flattens .editor-container's rounded top corners — see _simple-mode.scss) is applied
   // unconditionally, unlike the Scripture Editor's conditional use of the same class.
-  //
-  // The ContentZoomRoot below is only reached once the panel has a project, is not mid-pick/install,
-  // has a configured readiness, and has not just failed an install. None of the earlier returns for
-  // those states (no project; selecting/installing; readiness not configured; install failed) mark a
-  // zoom area, so while any of them is on screen this pane reports no area and offers no per-pane
-  // zoom control until content arrives; what the platform does with a pane that reports no areas is
-  // core's to define and document. Acceptable: each of those states shows only chrome — a prompt, a
-  // spinner or an error — with no scripture content to scale. Some of them (an unconfigured
-  // readiness, a failed install) can stay on screen indefinitely without that changing.
   return (
     <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
       <ResourceSelectorDropdown
@@ -721,9 +727,7 @@ export function ResourceTextPanel({
         )}
       />
 
-      <ContentZoomRoot area={contentZoomArea} className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
-        {renderContent()}
-      </ContentZoomRoot>
+      <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{renderContent()}</div>
     </div>
   );
 

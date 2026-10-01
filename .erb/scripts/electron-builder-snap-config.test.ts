@@ -199,6 +199,37 @@ function readSnapToolsSteps(): { workflow: string; step: WorkflowStep | undefine
   });
 }
 
+/** The cap every remote-service step carries, as the header comment of each workflow states. */
+const REMOTE_STEP_TIMEOUT_MINUTES = 90;
+
+/** The job-level backstop for whatever the step caps miss. */
+const JOB_TIMEOUT_MINUTES = 180;
+
+/**
+ * Every `timeout-minutes` value in each snap-building workflow, split into job and step values and
+ * de-duplicated, named so a failure says which workflow drifted.
+ */
+function readWorkflowTimeouts(): { workflow: string; job: unknown[]; steps: unknown[] }[] {
+  return LINUX_RUNNER_WORKFLOWS.map((workflow) => {
+    const parsed: unknown = parseYaml(
+      readFileSync(path.join(REPO_ROOT, '.github', 'workflows', workflow), 'utf8'),
+    );
+    const jobs = (
+      isRecord(parsed) && isRecord(parsed.jobs) ? Object.values(parsed.jobs) : []
+    ).filter(isRecord);
+    const steps = jobs
+      .flatMap((job) => (Array.isArray(job.steps) ? job.steps : []))
+      .filter(isRecord)
+      .filter((step) => 'timeout-minutes' in step)
+      .map((step) => step['timeout-minutes']);
+    return {
+      workflow,
+      job: [...new Set(jobs.map((job) => job['timeout-minutes']))],
+      steps: [...new Set(steps)],
+    };
+  });
+}
+
 /** The npm script that checks the built snap's own metadata, as a workflow would invoke it. */
 const SNAP_METADATA_CHECK = 'npm run assert:snap-metadata';
 
@@ -268,6 +299,20 @@ describe('electron-builder snap configuration', () => {
     // that drifted.
     const [reference, ...others] = steps;
     expect(others).toEqual(others.map(({ workflow }) => ({ workflow, step: reference.step })));
+  });
+
+  it('bounds steps and jobs with the same timeouts in every snap-building workflow', () => {
+    // The three workflows run the same remote calls against the same services, so a cap raised or
+    // lowered in one file and not the others leaves one leg failing a slow run the rest survive.
+    // An empty `steps` list fails here too, so dropping every cap cannot pass as agreement.
+    expect(REMOTE_STEP_TIMEOUT_MINUTES).toBeLessThan(JOB_TIMEOUT_MINUTES);
+    expect(readWorkflowTimeouts()).toEqual(
+      LINUX_RUNNER_WORKFLOWS.map((workflow) => ({
+        workflow,
+        job: [JOB_TIMEOUT_MINUTES],
+        steps: [REMOTE_STEP_TIMEOUT_MINUTES],
+      })),
+    );
   });
 
   it('checks the built snap in every workflow that builds one', () => {

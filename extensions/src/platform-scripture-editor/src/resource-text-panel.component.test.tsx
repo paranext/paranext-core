@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon } from '@sillsdev/scripture';
+import { CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { PickerResource } from './downloaded-resources.utils';
 import {
@@ -62,6 +63,8 @@ const STRINGS = {
   '%webView_resourcePanel_installFailed%': "The resource couldn't be installed.",
   '%webView_resourcePanel_installFailedOffline%':
     "The resource couldn't be installed. Check your connection and try again.",
+  '%webView_resourcePanel_installedButUnavailable%':
+    "The resource is installed but couldn't be opened.",
   '%webView_resourcePanel_retry%': 'Try again',
   '%webView_resourcePanel_settingsUnavailable%': "Couldn't load your resources.",
   '%webView_resourcePanel_loading%': 'Loading…',
@@ -167,6 +170,7 @@ function makeProps(overrides: Partial<ResourceTextPanelProps> = {}): ResourceTex
     isSelecting: false,
     isInstalling: false,
     installFailed: false,
+    installFailureReason: undefined,
     retryInstall: vi.fn(),
     isOnline: true,
     // The panel's whole picker surface: it reports the activation and the web view owns the pick.
@@ -387,6 +391,23 @@ describe('ResourceTextPanel content that cannot be shown', () => {
   });
 });
 
+describe('ResourceTextPanel content zoom placement', () => {
+  it('marks the text inside the scroll box, so scrolling to a verse measures unzoomed pixels', () => {
+    // `scrollToVerse` adds a `getBoundingClientRect()` distance to the scroll box's `scrollTop`. A
+    // rect read under a zoomed ancestor is in zoomed pixels while `scrollTop` is not, so a marker on
+    // the scroll box or above it makes every scroll overshoot by the zoom factor.
+    renderPanel();
+    expectEditorShowing();
+
+    const scrollBox = screen.getByTestId(RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID);
+    const marker = screen.getByTestId('editorial').closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`);
+    expect(marker).not.toBeNull();
+    expect(marker).not.toBe(scrollBox);
+    expect(scrollBox.contains(marker)).toBe(true);
+    expect(scrollBox.closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`)).toBeNull();
+  });
+});
+
 describe('ResourceTextPanel logging', () => {
   it('logs a missing book at debug and any other failure at error', () => {
     // A named, terminal message looks the same whatever went wrong, so the log is the only place
@@ -461,5 +482,29 @@ describe('ResourceTextPanel pick in flight', () => {
 
     expect(screen.getByText(SELECTING)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: PICK_BIBLE_TEXTS })).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceTextPanel install failure', () => {
+  it('hints at the connection when an install was rejected while offline', () => {
+    renderPanel({ installFailed: true, installFailureReason: 'installRejected', isOnline: false });
+
+    expect(
+      screen.getByText(STRINGS['%webView_resourcePanel_installFailedOffline%']),
+    ).toBeInTheDocument();
+  });
+
+  it('says the resource is installed, with no connection hint, when the catalog has not caught up', () => {
+    // The download worked, so "couldn't be installed, check your connection" would be wrong twice.
+    renderPanel({
+      installFailed: true,
+      installFailureReason: 'listNotConverging',
+      isOnline: false,
+    });
+
+    expect(
+      screen.getByText(STRINGS['%webView_resourcePanel_installedButUnavailable%']),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't be installed/)).not.toBeInTheDocument();
   });
 });

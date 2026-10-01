@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -197,6 +198,11 @@ const EXEMPT: { file: string; contains: string; reason: string }[] = [
     reason: 'sample-data generator — composes no label',
   },
   {
+    file: 'lib/platform-bible-react/src/components/advanced/resource-picker-dialog/resource-picker-dialog.data.ts',
+    contains: 'language} Resource',
+    reason: 'many-language sample-data generator — composes no label',
+  },
+  {
     file: 'extensions/src/platform-get-resources/src/get-resources.stories.tsx',
     contains: 'language} Scripture',
     reason: 'story fixture — generates sample data, composes no label',
@@ -249,31 +255,47 @@ type Site = { site: string; line: string; relativePosix: string };
  * What it does guarantee is narrower and still worth having: a new single-line composition naming a
  * `*fullName` field fails this test until someone either adopts the helper or writes down in
  * `EXEMPT` why the site is not a project-name label.
+ *
+ * The files are read concurrently. On a cold file cache (Windows especially, where each first open
+ * is also scanned by the antivirus) reading ~2,000 files one at a time takes 30 s or more, past the
+ * test timeout; concurrent reads overlap that latency and finish several times faster. They also
+ * leave the worker's event loop free, so the timeout can fire instead of being overshot by a
+ * blocking scan.
  */
-function candidateSites(): Site[] {
-  return ROOTS.flatMap((root) => sourceFiles(path.join(REPO_ROOT, root))).flatMap((file) => {
+async function findCandidateSites(): Promise<Site[]> {
+  const files = ROOTS.flatMap((root) => sourceFiles(path.join(REPO_ROOT, root))).flatMap((file) => {
     const relative = path.relative(REPO_ROOT, file);
     if (SELF_REFERENTIAL_FILES.has(relative)) return [];
     const relativePosix = relative.split(path.sep).join('/');
-    if (!isSweptFile(relativePosix)) return [];
-    return readFileSync(file, 'utf8')
-      .split('\n')
-      .flatMap((line, index) => {
+    return isSweptFile(relativePosix) ? [{ file, relativePosix }] : [];
+  });
+  const sitesPerFile = await Promise.all(
+    files.map(async ({ file, relativePosix }) =>
+      (await readFile(file, 'utf8')).split('\n').flatMap((line, index) => {
         if (isCommentLine(line)) return [];
         if (HELPERS.test(line)) return [];
         if (!FULL_NAME_FIELD.test(line) || !COMPOSING_OPERATOR.test(line)) return [];
         return [{ site: `${relativePosix}:${index + 1}`, line, relativePosix }];
-      });
-  });
+      }),
+    ),
+  );
+  return sitesPerFile.flat();
+}
+
+/** One sweep shared by both tests, so the source tree is read once per run. */
+let candidateSitesPromise: Promise<Site[]> | undefined;
+function candidateSites(): Promise<Site[]> {
+  candidateSitesPromise ??= findCandidateSites();
+  return candidateSitesPromise;
 }
 
 describe('project-name formatting is adopted, not re-inlined', () => {
-  it('composes and de-dups project names only through the shared helper', () => {
+  it('composes and de-dups project names only through the shared helper', async () => {
     // `formatProjectName` owns the joined label and `hasDistinctFullName` owns
     // `fullName && fullName !== shortName`. A copy elsewhere means a surface can drift from the
     // others the next time the rule changes. A new site here is not necessarily a bug — but it has
     // to be triaged into EXEMPT with a reason rather than landing silently.
-    const violations = candidateSites()
+    const violations = (await candidateSites())
       .filter(
         (candidate) =>
           !EXEMPT.some(
@@ -285,11 +307,11 @@ describe('project-name formatting is adopted, not re-inlined', () => {
     expect(violations).toEqual([]);
   });
 
-  it('has no stale or over-broad exemption', () => {
+  it('has no stale or over-broad exemption', async () => {
     // An exemption keyed on too common a substring silently swallows a genuine future violation
     // that lands on another line of the same file, and one whose site is gone is dead weight that
     // reads as coverage. Requiring exactly one match makes both fail loudly.
-    const candidates = candidateSites();
+    const candidates = await candidateSites();
     const misMatched = EXEMPT.map((entry) => {
       const matches = candidates.filter(
         (candidate) =>

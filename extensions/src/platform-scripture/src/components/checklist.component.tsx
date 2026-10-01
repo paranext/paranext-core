@@ -4,6 +4,7 @@ import {
   AlertTitle,
   Button,
   ColumnDef,
+  ContentZoomRoot,
   DataTable,
   TabToolbar,
   ToggleGroup,
@@ -106,17 +107,20 @@ type ParagraphRowProps = {
 
 function ParagraphRow({ paragraph, showVerseText, markerAriaTemplate }: ParagraphRowProps) {
   return (
+    // Project text and the marker token zoom with the pane; the row keeps its indent at interface
+    // size, and backend error and message items stay unmarked because they are UI strings.
     <div
       className="tw:flex tw:flex-row tw:flex-wrap tw:items-baseline tw:gap-1"
       style={getMarkerIndentStyle(paragraph.marker)}
       data-marker={paragraph.marker}
     >
-      <span
+      <ContentZoomRoot
+        as="span"
         className="tw:font-mono tw:text-xs tw:font-semibold"
         aria-label={markerAriaTemplate.replace('{marker}', paragraph.marker)}
       >
         {`\\${paragraph.marker}`}
-      </span>
+      </ContentZoomRoot>
       {showVerseText &&
         paragraph.items.map((item, itemIndex) => {
           // Content items are an ordered, append-only list rendered by index within a paragraph;
@@ -128,33 +132,38 @@ function ParagraphRow({ paragraph, showVerseText, markerAriaTemplate }: Paragrap
           if (item.type === 'text') {
             if (item.characterStyle) {
               return (
-                <span
+                <ContentZoomRoot
+                  as="span"
                   key={itemKey}
                   className="tw:italic tw:text-muted-foreground"
                   data-character-style={item.characterStyle}
                 >
                   {`(\\${item.characterStyle} ${item.text.trim()})`}
-                </span>
+                </ContentZoomRoot>
               );
             }
             return (
-              <span key={itemKey} className="tw:text-foreground">
+              <ContentZoomRoot as="span" key={itemKey} className="tw:text-foreground">
                 {item.text}
-              </span>
+              </ContentZoomRoot>
             );
           }
           if (item.type === 'verse') {
             return (
-              <sup key={itemKey} className="tw:font-semibold tw:text-muted-foreground">
+              <sup
+                key={itemKey}
+                className="tw:font-semibold tw:text-muted-foreground"
+                data-platform-content-zoom-root=""
+              >
                 {item.verseNumber}
               </sup>
             );
           }
           if (item.type === 'link') {
             return (
-              <span key={itemKey} className="tw:underline tw:text-primary">
+              <ContentZoomRoot as="span" key={itemKey} className="tw:underline tw:text-primary">
                 {item.displayText}
-              </span>
+              </ContentZoomRoot>
             );
           }
           if (item.type === 'error') {

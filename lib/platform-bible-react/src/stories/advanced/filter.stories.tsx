@@ -146,6 +146,7 @@ export const Default: Story = {
             selected={selectedTypes}
             onChange={setSelectedTypes}
             placeholder="Filter by type"
+            searchPlaceholder="Search types…"
             customSelectedText={getCustomSelectedText()}
             icon={<Blocks />}
             badgesPlaceholder="No types selected"
@@ -197,6 +198,7 @@ export const MultipleBadges: Story = {
           selected={selectedTypes}
           onChange={setSelectedTypes}
           placeholder="Select types"
+          searchPlaceholder="Search types…"
           icon={<Blocks />}
           badgesPlaceholder="No filters applied"
         />
@@ -224,6 +226,7 @@ export const EmptyState: Story = {
           selected={selectedTypes}
           onChange={setSelectedTypes}
           placeholder="Filter by type"
+          searchPlaceholder="Search types…"
           icon={<Blocks />}
           badgesPlaceholder="No filters applied"
         />

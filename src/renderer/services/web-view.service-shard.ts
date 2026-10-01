@@ -24,6 +24,7 @@ import {
   getContentZoomBootstrapScript,
   getContentZoomStyleElement,
 } from '@renderer/services/web-view-content-zoom.bootstrap-script';
+import { getContentZoomDeclaration } from '@shared/models/content-zoom.model';
 import {
   adjustContentZoom,
   getInitialContentZoomForWebView,
@@ -2872,7 +2873,7 @@ export async function openOrReloadWebView(
       document.addEventListener('DOMContentLoaded', setUpThemeStylesheet);
     else setUpThemeStylesheet();
   })();
-  ${getContentZoomBootstrapScript(webView.id)}
+  ${getContentZoomBootstrapScript(webView.id, getContentZoomDeclaration(webView.webViewType)?.defaultArea)}
   `;
 
   /** Nonce used to allow scripts and styles to run */
@@ -3111,10 +3112,11 @@ export async function openOrReloadWebView(
   // not a URL iframe
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL) {
     const themeStylesheet = `<style nonce="${srcNonce}" id="${THEME_STYLE_ELEMENT_ID}" data-theme-id="${theme.id}">${getStylesheetForTheme(theme)}</style>`;
-    // A view that runs no scripts cannot run the zoom bootstrap, so it can never report the areas it
-    // marks and the platform scales its whole iframe at the default instead; baking the area rules
-    // as well would scale a marked element a second time, and CSS `zoom` compounds across the iframe
-    // boundary. Skipping the read with them also spares such a view a settings round trip.
+    // A view that runs no scripts cannot run the zoom bootstrap, so it never reports the areas it
+    // marks, and every web view type core declares zoomable runs scripts: such a view is not
+    // zoomable (`isContentZoomable`) and renders at 100 %. Baking the area rules would scale its
+    // marked elements anyway, to a level it offers no way to change or reset. Skipping the read with
+    // them also spares such a view a settings round trip.
     let contentZoomStyles = '';
     if (allowScripts) {
       const initialContentZoom = await getInitialContentZoomForWebView(webView);

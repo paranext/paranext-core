@@ -4,13 +4,12 @@ import React from 'react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
+// CUSTOM: Shared portal-container factory (also used by tooltip.tsx) so this workaround is defined once
+import { createPortalContainerContext } from '@/context/portal-container.context';
 // CUSTOM: Import direction helper for RTL support
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 // CUSTOM: Import shared z-index constant to ensure popovers stack above the dock
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
-// CUSTOM: Import the content-zoom area context so a popover opened from zoomed content follows
-// that area's zoom
-import { getContentZoomPopupStyle, useContentZoomArea } from '@/context/content-zoom-area.context';
 
 /**
  * The Popover component displays rich content in a portal, triggered by a button. This component is
@@ -28,91 +27,49 @@ function PopoverTrigger({ ...props }: React.ComponentProps<typeof PopoverPrimiti
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;
 }
 
-// CUSTOM: expand JSDoc — explain focus-trap rationale and add usage examples
-/* #region CUSTOM PopoverPortalContainerContext + Provider — let descendant PopoverContent portal into a custom container instead of document.body */
-// Backing context for `PopoverPortalContainerProvider`. See the provider's JSDoc for rationale.
-// eslint-disable-next-line no-null/no-null
-const PopoverPortalContainerContext = React.createContext<HTMLElement | null>(null);
+/* #region CUSTOM PopoverPortalContainerProvider — let descendant PopoverContent portal into a custom container instead of document.body */
+const { PortalContainerProvider, usePortalContainer: usePopoverPortalContainer } =
+  createPortalContainerContext();
 
+// CUSTOM: expand JSDoc — state the provider's contract and give a usage example. The shared factory
+// carries the general rationale, so this keeps only what a popover caller needs.
 /**
- * Overrides the container that descendant {@link PopoverContent} components portal into. Use it to
- * keep popovers inside a Radix `DialogContent`, `DropdownMenuContent`, or any other ancestor that
- * owns a focus trap or dismiss-on-outside-click layer.
+ * Keeps descendant {@link PopoverContent} inside `container` instead of `document.body`. Use it
+ * whenever a popover's trigger sits inside an ancestor that owns a focus trap or a
+ * dismiss-on-outside-click layer (`DialogContent`, `DropdownMenuContent`, …), which would otherwise
+ * pull focus out of the popover or treat a click inside it as an outside click.
  *
- * @remarks
- * Radix `Popover` portals its content to `document.body` by default, which works fine for top-level
- * UI. The default breaks down whenever a popover trigger lives inside an ancestor that:
+ * Contract:
  *
- * - Runs a focus trap (`Dialog`, `AlertDialog`, modal `DropdownMenu`) — the trap yanks focus back out
- *   of the popover the instant it opens because the portal'd content is outside the trap's DOM
- *   subtree.
- * - Listens for outside-clicks (Radix `DismissableLayer`, used by every `*Menu`/`Dialog`) — a click
- *   inside the popover reads as "outside the menu" and dismisses the parent immediately.
+ * - Pass `null` for `container` until the ancestor element exists (the initial state of a
+ *   ref-callback `useState`) to keep Radix's `document.body` default; once it exists, later opens
+ *   portal into it.
+ * - The ancestor must wrap this provider, not the other way round, so only its own descendants are
+ *   redirected.
+ * - Only affects popovers mounted as React descendants; already-open popovers are not re-portalled.
  *
- * Wrapping the children of the trapping ancestor in this provider, with that ancestor's element as
- * `container`, makes nested `PopoverContent` portal as a DOM descendant of the trap so both focus
- * and dismiss-layer logic accept it.
- *
- * Single descendant scope: a `PopoverPortalContainerProvider` only affects `PopoverContent` mounts
- * rendered as React children. It does not retroactively re-portal already-mounted popovers, and it
- * does not affect popovers in sibling subtrees.
- *
- * Initial-mount behavior: pass `null` for `container` (the initial value of a `useState<HTMLElement
- *
- * | null>(null)` paired with a ref callback on the ancestor) to keep Radix's default
- *
- * `document.body` behavior until the ancestor mounts. Once the element exists, future popover opens
- * portal into it. The triggering ancestor (the trap owner) must wrap, not be wrapped by, this
- * provider.
- * @example
- *
- * ```tsx
- * function ScopeMenu() {
- *   const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
- *
- *   return (
- *     <Dialog open={isOpen} onOpenChange={setIsOpen}>
- *       <DialogContent ref={setDialogEl}>
- *         <PopoverPortalContainerProvider container={dialogEl}>
- *           <BookChapterControl ... />
- *         </PopoverPortalContainerProvider>
- *       </DialogContent>
- *     </Dialog>
- *   );
- * }
- * ```
+ * `TooltipPortalContainerProvider` in `tooltip.tsx` does the same for tooltips.
  *
  * @example
  *
  * ```tsx
- * // Dropdown variant: same pattern, container is the DropdownMenuContent.
- * const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
- * <DropdownMenu>
- *   <DropdownMenuTrigger>...</DropdownMenuTrigger>
- *   <DropdownMenuContent ref={setContentEl}>
- *     <PopoverPortalContainerProvider container={contentEl}>
+ * const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+ *
+ * <Dialog open={isOpen} onOpenChange={setIsOpen}>
+ *   <DialogContent ref={setDialogEl}>
+ *     <PopoverPortalContainerProvider container={dialogEl}>
  *       <BookChapterControl ... />
  *     </PopoverPortalContainerProvider>
- *   </DropdownMenuContent>
- * </DropdownMenu>
+ *   </DialogContent>
+ * </Dialog>;
  * ```
  */
-function PopoverPortalContainerProvider({
-  container,
-  children,
-}: {
-  container: HTMLElement | null;
-  children: React.ReactNode;
-}) {
-  return (
-    <PopoverPortalContainerContext.Provider value={container}>
-      {children}
-    </PopoverPortalContainerContext.Provider>
-  );
-}
+const PopoverPortalContainerProvider = PortalContainerProvider;
 /* #endregion CUSTOM */
 
 /** @inheritdoc Popover */
+// CUSTOM: Carries no content-zoom marker and reads no zoom area, so this pop-up keeps interface
+// scale when opened from zoomed content; pop-ups never follow content zoom (see ContentZoomRoot).
 function PopoverContent({
   className,
   align = 'center',
@@ -123,14 +80,15 @@ function PopoverContent({
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   // CUSTOM: Read document direction to support RTL layouts
   const dir: Direction = readDirection();
-  // CUSTOM: Read portal container override (see PopoverPortalContainerContext above) so nested popovers stay inside modal dialogs.
-  const portalContainer = React.useContext(PopoverPortalContainerContext);
-  // CUSTOM: Read the content-zoom area this popover was opened from (undefined outside every area)
-  const zoomArea = useContentZoomArea();
+  // CUSTOM: Read portal container override (see PopoverPortalContainerProvider above) so nested
+  // popovers stay inside modal dialogs. The hook already resolves "no provider in scope" to
+  // undefined, which is what Radix's Portal wants for its document.body default, so nothing here
+  // has to coalesce it.
+  const portalContainer = usePopoverPortalContainer();
   return (
     // CUSTOM: When a PopoverPortalContainerProvider is in scope, portal into its container
     // instead of the default document.body so nested popovers stay inside modal dialogs.
-    <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
+    <PopoverPrimitive.Portal container={portalContainer}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}
@@ -138,43 +96,12 @@ function PopoverContent({
         className={cn(
           // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation; removed tw:z-50 to use shared constant below
           'pr-twp tw:flex tw:w-72 tw:origin-(--radix-popover-content-transform-origin) tw:flex-col tw:gap-2.5 tw:rounded-lg tw:bg-popover tw:p-2.5 tw:text-sm tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:outline-hidden tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95',
-          // CUSTOM: Inside a content-zoom area, cap the width at the space Radix reports as available,
-          // divided by the area's zoom factor: Radix measures in unzoomed pixels while this element's
-          // own lengths are zoomed, so the division keeps a zoomed popover inside the pane
-          // CUSTOM: Falls back to 100vw until Radix's size middleware publishes the real available
-          // width, so the measuring pass gets a real cap instead of an invalid var() computing to none
-          zoomArea !== undefined &&
-            'tw:max-w-[calc(var(--radix-popover-content-available-width,100vw)/var(--platform-content-zoom-popup-factor,1))]',
-          // CUSTOM: Inside a content-zoom area, also cap the height at the space Radix reports as
-          // available, divided by the area's zoom factor, so a tall zoomed popover stays inside the
-          // pane vertically too (same unzoomed-vs-zoomed pixel reason as the width cap above). The
-          // box scrolls, so content that cannot shrink to the capped size stays inside it instead of
-          // painting past its edges. That makes this element a clipping ancestor for anything
-          // rendered inside it: the editor's right-click menu portals into the footnote editor's
-          // root, a descendant, and stays inside this box only because the editor library clamps
-          // the menu against its clipping ancestors. A nested pop-up that does not do that would
-          // be clipped here.
-          // CUSTOM: Falls back to 100vh until Radix's size middleware publishes the real available
-          // height, so the measuring pass gets a real cap instead of an invalid var() computing to none
-          zoomArea !== undefined &&
-            'tw:max-h-[calc(var(--radix-popover-content-available-height,100vh)/var(--platform-content-zoom-popup-factor,1))] tw:overflow-y-auto',
           className,
         )}
         // CUSTOM: z-index uses shared constant instead of default tw:z-50, ensuring popover renders above the dock
-        // CUSTOM: Inside a content-zoom area, also carry the area's zoom factor, which both the width
-        // and the height cap above divide by
-        style={{
-          zIndex: Z_INDEX_ABOVE_DOCK,
-          ...(zoomArea === undefined ? undefined : getContentZoomPopupStyle(zoomArea)),
-          ...style,
-        }}
+        style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
         // CUSTOM: Apply document direction for RTL layout support
         dir={dir}
-        // CUSTOM: Inside a content-zoom area, mark the content with that area so the platform's zoom
-        // rule scales it, and flag it as pop-up content so the platform never counts it as a pane.
-        // It is portaled out of the area element, so it is a marker of its own, not a nested one.
-        data-platform-content-zoom-root={zoomArea}
-        data-platform-content-zoom-popup={zoomArea === undefined ? undefined : ''}
         {...props}
       />
     </PopoverPrimitive.Portal>

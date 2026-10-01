@@ -1,4 +1,5 @@
 import { useEvent } from 'platform-bible-react';
+import { deepEqual } from 'platform-bible-utils';
 import { useState, useCallback, useEffect, useRef } from 'react';
 
 // We don't add this to PAPI directly like other hooks because `this` has to be bound to a web view's iframe context
@@ -28,16 +29,29 @@ export function useWebViewState<T>(
   const defaultStateValueRef = useRef(defaultStateValue);
   defaultStateValueRef.current = defaultStateValue;
 
+  // Whether `state` holds the default value because the web view state has no value at stateKey.
+  // While it does, an update that still has no value at stateKey keeps the current default object
+  // instead of swapping in the caller's latest `defaultStateValue`, which is often a new object
+  // every render and would re-run the caller's effects on every unrelated state update
+  const isDefaultRef = useRef(false);
+
+  // `getWebViewState` returns the given default itself when the state has no value at stateKey
+  const readState = useCallback((key: string) => {
+    const value = this.getWebViewState(key, defaultStateValueRef.current);
+    // Identity, not deep equality: a saved object equal to the default is still a saved value. A
+    // saved primitive identical to the default counts as the default, which shows the same value
+    isDefaultRef.current = Object.is(value, defaultStateValueRef.current);
+    return value;
+  }, []);
+
   // Value of the WebView state for the given stateKey. Directly reflects the state value from the
   // WebView service; not changed directly in here
-  const [state, setStateInternal] = useState(() =>
-    this.getWebViewState(stateKey, defaultStateValueRef.current),
-  );
+  const [state, setStateInternal] = useState(() => readState(stateKey));
 
   useEffect(() => {
     // Get the setting for the new key when the key changes
-    setStateInternal(this.getWebViewState(stateKey, defaultStateValueRef.current));
-  }, [stateKey]);
+    setStateInternal(readState(stateKey));
+  }, [readState, stateKey]);
 
   // Keep the state value up-to-date with changes (internal to this hook and from external changes)
   useEvent(
@@ -46,11 +60,26 @@ export function useWebViewState<T>(
       ({ webView: { id: updatedWebViewId, state: updatedState } }) => {
         if (updatedWebViewId !== this.webViewId) return;
 
-        // We are trusting the developer used the correct type as we have no way to validate state
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        if (updatedState && stateKey in updatedState) setStateInternal(updatedState[stateKey] as T);
+        if (updatedState && stateKey in updatedState) {
+          isDefaultRef.current = false;
+          // An equal value saved as a new object (by this caller's own setState or by another
+          // writer) keeps the current object, so the caller's effects that depend on it don't re-run
+          setStateInternal((currentState) =>
+            deepEqual(currentState, updatedState[stateKey])
+              ? currentState
+              : // We are trusting the developer used the correct type as we have no way to validate state
+                // eslint-disable-next-line no-type-assertion/no-type-assertion
+                (updatedState[stateKey] as T),
+          );
+          return;
+        }
+
+        // No value at stateKey and the slot already shows the default, so keep it
+        if (isDefaultRef.current) return;
+
         // The state at stateKey was removed, so reset to default
-        else setStateInternal(defaultStateValueRef.current);
+        isDefaultRef.current = true;
+        setStateInternal(defaultStateValueRef.current);
       },
       [stateKey],
     ),
@@ -64,6 +93,9 @@ export function useWebViewState<T>(
   );
 
   const resetState = useCallback(() => {
+    // Take the reset branch of the update handler even if the slot already shows a default, so it
+    // switches to the latest `defaultStateValue`
+    isDefaultRef.current = false;
     this.resetWebViewState(stateKey);
   }, [stateKey]);
 

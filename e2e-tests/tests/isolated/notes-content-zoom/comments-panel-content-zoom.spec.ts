@@ -10,7 +10,6 @@
  */
 import { test, expect } from '../../../fixtures/comment.fixture';
 import {
-  areaBox,
   ctrlWheel,
   INDICATOR_SELECTOR,
   readContentZoomMemory,
@@ -89,22 +88,27 @@ test.describe('Comments panel content zoom in Simple mode', () => {
     const scopeBoxBaseline = await scopeTrigger.boundingBox();
     if (!scopeBoxBaseline) throw new Error('Scope filter trigger not found');
 
-    await test.step('wheel over the panel scales it and leaves the scope-filter row untouched', async () => {
+    await test.step('wheel over the panel zooms the comment text and leaves the card buttons and the scope-filter row untouched', async () => {
       const card = panelFrame.locator(`[role="option"][id="${projectACardThreadId}"]`);
-      const cardBoxBefore = await card.boundingBox();
-      if (!cardBoxBefore) throw new Error('Comment card not found');
+      const body = card.locator('[data-platform-content-zoom-root]', {
+        hasText: 'Project A comment zoom marker',
+      });
+      const readToggle = card.getByRole('button', { name: /^Mark as (read|unread)$/ });
+      const cardBox = await card.boundingBox();
+      const bodyBoxBefore = await body.boundingBox();
+      const toggleBoxBefore = await readToggle.boundingBox();
+      if (!cardBox || !bodyBoxBefore || !toggleBoxBefore)
+        throw new Error('Comment card, body or read toggle not found');
 
-      const box = await areaBox(panelFrame, '');
-      await ctrlWheel(mainPage, box, -120);
+      await ctrlWheel(mainPage, cardBox, -120);
       await expect.poll(() => readFactor(panelFrame, '')).toBe(1.1);
 
-      const cardBoxAfter = await card.boundingBox();
-      if (!cardBoxAfter) throw new Error('Comment card not found after zoom');
-      // A tight tolerance around the actual 1.1 factor: a wide band would also accept a ratio of
-      // 1.0, so a missing marker that left the whole-iframe fallback scaling nothing would pass
-      // unnoticed.
-      const ratio = cardBoxAfter.height / cardBoxBefore.height;
-      expect(ratio).toBeCloseTo(1.1, 1);
+      const bodyBoxAfter = await body.boundingBox();
+      const toggleBoxAfter = await readToggle.boundingBox();
+      if (!bodyBoxAfter || !toggleBoxAfter) throw new Error('Body or read toggle lost after zoom');
+      // A tight tolerance around 1.1, so a ratio of 1.0 (nothing marked) fails.
+      expect(bodyBoxAfter.height / bodyBoxBefore.height).toBeCloseTo(1.1, 1);
+      expect(Math.abs(toggleBoxAfter.height - toggleBoxBefore.height)).toBeLessThanOrEqual(1);
 
       const indicator = panelFrame.locator(INDICATOR_SELECTOR);
       await expect.poll(() => indicator.getAttribute('data-area'), { timeout: 2_000 }).toBe('main');
@@ -148,7 +152,10 @@ test.describe('Comments panel content zoom in Simple mode', () => {
     // default back — so re-establish a non-default level here for the re-point check below to
     // have something to remember.
     await test.step('re-establish a non-default level for project A', async () => {
-      const box = await areaBox(panelFrame, '');
+      const box = await panelFrame
+        .locator(`[role="option"][id="${projectACardThreadId}"]`)
+        .boundingBox();
+      if (!box) throw new Error('Comment card not found');
       await ctrlWheel(mainPage, box, -120);
       await expect.poll(() => readFactor(panelFrame, '')).toBe(1.1);
       await expect

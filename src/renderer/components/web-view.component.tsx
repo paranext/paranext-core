@@ -317,9 +317,8 @@ export function WebView({
     iframeHasLoadedRef.current = true;
     // Increment the tracker for the number of times the iframe has loaded
     setIframeHasLoadedTimes((prev) => prev + 1);
-    // Pushes the pane's current zoom. The whole-view fallback applies immediately to URL web views;
-    // for any other view it applies only after the grace period during which the bootstrap may
-    // report its zoom areas.
+    // Pushes the pane's current zoom variables and starts the wait that drops zoom areas left
+    // behind by content this load replaced. The iframe element itself is never scaled.
     applyContentZoomForWebView(id);
   }, [id]);
 
@@ -336,19 +335,25 @@ export function WebView({
     flushMessageBuffer();
 
     // Focus this WebView when it is loaded - focusing tab on mount in `platform-panel.component.tsx`
-    // doesn't always work perfectly with WebViews, so we also focus them here
-    (async () => {
-      try {
-        await windowService.setFocus({
-          focusType: 'tab',
-          id,
-        });
-      } catch (e) {
-        logger.warn(
-          `web-view.component on load failed to set focus on cross-origin webView ${id}: ${getErrorMessage(e)}`,
-        );
-      }
-    })();
+    // doesn't always work perfectly with WebViews, so we also focus them here.
+    // Hidden case: skipped when the tab is not in front of its group. rc-dock keeps an inactive
+    // tab's pane mounted with `display: none`, so its iframe has no client rects. An iframe loads
+    // there only when its web view was reloaded in the background (`bringToFront: false`), and
+    // focusing the tab would make it the active one, undoing that. A tab asked to come to the front
+    // is already active by the time its content loads.
+    if (iframe.getClientRects().length > 0)
+      (async () => {
+        try {
+          await windowService.setFocus({
+            focusType: 'tab',
+            id,
+          });
+        } catch (e) {
+          logger.warn(
+            `web-view.component on load failed to set focus on cross-origin webView ${id}: ${getErrorMessage(e)}`,
+          );
+        }
+      })();
 
     // Cross-origin iframes don't have contentDocument, and their focus works just fine without tracking
     // the active element in the iframe. No need to do more

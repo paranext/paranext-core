@@ -3,7 +3,6 @@ import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import {
   Button,
-  ContentZoomRoot,
   EmptyState,
   Popover,
   PopoverContent,
@@ -56,6 +55,7 @@ import { useTextCollectionProjectId } from './use-text-collection-project-id.hoo
 import {
   ResourceCollectionOptions,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+  isResourceCollectionViewMode,
   type ResourceCollectionViewMode,
 } from './resource-collection-options/resource-collection-options.component';
 import {
@@ -67,7 +67,7 @@ import { toGridResources } from './scripture-text-grid/grid-resources.utils';
 import { getGridBodyState } from './scripture-text-grid/grid-body-state.utils';
 import { isNonDblResource } from './resource-reference.utils';
 import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
-import { useResourceZoom } from './scripture-text-grid/use-resource-zoom.hook';
+import { useResourceContentZoom } from './scripture-text-grid/use-resource-content-zoom.hook';
 import {
   ZOOM_IN_KEY,
   ZOOM_OUT_KEY,
@@ -154,7 +154,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 }: WebViewProps) {
   const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
 
-  const zoom = useResourceZoom(useWebViewState);
+  // Each resource is its own content zoom area; the menus read the platform's levels for this tab
+  // and send the platform's zoom commands with this tab's id and the resource's area.
+  const zoom = useResourceContentZoom(webViewId, useWebViewState);
   const zoomMenuLabels = useMemo<ZoomMenuLabels>(
     () => ({
       zoomIn: localizedStrings[ZOOM_IN_KEY],
@@ -181,9 +183,15 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const sourcesRef = useRef(sources);
   sourcesRef.current = sources;
 
-  // View Options `viewMode` toggle; drives the grid body's verse/chapter layout. Persisted per web
-  // view via useWebViewState so the choice survives an app restart (mirrors resource-text-panel).
-  const [viewMode, setViewMode] = useWebViewState<ResourceCollectionViewMode>('viewMode', 'verse');
+  // View Options `viewMode` toggle; drives the grid body's layout. Persisted per web view via
+  // useWebViewState so the choice survives an app restart (mirrors resource-text-panel). A saved
+  // layout outlives the build that wrote it, so a mode this build cannot render — written by a
+  // newer one, or since renamed — falls back to the default rather than reaching the grid.
+  const [persistedViewMode, setViewMode] = useWebViewState<ResourceCollectionViewMode>(
+    'viewMode',
+    'verse',
+  );
+  const viewMode = isResourceCollectionViewMode(persistedViewMode) ? persistedViewMode : 'verse';
   // Resources whose install is in flight after a Get Resources pick (keyed by id so duplicate
   // display names can't drop each other's row); their names drive the "Installing {name}…" rows.
   const [installing, setInstalling] = useState<Array<{ id: string; name: string }>>([]);
@@ -194,8 +202,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const [refreshCounter, setRefreshCounter] = useState(0);
 
   // Chapter-context overlay opened from a verse cell; Escape closes it. Intentionally NOT cleared on
-  // a view-mode switch: chapter mode ignores it, and keeping it restores the open split when the user
-  // returns to verse mode.
+  // a view-mode switch: the other views ignore it, and keeping it restores the open split when the
+  // user returns to verse mode. The Escape handler below is gated on the verse view for that reason
+  // — it is a capture-phase listener, so leaving it live would swallow Escape in the other views for
+  // a split the reader cannot see.
   const [chapterContext, setChapterContext] = useState<ChapterContextResource | undefined>(
     undefined,
   );
@@ -217,14 +227,14 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   }, [localizedStrings]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || chapterContext === undefined) return;
+      if (event.key !== 'Escape' || chapterContext === undefined || viewMode !== 'verse') return;
       event.preventDefault();
       event.stopPropagation();
       handleCloseChapterContext();
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [chapterContext, handleCloseChapterContext]);
+  }, [chapterContext, handleCloseChapterContext, viewMode]);
 
   // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
   // installed project id the cell fetches chapter text with; project references need no lookup. It
@@ -239,7 +249,17 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     refetch: refetchCatalog,
   } = useRetryablePromise(
     useCallback(
-      () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      async () => {
+        // This grid acts on `installed` (it decides whether a pick needs a download), so it needs
+        // the reconciled flags rather than the snapshot `getCachedResources` answers with, which is
+        // one refresh behind. A failed refresh still leaves a usable catalog to read.
+        try {
+          await papi.commands.sendCommand('platformGetResources.refreshResourceFlags', false);
+        } catch (error) {
+          logger.warn(`Could not refresh DBL resource flags: ${getErrorMessage(error)}`);
+        }
+        return papi.commands.sendCommand('platformGetResources.getCachedResources');
+      },
       // refreshCounter is a refresh-trigger counter: the factory doesn't use its value, but each
       // bump creates a new function reference so the fetch re-runs and re-validates installed
       // flags — necessary after any installation completes.
@@ -603,11 +623,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           empty (a DBL ref resolves to a cell only once the cached list loads). The
           `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`.
 
-          Named as its own zoom area ("text-collection") so its remembered level is kept apart from
-          this project's other resource panes, which resolve to the same kind/identity pair and
-          would otherwise all read one remembered level. The View Options row above stays outside so
-          it keeps its size while the grid scales. */}
-      <ContentZoomRoot area="text-collection" className="tw:flex-1 tw:overflow-hidden">
+          The body itself is not a zoom area: each cell marks only its resource's text, with that
+          resource's own area (`resource-<id>`, see `resource-zoom-area.utils.ts`), so the cells'
+          name labels, reorder grips and zoom options buttons, the chapter-context chrome and the
+          empty and error states keep interface scale. Naming each resource's area keeps its
+          remembered level apart from the other resources' and from this project's other resource
+          panes, which resolve to the same kind/identity pair. */}
+      <div className="tw:flex-1 tw:overflow-hidden">
         {gridBodyState === 'catalogError' && (
           <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
             <RetryableErrorView
@@ -651,7 +673,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             getReorderAnnouncement={getReorderAnnouncement}
           />
         )}
-      </ContentZoomRoot>
+      </div>
     </div>
   );
 };

@@ -985,8 +985,8 @@ describe('prunePresentBookIds', () => {
   });
 
   it('returns the ORIGINAL array reference when nothing needs removing', () => {
-    // Identity, not just equality: the caller skips its state write on `!==`, which is what stops the
-    // effect from re-triggering itself.
+    // Identity, not just equality: the caller skips recomputation downstream on an unchanged
+    // reference, which is what keeps identity-keyed effects from re-firing.
     const selectedBookIds = ['GEN', 'EXO'];
     expect(prunePresentBookIds(['GEN', 'EXO', 'LEV'], selectedBookIds)).toBe(selectedBookIds);
   });

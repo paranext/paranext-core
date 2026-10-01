@@ -112,7 +112,7 @@
     "items": [
       {
         "label": "%webView_openProjectSettings%",
-        "localizeNotes": "Web view main menu > Project > Open Project Settings...",
+        "localizeNotes": "Web view main menu > Project > Open Project Settings... Simple's design calls this 'Project settings', but every mode and web view shares this item, so it cannot be relabelled for Simple alone.",
         "group": "platform.projectTop",
         "order": 3,
         "command": "platform.openSettings"
@@ -149,21 +149,21 @@
     "items": [
       {
         "label": "%tab_contextMenu_zoomIn%",
-        "localizeNotes": "Tab context menu > Zoom in. Enlarges the pane last used in this tab (for a tab with one pane, its whole content); the application's own menus and toolbars are unaffected.",
+        "localizeNotes": "Tab context menu > Zoom in. Enlarges the pane last used in this tab (for a tab with one pane, the tab's project text); the application's own menus and toolbars are unaffected.",
         "group": "platform.tabZoom",
         "order": 100,
         "command": "platform.webViewContentZoomIn"
       },
       {
         "label": "%tab_contextMenu_zoomOut%",
-        "localizeNotes": "Tab context menu > Zoom out. Shrinks the pane last used in this tab (for a tab with one pane, its whole content); the application's own menus and toolbars are unaffected.",
+        "localizeNotes": "Tab context menu > Zoom out. Shrinks the pane last used in this tab (for a tab with one pane, the tab's project text); the application's own menus and toolbars are unaffected.",
         "group": "platform.tabZoom",
         "order": 200,
         "command": "platform.webViewContentZoomOut"
       },
       {
         "label": "%tab_contextMenu_resetZoom%",
-        "localizeNotes": "Tab context menu > Reset zoom to default. Returns the pane last used in this tab (for a tab with one pane, its whole content) to the default size set in Settings; the application's own menus and toolbars are unaffected.",
+        "localizeNotes": "Tab context menu > Reset zoom to default. Returns the pane last used in this tab (for a tab with one pane, the tab's project text) to the default size set in Settings; the application's own menus and toolbars are unaffected.",
         "group": "platform.tabZoom",
         "order": 300,
         "command": "platform.webViewContentZoomReset"
