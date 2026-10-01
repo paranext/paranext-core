@@ -889,12 +889,64 @@ describe('classify', () => {
         detection: detected('NOASSERTION', 100, 'abc', text),
       });
 
-    it('checks no notices for an exception that records no credits', () => {
-      // Most exceptions record none: their rows are credited to the file's first notice, so there
-      // is no hand-typed credit to check and no operand to credit the file's other notices to.
-      const v = classifyWith(undefined);
+    it('needs no credits for a conjunction whose file states a single notice', () => {
+      // `pako`'s shape: every operand is credited to the one notice there is, which is all the
+      // file can say.
+      const text = ['Copyright (C) 2014 A', '', 'Permission is hereby granted ...'].join('\n');
+      const v = classifyWith(undefined, { text });
       expect(v.verdict).toBe('excepted');
       expect(v.copyrightByOperand).toBeUndefined();
+    });
+
+    it('needs no credits for a single identifier, however many notices its file states', () => {
+      // One operand prints one canonical text, so there is no operand to credit the wrong holder to.
+      const v = classifyWith(undefined, { spdx: 'MIT' });
+      expect(v.verdict).toBe('excepted');
+    });
+
+    it('does not count an unfilled template placeholder as a notice', () => {
+      // A raw license template pasted into a stacked file would otherwise have to be credited, and
+      // would then be printed as a copyright notice.
+      const text = [
+        'Copyright (C) 2014 A',
+        '',
+        'Copyright (c) <year> <copyright holders>',
+        '',
+        'Permission is hereby granted ...',
+      ].join('\n');
+      expect(classifyWith(undefined, { text }).verdict).toBe('excepted');
+    });
+
+    it('requires credits for a conjunction whose file states more than one notice', () => {
+      // Without them every operand is credited to the package's own notice, which names the wrong
+      // holder beside at least one operand. The refusal lists each notice whole, ready to copy.
+      const v = classifyWith(undefined);
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain(
+        '3 notices: "Copyright 2020 Stacked, Inc.", "Copyright (c) 2012 Sentry", ' +
+          '"Copyright (c) Meta Platforms, Inc. and affiliates."',
+      );
+    });
+
+    it('does not count the notice an unkeyed operand prints as crediting the file’s first', () => {
+      // An unkeyed operand prints the package's own notice, which can come from elsewhere, stop
+      // short of a wrapped holder list, or be absent - so only a key credits a notice.
+      const v = classifyWith({
+        MIT: 'Copyright (c) 2012 Sentry; Copyright (c) Meta Platforms, Inc. and affiliates.',
+      });
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('credits no operand with "Copyright 2020 Stacked, Inc."');
+    });
+
+    it('allows an operand the file states no notice for to be left unkeyed', () => {
+      // `pako`'s shape with more than one notice: every notice belongs to MIT, and the file says
+      // nothing for the other operand, so the only key it could carry would name MIT's holders.
+      const v = classifyWith({
+        MIT:
+          'Copyright 2020 Stacked, Inc.; Copyright (c) 2012 Sentry; ' +
+          'Copyright (c) Meta Platforms, Inc. and affiliates.',
+      });
+      expect(v.verdict).toBe('excepted');
     });
 
     it('carries the recorded credits onto the verdict the exception clears to', () => {
@@ -919,6 +971,8 @@ describe('classify', () => {
       const v = classifyWith({ MIT: '  ' });
       expect(v.verdict).toBe('blocked');
       expect(v.reason).toContain('gives MIT no notice');
+      // Nothing but separators would otherwise print `;` as the operand's credit line.
+      expect(classifyWith({ MIT: ' ; ' }).reason).toContain('gives MIT no notice');
     });
 
     it('refuses an empty or non-object value', () => {
@@ -1000,7 +1054,7 @@ describe('classify', () => {
         MIT: 'Copyright (c) 2012 Sentry',
       });
       expect(v.verdict).toBe('blocked');
-      expect(v.reason).toContain('"Copyright (c) Meta Platforms, Inc."');
+      expect(v.reason).toContain('"Copyright (c) Meta Platforms, Inc. and affiliates."');
       expect(v.reason).not.toContain('"Copyright (c) 2012 Sentry"');
     });
 
@@ -1043,9 +1097,7 @@ describe('classify', () => {
       expect(classifyWith({ MIT: all }, { text }).verdict).toBe('excepted');
     });
 
-    it('accepts a notice cut at a line break, leaving the lines that follow it optional', () => {
-      // `All rights reserved.` under a notice is part of its paragraph, and so is a permission
-      // grant a file runs on without a blank line - neither has to be typed into the credit.
+    it('accepts a notice with or without the All rights reserved. line under it', () => {
       const text = ['Copyright (c) 2012 A', 'All rights reserved.', '', 'Redistribution ...'].join(
         '\n',
       );
@@ -1053,6 +1105,67 @@ describe('classify', () => {
       expect(
         classifyWith({ MIT: 'Copyright (c) 2012 A All rights reserved.' }, { text }).verdict,
       ).toBe('excepted');
+    });
+
+    it('refuses a holder list cut where the file wraps it, and quotes the whole notice', () => {
+      // `chroma-js`'s shape: the ColorBrewer notice wraps its holders across two lines, and a
+      // credit stopping at the break would drop the last of them from the printed credit.
+      const text = [
+        'Copyright (c) 2011 A',
+        'All rights reserved.',
+        '',
+        'Copyright (c) 2002 B, C,',
+        'and D.',
+        '',
+        'Licensed under the Apache License ...',
+      ].join('\n');
+      const cut = classifyWith(
+        { 'BSD-3-Clause': 'Copyright (c) 2011 A', 'Apache-2.0': 'Copyright (c) 2002 B, C,' },
+        { spdx: '(BSD-3-Clause AND Apache-2.0)', text },
+      );
+      expect(cut.verdict).toBe('blocked');
+      expect(cut.reason).toContain('"Copyright (c) 2002 B, C,"');
+      expect(cut.reason).toContain('not a whole notice');
+      const uncredited = classifyWith(
+        { 'BSD-3-Clause': 'Copyright (c) 2011 A' },
+        { spdx: '(BSD-3-Clause AND Apache-2.0)', text },
+      );
+      expect(uncredited.reason).toContain('"Copyright (c) 2002 B, C, and D."');
+      const whole = classifyWith(
+        { 'BSD-3-Clause': 'Copyright (c) 2011 A', 'Apache-2.0': 'Copyright (c) 2002 B, C, and D.' },
+        { spdx: '(BSD-3-Clause AND Apache-2.0)', text },
+      );
+      expect(whole.verdict).toBe('excepted');
+      const none = classifyWith(undefined, { spdx: '(BSD-3-Clause AND Apache-2.0)', text });
+      expect(none.reason).toContain(
+        '"Copyright (c) 2011 A All rights reserved.", "Copyright (c) 2002 B, C, and D."',
+      );
+    });
+
+    it('ends a notice at a separator line under it', () => {
+      // A Markdown underline is not part of the holder, and is never typed into a credit.
+      const text = ['Copyright (c) 2013 A', '-----', '', 'Copyright (c) 2020 B'].join('\n');
+      const v = classifyWith(
+        { MIT: 'Copyright (c) 2013 A', 'Apache-2.0': 'Copyright (c) 2020 B' },
+        { text },
+      );
+      expect(v.verdict).toBe('excepted');
+    });
+
+    it('ends a notice where a grant runs on from it without a blank line', () => {
+      // The grant is license text, not part of the notice, and is never typed into a credit.
+      const text = [
+        'Copyright 2010 A. All rights reserved.',
+        'Permission is hereby granted, free of charge ...',
+        '',
+        'Copyright (c) 2020 B',
+        'Redistribution and use in source and binary forms ...',
+      ].join('\n');
+      const v = classifyWith(
+        { MIT: 'Copyright 2010 A. All rights reserved.', 'Apache-2.0': 'Copyright (c) 2020 B' },
+        { text },
+      );
+      expect(v.verdict).toBe('excepted');
     });
   });
 

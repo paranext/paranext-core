@@ -28,7 +28,7 @@ const PROSE_LINE = /^[ \t]*copyright\s+(?:notice|notices|holder|holders|law|and|
  * owner]`. Reproducing one as a package's notice would credit a holder that does not exist, which
  * is worse than stating that the package records none.
  */
-const UNFILLED_PLACEHOLDER =
+export const UNFILLED_PLACEHOLDER =
   /[[<](?:yyyy|year|years|name of copyright owner|copyright holders?|fullname|author|your name)[\]>]/i;
 
 /**
@@ -52,7 +52,7 @@ const UNFILLED_PLACEHOLDER =
  * the grant yields 82 fewer wrong results, loses no real notice, and keeps the continuation line on
  * 60 notices a title cut truncates.
  */
-const GRANT_START = new RegExp(
+export const GRANT_START = new RegExp(
   [
     'permission is hereby granted',
     'permission to use, copy',

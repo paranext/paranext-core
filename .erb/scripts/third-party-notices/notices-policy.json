@@ -102,7 +102,7 @@
       "reason": "Declared as a root runtime dependency, but its only import in src/main/main.ts is commented out, so webpack compiles no module for it and electron-builder does not pack it either - release/app/package.json, whose closure is the one packed unbundled, declares no dependencies. Nothing this repository distributes contains it."
     }
   },
-  "exceptionsNote": "A reviewed determination that clears one blocked package. Keyed by ecosystem:name and pinned to the exact license TEXT: the block returns the moment the package changes its license text, which is what a determination read off that text can no longer stand for. `version` records which version the determination was read against, so it stays re-checkable; it is provenance, not part of the key - a version bump that leaves the text byte-identical changes nothing this entry asserts. `copyrightByOperand` is optional and for a conjunction whose operands are granted by different holders: it maps an operand's SPDX id to the notice that operand is granted under, which is printed beside that operand's canonical text instead of the first notice in the package's file. Each key must be an operand of `spdx`, which must name more than one identifier; each value is copied whole from the pinned license file, several notices separated by `; `. A credit that is not a whole notice the file states is refused, and so are credits that leave any of the file's notices credited to no operand, even one for code the package does not ship today.",
+  "exceptionsNote": "A reviewed determination that clears one blocked package. Keyed by ecosystem:name and pinned to the exact license TEXT: the block returns the moment the package changes its license text, which is what a determination read off that text can no longer stand for. `version` records which version the determination was read against, so it stays re-checkable; it is provenance, not part of the key - a version bump that leaves the text byte-identical changes nothing this entry asserts. `copyrightByOperand` maps an operand's SPDX id to the notices that operand is granted under, printed beside that operand's canonical text instead of the package's own notice; it is required for a conjunction whose pinned license file states more than one notice. Each key must be an operand of `spdx`, which must name more than one identifier; each value is copied whole from the pinned license file, several notices separated by `; `, and only an `All rights reserved.` (or `Some rights reserved.`) on a line of its own at the end may be left off. Only a key credits a notice: a credit that is not a whole notice the file states is refused, and so are credits that leave any of the file's notices credited to no operand, even one for code the package does not ship today. Leave unkeyed only an operand the file states no notice for.",
   "exceptions": [
     {
       "package": "npm:bowser",
@@ -120,7 +120,11 @@
       "reason": "LICENSE holds two grants in one file - BSD-3-Clause for chroma.js itself and Apache-2.0 for the colorbrewer2.org colour tables it embeds - which is exactly the conjunction its package.json declares; no single-license matcher identifies a two-grant document, and both operands are on the allowed list.",
       "reviewer": "matt_lyons@sil.org",
       "date": "2026-08-21",
-      "textSha256": "85aae6740628115550c6e67a85e8f8e70835cd5b14d4a2cb878c90c998f506db"
+      "textSha256": "85aae6740628115550c6e67a85e8f8e70835cd5b14d4a2cb878c90c998f506db",
+      "copyrightByOperand": {
+        "BSD-3-Clause": "Copyright (c) 2011-2025, Gregor Aisch All rights reserved.",
+        "Apache-2.0": "Copyright (c) 2002 Cynthia Brewer, Mark Harrower, and The Pennsylvania State University."
+      }
     },
     {
       "package": "npm:posthog-node",
@@ -209,7 +213,11 @@
       "reason": "LICENSE is the ISC grant for the package, followed by an MIT grant covering the named icons derived from the Feather project; two grants in one file identify as neither, and both are on the allowed list.",
       "reviewer": "matt_lyons@sil.org",
       "date": "2026-08-21",
-      "textSha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57"
+      "textSha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+      "copyrightByOperand": {
+        "ISC": "Copyright (c) 2026 Lucide Icons and Contributors",
+        "MIT": "Copyright (c) 2013-present Cole Bemis"
+      }
     },
     {
       "package": "npm:mkdirp",

@@ -164,11 +164,11 @@ function exceptionRemedy(
     // Unconditional, because the case it covers is one the template cannot see coming: a file
     // stacking several grants is typically declared as ONE of them and identified as nothing, and
     // the reader writes the conjunction into "spdx" by hand.
-    '  If "spdx" is a conjunction whose operands are granted by different copyright holders, also',
-    '  record "copyrightByOperand", mapping each operand to the notices copied whole from this file',
-    '  (separate several with "; "), crediting every notice the file states to some operand;',
-    '  otherwise every operand\u2019s text is credited to the file\u2019s first notice. Leave it out',
-    '  for a single identifier: it would never be printed.',
+    '  If "spdx" is a conjunction and this file states more than one copyright notice, also record',
+    '  "copyrightByOperand", mapping each operand to the notices copied whole from this file',
+    '  (separate several with "; ") and crediting every notice the file states to some operand. An',
+    '  operand you leave out prints the package\u2019s own notice, so leave out only one the file',
+    '  states no notice for. Leave the field out for a single identifier: it would never be printed.',
     '  The exception is pinned to this exact license TEXT. If the package changes it, the block',
     '  returns and the exception must be reviewed again. "version" records what you read, so a',
     '  later reader can check the determination against the same thing; it does not pin anything.',

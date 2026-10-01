@@ -111,18 +111,22 @@ export type Exception = {
   textSha256: string;
   /**
    * The copyright notice(s) each operand of a conjunction's grant is made under, keyed by that
-   * operand's SPDX id, where they are not the package's first notice.
+   * operand's SPDX id.
    *
-   * The credit line beside a canonical text is otherwise the first notice in the package's license
-   * file - which, for a file stacking several grants, belongs to one of them. `posthog-node`'s
-   * LICENSE opens with PostHog's Apache-2.0 notice and carries its MIT grants for code vendored
-   * from Sentry, Meta, Expo and AgentCat further down, so without this the MIT section credits
-   * PostHog. Every key must be an operand of `spdx`, and `spdx` must name more than one identifier,
-   * since a single-identifier row prints no per-operand credit. Each value is one or more notices
-   * copied whole from the pinned license file and separated by `; `. `applyException` refuses a
-   * credit that is not a whole notice the file states, and refuses credits that leave any notice in
-   * the file credited to no operand - an exception outlives the code any one version ships. An
-   * operand with no key keeps the package's own notice.
+   * The credit line beside a canonical text is otherwise the package's own notice, read from the
+   * top of its license files - which, for a file stacking several grants, belongs to one of them.
+   * `posthog-node`'s LICENSE opens with PostHog's Apache-2.0 notice and carries its MIT grants for
+   * code vendored from Sentry, Meta, Expo and AgentCat further down, so without this the MIT
+   * section credits PostHog. Every key must be an operand of `spdx`, and `spdx` must name more than
+   * one identifier, since a single-identifier row prints no per-operand credit. Each value is one
+   * or more notices copied whole from the pinned license file and separated by `; `; only an `All
+   * rights reserved.` (or `Some rights reserved.`) on a line of its own at the end may be left off.
+   * `applyException` requires this field on a conjunction whose pinned file states more than one
+   * notice, refuses a credit that is not a whole notice the file states, and refuses credits that
+   * leave any notice in the file credited to no operand - an exception outlives the code any one
+   * version ships. Only a key credits a notice: an operand with no key prints the package's own
+   * notice, which counts toward none, so leave unkeyed only an operand the file states no notice
+   * for.
    */
   copyrightByOperand?: Record<string, string>;
 };

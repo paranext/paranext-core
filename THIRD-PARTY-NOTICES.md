@@ -8624,7 +8624,7 @@ rather than left blank.
 ### Apache-2.0 — canonical text, 6 packages
 
 - `@posthog/core@1.55.2` (npm) — Copyright 2020 Posthog / Hiberly, Inc.; Copyright 2015 Mixpanel, Inc.; Copyright 2021-2023 LiosK
-- `chroma-js@3.2.0` (npm) — Copyright (c) 2011-2025, Gregor Aisch All rights reserved.
+- `chroma-js@3.2.0` (npm) — Copyright (c) 2002 Cynthia Brewer, Mark Harrower, and The Pennsylvania State University.
 - `posthog-node@5.51.1` (npm) — Copyright 2020 Posthog / Hiberly, Inc.; Copyright 2015 Mixpanel, Inc.
 - `rc-new-window@0.1.13` (npm) — no copyright notice — an npm manifest has no field for one, and it bundles no license file to carry one
 - `CsvHelper@33.1.0` (NuGet) — Copyright © 2009-2024 Josh Close
@@ -8773,7 +8773,7 @@ THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH REGARD TO
 - `fsevents@2.3.3` (npm) — Copyright (C) 2010-2020 by Philipp Dunkel, Ben Noordhuis, Elan Shankar, Paul Miller
 - `imurmurhash@0.1.4` (npm) — Copyright (c) 2013 Gary Court, Jens Taylor
 - `isarray@1.0.0` (npm) — Copyright (c) 2013 Julian Gruber \<julian@juliangruber.com\>
-- `lucide-react@1.8.0` (npm) — Copyright (c) 2026 Lucide Icons and Contributors
+- `lucide-react@1.8.0` (npm) — Copyright (c) 2013-present Cole Bemis
 - `pako@1.0.11` (npm) — Copyright (C) 2014-2017 by Vitaly Puzrin and Andrei Tuputcyn
 - `posthog-node@5.51.1` (npm) — Copyright (c) 2012 Functional Software, Inc. dba Sentry; Copyright (c) 2017 Sentry; Copyright (c) Meta Platforms, Inc. and affiliates.; Copyright (c) 2015-present 650 Industries, Inc. (aka Expo); Copyright (c) 2025 AgentCat, Inc. (formerly MCPcat)
 - `react-remove-scroll-bar@2.3.8` (npm) — Copyright (c) 2025 Anton Korzunov \<thekashey@gmail.com\>

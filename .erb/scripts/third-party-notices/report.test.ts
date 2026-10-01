@@ -402,7 +402,7 @@ describe('a remedy the gate would reject is not offered', () => {
     // `posthog-node`'s shape: MIT declared, and a LICENSE stacking an Apache-2.0 grant over MIT
     // grants that nothing identifies. The reader records the conjunction by hand, so the template
     // cannot know one is coming, and without `copyrightByOperand` every operand's canonical text is
-    // credited to the file's first notice.
+    // credited to the package's own notice.
     const message = describeBlock(
       {
         ...block,
@@ -413,7 +413,7 @@ describe('a remedy the gate would reject is not offered', () => {
       POLICY,
     );
     expect(message).toContain('"copyrightByOperand"');
-    expect(message).toContain('first notice');
+    expect(message).toContain('crediting every notice the file states to some operand');
   });
 
   // A conjunction leaves `detected` undefined, so this printed a placeholder asking the reader for

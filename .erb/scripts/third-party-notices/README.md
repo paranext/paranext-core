@@ -158,13 +158,16 @@ and why every escape instrument is pinned.
 - An exception is pinned to one text hash, so the block returns the moment the package changes its
   license text — and the entry has to be reviewed again. `version` records what the determination
   was read against; it does not gate.
-- An exception recording a conjunction whose operands are granted by different holders (one file
-  stacking several grants) records `copyrightByOperand`, so each operand's canonical text is
-  credited to the holder that grants it rather than to whichever notice the file states first.
-  Each notice is copied whole from the pinned file, several separated by `; `. The gate refuses a
-  credit that is not a whole notice the file states, refuses credits that leave any of the file's
-  notices uncredited (even one for code the package does not ship today), and refuses the field on
-  a single identifier, where it would never print.
+- An exception recording a conjunction whose pinned file states more than one copyright notice
+  (one file stacking several grants) records `copyrightByOperand`, so each operand's canonical text
+  is credited to the holder that grants it rather than to whichever notice the file states first.
+  Each notice is copied whole from the pinned file, several separated by `; `; only an
+  `All rights reserved.` (or `Some rights reserved.`) on a line of its own at the end may be left
+  off. Only a key credits a notice; leave unkeyed only an operand the file states no notice for,
+  which then prints the package's own notice. The gate refuses such an exception without the
+  field, refuses a credit that is not a whole notice the file states, refuses credits that leave
+  any of the file's notices uncredited (even one for code the package does not ship today), and
+  refuses the field on a single identifier, where it would never print.
 - Only one `exceptions` entry per package. Re-review edits the entry in place; appending a second
   leaves the stale one in force, and `loadPolicy` refuses the file.
 
