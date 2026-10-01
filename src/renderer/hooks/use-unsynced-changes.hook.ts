@@ -39,9 +39,12 @@ function isSameSet(a: readonly string[] | undefined, b: readonly string[]): bool
  * make that claim on the strength of a failed read.
  *
  * Seeded from `paratextBibleSendReceive.getUnsyncedChanges` because
- * `paratextBibleSendReceive.onUnsyncedChangesChanged` fires on changes only. An event that lands
- * while the seed is in flight wins: it describes a later moment than the snapshot does. The same
- * set arriving again keeps the same array instance, so consumers can depend on identity.
+ * `paratextBibleSendReceive.onUnsyncedChangesChanged` fires only when the set changes, plus one
+ * baseline per backend start, and carries no replay for a subscriber that arrives later. An event
+ * that lands while the seed is in flight wins: it describes a later moment than the snapshot does.
+ * If the backend stays unreachable for longer than the seed's retry window during a cold start,
+ * this stays `undefined` until the next event arrives. The same set arriving again keeps the same
+ * array instance, so consumers can depend on identity.
  */
 export function useUnsyncedChanges(): readonly string[] | undefined {
   const [ids, setIds] = useState<readonly string[] | undefined>(undefined);
@@ -70,8 +73,8 @@ export function useUnsyncedChanges(): readonly string[] | undefined {
           }
         },
         apply,
-        // Out of budget with no answer: "we could not find out" is the only claim this has earned.
-        onExhausted: () => setIds(undefined),
+        // No `onExhausted`: the seed gives up only when nothing has answered, so `ids` is still the
+        // `undefined` that says the set is not known.
         hasEventApplied: () => hasAppliedEventRef.current,
         runRef,
         logLabel: 'unsynced changes',

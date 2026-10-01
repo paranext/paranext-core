@@ -632,6 +632,9 @@ export function useSyncStatus(): SyncStatusInfo {
     didClaimSeeActivitySyncRef.current = false;
   }, [activitySyncing, claimStatus]);
 
+  const unsyncedProjectIds = useUnsyncedChanges();
+  const hasUnsynced = (unsyncedProjectIds?.length ?? 0) > 0;
+
   /**
    * The single derived status. The OR is deliberate and monotone: either input claiming a sync is
    * enough — including when the claim's own read has failed (`claimStatus === 'unknown'`), since
@@ -664,8 +667,6 @@ export function useSyncStatus(): SyncStatusInfo {
    * not be read nor a stale verdict unmakes a fact read from the repository. A set that is not
    * known (`undefined`) is no input at all, never a claim that something is unsent.
    */
-  const unsyncedProjectIds = useUnsyncedChanges();
-  const hasUnsynced = (unsyncedProjectIds?.length ?? 0) > 0;
   const status: SyncStatus = (() => {
     if (activitySyncing) return 'syncing';
     // A claim that is itself reporting a sync is describing the current one, not an earlier one.
@@ -751,9 +752,9 @@ function useProjectNames(projectIds: readonly string[]): readonly SyncingProject
             // same project the same way the picker does.
             name: metadataById.get(normalizeProjectId(projectId))?.name ?? projectId,
           }))
-          // Input order carries no meaning — the claim's contract says its order can differ between
-          // reads of the same set — so sorting is what keeps an open popover from reshuffling under the user. Ties
-          // break on id, because two projects sharing a display name (or both falling back to their
+          // Input order carries no meaning — no input guarantees one, and the same set can arrive
+          // in a different order between reads — so sorting is what keeps an open popover from
+          // reshuffling under the user. Ties break on id, because two projects sharing a display name (or both falling back to their
           // id) would otherwise be left in exactly the meaningless order the sort exists to remove.
           .sort(
             (a, b) =>
