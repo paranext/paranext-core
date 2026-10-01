@@ -188,10 +188,10 @@ compensates for an expected divergence — there isn't one.
 a range over a marker glyph, a verse or chapter number, a note caller, or an attribute value
 (`['lemma'] propertyOffset …`); the editor holds it on those bytes (same CSS classes as a `<mark>`,
 plus `display-annotation`, painted whole) and never changes the document for it. An annotation holds
-exactly the bytes its range names; a range into part of a char span or note holds only that part —
-the text is marked piece by piece, and the span's own marker glyphs the range passes over without
-covering the span whole hold the annotation as display bytes instead. `getUsj()` never carries it,
-and `setUsj` drops every annotation, so the host re-applies from its own anchors —
+exactly the bytes its range names; a range into part of a char span, note or figure holds only that
+part — the text is marked piece by piece, and the span's own marker glyphs the range passes over
+without covering the span whole hold the annotation as display bytes instead. `getUsj()` never
+carries it, and `setUsj` drops every annotation, so the host re-applies from its own anchors —
 `annotationInfoByIdRef` in `platform-scripture-editor.web-view.tsx` keeps each range.
 
 `onRemove`: each `<mark>` reports its own removal when it goes away — one call per `<mark>`, whatever
