@@ -151,6 +151,18 @@ public static class Program
                 paratextSendReceiveService
             );
 
+            // Track and announce projects with local changes not yet sent (event +
+            // getUnsyncedChanges).
+            var unsyncedChangesTracker = new UnsyncedChangesTracker(
+                paratextSendReceiveService,
+                paratextProjects
+            );
+            unsyncedChangesTracker.Start();
+            var unsyncedChangesNotifierService = new UnsyncedChangesNotifierService(
+                papi,
+                unsyncedChangesTracker
+            );
+
             StartupTiming.Mark("init-barrier-start");
             // Critical path: everything the renderer needs to list projects and open an editor.
             await Task.WhenAll(
@@ -161,9 +173,14 @@ public static class Program
                 paratextSendReceiveService.InitializeAsync(),
                 dblResources.RegisterDataProviderAsync(),
                 sendReceiveBlockNotifierService.InitializeAsync(),
-                syncActivityNotifierService.InitializeAsync()
+                syncActivityNotifierService.InitializeAsync(),
+                unsyncedChangesNotifierService.InitializeAsync()
             );
             StartupTiming.Mark("init-barrier-end");
+
+            // Off the barrier: one `hg status` per local project, in the background; the result
+            // arrives as an onUnsyncedChangesChanged event when it differs from the empty baseline.
+            unsyncedChangesTracker.StartBaselineScan();
 
             // Things that only run in our "noisy dev mode" go here
             var noisyDevModeEnvVar = Environment.GetEnvironmentVariable("DEV_NOISY");
