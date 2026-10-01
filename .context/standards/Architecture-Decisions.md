@@ -7981,7 +7981,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   switches on in a Studio build, and a missing tip id means "unknown", never "synced". The contract
   is declared in core's `.d.ts` only, as with the other C#-served Send/Receive seams, so the
   extension repository registers nothing for it. Because every emit is a full snapshot, a lost event
-  self-heals on the next write or sync end.
+  self-heals on the next write or sync end. The tracker consumes the Send/Receive write gate's disarm
+  (`SendReceiveWriteLock.BlockStateChanged`) as a sync-end signal alongside `SyncActivityChanged`,
+  because as of 2026-10-01 the Paratext 10 patch raises no sync activity signal; once it does, a
+  sync can trigger the recheck twice, and the tracker's per-project claim coalesces the second pass
+  into at most one extra check per project.
 - **Source:** PT-4694; the follow-up of `adr-toolbar-sync-status-is-local`.
 
 ## adr-usersnap-lives-in-product-patch: Usersnap keys and Help items live in the product's repo patch; core ships empty constants
