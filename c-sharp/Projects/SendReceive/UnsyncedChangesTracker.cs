@@ -19,8 +19,17 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// requests exactly one re-run, so the last write is always observed. No check starts while a sync
 /// is active — the project is parked and rechecked at the sync-end transition. A check that started
 /// just before a sync is harmless: it only reads, and the sync-end recheck corrects its result.
-/// This relies on the sync-activity source already reporting idle when it raises the sync-end
-/// transition.
+/// </para>
+/// <para>
+/// Two sync signals are consumed, and "a sync is active" means either one says so:
+/// <see cref="ParatextProjectSendReceiveService.SyncActivityChanged"/> is authoritative for every
+/// sync path but is absent from builds that predate it, while
+/// <see cref="SendReceiveWriteLock.BlockStateChanged"/> is armed by every real sync. The end of
+/// either one triggers the recheck; when both end one sync, the per-project claim absorbs the
+/// second pass into at most one extra check per project. This relies on each source already
+/// reporting idle through its live read (<see cref="ParatextProjectSendReceiveService.GetSyncActivity"/>,
+/// <see cref="SendReceiveWriteLock.GetBlockState"/>) when it raises its end transition; if the other
+/// signal is still active then, the recheck parks again and runs when that one ends.
 /// </para>
 /// </summary>
 internal sealed class UnsyncedChangesTracker : IDisposable
@@ -56,7 +65,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     )
         : this(
             projectId => DetectInProject(service, projectId),
-            () => service.GetSyncActivity().IsSyncing,
+            () => IsAnySyncActive(service),
             () =>
                 projects
                     .GetAvailableUnpublishedProjectDetails()
@@ -103,7 +112,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     }
 
     /// <summary>
-    /// Subscribes to write-scope exits and sync-activity transitions. Idempotent; does nothing on a
+    /// Subscribes to write-scope exits and both sync signals. Idempotent; does nothing on a
     /// tracker built with the test constructor, which is driven directly instead.
     /// </summary>
     public void Start()
@@ -114,6 +123,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
                 return;
             _started = true;
             SendReceiveWriteLock.WriteScopeExited += OnWriteScopeExited;
+            SendReceiveWriteLock.BlockStateChanged += OnBlockStateChanged;
             _service.SyncActivityChanged += OnSyncActivityChanged;
         }
     }
@@ -152,13 +162,32 @@ internal sealed class UnsyncedChangesTracker : IDisposable
         _ = DebounceThenCheckAsync(id, debounce);
     }
 
-    /// <summary>
-    /// At the end of a sync, rechecks every project seen so far plus every check parked during it.
-    /// </summary>
+    /// <summary>At the end of a sync run, rechecks; see <see cref="RecheckAfterSync"/>.</summary>
     internal void OnSyncActivityChanged(SyncActivityState state)
     {
-        if (state.IsSyncing)
-            return;
+        if (!state.IsSyncing)
+            RecheckAfterSync();
+    }
+
+    /// <summary>
+    /// When the write gate disarms, rechecks; see <see cref="RecheckAfterSync"/>. Arming needs no
+    /// action: checks consult the gate when they start.
+    /// </summary>
+    internal void OnBlockStateChanged(SendReceiveBlockState state)
+    {
+        if (!state.IsBlocking)
+            RecheckAfterSync();
+    }
+
+    /// <summary>
+    /// Whether either sync signal reports an active sync: the run marker or the armed write gate.
+    /// </summary>
+    internal static bool IsAnySyncActive(ParatextProjectSendReceiveService service) =>
+        service.GetSyncActivity().IsSyncing || SendReceiveWriteLock.GetBlockState().IsBlocking;
+
+    /// <summary>Rechecks every project seen so far plus every check parked during the sync.</summary>
+    private void RecheckAfterSync()
+    {
         string[] ids;
         lock (_lock)
         {
@@ -194,6 +223,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
             if (_started)
             {
                 SendReceiveWriteLock.WriteScopeExited -= OnWriteScopeExited;
+                SendReceiveWriteLock.BlockStateChanged -= OnBlockStateChanged;
                 _service!.SyncActivityChanged -= OnSyncActivityChanged;
             }
             debounces = [.. _debounces.Values];
@@ -205,16 +235,23 @@ internal sealed class UnsyncedChangesTracker : IDisposable
 
     private static bool? DetectInProject(ParatextProjectSendReceiveService service, string id)
     {
-        ScrText? scrText;
+        ScrText scrText;
         try
         {
             scrText = LocalParatextProjects.GetParatextProject(id);
         }
-        catch (Exception)
+        catch (ProjectNotFoundException)
         {
-            return null; // not found or not a valid project id: unknown
+            return null; // removed or never existed: an expected outcome, not worth a log line
         }
-        return scrText is null ? null : service.HasUnsyncedLocalChanges(scrText);
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"[UnsyncedChangesTracker] Could not resolve project {id}: {ex}"
+            );
+            return null;
+        }
+        return service.HasUnsyncedLocalChanges(scrText);
     }
 
     private static IEnumerable<string> Normalize(IEnumerable<string> projectIds) =>
