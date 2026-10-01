@@ -7847,6 +7847,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
      the state controller also covers `runScheduledSessionSync` and the auto-sync engine. Under the
      new semantics a background sync raises the interactive "Apply now" prompt to someone who took no
      action. This decision establishes the contradiction rather than causing it. Owner: core.
+- **Follow-up resolved (2026-10-01):** the deferred "Unsynced changes" state is now derived from a
+  backend signal; see `adr-unsynced-changes-signal-is-backend-read`.
 - **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
 
@@ -7935,6 +7937,52 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   determination AND the text to reproduce, not a relaxation of the gate.
 - **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
   `policyRemedy`.
+
+## adr-unsynced-changes-signal-is-backend-read: "Unsynced changes" is read from the project's local Mercurial state in the backend and pushed as a snapshot
+
+- **Date:** 2026-10-01
+- **Status:** Accepted
+- **Context:** PT-4694. `adr-toolbar-sync-status-is-local` deferred the toolbar's "Unsynced changes"
+  state because nothing Send/Receive emits says that a project holds local work that was never sent.
+  Home's edited dot cannot stand in for it: `SharedProjectInfo.editedStatus` comes from a server round
+  trip inside `getSharedProjects` and is refreshed only after a sync completes, so a local edit never
+  updates it. The truth is "the working directory differs from the last synced state", which has two
+  halves: uncommitted changes (`HasUncommittedChanges`, an `hg status`) and changes already committed
+  locally but never sent (the editor commits daily on project open and Find/Replace commits on
+  demand), visible as a tip id that differs from the last-synced tip id kept in the Send/Receive
+  memento. Uncommitted-only detection would go dark after the first local commit.
+- **Decision:** The backend owns the answer. A write-gate exit
+  (`SendReceiveWriteLock.WriteScopeExited`) triggers a debounced local Mercurial check for that
+  project, and the end of a sync rechecks every tracked project; checks are deferred while a sync is
+  in flight so `hg status` never runs against a repository a sync is replacing. A baseline scan after
+  the startup barrier covers edits made in a previous session. `UnsyncedChangesTracker` holds the set
+  and `UnsyncedChangesNotifierService` publishes it as a full snapshot on
+  `SendReceiveSnapshotNotifierService<T>` (event `paratextBibleSendReceive.onUnsyncedChangesChanged`,
+  seed command `getUnsyncedChanges`), the same pattern as sync activity. The renderer's
+  `useSyncStatus` gains `'unsynced'` with the precedence syncing, then failed, then unsynced, then
+  synced, then idle or unknown: a failed last sync already implies unsent work and is the more
+  actionable fact. Home's dot and Sync button read the same event. The signal is strictly "local
+  changes not yet sent"; "the server has changes waiting to be received" is out of scope because it
+  needs server polling. Detection errors (no Mercurial, broken repository) log once per project and
+  report "not unsynced" rather than guess.
+- **Alternatives:** **An in-memory dirty flag set on writes and cleared on sync** — rejected: it is
+  wrong after a restart, when the unsent edits are still on disk, and it reports false positives for
+  writes that change nothing (a no-op `PutText`, a settings save of an equal value). The Mercurial
+  state is the thing being asked about, so read it. **Polling `getSharedProjects`** — rejected: every
+  poll is a server round trip, the call is serialized against syncs so it stalls exactly when the
+  answer is most interesting, and its edited status measures "modified by anyone against the server
+  tip", not "modified here since the last sync". **Uncommitted-only detection** — rejected: it goes
+  dark after a local commit that was never sent.
+- **Consequences:** One `hg status` runs per debounced write burst per project, and one per project
+  during the startup baseline scan, which is why the scan runs after the startup barrier rather than
+  on it. The last-synced tip id is owned by the Paratext 10 Studio patch: public core declares
+  `GetLastSyncedTipId` as a stub returning `null`, and the patch fills it from the Send/Receive
+  memento. Public core therefore detects uncommitted edits only; the committed-but-unsent half
+  switches on in a Studio build, and a missing tip id means "unknown", never "synced". The contract
+  is declared in core's `.d.ts` only, as with the other C#-served Send/Receive seams, so the
+  extension repository registers nothing for it. Because every emit is a full snapshot, a lost event
+  self-heals on the next write or sync end.
+- **Source:** PT-4694; the follow-up of `adr-toolbar-sync-status-is-local`.
 
 ## adr-usersnap-lives-in-product-patch: Usersnap keys and Help items live in the product's repo patch; core ships empty constants
 
