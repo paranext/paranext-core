@@ -371,8 +371,12 @@ jobs:
         timeout-minutes: 90
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Lists only this artifact name, on the server, and pages through the results: the
+        # unfiltered repo-wide list is big enough that GitHub sometimes returns it cut off
+        # ("unexpected end of JSON input"), and one unpaged page holds only the newest 30 artifacts.
+        # Empty lines are skipped so no DELETE is sent without an id.
         run: |
-          (gh api -X GET /repos/${{ github.repository }}/actions/artifacts --jq '.artifacts[] | select(.name == "app-windows-test" and .workflow_run.head_branch == "${{ github.ref_name }}") | .id') -split "`n" | ForEach-Object { gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/$_ }
+          gh api --paginate "/repos/${{ github.repository }}/actions/artifacts?name=app-windows-test&per_page=100" --jq '.artifacts[] | select(.workflow_run.head_branch == "${{ github.ref_name }}") | .id' | Where-Object { $_ } | ForEach-Object { gh api -X DELETE "/repos/${{ github.repository }}/actions/artifacts/$_" }
 
       - name: Rename Windows exe to include GitHub Action Run ID
         if: ${{ matrix.os == env.OS_WINDOWS }}
@@ -401,8 +405,9 @@ jobs:
         timeout-minutes: 90
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Filtered and paged on the server, like the Windows step above.
         run: |
-          gh api -X GET /repos/${{ github.repository }}/actions/artifacts --jq '.artifacts[] | select(.name == "app-macos-test" and .workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/{}
+          gh api --paginate "/repos/${{ github.repository }}/actions/artifacts?name=app-macos-test&per_page=100" --jq '.artifacts[] | select(.workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE "/repos/${{ github.repository }}/actions/artifacts/{}"
 
       - name: Rename macOS dmg to include GitHub Action Run ID
         if: ${{ matrix.os == env.OS_MACOS }}
@@ -428,8 +433,9 @@ jobs:
         timeout-minutes: 90
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Filtered and paged on the server, like the Windows step above.
         run: |
-          gh api -X GET /repos/${{ github.repository }}/actions/artifacts --jq '.artifacts[] | select(.name == "app-linux-test" and .workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/{}
+          gh api --paginate "/repos/${{ github.repository }}/actions/artifacts?name=app-linux-test&per_page=100" --jq '.artifacts[] | select(.workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE "/repos/${{ github.repository }}/actions/artifacts/{}"
 
       # `!cancelled()` rather than the implicit `success()`, matching the Playwright upload above: a
       # snap that fails the metadata check is the one someone needs to unsquash to see what shipped,
