@@ -163,7 +163,7 @@
       },
       {
         "label": "%tab_contextMenu_resetZoom%",
-        "localizeNotes": "Tab context menu > Reset zoom to default. Returns the pane last used in this tab (for a tab with one pane, the tab's project text) to the default size set in Settings; the application's own menus and toolbars are unaffected.",
+        "localizeNotes": "Tab context menu > Zoom reset. Returns the pane last used in this tab (for a tab with one pane, the tab's project text) to the default size set in Settings; the application's own menus and toolbars are unaffected.",
         "group": "platform.tabZoom",
         "order": 300,
         "command": "platform.webViewContentZoomReset"

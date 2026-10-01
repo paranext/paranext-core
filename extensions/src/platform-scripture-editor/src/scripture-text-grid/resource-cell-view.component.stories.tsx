@@ -483,7 +483,7 @@ export const PartialFailureRow: Story = {
 const zoomMenuLabels = {
   zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom in',
   zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom out',
-  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Reset zoom',
+  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Zoom reset',
   options: localizedStrings[ZOOM_OPTIONS_KEY] ?? 'Zoom options for {resourceName}',
 };
 
@@ -541,12 +541,12 @@ export const ZoomOptionsOpen: Story = {
       const menu = within(canvas.getByRole('menu'));
       await expect(menu.getByRole('menuitem', { name: /^zoom in/i })).toBeVisible();
       await expect(menu.getByRole('menuitem', { name: /^zoom out/i })).toBeVisible();
-      await expect(menu.getByRole('menuitem', { name: /^reset zoom/i })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: /^zoom reset/i })).toBeVisible();
     });
   },
 };
 
-/** At 300 %: Zoom in is disabled, Zoom out and Reset zoom stay enabled. */
+/** At 300 %: Zoom in is disabled, Zoom out and Zoom reset stay enabled. */
 export const AtMaxZoomMenuOpen: Story = {
   render: () => (
     <CellBox>
@@ -617,7 +617,7 @@ export const AtMinZoomMenuOpen: Story = {
 };
 
 /**
- * A resource with no zoom level of its own follows the Tab content default zoom, so Reset zoom has
+ * A resource with no zoom level of its own follows the Tab content default zoom, so Zoom reset has
  * nothing to undo and is disabled.
  */
 export const ResetDisabledWithoutOwnLevel: Story = {
@@ -642,9 +642,9 @@ export const ResetDisabledWithoutOwnLevel: Story = {
     await step('Open the zoom options menu', async () => {
       await user.click(canvas.getByRole('button', { name: /zoom options for WEB/i }));
     });
-    await step('Assert Reset zoom is disabled', async () => {
+    await step('Assert Zoom reset is disabled', async () => {
       const menu = within(canvas.getByRole('menu'));
-      await expect(menu.getByRole('menuitem', { name: /^reset zoom/i })).toHaveAttribute(
+      await expect(menu.getByRole('menuitem', { name: /^zoom reset/i })).toHaveAttribute(
         'aria-disabled',
         'true',
       );

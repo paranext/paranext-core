@@ -354,7 +354,7 @@ const menuStrings = {
 const zoomMenuLabels = {
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
-  reset: 'Reset zoom',
+  reset: 'Zoom reset',
   options: 'Zoom options for {resourceName}',
 };
 
@@ -546,7 +546,7 @@ describe('ResourceCellView right-click menu', () => {
 
 describe('ResourceCellView zoom menus', () => {
   it.each(['inline', 'header'] as const)(
-    '%s layout: the right-click menu offers Copy, a separator, Zoom in, Zoom out and Reset zoom, in that order',
+    '%s layout: the right-click menu offers Copy, a separator, Zoom in, Zoom out and Zoom reset, in that order',
     (nameDisplay) => {
       renderCells(
         <ResourceCellView
@@ -566,7 +566,7 @@ describe('ResourceCellView zoom menus', () => {
         '—',
         'Zoom in',
         'Zoom out',
-        'Reset zoom',
+        'Zoom reset',
       ]);
     },
   );
@@ -590,7 +590,7 @@ describe('ResourceCellView zoom menus', () => {
     const menu = screen.getByRole('menu');
     expect(zoomMenuItem('Zoom in')).toHaveAttribute('aria-disabled', 'true');
     expect(zoomMenuItem('Zoom out')).not.toHaveAttribute('aria-disabled', 'true');
-    expect(zoomMenuItem('Reset zoom')).toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Zoom reset')).toHaveAttribute('aria-disabled', 'true');
     fireEvent.keyDown(menu, { key: 'Escape' });
 
     rerender(
@@ -614,7 +614,7 @@ describe('ResourceCellView zoom menus', () => {
     expect(screen.getByRole('menu')).toBeInTheDocument();
     expect(zoomMenuItem('Zoom in')).not.toHaveAttribute('aria-disabled', 'true');
     expect(zoomMenuItem('Zoom out')).toHaveAttribute('aria-disabled', 'true');
-    expect(zoomMenuItem('Reset zoom')).not.toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Zoom reset')).not.toHaveAttribute('aria-disabled', 'true');
   });
 
   it('choosing each zoom item calls its callback', async () => {
@@ -641,7 +641,7 @@ describe('ResourceCellView zoom menus', () => {
     fireEvent.contextMenu(screen.getByText('verse'));
     await user.click(zoomMenuItem('Zoom out'));
     fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(zoomMenuItem('Reset zoom'));
+    await user.click(zoomMenuItem('Zoom reset'));
     expect(onZoomIn).toHaveBeenCalledTimes(1);
     expect(onZoomOut).toHaveBeenCalledTimes(1);
     expect(onResetZoom).toHaveBeenCalledTimes(1);
@@ -734,7 +734,7 @@ describe('ResourceCellView zoom menus', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Zoom options for WEB' }));
     const menu = screen.getByRole('menu');
-    expect(menuEntries(menu)).toEqual(['Zoom in', 'Zoom out', 'Reset zoom']);
+    expect(menuEntries(menu)).toEqual(['Zoom in', 'Zoom out', 'Zoom reset']);
     expect(zoomMenuItem('Zoom in')).toHaveAttribute('aria-disabled', 'true');
   });
 
@@ -863,7 +863,7 @@ describe('ResourceCellView zoom menu shortcut hints', () => {
       expect(within(zoomOut).getByText('+').tagName).toBe('SPAN');
 
       // content-zoom-reset: Ctrl+0
-      const reset = zoomMenuItem('Reset zoom');
+      const reset = zoomMenuItem('Zoom reset');
       expect(within(reset).getByText('Ctrl').tagName).toBe('KBD');
       expect(within(reset).getByText('0').tagName).toBe('KBD');
       expect(within(reset).getByText('+').tagName).toBe('SPAN');
@@ -901,7 +901,7 @@ describe('ResourceCellView zoom menu shortcut hints', () => {
     expect(within(zoomOut).queryByText('+')).not.toBeInTheDocument();
 
     // content-zoom-reset on macOS: ⌘0
-    const reset = zoomMenuItem('Reset zoom');
+    const reset = zoomMenuItem('Zoom reset');
     expect(within(reset).getByText('⌘').tagName).toBe('KBD');
     expect(within(reset).getByText('0').tagName).toBe('KBD');
     expect(within(reset).queryByText('+')).not.toBeInTheDocument();
