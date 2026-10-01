@@ -17,6 +17,7 @@ import {
 } from 'platform-bible-utils';
 import {
   EditorDecorations,
+  EditorMessageInsertCommentAtSelection,
   EditorMessageInsertTextualNoteAtSelection,
   SelectionChangeEvent,
   EditorWebViewMessage,
@@ -167,10 +168,16 @@ async function openPlatformResourceViewer(
  * Insert items always available instead and gates at submission — see
  * `adr-menus-always-available-gate-at-submission` in Architecture-Decisions.md; the submission-time
  * check itself is the web view's read-only/sync-blocked guard in `insertNoteAtCurrentSelection`,
- * the one callback all three insert kinds share.
+ * the one callback all three insert kinds share. The comment editor opener reaches the web view the
+ * same way but is handled there by its own `insertCommentAtCurrentSelection`.
+ *
+ * @param method The controller method to invoke: one of the three textual-note inserters or the
+ *   comment editor opener — all take no arguments and resolve once requested.
  */
-async function insertNoteAtSelection(
-  method: EditorMessageInsertTextualNoteAtSelection['method'],
+async function requestEditorInsert(
+  method:
+    | EditorMessageInsertTextualNoteAtSelection['method']
+    | EditorMessageInsertCommentAtSelection['method'],
   webViewId: string | undefined,
 ): Promise<void> {
   logger.debug(`Requesting ${method} on WebView ${webViewId}`);
@@ -179,21 +186,19 @@ async function insertNoteAtSelection(
 }
 
 async function insertFootnoteAtSelection(webViewId: string | undefined): Promise<void> {
-  return insertNoteAtSelection('insertFootnoteAtSelection', webViewId);
+  return requestEditorInsert('insertFootnoteAtSelection', webViewId);
 }
 
 async function insertCrossReferenceAtSelection(webViewId: string | undefined): Promise<void> {
-  return insertNoteAtSelection('insertCrossReferenceAtSelection', webViewId);
+  return requestEditorInsert('insertCrossReferenceAtSelection', webViewId);
 }
 
 async function insertEndnoteAtSelection(webViewId: string | undefined): Promise<void> {
-  return insertNoteAtSelection('insertEndnoteAtSelection', webViewId);
+  return requestEditorInsert('insertEndnoteAtSelection', webViewId);
 }
 
 async function insertCommentAtSelection(webViewId: string | undefined): Promise<void> {
-  logger.debug(`Requesting insertCommentAtSelection on WebView ${webViewId}`);
-  const controller = await getScriptureEditorController(webViewId);
-  await controller?.insertCommentAtSelection();
+  return requestEditorInsert('insertCommentAtSelection', webViewId);
 }
 
 /** Function to prompt for a project or use the one passed in and open it in the editor */
