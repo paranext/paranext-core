@@ -1,4 +1,7 @@
+using System.Collections.Concurrent;
 using Paranext.DataProvider.Services;
+using Paratext.Data;
+using Paratext.Data.Repository;
 using static Paranext.DataProvider.NetworkObjects.Documentation.ExperimentalMethodDocumentation;
 
 namespace Paranext.DataProvider.Projects.SendReceive;
@@ -63,6 +66,43 @@ internal class ParatextProjectSendReceiveService(
     /// </para>
     /// </summary>
     public SyncActivityState GetSyncActivity() => new(false, Array.Empty<string>());
+
+    /// <summary>
+    /// Whether <paramref name="scrText"/> holds local changes Send/Receive has not sent — see
+    /// <see cref="UnsyncedChangesRule"/>. Local repository reads only (an <c>hg status</c> and a tip
+    /// lookup); never contacts the server. Any failure (no Mercurial, broken repository) is logged
+    /// once per project and answered <see langword="false"/>: an indicator must never claim unsent work
+    /// it cannot see. Read by <see cref="UnsyncedChangesTracker"/>.
+    /// </summary>
+    public bool HasUnsyncedLocalChanges(ScrText scrText)
+    {
+        try
+        {
+            if (!scrText.IsProjectShared)
+                return false;
+            if (VersioningManager.Get(scrText).HasUncommittedChanges())
+                return true;
+            string? lastSynced = GetLastSyncedTipId(scrText);
+            if (string.IsNullOrEmpty(lastSynced))
+                return false;
+            return UnsyncedChangesRule.Evaluate(
+                true,
+                false,
+                Hg.Default.GetTipId(scrText.Directory),
+                lastSynced
+            );
+        }
+        catch (Exception ex)
+        {
+            if (_unsyncedCheckWarned.TryAdd(scrText.Guid.ToString(), true))
+                Console.Error.WriteLine(
+                    $"Could not determine unsynced changes for project {scrText.Name}: {ex.Message}"
+                );
+            return false;
+        }
+    }
+
+    private readonly ConcurrentDictionary<string, bool> _unsyncedCheckWarned = new();
 
     /// <summary>
     /// Whether the persistent C# Send/Receive toast should be shown for a sync starting now.
@@ -167,6 +207,17 @@ internal class ParatextProjectSendReceiveService(
     #region Protected properties and methods
 
     protected PapiClient PapiClient { get; } = papiClient;
+
+    /// <summary>
+    /// The local Mercurial tip id recorded after this project's last successful Send/Receive, or
+    /// <see langword="null"/> when unknown.
+    /// <para>
+    /// Scaffolding: public Platform.Bible has no Send/Receive memento, so this is always unknown here.
+    /// The Paratext 10 patch replaces the body with the memento lookup (a local file read, no
+    /// network). Do not remove — removing it breaks the patch.
+    /// </para>
+    /// </summary>
+    protected internal string? GetLastSyncedTipId(ScrText scrText) => null;
 
     // The three properties below are read only by the closed-source Paratext 10 patch,
     // which replaces this class's stub bodies with real implementations. Do not remove them —
