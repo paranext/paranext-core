@@ -73,7 +73,12 @@ import {
 import { buildLock, writeLock, readLock, diffLock, diffDocument, diffShippingSet } from './lock';
 import { describeBlock, openPolicyQuestions, stalePolicyEntries } from './report';
 import { render, joinTexts } from './render';
-import { declaredLicenseField, readPackageNotices, readTextFile } from './package-files';
+import {
+  declaredLicenseField,
+  readCreditFiles,
+  readPackageNotices,
+  readTextFile,
+} from './package-files';
 import { messageOf, readJsonFile } from './read-json';
 import { assertProductMatchesPackaging, readPackagingConfig } from './product';
 import type { PackagingConfig } from './product';
@@ -320,6 +325,7 @@ function npmVerdict(pkg: ShippedPackage, detection: Detection, policy: Policy): 
         ),
       );
   const files = detection.files || [];
+  const exception = (policy.exceptions || []).find((entry) => entry.package === `npm:${pkg.name}`);
   const verdict = classify({
     name: pkg.name,
     version: pkg.version,
@@ -327,6 +333,9 @@ function npmVerdict(pkg: ShippedPackage, detection: Detection, policy: Policy): 
     declaredField,
     detection,
     policy,
+    // A reviewed exception's `creditFiles` name files no filename rule finds, so they are read here
+    // by path - and never for a `fromLock` package, whose folder is not evidence of what ships.
+    creditFileTexts: pkg.fromLock ? {} : readCreditFiles(pkg.dir, exception?.creditFiles),
   });
   // Only the file the verdict actually rests on, and 0 where it rests on none. A `|| files[0]`
   // fallback reports an ARBITRARY file's confidence wherever `matchedFile` is undefined - which is

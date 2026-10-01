@@ -1,6 +1,5 @@
 import correct from 'spdx-correct';
 import { compareStrings } from './compare';
-import { GRANT_START, UNFILLED_PLACEHOLDER } from './credit';
 import { parseDeclared } from './declared';
 import type { ParsedDeclaration as Declared } from './declared';
 import { readJsonFile } from './read-json';
@@ -483,6 +482,12 @@ type ClassifyInput = {
   detection: { dir: string; files: DetectedFile[] };
   policy: Policy;
   validationErrors?: string[];
+  /**
+   * The text of each file the package's reviewed exception names in `creditFiles`, keyed by the
+   * path as recorded - `undefined` for one that could not be read. Read by the caller, since this
+   * module reads nothing off disk.
+   */
+  creditFileTexts?: Record<string, string | undefined>;
 };
 
 function blocked(reason: string, extra: Partial<Verdict> = {}): BlockedFields {
@@ -544,69 +549,37 @@ function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-/**
- * A line that opens a copyright notice: `Copyright` followed by a year, `(c)`, `©` or a capitalized
- * holder (`Copyright JS Foundation and other contributors` has no year), `COPYRIGHT` followed by a
- * year, `(c)` or `©`, or a bare `©` or `(c)` followed by a year.
- *
- * Deliberately leaves out the text a license file uses to TALK about copyright - Apache-2.0's
- * `Copyright [yyyy] [name of copyright owner]` appendix and its `(c) You must retain` clause, the
- * `COPYRIGHT AND PERMISSION NOTICE` heading, CC0's `Copyright and Related Rights`. It misses a
- * notice that opens mid-line (`Portions Copyright (c) 1999 Apple Inc.`) or with punctuation after
- * the word (`Copyright: A`), neither of which a stacked-grant file has been seen to use.
- */
-const NOTICE_START =
-  /^(?:Copyright\s+(?:\([cC]\)|©|\d|\p{Lu})|COPYRIGHT\s+(?:\([cC]\)|©|\d)|©\s*\d|\([cC]\)\s*\d)/u;
+/** The comment markers a source file or a quoted text puts before a line. */
+const COMMENT_MARKERS = ['//', '#', '*', '>'];
 
 /**
- * A line under a notice that only reserves rights - `All rights reserved.` or `Some rights
- * reserved.` - which a credit may leave off.
+ * One line of a package file as a credit is compared with it: leading comment markers removed, in
+ * any number and combination, and whitespace collapsed. Plain string handling on purpose - it does
+ * the same thing to every line and decides nothing about what a line says.
  */
-const RIGHTS_RESERVED = /^(?:all|some) rights reserved\.?$/i;
+function normalizeCreditLine(line: string): string {
+  const markerOf = (text: string) => COMMENT_MARKERS.find((marker) => text.startsWith(marker));
+  let rest = line.trim();
+  let marker = markerOf(rest);
+  while (marker) {
+    rest = rest.slice(marker.length).trimStart();
+    marker = markerOf(rest);
+  }
+  return collapseWhitespace(rest);
+}
 
 /**
- * A line with no letter or digit - a Markdown underline or `-----` rule - which no notice runs on
- * to.
+ * Whether `credit` is one or more consecutive lines of `lines`, each whole, joined by single
+ * spaces. A blank line ends a run, so a credit never spans two paragraphs - or two files, which the
+ * caller separates with one.
  */
-const SEPARATOR = /^[^\p{L}\p{N}]+$/u;
-
-/**
- * The copyright notices a license text states, each as the forms a credit may copy it in, the whole
- * notice first.
- *
- * A notice runs from a line matching `NOTICE_START` through the lines after it, up to a blank line,
- * the next notice, a separator line, or the line the license's own text opens with (`GRANT_START`).
- * So `Copyright (c) Meta Platforms, Inc.` wrapped onto `and affiliates.` is one notice, while a
- * file that runs a notice straight into `Permission is hereby granted` leaves the grant out of it.
- * A credit must copy the whole notice, so a holder list wrapped across lines cannot be cut short;
- * the only part it may leave off is a trailing `All rights reserved.` on a line of its own. A line
- * holding an unfilled template placeholder (`Copyright (c) <year> <copyright holders>`) is no
- * notice and ends the one above it. Each line is whitespace-collapsed and stripped of a leading
- * comment marker (`#`, `*`, `>`, `//`), because a file wraps, indents and comments its notices
- * freely.
- *
- * Any other line run on below a notice without a blank line - `Based on ...`, an
- * `SPDX-License-Identifier:` tag, a grant opening with words `GRANT_START` does not list - is read
- * as part of it, so a credit for such a file has to include it.
- */
-function statedNotices(text: string): string[][] {
-  const notices: string[][] = [];
-  let current: string[] | undefined;
-  text.split(/\r?\n/).forEach((rawLine) => {
-    const line = collapseWhitespace(rawLine.replace(/^\s*(?:(?:#|\*|>|\/\/)\s*)*/, ''));
-    if (!line || SEPARATOR.test(line) || GRANT_START.test(line) || UNFILLED_PLACEHOLDER.test(line))
-      current = undefined;
-    else if (NOTICE_START.test(line)) {
-      current = [line];
-      notices.push(current);
-    } else current?.push(line);
-  });
-  return notices.map((lines) => {
-    let end = lines.length;
-    while (end > 1 && RIGHTS_RESERVED.test(lines[end - 1])) end -= 1;
-    return end === lines.length
-      ? [lines.join(' ')]
-      : [lines.join(' '), lines.slice(0, end).join(' ')];
+function isLineRun(credit: string, lines: string[]): boolean {
+  return lines.some((line, start) => {
+    if (!line || !credit.startsWith(line)) return false;
+    let run = line;
+    for (let index = start + 1; run.length < credit.length && lines[index]; index += 1)
+      run = `${run} ${lines[index]}`;
+    return run === credit;
   });
 }
 
@@ -652,6 +625,7 @@ function applyException(
   version: string,
   sha256: string | undefined,
   text: string | undefined,
+  creditFileTexts: Record<string, string | undefined>,
   allowed: Set<string>,
   copyleft: Set<string>,
 ): BlockedFields | undefined {
@@ -683,13 +657,21 @@ function applyException(
         'without a name, a date and a stated reason it is not reviewable, and nothing else records ' +
         'who accepted it or why.',
     );
-  // The template `report.ts` prints carries these literal placeholders for the reader to replace.
+  // The template `report.ts` prints carries these literal placeholders for the reader to replace -
+  // and, for a conjunction, one per operand's credit.
   // Pasted and half-filled, each clears every other check and stands as the recorded determination:
   // `<your email>` is a non-empty string, so the "unsigned" test above sees a reviewer, and the
   // entry then reads as a determination somebody made under a name that is not a name.
   const placeholder = [
     ['reason', entry.reason],
     ['reviewer', entry.reviewer],
+    // And the credit it offers for each operand of a conjunction.
+    ...(typeof entry.copyrightByOperand === 'object' && entry.copyrightByOperand
+      ? Object.entries(entry.copyrightByOperand).map(([id, notice]) => [
+          `copyrightByOperand.${id}`,
+          notice,
+        ])
+      : []),
   ].find(([, value]) => PLACEHOLDER_TEMPLATE_VALUE.test(String(value ?? '')));
   if (placeholder)
     return blocked(
@@ -746,13 +728,14 @@ function applyException(
     );
   // A per-operand credit is printed beside that operand's canonical text as the notice it is made
   // under, so one keyed by an id the recorded expression does not contain - a typo, or an operand
-  // since dropped from `spdx` - would never be printed, and the operand it was meant for would fall
-  // back to the package's own notice with nothing to say the correction had been lost. A
+  // since dropped from `spdx` - would never be printed, and the operand it was meant for would be
+  // printed as having no notice, with nothing to say the correction had been lost. A
   // single-identifier expression is refused for the same reason: `render.ts` reproduces canonical
   // texts beside a package's own file only for a multi-operand expression
   // (`spdxIdsOf(...).length > 1`), and an exception is always pinned to a file, so a credit
   // recorded on one identifier clears the gate and then appears nowhere. An empty value, or one of
-  // nothing but `;` separators, would print a credit line naming nobody.
+  // nothing but `;` separators, would print a credit line naming nobody. `{}` is the one empty
+  // form accepted: it records that no operand has a notice to credit - see the conjunction rule.
   const byOperand = entry.copyrightByOperand;
   const creditEntries = typeof byOperand === 'object' && byOperand ? Object.entries(byOperand) : [];
   if (byOperand !== undefined) {
@@ -764,7 +747,8 @@ function applyException(
       )
       .map(([id]) => id);
     let problem: string | undefined;
-    if (!creditEntries.length) problem = 'is not a non-empty object keyed by operand';
+    if (!byOperand || typeof byOperand !== 'object' || Array.isArray(byOperand))
+      problem = 'is not an object keyed by operand';
     else if (recorded.ids.length < 2)
       problem =
         `is recorded on the single-identifier expression ${entry.spdx}, whose row is described ` +
@@ -779,6 +763,26 @@ function applyException(
           'value the copyright notice that operand is granted under.',
       );
   }
+  // `creditFiles` names further files in the package a credit may be copied from - see
+  // `Exception.creditFiles`. It supplies nothing but credits, so it is refused without them.
+  const { creditFiles } = entry;
+  if (creditFiles !== undefined) {
+    let problem: string | undefined;
+    if (
+      !Array.isArray(creditFiles) ||
+      !creditFiles.length ||
+      creditFiles.some((file) => typeof file !== 'string' || !file.trim())
+    )
+      problem = 'is not a non-empty list of paths';
+    else if (byOperand === undefined)
+      problem = 'is recorded without the copyrightByOperand it supplies';
+    if (problem)
+      return blocked(
+        `the reviewed exception for ${key}@${version} records a creditFiles that ${problem}. ` +
+          'Each entry is the path, relative to the package folder, of a file a credit is copied ' +
+          'from.',
+      );
+  }
   if (!sha256 || !entry.textSha256)
     return blocked(
       `a reviewed exception exists for ${key}@${version} but the exception is not hash-pinned - ` +
@@ -789,57 +793,49 @@ function applyException(
       `a reviewed exception exists for ${key}@${version} but its recorded textSha256 is stale ` +
         `(recorded ${entry.textSha256}, found ${sha256}). The license text changed since it was reviewed.`,
     );
+  // A conjunction's operands each print beside their own canonical text, and with no credits
+  // recorded every one is credited to the package's own notice, read from the top of its license
+  // files - for a file stacking several grants, one grant's holder beside every operand.
+  // `chroma-js`'s Apache-2.0 text was credited to Gregor Aisch that way. Required for EVERY
+  // conjunction, not only where the file states several notices: counting notices means deciding
+  // which lines of free text are notices, a guess the gate cannot make reliably, and a wrong guess
+  // here has no remedy short of a code change. `{}` records that no operand has a notice to credit.
+  if (byOperand === undefined && recorded.hasConjunction)
+    return blocked(
+      `the reviewed exception for ${key}@${version} records the conjunction ${entry.spdx} but no ` +
+        "copyrightByOperand. Each operand's canonical text is printed beside a credit line, which " +
+        "is otherwise the package's own notice whichever grant that belongs to - so record the " +
+        'notices each operand is granted under, or {} if the package states none for any of them.',
+    );
+  const unread = (creditFiles ?? []).filter((file) => creditFileTexts[file] === undefined);
+  if (unread.length)
+    return blocked(
+      `the reviewed exception for ${key}@${version} names ${unread.join(', ')} in creditFiles, ` +
+        'which could not be read from the package folder: the file is missing, is not a file, or ' +
+        'its path leaves the folder.',
+    );
   // A credit is hand-typed, and the document prints it verbatim as the copyright notice an operand
-  // is granted under - so each one must be a WHOLE notice the pinned text states. The hash pins the
-  // file, not what was typed from it, and a substring test passes a truncated notice, a bare
-  // fragment such as a holder's name, and two notices run together across the blank line between
-  // them. `; ` separates notices within one credit.
-  const notices = statedNotices(text ?? '');
-  const credited = creditEntries.flatMap(([, notice]) =>
-    String(notice).split(';').map(collapseWhitespace).filter(Boolean),
-  );
-  const notWhole = credited.filter((credit) => !notices.some((forms) => forms.includes(credit)));
-  if (notWhole.length)
+  // is granted under - so each one must be copied from the package's own license file, or a file
+  // `creditFiles` names, whole lines at a time. The hash pins the license file, not what was typed
+  // from it. This is plain string comparison and decides nothing about what a line says: which
+  // lines make up a notice, which operand it grants, and that every notice the file states is
+  // credited are the reviewer's determination, like `spdx` itself. `; ` separates notices within
+  // one credit.
+  const lines = [text ?? '', ...(creditFiles ?? []).map((file) => creditFileTexts[file] ?? '')]
+    // A blank line before each source, so no run joins the end of one file to the next.
+    .flatMap((source) => ['', ...source.split('\n').map(normalizeCreditLine)]);
+  const notCopied = creditEntries
+    .flatMap(([, notice]) => String(notice).split(';').map(collapseWhitespace).filter(Boolean))
+    .filter((credit) => !isLineRun(credit, lines));
+  if (notCopied.length)
     return blocked(
       `the reviewed exception for ${key}@${version} credits ` +
-        `${notWhole.map((credit) => `"${credit}"`).join(', ')}, which is not a whole notice its ` +
-        'pinned license text states. Each notice in copyrightByOperand is printed as a copyright ' +
-        "notice, so it must be copied whole from the package's license file, from the line that " +
-        'opens it to the end of its paragraph (an "All rights reserved." on a line of its own at ' +
-        'the end may be left off); ' +
-        'separate several notices with "; ".',
-    );
-  const quoted = (forms: string[][]) => forms.map(([notice]) => `"${notice}"`).join(', ');
-  // A conjunction's operands print beside their own canonical texts, and with no credits recorded
-  // each is credited to the package's own notice - one notice, or one run of them, read from the
-  // top of its license files. Where the file states more than one, that can name the wrong holder
-  // beside an operand: `chroma-js`'s file states Gregor Aisch's BSD-3-Clause notice first and
-  // ColorBrewer's Apache-2.0 notice below it, so its Apache-2.0 text would be credited to Aisch.
-  if (!creditEntries.length && recorded.hasConjunction && notices.length > 1)
-    return blocked(
-      `the reviewed exception for ${key}@${version} records the conjunction ${entry.spdx}, and ` +
-        `its pinned license text states ${notices.length} notices: ${quoted(notices)}. Without ` +
-        "copyrightByOperand every operand's text is credited to the package's own notice, read " +
-        'from the top of its license files, so record the notices each operand is granted under.',
-    );
-  // And where credits are recorded, every notice the file states must be credited to SOME operand.
-  // An exception is keyed by name and outlives the code any one version ships, while a license file
-  // shared across a monorepo names every holder whatever this package ships today - so a credit
-  // trimmed to today's code would silently under-credit a later version whose license text, and so
-  // hash, is unchanged. Only a key credits a notice. An operand left unkeyed prints the package's
-  // own notice, which is not reliably any one notice of this file whole - it may come from a
-  // curated entry or another license file, may stop short of a wrapped holder list, or may be
-  // absent when the notice sits below the license text - so it counts toward none. An operand
-  // the file states no notice for is the one to leave unkeyed.
-  const uncredited = creditEntries.length
-    ? notices.filter((forms) => !forms.some((form) => credited.includes(form)))
-    : [];
-  if (uncredited.length)
-    return blocked(
-      `the reviewed exception for ${key}@${version} credits no operand with ` +
-        `${quoted(uncredited)}, which its pinned license text states. Every notice in the file ` +
-        'must be credited to the operand it grants, even one whose code the package does not ' +
-        "ship today: the exception outlives any one version's code.",
+        `${notCopied.map((credit) => `"${credit}"`).join(', ')}, which is not copied whole lines ` +
+        "at a time from the package's license file" +
+        `${creditFiles ? ' or its creditFiles' : ''}. Each notice in copyrightByOperand is printed ` +
+        'as a copyright notice, so copy it from the line that opens it to the line that ends it, ' +
+        'never across a blank line, and leave out the license text that follows it; separate ' +
+        'several notices with "; ".',
     );
   return {
     verdict: 'excepted',
@@ -1100,6 +1096,7 @@ type ClassifyContext = {
   common: CommonFields;
   declared: Declared;
   usableById: Map<string, DetectedFile>;
+  creditFileTexts: Record<string, string | undefined>;
 };
 
 /**
@@ -1757,6 +1754,7 @@ function readInstruments(
     version,
     pinned?.sha256,
     pinned?.text,
+    ctx.creditFileTexts,
     allowed,
     copyleft,
   );
@@ -1836,6 +1834,7 @@ export function classify({
   detection,
   policy,
   validationErrors = [],
+  creditFileTexts = {},
 }: ClassifyInput): Verdict {
   const key = `${ecosystem}:${name}`;
   const allowed = new Set(policy.allowed);
@@ -1924,6 +1923,7 @@ export function classify({
     common,
     declared,
     usableById,
+    creditFileTexts,
   };
 
   const { exception, overridable } = readInstruments(ctx, signals, pinned);

@@ -8896,7 +8896,7 @@ Except as contained in this notice, the name of a copyright holder shall not be 
 
 ### Zlib — canonical text, 2 packages
 
-- `pako@1.0.11` (npm) — Copyright (C) 2014-2017 by Vitaly Puzrin and Andrei Tuputcyn
+- `pako@1.0.11` (npm) — (C) 1995-2013 Jean-loup Gailly and Mark Adler; (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin
 - `Spart@1.0.0` (NuGet) — Copyright © Jonathan de Halleux 2003, portions Copyright © 2018 SIL International
 
 ```text

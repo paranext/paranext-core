@@ -117,18 +117,26 @@ export type Exception = {
    * top of its license files - which, for a file stacking several grants, belongs to one of them.
    * `posthog-node`'s LICENSE opens with PostHog's Apache-2.0 notice and carries its MIT grants for
    * code vendored from Sentry, Meta, Expo and AgentCat further down, so without this the MIT
-   * section credits PostHog. Every key must be an operand of `spdx`, and `spdx` must name more than
-   * one identifier, since a single-identifier row prints no per-operand credit. Each value is one
-   * or more notices copied whole from the pinned license file and separated by `; `; only an `All
-   * rights reserved.` (or `Some rights reserved.`) on a line of its own at the end may be left off.
-   * `applyException` requires this field on a conjunction whose pinned file states more than one
-   * notice, refuses a credit that is not a whole notice the file states, and refuses credits that
-   * leave any notice in the file credited to no operand - an exception outlives the code any one
-   * version ships. Only a key credits a notice: an operand with no key prints the package's own
-   * notice, which counts toward none, so leave unkeyed only an operand the file states no notice
-   * for.
+   * section credits PostHog. `applyException` requires it on every conjunction. Every key must be
+   * an operand of `spdx`, and `spdx` must name more than one identifier, since a single-identifier
+   * row prints no per-operand credit. Each value is one or more notices separated by `; `, each
+   * copied from the pinned license file (or a file `creditFiles` names) whole lines at a time and
+   * never across a blank line; the gate compares them with the files' lines and refuses one it does
+   * not find. Which lines make up a notice, and crediting every notice the file states to the
+   * operand it grants - even one for code the package does not ship today, since an exception
+   * outlives any one version's code - is the reviewer's determination. An operand with no key is
+   * printed as having no notice, and `{}` records that for every operand.
    */
   copyrightByOperand?: Record<string, string>;
+  /**
+   * Further files in the package, each by its path relative to the package folder, that a
+   * `copyrightByOperand` credit may be copied from - for an operand whose notice the pinned license
+   * file does not state. `pako`'s LICENSE carries only its MIT grant; the zlib notices its Zlib
+   * operand is granted under are stated in `lib/zlib/README` and the header of every file under
+   * `lib/zlib/`. Not hash-pinned: each credit is matched against the file's lines on every run, so
+   * a version that stops stating a credited notice is refused the run it arrives.
+   */
+  creditFiles?: string[];
 };
 
 /** The choice this project takes among a declared disjunction's operands. */
