@@ -7,7 +7,7 @@
  *
  * - Ctrl+wheel over one resource zooms that resource alone, and the badge names it.
  * - A resource's chapter panel shows its row's level, and zooming inside the panel moves the row.
- * - The right-click menu (Copy, Zoom in, Zoom out, Reset zoom) and the chapter view's "⋮" zoom one
+ * - The right-click menu (Copy, Zoom in, Zoom out, Zoom reset) and the chapter view's "⋮" zoom one
  *   resource; Zoom in is disabled at 300 %.
  * - The zoom keys act on the resource last clicked (its name, anywhere in its column), and Ctrl+0
  *   resets only that resource.
@@ -328,7 +328,7 @@ test.describe('Scripture Text Grid — per-resource content zoom', () => {
         /^Copy$/,
         /^Zoom in/,
         /^Zoom out/,
-        /^Reset zoom/,
+        /^Zoom reset/,
       ]);
       await menu.getByRole('menuitem', { name: /^Zoom in/ }).click();
       await expect
@@ -337,27 +337,27 @@ test.describe('Scripture Text Grid — per-resource content zoom', () => {
       expect(await readFactor(frame, areaA)).toBe(settingsDefault);
     });
 
-    await test.step('at 300 % the menu’s Zoom in is disabled, Reset zoom is not', async () => {
+    await test.step('at 300 % the menu’s Zoom in is disabled, Zoom reset is not', async () => {
       await stepAreaUpTo(mainPage, frame, webViewId, areaB, 3);
       const menu = await openCellContextMenu(stg.frame, cellB);
       await expect(menu.getByRole('menuitem', { name: /^Zoom in/ })).toHaveAttribute(
         'aria-disabled',
         'true',
       );
-      await expect(menu.getByRole('menuitem', { name: /^Reset zoom/ })).not.toHaveAttribute(
+      await expect(menu.getByRole('menuitem', { name: /^Zoom reset/ })).not.toHaveAttribute(
         'aria-disabled',
         'true',
       );
       await mainPage.keyboard.press('Escape');
     });
 
-    await test.step('Reset zoom from B’s ⋮ in the chapter view returns B to the default', async () => {
+    await test.step('Zoom reset from B’s ⋮ in the chapter view returns B to the default', async () => {
       await stg.switchToChapterView();
       const columnB = stg.cellDraggable.nth(1);
       expect(await readResourceZoomArea(columnB)).toBe(areaB);
       const menu = await openChapterViewZoomOptions(stg.frame, columnB, labelB);
-      await expect(menu.getByRole('menuitem')).toHaveText([/^Zoom in/, /^Zoom out/, /^Reset zoom/]);
-      await menu.getByRole('menuitem', { name: /^Reset zoom/ }).click();
+      await expect(menu.getByRole('menuitem')).toHaveText([/^Zoom in/, /^Zoom out/, /^Zoom reset/]);
+      await menu.getByRole('menuitem', { name: /^Zoom reset/ }).click();
       await expect.poll(() => readFactor(frame, areaB)).toBe(settingsDefault);
     });
   });

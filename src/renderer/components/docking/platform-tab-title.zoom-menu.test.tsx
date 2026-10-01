@@ -19,7 +19,7 @@ const { localizedStrings } = vi.hoisted(() => {
     '%window_label_empty%': 'Empty window',
     '%tab_contextMenu_zoomIn%': 'Zoom in',
     '%tab_contextMenu_zoomOut%': 'Zoom out',
-    '%tab_contextMenu_resetZoom%': 'Reset zoom to default',
+    '%tab_contextMenu_resetZoom%': 'Zoom reset',
   };
   return { localizedStrings: strings };
 });
@@ -207,8 +207,8 @@ const CONTRIBUTED_TAB_MENU: Awaited<ReturnType<typeof menuDataService.getWebView
         command: 'platform.webViewContentZoomOut',
       },
       {
-        label: 'Reset zoom to default',
-        localizeNotes: 'Tab context menu > Reset zoom',
+        label: 'Zoom reset',
+        localizeNotes: 'Tab context menu > Zoom reset',
         group: 'platform.tabZoom',
         order: 300,
         command: 'platform.webViewContentZoomReset',
@@ -284,12 +284,7 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
     await flushMenuRead();
 
     const labels = renderedItemLabels();
-    expect(labels.slice(0, 4)).toEqual([
-      'Zoom in',
-      'Zoom out',
-      'Reset zoom to default',
-      'Float Tab',
-    ]);
+    expect(labels.slice(0, 4)).toEqual(['Zoom in', 'Zoom out', 'Zoom reset', 'Float Tab']);
   });
 
   it('simple mode: offers exactly the zoom items', async () => {
@@ -298,7 +293,7 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
     await flushMenuRead();
 
     const labels = renderedItemLabels();
-    expect(labels).toEqual(['Zoom in', 'Zoom out', 'Reset zoom to default']);
+    expect(labels).toEqual(['Zoom in', 'Zoom out', 'Zoom reset']);
     expect(screen.queryByText('Float Tab')).not.toBeInTheDocument();
     expect(screen.queryByText('Move tab to new window')).not.toBeInTheDocument();
     expect(screen.queryByText('Move tab to window')).not.toBeInTheDocument();
@@ -314,7 +309,7 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
       expect(sendCommand).toHaveBeenCalledWith('platform.webViewContentZoomIn', 'tab-1'),
     );
 
-    fireEvent.click(screen.getByText('Reset zoom to default'));
+    fireEvent.click(screen.getByText('Zoom reset'));
     await waitFor(() =>
       expect(sendCommand).toHaveBeenCalledWith('platform.webViewContentZoomReset', 'tab-1'),
     );
@@ -390,7 +385,7 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
     expect(screen.getByText('Float Tab')).toBeInTheDocument();
     expect(screen.queryByText('Zoom in')).not.toBeInTheDocument();
     expect(screen.queryByText('Zoom out')).not.toBeInTheDocument();
-    expect(screen.queryByText('Reset zoom to default')).not.toBeInTheDocument();
+    expect(screen.queryByText('Zoom reset')).not.toBeInTheDocument();
   });
 
   it('power mode: a zoomable pane offers the zoom items, enabled, and a click sends the command', async () => {
@@ -426,7 +421,7 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
 
     setZoomable('web-view-1', true);
 
-    expect(renderedItemLabels()).toEqual(['Zoom in', 'Zoom out', 'Reset zoom to default']);
+    expect(renderedItemLabels()).toEqual(['Zoom in', 'Zoom out', 'Zoom reset']);
   });
 
   it('keeps the zoom items for the rest of an open menu when the pane stops being zoomable, and drops them on close', async () => {
@@ -436,7 +431,7 @@ describe('PlatformTabTitle zoom group in the tab menu', () => {
     fireEvent.click(screen.getByTestId('open-menu'));
 
     setZoomable('web-view-1', false);
-    expect(renderedItemLabels()).toEqual(['Zoom in', 'Zoom out', 'Reset zoom to default']);
+    expect(renderedItemLabels()).toEqual(['Zoom in', 'Zoom out', 'Zoom reset']);
 
     fireEvent.click(screen.getByTestId('close-menu'));
     expect(screen.queryByTestId('context-menu')).toBeNull();
