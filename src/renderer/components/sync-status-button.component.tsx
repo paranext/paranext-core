@@ -1,9 +1,9 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { SyncStatus, useSyncStatus } from '@renderer/hooks/use-sync-status.hook';
+import { SyncStatus, SyncingProject, useSyncStatus } from '@renderer/hooks/use-sync-status.hook';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
-import { CircleAlert, CircleCheck, CircleHelp, RefreshCw } from 'lucide-react';
+import { CircleAlert, CircleArrowUp, CircleCheck, CircleHelp, RefreshCw } from 'lucide-react';
 import {
   Button,
   Popover,
@@ -72,6 +72,7 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_sync_popover_idle%',
   '%toolbar_sync_popover_synced%',
   '%toolbar_sync_popover_unknown%',
+  '%toolbar_sync_popover_unsynced%',
   '%toolbar_sync_progress_item%',
   '%toolbar_sync_status_cancelled%',
   '%toolbar_sync_status_failed%',
@@ -80,10 +81,34 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_sync_status_syncing_project%',
   '%toolbar_sync_status_syncing_projects%',
   '%toolbar_sync_status_unknown%',
+  '%toolbar_sync_status_unsynced%',
   '%toolbar_sync_view_details%',
   SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
   SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY,
 ];
+
+/**
+ * The popover's list of project names, shared by the syncing and unsynced states so both render the
+ * same markup.
+ */
+function ProjectList({ projects }: { projects: readonly SyncingProject[] }) {
+  return (
+    // Tailwind's reset strips list semantics in Safari; role="list" re-establishes
+    // them for VoiceOver, as `first-run/steps/sync-progress.component.tsx` documents.
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles
+    <ul role="list" data-testid="toolbar-sync-popover-projects" className="tw:text-sm">
+      {projects.map((project) => (
+        // Keyed on the id, not the name: two projects can share a name, and a name
+        // falls back to the id only when its metadata couldn't be read.
+        // `data-project-id` because two projects can share a display name, which
+        // makes the rendered rows indistinguishable from each other otherwise.
+        <li key={project.projectId} data-project-id={project.projectId} className="tw:truncate">
+          {project.name}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /**
  * Ambient Send/Receive status for the toolbar: a button reporting whether a sync is running, a
@@ -91,16 +116,19 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
  * web view for the detail this compact surface cannot carry (per-project conflicts, failure
  * messages, warnings).
  *
- * Deferred: three of the richer states in the design — "Connection problem", "Unsaved changes",
- * "Unsynced changes" — are not implemented, because none is derivable from what Send/Receive
- * currently emits; each needs a new event from that extension, so showing them now would mean
- * guessing at state, which is precisely the untruthfulness this control exists to fix. Sync FAILURE
- * is derivable (from the last sync's per-project results) and is reported. See
- * `adr-toolbar-sync-status-is-local` in `.context/standards/Architecture-Decisions.md`.
+ * "Unsynced changes" is driven by `useUnsyncedChanges` through `useSyncStatus`, which reads each
+ * project's repository for local changes not yet sent; the popover names those projects.
+ *
+ * Deferred: two of the richer states in the design — "Connection problem" and "Unsaved changes" —
+ * are not implemented, because neither is derivable from what Send/Receive currently emits; each
+ * needs a new event from that extension, so showing them now would mean guessing at state, which is
+ * precisely the untruthfulness this control exists to fix. Sync FAILURE is derivable (from the last
+ * sync's per-project results) and is reported. See `adr-toolbar-sync-status-is-local` in
+ * `.context/standards/Architecture-Decisions.md`.
  */
 export function SyncStatusButton() {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
-  const { status, syncingProjects, syncProgress } = useSyncStatus();
+  const { status, syncingProjects, unsyncedProjects, syncProgress } = useSyncStatus();
   const [isOpen, setIsOpen] = useState(false);
   const [isCancelEnabled, setIsCancelEnabled] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -398,6 +426,7 @@ export function SyncStatusButton() {
     if (wasCancelled) return localizedStrings['%toolbar_sync_status_cancelled%'];
     if (status === 'synced') return localizedStrings['%toolbar_sync_status_synced%'];
     if (status === 'failed') return localizedStrings['%toolbar_sync_status_failed%'];
+    if (status === 'unsynced') return localizedStrings['%toolbar_sync_status_unsynced%'];
     // `unknown` says so in the button's accessible name instead (see `buttonAccessibleName`): the
     // visible label is capped and truncates, so it carries the control's identity rather than its
     // status, and the icon carries the distinction visually.
@@ -643,6 +672,13 @@ export function SyncStatusButton() {
                   {status === 'idle' && (
                     <RefreshCw className="tw:h-4 tw:w-4 tw:shrink-0" aria-hidden />
                   )}
+                  {status === 'unsynced' && (
+                    <CircleArrowUp
+                      data-testid="toolbar-sync-unsynced-icon"
+                      className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-primary"
+                      aria-hidden
+                    />
+                  )}
                   {status === 'unknown' && (
                     <CircleHelp
                       className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground"
@@ -681,31 +717,10 @@ export function SyncStatusButton() {
             </PopoverTitle>
           </PopoverHeader>
           <div className="tw:flex tw:flex-col tw:gap-2 tw:px-2 tw:pb-1">
-            {status === 'syncing' ? (
+            {status === 'syncing' && (
               <>
                 {syncingProjects.length > 0 ? (
-                  // Tailwind's reset strips list semantics in Safari; role="list" re-establishes
-                  // them for VoiceOver, as `first-run/steps/sync-progress.component.tsx` documents.
-                  // eslint-disable-next-line jsx-a11y/no-redundant-roles
-                  <ul
-                    role="list"
-                    data-testid="toolbar-sync-popover-projects"
-                    className="tw:text-sm"
-                  >
-                    {syncingProjects.map((project) => (
-                      // Keyed on the id, not the name: two projects can share a name, and a name
-                      // falls back to the id only when its metadata couldn't be read.
-                      // `data-project-id` because two projects can share a display name, which
-                      // makes the rendered rows indistinguishable from each other otherwise.
-                      <li
-                        key={project.projectId}
-                        data-project-id={project.projectId}
-                        className="tw:truncate"
-                      >
-                        {project.name}
-                      </li>
-                    ))}
-                  </ul>
+                  <ProjectList projects={syncingProjects} />
                 ) : (
                   <p className="tw:text-sm">{localizedStrings['%toolbar_sync_status_syncing%']}</p>
                 )}
@@ -752,7 +767,15 @@ export function SyncStatusButton() {
                     : localizedStrings['%toolbar_sync_cancel%']}
                 </Button>
               </>
-            ) : (
+            )}
+            {status === 'unsynced' && (
+              <>
+                <p className="tw:text-sm">{localizedStrings['%toolbar_sync_popover_unsynced%']}</p>
+                {/* The names resolve after the status does, so the list can be empty for a moment. */}
+                {unsyncedProjects.length > 0 && <ProjectList projects={unsyncedProjects} />}
+              </>
+            )}
+            {status !== 'syncing' && status !== 'unsynced' && (
               <p data-testid="toolbar-sync-popover-status" className="tw:text-sm">
                 {popoverStatusMessage}
               </p>
