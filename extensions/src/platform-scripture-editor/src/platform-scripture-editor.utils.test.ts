@@ -4,7 +4,7 @@ import type PapiBackend from '@papi/backend';
 import { newPlatformError, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
-import type { DeltaOpInsertNoteEmbed, EditorRef } from '@eten-tech-foundation/platform-editor';
+import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import {
   USJ_TYPE,
   USJ_VERSION,
@@ -51,7 +51,6 @@ import {
   resolveResourceContentState,
   resolveCallerHighlight,
   resolveNoteEditingSurface,
-  isUnclosedNoteOp,
   shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
   selectableParagraphMarkers,
@@ -3458,20 +3457,6 @@ describe('resolveCallerHighlight', () => {
     expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
     expect(resolveCallerHighlight({ isStandardView: false, ...paneState })).toBeUndefined();
     expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
-  });
-});
-
-describe('isUnclosedNoteOp', () => {
-  const noteOp = (extra: object): DeltaOpInsertNoteEmbed => ({
-    insert: { note: { style: 'f', caller: '+', ...extra } },
-  });
-
-  it('recognizes a note written with no closing marker', () => {
-    expect(isUnclosedNoteOp(noteOp({ closed: 'false' }))).toBe(true);
-  });
-
-  it('treats a note with no closed attribute as closed', () => {
-    expect(isUnclosedNoteOp(noteOp({}))).toBe(false);
   });
 });
 

@@ -130,6 +130,7 @@ export {
   type FootnoteEditorLocalizedStrings,
   type FootnoteCallerType,
 } from './components/advanced/footnote-editor/footnote-editor.types';
+export { isUnclosedNoteOp } from './components/advanced/footnote-editor/footnote-editor.utils';
 export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';
 export { default as FootnoteList } from './components/advanced/footnotes/footnote-list.component';
 export {

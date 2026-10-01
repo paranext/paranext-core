@@ -872,6 +872,38 @@ export function scrollToNoteCaller(noteElement: HTMLElement): void {
 }
 
 /**
+ * Finds the element {@link keepScrollPositionAcross} anchors its restore to: the first verse marker
+ * whose top edge is inside the scroll container's visible area, so the reader's place is kept to
+ * the verse even inside a long paragraph that re-wraps. With no such verse (a view scrolled into
+ * one verse longer than the view, or a text with no verse markers), it is the first direct child of
+ * the editor's content-editable root (`.editor-input`, or `textElement` itself when no such root
+ * exists inside it) whose bottom edge is below the scroll container's top edge — the topmost
+ * paragraph not yet fully scrolled past.
+ *
+ * @param textElement The element `keepScrollPositionAcross` was asked to keep in place
+ * @param scrollContainer Its scroll container
+ * @returns The anchor element, or `undefined` when none qualifies
+ */
+function findScrollAnchorElement(
+  textElement: HTMLElement,
+  scrollContainer: HTMLElement,
+): HTMLElement | undefined {
+  const contentRoot = textElement.querySelector<HTMLElement>('.editor-input') ?? textElement;
+  const { top: containerTop, bottom: containerBottom } = scrollContainer.getBoundingClientRect();
+  const verse = Array.from(contentRoot.querySelectorAll<HTMLElement>('span[data-marker="v"]')).find(
+    (verseElement) => {
+      const { top, height } = verseElement.getBoundingClientRect();
+      return height > 0 && top >= containerTop && top < containerBottom;
+    },
+  );
+  if (verse) return verse;
+  return Array.from(contentRoot.children).find(
+    (child): child is HTMLElement =>
+      child instanceof HTMLElement && child.getBoundingClientRect().bottom > containerTop,
+  );
+}
+
+/**
  * Runs `action`, then puts the scroll container of `textElement` back where it was before it ran.
  *
  * For handing focus back to the text without moving the reader's view: the editor engine scrolls
@@ -880,20 +912,52 @@ export function scrollToNoteCaller(noteElement: HTMLElement): void {
  * microtask, so the position is put back on the next animation frame, which runs before that frame
  * is painted.
  *
+ * Anchored to the text rather than a bare pixel offset, because `action` can itself change the text
+ * panel's width (e.g. a footnotes pane opening or closing beside it instead of below it), and a
+ * width change re-wraps the text, so the raw `scrollTop` captured beforehand would land on a
+ * different passage. The anchor (the first verse whose top is in view, see
+ * {@link findScrollAnchorElement}) has its content-space position read before and after `action`
+ * (via {@link getTopWithinScrollContainer}, which does not depend on the current `scrollTop`), and
+ * the restored `scrollTop` is shifted by however far re-wrapping moved it, so the anchor lands at
+ * the same screen offset either way. When nothing re-wraps, the anchor does not move and this is a
+ * plain pixel restore.
+ *
  * @param textElement An element inside the text whose scroll position to keep (e.g. its
  *   `.editor-container`); when it has no scroll container, `action` simply runs
- * @param action What to run, e.g. focusing the text
+ * @param action What to run, e.g. focusing the text or toggling the footnotes pane
  */
 export function keepScrollPositionAcross(
   textElement: HTMLElement | undefined,
   action: () => void,
 ): void {
-  const scrollContainer = textElement ? findScrollContainer(textElement) : undefined;
-  const scrollTop = scrollContainer?.scrollTop;
+  if (!textElement) {
+    action();
+    return;
+  }
+  const scrollContainer = findScrollContainer(textElement);
+  if (!scrollContainer) {
+    action();
+    return;
+  }
+
+  const { scrollTop } = scrollContainer;
+  const anchor = findScrollAnchorElement(textElement, scrollContainer);
+  const anchorContentTop = anchor
+    ? getTopWithinScrollContainer(anchor.getBoundingClientRect(), scrollContainer)
+    : undefined;
+
   action();
-  if (!scrollContainer || scrollTop === undefined) return;
+
   requestAnimationFrame(() => {
-    scrollContainer.scrollTop = scrollTop;
+    if (anchor === undefined || anchorContentTop === undefined || !anchor.isConnected) {
+      scrollContainer.scrollTop = scrollTop;
+      return;
+    }
+    const newAnchorContentTop = getTopWithinScrollContainer(
+      anchor.getBoundingClientRect(),
+      scrollContainer,
+    );
+    scrollContainer.scrollTop = scrollTop + (newAnchorContentTop - anchorContentTop);
   });
 }
 

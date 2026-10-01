@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { afterEach, describe, expect, it, test, vi } from 'vitest';
 import { FootnoteList } from '@/components/advanced/footnotes/footnote-list.component';
@@ -198,6 +198,86 @@ test('tabs through every row in order, entering the editing row in its place', a
   expect(screen.getByTestId('editor-input')).toHaveFocus();
   await user.tab();
   expect(rows[1]).toHaveFocus();
+});
+
+describe('FootnoteList editing-row reveal', () => {
+  /** A row editor that puts its caret at the start or the end of its text as it mounts. */
+  function CaretPlacingEditor({ caretAt }: { caretAt: 'start' | 'end' }) {
+    // The ref needs to start out with null for it to work as an element ref
+    // eslint-disable-next-line no-null/no-null
+    const ref = useRef<HTMLSpanElement>(null);
+    useLayoutEffect(() => {
+      const text = ref.current?.firstChild;
+      if (text) document.getSelection()?.collapse(text, 1);
+    }, []);
+    return (
+      <div data-testid="row-editor">
+        {caretAt === 'start' ? (
+          <span ref={ref} data-caret-line="top">
+            a
+          </span>
+        ) : (
+          <span ref={ref} data-caret-line="bottom">
+            z
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  /**
+   * Lays out (jsdom has none) a list 100px tall and an editing row `rowHeight` tall at its top,
+   * with a caret line near the row's top or its bottom.
+   */
+  function stubLayout(rowHeight: number) {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function rect(
+      this: Element,
+    ) {
+      const box = (top: number, height: number) => new DOMRect(0, top, 100, height);
+      if (this.getAttribute('role') === 'listbox') return box(0, 100);
+      if (this.tagName === 'LI' && this.querySelector('[data-testid="row-editor"]'))
+        return box(0, rowHeight);
+      const caretLine = this.getAttribute('data-caret-line');
+      if (caretLine === 'top') return box(10, 10);
+      if (caretLine === 'bottom') return box(rowHeight - 20, 10);
+      return box(0, 0);
+    });
+  }
+
+  function renderEditing(caretAt: 'start' | 'end') {
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+    render(
+      <FootnoteList
+        footnotes={notesWithReferences}
+        listId="notes"
+        editingFootnoteIndex={1}
+        renderEditingFootnote={() => <CaretPlacingEditor caretAt={caretAt} />}
+      />,
+    );
+    const row = screen.getByTestId('row-editor').closest('li');
+    return row
+      ? scrollIntoView.mock.calls.filter((_, i) => scrollIntoView.mock.contexts[i] === row)
+      : [];
+  }
+
+  afterEach(() => {
+    document.getSelection()?.removeAllRanges();
+  });
+
+  it('reveals a row that fits just far enough to show all of it', () => {
+    stubLayout(60);
+    expect(renderEditing('end')).toEqual([[{ block: 'nearest' }]]);
+  });
+
+  it('aligns a row taller than the list at its bottom when the caret is near its end', () => {
+    stubLayout(300);
+    expect(renderEditing('end')).toEqual([[{ block: 'end' }]]);
+  });
+
+  it('aligns a row taller than the list at its top when the caret is near its start', () => {
+    stubLayout(300);
+    expect(renderEditing('start')).toEqual([[{ block: 'start' }]]);
+  });
 });
 
 describe('FootnoteList focused row reporting', () => {

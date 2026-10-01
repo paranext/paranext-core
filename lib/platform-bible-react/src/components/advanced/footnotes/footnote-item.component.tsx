@@ -131,7 +131,9 @@ function renderMarkerObject(
   const { marker } = markerObj;
   // A marker with nothing to match - a closer typed where no run or note is open to close, `\f*`
   // in a note that ended before it - is one marker in the text, spelled exactly as written
-  // (a nested one's `+` included), not a run with an opener and a closer of its own.
+  // (a nested one's `+` included), not a run with an opener and a closer of its own. It shows
+  // even with markers hidden, as the Standard editor shows it in every view mode: it flags an
+  // error in the text rather than marking up text that is fine.
   if (markerObj.type === 'unmatched')
     return (
       <span key={key} className="marker">

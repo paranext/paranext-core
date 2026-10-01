@@ -133,7 +133,8 @@ function firstTextNodeWithin(node: Node): Text | undefined {
  * @param clientX Viewport X of the click (from the mouse event).
  * @param clientY Viewport Y of the click.
  * @param rowElement The row's root element; the position is computed over the text of its
- *   `.textual-note-body` descendant (see {@link RowTextKind}).
+ *   `.textual-note-body` descendant (see `RowTextKind` in this module for what each piece of that
+ *   text counts as).
  * @returns The position (see {@link FootnoteCaretPosition}), or `'end'` when the click cannot be
  *   mapped (no browser support, click outside the row's text).
  */

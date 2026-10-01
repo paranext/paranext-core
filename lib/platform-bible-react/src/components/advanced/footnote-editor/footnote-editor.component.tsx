@@ -69,7 +69,7 @@ import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 import { MarkerMenu } from '../marker-menu.component';
-import { generateInlineMarkerMenuListItems } from './footnote-editor.utils';
+import { generateInlineMarkerMenuListItems, isUnclosedNoteOp } from './footnote-editor.utils';
 import { FootnoteCaretPosition } from '../footnotes/footnotes.types';
 
 /**
@@ -250,35 +250,39 @@ function deltaOpsLength(ops: DeltaOp[]): number {
   );
 }
 
-/** `ops` split into single units: one op per UTF-16 code unit of text, one per embed. */
-function deltaOpUnits(ops: DeltaOp[]): DeltaOp[] {
-  return ops.flatMap((op) =>
-    typeof op.insert === 'string'
-      ? op.insert
-          .split('')
-          .map((unit) =>
-            op.attributes ? { insert: unit, attributes: op.attributes } : { insert: unit },
-          )
-      : [op],
-  );
-}
-
-/** Whether `ops` begin with exactly the content `prefix` inserts, however either splits its text. */
+/**
+ * Whether `ops` begin with exactly the content `prefix` inserts, however either splits its text.
+ * Walks both lists in step and stops when `prefix` runs out, so the cost follows `prefix`, not
+ * everything in `ops`.
+ */
 function deltaOpsStartWith(ops: DeltaOp[], prefix: DeltaOp[]): boolean {
-  const units = deltaOpUnits(ops);
-  const prefixUnits = deltaOpUnits(prefix);
-  return (
-    prefixUnits.length <= units.length &&
-    prefixUnits.every((unit, index) => deepEqual(unit, units[index]))
-  );
-}
-
-/** Whether `op` is an UNCLOSED note (`closed: "false"`, written with no closer). */
-function isUnclosedNoteOp(op: DeltaOp | undefined): boolean {
-  if (!op || !isInsertEmbedOpOfType('note', op)) return false;
-  // `closed` rides on the embed as an unknown attribute; the embed's type does not declare it.
-  const { note } = op.insert;
-  return !!note && 'closed' in note && note.closed === 'false';
+  let opIndex = 0;
+  // How far into `ops[opIndex]`'s text the comparison has reached.
+  let opOffset = 0;
+  return prefix.every((prefixOp) => {
+    if (typeof prefixOp.insert !== 'string') {
+      const op = ops[opIndex];
+      if (opOffset !== 0 || !op || !deepEqual(op, prefixOp)) return false;
+      opIndex += 1;
+      return true;
+    }
+    let remaining = prefixOp.insert;
+    while (remaining.length > 0) {
+      const op = ops[opIndex];
+      if (!op || typeof op.insert !== 'string' || !deepEqual(op.attributes, prefixOp.attributes))
+        return false;
+      const available = op.insert.slice(opOffset);
+      const compared = Math.min(available.length, remaining.length);
+      if (available.slice(0, compared) !== remaining.slice(0, compared)) return false;
+      remaining = remaining.slice(compared);
+      opOffset += compared;
+      if (opOffset === op.insert.length) {
+        opIndex += 1;
+        opOffset = 0;
+      }
+    }
+    return true;
+  });
 }
 
 /**
@@ -733,7 +737,13 @@ export default function FootnoteEditor({
           // behind its back with content it already has would silently strand the session. The
           // popover deliberately keeps applying unconditionally: its Save is also what confirms a
           // newly inserted note, which would otherwise be discarded as abandoned on close.
-          const carriedText = carriedTextRef.current;
+          // Text still after the note in this editor is carried text whose take (deferred out of
+          // the change listener) has not run yet. It is read, not taken, so a session that ends
+          // before the take still carries it, and the take later yields the same ops.
+          const carriedText = [
+            ...carriedTextRef.current,
+            ...(editorRef.current?.getOpsAfterNote(0) ?? []),
+          ];
           const appliedCarriedText = appliedCarriedTextRef.current;
           const isCarriedTextChanged = !deepEqual(carriedText, appliedCarriedText);
           if (

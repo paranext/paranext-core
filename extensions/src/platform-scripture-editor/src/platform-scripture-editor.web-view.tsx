@@ -77,6 +77,7 @@ import {
   UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
   isMacOs,
+  isUnclosedNoteOp,
   useLivePopoverAnchor,
   usePromise,
   useViewVisibility,
@@ -182,7 +183,6 @@ import {
   isMissingBookError,
   isMissingBookInfoOnScreen,
   isOverrunProjectIdParse,
-  isUnclosedNoteOp,
   openCommentListAndSelectThreadSafe,
   paragraphMarkerNameKey,
   parseMissingBookError,
@@ -2003,8 +2003,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         case 'toggleFootnotesPaneVisibility': {
           const { current } = footnotesPaneVisibleRef;
-          if (current) endPaneNoteEdit();
-          setFootnotesPaneVisible(!current);
+          // Opening or closing the pane beside the text (rather than below it) changes the text
+          // panel's width and re-wraps it, the same as the pane's own close button does — so the
+          // toggle keeps the text's scroll position the same way `hideFootnotesPane` does, by
+          // capturing the anchor before the visibility state change commits and restoring it once
+          // the resulting layout change has landed on the next frame.
+          keepScrollPositionAcross(
+            editorContainerRef.current?.querySelector<HTMLElement>('.editor-container') ??
+              undefined,
+            () => {
+              if (current) endPaneNoteEdit();
+              setFootnotesPaneVisible(!current);
+            },
+          );
           break;
         }
         case 'insertFootnoteAtSelection': {

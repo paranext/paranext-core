@@ -3,6 +3,10 @@
  * The text scrolls inside its own panel in `FootnotesLayout`; if showing or hiding the pane swapped
  * that scrolling element for another one, the text would land back at the top of the chapter.
  *
+ * Covers both pane positions: below the text, where opening or closing the pane does not change the
+ * text panel's width, and beside the text, where it does — narrowing or widening the text and
+ * re-wrapping it, which the text's scroll position has to account for either way.
+ *
  * Matthew 5 is long enough to scroll well past its first verse and carries footnote callers through
  * its middle (verses 5, 18, 22, 26, 27, 29, 30, 43 and 47 in
  * `c-sharp/assets/WEB/41MATengWEBUS.SFM`).
@@ -276,6 +280,45 @@ test.describe('footnotes pane and the Scripture text scroll position', () => {
       await expect(pane).toHaveCount(1, { timeout: 20_000 });
       await expect.poll(() => isCallerInView(frame, callerIndex), { timeout: 10_000 }).toBe(true);
       expect((await readTextViewport(frame)).visibleVerses).not.toContain(1);
+    });
+
+    await test.step('moving the pane beside the text, then closing or reopening it there, keeps the same verses in view', async () => {
+      // The position change only takes effect while the pane is visible (`FootnotesLayout` only
+      // listens for it then), and the previous step left it open.
+      await sendCommandWithId(
+        mainPage,
+        'platformScriptureEditor.changeFootnotesPaneLocation',
+        editorId,
+      );
+      // The pane now takes its room from beside the text instead of below it, narrowing the text
+      // panel and re-wrapping its lines.
+      await waitForTextToSettle(frame);
+      const versesBesideText = (await readTextViewport(frame)).visibleVerses;
+      // Positive control: still scrolled well into the chapter, not back at the top.
+      expect(versesBesideText).not.toContain(1);
+      // A verse from the middle of the visible range, not its first or last: re-wrapping can shift
+      // exactly which verse sits flush against the viewport's edge by a line, so checking an edge
+      // verse here would be checking the re-wrap itself rather than whether scroll position was
+      // kept. A verse safely inside the range is unaffected by that edge slop.
+      const middleVerse = versesBesideText[Math.floor(versesBesideText.length / 2)];
+
+      await test.step('closing the pane with its X keeps the same verses in view', async () => {
+        await frame.getByRole('button', { name: 'Close footnotes pane' }).click();
+        await expect(pane).toHaveCount(0, { timeout: 20_000 });
+        await expect
+          .poll(async () => (await readTextViewport(frame)).visibleVerses, { timeout: 10_000 })
+          .toContain(middleVerse);
+        expect((await readTextViewport(frame)).visibleVerses).not.toContain(1);
+      });
+
+      await test.step('reopening the pane beside the text with the toggle command keeps the same verses in view', async () => {
+        await sendCommandWithId(mainPage, 'platformScriptureEditor.toggleFootnotes', editorId);
+        await expect(pane).toHaveCount(1, { timeout: 20_000 });
+        await expect
+          .poll(async () => (await readTextViewport(frame)).visibleVerses, { timeout: 10_000 })
+          .toContain(middleVerse);
+        expect((await readTextViewport(frame)).visibleVerses).not.toContain(1);
+      });
     });
   });
 });

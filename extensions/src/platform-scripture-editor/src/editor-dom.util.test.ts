@@ -244,6 +244,51 @@ describe('keepScrollPositionAcross', () => {
     expect(action).toHaveBeenCalledOnce();
     expect(requestFrame).not.toHaveBeenCalled();
   });
+
+  it('shifts scrollTop to keep the anchor paragraph at the same screen offset when the action re-wraps the text', () => {
+    const { wrapper, editorContainer } = buildEditorDom({ verseNumbers: [] });
+    const paragraph = editorContainer.querySelector('p');
+    if (!paragraph) throw new Error('test setup failed: no paragraph');
+    // The paragraph sits 40px below the scroll container's top edge before the action runs.
+    stubRect(paragraph, 40, 20);
+    wrapper.scrollTop = 500;
+    const runFrames = captureAnimationFrames();
+
+    keepScrollPositionAcross(editorContainer, () => {
+      // Simulates a width change (the footnotes pane opening or closing beside the text instead
+      // of below it) re-wrapping the text: the same paragraph now renders 15px lower.
+      stubRect(paragraph, 55, 20);
+    });
+
+    runFrames();
+
+    // A pixel-only restore would land back at 500, showing a different passage now that the text
+    // re-wrapped; the extra 15px keeps the paragraph at the same screen offset it had before the
+    // toggle.
+    expect(wrapper.scrollTop).toBe(515);
+  });
+
+  it('keeps the first verse whose top is in view in place, even inside a paragraph that starts above the view', () => {
+    const { wrapper, editorContainer } = buildEditorDom({
+      verseNumbers: [14, 15],
+      verseTops: { 14: -100, 15: 300 },
+    });
+    const paragraph = editorContainer.querySelector('p');
+    const verse15 = editorContainer.querySelector<HTMLElement>('[data-number="15"]');
+    if (!paragraph || !verse15) throw new Error('test setup failed');
+    // One long paragraph, starting above the view, holds both verses.
+    stubRect(paragraph, -200, 2000);
+    wrapper.scrollTop = 500;
+    const runFrames = captureAnimationFrames();
+
+    keepScrollPositionAcross(editorContainer, () => {
+      // The re-wrap moves verse 15 down within its paragraph; the paragraph's own top stays put.
+      stubRect(verse15, 340, 20);
+    });
+    runFrames();
+
+    expect(wrapper.scrollTop).toBe(540);
+  });
 });
 
 describe('findScrollContainer', () => {

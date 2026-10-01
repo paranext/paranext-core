@@ -14,7 +14,11 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { createRef, forwardRef, useImperativeHandle } from 'react';
 import type { RefObject } from 'react';
-import type { DeltaOpInsertNoteEmbed, EditorRef } from '@eten-tech-foundation/platform-editor';
+import type {
+  DeltaOp,
+  DeltaOpInsertNoteEmbed,
+  EditorRef,
+} from '@eten-tech-foundation/platform-editor';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
 import FootnoteEditor, {
@@ -412,7 +416,7 @@ describe('FootnoteEditor inline live-apply', () => {
       const parentRef = {
         current: {
           replaceEmbedUpdate: vi.fn(),
-          getOpsAfterNote: vi.fn(() => [{ insert: ' beta' }]),
+          getOpsAfterNote: vi.fn((): DeltaOp[] => [{ insert: ' beta' }]),
         },
       };
       const view = renderEditor({
@@ -502,6 +506,58 @@ describe('FootnoteEditor inline live-apply', () => {
       await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
 
       expect(lastApplied(parentRef)).toEqual([openNoteOp('alpha beta')]);
+    });
+
+    it('takes the text back out of the parent however the parent splits it', async () => {
+      const { parentRef } = await editThatClosesTheNote();
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      // The same " beta", split differently and followed by more of the paragraph.
+      parentRef.current.getOpsAfterNote.mockReturnValue([
+        { insert: ' b' },
+        { insert: 'eta and the rest' },
+      ]);
+
+      changeNoteTo(openNoteOp('alpha beta')); // the undo
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+
+      expect(lastApplied(parentRef)).toEqual([openNoteOp('alpha beta'), { delete: 5 }]);
+    });
+
+    it('does not take back text that only matches part of what was applied', async () => {
+      const { parentRef } = await editThatClosesTheNote();
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      parentRef.current.getOpsAfterNote.mockReturnValue([
+        { insert: ' be' },
+        { insert: 'ta', attributes: { char: { style: 'bd' } } },
+      ]);
+
+      changeNoteTo(openNoteOp('alpha beta')); // the undo
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+
+      expect(lastApplied(parentRef)).toEqual([openNoteOp('alpha beta')]);
+    });
+
+    it('carries the text when the session ends before it is taken', async () => {
+      vi.useFakeTimers();
+      const parentRef = {
+        current: { replaceEmbedUpdate: vi.fn(), getOpsAfterNote: vi.fn(() => []) },
+      };
+      const { unmount } = renderEditor({
+        inline: true,
+        noteOps: [openNoteOp('alpha beta')],
+        parentEditorRef: makeParentRef(parentRef),
+        noteKey: 'key-close',
+      });
+      await vi.runOnlyPendingTimersAsync(); // initial load
+      editorRefMock.getNoteOps.mockReturnValue([openNoteOp('alpha beta')]);
+      latestEditorialProps.onUsjChange?.(paraUsj); // snapshot call
+      editorRefMock.getNoteOps.mockReturnValue(makeNoteOps('alpha'));
+      editorRefMock.getOpsAfterNote.mockReturnValue([{ insert: ' beta' }]);
+      latestEditorialProps.onUsjChange?.(paraUsj);
+
+      unmount(); // before the deferred take runs
+
+      expect(lastApplied(parentRef)).toEqual([makeNoteOps('alpha')[0], { insert: ' beta' }]);
     });
 
     it('the redo of that undo carries the text out again', async () => {

@@ -1,4 +1,4 @@
-import { EditorRef } from '@eten-tech-foundation/platform-editor';
+import { DeltaOp, EditorRef, isInsertEmbedOpOfType } from '@eten-tech-foundation/platform-editor';
 import { LanguageStrings, usfmMarkers } from 'platform-bible-utils';
 import { MutableRefObject } from 'react';
 import { MarkerMenuItem } from '../marker-menu.component';
@@ -54,4 +54,19 @@ export function generateInlineMarkerMenuListItems(
     );
   });
   return markerMenuItems.sort((a, b) => (a.marker ?? a.title).localeCompare(b.marker ?? b.title));
+}
+
+/**
+ * Whether a delta op is an UNCLOSED note: one written with no closing marker (`\f` with no `\f*`),
+ * which USJ marks `closed: "false"`. Such a note is edited in place in the text, as PT9 does its
+ * `opennote`.
+ *
+ * @param op The op to check; anything other than a note embed is not an unclosed note
+ * @returns Whether `op` is a note embed marked unclosed
+ */
+export function isUnclosedNoteOp(op: DeltaOp | undefined): boolean {
+  if (!op || !isInsertEmbedOpOfType('note', op)) return false;
+  // `closed` rides on the embed as an unknown attribute; the embed's type does not declare it.
+  const { note } = op.insert;
+  return !!note && 'closed' in note && note.closed === 'false';
 }

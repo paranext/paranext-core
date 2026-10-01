@@ -52,11 +52,7 @@ import type { MutableRefObject } from 'react';
 // import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
 // import from the editor package drags its React-bundling dist into the main bundle, breaking
 // extension activation. See platform-scripture-editor.web-view.utils.ts's header.
-import type {
-  DeltaOp,
-  DeltaOpInsertNoteEmbed,
-  EditorRef,
-} from '@eten-tech-foundation/platform-editor';
+import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
@@ -238,19 +234,6 @@ export function shouldEndPaneNoteEditOnRowSelect({
   selectedIndex: number;
 }): boolean {
   return paneEditingIndex !== undefined && paneEditingIndex !== selectedIndex;
-}
-
-/**
- * Whether a note insert-embed op is an UNCLOSED note (`closed: "false"`, written with no `\f*`).
- * The text shows such a note expanded and edits it in place, as PT9 does its `opennote`.
- *
- * @param noteOp A note insert-embed op
- * @returns Whether the note is unclosed
- */
-export function isUnclosedNoteOp(noteOp: DeltaOpInsertNoteEmbed): boolean {
-  // `closed` rides on the embed as an unknown attribute; the embed's type does not declare it.
-  const { note } = noteOp.insert;
-  return !!note && 'closed' in note && note.closed === 'false';
 }
 
 /** Snapshot of the state a collapsed-note caller click decides against. */

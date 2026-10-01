@@ -20,6 +20,43 @@ const EDITING_ROW_KEY = 'editing-row';
  */
 const EDITING_ROW_REVEAL_MS = 1000;
 
+/** Where the caret is on screen, when it is inside `element`. */
+function getCaretRectIn(element: HTMLElement): DOMRect | undefined {
+  const selection = element.ownerDocument.getSelection();
+  if (!selection || selection.rangeCount === 0 || !element.contains(selection.focusNode))
+    return undefined;
+  const range = selection.getRangeAt(0).cloneRange();
+  range.collapse(false);
+  // A collapsed range at an element boundary can measure as an empty rect at the origin.
+  const rangeRect =
+    typeof range.getBoundingClientRect === 'function' ? range.getBoundingClientRect() : undefined;
+  if (rangeRect && (rangeRect.height > 0 || rangeRect.top !== 0)) return rangeRect;
+  const { focusNode } = selection;
+  const focusElement = focusNode instanceof Element ? focusNode : focusNode?.parentElement;
+  return focusElement?.getBoundingClientRect();
+}
+
+/**
+ * Brings the row being edited into view in `list`, its scroll container. A row that fits is
+ * revealed whole. A row taller than the list is aligned at whichever edge keeps the caret in view
+ * (the top for a caret near its start, the bottom for one near its end), because revealing as much
+ * of it as fits from the top would push a caret at its end out of view. Only rect heights and
+ * differences are compared, all read in the same coordinate space, so a zoomed pane measures the
+ * same as an unzoomed one.
+ */
+function revealEditingRow(row: HTMLElement, list: HTMLElement | null): void {
+  const rowRect = row.getBoundingClientRect();
+  const listHeight = list?.getBoundingClientRect().height ?? 0;
+  const caretRect = getCaretRectIn(row);
+  if (!list || rowRect.height <= listHeight || !caretRect) {
+    row.scrollIntoView({ block: 'nearest' });
+    return;
+  }
+  if (caretRect.bottom - rowRect.top <= listHeight) row.scrollIntoView({ block: 'start' });
+  else if (rowRect.bottom - caretRect.top <= listHeight) row.scrollIntoView({ block: 'end' });
+  // A caret too far from both edges for either to show it is left where the editor put it.
+}
+
 /**
  * Returns the nearest row index adjacent to `from` in `direction`, hopping over `editingIndex` -
  * that row isn't a selectable option while it's being edited, and it renders no `ref`/`tabIndex`
@@ -75,6 +112,9 @@ export function FootnoteList({
   // React's ref API requires `null` as the initial value for DOM refs.
   // eslint-disable-next-line no-null/no-null
   const editingRowRef = useRef<HTMLLIElement>(null);
+  // React's ref API requires `null` as the initial value for DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const listRef = useRef<HTMLDivElement>(null);
 
   const handleFootnoteClick = (
     footnote: MarkerObject,
@@ -237,7 +277,7 @@ export function FootnoteList({
   useEffect(() => {
     const row = editingRowRef.current;
     if (editingRowIndex === undefined || !row) return undefined;
-    const reveal = () => row.scrollIntoView({ block: 'nearest' });
+    const reveal = () => revealEditingRow(row, listRef.current);
     reveal();
     if (typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(reveal);
@@ -261,6 +301,7 @@ export function FootnoteList({
     // starts by focusing it. With NO rows there is no row to be that stop, so the list takes the
     // turn itself rather than leaving the region unreachable by keyboard.
     <div
+      ref={listRef}
       role="listbox"
       aria-label={ariaLabel}
       tabIndex={footnotes.length === 0 ? 0 : -1}
