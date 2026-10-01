@@ -24,6 +24,11 @@ const SEVERAL_PROJECTS = [
   { projectId: 'proj-web', name: 'WEB' },
 ];
 
+const TWO_PROJECTS = [
+  { projectId: 'proj-hnf', name: 'HNF' },
+  { projectId: 'proj-tpts', name: 'TPTS' },
+];
+
 /** Long enough to clip inside the button's 180px cap, so the truncation tooltip is exercisable. */
 const LONG_NAME_PROJECT = [
   { projectId: 'proj-long', name: 'Hunde New Testament and Portions Revision' },
@@ -163,6 +168,17 @@ export const Cancelled: Story = {
 };
 
 /**
+ * No sync is running, the last one did not fail, and at least one project holds local changes not
+ * yet sent: "Unsynced changes". Read from each project's repository, so it also covers edits made
+ * in an earlier session.
+ */
+export const Unsynced: Story = {
+  decorators: [
+    withSyncStatus({ status: 'unsynced', syncingProjects: [], unsyncedProjects: TWO_PROJECTS }),
+  ],
+};
+
+/**
  * The status could not be read at all. Deliberately not `idle`: "nothing has synced" would be a
  * positive claim resting on a read that never answered — which is what the question-mark icon says,
  * in place of `Idle`'s sync glyph.
@@ -245,6 +261,14 @@ export const PopoverSynced: Story = {
 /** Popover after a sync that did not succeed — the case "View sync details" exists for. */
 export const PopoverFailed: Story = {
   decorators: [withSyncStatus({ status: 'failed', syncingProjects: [], unsyncedProjects: [] })],
+  play: openPopover,
+};
+
+/** Popover with unsent local changes: the projects that hold them, by name. */
+export const PopoverUnsynced: Story = {
+  decorators: [
+    withSyncStatus({ status: 'unsynced', syncingProjects: [], unsyncedProjects: TWO_PROJECTS }),
+  ],
   play: openPopover,
 };
 
