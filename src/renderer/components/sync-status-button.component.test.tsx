@@ -8,6 +8,7 @@ import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { notificationService } from '@shared/services/notification.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
+import { useUnsyncedChanges } from '@renderer/hooks/use-unsynced-changes.hook';
 import { resetSyncActivity, setSyncActivity } from '@renderer/services/sync-activity-store';
 import type {
   ResultInfo,
@@ -46,10 +47,12 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_popover_idle%': 'Test no sync running',
       '%toolbar_sync_popover_synced%': 'Test last sync finished',
       '%toolbar_sync_popover_unknown%': 'Test status unavailable',
+      '%toolbar_sync_popover_unsynced%': 'Test These projects have unsynced changes:',
       '%toolbar_sync_progress_item%': '{item} — {percent}%',
       '%toolbar_sync_status_cancelled%': 'Test Sync cancelled',
       '%toolbar_sync_status_failed%': 'Test Sync failed',
       '%toolbar_sync_status_unknown%': 'Test Sync status unavailable',
+      '%toolbar_sync_status_unsynced%': 'Test Unsynced changes',
       '%toolbar_sync_status_synced%': 'Test Synced',
       '%toolbar_sync_status_syncing%': 'Test Syncing',
       '%toolbar_sync_status_syncing_project%': 'Test Syncing {projectName}',
@@ -59,6 +62,11 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     },
   ]),
 }));
+
+// The unsynced-changes signal reads project repositories, which is not what this suite exercises;
+// each test names the unsynced project ids directly. Unset (reset to `undefined`) means "not read
+// yet", which contributes no `unsynced` status.
+vi.mock('@renderer/hooks/use-unsynced-changes.hook', () => ({ useUnsyncedChanges: vi.fn() }));
 
 vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 
@@ -2434,6 +2442,73 @@ describe('SyncStatusButton — accessibility', () => {
     render(<SyncStatusButton />);
 
     await screen.findByRole('button', { name: UNKNOWN_ACCESSIBLE_NAME });
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+});
+
+describe('SyncStatusButton — unsynced changes', () => {
+  const mockUnsyncedProjectIds = (projectIds: string[]) => {
+    vi.mocked(useUnsyncedChanges).mockReturnValue(projectIds);
+  };
+
+  it('labels the button and shows the unsynced icon', async () => {
+    mockSyncState(IDLE_STATE);
+    mockUnsyncedProjectIds(['a']);
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Test Unsynced changes' }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('toolbar-sync-unsynced-icon')).toBeInTheDocument();
+  });
+
+  it('lists each unsynced project in the popover, keeps View sync details, and offers no Cancel', async () => {
+    mockSyncState(IDLE_STATE);
+    mockUnsyncedProjectIds(['a', 'b']);
+    mockProjectNames({ a: 'AAA', b: 'BBB' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Test Unsynced changes' }));
+
+    expect(
+      await screen.findByText('Test These projects have unsynced changes:'),
+    ).toBeInTheDocument();
+    const list = await screen.findByTestId('toolbar-sync-popover-projects');
+    await waitFor(() => {
+      expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+    });
+    expect(list.querySelector('li[data-project-id="a"]')).toHaveTextContent('AAA');
+    expect(list.querySelector('li[data-project-id="b"]')).toHaveTextContent('BBB');
+    expect(screen.getByTestId('toolbar-sync-view-details-button')).toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-sync-cancel-button')).not.toBeInTheDocument();
+  });
+
+  it('shows the message without a list while the project names are still unresolved', async () => {
+    mockSyncState(IDLE_STATE);
+    mockUnsyncedProjectIds(['a']);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockReturnValue(
+      new Promise(() => {}),
+    );
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Test Unsynced changes' }));
+
+    expect(
+      await screen.findByText('Test These projects have unsynced changes:'),
+    ).toBeInTheDocument();
+  });
+
+  it('does not announce the move from idle to unsynced', async () => {
+    mockSyncState(IDLE_STATE);
+    const { rerender } = render(<SyncStatusButton />);
+    await screen.findByRole('button', { name: 'Sync' });
+
+    mockUnsyncedProjectIds(['a']);
+    mockProjectNames({ a: 'AAA' });
+    rerender(<SyncStatusButton />);
+
+    await screen.findByRole('button', { name: 'Test Unsynced changes' });
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 });
