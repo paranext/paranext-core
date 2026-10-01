@@ -25,6 +25,7 @@ const chapter = (number: string, extras: Record<string, string> = {}): MarkerCon
   number,
   ...extras,
 });
+const VERSE_1: MarkerContent = { type: 'verse', marker: 'v', number: '1' };
 const para = (marker: string, text: string): MarkerContent => ({
   type: 'para',
   marker,
@@ -177,6 +178,73 @@ describe('repairChapterMarkers — USJ specifics', () => {
       ID_GEN,
       { type: 'para', marker: 'p', content: ['before', 'after'] },
     ]);
+  });
+
+  describe('a chapter marker typed in the middle of a paragraph', () => {
+    // The shape the editor settles `aaa \c 5 bbb` into: the paragraph cut short at the marker, the
+    // marker, and the rest of the paragraph's text standing outside any paragraph.
+    const typedMidParagraph = usjOf(
+      chapter('3'),
+      { type: 'para', marker: 'p', content: [VERSE_1, 'aaa '] },
+      chapter('5'),
+      'bbb ',
+      para('p', 'next para'),
+    );
+
+    it('puts the text after the marker back into the paragraph, as removing the marker bytes does', () => {
+      const { usj, didRepair } = repairChapterMarkers(typedMidParagraph, 3);
+      expect(didRepair).toBe(true);
+      expect(usj.content).toEqual([
+        chapter('3'),
+        { type: 'para', marker: 'p', content: [VERSE_1, 'aaa bbb '] },
+        para('p', 'next para'),
+      ]);
+    });
+
+    it('puts inline markers after the marker back into the paragraph too, up to the next block', () => {
+      const note = { type: 'note', marker: 'f', caller: '+', content: ['n'] };
+      const { usj } = repairChapterMarkers(
+        usjOf(
+          chapter('2'),
+          para('p', 'aaa '),
+          chapter('5'),
+          'bbb ',
+          { type: 'verse', marker: 'v', number: '2' },
+          'ccc',
+          note,
+          para('p', 'next para'),
+        ),
+        2,
+      );
+      expect(usj.content).toEqual([
+        chapter('2'),
+        {
+          type: 'para',
+          marker: 'p',
+          content: ['aaa bbb ', { type: 'verse', marker: 'v', number: '2' }, 'ccc', note],
+        },
+        para('p', 'next para'),
+      ]);
+    });
+
+    it('rejoins a paragraph that a chapter later than the first had its own marker typed into', () => {
+      const { usj } = repairChapterMarkers(usjOf(para('p', 'aaa '), chapter('3'), 'bbb'), 3);
+      expect(usj.content).toEqual([chapter('3'), para('p', 'aaa bbb')]);
+    });
+
+    it('leaves text alone that a removed marker did not cut off from a paragraph', () => {
+      const { usj } = repairChapterMarkers(
+        usjOf(chapter('2'), chapter('5'), 'bbb', para('p', 'two')),
+        2,
+      );
+      expect(usj.content).toEqual([chapter('2'), 'bbb', para('p', 'two')]);
+    });
+
+    it('does not mutate its input', () => {
+      const snapshot = JSON.stringify(typedMidParagraph);
+      repairChapterMarkers(typedMidParagraph, 3);
+      expect(JSON.stringify(typedMidParagraph)).toBe(snapshot);
+    });
   });
 
   it('does not mutate its input', () => {
@@ -532,6 +600,41 @@ describe('repairChapterMarkers — where the caret belongs after a repair', () =
     );
     expect(usj.content).toEqual([chapter('2'), para('p', 'one'), para('p', 'two')]);
     expect(caretTarget).toEqual({ start: { jsonPath: '$.content[2]', offset: 0 } });
+  });
+
+  it('puts the caret where a chapter marker typed mid-paragraph was removed, inside the rejoined text', () => {
+    const { caretTarget } = repairChapterMarkers(
+      usjOf(
+        chapter('3'),
+        { type: 'para', marker: 'p', content: [VERSE_1, 'aaa '] },
+        chapter('5'),
+        'bbb ',
+      ),
+      3,
+    );
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[1]', offset: 4 } });
+  });
+
+  it('puts the caret at the start of rejoined text that follows a marker rather than text', () => {
+    const { usj, caretTarget } = repairChapterMarkers(
+      usjOf(
+        chapter('3'),
+        { type: 'para', marker: 'p', content: ['aaa', VERSE_1] },
+        chapter('5'),
+        'bbb',
+      ),
+      3,
+    );
+    expect(usj.content[1]).toEqual({ type: 'para', marker: 'p', content: ['aaa', VERSE_1, 'bbb'] });
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[2]', offset: 0 } });
+  });
+
+  it('puts the caret before a rejoined marker when the marker is what followed the removed one', () => {
+    const { caretTarget } = repairChapterMarkers(
+      usjOf(chapter('3'), para('p', 'aaa'), chapter('5'), VERSE_1, 'bbb'),
+      3,
+    );
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1]', offset: 1 } });
   });
 
   it('prefers the corrected number over a removal site when the repair did both', () => {

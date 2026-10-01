@@ -33,6 +33,12 @@ const CHAPTER_MARKER = 'c';
 /** USJ `type` of a paragraph node. */
 const PARA_TYPE = 'para';
 /**
+ * USJ `type`s of marker nodes that run inside a paragraph rather than standing as blocks of their
+ * own. Anything not listed is treated as a block, so content of a kind not anticipated here is left
+ * where it is rather than moved into a paragraph.
+ */
+const INLINE_TYPES = new Set(['char', 'verse', 'note', 'ms', 'figure', 'optbreak', 'ref']);
+/**
  * Every USFM introduction paragraph marker begins with `i` (`\ip`, `\imt`, `\is`, `\iot`, …), so
  * the prefix alone identifies one.
  */
@@ -43,6 +49,24 @@ interface ChapterEntry {
   /** Index of this chapter node in the document's top-level `content`. */
   index: number;
   chapterObject: MarkerObject;
+}
+
+/**
+ * Where a top-level item of the stripped document ended up in the repaired one: either still a
+ * top-level item of its own, or joined onto the end of the paragraph a removed chapter marker had
+ * cut it off from.
+ */
+interface Placement {
+  /**
+   * Content indexes addressing the item in the repaired document. A text item joined onto text the
+   * paragraph already ended with addresses that combined text.
+   */
+  indexes: number[];
+  /**
+   * For a text item joined into a paragraph, where its own text starts within the text `indexes`
+   * addresses.
+   */
+  textOffset?: number;
 }
 
 /**
@@ -99,6 +123,16 @@ function isMarkerObject(item: MarkerContent | undefined): item is MarkerObject {
 /** Whether `item` is a chapter marker node. */
 function isChapterObject(item: MarkerContent): item is MarkerObject {
   return isMarkerObject(item) && item.type === CHAPTER_TYPE;
+}
+
+/** Whether `item` is a paragraph node. */
+function isParaObject(item: MarkerContent | undefined): item is MarkerObject {
+  return isMarkerObject(item) && item.type === PARA_TYPE;
+}
+
+/** Whether `item` is content that runs inside a paragraph — text or an inline marker. */
+function isInlineItem(item: MarkerContent): boolean {
+  return !isMarkerObject(item) || INLINE_TYPES.has(item.type);
 }
 
 /**
@@ -203,6 +237,45 @@ function caretAtRemovalBoundary(parentIndexes: number[], childIndex: number): Se
 }
 
 /**
+ * `para` with `item` appended, as a copy. Text joining text the paragraph already ends with is
+ * combined into that one text item, as the editor holds a run of text as one node.
+ *
+ * @param para The paragraph to append to.
+ * @param paraIndex Where `para` sits in the repaired document's top-level content.
+ * @param item The item to append.
+ * @returns The extended paragraph, and where `item` ended up.
+ */
+function appendToParagraph(
+  para: MarkerObject,
+  paraIndex: number,
+  item: MarkerContent,
+): { para: MarkerObject; placement: Placement } {
+  const paraContent = [...(para.content ?? [])];
+  const lastIndex = paraContent.length - 1;
+  const last = paraContent[lastIndex];
+  let placement: Placement;
+  if (typeof item === 'string' && typeof last === 'string') {
+    paraContent[lastIndex] = last + item;
+    placement = { indexes: [paraIndex, lastIndex], textOffset: last.length };
+  } else {
+    paraContent.push(item);
+    placement = {
+      indexes: [paraIndex, paraContent.length - 1],
+      textOffset: typeof item === 'string' ? 0 : undefined,
+    };
+  }
+  return { para: { ...para, content: paraContent }, placement };
+}
+
+/** The caret position at the start of an item the repair kept, wherever it ended up. */
+function caretAtStartOf({ indexes, textOffset }: Placement): SelectionRange {
+  if (textOffset !== undefined)
+    return { start: { jsonPath: usjJsonPathFromIndexes(indexes), offset: textOffset } };
+  if (indexes.length === 1) return caretAtRemovalBoundary(indexes, 0);
+  return caretAtRemovalBoundary(indexes.slice(0, -1), indexes[indexes.length - 1]);
+}
+
+/**
  * A result carrying `repairedContent`, reporting a repair only when that content actually differs
  * from what the document already holds.
  */
@@ -227,7 +300,8 @@ function toRepairResult(
  * belongs, so Paratext will accept the write (see the module comment for why a document that fails
  * that check poisons every later save of the chapter).
  *
- * Extra chapter markers are dropped, a missing one is restored, a nested one is removed, and the
+ * Extra chapter markers are dropped (the text that followed one in the paragraph it was typed into
+ * goes back into that paragraph), a missing one is restored, a nested one is removed, and the
  * surviving marker keeps its other fields (`sid`, `altnumber`, `pubnumber`) so publication and
  * alternate numbering survive the repair. The input document is never mutated; when nothing needs
  * repairing it is returned as-is.
@@ -261,15 +335,15 @@ export function repairChapterMarkers(
 
   /**
    * The caret target for the first nested marker the strip removed, addressed through
-   * `toRepairedIndex` because the top level is rebuilt around the surviving marker.
+   * `toRepairedIndexes` because the top level is rebuilt around the surviving marker.
    */
   function nestedRemovalCaretTarget(
-    toRepairedIndex: (index: number) => number,
+    toRepairedIndexes: (index: number) => number[],
   ): SelectionRange | undefined {
     if (!firstNestedRemoval) return undefined;
     const { topLevelIndex, removal } = firstNestedRemoval;
     return caretAtRemovalBoundary(
-      [toRepairedIndex(topLevelIndex), ...removal.parentIndexes],
+      [...toRepairedIndexes(topLevelIndex), ...removal.parentIndexes],
       removal.childIndex,
     );
   }
@@ -281,7 +355,7 @@ export function repairChapterMarkers(
     return toRepairResult(
       usj,
       strippedContent,
-      nestedRemovalCaretTarget((index) => index),
+      nestedRemovalCaretTarget((index) => [index]),
     );
   }
 
@@ -290,39 +364,72 @@ export function repairChapterMarkers(
     ? { ...anchor.chapterObject, number: expected }
     : { type: CHAPTER_TYPE, marker: CHAPTER_MARKER, number: expected };
 
-  const survivors = strippedContent.filter((item) => !isChapterObject(item));
   // Chapter 1 keeps its marker where the user has it, since the introduction ahead of it is the
   // author's; every other chapter puts its marker at the very start of the document. Nothing may
   // precede it there, not even an `\id` book node typed into the chapter: Paratext refuses a
   // chapter after the first that holds any content ahead of its chapter marker ("Text present
   // before chapter marker."), so a marker placed behind one would produce another document the
   // writer will not take.
-  const insertIndex =
-    expectedChapterNum === 1 && anchor
-      ? strippedContent.slice(0, anchor.index).filter((item) => !isChapterObject(item)).length
-      : 0;
+  const keepsAnchorInPlace = expectedChapterNum === 1 && !!anchor;
+  const repairedContent: MarkerContent[] = keepsAnchorInPlace ? [] : [repairedChapterObject];
+  let insertIndex = 0;
+  /** Where each non-chapter item of `strippedContent` ended up, by its index there. */
+  const placements = new Map<number, Placement>();
+  /**
+   * The paragraph that text following a removed chapter marker rejoins, while that text lasts.
+   *
+   * Paratext 9 removes a chapter marker's own bytes and nothing else, so whatever followed the
+   * marker on its line runs on in the paragraph the marker was typed into. The editor holds a
+   * chapter marker typed mid-paragraph as the paragraph cut short, the marker, and the rest of the
+   * paragraph's text standing outside any paragraph; that text goes back into the paragraph.
+   */
+  let rejoinParaIndex: number | undefined;
+  strippedContent.forEach((item, index) => {
+    if (isChapterObject(item)) {
+      if (keepsAnchorInPlace && index === anchor?.index) {
+        insertIndex = repairedContent.length;
+        repairedContent.push(repairedChapterObject);
+        rejoinParaIndex = undefined;
+        return;
+      }
+      const lastIndex = repairedContent.length - 1;
+      if (rejoinParaIndex === undefined && isParaObject(repairedContent[lastIndex]))
+        rejoinParaIndex = lastIndex;
+      return;
+    }
+    const rejoinPara = rejoinParaIndex === undefined ? undefined : repairedContent[rejoinParaIndex];
+    if (rejoinParaIndex !== undefined && isParaObject(rejoinPara) && isInlineItem(item)) {
+      const { para, placement } = appendToParagraph(rejoinPara, rejoinParaIndex, item);
+      repairedContent[rejoinParaIndex] = para;
+      placements.set(index, placement);
+      return;
+    }
+    rejoinParaIndex = undefined;
+    placements.set(index, { indexes: [repairedContent.length] });
+    repairedContent.push(item);
+  });
 
-  /** Where a top-level item that survived the repair ended up. */
-  function mapTopLevelIndex(index: number): number {
-    const amongSurvivors = strippedContent
-      .slice(0, index)
-      .filter((item) => !isChapterObject(item)).length;
-    return amongSurvivors >= insertIndex ? amongSurvivors + 1 : amongSurvivors;
+  /** Content indexes addressing a non-chapter item of `strippedContent` in the repaired document. */
+  function indexesOfItem(index: number): number[] {
+    return placements.get(index)?.indexes ?? [index];
   }
 
   // The correction the user is standing in front of is the one their caret belongs in: a renumbered
   // marker takes the caret to just past its number, as deleting the errant text by hand would have.
   // A restored marker has no number the user typed, so the caret goes back to the end of the text
   // they were typing ({@link CARET_AT_DOCUMENT_END}). Only when the repair left every surviving
-  // number alone does the caret go to the place a removed marker used to occupy: the first item
-  // after it that the repair keeps. A marker with nothing but removed markers after it ended the
-  // document and has no such place, so the surviving marker takes the caret instead.
+  // number alone does the caret go to the place a removed marker used to occupy: the start of the
+  // first item after it that the repair keeps, wherever that item ended up. A marker with nothing but
+  // removed markers after it ended the document and has no such place, so the surviving marker takes
+  // the caret instead.
   const removedTopLevelEntry = chapterEntries.find((entry) => entry.index !== anchor?.index);
-  const followingItemIndex = removedTopLevelEntry
-    ? strippedContent.findIndex(
-        (item, index) => index > removedTopLevelEntry.index && !isChapterObject(item),
+  const followingItemPlacement = removedTopLevelEntry
+    ? placements.get(
+        strippedContent.findIndex(
+          (item, index) => index > removedTopLevelEntry.index && !isChapterObject(item),
+        ),
       )
-    : -1;
+    : undefined;
   const caretAtChapterNumber = caretAfterChapterNumber(
     [insertIndex],
     repairedChapterObject.marker ?? CHAPTER_MARKER,
@@ -333,17 +440,13 @@ export function repairChapterMarkers(
     caretTarget = CARET_AT_DOCUMENT_END;
   } else if (anchor.chapterObject.number !== expected) {
     caretTarget = caretAtChapterNumber;
-  } else if (followingItemIndex >= 0) {
-    caretTarget = caretAtRemovalBoundary([mapTopLevelIndex(followingItemIndex)], 0);
+  } else if (followingItemPlacement) {
+    caretTarget = caretAtStartOf(followingItemPlacement);
   } else {
-    caretTarget = nestedRemovalCaretTarget(mapTopLevelIndex) ?? caretAtChapterNumber;
+    caretTarget = nestedRemovalCaretTarget(indexesOfItem) ?? caretAtChapterNumber;
   }
 
-  return toRepairResult(
-    usj,
-    [...survivors.slice(0, insertIndex), repairedChapterObject, ...survivors.slice(insertIndex)],
-    caretTarget,
-  );
+  return toRepairResult(usj, repairedContent, caretTarget);
 }
 
 /** What a chapter save should do with the document the editor is holding. */
