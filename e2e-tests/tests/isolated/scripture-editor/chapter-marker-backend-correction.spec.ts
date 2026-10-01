@@ -8,9 +8,8 @@
  * one thing that matters most: that the shape the correction produces is a shape real Paratext will
  * actually take. `ScrText.ValidateChapterNumber` is the code that refuses these documents, and only
  * a live write reaches it — so a correction that fixed the marker but left, say, content ahead of
- * it would pass every unit test and still fail every save. That is not hypothetical: the renderer
- * port shipped exactly that bug during development (a restored marker placed after a leading `\id`)
- * and only cross-checking the two ports caught it.
+ * it would pass every unit test and still fail every save — for example, a restored marker placed
+ * after a leading `\id`.
  *
  * No UI: the assertions go straight to the project data provider over PAPI, so this is the cheap
  * half of the feature's e2e cover. `chapter-marker-repair.spec.ts` covers the editor half.
