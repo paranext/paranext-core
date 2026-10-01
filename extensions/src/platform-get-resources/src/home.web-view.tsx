@@ -169,6 +169,48 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     checkIfSendReceiveAvailable,
   );
 
+  const [unsyncedProjectIds, setUnsyncedProjectIds] = useState<readonly string[]>([]);
+  /** Whether a change event has arrived, which is newer than anything the seed command returns. */
+  const didReceiveUnsyncedEventRef = useRef(false);
+
+  // The backend raises its baseline event once per start with no replay, so the set is seeded from
+  // the command. A failure leaves the set empty; later change events still fill it in.
+  useEffect(() => {
+    (async () => {
+      const snapshot = await retryUntil(
+        async () => {
+          try {
+            return await papi.commands.sendCommand('paratextBibleSendReceive.getUnsyncedChanges');
+          } catch (e) {
+            logger.warn(
+              `Home web view could not read the projects with unsent changes: ${getErrorMessage(e)}`,
+            );
+            return undefined;
+          }
+        },
+        (result) => result !== undefined || !isMounted.current,
+        { maxAttempts: SEND_RECEIVE_ATTEMPTS, delayMs: SEND_RECEIVE_RETRY_MS },
+      );
+      if (
+        !isMounted.current ||
+        didReceiveUnsyncedEventRef.current ||
+        !Array.isArray(snapshot?.projectIds)
+      )
+        return;
+      setUnsyncedProjectIds(snapshot.projectIds.map((id) => id.toUpperCase()));
+    })();
+  }, []);
+
+  useEvent(
+    papi.network.getNetworkEvent('paratextBibleSendReceive.onUnsyncedChangesChanged'),
+    useCallback(({ projectIds }: { projectIds: string[] }) => {
+      didReceiveUnsyncedEventRef.current = true;
+      setUnsyncedProjectIds(
+        Array.isArray(projectIds) ? projectIds.map((id) => id.toUpperCase()) : [],
+      );
+    }, []),
+  );
+
   const [isSendReceiveInProgress, setIsSendReceiveInProgress] = useState<boolean>(false);
   const [activeSendReceiveProjects, setActiveSendReceiveProjects] = useState<string[]>([]);
   const [syncsCompletedCount, setSyncsCompletedCount] = useState<number>(0);
@@ -391,6 +433,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       showGetResourcesButton={showGetResourcesButton}
       isSendReceiveInProgress={isSendReceiveInProgress}
       isLoadingLocalProjects={isLoadingLocalProjects}
+      unsyncedProjectIds={unsyncedProjectIds}
       remoteProjectsState={remoteProjectsState}
       shouldShowProjectsOnly={shouldShowProjectsOnly}
       localProjectsInfo={localProjectsInfo}
