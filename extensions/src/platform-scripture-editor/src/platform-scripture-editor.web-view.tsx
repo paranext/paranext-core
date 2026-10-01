@@ -2699,6 +2699,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // belong to `save-failure-report.util.ts` rather than to this component — see `SaveFailureMemory`
   // for why they cannot be allowed to live apart.
   const saveFailureMemory = useRef<SaveFailureMemory>(createSaveFailureMemory());
+  // The save-failed notice stays up until a save that gets through dismisses it, and only a mount
+  // whose `saveFailureMemory` records the failure does that. A reloaded web view keeps its id but
+  // starts with empty memory, so it takes down any notice an earlier mount left standing, which no
+  // longer describes this mount's saves. Dismissing an id that was never sent is a no-op.
+  useEffect(() => {
+    papi.notifications.dismiss(saveNotificationIds.saveFailed).catch((error: unknown) => {
+      logger.warn(`Error dismissing the save-failed notification: ${getErrorMessage(error)}`);
+    });
+  }, [saveNotificationIds]);
   // Monotonic count of PDP deliveries observed — the failed-save retry gate's other half.
   // `withWriteInFlightGuard` owns the in-flight flag for exactly the write's own duration, so the
   // flag carries no information about deliveries; this counter is what lets a failed save tell
