@@ -13,6 +13,10 @@
  * - A comment from the last word of one verse to the first word of the next becomes one mark on each
  *   side of the verse number. The verse number stays outside both marks, exactly one space still
  *   precedes it, and the saved paragraph is unchanged.
+ * - An annotation from the text in front of a `\wj` span into part of its own text holds only those
+ *   two pieces: the span's opening glyph, which the range crosses without covering the span whole,
+ *   becomes a display-byte carrier instead of joining either mark, and the closing glyph, which the
+ *   range never reaches, holds nothing.
  * - A comment across a milestone the user typed leaves the milestone (and its attribute) in place,
  *   outside the marks, in the editor and in the saved document.
  * - A comment starting exactly at a char span's first content character marks that text, not the
@@ -78,8 +82,8 @@ const NBSP = '\u00a0';
 
 /**
  * John 2 in the sample WEB project. Paragraph by paragraph: v1–3 · v4 · v5 · v6–11 · v12 · v13–17 ·
- * v18 · v19 · v20–22 · v23–25. The steps use v1–2, v11, v12, v18–19 and v22; v24 is where the caret
- * goes to leave an edit, and v23 carries the save probes.
+ * v18 · v19 · v20–22 · v23–25. The steps use v1–2, v4, v11, v12, v18–19 and v22; v24 is where the
+ * caret goes to leave an edit, and v23 carries the save probes.
  */
 const CHAPTER_REFERENCE = 'John 2:1';
 /** Pins the fixture data before any location is computed from it. */
@@ -281,6 +285,44 @@ test.describe('scripture editor annotation shapes', () => {
 
       const saved = await saveAndReadChapter('probeverse');
       const paragraphIndex = paragraphIndexOf(verseOne);
+      expect(paragraphContent(saved, paragraphIndex)).toEqual(
+        paragraphContent(chapterUsj, paragraphIndex),
+      );
+    });
+
+    await test.step('an annotation into part of a char span holds only the part it names', async () => {
+      const verseFour = requireVerseText(chapterUsj, '4');
+      const paragraphIndex = paragraphIndexOf(verseFour);
+      const textIndex = indexInParagraph(verseFour);
+      const span = paragraphContent(chapterUsj, paragraphIndex)[textIndex + 1];
+      if (typeof span !== 'object' || span.type !== 'char' || span.marker !== 'wj')
+        throw new Error("Expected a \\wj char span right after John 2:4's own text");
+      const spanText = span.content?.[0];
+      if (typeof spanText !== 'string') throw new Error('The \\wj span has no plain text content');
+
+      // Starts 4 characters before the span, ends 6 characters into it: the range crosses the
+      // opening glyph without covering the span whole, so only the two pieces of text it actually
+      // names become marks, and the glyph it passes over becomes a display-byte carrier instead.
+      const beforeText = verseFour.text.slice(-4);
+      const intoSpanText = spanText.slice(0, 6);
+
+      await setAnnotation(
+        2,
+        { verse: 4, jsonPath: verseFour.jsonPath, offset: verseFour.text.length - 4 },
+        { verse: 4, jsonPath: contentJsonPath([paragraphIndex, textIndex + 1, 0]), offset: 6 },
+        'into-char-span',
+      );
+
+      await expectMarkTexts('into-char-span', [beforeText, intoSpanText]);
+      const paragraph = paragraphWith('Jesus said to her');
+      await expect(paragraph.locator('span.opening[data-marker="wj"]')).toHaveClass(
+        /(^|\s)display-annotation(\s|$)/,
+      );
+      await expect(paragraph.locator('span.closing[data-marker="wj"]')).not.toHaveClass(
+        /(^|\s)display-annotation(\s|$)/,
+      );
+
+      const saved = await saveAndReadChapter('probecharspan');
       expect(paragraphContent(saved, paragraphIndex)).toEqual(
         paragraphContent(chapterUsj, paragraphIndex),
       );

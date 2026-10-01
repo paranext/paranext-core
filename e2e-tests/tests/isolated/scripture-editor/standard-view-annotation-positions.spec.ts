@@ -39,6 +39,9 @@
  *   view had not rendered yet.
  * - A position at the very end of the chapter's last text resolves to that text's own path and
  *   offset, not to the preceding verse's own `['number']` location.
+ * - A collapsed `selectRange` at a verse text's own settled offset 0 reports that text's location,
+ *   not the preceding verse number's `['number']` location: content wins over a verse glyph's own
+ *   trailing separator.
  * - A `setAnnotation` on a char span's own SAVED content word does not interrupt an UNFINISHED
  *   attribute the user is still typing into that SAME span, right after that word, with the
  *   editor's own idle-settle clock switched off so only the caret leaving (never attempted here)
@@ -592,6 +595,26 @@ test.describe('scripture editor settled positions', () => {
         await editorInput.press('Backspace');
         await pollLastVerseText(lastText);
       }
+    });
+
+    await test.step("a collapsed selectRange at a verse text's offset 0 reports that text", async () => {
+      // Fresh read: earlier steps in this spec have already typed into other verses, and the next
+      // step types into this very verse — read John 2:6's own text right before relying on it.
+      const freshChapter = await getChapterUsj(TYPING_PROBE_VERSE_REF);
+      const verseSixText = findVerseText(freshChapter.content ?? [], '6');
+      if (!verseSixText) throw new Error('No plain text found for John 2:6 in a fresh read');
+
+      const location = chapterLocation(TYPING_PROBE_VERSE_REF, verseSixText.jsonPath, 0);
+      await sendToEditorController(editorId, 'selectRange', [{ start: location, end: location }]);
+
+      // Content wins over the verse glyph's own trailing separator: a caret right behind `\v 6 `
+      // reports the text's own offset 0, never the verse's `['number']` location.
+      const expectedLocation = { jsonPath: verseSixText.jsonPath, offset: 0 };
+      await expect
+        .poll(async () => (await readSelection())?.start?.documentLocation, { timeout: 30_000 })
+        .toEqual(expectedLocation);
+      const selection = await readSelection();
+      expect(selection?.end?.documentLocation).toEqual(expectedLocation);
     });
 
     await test.step("a setAnnotation on a char span's own saved word does not interrupt an unfinished attribute typed into that SAME span, right after that word", async () => {
