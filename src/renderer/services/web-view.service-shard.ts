@@ -2997,6 +2997,22 @@ export async function openOrReloadWebView(
                   } catch (e) {
                     console.log('Error unsubscribing from WebView updates', e);
                   }
+                  // React comes from the parent window, so this root outlives this document unless
+                  // it is unmounted here: a reload only swaps the iframe's srcdoc, and a root left
+                  // mounted keeps rendering with \`window\` resolving to the replacement document.
+                  // A microtask, not a timer: when a navigation hides this document it runs as soon
+                  // as this handler returns, before the replacement document exists. When the
+                  // renderer's React removes the iframe, this handler runs inside that commit, where
+                  // an inline unmount would warn; the microtask is then most likely dropped with
+                  // this document's realm, so web-view.component.tsx's deferred unmount on close
+                  // remains what unmounts the root in that case.
+                  queueMicrotask(() => {
+                    try {
+                      root.unmount();
+                    } catch (e) {
+                      console.log('Error unmounting WebView React root', e);
+                    }
+                  });
                 };
 
                 renderRoot();
