@@ -8,7 +8,7 @@
  * The real hook derives its status from two Send/Receive commands and two network events. Storybook
  * has no PAPI backend, so every read fails: the hook reports `idle` and then `unknown` a minute
  * later, and no other state is reachable at all. Replacing the hook — rather than the services
- * under it — is what lets a story ask for any one of the five statuses directly, including
+ * under it — is what lets a story ask for any one of the six statuses directly, including
  * `unknown`, without the sync button growing props it does not need in the app.
  *
  * With no story opted in, this returns the inert `idle` state the real hook shows in Storybook
@@ -31,6 +31,7 @@ export type { SyncStatus, SyncingProject, SyncStatusInfo };
 const IDLE: SyncStatusInfo = Object.freeze({
   status: 'idle',
   syncingProjects: Object.freeze([]),
+  unsyncedProjects: Object.freeze([]),
 });
 
 export function useSyncStatus(): SyncStatusInfo {
