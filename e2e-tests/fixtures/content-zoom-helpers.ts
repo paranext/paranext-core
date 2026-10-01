@@ -93,22 +93,34 @@ export async function onScreenBox(
 }
 
 /**
- * Height of the line box holding the first visible character inside `element`, in the frame's
- * (zoomed) pixels. Under CSS `zoom` z a single line box grows by z, whereas a block of wrapped text
- * also loses width to the zoom, wraps onto ~z× as many lines, and grows by ~z² — so a zoom-ratio
- * assertion measures a line box, never the block.
+ * Rendered line height of the first visible text inside `element`, in the frame's (zoomed) pixels:
+ * the height of a temporary inline-block probe placed right after that text, which inherits the
+ * `line-height` that applies to it. Under CSS `zoom` z a single line grows by z, whereas a block of
+ * wrapped text also loses width to the zoom, wraps onto ~z× as many lines, and grows by ~z² — so a
+ * zoom-ratio assertion measures a line, never the block. The glyph box (a `Range` rect over a
+ * character) is no substitute: Chromium rounds the font's ascent and descent to whole pixels at
+ * each effective font size, so it does not scale exactly with z (14px Google Sans gives 18, 28px
+ * gives 35, not 36). The same rounding returns under `line-height: normal`, so an exact ratio needs
+ * text with an explicit `line-height`.
  */
 export async function firstLineBoxHeight(element: Locator): Promise<number> {
   return element.evaluate((root) => {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const offset = (node.textContent ?? '').search(/\S/u);
-      if (offset >= 0) {
-        const range = document.createRange();
-        range.setStart(node, offset);
-        range.setEnd(node, offset + 1);
-        const rect = range.getClientRects()[0];
-        if (rect && rect.height > 0) return rect.height;
+      if (/\S/u.test(node.textContent ?? '') && node instanceof Text) {
+        // Inserted and removed within this synchronous call, so it is never painted and React never
+        // renders over it. Placed directly after the text node so it sits in the text's own inline
+        // formatting context and inherits the line-height that applies to it.
+        const probe = document.createElement('span');
+        probe.style.display = 'inline-block';
+        probe.textContent = 'x';
+        node.after(probe);
+        try {
+          const { height } = probe.getBoundingClientRect();
+          if (height > 0) return height;
+        } finally {
+          probe.remove();
+        }
       }
     }
     throw new Error('No rendered text inside the element');
