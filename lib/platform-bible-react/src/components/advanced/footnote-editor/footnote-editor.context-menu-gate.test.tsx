@@ -18,12 +18,21 @@ import {
   $isElementNode,
   $isRangeSelection,
   $isTextNode,
+  $selectAll,
   LexicalEditor,
   LexicalNode,
   TextNode,
 } from 'lexical';
 import type { FootnoteEditorMarkerPalette } from './footnote-editor.component';
 import { editableView, renderPopoverAndWaitForInit } from './footnote-editor.test-harness';
+
+// jsdom has no `execCommand`; the editor's Cut path copies the selection to the clipboard first,
+// which triggers a native `copy` ClipboardEvent through this call. Stub it inertly, the same way a
+// browser that refuses the call would behave — nothing here asserts on clipboard content, only on
+// what Cut does to the document.
+if (typeof document.execCommand !== 'function') {
+  document.execCommand = () => true;
+}
 
 // jsdom doesn't implement `getBoundingClientRect` on `Range`; moving the caret can make Lexical's
 // post-commit scroll-into-view read a Range rect. Stub it (a zero rect nothing here asserts on) —
@@ -140,6 +149,52 @@ function dispatchBackslash(editorInput: HTMLElement): boolean {
   return event.defaultPrevented;
 }
 
+function dispatchKey(editorInput: HTMLElement, key: string): void {
+  editorInput.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+}
+
+/**
+ * Focuses the editor and selects its ENTIRE content via Lexical's `$selectAll` — landing a
+ * non-collapsed selection whose anchor sits in the wrapper paragraph that hosts the note, not in
+ * `span.note` itself (the wrapper is the document's first point). Mirrors what Ctrl+A leaves
+ * behind, and is the precondition the menu-open guards must not mishandle.
+ */
+async function selectAllOutsideNote(
+  lexical: LexicalEditor,
+  editorInput: HTMLElement,
+): Promise<void> {
+  await act(async () => {
+    editorInput.focus();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  });
+  await act(async () => {
+    lexical.update(() => {
+      $selectAll();
+    });
+    await Promise.resolve();
+  });
+}
+
+/** True when the DOM selection's anchor sits outside the popover's `span.note` element. */
+function domAnchorOutsideNote(editorInput: HTMLElement): boolean {
+  const note = editorInput.querySelector('span.note');
+  const anchorNode = document.getSelection()?.anchorNode;
+  return !!note && !!anchorNode && !note.contains(anchorNode);
+}
+
+/** Finds the (single) Lexical TextNode holding the `\ft` sentinel content, if it still exists. */
+function $findFtTextNodeIfAny(): TextNode | undefined {
+  let found: TextNode | undefined;
+  const walk = (node: LexicalNode): void => {
+    if ($isTextNode(node) && node.getTextContent().includes('sentinel')) found = node;
+    if ($isElementNode(node)) node.getChildren().forEach(walk);
+  };
+  walk($getRoot());
+  return found;
+}
+
 describe('FootnoteEditor context-menu gate (the popover claims `\\` while its own menu is open)', () => {
   it('claims and drops `\\` while the popover right-click menu is open, without opening the marker palette', async () => {
     const { markerPalette, show } = makeMarkerPalette();
@@ -164,6 +219,53 @@ describe('FootnoteEditor context-menu gate (the popover claims `\\` while its ow
 
     expect(defaultPrevented).toBe(true);
     expect(show).not.toHaveBeenCalled();
+  });
+
+  it('does not collapse a non-collapsed selection while claiming `\\`, and lets its own Enter (Cut) act on that selection, while its own menu is open', async () => {
+    const { markerPalette, show } = makeMarkerPalette();
+    const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView, {
+      markerPalette,
+    });
+
+    // Ctrl+A-style selection: non-collapsed, anchored in the wrapper paragraph OUTSIDE
+    // `span.note` — the precondition the Enter/`\` caret-discipline guards below the menu gate
+    // would otherwise collapse via `selectNote(0)`/`focus()`.
+    await selectAllOutsideNote(lexical, editorInput);
+    expect(domAnchorOutsideNote(editorInput)).toBe(true);
+    expect(document.getSelection()?.isCollapsed).toBe(false);
+
+    await act(async () => {
+      openContextMenu(editorInput);
+      await Promise.resolve();
+    });
+    expect(editorInput.getAttribute('aria-controls')).toBe('editor-context-menu');
+
+    // (a) `\` is still claimed and dropped (same swallow-while-menu-open behavior as the sibling
+    // test above), but must leave the selection exactly as the user built it.
+    let defaultPrevented = false;
+    await act(async () => {
+      defaultPrevented = dispatchBackslash(editorInput);
+      await Promise.resolve();
+    });
+    expect(defaultPrevented).toBe(true);
+    expect(show).not.toHaveBeenCalled();
+    expect(document.getSelection()?.isCollapsed).toBe(false);
+
+    // (b) ArrowDown highlights the menu's first item (Cut); Enter must reach the menu's OWN
+    // handler and cut the selection as the user left it, not a selection already collapsed by
+    // this listener's own caret-discipline guards.
+    await act(async () => {
+      dispatchKey(editorInput, 'ArrowDown');
+      await Promise.resolve();
+    });
+    await act(async () => {
+      dispatchKey(editorInput, 'Enter');
+      await Promise.resolve();
+    });
+
+    lexical.getEditorState().read(() => {
+      expect($findFtTextNodeIfAny()).toBeUndefined();
+    });
   });
 
   it('still opens the marker palette on `\\` when no menu is open', async () => {

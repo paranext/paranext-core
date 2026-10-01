@@ -977,6 +977,21 @@ export default function FootnoteEditor({
           return;
         }
 
+        // This popover's own right-click menu is up: let its own keydown listener handle every
+        // key instead of the guards below, which otherwise resolve against the caret/selection —
+        // collapsing a selection the menu's own Enter (e.g. Cut) is about to act on. Still claim
+        // and drop `\`, mirroring the main editor's swallow-while-menu-open behavior, so the
+        // literal backslash never leaks into the note once the menu closes. See
+        // `isEditorContextMenuOpenFor`. Scoped to THIS popover's root — a second editor's open
+        // menu (e.g. the main Standard-view editor) must never trip this gate.
+        if (isEditorContextMenuOpenFor(editorParentRef.current)) {
+          if (event.key === defaultMarkerMenuTrigger) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+          return;
+        }
+
         // Enter with the DOM caret OUTSIDE the note content (Radix's
         // open-autofocus can park it at the wrapper-para start; Lexical's keydown path follows
         // the DOM) plain-splits the wrapper instead of inserting `\fp`. Enter has no legitimate
@@ -1003,15 +1018,6 @@ export default function FootnoteEditor({
           event.stopPropagation();
           editorRef.current?.selectNote(0);
           editorRef.current?.focus();
-          return;
-        }
-        // This popover's own right-click menu is up: claim and drop `\`, mirroring the main
-        // editor's swallow-while-menu-open behavior. See `isEditorContextMenuOpenFor`. Scoped to
-        // THIS popover's root — a second editor's open menu (e.g. the main Standard-view editor)
-        // must never trip this gate.
-        if (isEditorContextMenuOpenFor(editorParentRef.current)) {
-          event.preventDefault();
-          event.stopPropagation();
           return;
         }
         // ACTIVE palette: the trigger never lands, whatever the selection shape — typing filters
