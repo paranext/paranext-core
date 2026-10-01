@@ -54,7 +54,7 @@
  * non-closable Column 3 tab.
  */
 
-import { ElectronApplication, Frame, FrameLocator, Locator, Page } from '@playwright/test';
+import { ElectronApplication, Frame, Locator, Page } from '@playwright/test';
 import {
   test,
   expect,
@@ -154,6 +154,17 @@ const HISTORY_DEBOUNCE_MS = 5_000;
 const CLEAR_SEARCH_LABEL = 'Clear search';
 
 /**
+ * Budget for opening one of the panel's popovers: click the trigger, then see the content.
+ *
+ * Generous because a click into a web view is slow even through a resolved `Frame`. Playwright's
+ * hit-target check for an element inside an iframe adopts the iframe element into another execution
+ * context, and each adoption is a `DOM.describeNode` that serializes the iframe's multi-megabyte
+ * `srcdoc` (see {@link findPanelFrame}), so one click can take several seconds before the popover
+ * even starts to open.
+ */
+const POPOVER_OPEN_TIMEOUT_MS = 30_000;
+
+/**
  * How long to wait for a search to produce results. The findInScripture PDP factory initializes
  * lazily on first request and can take 60–120 s on a cold start while the C# backend loads project
  * data; `beforeAll` warms it, but a loaded worker can still be slow.
@@ -188,15 +199,30 @@ function dockTabForWebView(mainPage: Page, webViewId: string): Locator {
 }
 
 /**
- * FrameLocator for the Find panel's iframe.
+ * The Find panel's iframe, resolved to its live `Frame`.
  *
  * Uses the `data-web-view-id` attribute (set by `web-view.component.tsx`) rather than
  * `iframe[title="Find"]`, which depends on the localization service having initialized before the
  * WebView's first `getWebView()` call. The id attribute is always present.
+ *
+ * A `Frame`, not a `FrameLocator`, because of what a `FrameLocator` costs here. It re-resolves its
+ * iframe on every call, and in Chromium that resolution is a CDP `DOM.describeNode` on the iframe
+ * element, which serializes the element's attributes — `srcdoc` included, and `srcdoc` holds the
+ * web view's whole inlined bundle (about 15 MB in a development build). That makes every read and
+ * assertion through a `FrameLocator` take seconds before it starts, so a `toBeVisible` with a
+ * two-second budget can never pass. Resolving the iframe once here pays that cost once.
+ *
+ * The Find tab is permanent, so its iframe is not replaced while a test runs. If it ever is,
+ * actions on the returned frame fail with "frame was detached" instead of reaching the replacement
+ * — call this again after anything that reloads the web view.
  */
-async function findPanelFrame(mainPage: Page): Promise<FrameLocator> {
+async function findPanelFrame(mainPage: Page): Promise<Frame> {
   const findId = await webViewIdForType(mainPage, FIND_WEBVIEW_TYPE);
-  return mainPage.frameLocator(`iframe[data-web-view-id="${findId}"]`);
+  const iframe = mainPage.locator(`iframe[data-web-view-id="${findId}"]`);
+  await expect(iframe).toBeAttached({ timeout: 30_000 });
+  const frame = await (await iframe.elementHandle())?.contentFrame();
+  if (!frame) throw new Error(`The Find web view's iframe (${findId}) has no content frame`);
+  return frame;
 }
 
 /**
@@ -208,7 +234,7 @@ async function findPanelFrame(mainPage: Page): Promise<FrameLocator> {
  * given the same `tw:text-center tw:font-light` classes by `ResultsPlaceholder` — so without this
  * the idle placeholder would satisfy every "a search finished" assertion in the file.
  */
-function resultsMessage(frame: FrameLocator): Locator {
+function resultsMessage(frame: Frame): Locator {
   return frame.locator('p:not([role="status"]).tw\\:font-light.tw\\:text-center');
 }
 
@@ -247,7 +273,7 @@ async function activateTab(mainPage: Page, webViewType: string): Promise<void> {
  * Asserts the tab became ACTIVE rather than merely visible: in Simple mode the Find tab exists and
  * is visible from startup, so a visibility check would pass even if the activation did nothing.
  */
-async function activateFindTab(mainPage: Page): Promise<FrameLocator> {
+async function activateFindTab(mainPage: Page): Promise<Frame> {
   await activateTab(mainPage, FIND_WEBVIEW_TYPE);
   const frame = await findPanelFrame(mainPage);
   await expect(frame.locator('#search-term')).toBeVisible({ timeout: 30_000 });
@@ -290,7 +316,7 @@ async function invokeFindFromHamburger(mainPage: Page): Promise<void> {
  * Must run while the tab is ACTIVE: an inactive rc-dock pane is `display: none`, and clicks into a
  * hidden subtree do nothing.
  */
-async function resetFindPanel(frame: FrameLocator): Promise<void> {
+async function resetFindPanel(frame: Frame): Promise<void> {
   // Clear the search term. The X button only exists while the input is non-empty, so an
   // already-empty panel needs no click.
   const clearButton = frame.getByRole('button', { name: CLEAR_SEARCH_LABEL, exact: true });
@@ -317,7 +343,7 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
     if (!isPopoverTriggerExpanded(await filtersTrigger.getAttribute('aria-expanded')))
       await filtersTrigger.click();
     await expect(matchCase).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 5_000 });
+  }).toPass({ timeout: POPOVER_OPEN_TIMEOUT_MS });
   if (await matchCase.isChecked()) await matchCase.click();
   const allowRegex = frame.locator('#allowRegex');
   if (await allowRegex.isChecked()) await allowRegex.click();
@@ -346,7 +372,7 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
     if (!isPopoverTriggerExpanded(await scopeTrigger.getAttribute('aria-expanded')))
       await scopeTrigger.click();
     await expect(bookScope).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 5_000 });
+  }).toPass({ timeout: POPOVER_OPEN_TIMEOUT_MS });
   if (!(await bookScope.isChecked())) await bookScope.click();
   await bookScope.press('Escape');
   await expect(bookScope).not.toBeVisible({ timeout: 5_000 });
@@ -380,7 +406,7 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
  * catch-up search may briefly run with the previous test's term. `resetFindPanel` waits for the
  * idle placeholder, which is only reached once that search is gone.
  */
-async function openFindPanel(mainPage: Page): Promise<FrameLocator> {
+async function openFindPanel(mainPage: Page): Promise<Frame> {
   const frame = await activateFindTab(mainPage);
   await resetFindPanel(frame);
   return frame;
@@ -390,7 +416,7 @@ async function openFindPanel(mainPage: Page): Promise<FrameLocator> {
  * Type a search term in the search input and wait for the results counter to appear. The counter
  * shows either "N of M" or "– of M" once a search completes.
  */
-async function fillSearchAndWaitForResults(frame: FrameLocator, term: string): Promise<void> {
+async function fillSearchAndWaitForResults(frame: Frame, term: string): Promise<void> {
   await frame.locator('#search-term').fill(term);
   // Press Enter to start the search immediately, bypassing the 500 ms debounce.
   await frame.locator('#search-term').press('Enter');
@@ -398,7 +424,7 @@ async function fillSearchAndWaitForResults(frame: FrameLocator, term: string): P
 }
 
 /** Click the X (clear search) button in the search input. */
-async function clickClearSearch(frame: FrameLocator): Promise<void> {
+async function clickClearSearch(frame: Frame): Promise<void> {
   const clearButton = frame.getByRole('button', { name: CLEAR_SEARCH_LABEL, exact: true });
   await expect(clearButton).toBeVisible({ timeout: 5_000 });
   await clearButton.click();
@@ -410,7 +436,7 @@ async function clickClearSearch(frame: FrameLocator): Promise<void> {
  * `RecentSearches` renders nothing at all while the history is empty, so this locator matching
  * nothing means "the history is empty", not "the button is hidden".
  */
-function recentSearchesButton(frame: FrameLocator): Locator {
+function recentSearchesButton(frame: Frame): Locator {
   return frame.getByRole('button', { name: /show recent searches/i });
 }
 
@@ -421,7 +447,7 @@ function recentSearchesButton(frame: FrameLocator): Locator {
  * role is what scopes an assertion to the list rather than to the many result-card texts that also
  * contain the search term.
  */
-async function openHistoryDropdown(frame: FrameLocator): Promise<void> {
+async function openHistoryDropdown(frame: Frame): Promise<void> {
   await expect(recentSearchesButton(frame)).toBeVisible({ timeout: 5_000 });
   await recentSearchesButton(frame).click();
 }
@@ -433,7 +459,7 @@ async function openHistoryDropdown(frame: FrameLocator): Promise<void> {
  * search that FAILED, because that paragraph carries the regex error message as well as the
  * no-results one.
  */
-async function waitForCounterToChangeFrom(frame: FrameLocator, previous: string | null) {
+async function waitForCounterToChangeFrom(frame: Frame, previous: string | null) {
   let current = previous;
   await expect(async () => {
     current = await frame.locator('.tw\\:tabular-nums').textContent({ timeout: 1_000 });
@@ -453,14 +479,14 @@ async function waitForCounterToChangeFrom(frame: FrameLocator, previous: string 
  * visibility, which stays true through the exit animation. `resetFindPanel` uses the same
  * sequence.
  */
-async function openFiltersPanel(frame: FrameLocator): Promise<void> {
+async function openFiltersPanel(frame: Frame): Promise<void> {
   const filtersBtn = frame.getByRole('button', { name: /toggle filters/i });
   const matchCase = frame.locator('#matchCase');
   await expect(async () => {
     if (!isPopoverTriggerExpanded(await filtersBtn.getAttribute('aria-expanded')))
       await filtersBtn.click();
     await expect(matchCase).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 5_000 });
+  }).toPass({ timeout: POPOVER_OPEN_TIMEOUT_MS });
 }
 
 /**
@@ -468,7 +494,7 @@ async function openFiltersPanel(frame: FrameLocator): Promise<void> {
  * `div[role="button"][aria-pressed]`. We target this directly rather than `div.pr-twp` because the
  * root panel container is also a `div.pr-twp` and would match first.
  */
-function firstResultCard(frame: FrameLocator): Locator {
+function firstResultCard(frame: Frame): Locator {
   return frame.locator('[role="button"][aria-pressed]').first();
 }
 
