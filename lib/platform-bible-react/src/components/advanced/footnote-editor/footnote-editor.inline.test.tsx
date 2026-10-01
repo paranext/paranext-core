@@ -560,6 +560,54 @@ describe('FootnoteEditor inline live-apply', () => {
       expect(lastApplied(parentRef)).toEqual([makeNoteOps('alpha')[0], { insert: ' beta' }]);
     });
 
+    it('applies the text once when it reached the parent before it was taken, and undo and redo still move it', async () => {
+      vi.useFakeTimers();
+      const parentRef = {
+        current: { replaceEmbedUpdate: vi.fn(), getOpsAfterNote: vi.fn((): DeltaOp[] => []) },
+      };
+      const handleRef = createRef<FootnoteEditorHandle>();
+      renderEditor({
+        inline: true,
+        ref: handleRef,
+        noteOps: [openNoteOp('alpha beta')],
+        parentEditorRef: makeParentRef(parentRef),
+        noteKey: 'key-close',
+      });
+      await vi.runOnlyPendingTimersAsync(); // initial load
+      editorRefMock.getNoteOps.mockReturnValue([openNoteOp('alpha beta')]);
+      latestEditorialProps.onUsjChange?.(paraUsj); // snapshot call
+      // The closer is typed; " beta" now sits after the note, not yet taken.
+      editorRefMock.getNoteOps.mockReturnValue(makeNoteOps('alpha'));
+      editorRefMock.getOpsAfterNote.mockReturnValue([{ insert: ' beta' }]);
+      editorRefMock.takeOpsAfterNote.mockImplementation(() => {
+        editorRefMock.getOpsAfterNote.mockReturnValue([]);
+        return [{ insert: ' beta' }];
+      });
+      latestEditorialProps.onUsjChange?.(paraUsj);
+
+      // Saved before the deferred take runs, with the session going on afterwards.
+      handleRef.current?.flushPendingEdits();
+      parentRef.current.getOpsAfterNote.mockReturnValue([{ insert: ' beta' }]);
+      await vi.advanceTimersByTimeAsync(0); // the take
+      latestEditorialProps.onUsjChange?.(paraUsj); // the take's own commit
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+
+      const withText = parentRef.current.replaceEmbedUpdate.mock.calls.filter(([, ops]) =>
+        JSON.stringify(ops).includes(' beta'),
+      );
+      expect(withText).toHaveLength(1);
+
+      changeNoteTo(openNoteOp('alpha beta')); // the undo
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      expect(lastApplied(parentRef)).toEqual([openNoteOp('alpha beta'), { delete: 5 }]);
+
+      parentRef.current.getOpsAfterNote.mockReturnValue([]);
+      changeNoteTo(makeNoteOps('alpha')[0]); // the redo
+      await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
+      expect(lastApplied(parentRef)).toEqual([makeNoteOps('alpha')[0], { insert: ' beta' }]);
+      expect(editorRefMock.takeOpsAfterNote).toHaveBeenCalledTimes(1);
+    });
+
     it('the redo of that undo carries the text out again', async () => {
       const { parentRef } = await editThatClosesTheNote();
       await vi.advanceTimersByTimeAsync(INLINE_APPLY_DEBOUNCE_MS);
