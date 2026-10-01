@@ -187,16 +187,26 @@ compensates for an expected divergence — there isn't one.
 **An annotation may cover display bytes, and the host keeps its anchor.** `setAnnotation` accepts
 a range over a marker glyph, a verse or chapter number, a note caller, or an attribute value
 (`['lemma'] propertyOffset …`); the editor holds it on those bytes (same CSS classes as a `<mark>`,
-plus `display-annotation`, painted whole) and never changes the document for it. `getUsj()` never
-carries it, and `setUsj` drops every annotation, so the host re-applies from its own anchors —
-`annotationInfoByIdRef` in `platform-scripture-editor.web-view.tsx` keeps each range. Each `<mark>`
-reports its own `onRemove` (one call per `<mark>`); display bytes report only when no `<mark>`
-does. `removeAnnotation` (or setting the id again) reports `"removed"` once from display bytes when
-no `<mark>` holds the annotation. `"destroyed"` comes from display bytes — once, when the last one
-leaves — only for an annotation that never held a `<mark>`. One that held a `<mark>` at any moment
-since it was set, including a range set over a pending edit that the settle carries onto display
-bytes, reports its destruction only through its marks: once they are gone, nothing reports the
-later loss of its display bytes.
+plus `display-annotation`, painted whole) and never changes the document for it. An annotation holds
+exactly the bytes its range names; a range into part of a char span or note holds only that part —
+the text is marked piece by piece, and the span's own marker glyphs the range passes over without
+covering the span whole hold the annotation as display bytes instead. `getUsj()` never carries it,
+and `setUsj` drops every annotation, so the host re-applies from its own anchors —
+`annotationInfoByIdRef` in `platform-scripture-editor.web-view.tsx` keeps each range.
+
+`onRemove`: each `<mark>` reports its own removal when it goes away — one call per `<mark>`, whatever
+else still holds the annotation — and only once; a `<mark>` an undo brings back stays quiet when it
+goes again. Beyond that, the annotation's last holder — a `<mark>` or a display byte — leaving the
+document without any `<mark>` having reported the annotation's removal since it was set fires ONE
+more report through its display bytes: `"removed"` when `removeAnnotation` or setting the same id
+again takes it away, `"destroyed"` when it drops out of the document (an edit, a collaborator's
+edit, or a settle that discards those bytes). An annotation split across several carriers that all
+leave in the same edit reports their text joined in document order; carriers lost across separate
+edits report only the text of the piece(s) still present at the last one. A collapsed note caller's
+text is reported as the note's caller. Undo, redo, and a `setUsj` reload report nothing; setting the
+id again starts a fresh reporting cycle. An `onRemove` that throws while the editor reports a
+`"destroyed"` after an edit does not stop that edit or the other reports: the error is handed to the
+editor's error handler, which rethrows it, in a microtask once the edit has been committed.
 
 **A position names the byte in front of which it sits, and snaps LEFT in BOTH directions.** It maps
 through whatever contains that byte on its own side; where one side has bytes the other lacks, the

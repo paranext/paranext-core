@@ -2159,6 +2159,59 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the id scheme that replaced it.
 - **Source:** PT-4464.
 
+## adr-editor-annotation-exact-locations: An annotation holds exactly the bytes its range names, and removal reporting follows whatever holds it now
+
+- **Date:** 2026-09-29
+- **Status:** Accepted
+- **Context:** TJ's round-8 ask was that both directions of the annotation position model are
+  exact: the bytes a `setAnnotation` range names must be exactly the bytes the editor holds the
+  annotation on, and removal reporting must follow whatever currently holds the annotation rather
+  than a point-in-time test. An audit, productized into a permanent oracle
+  (`scripture-editors/packages/platform/src/editor/annotationLocations/`, one `it` per corpus and
+  view), found that the wrap behind `setAnnotation`, `CommentPlugin`, and the Tier-2 settle's
+  restore (`typedMarkWrap.utils.ts`) read `anchor.offset`/`focus.offset` as raw text offsets even
+  against element points — misreading an element's child index as a text offset at both range
+  ends, including the document end — moved any inline element the range merely touched into the
+  mark whole regardless of how much of it the range covered, and had no collapsed-range check at
+  all. Separately, removal reporting (`hadMarks`) was a permanent latch set the first time a mark
+  ever held the annotation, so an annotation set over a pending edit and then settled onto display
+  bytes alone never reported its own loss.
+- **Decision:** Convert both range points to carets on leaves before the wrap loop and measure
+  every node's coverage by caret order, not raw offsets; return immediately for a collapsed
+  selection. An inline element moves into the mark whole only when the range covers it whole, from
+  in front of its first leaf through behind its last; a fully covered element still takes its own
+  opening separator with it when it moves, rather than leaving that separator stranded outside the
+  mark. A range that only partly covers an element is handled byte by byte instead: its content
+  text is split and marked piece by piece, and its own marker glyphs become display-byte carriers
+  holding the same annotation wherever the range passes over them. Removal reporting is decided by
+  what holds the annotation NOW, not by what ever held it: the holder set is recomputed from the
+  document after every settle, so the loss of an annotation's last holder — a mark or a
+  display-byte carrier — fires one more report through display bytes, `"removed"` or `"destroyed"`,
+  exactly once; an annotation whose marks still exist keeps reporting through its marks only.
+  Painting stays whole-node, per `adr-editor-annotations-on-display-bytes`.
+- **Alternatives:** Splitting the covered inline element into two elements to carry a partial mark
+  — rejected: it clones the element and changes the document, which `setAnnotation` promises never
+  to do. Keeping the whole-element move and documenting the extra bytes it marks — rejected: bytes
+  nobody named must be fixed, not left as a documented gap. Never moving an element into a mark
+  even when the range covers it whole, keeping glyph carriers plus a separate content mark instead
+  — rejected: it multiplies marks, so one host registration gets more `"destroyed"` calls than
+  before, and turns one comment into an extra `zmsc` pair inside the element on export — the
+  opposite of what a fix should do. A permanent `hadMarks` latch — rejected: an annotation that
+  settles onto display bytes alone, with nothing having yet reported its removal, would never
+  report it.
+- **Consequences:** A comment or check set from content into part of a char span can now sit
+  INSIDE the span rather than wrapping it whole, so a mark can appear nested inside the element it
+  annotates, and the exporter writes a `zmsc` pair inside the span for it — the same shape a
+  comment crossing a verse boundary already produces. The same range set exactly on the span's own
+  opening glyph still moves the span whole, because the glyph branch claims the wrap's target
+  parent before the partial-coverage path runs — so two annotations holding the same bytes can
+  differ in mark count depending on where the range started, by construction, not as a bug; both
+  hold exactly the named bytes. The permanent oracle is the regression net for both halves of this
+  decision — exact coverage and exact removal reporting — on every future change to the wrap or the
+  removal path.
+- **Source:** PT-4370 round 8; paranext-core PR #2823, scripture-editors PR
+  paranext/scripture-editors#11.
+
 ## adr-editor-annotations-on-display-bytes: An annotation over display bytes is carrier node state, never a mark wrapping them
 
 - **Date:** 2026-09-28
