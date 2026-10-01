@@ -224,6 +224,16 @@ internal static class SendReceiveWriteLock
     /// </summary>
     public static event Action<SendReceiveBlockState>? BlockStateChanged;
 
+    /// <summary>
+    /// Raised once each time a write scope opened by <see cref="EnterWrite"/> is disposed, with the
+    /// project id that scope was opened for (exactly as passed to <see cref="EnterWrite"/>). Fires
+    /// AFTER the scope's in-flight count is released, on the disposing thread, and regardless of
+    /// whether the mutation inside the scope succeeded — a subscriber that needs the truth (e.g. an
+    /// unsynced-changes tracker) re-reads the repository rather than trusting the signal. A throwing
+    /// subscriber is logged and never propagates into the disposing data-provider write.
+    /// </summary>
+    public static event Action<string>? WriteScopeExited;
+
     // The single atomic word all mutual exclusion rests on (see the class remarks): bits 0–31
     // count in-flight write scopes, bit 32 is the "a sync is armed" flag, and bits 33–62 hold the
     // 30-bit arm generation — the token SetSyncing returns and Clear(token) checks, riding in the
@@ -339,6 +349,28 @@ internal static class SendReceiveWriteLock
         catch
         {
             // Deliberately swallowed — see above. No logger in this class.
+        }
+    }
+
+    // Invokes WriteScopeExited handler by handler, so one faulting subscriber can neither abort the
+    // disposing write nor starve the subscribers after it.
+    private static void RaiseWriteScopeExited(string projectId)
+    {
+        Action<string>? handlers = WriteScopeExited;
+        if (handlers is null)
+            return;
+        foreach (Delegate handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                ((Action<string>)handler)(projectId);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(
+                    $"[SendReceiveWriteLock] A {nameof(WriteScopeExited)} handler threw: {ex}"
+                );
+            }
         }
     }
 
@@ -631,7 +663,7 @@ internal static class SendReceiveWriteLock
             if ((state & ArmedFlag) != 0 && _blockedProjectIds.Contains(projectId))
                 throw EditBlocked(projectId);
             if (Interlocked.CompareExchange(ref _state, state + 1, state) == state)
-                return new WriteScope();
+                return new WriteScope(projectId);
         }
     }
 
@@ -661,9 +693,9 @@ internal static class SendReceiveWriteLock
     /// <summary>
     /// The disposable returned by <see cref="EnterWrite"/>. Releases its in-flight count exactly
     /// once, from whatever thread disposes it (an interlocked guard makes cross-thread double-
-    /// dispose safe).
+    /// dispose safe), then raises <see cref="WriteScopeExited"/> for its project.
     /// </summary>
-    private sealed class WriteScope : IDisposable
+    private sealed class WriteScope(string projectId) : IDisposable
     {
         private int _disposed;
 
@@ -672,6 +704,7 @@ internal static class SendReceiveWriteLock
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
                 return;
             ExitWrite();
+            RaiseWriteScopeExited(projectId);
         }
     }
 }
