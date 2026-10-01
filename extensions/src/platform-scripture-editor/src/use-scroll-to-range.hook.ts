@@ -190,15 +190,33 @@ export type UseScrollToRangeResult = {
    */
   consumeRangeScrollClaimFor: (scrRef: SerializedVerseRef) => boolean;
   /**
-   * Gives up on the current jump request, if any, without scrolling anywhere — for a caller that
-   * knows the user has moved on before this hook's own effect would notice, such as a caret report
-   * from the editor itself. Releases the claim {@link consumeRangeScrollClaimFor} would otherwise
-   * answer for the abandoned request's verse, exactly as the hook's own bounded give-ups do, so the
-   * ordinary verse scroll for that reference is not suppressed forever. A no-op when no request is
-   * pending.
+   * Hands the hook a reference the editor reported through its `onScrRefChange`. A report of the
+   * user's own caret move means the user has moved on before this hook's own effect would notice,
+   * so it gives up on the current jump request, if any, without scrolling anywhere, and releases
+   * the claim {@link consumeRangeScrollClaimFor} would otherwise answer for the abandoned request's
+   * verse, exactly as the hook's own bounded give-ups do, so the ordinary verse scroll for that
+   * reference is not suppressed forever.
+   *
+   * The engine reports one other shape, which is not a caret move and cancels nothing: its book
+   * correction, `{ ...scrRef, book: <its document's book> }`, sent when a document whose book
+   * differs from the web view's reference mounts. A jump into that document is still wanted.
    */
-  cancelRangeJump: () => void;
+  onEditorScrRefChange: (reported: SerializedVerseRef) => void;
 };
+
+/**
+ * Whether `reported`, a reference the engine sent through `onScrRefChange` while the web view
+ * showed `current`, is its book correction — `current` with only the book replaced — rather than
+ * the report of a caret move. A caret move in a loaded document always names that document's book,
+ * which is `current`'s once any correction has been applied.
+ */
+function isBookCorrection(reported: SerializedVerseRef, current: SerializedVerseRef): boolean {
+  return (
+    reported.book !== current.book &&
+    reported.chapterNum === current.chapterNum &&
+    reported.verseNum === current.verseNum
+  );
+}
 
 /**
  * Owns a jump to a range in the Scripture editor — a find match, a check result, a comment's
@@ -244,9 +262,11 @@ export function useScrollToRange({
   scrRef,
 }: UseScrollToRangeOptions): UseScrollToRangeResult {
   const [request, setRequest] = useState<RangeScrollRequest | undefined>(undefined);
-  /** Mirrors `request` for `cancelRangeJump`, which is called from outside the effect below. */
+  /** Mirrors `request` for `onEditorScrRefChange`, which is called from outside the effect below. */
   const requestRef = useRef(request);
   requestRef.current = request;
+  const scrRefRef = useRef(scrRef);
+  scrRefRef.current = scrRef;
 
   const nextRequestIdRef = useRef(0);
   const editorChapterKeyRef = useRef(editorChapterKey);
@@ -289,9 +309,9 @@ export function useScrollToRange({
     return isTarget;
   }, []);
 
-  const cancelRangeJump = useCallback(() => {
+  const onEditorScrRefChange = useCallback((reported: SerializedVerseRef) => {
     const { current } = requestRef;
-    if (!current) return;
+    if (!current || isBookCorrection(reported, scrRefRef.current)) return;
     if (isSameVerseRef(targetVerseRef.current, current.verseRef))
       targetVerseRef.current = undefined;
     setRequest((latest) => (latest?.id === current.id ? undefined : latest));
@@ -525,5 +545,5 @@ export function useScrollToRange({
     };
   }, [request, editorChapterKey, isViewVisible, editorRef, scrRef]);
 
-  return { requestScrollToRange, consumeRangeScrollClaimFor, cancelRangeJump };
+  return { requestScrollToRange, consumeRangeScrollClaimFor, onEditorScrRefChange };
 }

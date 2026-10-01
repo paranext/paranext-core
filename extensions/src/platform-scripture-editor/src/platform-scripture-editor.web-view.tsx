@@ -1323,12 +1323,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // tab stack. The selection is applied as soon as this web view shows the range's verse, hidden or
   // not (it is data, with no geometry); the scroll waits for this tab to be shown, then runs once,
   // instantly, for the latest request. See `useScrollToRange`.
-  const { requestScrollToRange, consumeRangeScrollClaimFor, cancelRangeJump } = useScrollToRange({
-    editorRef,
-    editorChapterKey,
-    isViewVisible,
-    scrRef,
-  });
+  const { requestScrollToRange, consumeRangeScrollClaimFor, onEditorScrRefChange } =
+    useScrollToRange({
+      editorRef,
+      editorChapterKey,
+      isViewVisible,
+      scrRef,
+    });
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
    * it without the editor unmounting and remounting. We need to re-parent the editor when container
@@ -2498,9 +2499,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const setScrRefNoScroll = useCallback(
     (newVerseLocation: SerializedVerseRef) => {
-      // The editor is reporting the user's own caret move: give up on any pending range jump now,
-      // so it cannot land later on top of wherever the user just clicked.
-      cancelRangeJump();
+      // A report of the user's own caret move gives up on any pending range jump now, so it cannot
+      // land later on top of wherever the user just clicked; the hook tells the engine's book
+      // correction apart and keeps the jump for that.
+      onEditorScrRefChange(newVerseLocation);
       // Preserve versificationStr so the PDP selector doesn't change on every click. Against
       // platform-editor 0.8.15 the fallback is a no-op: `positionToScrRef` carries the host's
       // `versificationStr` on every position report (a document states no versification of its
@@ -2513,7 +2515,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       internalVerseLocationRef.current = preservedLocation;
       setScrRefWithScroll(preservedLocation);
     },
-    [cancelRangeJump, setScrRefWithScroll, scrRef.versificationStr],
+    [onEditorScrRefChange, setScrRefWithScroll, scrRef.versificationStr],
   );
 
   /**

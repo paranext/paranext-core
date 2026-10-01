@@ -876,7 +876,7 @@ describe('useScrollToRange', () => {
     });
   });
 
-  describe('cancelRangeJump', () => {
+  describe('onEditorScrRefChange', () => {
     it('cancels a jump that is still settling, releasing its claim on the reference', async () => {
       const fake = createFakeEditor();
       const { result } = renderScrollToRange(fake.editor, {
@@ -888,7 +888,7 @@ describe('useScrollToRange', () => {
       expect(fake.setSelection).toHaveBeenCalledWith(MATCH);
 
       // The user clicks elsewhere before the settle loop (still mid-wait) has decided anything.
-      act(() => result.current.cancelRangeJump());
+      act(() => result.current.onEditorScrRefChange(GEN_10_25));
       await runFrames();
 
       expect(scrollToRange).not.toHaveBeenCalled();
@@ -909,7 +909,7 @@ describe('useScrollToRange', () => {
       await runFrames(SCROLL_MAX_WAIT_MS * 3);
       expect(fake.setSelection).not.toHaveBeenCalled();
 
-      act(() => result.current.cancelRangeJump());
+      act(() => result.current.onEditorScrRefChange(GEN_1_5));
 
       rerender({ editorChapterKey: 'GEN 10', isViewVisible: true });
       await runFrames();
@@ -933,7 +933,7 @@ describe('useScrollToRange', () => {
       await runFrames(50);
       expect(fake.setSelection).not.toHaveBeenCalled();
 
-      act(() => result.current.cancelRangeJump());
+      act(() => result.current.onEditorScrRefChange(GEN_10_3));
 
       // The web view reaches the cancelled jump's verse well after it was given up on.
       fake.replaceSelection(undefined);
@@ -951,7 +951,55 @@ describe('useScrollToRange', () => {
         isViewVisible: true,
       });
 
-      expect(() => act(() => result.current.cancelRangeJump())).not.toThrow();
+      expect(() => act(() => result.current.onEditorScrRefChange(GEN_10_25))).not.toThrow();
+    });
+
+    it("cancels on a caret move inside the jump's own verse", async () => {
+      const fake = createFakeEditor();
+      const { result } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 10',
+        isViewVisible: true,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      act(() => result.current.onEditorScrRefChange(GEN_10_19));
+      await runFrames();
+
+      expect(scrollToRange).not.toHaveBeenCalled();
+    });
+
+    it("leaves the jump alone for the engine's book correction, which is not a caret move", async () => {
+      const fake = createFakeEditor();
+      const { result } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 10',
+        isViewVisible: true,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      // The engine's mount correction: the web view's own reference with its document's book.
+      act(() => result.current.onEditorScrRefChange({ ...GEN_10_19, book: 'EXO' }));
+      await runFrames();
+
+      expect(scrollToRange).toHaveBeenCalledTimes(1);
+      act(() => {
+        expect(result.current.consumeRangeScrollClaimFor(GEN_10_19)).toBe(true);
+      });
+    });
+
+    it('leaves a jump waiting for its chapter alone for the book correction', async () => {
+      const fake = createFakeEditor();
+      const { result, rerender } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 1',
+        isViewVisible: true,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      act(() => result.current.onEditorScrRefChange({ ...GEN_10_19, book: 'EXO' }));
+      rerender({ editorChapterKey: 'GEN 10', isViewVisible: true });
+      await runFrames();
+
+      expect(fake.setSelection).toHaveBeenCalledWith(MATCH);
+      expect(scrollToRange).toHaveBeenCalledTimes(1);
     });
   });
 });
