@@ -401,6 +401,24 @@ declare module 'paratext-bible-send-receive' {
     /** Ids of the blocked projects. `isBlocking` false always pairs with an empty array. */
     projectIds: string[];
   };
+
+  /**
+   * Backend-authoritative snapshot of the projects whose LOCAL repository holds changes
+   * Send/Receive has not yet sent — uncommitted edits, or local commits made since the last
+   * successful sync. Carried identically by the `paratextBibleSendReceive.onUnsyncedChangesChanged`
+   * event and the `paratextBibleSendReceive.getUnsyncedChanges` command return. Says nothing about
+   * changes waiting on the server.
+   *
+   * Emitted by core's own `UnsyncedChangesNotifierService`, so every build serves it; only a
+   * Paratext 10 build can also detect "committed but unsent" (it alone records the last-synced
+   * tip), public Platform.Bible reports uncommitted edits only.
+   *
+   * @experimental This type is unstable and may change shape or disappear without notice
+   */
+  export type UnsyncedChangesSnapshot = {
+    /** Normalized (upper-case) ids of the projects with unsent local changes; empty when none. */
+    projectIds: string[];
+  };
 }
 
 declare module 'papi-shared-types' {
@@ -411,6 +429,7 @@ declare module 'papi-shared-types' {
     SyncProgressEvent,
     SyncState,
     SyncWriteLockSnapshot,
+    UnsyncedChangesSnapshot,
   } from 'paratext-bible-send-receive';
   import type { SharedProjectsInfo } from 'platform-scripture';
 
@@ -658,6 +677,17 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.getAutoSyncBlocking': () => Promise<SyncWriteLockSnapshot>;
+
+    /**
+     * Returns the current {@link UnsyncedChangesSnapshot} so a consumer can seed on mount rather
+     * than waiting for the next `paratextBibleSendReceive.onUnsyncedChangesChanged` event. Served
+     * from the dotnet process (registered by core's `UnsyncedChangesNotifierService`); a cold-start
+     * rejection must be retried, not read as "nothing is unsynced".
+     *
+     * @returns The current {@link UnsyncedChangesSnapshot}
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.getUnsyncedChanges': () => Promise<UnsyncedChangesSnapshot>;
   }
 
   export interface NetworkEvents {
@@ -695,5 +725,14 @@ declare module 'papi-shared-types' {
      * @experimental This event is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.onSyncActivityChanged': SyncActivitySnapshot;
+    /**
+     * Emitted by the dotnet process whenever the set of projects with unsent local changes changes,
+     * carrying the full current {@link UnsyncedChangesSnapshot}. Also emitted once as a baseline per
+     * backend (re)start; no replay, so a consumer seeds from
+     * `paratextBibleSendReceive.getUnsyncedChanges`.
+     *
+     * @experimental This event is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.onUnsyncedChangesChanged': UnsyncedChangesSnapshot;
   }
 }
