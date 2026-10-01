@@ -369,8 +369,12 @@ export function OverlayCommandPalettePresentational({
   // eslint-disable-next-line no-null/no-null
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus the search input on mount. Skipped entirely in passive mode, which renders no
-  // search input and must never steal focus from the requesting WebView.
+  // Auto-focus the search input on mount. Passive and key-forwarding palettes never focus their
+  // input and return immediately below: passive renders no search input and must never steal
+  // focus from the requesting WebView, and a key-forwarding palette's session owns focus and
+  // forwards keystrokes through `keyForwarding` instead — stealing it would break that routing,
+  // including for an anchored palette whose own input portal has not mounted yet. Every other
+  // palette retries until its input mounts and takes focus.
   //
   // A single synchronous focus() reliably LOSES the focus
   // fight when the palette opens while an editor webview iframe holds focus — the iframe's own
@@ -380,22 +384,19 @@ export function OverlayCommandPalettePresentational({
   // (bounded, and cancelled if the palette unmounts first).
   //
   // The input may not exist yet on the first attempts: an anchored palette renders it inside a
-  // Radix Popover portal, which mounts its content on a render AFTER this effect has run. Only a
-  // palette without `keyForwarding` waits for that input (the anchored Enter palette needs it). An
-  // anchored `keyForwarding` palette wraps a text selection in the requesting editor, which keeps
-  // focus and forwards keys; since its input is never mounted on the first attempt, it never takes
-  // focus. Keyed on whether forwarding is set, not on the object, so a new `keyForwarding` identity
-  // cannot re-run this effect after the portal mounts and steal focus after all.
+  // Radix Popover portal, which mounts its content on a render AFTER this effect has run. Keyed on
+  // whether forwarding is set, not on the object, so a new `keyForwarding` identity cannot re-run
+  // this effect after the portal mounts and steal focus after all.
   const forwardsKeys = !!keyForwarding;
   useEffect(() => {
-    if (passive) return () => {};
+    if (passive || forwardsKeys) return () => {};
     let rafId: number | undefined;
     let attempts = 0;
     const MAX_FOCUS_ATTEMPTS = 20;
     const tryFocus = () => {
       const input = inputRef.current;
       if (!input) {
-        if (forwardsKeys || attempts >= MAX_FOCUS_ATTEMPTS) return;
+        if (attempts >= MAX_FOCUS_ATTEMPTS) return;
         attempts += 1;
         rafId = requestAnimationFrame(tryFocus);
         return;

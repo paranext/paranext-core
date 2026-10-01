@@ -383,6 +383,28 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(input).not.toHaveFocus();
     });
 
+    it('should NOT focus a centered palette that declares keyForwarding, even though its input mounts immediately', async () => {
+      // Centered mode (no `position`) renders its input directly, not inside a Radix Popover
+      // portal, so the input exists on the very first mount-effect attempt. A key-forwarding
+      // palette must still leave focus wherever it already was — forwarding exists precisely so a
+      // palette can be driven without ever taking DOM focus.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          keyForwarding={{ keys: ['Enter'], onKey: vi.fn() }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      // Give the retry loop, if it were still running, several animation frames to steal focus.
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+      });
+      expect(input).not.toHaveFocus();
+    });
+
     it('should not throw when the palette unmounts before focus ever sticks', async () => {
       const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {});
 
