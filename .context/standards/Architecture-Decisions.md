@@ -927,15 +927,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     `libs/shared-react/src/plugins/usj/collab/delta-common.utils.ts`), and it exports no USJ→OT
     position helper, so the host would compute retains itself — where a miscomputed retain splices
     content silently rather than failing.
-  - **Repair inside the editor as node surgery, behind a new `EditorRef` method** — the right end
-    state, deferred. One `editor.update()` that rewrites the marker's glyph (the glyph is the source
+  - **Repair inside the editor as node surgery, behind a new `EditorRef` method** — deferred, and
+    it would put a Paratext rule into the editor. One `editor.update()` that rewrites the marker's glyph (the glyph is the source
     of truth: `$chapterNodeTransform` re-derives the number from it, so `ChapterNode.setNumber`
     alone is overwritten) or removes the offending node would keep the caret through Lexical's own
     reconciliation and push exactly one undo entry — the shape every other structural mutation on
     `EditorRef` already has (`removeCharacterMarker`, `insertMarker`, `splitParagraphWithMarker`).
     Deferred because it is a `scripture-editors` change, so it carries its own PR, committed-dist
     rebuild and `platform-yalc` move; and because it has to handle the pending, unsettled literal
-    case inside the marker-edit tiers, which is the genuinely hard part.
+    case inside the marker-edit tiers, which is the genuinely hard part. Which way to keep the undo
+    history — this, OT ops, or a generic history-preserving load in the editor — is open in PT-4818.
 - **Consequences:** after a correction the caret sits in the marker glyph, where typed characters
   are marker bytes that the next repair corrects away again — the same fight any autocorrect has.
   **None of this is announced.** The notice says only that the marker did not match the chapter and
@@ -943,7 +944,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   annotations were cleared. That is deliberate — one sentence a reader can take in beats a warning
   nobody finishes — but it means the losses below are unmitigated, not merely explained. Undo and
   redo history is emptied by every repair, so a user cannot undo back past a correction; that is a
-  known limitation carried on PT-4608 rather than a property anyone should rely on.
+  known limitation tracked in PT-4818 rather than a property anyone should rely on.
   **Every annotation is cleared too** — a load replaces the node
   map, and the `TypedMarkNode`s that carry annotations live only in that tree, never in USJ. That is
   not new to the repair (it is true of every `setEditorUsj` call, including the ordinary PDP echo)
@@ -964,7 +965,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   emits it childless. That equivalence is pinned in
   `chapter-marker-repair.util.test.ts` ("renumbers and synthesizes markers of the same childless
   shape"), because it is a property of the parser that nothing else here would notice changing.
-  **Revisit** when the editor grows a chapter-repair primitive of its own.
+  **Revisit** with PT-4818.
 - **Source:** PT-4608 hand QA.
 
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
