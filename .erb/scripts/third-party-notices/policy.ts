@@ -747,11 +747,12 @@ function applyException(
   // A per-operand credit is printed beside that operand's canonical text as the notice it is made
   // under, so one keyed by an id the recorded expression does not contain - a typo, or an operand
   // since dropped from `spdx` - would never be printed, and the operand it was meant for would fall
-  // back to the package's own notice with nothing to say the correction had been lost. An empty
-  // value, or one of nothing but `;` separators, would print a credit line naming nobody. A single-identifier expression is refused for
-  // the same reason: `render.ts` reproduces canonical texts beside a package's own file only for a
-  // multi-operand expression (`spdxIdsOf(...).length > 1`), and an exception is always pinned to a
-  // file, so a credit recorded on one identifier clears the gate and then appears nowhere.
+  // back to the package's own notice with nothing to say the correction had been lost. A
+  // single-identifier expression is refused for the same reason: `render.ts` reproduces canonical
+  // texts beside a package's own file only for a multi-operand expression
+  // (`spdxIdsOf(...).length > 1`), and an exception is always pinned to a file, so a credit
+  // recorded on one identifier clears the gate and then appears nowhere. An empty value, or one of
+  // nothing but `;` separators, would print a credit line naming nobody.
   const byOperand = entry.copyrightByOperand;
   const creditEntries = typeof byOperand === 'object' && byOperand ? Object.entries(byOperand) : [];
   if (byOperand !== undefined) {
@@ -765,7 +766,9 @@ function applyException(
     let problem: string | undefined;
     if (!creditEntries.length) problem = 'is not a non-empty object keyed by operand';
     else if (recorded.ids.length < 2)
-      problem = `is recorded on the single-identifier expression ${entry.spdx}, whose row is described by the package's own license file and prints no per-operand credit`;
+      problem =
+        `is recorded on the single-identifier expression ${entry.spdx}, whose row is described ` +
+        "by the package's own license file and prints no per-operand credit";
     else if (stray.length)
       problem = `names ${stray.join(', ')}, which ${entry.spdx} does not contain`;
     else if (empty.length) problem = `gives ${empty.join(', ')} no notice`;

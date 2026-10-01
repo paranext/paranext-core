@@ -1097,7 +1097,7 @@ describe('classify', () => {
       expect(classifyWith({ MIT: all }, { text }).verdict).toBe('excepted');
     });
 
-    it('accepts a notice with or without the All rights reserved. line under it', () => {
+    it('accepts a notice with or without the All (or Some) rights reserved. line under it', () => {
       const text = ['Copyright (c) 2012 A', 'All rights reserved.', '', 'Redistribution ...'].join(
         '\n',
       );
@@ -1105,6 +1105,10 @@ describe('classify', () => {
       expect(
         classifyWith({ MIT: 'Copyright (c) 2012 A All rights reserved.' }, { text }).verdict,
       ).toBe('excepted');
+      const some = text.replace('All rights', 'Some rights');
+      expect(classifyWith({ MIT: 'Copyright (c) 2012 A' }, { text: some }).verdict).toBe(
+        'excepted',
+      );
     });
 
     it('refuses a holder list cut where the file wraps it, and quotes the whole notice', () => {
