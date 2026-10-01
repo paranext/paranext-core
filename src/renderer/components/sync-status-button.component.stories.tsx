@@ -63,8 +63,8 @@ function withSyncEndingAfterCancel(syncingProjects: SyncStatusMock['syncingProje
     const mock = useMemo<SyncStatusMock>(
       () =>
         hasEnded
-          ? { status: 'failed', syncingProjects: [] }
-          : { status: 'syncing', syncingProjects },
+          ? { status: 'failed', syncingProjects: [], unsyncedProjects: [] }
+          : { status: 'syncing', syncingProjects, unsyncedProjects: [] },
       // `syncingProjects` is the decorator factory's own argument, fixed for the story's lifetime.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [hasEnded],
@@ -106,7 +106,7 @@ const openPopover: NonNullable<Story['play']> = async ({ canvasElement }) => {
  * toolbar would otherwise leave this control a clipped word with nothing identifying it.
  */
 export const Idle: Story = {
-  decorators: [withSyncStatus({ status: 'idle', syncingProjects: [] })],
+  decorators: [withSyncStatus({ status: 'idle', syncingProjects: [], unsyncedProjects: [] })],
 };
 
 /**
@@ -115,22 +115,26 @@ export const Idle: Story = {
  * a guessed project is the untruthfulness this control exists to remove.
  */
 export const SyncingUnknownProjects: Story = {
-  decorators: [withSyncStatus({ status: 'syncing', syncingProjects: [] })],
+  decorators: [withSyncStatus({ status: 'syncing', syncingProjects: [], unsyncedProjects: [] })],
 };
 
 /** One project syncing, named in the label. */
 export const SyncingOneProject: Story = {
-  decorators: [withSyncStatus({ status: 'syncing', syncingProjects: ONE_PROJECT })],
+  decorators: [
+    withSyncStatus({ status: 'syncing', syncingProjects: ONE_PROJECT, unsyncedProjects: [] }),
+  ],
 };
 
 /** Several projects syncing: the label counts them rather than listing them in the bar. */
 export const SyncingSeveralProjects: Story = {
-  decorators: [withSyncStatus({ status: 'syncing', syncingProjects: SEVERAL_PROJECTS })],
+  decorators: [
+    withSyncStatus({ status: 'syncing', syncingProjects: SEVERAL_PROJECTS, unsyncedProjects: [] }),
+  ],
 };
 
 /** The last sync finished and every project in it succeeded. */
 export const Synced: Story = {
-  decorators: [withSyncStatus({ status: 'synced', syncingProjects: [] })],
+  decorators: [withSyncStatus({ status: 'synced', syncingProjects: [], unsyncedProjects: [] })],
 };
 
 /**
@@ -140,7 +144,7 @@ export const Synced: Story = {
  * plus the button's own knowledge that it made the request.
  */
 export const Failed: Story = {
-  decorators: [withSyncStatus({ status: 'failed', syncingProjects: [] })],
+  decorators: [withSyncStatus({ status: 'failed', syncingProjects: [], unsyncedProjects: [] })],
 };
 
 /**
@@ -164,7 +168,7 @@ export const Cancelled: Story = {
  * in place of `Idle`'s sync glyph.
  */
 export const Unknown: Story = {
-  decorators: [withSyncStatus({ status: 'unknown', syncingProjects: [] })],
+  decorators: [withSyncStatus({ status: 'unknown', syncingProjects: [], unsyncedProjects: [] })],
 };
 
 /**
@@ -173,18 +177,22 @@ export const Unknown: Story = {
  * tooltip appears only while the label is actually clipped.
  */
 export const TruncatedProjectName: Story = {
-  decorators: [withSyncStatus({ status: 'syncing', syncingProjects: LONG_NAME_PROJECT })],
+  decorators: [
+    withSyncStatus({ status: 'syncing', syncingProjects: LONG_NAME_PROJECT, unsyncedProjects: [] }),
+  ],
 };
 
 /** Popover during a sync: the projects by name, Cancel sync, and the way through to the details. */
 export const PopoverSyncing: Story = {
-  decorators: [withSyncStatus({ status: 'syncing', syncingProjects: SEVERAL_PROJECTS })],
+  decorators: [
+    withSyncStatus({ status: 'syncing', syncingProjects: SEVERAL_PROJECTS, unsyncedProjects: [] }),
+  ],
   play: openPopover,
 };
 
 /** Popover during a sync whose projects are unknown: the bare "Syncing" line in place of the list. */
 export const PopoverSyncingUnknownProjects: Story = {
-  decorators: [withSyncStatus({ status: 'syncing', syncingProjects: [] })],
+  decorators: [withSyncStatus({ status: 'syncing', syncingProjects: [], unsyncedProjects: [] })],
   play: openPopover,
 };
 
@@ -198,6 +206,7 @@ export const PopoverSyncingWithProgress: Story = {
     withSyncStatus({
       status: 'syncing',
       syncingProjects: SEVERAL_PROJECTS,
+      unsyncedProjects: [],
       syncProgress: { text: 'GreekNT', fraction: 0.42 },
     }),
   ],
@@ -214,6 +223,7 @@ export const PopoverSyncingReconnecting: Story = {
     withSyncStatus({
       status: 'syncing',
       syncingProjects: ONE_PROJECT,
+      unsyncedProjects: [],
       syncProgress: { text: 'Connection to server lost. Retrying…' },
     }),
   ],
@@ -222,25 +232,25 @@ export const PopoverSyncingReconnecting: Story = {
 
 /** Popover while idle: no Cancel, since there is nothing to cancel. */
 export const PopoverIdle: Story = {
-  decorators: [withSyncStatus({ status: 'idle', syncingProjects: [] })],
+  decorators: [withSyncStatus({ status: 'idle', syncingProjects: [], unsyncedProjects: [] })],
   play: openPopover,
 };
 
 /** Popover after a successful sync. */
 export const PopoverSynced: Story = {
-  decorators: [withSyncStatus({ status: 'synced', syncingProjects: [] })],
+  decorators: [withSyncStatus({ status: 'synced', syncingProjects: [], unsyncedProjects: [] })],
   play: openPopover,
 };
 
 /** Popover after a sync that did not succeed — the case "View sync details" exists for. */
 export const PopoverFailed: Story = {
-  decorators: [withSyncStatus({ status: 'failed', syncingProjects: [] })],
+  decorators: [withSyncStatus({ status: 'failed', syncingProjects: [], unsyncedProjects: [] })],
   play: openPopover,
 };
 
 /** Popover when the status is unreadable: it says so rather than claiming no sync is running. */
 export const PopoverUnknown: Story = {
-  decorators: [withSyncStatus({ status: 'unknown', syncingProjects: [] })],
+  decorators: [withSyncStatus({ status: 'unknown', syncingProjects: [], unsyncedProjects: [] })],
   play: openPopover,
 };
 
@@ -251,7 +261,9 @@ export const PopoverUnknown: Story = {
  * a stopping point.
  */
 export const Cancelling: Story = {
-  decorators: [withSyncStatus({ status: 'syncing', syncingProjects: ONE_PROJECT })],
+  decorators: [
+    withSyncStatus({ status: 'syncing', syncingProjects: ONE_PROJECT, unsyncedProjects: [] }),
+  ],
   play: async (context) => {
     await openPopover(context);
     // Radix portals the popover content to `document.body`, so it is outside the story canvas.

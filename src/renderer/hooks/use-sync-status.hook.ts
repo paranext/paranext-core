@@ -7,6 +7,7 @@ import {
   getSyncActivityState,
   subscribeToSyncActivity,
 } from '@renderer/services/sync-activity-store';
+import { useUnsyncedChanges } from '@renderer/hooks/use-unsynced-changes.hook';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
@@ -32,8 +33,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
  *   outcome
  * - `unknown` — the status could not be read. Distinct from `idle` because "nothing has synced" is a
  *   positive claim, and a consumer must not make it on the strength of a failed read
+ * - `unsynced` — no sync is running, the last sync (if any) did not fail, and at least one project
+ *   has local changes not yet sent. Reported only on a successful read of those changes: a set that
+ *   could not be read never yields it
  */
-export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'failed' | 'unknown';
+export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'failed' | 'unknown' | 'unsynced';
 
 /** A project taking part in the sync that is running right now. */
 export type SyncingProject = {
@@ -71,6 +75,14 @@ export type SyncStatusInfo = {
    * than reading empty as "nothing is syncing". Use {@link SyncStatusInfo.status} for that.
    */
   syncingProjects: readonly SyncingProject[];
+  /**
+   * The projects whose local changes have not yet been sent, sorted the same way as
+   * {@link SyncStatusInfo.syncingProjects}. Empty both when nothing is unsent and while that is not
+   * known, so — as with `syncingProjects` — use {@link SyncStatusInfo.status} to tell the two apart.
+   * Filled whatever the status — not only under `unsynced` — because it is read independently of
+   * the sync signals, so a `failed` status can still name the projects left unsent.
+   */
+  unsyncedProjects: readonly SyncingProject[];
   /**
    * Progress within the running sync, or `undefined` when there is none to report — nothing is
    * syncing, or the backend has not sent a progress tick yet.
@@ -281,6 +293,11 @@ function isValidSyncState(state: unknown): state is ReadableSyncState {
  * signal is the only one reporting a sync and its backend has not yet resolved a merge set for it.
  * A project whose metadata can't be fetched falls back to its id, so a partial failure loses
  * precision but never a project.
+ *
+ * Local changes not yet sent come from a third input, `useUnsyncedChanges`, which reads each
+ * project's repository rather than either sync signal. It contributes the `unsynced` status and
+ * {@link SyncStatusInfo.unsyncedProjects}, named and sorted exactly as the syncing projects are; how
+ * it ranks against the sync signals is set out at the `status` derivation below.
  */
 export function useSyncStatus(): SyncStatusInfo {
   // Starts `unknown`, not `idle`: until the seed answers, nothing here knows whether a sync is
@@ -637,11 +654,25 @@ export function useSyncStatus(): SyncStatusInfo {
    * disagreement as a stuck claim would flicker every normal sync through a wrong state at its
    * start. A genuinely stranded claim would need a signal that distinguishes the two, which neither
    * input carries today.
+   *
+   * Unsent local changes are a separate input, read from each project's repository rather than from
+   * either sync signal, and they rank below a running sync and below a failed one. A running sync
+   * is in the middle of sending them, so `syncing` is the true and current answer. A failed sync
+   * already implies work was left unsent and is the more actionable of the two facts — it leads the
+   * user to the details that say why — so `failed` keeps the indicator. Over every other state the
+   * set wins: a sync finishing says nothing about edits made since, and neither a claim that could
+   * not be read nor a stale verdict unmakes a fact read from the repository. A set that is not
+   * known (`undefined`) is no input at all, never a claim that something is unsent.
    */
+  const unsyncedProjectIds = useUnsyncedChanges();
+  const hasUnsynced = (unsyncedProjectIds?.length ?? 0) > 0;
   const status: SyncStatus = (() => {
     if (activitySyncing) return 'syncing';
     // A claim that is itself reporting a sync is describing the current one, not an earlier one.
-    if (isClaimVerdictStale && claimStatus !== 'syncing') return 'unknown';
+    if (isClaimVerdictStale && claimStatus !== 'syncing')
+      return hasUnsynced ? 'unsynced' : 'unknown';
+    if (claimStatus === 'syncing' || claimStatus === 'failed') return claimStatus;
+    if (hasUnsynced) return 'unsynced';
     return claimStatus;
   })();
 
@@ -668,9 +699,25 @@ export function useSyncStatus(): SyncStatusInfo {
   const effectiveProjectIds =
     syncingProjectIds.length > 0 || isClaimRereadInFlight ? syncingProjectIds : activityProjectIds;
 
-  const [syncingProjects] = usePromise(
+  const syncingProjects = useProjectNames(effectiveProjectIds);
+  const unsyncedProjects = useProjectNames(unsyncedProjectIds ?? NO_PROJECT_IDS);
+
+  return useMemo(
+    () => ({ status, syncingProjects, unsyncedProjects, syncProgress }),
+    [status, syncingProjects, unsyncedProjects, syncProgress],
+  );
+}
+
+/**
+ * Resolves project ids to the named, sorted list {@link SyncStatusInfo} hands its consumers. Shared
+ * by every list it reports, so the same project is labelled — and ordered — the same way in each.
+ *
+ * Keyed on the identity of `projectIds`, so callers must keep it stable while the set is unchanged
+ * (see {@link isSameProjectIdSet}); a fresh array per render would re-run the lookup on every one.
+ */
+function useProjectNames(projectIds: readonly string[]): readonly SyncingProject[] {
+  const [projects] = usePromise(
     useCallback(async () => {
-      const projectIds = effectiveProjectIds;
       if (projectIds.length === 0) return NO_SYNCING_PROJECTS;
 
       // One filtered lookup rather than a call per id: `getMetadataForProject` fans out across every
@@ -690,7 +737,7 @@ export function useSyncStatus(): SyncStatusInfo {
       } catch (e) {
         // Every project falls back to its id below, so the popover still names the right number of
         // projects — it just names them less precisely.
-        logger.warn(`Could not resolve names of syncing projects: ${getErrorMessage(e)}`);
+        logger.warn(`Could not resolve names of sync status projects: ${getErrorMessage(e)}`);
       }
 
       return (
@@ -704,8 +751,8 @@ export function useSyncStatus(): SyncStatusInfo {
             // same project the same way the picker does.
             name: metadataById.get(normalizeProjectId(projectId))?.name ?? projectId,
           }))
-          // The contract says claim order carries no meaning and can differ between reads of the
-          // same set, so sorting is what keeps an open popover from reshuffling under the user. Ties
+          // Input order carries no meaning — the claim's contract says its order can differ between
+          // reads of the same set — so sorting is what keeps an open popover from reshuffling under the user. Ties
           // break on id, because two projects sharing a display name (or both falling back to their
           // id) would otherwise be left in exactly the meaningless order the sort exists to remove.
           .sort(
@@ -713,14 +760,10 @@ export function useSyncStatus(): SyncStatusInfo {
               compareProjectShortNames(a.name, b.name) || a.projectId.localeCompare(b.projectId),
           )
       );
-    }, [effectiveProjectIds]),
+    }, [projectIds]),
     NO_SYNCING_PROJECTS,
   );
-
-  return useMemo(
-    () => ({ status, syncingProjects, syncProgress }),
-    [status, syncingProjects, syncProgress],
-  );
+  return projects;
 }
 
 export default useSyncStatus;
