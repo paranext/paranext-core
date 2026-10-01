@@ -3,7 +3,7 @@
 // `document` at module-eval time (it re-exports the whole component library). The default `node`
 // environment (see `vitest.config.ts`) has no `document`, so this file needs jsdom — same fix
 // already used by `scripture-pane.test.tsx` and `use-editor-pdp-sync.hook.test.ts`.
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { MutableRefObject } from 'react';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -12,7 +12,6 @@ import { isBlockMarker, isLocalizeKey } from 'platform-bible-utils';
 import {
   CONTEXT_MENU_ACTION_TO_NOTE_KIND,
   createInsertContextMenuItems,
-  isEditorContextMenuOpen,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   INSERT_CONTEXT_MENU_STRING_KEYS,
@@ -822,50 +821,5 @@ describe('createInsertContextMenuItems', () => {
         expect(actions[name]).toHaveBeenCalledTimes(name === actionName ? 1 : 0);
       },
     );
-  });
-});
-
-describe('isEditorContextMenuOpen', () => {
-  /**
-   * Builds a `.editor-input`-bearing editor root inside its own container, marked as if
-   * `ContextMenuPlugin` had opened a right-click menu for it when `menuOpen` is set — see
-   * `isEditorContextMenuOpenFor` (`editor-context-menu.util.ts`) for what this function delegates
-   * to and why the signal is per-editor rather than a document-wide class query.
-   */
-  function makeEditor({ menuOpen }: { menuOpen: boolean }): HTMLDivElement {
-    const container = document.createElement('div');
-    const root = document.createElement('div');
-    root.className = 'editor-input';
-    if (menuOpen) root.setAttribute('aria-controls', 'editor-context-menu');
-    container.append(root);
-    document.body.append(container);
-    return container;
-  }
-
-  afterEach(() => {
-    document.body.innerHTML = '';
-  });
-
-  it('is false with no context menu open', () => {
-    expect(isEditorContextMenuOpen(makeEditor({ menuOpen: false }))).toBe(false);
-  });
-
-  // Keyed on the menu being OPEN, not on a highlighted item — see `isEditorContextMenuOpen`'s
-  // TSDoc for why a menu holding nothing to invoke still holds the keyboard.
-  it('is true while the given editor’s own menu is open', () => {
-    expect(isEditorContextMenuOpen(makeEditor({ menuOpen: true }))).toBe(true);
-  });
-
-  // Scoped to the given container: the footnote-editor popover mounts its own `ContextMenuPlugin`
-  // instance, whose portal shares the same classes as the main editor's — a DIFFERENT editor's open
-  // menu elsewhere in the document must never trip THIS container's gate.
-  it('ignores a different editor’s open menu elsewhere in the document', () => {
-    const ownEditor = makeEditor({ menuOpen: false });
-    makeEditor({ menuOpen: true });
-    expect(isEditorContextMenuOpen(ownEditor)).toBe(false);
-  });
-
-  it('is false for an editor that has not mounted yet', () => {
-    expect(isEditorContextMenuOpen(undefined)).toBe(false);
   });
 });
