@@ -53,6 +53,7 @@ function measured(geometry: RangeScrollGeometry): RangeScrollMeasurement {
 const GEN_10_19: SerializedVerseRef = { book: 'GEN', chapterNum: 10, verseNum: 19 };
 const GEN_10_3: SerializedVerseRef = { book: 'GEN', chapterNum: 10, verseNum: 3 };
 const GEN_10_25: SerializedVerseRef = { book: 'GEN', chapterNum: 10, verseNum: 25 };
+const GEN_1_5: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 5 };
 const MATCH: SelectionRange = {
   start: { jsonPath: '$.content[40].content[2]', offset: 120 },
   end: { jsonPath: '$.content[40].content[2]', offset: 125 },
@@ -747,6 +748,47 @@ describe('useScrollToRange', () => {
       await runFrames(EDITOR_LOAD_DELAY_TIME + 100);
 
       expect(fake.setSelection).not.toHaveBeenCalledWith(OTHER_MATCH);
+      expect(fake.setSelection).toHaveBeenCalledTimes(1);
+      expect(fake.editor.getSelection()).toEqual(MATCH);
+      expect(scrollToRange).toHaveBeenCalledTimes(1);
+    });
+
+    it('a cross-chapter jump waits out the load delay once the chapter arrives after the navigation', async () => {
+      const fake = createFakeEditor();
+      const { result, rerender } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 1',
+        isViewVisible: true,
+        scrRef: GEN_1_5,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      // The navigation renders before the engine has the chapter's content.
+      rerender({ editorChapterKey: 'GEN 1', isViewVisible: true, scrRef: GEN_10_19 });
+      await runFrames(50);
+      fake.replaceSelection(undefined);
+      rerender({ editorChapterKey: 'GEN 10', isViewVisible: true, scrRef: GEN_10_19 });
+
+      expect(fake.setSelection).not.toHaveBeenCalled();
+      await runFrames(EDITOR_LOAD_DELAY_TIME + 100);
+      expect(fake.setSelection).toHaveBeenCalledTimes(1);
+      expect(fake.editor.getSelection()).toEqual(MATCH);
+      expect(scrollToRange).toHaveBeenCalledTimes(1);
+    });
+
+    it('a cross-chapter jump waits out the load delay when the reference and the chapter arrive in the same render', async () => {
+      const fake = createFakeEditor();
+      const { result, rerender } = renderScrollToRange(fake.editor, {
+        editorChapterKey: 'GEN 1',
+        isViewVisible: true,
+        scrRef: GEN_1_5,
+      });
+
+      act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+      fake.replaceSelection(undefined);
+      rerender({ editorChapterKey: 'GEN 10', isViewVisible: true, scrRef: GEN_10_19 });
+
+      expect(fake.setSelection).not.toHaveBeenCalled();
+      await runFrames(EDITOR_LOAD_DELAY_TIME + 100);
       expect(fake.setSelection).toHaveBeenCalledTimes(1);
       expect(fake.editor.getSelection()).toEqual(MATCH);
       expect(scrollToRange).toHaveBeenCalledTimes(1);

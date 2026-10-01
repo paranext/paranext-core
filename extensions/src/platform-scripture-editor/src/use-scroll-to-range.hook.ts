@@ -213,8 +213,8 @@ export type UseScrollToRangeResult = {
  *    Selecting any earlier would resolve the range against the previous chapter's content. Bounded
  *    by {@link SCROLL_MAX_WAIT_MS} of visible time, falling back to the verse, so a chapter or an
  *    editor that never arrives cannot leave the reference with no scroll at all. Also wait until
- *    the web view shows the range's own verse, and, when it has just navigated there, for
- *    {@link EDITOR_LOAD_DELAY_TIME} more: the engine puts its caret at the verse start on every
+ *    the web view shows the range's own verse, and, when it has navigated there since the request,
+ *    for {@link EDITOR_LOAD_DELAY_TIME} more: the engine puts its caret at the verse start on every
  *    reference change, so a selection applied before the web view reaches the verse — a navigation
  *    not rendered yet, or a scroll group that briefly flips back to an older verse on the way — is
  *    moved off again. A request waiting for its verse is never consumed by a run for another verse.
@@ -260,6 +260,13 @@ export function useScrollToRange({
   const targetVerseRef = useRef<SerializedVerseRef | undefined>(undefined);
   /** The reference the previous effect run saw, to tell a navigation from any other re-run */
   const lastSeenScrRefRef = useRef(scrRef);
+  /**
+   * Id of the request the web view has navigated since, and whose wait for the engine's own caret
+   * placement after that navigation has not been served yet. Kept across runs, because a run that
+   * sees the navigation can still be waiting for the chapter, and the run that finally finds it
+   * sees no navigation of its own.
+   */
+  const navigatedRequestIdRef = useRef<number | undefined>(undefined);
 
   const requestScrollToRange = useCallback(
     (range: SelectionRange, verseRef: SerializedVerseRef) => {
@@ -295,6 +302,7 @@ export function useScrollToRange({
     const isNavigation = !isSameVerseRef(previousScrRef, scrRef);
     lastSeenScrRefRef.current = scrRef;
     if (!request) return undefined;
+    if (isNavigation) navigatedRequestIdRef.current = request.id;
 
     /**
      * Gives up on the request without scrolling anywhere. Releases the claim as well as dropping
@@ -501,12 +509,14 @@ export function useScrollToRange({
       return cancel;
     };
 
-    if (!isNavigation) return runJump();
-    // Just navigated onto the verse: let the engine's own caret placement for it, and any stale
-    // scroll group echo that takes the web view back for a moment, happen first. A flip away
-    // cancels this and leaves the request waiting for the verse again.
+    if (navigatedRequestIdRef.current !== request.id) return runJump();
+    // Navigated onto the verse since the request — on this run, or on an earlier one that then
+    // waited for the chapter: let the engine's own caret placement for it, and any stale scroll
+    // group echo that takes the web view back for a moment, happen first. A flip away cancels this
+    // and leaves the request waiting for the verse again.
     let cancelJump: (() => void) | undefined;
     const delayTimeoutId = setTimeout(() => {
+      navigatedRequestIdRef.current = undefined;
       cancelJump = runJump();
     }, EDITOR_LOAD_DELAY_TIME);
     return () => {
