@@ -191,8 +191,17 @@ test.describe('web view reload', () => {
     // Closing removes the iframe inside the renderer's own React commit, which fires the same hide
     // event, so this is where an unmount that ran synchronously in the handler would warn
     await closeDockTab(page, webViewId);
-    // Gives a deferred unmount, and any warning it raises, time to arrive before the log is read
-    await page.waitForTimeout(1_000);
+    await expect(page.locator(iframeSelector(webViewId))).toHaveCount(0, { timeout: 10_000 });
+    // The web view component unmounts a closed web view's root from a zero-delay timer, so two
+    // timer turns after the iframe is gone, that unmount and any warning it raises have been logged
+    await page.evaluate(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    });
     const closeLines = consoleLines.slice(reloadLines.length);
 
     const crashLines = (lines: string[]) =>
