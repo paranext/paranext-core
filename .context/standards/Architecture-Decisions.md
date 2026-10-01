@@ -347,8 +347,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   with no preset raises Home showing whatever filter it last had — including a preset, which
   therefore persists until the user changes it. The accepted cost is that "More projects…" on a
   Home the user has widened still rebuilds the iframe, dropping its search and any in-progress
-  send/receive UI state; pushing the preset in without a reload would need a network event, which
-  was not worth it for that case.
+  send/receive UI state. Pushing the preset into the open Home instead
+  (`papi.webViewProviders.postMessageToWebView`) would avoid that, but Home reads its starting
+  filter once, so it would need a message handler of its own; not worth it for that case. Note
+  that the reload applies the preset only because every provider run gives the iframe a new
+  `srcNonce`, which remounts it: if web views ever keep their nonce across reloads, Home would keep
+  showing its old filter while its `state` says otherwise, and this has to be revisited.
 
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 

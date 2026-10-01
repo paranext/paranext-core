@@ -167,7 +167,8 @@ function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactE
   const onlyWebProjectList: LocalProjectInfo[] = [
     {
       projectId: '0',
-      isPublished: true,
+      // The bundled WEB sample is a plain project, not a published resource.
+      isPublished: false,
       fullName: 'The WEB project',
       name: 'WEB',
       language: 'myLanguage',

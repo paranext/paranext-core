@@ -15,10 +15,20 @@ import { formatReplacementString } from 'platform-bible-utils';
 import { ComponentType, SVGProps } from 'react';
 
 /**
+ * Every filter Home offers. The type and the guard below are derived from this one list, so adding
+ * a filter cannot leave the guard silently rejecting it.
+ */
+export const PROJECT_RESOURCE_FILTER_VALUES = Object.freeze([
+  'all',
+  'paratextProject',
+  'resource',
+] as const);
+
+/**
  * Which items Home lists. `paratextProject` and `resource` split on `isPublished`: a published item
  * is a resource, anything else is a Paratext project.
  */
-export type ProjectResourceFilterValue = 'all' | 'paratextProject' | 'resource';
+export type ProjectResourceFilterValue = (typeof PROJECT_RESOURCE_FILTER_VALUES)[number];
 
 export type ProjectResourceFilterOption = {
   key: Exclude<ProjectResourceFilterValue, 'all'>;
@@ -28,7 +38,7 @@ export type ProjectResourceFilterOption = {
 
 /** Whether a value — a Radix radio group's string, or a saved web view state value — is a filter. */
 export function isProjectResourceFilterValue(value: unknown): value is ProjectResourceFilterValue {
-  return value === 'all' || value === 'paratextProject' || value === 'resource';
+  return PROJECT_RESOURCE_FILTER_VALUES.some((filter) => filter === value);
 }
 
 /** Whether an item passes the filter, given whether it is a published resource. */

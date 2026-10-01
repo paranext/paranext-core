@@ -57,20 +57,6 @@ describe('shouldReloadHomeForFilterPreset', () => {
     expect(shouldReloadHomeForFilterPreset(savedHome(), 'paratextProject')).toBe(true);
   });
 
-  it('raises a filtered Home as the user left it when opened from a normal entry point', () => {
-    // An opener with no preset is just asking for Home. The filter is on screen and one click to
-    // change, so reloading to reset it would only cost the user their search.
-    expect(
-      shouldReloadHomeForFilterPreset(
-        savedHome({ projectResourceFilter: 'paratextProject' }),
-        undefined,
-      ),
-    ).toBe(false);
-    expect(
-      shouldReloadHomeForFilterPreset(savedHome({ projectResourceFilter: 'resource' }), undefined),
-    ).toBe(false);
-  });
-
   it('reloads a Home the user changed when "More projects…" asks for projects again', () => {
     // Launched on projects, then switched to everything by the user. The launch preset alone would
     // say nothing changed, and "More projects…" would raise a list full of resources.
@@ -89,9 +75,5 @@ describe('shouldReloadHomeForFilterPreset', () => {
         'paratextProject',
       ),
     ).toBe(false);
-  });
-
-  it('leaves an unfiltered Home alone when asked for no preset', () => {
-    expect(shouldReloadHomeForFilterPreset(savedHome(), undefined)).toBe(false);
   });
 });

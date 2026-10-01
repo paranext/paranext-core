@@ -47,13 +47,12 @@ export function buildHomeWebViewState(
  * That rebuild is the expensive path — it also drops the user's search — so it is limited to an
  * opener that asks for a specific filter ("More projects…" asking for projects) when the filter
  * Home is showing, which the user may have changed since it opened, is a different one. An opener
- * with no preset is just asking for Home, so the tab is raised showing whatever filter it last
- * had.
+ * with no preset never gets here: it is just asking for Home, so `openHome` raises the tab showing
+ * whatever filter it last had.
  */
 export function shouldReloadHomeForFilterPreset(
   existingWebView: SavedWebViewDefinition,
-  initialProjectResourceFilter: ProjectResourceFilterValue | undefined,
+  initialProjectResourceFilter: ProjectResourceFilterValue,
 ): boolean {
-  if (initialProjectResourceFilter === undefined) return false;
   return (existingWebView.state?.projectResourceFilter ?? 'all') !== initialProjectResourceFilter;
 }

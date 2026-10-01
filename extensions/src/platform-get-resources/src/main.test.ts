@@ -247,14 +247,18 @@ describe('platformGetResources.openHome', () => {
   it('asks for projects only when passed true', async () => {
     await openHome(true);
 
+    expect(mocks.openWebView).toHaveBeenCalledTimes(1);
     expect(lastRequestedPreset()).toBe('paratextProject');
   });
 
   it('asks for no preset when passed nothing or false', async () => {
+    // Each open is counted first: `lastRequestedPreset` is undefined when nothing opened too.
     await openHome();
+    expect(mocks.openWebView).toHaveBeenCalledTimes(1);
     expect(lastRequestedPreset()).toBeUndefined();
 
     await openHome(false);
+    expect(mocks.openWebView).toHaveBeenCalledTimes(2);
     expect(lastRequestedPreset()).toBeUndefined();
   });
 
@@ -263,6 +267,7 @@ describe('platformGetResources.openHome', () => {
     // first argument. A truthiness check would read that string as "projects only".
     await openHome('platform.projectResources');
 
+    expect(mocks.openWebView).toHaveBeenCalledTimes(1);
     expect(lastRequestedPreset()).toBeUndefined();
   });
 
@@ -282,6 +287,32 @@ describe('platformGetResources.openHome', () => {
       'home-1',
       expect.objectContaining({ initialProjectResourceFilter: 'paratextProject' }),
     );
+  });
+
+  it('leaves an open Home alone when it already shows the asked-for filter', async () => {
+    mocks.getOpenWebViewDefinition.mockResolvedValue({
+      id: 'home-1',
+      webViewType: 'platformGetResources.home',
+      state: { projectResourceFilter: 'paratextProject' },
+    });
+
+    await openHome(true);
+
+    // Positive control: the open Home was looked up, so it had every chance to be reloaded.
+    expect(mocks.getOpenWebViewDefinition).toHaveBeenCalledWith('home-1');
+    expect(mocks.reloadWebView).not.toHaveBeenCalled();
+  });
+
+  it('reports no Home when the reload that would apply the preset finds none', async () => {
+    mocks.getOpenWebViewDefinition.mockResolvedValue({
+      id: 'home-1',
+      webViewType: 'platformGetResources.home',
+      state: { projectResourceFilter: 'all' },
+    });
+    // The tab left this window's dock between the raise and the reload.
+    mocks.reloadWebView.mockResolvedValueOnce(undefined);
+
+    expect(await openHome(true)).toBeUndefined();
   });
 
   it('raises an open Home as the user left it when asked for nothing in particular', async () => {

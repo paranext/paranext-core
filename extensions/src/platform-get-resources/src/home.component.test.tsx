@@ -4,10 +4,12 @@ import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { SharedProjectsInfo } from 'platform-scripture';
+import coreEnStrings from '../../../../assets/localization/en.json';
 import localizedStringsContribution from '../contributions/localizedStrings.json';
 import {
   Home,
   HOME_STRING_KEYS,
+  type HomeProps,
   type LocalProjectInfo,
   type RemoteProjectsState,
 } from './home.component';
@@ -62,12 +64,16 @@ function renderHome(onSendReceiveProject: (projectId: string) => Promise<void>) 
 }
 
 /*
- * Drawn from the shipped `en` contribution rather than hand-written here, so a key that Home asks
- * for but the contribution does not define fails these tests instead of rendering as a literal
- * `%resources_…%` token in the app — `getLocalizedString` falls back to the key itself, which is
- * truthy, so nothing else catches it.
+ * Drawn from the shipped `en` strings rather than hand-written here, so a key that Home asks for but
+ * neither the extension's contribution nor core's generic strings define fails these tests instead
+ * of rendering as a literal `%resources_…%` token in the app — `getLocalizedString` falls back to
+ * the key itself, which is truthy, so nothing else catches it. Core's are included because Home
+ * reuses generic `%general_…%` strings rather than duplicating them.
  */
-const EN_STRINGS: Record<string, string> = localizedStringsContribution.localizedStrings.en;
+const EN_STRINGS: Record<string, string> = {
+  ...coreEnStrings,
+  ...localizedStringsContribution.localizedStrings.en,
+};
 const enString = (key: (typeof HOME_STRING_KEYS)[number]) => EN_STRINGS[key];
 
 const SERVER_UNREACHABLE_TITLE = enString('%resources_serverUnreachable_title%');
@@ -94,6 +100,7 @@ function renderHomeList({
   showGetResourcesButton = true,
   isLoadingLocalProjects = false,
   isLocalizedStringsLoading = false,
+  hasGetStartedHandler = true,
 }: {
   remoteProjectsState?: RemoteProjectsState;
   localProjectsInfo?: LocalProjectInfo[];
@@ -103,6 +110,8 @@ function renderHomeList({
   showGetResourcesButton?: boolean;
   isLoadingLocalProjects?: boolean;
   isLocalizedStringsLoading?: boolean;
+  /** New Tab renders Home without a Get started handler. */
+  hasGetStartedHandler?: boolean;
 } = {}) {
   return render(
     <Home
@@ -115,6 +124,7 @@ function renderHomeList({
       showGetResourcesButton={showGetResourcesButton}
       isLoadingLocalProjects={isLoadingLocalProjects}
       localizedStringsWithLoadingState={[EN_STRINGS, isLocalizedStringsLoading]}
+      onGetStarted={hasGetStartedHandler ? () => {} : undefined}
     />,
   );
 }
@@ -688,39 +698,10 @@ describe('Home project/resource filter', () => {
     fireEvent.click(activityHeader);
     expect(listedShortNames()).toEqual(['JAN', 'MAR', 'NONE']);
 
-    // An undated row that compared equal to everything left the rows where they were, so the
-    // descending click flipped the chevron and moved nothing.
+    // An undated row must not compare equal to every row, or the descending click flips the
+    // chevron and moves nothing.
     fireEvent.click(activityHeader);
     expect(listedShortNames()).toEqual(['MAR', 'JAN', 'NONE']);
-  });
-
-  it('keeps an Activity sort ordered when the Resources filter hides that column', async () => {
-    const SHARED_ONLY: SharedProjectsInfo = {
-      shared1: {
-        id: 'shared1',
-        name: 'SHR',
-        fullName: 'Shared Project',
-        language: 'mm',
-        editedStatus: '',
-        lastSendReceiveDate: '2026-08-16T00:00:00.000Z',
-      },
-    };
-    renderHomeList({
-      sharedProjectsInfo: SHARED_ONLY,
-      localProjectsInfo: [
-        { ...RESOURCE, projectId: 'rzz', name: 'RZZ', fullName: 'Resource Z', language: 'zz' },
-        { ...RESOURCE, projectId: 'raa', name: 'RAA', fullName: 'Resource A', language: 'aa' },
-      ],
-    });
-    const ACTIVITY = enString('%resources_activity%');
-    fireEvent.click(screen.getByRole('button', { name: ACTIVITY }));
-
-    await pickFilter(RESOURCES);
-
-    // Only send/receive rows have an activity; with them filtered out every row is undated, and an
-    // Activity sort still has to leave the list in an order rather than the one it arrived in.
-    expect(screen.queryByRole('button', { name: ACTIVITY })).toBeNull();
-    expect(listedShortNames()).toEqual(['RAA', 'RZZ']);
   });
 
   it('keeps the WEB getting-started prompt off a search that hides WEB', () => {
@@ -732,6 +713,202 @@ describe('Home project/resource filter', () => {
 
     expect(isShownText(NOTHING_FOUND)).toBe(true);
     expect(screen.queryByText(GET_STARTED_DESCRIPTION)).toBeNull();
+  });
+
+  it('keeps the server half in the announcement while the list reloads', () => {
+    const props: HomeProps = {
+      headerContent: undefined,
+      localProjectsInfo: [RESOURCE],
+      initialProjectResourceFilter: 'paratextProject',
+      localizedStringsWithLoadingState: [EN_STRINGS, false],
+    };
+    const { rerender } = render(<Home {...props} remoteProjectsState="unreachable" />);
+    const settledAnnouncement = announcement();
+    expect(settledAnnouncement).toContain(SERVER_UNREACHABLE_TITLE);
+
+    // Every completed sync re-fetches the server half, passing through `loading`. Dropping the
+    // banner's title for that stretch would announce the bare "No Paratext projects found." — the
+    // misleading half — and then announce the full message again when the fetch settles.
+    rerender(<Home {...props} remoteProjectsState="loading" />);
+    expect(announcement()).toBe(settledAnnouncement);
+    rerender(<Home {...props} remoteProjectsState="unreachable" />);
+    expect(announcement()).toBe(settledAnnouncement);
+  });
+
+  it('leaves the server half out of a resources-only announcement', () => {
+    renderHomeList({
+      localProjectsInfo: [PROJECT],
+      initialProjectResourceFilter: 'resource',
+      remoteProjectsState: 'unreachable',
+    });
+
+    // Server rows are never resources, so the missing half cannot explain an empty Resources list.
+    expect(announcement()).toBe(NO_RESOURCES_FOUND);
+  });
+
+  it('keeps the advice to join a project off a Home that cannot reach the server', () => {
+    renderHomeList({
+      localProjectsInfo: [RESOURCE],
+      initialProjectResourceFilter: 'paratextProject',
+      remoteProjectsState: 'unreachable',
+    });
+
+    // The user's projects may well be on the server Home could not reach.
+    expect(isShownText(NO_PARATEXT_PROJECTS_FOUND)).toBe(true);
+    expect(screen.queryByText(NO_PROJECTS_INSTRUCTION_WITHOUT_RESOURCES)).toBeNull();
+  });
+
+  it('moves focus to the search box when Clear Filters removes itself', () => {
+    renderHomeList({
+      localProjectsInfo: [RESOURCE],
+      initialProjectResourceFilter: 'paratextProject',
+    });
+    const clearFiltersButton = screen.getByRole('button', { name: CLEAR_FILTERS });
+    clearFiltersButton.focus();
+
+    fireEvent.click(clearFiltersButton);
+
+    // The table replaces the empty state, so the button that had focus is gone.
+    expect(document.activeElement).toBe(screen.getByRole('textbox'));
+  });
+
+  it('shows the WEB getting-started prompt when WEB is the only project listed', () => {
+    const GET_STARTED_DESCRIPTION = enString('%resources_getStartedDescription%');
+    const WEB: LocalProjectInfo = { ...PROJECT, projectId: 'web', name: 'WEB' };
+
+    // "More projects…" with the bundled sample and one downloaded resource: the list is just WEB.
+    renderHomeList({
+      localProjectsInfo: [WEB, RESOURCE],
+      initialProjectResourceFilter: 'paratextProject',
+    });
+
+    expect(screen.queryByText(GET_STARTED_DESCRIPTION)).not.toBeNull();
+  });
+
+  it('sorts by Language from the first click when the Activity column it sorted by is hidden', async () => {
+    renderHomeList({
+      sharedProjectsInfo: SHARED_PROJECTS,
+      localProjectsInfo: [
+        { ...RESOURCE, projectId: 'rzz', name: 'RZZ', fullName: 'Resource Z', language: 'zz' },
+        { ...RESOURCE, projectId: 'raa', name: 'RAA', fullName: 'Resource A', language: 'aa' },
+      ],
+    });
+    const ACTIVITY = enString('%resources_activity%');
+    fireEvent.click(screen.getByRole('button', { name: ACTIVITY }));
+    await pickFilter(RESOURCES);
+    // Only send/receive rows have an activity, so the Resources filter hides the column.
+    expect(screen.queryByRole('button', { name: ACTIVITY })).toBeNull();
+    expect(listedShortNames()).toEqual(['RAA', 'RZZ']);
+
+    // The rows are in Language order, so that is the sort the headers report and toggle from.
+    fireEvent.click(screen.getByRole('button', { name: enString('%resources_language%') }));
+
+    expect(listedShortNames()).toEqual(['RZZ', 'RAA']);
+  });
+
+  it('sorts by Activity in time order across differing UTC offsets', () => {
+    renderHomeList({
+      sharedProjectsInfo: {
+        // 05:45Z and 06:15Z: the later sync has the earlier local clock time after a DST fall-back.
+        // Listed later-first, so neither the arrival order nor the language order is the answer.
+        EST: {
+          ...SHARED_PROJECTS[PROJECT_ID],
+          id: 'EST',
+          name: 'EST',
+          lastSendReceiveDate: '2026-11-01T01:15:00-05:00',
+        },
+        EDT: {
+          ...SHARED_PROJECTS[PROJECT_ID],
+          id: 'EDT',
+          name: 'EDT',
+          lastSendReceiveDate: '2026-11-01T01:45:00-04:00',
+        },
+      },
+    });
+    const activityHeader = screen.getByRole('button', { name: enString('%resources_activity%') });
+
+    fireEvent.click(activityHeader);
+    expect(listedShortNames()).toEqual(['EDT', 'EST']);
+
+    fireEvent.click(activityHeader);
+    expect(listedShortNames()).toEqual(['EST', 'EDT']);
+  });
+
+  it('orders undated send/receive projects by language under an Activity sort', () => {
+    const undated = (id: string, language: string) => ({
+      ...SHARED_PROJECTS[PROJECT_ID],
+      id,
+      name: id,
+      language,
+      lastSendReceiveDate: '',
+    });
+    renderHomeList({ sharedProjectsInfo: { UZ: undated('UZ', 'zz'), UA: undated('UA', 'aa') } });
+
+    fireEvent.click(screen.getByRole('button', { name: enString('%resources_activity%') }));
+
+    // The tie-break that keeps a list with no dated rows in an order of its own.
+    expect(listedShortNames()).toEqual(['UA', 'UZ']);
+  });
+
+  it('shows no getting-started prompt where nothing handles Get started', () => {
+    const GET_STARTED_DESCRIPTION = enString('%resources_getStartedDescription%');
+    const WEB: LocalProjectInfo = { ...PROJECT, projectId: 'web', name: 'WEB' };
+
+    // New Tab: the bundled sample plus a resource, filtered to Paratext projects.
+    renderHomeList({
+      localProjectsInfo: [WEB, RESOURCE],
+      initialProjectResourceFilter: 'paratextProject',
+      hasGetStartedHandler: false,
+    });
+
+    // Positive control: WEB is what is listed.
+    expect(listedShortNames()).toEqual(['WEB']);
+    expect(screen.queryByText(GET_STARTED_DESCRIPTION)).toBeNull();
+  });
+
+  it('shows no getting-started prompt for a resource that happens to be named WEB', () => {
+    const GET_STARTED_DESCRIPTION = enString('%resources_getStartedDescription%');
+    const WEB_RESOURCE: LocalProjectInfo = { ...RESOURCE, projectId: 'webResource', name: 'WEB' };
+
+    // The prompt is for the bundled sample, which is a project; the DBL World English Bible is a
+    // resource that can carry the same short name.
+    renderHomeList({
+      localProjectsInfo: [PROJECT, WEB_RESOURCE],
+      initialProjectResourceFilter: 'resource',
+    });
+
+    expect(listedShortNames()).toEqual(['WEB']);
+    expect(screen.queryByText(GET_STARTED_DESCRIPTION)).toBeNull();
+  });
+
+  it('keeps the advice to join a project off an empty Home that cannot reach the server', () => {
+    renderHomeList({
+      initialProjectResourceFilter: 'paratextProject',
+      remoteProjectsState: 'unreachable',
+    });
+
+    // Positive control: the empty Home, under the server banner.
+    expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    expect(screen.queryByText(SERVER_UNREACHABLE_TITLE)).not.toBeNull();
+    expect(screen.queryByText(NO_PROJECTS_INSTRUCTION_WITHOUT_RESOURCES)).toBeNull();
+  });
+
+  it('holds the announcement steady while the list reloads', () => {
+    const props: HomeProps = {
+      headerContent: undefined,
+      localProjectsInfo: [PROJECT],
+      localizedStringsWithLoadingState: [EN_STRINGS, false],
+    };
+    const { rerender } = render(<Home {...props} remoteProjectsState="loaded" />);
+    rerender(<Home {...props} remoteProjectsState="loading" />);
+
+    // Only a spinner is on screen, so a search that empties the list has nothing to announce yet.
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'zzz' } });
+    expect(announcement()).toBe('');
+
+    // Once the list is back and still empty, the message is announced — once.
+    rerender(<Home {...props} remoteProjectsState="loaded" />);
+    expect(announcement()).toBe(NOTHING_FOUND);
   });
 
   it('counts what is shown against the total while anything is filtered out', () => {

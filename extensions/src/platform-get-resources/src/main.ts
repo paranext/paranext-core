@@ -511,7 +511,9 @@ export async function activate(context: ExecutionActivationContext) {
         existingWebView &&
         shouldReloadHomeForFilterPreset(existingWebView, initialProjectResourceFilter)
       )
-        await papi.webViews.reloadWebView(HOME_WEB_VIEW_TYPE, homeWebViewId, options);
+        // `undefined` when the tab is gone by the time the reload lands (moved to another window,
+        // or swapped out by an interface-mode change), and then there is no Home to report.
+        return papi.webViews.reloadWebView(HOME_WEB_VIEW_TYPE, homeWebViewId, options);
 
       return homeWebViewId;
     },
