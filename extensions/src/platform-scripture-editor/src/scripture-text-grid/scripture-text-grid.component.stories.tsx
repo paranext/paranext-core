@@ -120,7 +120,7 @@ const localizedStrings = getLocalizedStrings([...RESOURCE_CELL_STRING_KEYS]);
 const zoomMenuLabels = {
   zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom in',
   zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom out',
-  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Reset zoom',
+  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Zoom reset',
   options: localizedStrings[ZOOM_OPTIONS_KEY] ?? 'Zoom options for {resourceName}',
 };
 
