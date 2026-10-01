@@ -23,7 +23,8 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <para>
 /// Two sync signals are consumed, and "a sync is active" means either one says so:
 /// <see cref="ParatextProjectSendReceiveService.SyncActivityChanged"/> is authoritative for every
-/// sync path but is absent from builds that predate it, while
+/// sync path but is not raised by every Send/Receive implementation (the current Paratext 10 patch
+/// raises none), while
 /// <see cref="SendReceiveWriteLock.BlockStateChanged"/> is armed by every real sync. The end of
 /// either one triggers the recheck; when both end one sync, the per-project claim absorbs the
 /// second pass into at most one extra check per project. This relies on each source already
@@ -185,7 +186,11 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     internal static bool IsAnySyncActive(ParatextProjectSendReceiveService service) =>
         service.GetSyncActivity().IsSyncing || SendReceiveWriteLock.GetBlockState().IsBlocking;
 
-    /// <summary>Rechecks every project seen so far plus every check parked during the sync.</summary>
+    /// <summary>
+    /// Rechecks every project seen so far plus every check parked during the sync. Projects that
+    /// are currently marked unsynced go first, then parked ones, then the rest, so a project the
+    /// sync just sent leaves the set before the pass spends time on any other project.
+    /// </summary>
     private void RecheckAfterSync()
     {
         string[] ids;
@@ -194,7 +199,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
             if (_disposed)
                 return;
             _syncEndCount++;
-            ids = [.. _tracked.Union(_deferred)];
+            ids = [.. _unsynced.Concat(_deferred).Concat(_tracked).Distinct()];
             _deferred.Clear();
             BeginWorkLocked();
         }
@@ -206,6 +211,14 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     {
         lock (_lock)
             return _idle.Task;
+    }
+
+    /// <summary>Whether a debounce for the project has yet to fire. For tests.</summary>
+    internal bool HasPendingDebounce(string projectId)
+    {
+        string? id = Normalize([projectId]).FirstOrDefault();
+        lock (_lock)
+            return id is not null && _debounces.ContainsKey(id);
     }
 
     /// <summary>

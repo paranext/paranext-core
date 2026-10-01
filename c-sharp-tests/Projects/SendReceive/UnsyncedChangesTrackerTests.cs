@@ -114,6 +114,28 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
+        public async Task SyncEnd_ChecksUnsyncedProjectsFirst()
+        {
+            // B is enumerated last by the all-projects function, so it is tracked last.
+            _repo["B"] = true;
+            _tracker.StartBaselineScan();
+            await _tracker.FlushAsync();
+            Assert.That(_tracker.GetState().ProjectIds, Is.EquivalentTo(new[] { "B" }));
+            int eventsBefore = _events.Count;
+
+            // The sync sends B. A gains changes too, so checking A before B would raise a state
+            // that still lists B.
+            _repo["B"] = false;
+            _repo["A"] = true;
+            _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+
+            Assert.That(_events.Count, Is.GreaterThan(eventsBefore));
+            Assert.That(_events[eventsBefore].ProjectIds, Is.Empty, "B is cleared first");
+            Assert.That(_tracker.GetState().ProjectIds, Is.EquivalentTo(new[] { "A" }));
+        }
+
+        [Test]
         public async Task UnknownProject_IsDroppedFromSet()
         {
             _repo["A"] = true;
@@ -159,6 +181,14 @@ namespace TestParanextDataProvider.Projects.SendReceive
             Assert.That(started.Wait(TimeSpan.FromSeconds(5)), Is.True, "first check started");
             tracker.OnWriteScopeExited("A");
             tracker.OnWriteScopeExited("A");
+            // Release the check only once neither trigger's debounce is still pending, so both
+            // have landed while the check runs. Otherwise a debounce that fires after the re-run
+            // has finished makes a legitimate third check, and the count depends on the schedule.
+            Assert.That(
+                SpinWait.SpinUntil(() => !tracker.HasPendingDebounce("A"), TimeSpan.FromSeconds(5)),
+                Is.True,
+                "both triggers landed during the check"
+            );
             gate.Set();
             await tracker.FlushAsync();
             Assert.That(calls, Is.EqualTo(2), "one check in flight + exactly one re-run");
