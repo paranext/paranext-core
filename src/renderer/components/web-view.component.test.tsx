@@ -229,6 +229,13 @@ describe('the iframe loading a new document unmounts the React root of the one i
     );
     const iframe = rendered.container.querySelector('iframe');
     if (!iframe) throw new Error('missing iframe');
+    // Chromium returns `null` for a removed iframe's `contentWindow`; jsdom keeps the window, which
+    // would let a read made after React removes the iframe pass here
+    const liveWindow = iframe.contentWindow;
+    Object.defineProperty(iframe, 'contentWindow', {
+      configurable: true,
+      get: () => (iframe.isConnected ? liveWindow : null),
+    });
     return { ...rendered, iframe };
   }
 
