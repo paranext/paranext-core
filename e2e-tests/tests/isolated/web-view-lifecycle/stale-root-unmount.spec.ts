@@ -155,8 +155,9 @@ test.describe('web view reload', () => {
 
     const reloadLines = [...consoleLines];
 
-    // Closing removes the iframe inside the renderer's own React commit, which fires the same hide
-    // event, so this is where an unmount that ran synchronously in the handler would warn
+    // Closing removes the iframe inside the renderer's own React commit, which fires the old
+    // document's `pagehide` and `unload` there, so this is where an unmount run inline from the
+    // bootstrap's listeners would warn
     await closeDockTab(page, webViewId);
     await expect(page.locator(iframeSelector(webViewId))).toHaveCount(0, { timeout: 10_000 });
     // The web view component unmounts a closed web view's root from a zero-delay timer, so two
