@@ -24,7 +24,7 @@
  * replacements cannot affect the next. Do not run these against a fixture that lacks that
  * isolation.
  */
-import { FrameLocator, Locator, Page } from '@playwright/test';
+import { Frame, Locator, Page } from '@playwright/test';
 import {
   test,
   expect,
@@ -32,7 +32,11 @@ import {
   waitForProjects,
   WEB_COPY_PROJECT_ID,
 } from '../../../fixtures/find.fixture';
-import { waitForAppReady, PROCESS_READY_TIMEOUT } from '../../../fixtures/helpers';
+import {
+  resolveWebViewFrame,
+  waitForAppReady,
+  PROCESS_READY_TIMEOUT,
+} from '../../../fixtures/helpers';
 import {
   EDITOR_HAMBURGER_SELECTOR,
   findScriptureEditorFrame,
@@ -63,7 +67,7 @@ const SEARCH_TIMEOUT_MS = 150_000;
 // ---------------------------------------------------------------------------
 
 /** Get the first search result card. Each result renders `div[role="button"][aria-pressed]`. */
-function firstResultCard(frame: FrameLocator): Locator {
+function firstResultCard(frame: Frame): Locator {
   return frame.locator('[role="button"][aria-pressed]').first();
 }
 
@@ -76,7 +80,7 @@ function firstResultCard(frame: FrameLocator): Locator {
  * tw:font-light` classes, so without this exclusion the idle placeholder would satisfy this locator
  * too. Mirrors `resultsMessage` in `find.spec.ts`.
  */
-function resultsMessage(frame: FrameLocator): Locator {
+function resultsMessage(frame: Frame): Locator {
   return frame.locator('p:not([role="status"]).tw\\:font-light.tw\\:text-center');
 }
 
@@ -90,8 +94,12 @@ function findTab(mainPage: Page): Locator {
  *
  * The hamburger and its Radix menu both render INSIDE the editor's iframe (the menu portals to the
  * iframe body), while Find opens as a tab at main-page level.
+ *
+ * Returns the panel's iframe resolved once to a `Frame` — see {@link resolveWebViewFrame} for why
+ * not a `FrameLocator`. Each open is a new web view with a new iframe, so the frame is good until
+ * the panel is closed; reopening returns a fresh one.
  */
-async function openFindPanel(mainPage: Page): Promise<FrameLocator> {
+async function openFindPanel(mainPage: Page): Promise<Frame> {
   const editorFrame = await findScriptureEditorFrame(mainPage);
 
   const hamburger = editorFrame.locator(EDITOR_HAMBURGER_SELECTOR);
@@ -109,7 +117,10 @@ async function openFindPanel(mainPage: Page): Promise<FrameLocator> {
   await findMenuItem.click();
 
   await expect(findTab(mainPage)).toBeVisible({ timeout: 15_000 });
-  const frame = mainPage.frameLocator('iframe[title="Find"]');
+  const frame = await resolveWebViewFrame(
+    mainPage.locator('iframe[title="Find"]'),
+    "The Find web view's iframe",
+  );
   await expect(frame.locator('#search-term')).toBeVisible({ timeout: 30_000 });
   return frame;
 }
@@ -132,7 +143,7 @@ async function closeFindPanel(mainPage: Page): Promise<void> {
 }
 
 /** Switch the panel from Find to Replace. The ToggleGroup renders its items as `role="radio"`. */
-async function switchToReplaceMode(frame: FrameLocator): Promise<void> {
+async function switchToReplaceMode(frame: Frame): Promise<void> {
   await frame.getByRole('radio', { name: /^replace$/i }).click();
   await expect(frame.locator('#replace-term')).toBeVisible({ timeout: 5_000 });
 }
@@ -145,21 +156,21 @@ async function switchToReplaceMode(frame: FrameLocator): Promise<void> {
 const HISTORY_INACTIVITY_DEBOUNCE_MS = 5_000;
 
 /** Open the recent searches history dropdown. */
-async function openHistoryDropdown(frame: FrameLocator): Promise<void> {
+async function openHistoryDropdown(frame: Frame): Promise<void> {
   const button = frame.getByRole('button', { name: /show recent searches/i });
   await expect(button).toBeVisible({ timeout: 5_000 });
   await button.click();
 }
 
 /** Open the filters dropdown (the "Toggle filters" button). */
-async function openFiltersPanel(frame: FrameLocator): Promise<void> {
+async function openFiltersPanel(frame: Frame): Promise<void> {
   const filtersBtn = frame.getByRole('button', { name: /toggle filters/i });
   await expect(filtersBtn).toBeVisible({ timeout: 5_000 });
   await filtersBtn.click();
 }
 
 /** The header's Replace action button — `.first()` because result cards render one each too. */
-function headerReplaceButton(frame: FrameLocator): Locator {
+function headerReplaceButton(frame: Frame): Locator {
   return frame.getByRole('button', { name: /^replace$/i }).first();
 }
 
@@ -173,7 +184,7 @@ async function setupReplaceMode(
   mainPage: Page,
   searchTerm = REPLACE_SEARCH_TERM,
   replaceTerm = 'replaced',
-): Promise<FrameLocator> {
+): Promise<Frame> {
   const frame = await openFindPanel(mainPage);
 
   await frame.locator('#search-term').fill(searchTerm);

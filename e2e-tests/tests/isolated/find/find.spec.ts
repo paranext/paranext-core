@@ -65,6 +65,7 @@ import {
 } from '../../../fixtures/find.fixture';
 import {
   isPopoverTriggerExpanded,
+  resolveWebViewFrame,
   waitForAppReady,
   waitForOpenWebViewIdByType,
   PROCESS_READY_TIMEOUT,
@@ -156,11 +157,8 @@ const CLEAR_SEARCH_LABEL = 'Clear search';
 /**
  * Budget for opening one of the panel's popovers: click the trigger, then see the content.
  *
- * Generous because a click into a web view is slow even through a resolved `Frame`. Playwright's
- * hit-target check for an element inside an iframe adopts the iframe element into another execution
- * context, and each adoption is a `DOM.describeNode` that serializes the iframe's multi-megabyte
- * `srcdoc` (see {@link findPanelFrame}), so one click can take several seconds before the popover
- * even starts to open.
+ * Generous because a click into a web view takes seconds even through a resolved `Frame` (see
+ * {@link resolveWebViewFrame}), before the popover even starts to open.
  */
 const POPOVER_OPEN_TIMEOUT_MS = 30_000;
 
@@ -199,30 +197,20 @@ function dockTabForWebView(mainPage: Page, webViewId: string): Locator {
 }
 
 /**
- * The Find panel's iframe, resolved to its live `Frame`.
+ * The Find panel's iframe, resolved once to its live `Frame` — see {@link resolveWebViewFrame} for
+ * why not a `FrameLocator`. The Find tab is permanent, so its iframe is not replaced while a test
+ * runs.
  *
  * Uses the `data-web-view-id` attribute (set by `web-view.component.tsx`) rather than
  * `iframe[title="Find"]`, which depends on the localization service having initialized before the
  * WebView's first `getWebView()` call. The id attribute is always present.
- *
- * A `Frame`, not a `FrameLocator`, because of what a `FrameLocator` costs here. It re-resolves its
- * iframe on every call, and in Chromium that resolution is a CDP `DOM.describeNode` on the iframe
- * element, which serializes the element's attributes — `srcdoc` included, and `srcdoc` holds the
- * web view's whole inlined bundle (about 15 MB in a development build). That makes every read and
- * assertion through a `FrameLocator` take seconds before it starts, so a `toBeVisible` with a
- * two-second budget can never pass. Resolving the iframe once here pays that cost once.
- *
- * The Find tab is permanent, so its iframe is not replaced while a test runs. If it ever is,
- * actions on the returned frame fail with "frame was detached" instead of reaching the replacement
- * — call this again after anything that reloads the web view.
  */
 async function findPanelFrame(mainPage: Page): Promise<Frame> {
   const findId = await webViewIdForType(mainPage, FIND_WEBVIEW_TYPE);
-  const iframe = mainPage.locator(`iframe[data-web-view-id="${findId}"]`);
-  await expect(iframe).toBeAttached({ timeout: 30_000 });
-  const frame = await (await iframe.elementHandle())?.contentFrame();
-  if (!frame) throw new Error(`The Find web view's iframe (${findId}) has no content frame`);
-  return frame;
+  return resolveWebViewFrame(
+    mainPage.locator(`iframe[data-web-view-id="${findId}"]`),
+    `The Find web view's iframe (${findId})`,
+  );
 }
 
 /**

@@ -2,7 +2,9 @@ import {
   _electron as electron,
   ElectronApplication,
   expect,
+  Frame,
   FrameLocator,
+  Locator,
   Page,
 } from '@playwright/test';
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
@@ -2668,6 +2670,34 @@ export async function getOpenWebViewDefinitions(page: Page): Promise<OpenWebView
     const definitions = await papi.webViews.getAllOpenWebViewDefinitions();
     return definitions.map(({ id, webViewType, projectId }) => ({ id, webViewType, projectId }));
   });
+}
+
+/**
+ * A web view's iframe, resolved once to its live `Frame`.
+ *
+ * Prefer this to a `FrameLocator` for any web view a spec drives repeatedly. A `FrameLocator`
+ * re-resolves its iframe on every call, and in Chromium that resolution is a CDP `DOM.describeNode`
+ * on the iframe element, which serializes the element's attributes — `srcdoc` included, and
+ * `srcdoc` holds the web view's whole inlined bundle (about 15 MB in a development build). Every
+ * read and assertion through a `FrameLocator` then takes seconds before it starts: a `toBeVisible`
+ * with a two-second budget can never pass, and a few steps overrun a five-second product debounce.
+ * Resolving the iframe once pays that cost once.
+ *
+ * Clicks into the frame stay slow even so — Playwright's hit-target check for an element inside an
+ * iframe adopts the iframe element, which is another `describeNode` — so budget seconds per click.
+ *
+ * The returned frame belongs to this iframe only. If the web view is reloaded or closed and
+ * reopened, actions on it fail with "frame was detached" instead of reaching the replacement, so
+ * call this again after anything that replaces the iframe.
+ *
+ * @param iframe The web view's `<iframe>` element in the main page
+ * @param description What the iframe is, for the error when it has no content frame
+ */
+export async function resolveWebViewFrame(iframe: Locator, description: string): Promise<Frame> {
+  await expect(iframe).toBeAttached({ timeout: 30_000 });
+  const frame = await (await iframe.elementHandle())?.contentFrame();
+  if (!frame) throw new Error(`${description} has no content frame`);
+  return frame;
 }
 
 /**
