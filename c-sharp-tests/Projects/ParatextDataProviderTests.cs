@@ -314,6 +314,58 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void SetExtensionData_ResourceProject_IsRefusedAndCreatesNothing()
+        {
+            using DummyResourceScrText resource = new();
+            ProjectDetails resourceDetails = CreateProjectDetails(resource);
+            ParatextProjects.FakeAddProject(resourceDetails, resource);
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, resourceDetails, ParatextProjects);
+
+            Assert.Multiple(() =>
+            {
+                Assert.Throws<InvalidOperationException>(
+                    () =>
+                        provider.SetExtensionData(
+                            new ProjectDataScope
+                            {
+                                ProjectID = resourceDetails.Metadata.Id,
+                                ExtensionName = "myExtension",
+                                DataQualifier = "data.json",
+                            },
+                            "data"
+                        )
+                );
+                Assert.That(provider.GetStoredStreamNames(), Is.Empty);
+            });
+        }
+
+        [Test]
+        public void CreateDefaultStreamManager_ResourceProject_ReadsItsArchive()
+        {
+            using DummyResourceScrText resource = new();
+
+            // Not its directory: that is the folder holding the archive, shared by every resource in
+            // it, so all of them would read and list one another's extension data
+            Assert.That(
+                ParatextProjectDataProvider.CreateDefaultStreamManager(
+                    resource,
+                    CreateProjectDetails(resource)
+                ),
+                Is.InstanceOf<ResourceProjectStreamManager>()
+            );
+        }
+
+        [Test]
+        public void CreateDefaultStreamManager_EditableProject_ReadsItsDirectory()
+        {
+            Assert.That(
+                ParatextProjectDataProvider.CreateDefaultStreamManager(_scrText, _projectDetails),
+                Is.InstanceOf<RawDirectoryProjectStreamManager>()
+            );
+        }
+
+        [Test]
         public void ExtensionData_WhitespaceExtensionName_IsRejectedByGetAndSet()
         {
             DummyParatextProjectDataProvider provider =
@@ -506,6 +558,12 @@ namespace TestParanextDataProvider.Projects
                     Is.EqualTo("nested")
                 );
             });
+        }
+
+        /// <summary>A project that reports itself as a resource, as a .p8z resource does.</summary>
+        private sealed class DummyResourceScrText : DummyScrText
+        {
+            public override bool IsResourceProject => true;
         }
 
         private void SetExtensionData(

@@ -444,6 +444,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new InvalidDataException("Must provide a data qualifier");
 
         ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        // Refused before the lock is taken: a resource's extension data is what it was published
+        // with (see ResourceProjectStreamManager)
+        if (scrText.IsResourceProject)
+            throw new InvalidOperationException(
+                "Cannot write extension data to resource projects."
+            );
         RunWithinLock(
             WriteScope.EntireProject(scrText),
             writeLock =>
@@ -566,10 +572,26 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private IProjectStreamManager CreateExtensionStreamManager() =>
         CreateStreamManager(_paratextProjects.GetProjectDetails(ProjectDetails.Metadata.Id));
 
-    protected virtual IProjectStreamManager CreateStreamManager(ProjectDetails projectDetails)
-    {
-        return new RawDirectoryProjectStreamManager(projectDetails);
-    }
+    protected virtual IProjectStreamManager CreateStreamManager(ProjectDetails projectDetails) =>
+        CreateDefaultStreamManager(
+            LocalParatextProjects.GetParatextProject(projectDetails.Metadata.Id),
+            projectDetails
+        );
+
+    /// <summary>
+    /// A resource's streams are the entries of its archive; every other project's are files under
+    /// its own directory. A resource has no directory of its own — its
+    /// <see cref="ProjectDetails.HomeDirectory"/> is the folder holding its archive, shared with
+    /// every other resource there — so resolving its streams against that would give all of them
+    /// one bucket.
+    /// </summary>
+    internal static IProjectStreamManager CreateDefaultStreamManager(
+        ScrText scrText,
+        ProjectDetails projectDetails
+    ) =>
+        scrText.IsResourceProject
+            ? new ResourceProjectStreamManager(scrText.FileManager, scrText.FullPath)
+            : new RawDirectoryProjectStreamManager(projectDetails);
 
     #endregion
 
