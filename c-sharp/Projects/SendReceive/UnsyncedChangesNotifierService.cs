@@ -91,9 +91,19 @@ internal class UnsyncedChangesNotifierService(
             handler =>
             {
                 // Either side's change forwards the merged live read, so an event always carries both
-                // sets rather than only the side that moved.
-                tracker.Changed += _ => handler(ReadMerged(tracker, poller));
-                poller.Changed += () => handler(ReadMerged(tracker, poller));
+                // sets rather than only the side that moved. The gate serializes read-then-forward
+                // across the two sources: each raises on its own thread, so without it a tracker
+                // change and a poll result landing together could forward their merged reads in the
+                // opposite order and leave the renderer on the older one until the next change. The
+                // forward never awaits, so the gate is held only for the synchronous send start.
+                var forwardGate = new object();
+                void Forward()
+                {
+                    lock (forwardGate)
+                        handler(ReadMerged(tracker, poller));
+                }
+                tracker.Changed += _ => Forward();
+                poller.Changed += Forward;
             },
             s_unsyncedChangesEventDocumentation,
             Create(

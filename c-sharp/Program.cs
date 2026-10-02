@@ -151,7 +151,7 @@ public static class Program
                 paratextSendReceiveService
             );
 
-            // Track and announce projects with local changes not yet sent (event +
+            // Track and announce the projects with changes waiting in each sync direction (event +
             // getUnsyncedChanges).
             var unsyncedChangesTracker = new UnsyncedChangesTracker(
                 paratextSendReceiveService,
