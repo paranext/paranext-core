@@ -308,8 +308,9 @@ namespace TestParanextDataProvider.Projects.SendReceive
             Assert.That(_fetchCalls, Is.Zero);
             Assert.That(_poller.GetState(), Is.Empty);
 
+            // The other source's own end signal arrives once it reads idle.
             _syncing = false;
-            _poller.Tick();
+            _poller.OnSyncEnded();
             await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_fetchCalls, Is.EqualTo(1));
             Assert.That(_poller.GetState(), Is.EquivalentTo(new[] { "A" }));
