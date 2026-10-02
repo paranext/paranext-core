@@ -1,12 +1,15 @@
+import type { GridResource } from './grid-resources.utils';
+
 /**
- * Which of the grid body's three faces to render.
+ * Which of the grid body's faces to render.
  *
+ * - `resource` — the panel shows a published resource, which has no Text Collection; say so.
  * - `catalogError` — the DBL catalog is not coming, so configured references cannot be resolved; show
  *   a message with a retry.
  * - `empty` — the Text Collection has arrived and holds nothing to show; show the pick prompt.
  * - `grid` — there are rows, or an answer is still on its way.
  */
-export type ScriptureTextGridBodyState = 'catalogError' | 'empty' | 'grid';
+export type ScriptureTextGridBodyState = 'resource' | 'catalogError' | 'empty' | 'grid';
 
 /** The independent signals {@link getGridBodyState} decides from. */
 export type ScriptureTextGridBodyStateInput = {
@@ -20,8 +23,13 @@ export type ScriptureTextGridBodyStateInput = {
    * is an answer.
    */
   hasCatalogError: boolean;
-  /** Whether anything the other three signals depend on is still in flight. */
+  /** Whether anything the other signals depend on is still in flight. */
   isLoading: boolean;
+  /**
+   * Whether the panel shows a published resource. Its sources never arrive, because nothing is
+   * bound for a resource, so this outranks every other signal.
+   */
+  isPublishedResource: boolean;
 };
 
 /**
@@ -40,10 +48,27 @@ export function getGridBodyState({
   hasSources,
   hasCatalogError,
   isLoading,
+  isPublishedResource,
 }: ScriptureTextGridBodyStateInput): ScriptureTextGridBodyState {
+  if (isPublishedResource) return 'resource';
   if (hasRows || isLoading) return 'grid';
   if (hasCatalogError) return 'catalogError';
   return hasSources ? 'empty' : 'grid';
+}
+
+/**
+ * Whether to show the catalog retry banner above the grid: only when the catalog failed AND a cell
+ * is showing "couldn't check". A failed catalog whose references all resolved from disk leaves a
+ * working grid with nothing to retry; a build with no DBL credentials is not a failure at all.
+ */
+export function shouldShowCatalogRetryBanner({
+  hasCatalogError,
+  resources,
+}: {
+  hasCatalogError: boolean;
+  resources: GridResource[];
+}): boolean {
+  return hasCatalogError && resources.some((r) => r.unresolvedReason === 'unverified');
 }
 
 export default getGridBodyState;

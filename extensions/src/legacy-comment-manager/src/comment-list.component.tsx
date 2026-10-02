@@ -44,6 +44,7 @@ export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
   '%webView_legacyCommentManager_syncEditBlocked_notice%',
   '%comment_filter_current_user_unavailable%',
   '%comment_filter_retry_current_user%',
+  '%webView_legacyCommentManager_resourceHasNoComments%',
 ] as const;
 
 /**
@@ -110,6 +111,11 @@ export type CommentListPanelProps = Pick<
   currentUserNameUnavailable?: boolean;
   /** Retries the current user's registration-data fetch; wired to the message above's action. */
   onRetryFetchCurrentUserName?: () => void;
+  /**
+   * True when the panel shows a published resource, which has no comments. Replaces the whole
+   * panel, filters included, with a message saying so. Defaults to `false`.
+   */
+  isPublishedResource?: boolean;
 };
 
 /**
@@ -195,6 +201,7 @@ export function CommentListPanel({
   isSyncBlocked = false,
   currentUserNameUnavailable = false,
   onRetryFetchCurrentUserName,
+  isPublishedResource = false,
   handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
@@ -211,6 +218,13 @@ export function CommentListPanel({
   drafts,
   onDraftChange,
 }: CommentListPanelProps) {
+  if (isPublishedResource)
+    return (
+      <div className="tw:m-4 tw:flex tw:justify-center">
+        <Label>{localizedStrings['%webView_legacyCommentManager_resourceHasNoComments%']}</Label>
+      </div>
+    );
+
   const noFiltersActive = isShowingAllThreads({ filters, scopeFilter });
 
   // The list area swaps between an explanatory "current user unavailable" message, skeletons

@@ -1304,9 +1304,6 @@ async function isProjectPublished(papi: typeof PapiBackend, projectId: string): 
  * re-pointed. Find is NOT here: it needs the id of the editor web view the switch produces, so it
  * is re-pointed separately by {@link updateRelatedFindPanel} once that editor exists.
  *
- * The Text Collection is the one panel that declines to follow a published resource; see
- * {@link updateRelatedTextCollectionPanel}.
- *
  * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for
  */
@@ -1314,9 +1311,6 @@ export async function openOrUpdateRelatedPanels(
   papi: typeof PapiBackend,
   projectId: string,
 ): Promise<void> {
-  // Started first so the settings round trip overlaps the four panel commands below instead of
-  // adding to the switch's latency.
-  const isPublishedPromise = isProjectPublished(papi, projectId);
   try {
     await papi.commands.sendCommand('platformScriptureEditor.openModelText', projectId);
   } catch (e) {
@@ -1346,7 +1340,7 @@ export async function openOrUpdateRelatedPanels(
     papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
   }
   // Not wrapped like the four above: this one swallows its own failures (see its TSDoc).
-  await updateRelatedTextCollectionPanel(papi, projectId, isPublishedPromise);
+  await updateRelatedTextCollectionPanel(papi, projectId);
 }
 
 /**
@@ -1409,11 +1403,13 @@ export function resolveGridProviderProjectId(
  * `ActiveEditorProjectId` and keeps that project from then on (see
  * `resolveTextCollectionProjectId`), so only a re-point moves it.
  *
- * Four deliberate constraints:
+ * Follows every kind of project, a published resource included. A resource has no Text Collection,
+ * but staying on the outgoing project would show that project's texts beside a resource they don't
+ * belong to; bound to a resource, the grid says it has none and binds nothing it could write to
+ * (see `useTextCollectionBinding`).
  *
- * - Never follows a published resource (see `isProjectPublished`): a resource has no collection of
- *   its own, so following it would cost a reload, and the in-memory state it drops, for an empty
- *   panel. The rule lives here rather than in a caller so every re-point path applies it.
+ * Three deliberate constraints:
+ *
  * - Never creates a panel when none is open, unlike the Text Collection's menu command
  *   (`platformScriptureEditor.showTextCollectionPanel`), which does create one on demand. A project
  *   switch closing a tab the user deliberately closed in Power mode, or one the
@@ -1442,14 +1438,10 @@ export function resolveGridProviderProjectId(
  *
  * @param papi The instance of papi to read web view definitions with and request the reload from
  * @param projectId The id of the project whose text collection the panel should show
- * @param isPublishedPromise Whether `projectId` is a published resource. A caller that already
- *   started this read passes it in so the round trip overlaps its own work; otherwise it is read
- *   here, and only once a reload is still in question.
  */
 export async function updateRelatedTextCollectionPanel(
   papi: typeof PapiBackend,
   projectId: string,
-  isPublishedPromise?: Promise<boolean>,
 ): Promise<void> {
   let existingPanel: SavedWebViewDefinition | undefined;
   try {
@@ -1474,8 +1466,6 @@ export async function updateRelatedTextCollectionPanel(
       normalizeProjectId(existingPanel.projectId) === normalizeProjectId(projectId))
   )
     return;
-
-  if (await (isPublishedPromise ?? isProjectPublished(papi, projectId))) return;
 
   try {
     // Hidden case: Simple mode shows one Column 3 tab at a time, so this usually lands on an
@@ -1561,10 +1551,9 @@ export async function updateRelatedFindPanel(
  * Creates nothing. In Simple mode Checks joins Column 3 only when the user opens it, and a project
  * switch is not a request to open it.
  *
- * Never follows a published resource (see `isProjectPublished`), the same rule as
- * {@link updateRelatedTextCollectionPanel}: a resource is not something the user checks, so Checks
- * stays on the translation project. A translation project with editing switched off is followed
- * like any other.
+ * Never follows a published resource (see `isProjectPublished`): a resource is not something the
+ * user checks, so Checks stays on the translation project. A translation project with editing
+ * switched off is followed like any other.
  *
  * Only Simple mode re-points Checks, read fresh here for the same reason as in
  * {@link updateRelatedFindPanel}. In Power mode each Checks panel is docked beside the editor it was
