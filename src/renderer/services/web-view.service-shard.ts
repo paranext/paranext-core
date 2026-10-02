@@ -2936,7 +2936,8 @@ export async function openOrReloadWebView(
       // unmounting runs every effect cleanup, so an unmount during `pagehide` would remove a
       // listener the web view registered in an effect before the browser reached it, losing a last
       // save made there. `unload` follows every `pagehide` listener and still precedes the
-      // replacement document. A web view's own `unload` listeners do run after the unmount.
+      // replacement document. Being added during `pagehide`, the listener also follows any `unload`
+      // listener the web view added earlier, so those still see its React tree.
       //
       // The unmount is then a microtask, not a timer: on a navigation it runs as soon as the
       // `unload` listener returns, before the replacement document exists. When the renderer's React

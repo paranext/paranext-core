@@ -247,7 +247,7 @@ Never use editable content in list item keys:
 
 ### Saving on Teardown
 
-Flush pending work (a debounced save, a draft) in a `pagehide` listener, and in an effect's unmount cleanup as well. When a web view reloads (for example on `reloadWebView`), the platform unmounts the replaced document's React root on that document's `unload`, after every `pagehide` listener has run and while the old document is still current, so a `pagehide` listener that your effect cleanup removes still fires. A window or app close runs no unmount at all, so pair the `pagehide` listener with `beforeunload`. Do not rely on your own `unload` listener seeing your React tree: on a reload it can run after the root has been unmounted. `use-comment-drafts.hook.ts` (`legacy-comment-manager`) does both.
+Flush pending work (a debounced save, a draft) in a `pagehide` listener, and in an effect's unmount cleanup as well. When a web view reloads (for example on `reloadWebView`), the platform unmounts the replaced document's React root on that document's `unload`, after every `pagehide` listener has run and while the old document is still current, so a `pagehide` listener that your effect cleanup removes still fires. An `unload` listener added in an effect also runs before that unmount, but `pagehide` is the flush point to rely on. A window or app close may run no unmount, or skip `pagehide`, so pair the `pagehide` listener with `beforeunload`. `use-comment-drafts.hook.ts` (`legacy-comment-manager`) does both.
 
 ### Opening WebViews with Layouts
 

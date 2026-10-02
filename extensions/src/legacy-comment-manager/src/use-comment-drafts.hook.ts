@@ -179,17 +179,17 @@ export function useCommentDrafts({
 
   // Flush (not cancel) on teardown, so a debounced write that hasn't fired yet -- e.g. the user
   // typed and then immediately switched project, closed this panel, or closed the app -- is never
-  // lost. The `pagehide` listener flushes on every way this web view's document goes away, each
-  // time before any unmount of this React root:
+  // lost. The listeners flush before any unmount of this React root:
   //
   // - Project switch: `openCommentListPanel` calls `reloadWebView`, so the iframe navigates to a
   //   new `srcDoc` document. The web view bootstrap unmounts this root only on the old document's
   //   `unload`, after every `pagehide` listener has run.
   // - Panel close: the renderer removes the iframe inside its own React commit, which fires
   //   `pagehide` synchronously, before the renderer's deferred unmount.
-  // - Window/app close: the renderer and every iframe in it go away with no React unmount at all.
-  //   `beforeunload` is the belt-and-suspenders pair for this path, matching the pairing
-  //   `platform-scripture-editor.web-view.tsx` uses for its own teardown flush.
+  // - Window/app close: the renderer and every iframe in it go away with no React unmount at all,
+  //   and a window destroyed outright skips `pagehide`, so `beforeunload` is the pair for this
+  //   path, matching the pairing `platform-scripture-editor.web-view.tsx` uses for its own teardown
+  //   flush.
   //
   // The unmount cleanup flushes as well, for an unmount that tears no document down; after a
   // `pagehide` flush it has nothing left to write.
