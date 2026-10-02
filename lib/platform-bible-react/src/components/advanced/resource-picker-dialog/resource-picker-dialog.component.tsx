@@ -1,4 +1,5 @@
 import { Alert, AlertDescription } from '@/components/shadcn-ui/alert';
+import { Button } from '@/components/shadcn-ui/button';
 import { EmptyState } from '@/components/basics/empty-state.component';
 import { RetryableErrorView } from '@/components/basics/retryable-error-view.component';
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/shadcn-ui/dialog';
@@ -99,6 +100,11 @@ export interface ResourcePickerDialogProps {
    * the user working against a partial list, where the error state replaces it.
    */
   notice?: string;
+  /**
+   * A button shown with {@link notice}, for something the user can do about what the notice says.
+   * Ignored without a `notice`. `label` must already be localized.
+   */
+  noticeAction?: { label: string; onSelect: () => void };
   /**
    * When false, rows in the "Installed" section are shown but cannot be picked. Use it when the
    * caller can act on a resource that still needs installing but has nothing to do with one that is
@@ -310,6 +316,7 @@ export default function ResourcePickerDialog({
   resourceType,
   selectedResourceIds,
   notice,
+  noticeAction,
   allowSelectingInstalled = true,
   localizedStrings,
   allowDeselect,
@@ -569,6 +576,18 @@ export default function ResourcePickerDialog({
             className="tw:mx-4 tw:mb-2 tw:w-auto tw:bg-muted tw:text-muted-foreground"
           >
             <AlertDescription>{notice}</AlertDescription>
+            {/* Below the text rather than in `AlertAction`, whose fixed end padding clips a label
+                longer than a word or two once translated. */}
+            {noticeAction && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="tw:mt-1 tw:justify-self-start"
+                onClick={noticeAction.onSelect}
+              >
+                {noticeAction.label}
+              </Button>
+            )}
           </Alert>
         )}
       </div>

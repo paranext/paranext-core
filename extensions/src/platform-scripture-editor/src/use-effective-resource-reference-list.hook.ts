@@ -35,8 +35,12 @@ function getDeduplicationKey(item: ResourceReference): string | undefined {
  * uses CURRENT_DATA_VERSION (not the source versions) and excludes UnknownResourceReference items,
  * which exist only for round-trip storage compatibility and cannot be acted upon. Admin-sourced
  * items (from the project file) are listed first.
+ *
+ * Exported so the no-project source (`useResourceReferenceSource`) can produce the same shape from
+ * a user layer alone rather than re-implementing dedup, unknown-type filtering, and `source`
+ * tagging as a second copy that can drift.
  */
-function mergeResourceReferenceLists(
+export function mergeResourceReferenceLists(
   projectResourceReferenceList: ResourceReferenceList,
   userResourceReferenceList: ResourceReferenceList,
 ): EffectiveResourceReferenceList {
