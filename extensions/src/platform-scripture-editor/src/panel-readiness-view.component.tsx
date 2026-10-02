@@ -9,7 +9,11 @@ import {
 import { AlertTriangle, BookOpen, CloudOff } from 'lucide-react';
 import { ReactNode } from 'react';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
-import { PanelRetryableErrorView, LoadingView } from './panel-state-views.component';
+import {
+  PANEL_FILL_CLASSES,
+  PanelRetryableErrorView,
+  LoadingView,
+} from './panel-state-views.component';
 
 /**
  * Renders the front of a resource panel's state machine — everything before it has something to
@@ -74,7 +78,7 @@ export function PanelReadinessView({
   // to replace a resource that may already be configured.
   if (readiness === 'error') {
     return (
-      <Empty className="tw:h-screen" role="alert">
+      <Empty className={PANEL_FILL_CLASSES} role="alert">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <AlertTriangle />
@@ -102,9 +106,7 @@ export function PanelReadinessView({
 
   if (readiness === 'empty') {
     return (
-      // An expanded "More info" can be taller than the panel. Safe centering plus scrolling keeps
-      // the top reachable when it is — plain `center` would push it above the scrollable area.
-      <Empty className="tw:h-screen tw:justify-center-safe tw:overflow-y-auto">
+      <Empty className={PANEL_FILL_CLASSES}>
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <BookOpen />

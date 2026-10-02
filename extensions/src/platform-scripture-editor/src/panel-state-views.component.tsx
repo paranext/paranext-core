@@ -2,6 +2,14 @@ import { Button, RetryableErrorView, Spinner } from 'platform-bible-react';
 import { ReactNode, useId, useState } from 'react';
 
 /**
+ * Classes for a full-panel state whose content is centered vertically. A panel can be shorter than
+ * its content (a long "More info", or a pane dragged small); `justify-center-safe` then falls back
+ * to top alignment and the panel scrolls, where plain `justify-center` would push the top above the
+ * scrollable area, out of reach. Overrides `Empty`'s own `justify-center` through `cn`.
+ */
+export const PANEL_FILL_CLASSES = 'tw:h-screen tw:justify-center-safe tw:overflow-y-auto';
+
+/**
  * Full-panel loading state: a spinner beside a label saying what is being waited on. Shared by the
  * Model Text and Resource (Bible Texts / Commentaries) panels, which render an identical block and
  * differ only in the localized label they resolve.
@@ -60,7 +68,7 @@ export function PanelRetryableErrorView({
 }) {
   return (
     <RetryableErrorView
-      className="tw:h-screen"
+      className={PANEL_FILL_CLASSES}
       message={message}
       retryLabel={retryLabel}
       onRetry={onRetry}
