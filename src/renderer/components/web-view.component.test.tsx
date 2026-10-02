@@ -99,6 +99,13 @@ const RESTORED_TAB: SavedTabInfo = {
   data: { id: SAVED_WEB_VIEW_ID, webViewType: SAVED_WEB_VIEW_TYPE },
 };
 
+/** Lets one zero-delay timer turn pass, e.g. the deferred close-time unmount */
+async function flushTimerTurn() {
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   // The curried useData return type is a deeply-generic object; its shape is tested in the
@@ -202,7 +209,7 @@ describe('the iframe lifecycle notifies content zoom', () => {
   });
 });
 
-describe('the iframe loading a new document unmounts the React root of the one it replaced', () => {
+describe("the web view unmounts the React roots of its iframe's documents", () => {
   const ROOT_WEB_VIEW_ID = 'root-view';
 
   /**
@@ -234,6 +241,8 @@ describe('the iframe loading a new document unmounts the React root of the one i
     const liveWindow = iframe.contentWindow;
     Object.defineProperty(iframe, 'contentWindow', {
       configurable: true,
+      // The DOM's own value for a removed iframe, which the component must cope with
+      // eslint-disable-next-line no-null/no-null
       get: () => (iframe.isConnected ? liveWindow : null),
     });
     return { ...rendered, iframe };
@@ -302,9 +311,7 @@ describe('the iframe loading a new document unmounts the React root of the one i
 
     unmount();
     // The close-time unmount is deferred a timer turn so it never lands inside React's commit
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await flushTimerTurn();
 
     expect(unmountSecondRoot).toHaveBeenCalledTimes(1);
     expect(unmountFirstRoot).toHaveBeenCalledTimes(1);
@@ -323,9 +330,7 @@ describe('the iframe loading a new document unmounts the React root of the one i
     unmount();
     // The close-time unmount is deferred a timer turn so it never lands inside React's commit
     expect(unmountSecondRoot).not.toHaveBeenCalled();
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await flushTimerTurn();
 
     expect(unmountSecondRoot).toHaveBeenCalledTimes(1);
     expect(unmountFirstRoot).toHaveBeenCalledTimes(1);
@@ -338,9 +343,7 @@ describe('the iframe loading a new document unmounts the React root of the one i
     publishRootOfNewDocument(iframe, unmountRoot);
 
     unmount();
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await flushTimerTurn();
 
     expect(unmountRoot).toHaveBeenCalledTimes(1);
   });
@@ -363,9 +366,7 @@ describe('the iframe loading a new document unmounts the React root of the one i
 
     // The new document's root was stored despite the throw, so closing unmounts it
     unmount();
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await flushTimerTurn();
     expect(unmountSecondRoot).toHaveBeenCalledTimes(1);
   });
 });
@@ -414,9 +415,7 @@ describe('the iframe asks for its tab to be focused when it loads', () => {
 
     // Give the load effect's async focus call the same chance to run that the test above waits for
     await vi.waitFor(() => expect(applyContentZoomForWebView).toHaveBeenCalled());
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await flushTimerTurn();
     expect(mocks.setFocus).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 /**
- * A web view's own `pagehide` listeners still run when the web view reloads, even one that the web
- * view removes in an effect cleanup.
+ * A web view's own `pagehide` and `unload` listeners still run before its root unmounts when the
+ * web view reloads, even ones the web view removes in an effect cleanup.
  *
  * The bootstrap unmounts a replaced document's React root while that document is torn down, and
  * unmounting runs every effect cleanup. If that ran during `pagehide`, a listener the web view had

@@ -187,7 +187,7 @@ export function useCommentDrafts({
   // - Panel close: the renderer removes the iframe inside its own React commit, which fires
   //   `pagehide` synchronously, before the renderer's deferred unmount.
   // - Window/app close: the renderer and every iframe in it go away with no React unmount at all,
-  //   and a window destroyed outright skips `pagehide`, so `beforeunload` is the pair for this
+  //   and a window destroyed outright can skip `pagehide`, so `beforeunload` is the pair for this
   //   path, matching the pairing `platform-scripture-editor.web-view.tsx` uses for its own teardown
   //   flush.
   //
