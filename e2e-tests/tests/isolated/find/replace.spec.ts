@@ -85,6 +85,28 @@ function resultsMessage(frame: Frame): Locator {
   return frame.locator('p:not([role="status"]).tw\\:font-light.tw\\:text-center');
 }
 
+/**
+ * Waits for the panel's search to finish and stay finished, and answers its results message.
+ *
+ * Seeing the message once is not enough. It shows for a stopped search as well as a completed one,
+ * so it can be on screen for a search that another is about to replace — in this suite a first read
+ * has come back "No results found" for a term the project held three times. So this waits until the
+ * message reads the same a second apart. A search starting in between hides the message, so two
+ * equal reads mean the panel settled on that answer.
+ */
+async function waitForSearchToSettle(frame: Frame): Promise<string> {
+  let settled = '';
+  await expect(async () => {
+    const first = await resultsMessage(frame).textContent({ timeout: 1_000 });
+    await frame.waitForTimeout(1_000);
+    const second = await resultsMessage(frame).textContent({ timeout: 1_000 });
+    expect(first).toBeTruthy();
+    expect(second).toBe(first);
+    settled = second ?? '';
+  }).toPass({ timeout: SEARCH_TIMEOUT_MS });
+  return settled;
+}
+
 /** The Find dock tab, which in Power mode is a normal closable tab rather than a fixed one. */
 function findTab(mainPage: Page): Locator {
   return mainPage.locator('.dock-tab', { hasText: /^Find/i });
@@ -440,11 +462,8 @@ test.describe('Replace operations', () => {
     // it, while the status-bar total comes straight from the find job's own count.
     await frame.locator('#search-term').fill('replaced');
     await frame.locator('#search-term').press('Enter');
-    const baselineMessage = resultsMessage(frame);
-    await expect(baselineMessage).toHaveText(/^(no results found|\d+ results)$/i, {
-      timeout: SEARCH_TIMEOUT_MS,
-    });
-    const baselineText = (await baselineMessage.textContent()) ?? '';
+    const baselineText = await waitForSearchToSettle(frame);
+    expect(baselineText).toMatch(/^(no results found|\d+ results)$/i);
     const baselineCount = /no results found/i.test(baselineText)
       ? 0
       : Number(baselineText.match(/(\d+) results$/)?.[1]);
