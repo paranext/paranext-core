@@ -199,6 +199,93 @@ describe('the iframe lifecycle notifies content zoom', () => {
   });
 });
 
+describe('the iframe loading a new document unmounts the React root of the one it replaced', () => {
+  const ROOT_WEB_VIEW_ID = 'root-view';
+
+  beforeEach(() => {
+    // Same stub as the content-zoom suite above, for the same reason.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion -- necessary for mock helper flexibility
+    vi.mocked(useData).mockReturnValue({
+      WebViewMenu: () => [undefined, vi.fn(), false],
+    } as never);
+  });
+
+  /**
+   * Stands in for a React web view's bootstrap having run in the iframe's current document: each
+   * document publishes its own root's unmount on its `window`, and the iframe's `contentWindow`
+   * always resolves to whichever document is current.
+   */
+  function publishRootOfNewDocument(iframe: HTMLIFrameElement, unmountRoot: () => void) {
+    const { contentWindow } = iframe;
+    if (!contentWindow) throw new Error('iframe has no contentWindow');
+    Object.assign(contentWindow, { webViewCleanup: { unmountRoot } });
+  }
+
+  async function renderWebView() {
+    const { WebView } = await import('./web-view.component');
+    const rendered = render(
+      <WebView
+        id={ROOT_WEB_VIEW_ID}
+        webViewType="test.type"
+        title="Root test view"
+        content="<html></html>"
+        contentType={WEB_VIEW_CONTENT_TYPE.HTML}
+      />,
+    );
+    const iframe = rendered.container.querySelector('iframe');
+    if (!iframe) throw new Error('missing iframe');
+    return { ...rendered, iframe };
+  }
+
+  test('unmounts the previous root, and only that one, when a moved iframe reloads', async () => {
+    // rc-dock moves a tab's pane within the window by re-inserting its DOM node, which reloads the
+    // iframe's document while the web view (and this component) stays mounted
+    const { iframe } = await renderWebView();
+    const unmountFirstRoot = vi.fn();
+    const unmountSecondRoot = vi.fn();
+
+    publishRootOfNewDocument(iframe, unmountFirstRoot);
+    fireEvent.load(iframe);
+    expect(unmountFirstRoot).not.toHaveBeenCalled();
+
+    publishRootOfNewDocument(iframe, unmountSecondRoot);
+    fireEvent.load(iframe);
+
+    expect(unmountFirstRoot).toHaveBeenCalledTimes(1);
+    expect(unmountSecondRoot).not.toHaveBeenCalled();
+  });
+
+  test('leaves the live root mounted when the same document reports a second load', async () => {
+    const { iframe } = await renderWebView();
+    const unmountRoot = vi.fn();
+
+    publishRootOfNewDocument(iframe, unmountRoot);
+    fireEvent.load(iframe);
+    fireEvent.load(iframe);
+
+    expect(unmountRoot).not.toHaveBeenCalled();
+  });
+
+  test('unmounts the root of the document still shown when the web view closes', async () => {
+    const { iframe, unmount } = await renderWebView();
+    const unmountFirstRoot = vi.fn();
+    const unmountSecondRoot = vi.fn();
+    publishRootOfNewDocument(iframe, unmountFirstRoot);
+    fireEvent.load(iframe);
+    publishRootOfNewDocument(iframe, unmountSecondRoot);
+    fireEvent.load(iframe);
+
+    unmount();
+    // The close-time unmount is deferred a timer turn so it never lands inside React's commit
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(unmountSecondRoot).toHaveBeenCalledTimes(1);
+    expect(unmountFirstRoot).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('the iframe asks for its tab to be focused when it loads', () => {
   const FOCUS_WEB_VIEW_ID = 'focus-view';
 
