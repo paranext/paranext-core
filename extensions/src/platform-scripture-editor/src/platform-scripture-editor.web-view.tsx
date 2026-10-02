@@ -153,6 +153,7 @@ import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
+import { applyEditorScrRefReport } from './editor-scr-ref-report.util';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
@@ -2501,19 +2502,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     (newVerseLocation: SerializedVerseRef) => {
       // A report of the user's own caret move gives up on any pending range jump now, so it cannot
       // land later on top of wherever the user just clicked; the hook tells the engine's book
-      // correction apart and keeps the jump for that.
-      onEditorScrRefChange(newVerseLocation);
-      // Preserve versificationStr so the PDP selector doesn't change on every click. Against
-      // platform-editor 0.8.15 the fallback is a no-op: `positionToScrRef` carries the host's
-      // `versificationStr` on every position report (a document states no versification of its
-      // own), and that plugin is the sole caller of this handler. Kept as cheap insurance in case
-      // that contract changes — versions before 0.8.15 reported positions without it.
-      const preservedLocation: SerializedVerseRef = {
-        ...newVerseLocation,
-        versificationStr: newVerseLocation.versificationStr ?? scrRef.versificationStr,
-      };
-      internalVerseLocationRef.current = preservedLocation;
-      setScrRefWithScroll(preservedLocation);
+      // correction apart and keeps the jump for that. Preserving `versificationStr` keeps the PDP
+      // selector from changing on every click.
+      applyEditorScrRefReport(newVerseLocation, {
+        currentVersificationStr: scrRef.versificationStr,
+        onEditorScrRefChange,
+        setScrRef: (preservedLocation) => {
+          internalVerseLocationRef.current = preservedLocation;
+          setScrRefWithScroll(preservedLocation);
+        },
+      });
     },
     [onEditorScrRefChange, setScrRefWithScroll, scrRef.versificationStr],
   );
