@@ -179,20 +179,20 @@ export function useCommentDrafts({
 
   // Flush (not cancel) on teardown, so a debounced write that hasn't fired yet -- e.g. the user
   // typed and then immediately switched project, closed this panel, or closed the app -- is never
-  // lost. Both the unmount cleanup and the `pagehide`/`beforeunload` listeners flush, and both must
-  // stay, because which one runs depends on how this web view's document goes away:
+  // lost. The `pagehide` listener flushes on every way this web view's document goes away, each
+  // time before any unmount of this React root:
   //
   // - Project switch: `openCommentListPanel` calls `reloadWebView`, so the iframe navigates to a
-  //   new `srcDoc` document. The web view bootstrap's own `pagehide` listener is registered before
-  //   this one and unmounts this React root in the microtask checkpoint right after it returns, so
-  //   the unmount cleanup flushes -- and removes this effect's listeners before the browser
-  //   reaches them.
+  //   new `srcDoc` document. The web view bootstrap unmounts this root only on the old document's
+  //   `unload`, after every `pagehide` listener has run.
   // - Panel close: the renderer removes the iframe inside its own React commit, which fires
-  //   `pagehide` synchronously, so the `pagehide` listener flushes before any unmount of this root.
-  // - Window/app close: the renderer and every iframe in it go away with no React unmount at all,
-  //   so only the listeners can flush. `beforeunload` is the belt-and-suspenders pair for this
-  //   path, matching the pairing `platform-scripture-editor.web-view.tsx` uses for its own
-  //   teardown flush.
+  //   `pagehide` synchronously, before the renderer's deferred unmount.
+  // - Window/app close: the renderer and every iframe in it go away with no React unmount at all.
+  //   `beforeunload` is the belt-and-suspenders pair for this path, matching the pairing
+  //   `platform-scripture-editor.web-view.tsx` uses for its own teardown flush.
+  //
+  // The unmount cleanup flushes as well, for an unmount that tears no document down; after a
+  // `pagehide` flush it has nothing left to write.
   useEffect(() => {
     const flush = () => debouncedSaveDrafts.flush();
     window.addEventListener('pagehide', flush);

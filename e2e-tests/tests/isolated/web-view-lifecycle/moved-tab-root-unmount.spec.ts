@@ -3,7 +3,7 @@
  * going anywhere. rc-tabs renders a panel's tab panes as keyed siblings, so reordering tabs makes
  * React re-insert the moved pane's DOM node, and an iframe re-inserted into the DOM loads a new
  * document. The web view component stays mounted throughout, so its close-time unmount never runs
- * for the replaced document, and that document's own hide handler runs while its realm is being
+ * for the replaced document, and that document's own unload handler runs while its realm is being
  * torn down. React is shared from the renderer (`window.React = window.parent.React`), so the root
  * the replaced document created lives on in the renderer unless something still alive unmounts it.
  *

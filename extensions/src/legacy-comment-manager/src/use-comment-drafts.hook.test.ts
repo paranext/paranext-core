@@ -144,10 +144,8 @@ describe('useCommentDrafts', () => {
   });
 
   it('flushes a pending debounced save on unmount so it is not lost', () => {
-    // Writes are debounced 500ms; a project switch mid-burst must not lose the last keystrokes. It
-    // reloads the web view, and the reload unmounts this React root before the browser reaches its
-    // `pagehide` listener, so the unmount cleanup is the flush that saves them. Unmounting well
-    // before the debounce would fire on its own means only the cleanup's
+    // Writes are debounced 500ms; an unmount mid-burst must not lose the last keystrokes.
+    // Unmounting well before the debounce would fire on its own means only the cleanup's
     // `debouncedSaveDrafts.flush()` call can be responsible for this write reaching storage.
     const { result, unmount } = renderCommentDrafts();
 
@@ -162,9 +160,10 @@ describe('useCommentDrafts', () => {
   });
 
   it('flushes a pending debounced save on pagehide, WITHOUT unmounting', () => {
-    // A window/app close destroys the iframe's document with no unmount at all, and a panel close
-    // fires `pagehide` before any unmount of this React tree, so the listener is what flushes on
-    // those paths; a cleanup-on-unmount-only flush (the previous test) would miss the window close.
+    // Every teardown of the iframe's document -- a project switch's reload, a panel close, a
+    // window/app close -- fires `pagehide` before any unmount of this React tree (a window close
+    // has none at all), so the listener is what flushes on those paths; a cleanup-on-unmount-only
+    // flush (the previous test) would miss the window close.
     // Asserting the flush WITHOUT calling `unmount()` is what exercises the listener, since RTL's
     // `unmount()` runs React's cleanup unconditionally and would pass even if no `pagehide`
     // listener existed at all.
