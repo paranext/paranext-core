@@ -462,30 +462,26 @@ export function WebView({
   /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */
   const shouldUseSrc = contentType === WEB_VIEW_CONTENT_TYPE.URL;
 
-  // Forget this pane's content zoom on unmount, and warn if the iframe reference was lost. The
-  // React roots are unmounted by the layout-effect cleanup below.
-  useEffect(() => {
-    // Capture the current iframe reference to use in cleanup
-    const currentIframe = iframeRef.current;
-
-    return () => {
-      forgetContentZoom(id);
-
-      if (!currentIframe)
-        logger.warn(`WebView ${id} iframe reference was not available during cleanup`);
-    };
-  }, [id]);
+  // Forget this pane's content zoom on unmount. The React roots are unmounted by the layout-effect
+  // cleanup below.
+  useEffect(() => () => forgetContentZoom(id), [id]);
 
   // Unmount the React roots on close. A layout-effect cleanup runs before React removes the iframe,
   // so `contentWindow` still resolves to the document shown at close. That document's root can
   // differ from the stored one: a reload or tab move replaces the document, and the stored unmount
   // catches up only on the new document's load. A close before that load would otherwise leave
-  // the new root mounted, since its own unload-time unmount is dropped with the removed iframe.
+  // the new root mounted, since its own unload-time unmount cannot be relied on once the iframe is
+  // removed.
+  // WARNING: a Suspense or Activity boundary above the dock that hides this content would run this
+  // cleanup too, unmounting live roots whose iframes stay in place.
   useLayoutEffect(() => {
     const currentIframe = iframeRef.current;
 
     return () => {
-      if (!currentIframe) return;
+      if (!currentIframe) {
+        logger.warn(`WebView ${id} iframe reference was not available during cleanup`);
+        return;
+      }
       const unmountRoots = new Set(
         [unmountRootFunctionRef.current, getCurrentDocumentUnmountRoot(currentIframe)].filter(
           (unmountRoot) => unmountRoot !== undefined,
@@ -495,16 +491,20 @@ export function WebView({
         logger.warn(`No cleanup function available for WebView ${id}`);
         return;
       }
-      // Use setTimeout to avoid synchronous unmount during React rendering
+      // Deferred a timer turn so the unmount never runs inside React's commit
       setTimeout(() => {
+        let anyUnmountFailed = false;
         unmountRoots.forEach((unmountRoot) => {
           try {
             unmountRoot();
-            logger.debug(`Successfully unmounted React root for WebView ${id}`);
           } catch (error) {
-            logger.warn(`Failed unmount React root for WebView ${id}: ${getErrorMessage(error)}`);
+            anyUnmountFailed = true;
+            logger.warn(
+              `Failed to unmount React root for WebView ${id}: ${getErrorMessage(error)}`,
+            );
           }
         });
+        if (!anyUnmountFailed) logger.debug(`Successfully unmounted React root for WebView ${id}`);
         unmountRootFunctionRef.current = undefined;
       }, 0);
     };
