@@ -15,7 +15,7 @@ import {
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.component';
-import { toUnsyncedProjectIds } from './home-unsynced.util';
+import { parseUnsyncedProjectIds } from './home-unsynced.util';
 import { useLocalProjects } from './use-local-projects.hook';
 
 const defaultInterfaceLanguages: string[] = ['en'];
@@ -178,10 +178,16 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   // the command. A failure leaves the set empty; later change events still fill it in.
   useEffect(() => {
     (async () => {
-      const snapshot = await retryUntil(
+      const seededIds = await retryUntil(
         async () => {
           try {
-            return await papi.commands.sendCommand('paratextBibleSendReceive.getUnsyncedChanges');
+            const snapshot = await papi.commands.sendCommand(
+              'paratextBibleSendReceive.getUnsyncedChanges',
+            );
+            const ids = parseUnsyncedProjectIds(snapshot);
+            if (!ids)
+              logger.warn('getUnsyncedChanges answered in an unexpected shape; ignoring it');
+            return ids;
           } catch (e) {
             logger.warn(
               `Home web view could not read the projects with unsynced changes: ${getErrorMessage(e)}`,
@@ -192,16 +198,22 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
         (result) => result !== undefined || !isMounted.current,
         { maxAttempts: SEND_RECEIVE_ATTEMPTS, delayMs: SEND_RECEIVE_RETRY_MS },
       );
-      if (!isMounted.current || didReceiveUnsyncedEventRef.current) return;
-      setUnsyncedProjectIds(toUnsyncedProjectIds(snapshot));
+      if (!isMounted.current || didReceiveUnsyncedEventRef.current || !seededIds) return;
+      setUnsyncedProjectIds(seededIds);
     })();
   }, []);
 
   useEvent(
     papi.network.getNetworkEvent('paratextBibleSendReceive.onUnsyncedChangesChanged'),
     useCallback((snapshot: unknown) => {
+      const ids = parseUnsyncedProjectIds(snapshot);
+      if (!ids) {
+        // Neither clear the marks nor stop a still-pending valid seed from landing.
+        logger.warn('onUnsyncedChangesChanged carried an unexpected shape; ignoring it');
+        return;
+      }
       didReceiveUnsyncedEventRef.current = true;
-      setUnsyncedProjectIds(toUnsyncedProjectIds(snapshot));
+      setUnsyncedProjectIds(ids);
     }, []),
   );
 
