@@ -10,6 +10,7 @@ import {
   type LocalProjectInfo,
   type RemoteProjectsState,
 } from './home.component';
+import { toUnsyncedProjectIds } from './home-unsynced.util';
 
 /*
  * `onSendReceiveProject`'s contract is that a rejection surfaces to the user: the prop's TSDoc says
@@ -361,6 +362,19 @@ describe('Home unsent local changes marker', () => {
       sharedProjectsInfo: SHARED_PROJECTS,
       localProjectsInfo: [LOCAL_COPY],
       unsyncedProjectIds: [PROJECT_ID.toUpperCase()],
+    });
+
+    expect(screen.queryByTestId('home-project-unsynced-dot')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open' })).toBeNull();
+  });
+
+  it('marks a project listed only for changes to receive the same way', () => {
+    renderHomeList({
+      sharedProjectsInfo: SHARED_PROJECTS,
+      localProjectsInfo: [LOCAL_COPY],
+      // The web view merges the send and receive sets into this one list.
+      unsyncedProjectIds: toUnsyncedProjectIds({ toSend: [], toReceive: [PROJECT_ID] }),
     });
 
     expect(screen.queryByTestId('home-project-unsynced-dot')).not.toBeNull();
