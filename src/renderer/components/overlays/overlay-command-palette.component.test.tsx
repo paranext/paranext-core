@@ -616,7 +616,24 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(onDismiss).toHaveBeenCalledTimes(1);
     });
 
-    it('leaves the DEFAULT palette untouched — input focused, editable, keys handled locally', async () => {
+    it('leaves the DEFAULT palette untouched — input focused and editable', async () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      await vi.waitFor(() => expect(input).toHaveFocus());
+      expect(input).not.toHaveAttribute('readonly');
+    });
+
+    it('does not forward undeclared keys, and dismisses locally, outside list mode', () => {
+      // A key-forwarding palette that is NOT list-focused keeps today's behaviour in both
+      // respects: only its declared keys go back to the session, and Escape is its own. (It also
+      // leaves focus alone — covered by the anchored-palette focus tests above.)
       const onKey = vi.fn();
       const onDismiss = vi.fn();
       render(
@@ -629,10 +646,6 @@ describe('OverlayCommandPalettePresentational', () => {
       );
 
       const input = screen.getByRole('combobox');
-      await vi.waitFor(() => expect(input).toHaveFocus());
-      expect(input).not.toHaveAttribute('readonly');
-
-      // An undeclared key is NOT forwarded in the default mode; Escape still dismisses locally.
       fireEvent.keyDown(input, { key: 'q' });
       expect(onKey).not.toHaveBeenCalled();
       fireEvent.keyDown(input, { key: 'Escape' });
