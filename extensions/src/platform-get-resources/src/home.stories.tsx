@@ -44,8 +44,9 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
     projectId: '14',
     // Non-published but non-editable Scripture text (e.g. Paratext Editable=F) — should appear
-    // with the unpublished-project icon, not the published-resource icon.
+    // with the project icon plus the read-only padlock, not the published-resource icon.
     isPublished: false,
+    isEditable: false,
     fullName:
       'Project 3 - read-only This_is_a_project_with_a_very_long_name_01234567890_!/"§$%&/()=?_öäüß',
     name: 'Pr3',
@@ -167,8 +168,10 @@ function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactE
   const onlyWebProjectList: LocalProjectInfo[] = [
     {
       projectId: '0',
-      // The bundled WEB sample is a plain project, not a published resource.
+      // The bundled WEB sample is a plain project, not a published resource — and a read-only one
+      // (its Settings.xml ships `<Editable>F</Editable>`).
       isPublished: false,
+      isEditable: false,
       fullName: 'The WEB project',
       name: 'WEB',
       language: 'myLanguage',

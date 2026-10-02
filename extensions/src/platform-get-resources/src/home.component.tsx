@@ -5,7 +5,7 @@ import {
   ChevronsUpDown,
   ChevronUp,
   CloudOff,
-  Scroll,
+  Lock,
   ScrollText,
 } from 'lucide-react';
 import {
@@ -30,6 +30,7 @@ import {
   TableRow,
   Tooltip,
   TooltipContent,
+  TOOLTIP_DELAY_MS,
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
@@ -39,6 +40,7 @@ import {
   formatReplacementString,
   formatTimeSpan,
   getErrorMessage,
+  hasDistinctFullName,
   normalizeFullName,
 } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
@@ -60,6 +62,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%general_countOfTotal%',
   '%resources_action%',
   '%resources_activity%',
+  '%resources_activity_tooltip%',
   '%resources_clearFilters%',
   '%resources_clearSearch%',
   '%resources_filter_all%',
@@ -72,7 +75,6 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_getResources%',
   '%resources_items%',
   '%resources_language%',
-  '%resources_lastSynchronized%',
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
   '%resources_noProjectsInstructionWithoutResources%',
@@ -80,8 +82,8 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_noResourcesFound%',
   '%resources_noSearchResults%',
   '%resources_open%',
-  '%resources_paratextProjectEditable_tooltip%',
   '%resources_paratextProjectReadOnly_tooltip%',
+  '%resources_paratextProject_tooltip%',
   '%resources_paratextProjects_label%',
   '%resources_resource_tooltip%',
   '%resources_resources_label%',
@@ -164,8 +166,9 @@ export type LocalProjectInfo = {
   name: string;
   language: string;
   /**
-   * Whether the project can be edited here. Absent means editable, as in `ProjectMetadata`; always
-   * `false` for a published resource.
+   * The project's `platform.isEditable` setting, as in `ProjectMetadata`: absent means it does not
+   * say. Home only calls out an explicit `false`, since the user's role on a project can still make
+   * an "editable" one read-only.
    */
   isEditable?: boolean;
 };
@@ -179,7 +182,7 @@ export function metadataToLocalProjectInfo(data: ProjectMetadata): LocalProjectI
   return {
     projectId: data.id,
     isPublished: data.isPublished ?? false,
-    isEditable: data.isEditable ?? true,
+    isEditable: data.isEditable,
     fullName: normalizeFullName(data.fullName),
     name: data.name ?? data.id,
     language: data.language ?? '',
@@ -193,8 +196,8 @@ export type MergedProjectInfo = {
   fullName?: string;
   language: string;
   isPublished: boolean;
-  /** Whether the project can be edited here. See {@link LocalProjectInfo.isEditable}. */
-  isEditable: boolean;
+  /** See {@link LocalProjectInfo.isEditable}. */
+  isEditable?: boolean;
   isSendReceivable: boolean;
   isLocallyAvailable?: boolean;
   editedStatus?: EditedStatus;
@@ -339,10 +342,8 @@ export function Home({
     : getLocalizedString('%resources_items%');
   const countOfTotalText: string = getLocalizedString('%general_countOfTotal%');
   const languageText: string = getLocalizedString('%resources_language%');
-  const lastSynchronizedText: string = getLocalizedString('%resources_lastSynchronized%');
-  const paratextProjectEditableText: string = getLocalizedString(
-    '%resources_paratextProjectEditable_tooltip%',
-  );
+  const activityTooltipText: string = getLocalizedString('%resources_activity_tooltip%');
+  const paratextProjectText: string = getLocalizedString('%resources_paratextProject_tooltip%');
   const paratextProjectReadOnlyText: string = getLocalizedString(
     '%resources_paratextProjectReadOnly_tooltip%',
   );
@@ -412,8 +413,8 @@ export function Home({
           // Shared (send/receive) projects are not published resources.
           isPublished: false,
           // The server's list says nothing about editability. A downloaded copy has its own
-          // setting; one not on this machine yet has none to honor.
-          isEditable: localProject?.isEditable ?? true,
+          // setting; one not on this machine yet has none.
+          isEditable: localProject?.isEditable,
           isSendReceivable: true,
           isLocallyAvailable: !!localProject,
           editedStatus: sharedProject.editedStatus,
@@ -431,7 +432,7 @@ export function Home({
           fullName: project.fullName,
           language: project.language,
           isPublished: project.isPublished,
-          isEditable: project.isEditable ?? true,
+          isEditable: project.isEditable,
           isSendReceivable: false,
           isLocallyAvailable: true,
         });
@@ -652,11 +653,15 @@ export function Home({
     [uiLocales],
   );
 
-  /** The row's kind — its icon, and the words that name it in the tooltip and to screen readers. */
+  /**
+   * The row's kind — its icon, whether it carries the read-only padlock other project lists use,
+   * and the words that name it in the tooltip and to screen readers.
+   */
   const getRowKind = (project: MergedProjectInfo) => {
-    if (project.isPublished) return { Icon: BookOpen, label: resourceTypeText };
-    if (!project.isEditable) return { Icon: Scroll, label: paratextProjectReadOnlyText };
-    return { Icon: ScrollText, label: paratextProjectEditableText };
+    if (project.isPublished) return { Icon: BookOpen, isReadOnly: false, label: resourceTypeText };
+    if (project.isEditable === false)
+      return { Icon: ScrollText, isReadOnly: true, label: paratextProjectReadOnlyText };
+    return { Icon: ScrollText, isReadOnly: false, label: paratextProjectText };
   };
 
   /**
@@ -664,7 +669,7 @@ export function Home({
    * named by its kind too, so the kind does not depend on seeing the icon or hovering the row.
    */
   const renderNameWithDetails = (project: MergedProjectInfo) => {
-    const { Icon, label } = getRowKind(project);
+    const { Icon, isReadOnly, label } = getRowKind(project);
     return (
       <Tooltip>
         <TooltipTrigger asChild>
@@ -673,18 +678,24 @@ export function Home({
               {project.editedStatus === 'edited' && (
                 <div className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]" />
               )}
-              <Icon className="tw:pr-0" size={18} role="img" aria-label={label} />
+              <span role="img" aria-label={label} className="tw:flex tw:items-center">
+                <Icon className="tw:pr-0" size={18} aria-hidden />
+                {isReadOnly && <Lock className="tw:size-3 tw:-ms-1 tw:self-end" aria-hidden />}
+              </span>
             </div>
             <div className="tw:whitespace-nowrap tw:cursor-default">{project.name}</div>
           </div>
         </TooltipTrigger>
-        <TooltipContent side="right">
+        {/* Capped to the room beside the trigger, so a long full name wraps rather than clipping. */}
+        <TooltipContent side="right" className="tw:max-w-(--radix-tooltip-content-available-width)">
           <div className="tw:flex tw:flex-col tw:gap-0.5">
-            {project.fullName && (
+            {hasDistinctFullName({ shortName: project.name, fullName: project.fullName }) && (
               <div className="tw:wrap-anywhere tw:font-bold">{project.fullName}</div>
             )}
-            <div className="tw:text-xs">{project.language}</div>
-            <div className="tw:text-xs tw:text-muted-foreground">{label}</div>
+            <div>{project.language}</div>
+            {/* The tooltip is inverted (`bg-foreground`), so its caption dims the tooltip's own
+                text color rather than using `muted-foreground`, which is meant for the page. */}
+            <div className="tw:text-background/80">{label}</div>
           </div>
         </TooltipContent>
       </Tooltip>
@@ -706,13 +717,21 @@ export function Home({
         </TooltipTrigger>
         <TooltipContent side="left">
           <div className="tw:flex tw:flex-col tw:gap-0.5">
-            <div className="tw:text-xs tw:text-muted-foreground">{lastSynchronizedText}</div>
-            <div>{exactDateTimeFormatter.format(new Date(time))}</div>
+            <div className="tw:text-background/80">{activityTooltipText}</div>
+            <div className="tw:font-bold">{exactDateTimeFormatter.format(new Date(time))}</div>
           </div>
         </TooltipContent>
       </Tooltip>
     );
   };
+
+  /**
+   * Whether a row event happened in the row itself. A row's tooltips are portaled out of the table
+   * but are still its React children, so their events bubble to the row's handlers; a double-click
+   * on a tooltip must not open the project, or start a download, behind it.
+   */
+  const isEventInside = (event: { target: EventTarget; currentTarget: Element }) =>
+    event.target instanceof Node && event.currentTarget.contains(event.target);
 
   const getSendReceiveButtonContent = (project: MergedProjectInfo) => {
     if (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)) {
@@ -891,7 +910,10 @@ export function Home({
                     </div>
                   </div>
                 ) : (
-                  <TooltipProvider>
+                  <TooltipProvider delayDuration={TOOLTIP_DELAY_MS} disableHoverableContent>
+                    {/* The standard delay, and closed once the pointer leaves the trigger: without
+                        them a sweep down the list opens every tooltip it crosses, and an open one
+                        can sit over the row's own actions in a narrow Home. */}
                     <Table stickyHeader>
                       <TableHeader className="tw:bg-none tw:max-[300px]:hidden" stickyHeader>
                         <TableRow className="tw:rounded-sm">
@@ -907,15 +929,17 @@ export function Home({
                         {filteredAndSortedProjects.map((project) => (
                           <TableRow
                             onMouseDown={(e) => {
+                              if (!isEventInside(e)) return;
                               // cancel double‑click text selection
                               if (e.detail > 1) e.preventDefault();
                             }}
-                            onDoubleClick={() =>
-                              project.isLocallyAvailable
-                                ? onOpenProject(project.projectId, project.isPublished)
-                                : !isSendReceiveInProgress &&
-                                  handleSendReceiveProject(project.projectId)
-                            }
+                            onDoubleClick={(e) => {
+                              if (!isEventInside(e)) return;
+                              if (project.isLocallyAvailable)
+                                onOpenProject(project.projectId, project.isPublished);
+                              else if (!isSendReceiveInProgress)
+                                handleSendReceiveProject(project.projectId);
+                            }}
                             key={project.projectId}
                             className={cn('tw:rounded-sm', {
                               'tw:text-muted-foreground/70 tw:hover:text-foreground':

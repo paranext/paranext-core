@@ -9,7 +9,6 @@ import localizedStringsContribution from '../contributions/localizedStrings.json
 import {
   Home,
   HOME_STRING_KEYS,
-  metadataToLocalProjectInfo,
   type HomeProps,
   type LocalProjectInfo,
   type RemoteProjectsState,
@@ -939,23 +938,26 @@ describe('Home project/resource filter', () => {
 });
 
 /*
- * What kind of item each row is — a Paratext project you can edit, one that is read-only, or a
- * resource — shown by the row's icon and, with its full name and language, in a tooltip on the row.
- * The icon carries the same words as its accessible name, so the distinction is not visual-only.
+ * What kind of item each row is — a Paratext project, one that is read-only, or a resource — shown
+ * by the row's icon and, with its full name and language, in a tooltip on the row. The icon carries
+ * the same words as its accessible name, so the distinction is not visual-only.
  */
 describe('Home row type and details', () => {
-  const EDITABLE = enString('%resources_paratextProjectEditable_tooltip%');
+  const PARATEXT_PROJECT = enString('%resources_paratextProject_tooltip%');
   const READ_ONLY = enString('%resources_paratextProjectReadOnly_tooltip%');
   const RESOURCE_TYPE = enString('%resources_resource_tooltip%');
   const PROJECT: LocalProjectInfo = {
-    projectId: 'editable1',
+    projectId: 'project1',
     isPublished: false,
-    fullName: 'Editable Project',
-    name: 'EDT',
+    fullName: 'A Project',
+    name: 'PRJ',
     language: 'en',
   };
 
-  it('names each row by its kind: editable project, read-only project, or resource', () => {
+  /** The row-kind icon a row shows, found by its accessible name. */
+  const kindIcons = (name: string) => screen.queryAllByRole('img', { name });
+
+  it('names each row by its kind: Paratext project, read-only project, or resource', () => {
     renderHomeList({
       localProjectsInfo: [
         PROJECT,
@@ -964,65 +966,119 @@ describe('Home row type and details', () => {
       ],
     });
 
-    expect(screen.getAllByRole('img', { name: EDITABLE })).toHaveLength(1);
-    expect(screen.getAllByRole('img', { name: READ_ONLY })).toHaveLength(1);
+    expect(kindIcons(PARATEXT_PROJECT)).toHaveLength(1);
+    expect(kindIcons(READ_ONLY)).toHaveLength(1);
     // A resource is never editable, but it is a resource first.
-    expect(screen.getAllByRole('img', { name: RESOURCE_TYPE })).toHaveLength(1);
+    expect(kindIcons(RESOURCE_TYPE)).toHaveLength(1);
   });
 
-  it('counts a server-only project as editable, and a downloaded one by its own setting', () => {
+  it('marks a read-only project with the padlock other project lists use', () => {
     renderHomeList({
-      sharedProjectsInfo: SHARED_PROJECTS,
-      localProjectsInfo: [{ ...PROJECT, projectId: 'downloaded', name: 'DL', isEditable: false }],
+      localProjectsInfo: [
+        PROJECT,
+        { ...PROJECT, projectId: 'readOnly1', name: 'RO', isEditable: false },
+      ],
     });
 
-    // The server's list says nothing about editability; a project that is not on this machine yet
-    // has no read-only setting to honor.
-    expect(screen.getAllByRole('img', { name: EDITABLE })).toHaveLength(1);
-    expect(screen.getAllByRole('img', { name: READ_ONLY })).toHaveLength(1);
+    // The glyph is all a sighted user sees without hovering, so it is pinned, not just the name.
+    const [readOnlyIcon] = kindIcons(READ_ONLY);
+    const [projectIcon] = kindIcons(PARATEXT_PROJECT);
+    expect(readOnlyIcon.querySelector('.lucide-lock')).not.toBeNull();
+    expect(projectIcon.querySelector('.lucide-lock')).toBeNull();
+    expect(projectIcon.querySelector('.lucide-scroll-text')).not.toBeNull();
   });
 
-  it("reads editability from a project's metadata, treating absent as editable", () => {
-    const metadata = { projectInterfaces: [], pdpFactoryInfo: {} };
-    expect(
-      metadataToLocalProjectInfo({ ...metadata, id: 'p1', isEditable: false }).isEditable,
-    ).toBe(false);
-    expect(metadataToLocalProjectInfo({ ...metadata, id: 'p2' }).isEditable).toBe(true);
+  it("claims no editability Home can't vouch for", () => {
+    // `isEditable` reflects one project setting, and a server-only row has none at all; the user's
+    // role on the project can still make it read-only. So only a known read-only is called out.
+    renderHomeList({ sharedProjectsInfo: SHARED_PROJECTS, localProjectsInfo: [PROJECT] });
+
+    expect(kindIcons(PARATEXT_PROJECT)).toHaveLength(2);
+    expect(kindIcons(READ_ONLY)).toHaveLength(0);
+  });
+
+  it('marks a downloaded send/receive project read-only from its own setting', () => {
+    renderHomeList({
+      sharedProjectsInfo: SHARED_PROJECTS,
+      // The same project, downloaded: its local metadata knows what the server's list does not.
+      localProjectsInfo: [{ ...PROJECT, projectId: PROJECT_ID, name: 'SHR', isEditable: false }],
+    });
+
+    expect(kindIcons(READ_ONLY)).toHaveLength(1);
+    expect(kindIcons(PARATEXT_PROJECT)).toHaveLength(0);
   });
 
   it("shows a row's full name, language and kind in a tooltip", async () => {
     renderHomeList({ localProjectsInfo: [{ ...PROJECT, isEditable: false }] });
 
-    await userEvent.setup().hover(screen.getByText('EDT'));
+    await userEvent.setup().hover(screen.getByText('PRJ'));
 
     const tooltip = await screen.findByRole('tooltip');
-    expect(within(tooltip).queryByText('Editable Project')).not.toBeNull();
+    expect(within(tooltip).queryByText('A Project')).not.toBeNull();
     expect(within(tooltip).queryByText('en')).not.toBeNull();
     expect(within(tooltip).queryByText(READ_ONLY)).not.toBeNull();
   });
 
-  it('shows the exact time of the last sync in a tooltip on the Activity cell', async () => {
-    const lastSync = new Date('2026-08-16T14:30:00.000Z');
-    renderHomeList({
-      sharedProjectsInfo: {
-        [PROJECT_ID]: {
-          ...SHARED_PROJECTS[PROJECT_ID],
-          lastSendReceiveDate: lastSync.toISOString(),
-        },
-      },
-    });
-    const exactTime = new Intl.DateTimeFormat([], { dateStyle: 'long', timeStyle: 'short' }).format(
-      lastSync,
-    );
-    const relativeTime = screen
-      .getAllByRole('cell')
-      .find((cell) => /ago|last|yesterday/i.test(cell.textContent ?? ''));
-    if (!relativeTime) throw new Error('No Activity cell with a relative time was rendered');
+  it('does not repeat the short name as a full name in the tooltip', async () => {
+    renderHomeList({ localProjectsInfo: [{ ...PROJECT, fullName: 'PRJ' }] });
 
-    await userEvent.setup().hover(within(relativeTime).getByText(/./));
+    await userEvent.setup().hover(screen.getAllByText('PRJ')[0]);
 
     const tooltip = await screen.findByRole('tooltip');
-    expect(within(tooltip).queryByText(enString('%resources_lastSynchronized%'))).not.toBeNull();
-    expect(within(tooltip).queryByText(exactTime)).not.toBeNull();
+    // Positive control: this is the row's tooltip.
+    expect(within(tooltip).queryByText('en')).not.toBeNull();
+    expect(within(tooltip).queryByText('PRJ')).toBeNull();
+  });
+
+  it('opens nothing when the user double-clicks inside a row tooltip', async () => {
+    const onOpenProject = vi.fn();
+    render(
+      <Home
+        headerContent={undefined}
+        localProjectsInfo={[PROJECT]}
+        remoteProjectsState="loaded"
+        onOpenProject={onOpenProject}
+        localizedStringsWithLoadingState={[EN_STRINGS, false]}
+      />,
+    );
+    await userEvent.setup().hover(screen.getByText('PRJ'));
+    const tooltip = await screen.findByRole('tooltip');
+
+    // The tooltip is portaled, but React still bubbles its events to the row it belongs to.
+    fireEvent.doubleClick(within(tooltip).getByText('A Project'));
+
+    expect(onOpenProject).not.toHaveBeenCalled();
+    // Positive control: a double-click on the row itself does open the project.
+    fireEvent.doubleClick(screen.getByText('PRJ'));
+    expect(onOpenProject).toHaveBeenCalledWith('project1', false);
+  });
+
+  it('shows the exact time of the last sync in a tooltip on the Activity cell', async () => {
+    // Local time and a fixed locale, so the expected text is a literal on any machine.
+    const lastSync = new Date(2026, 7, 16, 14, 30);
+    render(
+      <Home
+        headerContent={undefined}
+        sharedProjectsInfo={{
+          [PROJECT_ID]: {
+            ...SHARED_PROJECTS[PROJECT_ID],
+            lastSendReceiveDate: lastSync.toISOString(),
+          },
+        }}
+        remoteProjectsState="loaded"
+        uiLocales={['en-US']}
+        localizedStringsWithLoadingState={[EN_STRINGS, false]}
+      />,
+    );
+    const activityColumn = screen
+      .getAllByRole('columnheader')
+      .findIndex((header) => header.textContent === enString('%resources_activity%'));
+    const activityCell = within(screen.getAllByRole('row')[1]).getAllByRole('cell')[activityColumn];
+
+    await userEvent.setup().hover(within(activityCell).getByText(/./));
+
+    const tooltip = await screen.findByRole('tooltip');
+    expect(within(tooltip).queryByText(enString('%resources_activity_tooltip%'))).not.toBeNull();
+    expect(within(tooltip).queryByText('August 16, 2026 at 2:30 PM')).not.toBeNull();
   });
 });
