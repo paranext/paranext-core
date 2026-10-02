@@ -3531,7 +3531,7 @@ describe('React web view bootstrap teardown', () => {
     return String(addWebViewToDockCalls[0].content);
   }
 
-  test('unmounts the React root when its document is hidden', async () => {
+  test('unmounts the React root when its document unloads, after its pagehide listeners', async () => {
     const { root, unsubscribeUpdateWebView, dispatch } = runReactBootstrap(
       await openReactWebViewContent(),
     );
@@ -3541,21 +3541,29 @@ describe('React web view bootstrap teardown', () => {
 
     dispatch('pagehide');
     await Promise.resolve();
+    // The web view's own pagehide listeners come after the bootstrap's, and unmounting runs every
+    // effect cleanup, which may remove them; so the root must still be mounted after pagehide
+    expect(root.unmount).not.toHaveBeenCalled();
+    expect(unsubscribeUpdateWebView).toHaveBeenCalledTimes(1);
+
+    dispatch('unload');
+    await Promise.resolve();
 
     // A replaced document's root would otherwise keep rendering inside the parent's React, with
     // `window` now resolving to the replacement document's half-initialized globals
     expect(root.unmount).toHaveBeenCalledTimes(1);
-    expect(unsubscribeUpdateWebView).toHaveBeenCalledTimes(1);
   });
 
-  test('tears down only once if the document is hidden again', async () => {
+  test('tears down only once if the document is hidden and unloaded again', async () => {
     const { root, unsubscribeUpdateWebView, dispatch } = runReactBootstrap(
       await openReactWebViewContent(),
     );
 
     dispatch('pagehide');
+    dispatch('unload');
     await Promise.resolve();
     dispatch('pagehide');
+    dispatch('unload');
     await Promise.resolve();
 
     expect(root.unmount).toHaveBeenCalledTimes(1);
