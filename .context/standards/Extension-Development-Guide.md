@@ -247,7 +247,7 @@ Never use editable content in list item keys:
 
 ### Saving on Teardown
 
-Flush pending work (a debounced save, a draft) in an effect's unmount cleanup, not only in a `pagehide` listener of your own: when a web view reloads (for example on `reloadWebView`), the platform unmounts the replaced document's React root during that document's `pagehide`, before the browser reaches the web view's own `pagehide` listeners, so a listener that your effect cleanup removes never fires. Keep a `pagehide`/`beforeunload` listener as well for a window or app close, where no unmount runs. `use-comment-drafts.hook.ts` (`legacy-comment-manager`) does both.
+Flush pending work (a debounced save, a draft) in a `pagehide` listener, and in an effect's unmount cleanup as well. When a web view reloads (for example on `reloadWebView`), the platform unmounts the replaced document's React root on that document's `unload`, after every `pagehide` listener has run and while the old document is still current, so a `pagehide` listener that your effect cleanup removes still fires. A window or app close runs no unmount at all, so pair the `pagehide` listener with `beforeunload`. Do not rely on your own `unload` listener seeing your React tree: on a reload it can run after the root has been unmounted. `use-comment-drafts.hook.ts` (`legacy-comment-manager`) does both.
 
 ### Opening WebViews with Layouts
 
@@ -504,4 +504,4 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.4   | 2026-09-23 | Pop-ups stay at interface scale: replace "Pop-ups follow their area" and the `papi.overlays` scaling note with one rule; `ContentZoomAreaProvider`, the pop-up attribute and `EditorOptions.contextMenuContainer` are gone. |
 | 1.1.5   | 2026-09-23 | "Content Zoom": mark the project text, not a content root — per-element markers sharing one id, `as="span"`, `ContentZoomTextProvider` / `useContentZoomTextProps`. |
 | 1.1.6   | 2026-09-24 | "Content Zoom": the area `label` and the zoom scope attribute (both experimental), pointing to Component-Builder-Patterns; the Text Collection grid is the reference, with one `resource-<id>` area per resource. |
-| 1.1.7   | 2026-10-02 | Add "Saving on Teardown" under WebViews: flush in the unmount cleanup too, because a reload unmounts the root before the web view's own `pagehide` listeners run. |
+| 1.1.7   | 2026-10-02 | Add "Saving on Teardown" under WebViews: flush in a `pagehide` listener and in the unmount cleanup; a reload unmounts the root on `unload`, after the web view's own `pagehide` listeners. |

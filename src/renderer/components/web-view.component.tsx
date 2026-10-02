@@ -330,7 +330,7 @@ export function WebView({
     // A new document's root replaces the stored one. rc-dock moving this tab within the window
     // re-inserts the iframe, which loads a new document while this component stays mounted, and
     // React comes from this window, so the replaced document's root stays mounted here unless it is
-    // unmounted now. After a reload its own hide handler has already unmounted it, making this a
+    // unmounted now. After a reload its own unload handler has already unmounted it, making this a
     // no-op. The `contentWindow` always resolves to the current document, so a stored unmount equal
     // to the current one is the live root and is kept.
     const currentUnmountRoot = getCurrentDocumentUnmountRoot(iframeRef.current);
