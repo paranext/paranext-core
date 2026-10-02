@@ -102,7 +102,7 @@
       "reason": "Declared as a root runtime dependency, but its only import in src/main/main.ts is commented out, so webpack compiles no module for it and electron-builder does not pack it either - release/app/package.json, whose closure is the one packed unbundled, declares no dependencies. Nothing this repository distributes contains it."
     }
   },
-  "exceptionsNote": "A reviewed determination that clears one blocked package. Keyed by ecosystem:name and pinned to the exact license TEXT: the block returns the moment the package changes its license text, which is what a determination read off that text can no longer stand for. `version` records which version the determination was read against, so it stays re-checkable; it is provenance, not part of the key - a version bump that leaves the text byte-identical changes nothing this entry asserts.",
+  "exceptionsNote": "A reviewed determination that clears one blocked package. Keyed by ecosystem:name and pinned to the exact license TEXT: the block returns the moment the package changes its license text, which is what a determination read off that text can no longer stand for. `version` records which version the determination was read against, so it stays re-checkable; it is provenance, not part of the key - a version bump that leaves the text byte-identical changes nothing this entry asserts. `copyrightByOperand` maps an operand's SPDX id to the notices that operand is granted under, printed beside that operand's canonical text instead of the package's own notice; every conjunction records it, as `{}` where no operand has a notice to credit. Each key must be an operand of `spdx`, which must name more than one identifier. Each value is copied from the pinned license file, or from a file `creditFiles` lists by its path in the package, whole lines at a time and never across a blank line, several notices separated by `; `. Credit every notice the file states, even one for code the package does not ship today. An operand left without a key is printed as having no notice.",
   "exceptions": [
     {
       "package": "npm:bowser",
@@ -117,19 +117,40 @@
       "package": "npm:chroma-js",
       "version": "3.2.0",
       "spdx": "(BSD-3-Clause AND Apache-2.0)",
-      "reason": "LICENSE holds two grants in one file - BSD-3-Clause for chroma.js itself and Apache-2.0 for the colorbrewer2.org colour tables it embeds - which is exactly the conjunction its package.json declares; no single-license matcher identifies a two-grant document, and both operands are on the allowed list.",
+      "reason": "LICENSE holds two grants in one file - BSD-3-Clause for chroma.js itself and Apache-2.0 for the colorbrewer2.org colour tables it embeds - which is exactly the conjunction its package.json declares; no single-license matcher identifies a two-grant document, and both operands are on the allowed list. The BSD-3-Clause operand is granted under Gregor Aisch's notice at the head of the file, and the Apache-2.0 operand under the ColorBrewer notice of Cynthia Brewer, Mark Harrower and The Pennsylvania State University below it, which is what copyrightByOperand records.",
       "reviewer": "matt_lyons@sil.org",
-      "date": "2026-08-21",
-      "textSha256": "85aae6740628115550c6e67a85e8f8e70835cd5b14d4a2cb878c90c998f506db"
+      "date": "2026-10-01",
+      "textSha256": "85aae6740628115550c6e67a85e8f8e70835cd5b14d4a2cb878c90c998f506db",
+      "copyrightByOperand": {
+        "BSD-3-Clause": "Copyright (c) 2011-2025, Gregor Aisch All rights reserved.",
+        "Apache-2.0": "Copyright (c) 2002 Cynthia Brewer, Mark Harrower, and The Pennsylvania State University."
+      }
     },
     {
       "package": "npm:posthog-node",
       "version": "5.51.1",
       "spdx": "(Apache-2.0 AND MIT)",
-      "reason": "package.json declares MIT, but LICENSE is the Apache-2.0 grant (PostHog and Mixpanel) followed by MIT grants for code vendored from Sentry, Meta, Expo and AgentCat, so no single-license matcher identifies it; both operands are on the allowed list.",
-      "reviewer": "rolf_heij@sil.org",
-      "date": "2026-09-23",
-      "textSha256": "a4a2a1ca3b22fe608ea29144452418e4a91f11ca44666a8a91cb72ec0a70f6ee"
+      "reason": "package.json declares MIT, but LICENSE is the Apache-2.0 grant (PostHog and Mixpanel) followed by MIT grants for code vendored from Sentry, Meta, Expo and AgentCat, so no single-license matcher identifies it; both operands are on the allowed list. The Apache-2.0 operand is granted under the PostHog and Mixpanel notices at the head of the file, and the MIT operand under the Sentry, Meta, Expo and AgentCat notices of the grants below it, which is what copyrightByOperand records.",
+      "reviewer": "tj_couch@sil.org",
+      "date": "2026-09-28",
+      "textSha256": "a4a2a1ca3b22fe608ea29144452418e4a91f11ca44666a8a91cb72ec0a70f6ee",
+      "copyrightByOperand": {
+        "Apache-2.0": "Copyright 2020 Posthog / Hiberly, Inc.; Copyright 2015 Mixpanel, Inc.",
+        "MIT": "Copyright (c) 2012 Functional Software, Inc. dba Sentry; Copyright (c) 2017 Sentry; Copyright (c) Meta Platforms, Inc. and affiliates.; Copyright (c) 2015-present 650 Industries, Inc. (aka Expo); Copyright (c) 2025 AgentCat, Inc. (formerly MCPcat)"
+      }
+    },
+    {
+      "package": "npm:@posthog/core",
+      "version": "1.55.2",
+      "spdx": "(Apache-2.0 AND MIT)",
+      "reason": "package.json declares MIT, but LICENSE is the posthog-js monorepo's: the Apache-2.0 grant for the repository, then a section stating that @posthog/core itself is MIT (PostHog), followed by the MIT grant for its TraceKit-derived error-tracking parser, the Apache-2.0 notice for its vendored uuidv7 (LiosK), and MIT grants for code vendored from Sentry, Meta, Expo and AgentCat. The package ships the uuidv7 and Sentry-derived code (src/vendor/uuidv7.ts, src/error-tracking/) and compiles both into dist/, so both operands apply; no single-license matcher identifies the file, and both are on the allowed list. copyrightByOperand credits every notice the file states to the operand that grants it, whether or not this version ships the code a notice covers: the file is shared across the monorepo, so a later version can ship more of that code under an unchanged text.",
+      "reviewer": "tj_couch@sil.org",
+      "date": "2026-10-01",
+      "textSha256": "d3fb92ac01f0bef4078f89aac9f20f76da3383ad45becf6204abdf5495f43f8f",
+      "copyrightByOperand": {
+        "MIT": "Copyright (c) 2022 PostHog (part of Hiberly Inc); Copyright (c) 2013 Onur Can Cakmak onur.cakmak@gmail.com and all TraceKit contributors.; Copyright (c) 2012 Functional Software, Inc. dba Sentry; Copyright (c) 2017 Sentry; Copyright (c) Meta Platforms, Inc. and affiliates.; Copyright (c) 2015-present 650 Industries, Inc. (aka Expo); Copyright (c) 2025 AgentCat, Inc. (formerly MCPcat)",
+        "Apache-2.0": "Copyright 2020 Posthog / Hiberly, Inc.; Copyright 2015 Mixpanel, Inc.; Copyright 2021-2023 LiosK"
+      }
     },
     {
       "package": "npm:fast-uri",
@@ -189,10 +210,14 @@
       "package": "npm:lucide-react",
       "version": "1.8.0",
       "spdx": "(ISC AND MIT)",
-      "reason": "LICENSE is the ISC grant for the package, followed by an MIT grant covering the named icons derived from the Feather project; two grants in one file identify as neither, and both are on the allowed list.",
+      "reason": "LICENSE is the ISC grant for the package, followed by an MIT grant covering the named icons derived from the Feather project; two grants in one file identify as neither, and both are on the allowed list. The ISC operand is granted under the Lucide Icons and Contributors notice at the head of the file, and the MIT operand under Cole Bemis's Feather notice below it, which is what copyrightByOperand records.",
       "reviewer": "matt_lyons@sil.org",
-      "date": "2026-08-21",
-      "textSha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57"
+      "date": "2026-10-01",
+      "textSha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+      "copyrightByOperand": {
+        "ISC": "Copyright (c) 2026 Lucide Icons and Contributors",
+        "MIT": "Copyright (c) 2013-present Cole Bemis"
+      }
     },
     {
       "package": "npm:mkdirp",
@@ -207,10 +232,15 @@
       "package": "npm:pako",
       "version": "1.0.11",
       "spdx": "(MIT AND Zlib)",
-      "reason": "package.json declares a conjunction rather than a choice, and correctly so: pako is a JavaScript port of zlib, so the zlib terms bind on the ported algorithm alongside MIT on pako's own code. No election can resolve a conjunction, both operands are permissive and on the allowed list, and the LICENSE the package ships carries only the MIT half, which is therefore the only text reproduced for it.",
+      "reason": "package.json declares a conjunction rather than a choice, and correctly so: pako is a JavaScript port of zlib, so the zlib terms bind on the ported algorithm alongside MIT on pako's own code. No election can resolve a conjunction, and both operands are permissive and on the allowed list. The LICENSE the package ships carries only the MIT grant, under Puzrin and Tuputcyn's notice, so the Zlib grant is reproduced from its canonical text. Its notices - Jean-loup Gailly and Mark Adler's for zlib, and Puzrin and Tupitsin's for the port - are stated in lib/zlib/README and the header of every file under lib/zlib/, so creditFiles names the README and copyrightByOperand credits them to Zlib.",
       "reviewer": "matt_lyons@sil.org",
-      "date": "2026-08-21",
-      "textSha256": "a04665b3b2de56c66730c1f720f528175739e4104f79073614aa611da1e85539"
+      "date": "2026-10-01",
+      "textSha256": "a04665b3b2de56c66730c1f720f528175739e4104f79073614aa611da1e85539",
+      "creditFiles": ["lib/zlib/README"],
+      "copyrightByOperand": {
+        "MIT": "Copyright (C) 2014-2017 by Vitaly Puzrin and Andrei Tuputcyn",
+        "Zlib": "(C) 1995-2013 Jean-loup Gailly and Mark Adler; (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin"
+      }
     },
     {
       "package": "npm:quill-delta",

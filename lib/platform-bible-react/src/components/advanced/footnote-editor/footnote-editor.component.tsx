@@ -64,6 +64,7 @@ import {
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
+import { isEditorContextMenuOpenFor } from '../editor-context-menu.util';
 import { MarkerMenu } from '../marker-menu.component';
 import { generateInlineMarkerMenuListItems } from './footnote-editor.utils';
 
@@ -1024,22 +1025,34 @@ export default function FootnoteEditor({
         // this outer guard covers only this handler's own trigger paths.)
         if (isImeCompositionKeyEvent(event)) return;
         const editorInput = getEditorInput();
-        if (!editorInput) return;
+        // Focus is the whole rule, for an open session as much as for the trigger paths below.
+        // The editor keeps focus (and its caret) for the life of a session, so its own keys route
+        // here; once the palette has taken focus its keys come back through key forwarding
+        // instead, and anything else focused in this document keeps its own keys.
+        if (!editorInput || document.activeElement !== editorInput) return;
         const session = paletteSession.current;
 
-        if (session && markerPalette && document.activeElement === editorInput) {
-          // Focus is the whole rule, exactly as when no session is open. The editor keeps focus
-          // (and its caret) for the life of a session, so its own keys route here; once the
-          // palette has taken focus its keys come back through key forwarding instead, and
-          // anything else focused in this document keeps its own keys.
-          //
+        if (session && markerPalette) {
           // Through the ref so this listener and the palette's forwarded keys provably run the
           // same handler (and so this effect needs no dependency on it).
           runPaletteSessionKeyRef.current(event);
           return;
         }
 
-        if (document.activeElement !== editorInput) return;
+        // This popover's own right-click menu is up: let its own keydown listener handle every
+        // key instead of the guards below, which otherwise resolve against the caret/selection —
+        // collapsing a selection the menu's own Enter (e.g. Cut) is about to act on. Still claim
+        // and drop `\`, mirroring the main editor's swallow-while-menu-open behavior, so the
+        // literal backslash never leaks into the note once the menu closes. See
+        // `isEditorContextMenuOpenFor`. Scoped to THIS popover's root — a second editor's open
+        // menu (e.g. the main Standard-view editor) must never trip this gate.
+        if (isEditorContextMenuOpenFor(editorParentRef.current)) {
+          if (event.key === defaultMarkerMenuTrigger) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+          return;
+        }
 
         // Enter with the DOM caret OUTSIDE the note content (Radix's
         // open-autofocus can park it at the wrapper-para start; Lexical's keydown path follows

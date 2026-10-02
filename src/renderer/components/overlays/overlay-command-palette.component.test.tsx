@@ -340,22 +340,68 @@ describe('OverlayCommandPalettePresentational', () => {
       await vi.waitFor(() => expect(input).toHaveFocus());
     });
 
-    it('focuses an ANCHORED palette whose input mounts after the first attempt', async () => {
-      // Regression: the retry loop only ran when the input EXISTED but focus had not stuck. When
-      // `inputRef.current` was still null it returned without scheduling anything, so focus was
-      // never requested again. An anchored palette renders through Radix's portal, which commits
-      // nothing on its first pass, so its input does not exist yet when the effect runs — which is
-      // why anchored palettes never took focus at all, and why the editor kept receiving the keys.
+    it('should focus the search input of an ANCHORED palette, whose input mounts after the palette', async () => {
+      // Anchored mode renders the input inside a Radix Popover portal, which mounts its content on
+      // a render AFTER the palette's own mount effects have run — so at the first attempt there is
+      // no input to focus yet. The Enter paragraph palette is anchored and never forwards keys, so
+      // an unfocused one leaves every typed filter character landing in the document instead.
       render(
         <OverlayCommandPalettePresentational
           items={sampleItems}
-          position={{ x: 100, y: 200 }}
+          position={{ x: 10, y: 10 }}
+          anchor={{ width: 1, height: 16 }}
           onSelect={vi.fn()}
           onDismiss={vi.fn()}
         />,
       );
 
-      await vi.waitFor(() => expect(screen.getByRole('combobox')).toHaveFocus());
+      const input = await screen.findByRole('combobox');
+      await vi.waitFor(() => expect(input).toHaveFocus());
+    });
+
+    it('should NOT focus an anchored palette that declares keyForwarding, even once its input mounts', async () => {
+      // A selection-wrap marker palette anchors like the Enter palette above, but forwards its
+      // keys to the editor session — it must leave DOM focus in the requesting editor for the
+      // whole time it is open, or the forwarded keys never arrive and the editor selection is lost.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 10, y: 10 }}
+          anchor={{ width: 1, height: 16 }}
+          keyForwarding={{ keys: ['Enter'], onKey: vi.fn() }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = await screen.findByRole('combobox');
+      // Give the retry loop, if it were still running, several animation frames to steal focus.
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+      });
+      expect(input).not.toHaveFocus();
+    });
+
+    it('should NOT focus a centered palette that declares keyForwarding, even though its input mounts immediately', async () => {
+      // Centered mode (no `position`) renders its input directly, not inside a Radix Popover
+      // portal, so the input exists on the very first mount-effect attempt. A key-forwarding
+      // palette must still leave focus wherever it already was — forwarding exists precisely so a
+      // palette can be driven without ever taking DOM focus.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          keyForwarding={{ keys: ['Enter'], onKey: vi.fn() }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      // Give the retry loop, if it were still running, several animation frames to steal focus.
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+      });
+      expect(input).not.toHaveFocus();
     });
 
     it('should not throw when the palette unmounts before focus ever sticks', async () => {

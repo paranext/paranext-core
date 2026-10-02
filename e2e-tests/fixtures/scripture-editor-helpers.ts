@@ -6,6 +6,7 @@ import {
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
 } from './helpers';
+import { suppressOnboardingTour } from './onboarding-tour.page';
 
 // Re-exported so the specs that reach for it through this module keep working: it is defined in
 // helpers.ts, which is the lower-level module and the single home for it.
@@ -369,6 +370,9 @@ function escapeForRegExp(value: string): string {
  * book name localized, and the app under test runs in English, so a book CODE never matches.
  */
 export async function navigateToolbarBcv(mainPage: Page, reference: string): Promise<void> {
+  // Simple-mode specs never reach `waitForHomeTab` (that layout has no Home tab), so this is the
+  // one place every caller passes through before the tour could block the click below.
+  await suppressOnboardingTour(mainPage);
   await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
   const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await input.fill(reference);

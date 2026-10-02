@@ -395,8 +395,17 @@ export function OverlayCommandPalettePresentational({
   // eslint-disable-next-line no-null/no-null
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Auto-focus on mount — the search input, or the result list in list mode. Skipped entirely in
-  // passive mode, which must never take focus from the requesting WebView.
+  // Auto-focus on mount, and WHAT gets focused depends on the mode:
+  //
+  // - `passive` focuses nothing: it renders a display-only surface and must never take focus from
+  //   the requesting WebView.
+  // - `focusTarget: 'list'` focuses the result LIST. These palettes DO declare key forwarding and
+  //   DO take focus — that pairing is the point, not a contradiction: focusing something that
+  //   cannot be edited is what keeps IME and dead-key composition out, and every key is handed
+  //   straight back to the requester, so its table still decides what each one means.
+  // - Any OTHER key-forwarding palette leaves focus where it is. Its requester owns focus and
+  //   feeds the filter through `keyForwarding`; taking focus here would break that routing.
+  // - Everything else focuses its own search input.
   //
   // A single synchronous focus() reliably LOSES the focus
   // fight when the palette opens while an editor webview iframe holds focus — the iframe's own
@@ -404,18 +413,22 @@ export function OverlayCommandPalettePresentational({
   // typing went to the document (replacing the selection), arrows never reached cmdk, and the
   // palette's Escape handler never fired. Retry across animation frames until the focus sticks
   // (bounded, and cancelled if the palette unmounts first).
+  //
+  // The target may not exist yet on the first attempts: an anchored palette renders through a
+  // Radix Popover portal, which mounts its content on a render AFTER this effect has run. A
+  // missing target is therefore a reason to RETRY, not to give up — returning there meant focus
+  // was never requested for any anchored palette at all. Keyed on whether forwarding is set, not
+  // on the object, so a new `keyForwarding` identity cannot re-run this effect and steal focus
+  // after the portal has mounted.
+  const forwardsKeys = !!keyForwarding;
   useEffect(() => {
     if (passive) return () => {};
+    if (forwardsKeys && !isListFocused) return () => {};
     let rafId: number | undefined;
     let attempts = 0;
     const MAX_FOCUS_ATTEMPTS = 20;
     const tryFocus = () => {
       const target = isListFocused ? listRef.current : inputRef.current;
-      // A missing target is a reason to RETRY, not to give up. An anchored palette renders through
-      // Radix's portal, which commits nothing on its first pass, so the element does not exist yet
-      // when this effect runs. Returning here meant focus was never requested for any anchored
-      // palette — so its keys kept reaching the editor underneath, which looked like the palette
-      // being unable to hold focus at all.
       if (target) {
         target.focus();
         if (document.activeElement === target) return;
@@ -428,7 +441,7 @@ export function OverlayCommandPalettePresentational({
     return () => {
       if (rafId !== undefined) cancelAnimationFrame(rafId);
     };
-  }, [passive, isListFocused]);
+  }, [passive, forwardsKeys, isListFocused]);
 
   // Active-mode search text: locally typed AND externally driven. When the cross-frame focus
   // fight loses (the editor iframe re-grabs focus on every Lexical commit), the extension

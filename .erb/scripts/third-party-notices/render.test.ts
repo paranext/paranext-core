@@ -333,6 +333,49 @@ describe('render', () => {
     ).toThrow(/twinned@2\.0\.0/);
   });
 
+  it('credits each operand of a conjunction with the notice a reviewed exception records for it', () => {
+    // `posthog-node`'s LICENSE opens with PostHog's Apache-2.0 notice and carries its MIT grants
+    // (Sentry, Meta, ...) further down, so the file's first notice is right for one operand only.
+    const out = render({
+      ...report,
+      verdicts: report.verdicts.map((row) =>
+        row.name === 'delta'
+          ? {
+              ...row,
+              copyright: 'Copyright (c) 2021 Delta',
+              copyrightByOperand: { Zlib: 'Copyright (C) 1995 Jean-loup Gailly and Mark Adler' },
+            }
+          : row,
+      ),
+    });
+    expect(out).toMatch(
+      /### Zlib — canonical text[^#]*`delta@4\.0\.0` \(npm\) — Copyright \(C\) 1995 Jean-loup Gailly/,
+    );
+    // An operand the exception records nothing for is one the package states no notice for, and
+    // the package's own notice belongs to another operand's grant.
+    expect(out).toMatch(
+      /### MIT — canonical text[^#]*`delta@4\.0\.0` \(npm\) — no copyright notice — its reviewed exception records none for this license/,
+    );
+    expect(out).not.toMatch(
+      /### MIT — canonical text[^#]*`delta@4\.0\.0` \(npm\) — Copyright \(c\) 2021 Delta/,
+    );
+  });
+
+  it('credits every operand with the package’s own notice where no exception records credits', () => {
+    const out = render({
+      ...report,
+      verdicts: report.verdicts.map((row) =>
+        row.name === 'delta' ? { ...row, copyright: 'Copyright (c) 2021 Delta' } : row,
+      ),
+    });
+    expect(out).toMatch(
+      /### Zlib — canonical text[^#]*`delta@4\.0\.0` \(npm\) — Copyright \(c\) 2021 Delta/,
+    );
+    expect(out).toMatch(
+      /### MIT — canonical text[^#]*`delta@4\.0\.0` \(npm\) — Copyright \(c\) 2021 Delta/,
+    );
+  });
+
   it('reproduces every operand of a conjunction, including one the package ships no text for', () => {
     // `spdxId` is not always a bare identifier: a reviewed exception records the whole expression.
     // An exact corpus lookup on the field matches nothing for a compound one, which leaves
@@ -669,6 +712,20 @@ describe('canonicalTextCredit', () => {
         hasText: true,
       }),
     ).toBe('`CsvHelper@33.1.0` (NuGet) — Copyright © 2009-2024 Josh Close');
+  });
+
+  it('says an operand a reviewed exception records no notice for has none', () => {
+    expect(
+      canonicalTextCredit({
+        name: 'pako',
+        version: '1.0.11',
+        ecosystem: 'npm',
+        hasText: true,
+        unkeyedOperand: true,
+      }),
+    ).toBe(
+      '`pako@1.0.11` (npm) — no copyright notice — its reviewed exception records none for this license',
+    );
   });
 
   it('collapses a multi-line copyright notice onto one line', () => {
