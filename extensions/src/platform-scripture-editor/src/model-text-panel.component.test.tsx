@@ -415,9 +415,33 @@ describe('ModelTextPanel', () => {
       showResourcePicker,
     });
     expect(screen.getByText('The selected model text could not be found.')).toBeInTheDocument();
+    // Like every full-panel state, it stays reachable in a pane shorter than its content.
+    expect(
+      screen.getByText('The selected model text could not be found.').parentElement,
+    ).toHaveClass('tw:justify-center-safe', 'tw:overflow-y-auto');
 
     fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
     await waitFor(() => expect(showResourcePicker).toHaveBeenCalled());
+  });
+
+  // The pick runs from a click handler, so nothing upstream awaits it. A rejection it does not handle
+  // itself becomes an unhandled rejection inside the web view: no message, no log line.
+  it('logs a failed pick and returns to the empty state rather than failing silently', async () => {
+    const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
+    renderPanel({
+      showResourcePicker: vi.fn(async () => INSTALLED_RESOURCE),
+      getUserModelTexts: async () => {
+        throw new Error('settings unreadable');
+      },
+      logger,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
+
+    await waitFor(() =>
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('settings unreadable')),
+    );
+    expect(await screen.findByRole('button', { name: 'Pick model text…' })).toBeInTheDocument();
   });
 
   it('loads a configured ProjectReference model text directly by project ID', async () => {

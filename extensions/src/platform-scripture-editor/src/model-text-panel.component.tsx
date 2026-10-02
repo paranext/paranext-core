@@ -37,6 +37,7 @@ import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook'
 import { useIsOnline } from './use-is-online.hook';
 import {
   ExpandableInfo,
+  PANEL_FILL_CLASSES,
   PanelRetryableErrorView,
   LoadingView,
 } from './panel-state-views.component';
@@ -523,10 +524,16 @@ export function ModelTextPanel({
     [getUserModelTexts, setUserModelTexts, installResource, clearInstallFailure, markInstallFailed],
   );
 
+  // Called from click handlers, which nothing awaits, so a failure is caught here or nowhere. The
+  // Resource panel logs the same failure the same way.
   const handlePickModelText = useCallback(async () => {
-    const resource = await showResourcePicker(currentModelTextIds);
-    if (resource) await handleResourceSelect(resource);
-  }, [showResourcePicker, currentModelTextIds, handleResourceSelect]);
+    try {
+      const resource = await showResourcePicker(currentModelTextIds);
+      if (resource) await handleResourceSelect(resource);
+    } catch (e) {
+      logger?.error(`Model text selection failed: ${getErrorMessage(e)}`);
+    }
+  }, [showResourcePicker, currentModelTextIds, handleResourceSelect, logger]);
 
   const handleScrRefChange = useCallback(
     (newScrRef: SerializedVerseRef) => {
@@ -542,7 +549,9 @@ export function ModelTextPanel({
   // catalog, a non-DBL reference, or an entry missing its id). Offer the picker so the user can
   // recover rather than being stranded.
   const notFoundState = (
-    <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
+    <div
+      className={`tw:flex tw:flex-col tw:items-center tw:gap-4 tw:p-8 tw:text-center ${PANEL_FILL_CLASSES}`}
+    >
       <p>{localize(localizedStrings, '%webView_modelTextPanel_unknownResource%')}</p>
       <Button onClick={() => handlePickModelText()}>
         {localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}

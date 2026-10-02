@@ -61,15 +61,19 @@ describe('PanelReadinessView', () => {
     expect(onPick).toHaveBeenCalledTimes(1);
   });
 
-  // jsdom does no layout, so this pins the classes that do the work: an expanded "More info" can
-  // outgrow the panel, and plain `justify-center` would then push the prompt above the scrollable
-  // area where it cannot be reached.
-  it('keeps an over-tall empty state scrollable from its top', () => {
-    renderView('empty');
-    const emptyState = screen.getByText('No Bible text selected.').closest('[data-slot="empty"]');
+  // jsdom does no layout, so this pins the classes that do the work. Any full-panel state can be
+  // taller than a short pane (an expanded "More info", or just a pane dragged small), and plain
+  // `justify-center` would then push its top above the scrollable area where it cannot be reached.
+  it.each([
+    ['empty', STRINGS.emptyPrompt],
+    ['error', STRINGS.errorMessage],
+    ['catalogError', STRINGS.catalogErrorMessage],
+  ] as const)('keeps an over-tall %s state scrollable from its top', (readiness, message) => {
+    renderView(readiness);
+    const panelState = screen.getByText(message).closest('[data-slot="empty"]');
 
-    expect(emptyState).toHaveClass('tw:justify-center-safe', 'tw:overflow-y-auto');
-    expect(emptyState).not.toHaveClass('tw:justify-center');
+    expect(panelState).toHaveClass('tw:justify-center-safe', 'tw:overflow-y-auto');
+    expect(panelState).not.toHaveClass('tw:justify-center');
   });
 
   // An expanded explanation can be several paragraphs. Placed above the button, it would push the
