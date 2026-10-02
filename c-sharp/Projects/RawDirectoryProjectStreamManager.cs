@@ -101,6 +101,10 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
                 .Select(file =>
                     Path.GetRelativePath(rootDir, file).Replace(Path.DirectorySeparatorChar, '/')
                 )
+                // A file whose name GetDataStream would refuse (".." anywhere) or resolve to a
+                // different file (a backslash, which it reads as a separator - possible only in a
+                // Unix file name) is not listed, since no caller can read it back
+                .Where(name => !name.Contains("..") && !name.Contains('\\'))
                 .Order(StringComparer.Ordinal),
         ];
     }

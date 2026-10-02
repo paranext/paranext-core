@@ -191,6 +191,71 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void GetExistingDataStreamNames_DirectoryJunction_IsNotDescendedInto()
+        {
+            // A junction is a link that carries ReparsePoint as cloud-sync placeholder directories
+            // do, but unlike them has a LinkTarget, so it must still be refused where a placeholder
+            // is walked. Junctions need no privilege, so this runs on Windows machines that skip
+            // the symbolic-link test above
+            WriteStream($"{ExtensionPath}/mine.json", "mine");
+            using var outside = new TemporaryFolder(
+                $"{TestContext.CurrentContext.Test.ID}-outside"
+            );
+            File.WriteAllText(Path.Join(outside.Path, "outside.json"), "not ours");
+            CreateJunctionOrIgnore(
+                Path.Join(
+                    _projectFolder.Path,
+                    ExtensionPath.Replace('/', Path.DirectorySeparatorChar),
+                    "escape"
+                ),
+                outside.Path
+            );
+
+            var streamNames = _streamManager.GetExistingDataStreamNames(ExtensionPath);
+
+            Assert.That(streamNames, Is.EqualTo(new[] { "mine.json" }));
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_NameGetDataStreamRefuses_IsNotListed()
+        {
+            WriteStream($"{ExtensionPath}/mine.json", "mine");
+            // Written around the stream manager, which refuses to create it - but a file can arrive
+            // by other means, such as Send/Receive
+            File.WriteAllText(
+                Path.Join(
+                    _projectFolder.Path,
+                    ExtensionPath.Replace('/', Path.DirectorySeparatorChar),
+                    "a..b.json"
+                ),
+                "unreadable"
+            );
+
+            var streamNames = _streamManager.GetExistingDataStreamNames(ExtensionPath);
+
+            // Every listed name must read back, and GetDataStream rejects ".." anywhere in a name
+            Assert.That(streamNames, Is.EqualTo(new[] { "mine.json" }));
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_BackslashInAUnixFileName_IsNotListed()
+        {
+            if (OperatingSystem.IsWindows())
+                Assert.Ignore("A Windows file name cannot contain a backslash");
+            WriteStream($"{ExtensionPath}/mine.json", "mine");
+            File.WriteAllText(
+                Path.Join(_projectFolder.Path, ExtensionPath, "a\\b.json"),
+                "unreadable"
+            );
+
+            var streamNames = _streamManager.GetExistingDataStreamNames(ExtensionPath);
+
+            // GetDataStream reads a backslash as a separator, so "a\b.json" would read a/b.json - a
+            // different file - rather than this one
+            Assert.That(streamNames, Is.EqualTo(new[] { "mine.json" }));
+        }
+
+        [Test]
         public void GetExistingDataStreamNames_ProjectStorageMissing_Throws()
         {
             WriteStream($"{ExtensionPath}/mine.json", "mine");
