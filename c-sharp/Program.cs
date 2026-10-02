@@ -158,9 +158,14 @@ public static class Program
                 paratextProjects
             );
             unsyncedChangesTracker.Start();
+            var remoteChangesPoller = new RemoteChangesPoller(
+                paratextSendReceiveService,
+                paratextProjects
+            );
             var unsyncedChangesNotifierService = new UnsyncedChangesNotifierService(
                 papi,
-                unsyncedChangesTracker
+                unsyncedChangesTracker,
+                remoteChangesPoller
             );
 
             StartupTiming.Mark("init-barrier-start");
@@ -181,6 +186,10 @@ public static class Program
             // Off the barrier: one `hg status` per local project, in the background; the result
             // arrives as an onUnsyncedChangesChanged event when it differs from the empty baseline.
             unsyncedChangesTracker.StartBaselineScan();
+
+            // Off the barrier: the first server lookup runs after a short delay, then every few
+            // minutes; its result arrives as an onUnsyncedChangesChanged event when toReceive changes.
+            remoteChangesPoller.Start();
 
             // Things that only run in our "noisy dev mode" go here
             var noisyDevModeEnvVar = Environment.GetEnvironmentVariable("DEV_NOISY");
