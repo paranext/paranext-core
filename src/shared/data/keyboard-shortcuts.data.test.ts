@@ -87,7 +87,21 @@ function getMenuLocationsByCommand(): Map<string, Set<string>> {
   return locationsByCommand;
 }
 
+/** Every (entry id, location) pair in the catalog, for a per-pair existence check. */
+const entryLocationPairs = rootKeyboardShortcuts.flatMap((entry) =>
+  entry.locations.map((location): [entryId: string, location: string] => [entry.id, location]),
+);
+
 describe('keyboard shortcuts catalog', () => {
+  it('has locations to check', () => {
+    // Guards the sweep below: an empty list would pass it by running nothing.
+    expect(entryLocationPairs.length).toBeGreaterThan(0);
+  });
+
+  it.each(entryLocationPairs)('%s location "%s" resolves to a real file', (_id, location) => {
+    expect(existsSync(path.join(process.cwd(), location))).toBe(true);
+  });
+
   it('commands match the expected menu hints', () => {
     // Sorted arrays rather than sets, so a `command` on two entries also fails
     const commands = entriesWithCommand.map((entry) => entry.command ?? '');
@@ -137,13 +151,6 @@ function zoomEntries() {
   return rootKeyboardShortcuts.filter((entry) => entry.category === 'Zoom');
 }
 
-/** All (entry id, location) pairs across the Zoom category, for a per-pair existence check. */
-function zoomEntryLocationPairs(): [entryId: string, location: string][] {
-  return zoomEntries().flatMap((entry) =>
-    entry.locations.map((location): [string, string] => [entry.id, location]),
-  );
-}
-
 describe('keyboard-shortcuts.data Zoom category', () => {
   it('has no leftover app-wide zoom entries for the removed main-process chords', () => {
     const ids = zoomEntries().map((entry) => entry.id);
@@ -159,8 +166,15 @@ describe('keyboard-shortcuts.data Zoom category', () => {
       expect(entry?.locations).toEqual(expect.arrayContaining(CONTENT_ZOOM_CHORD_LOCATIONS));
     },
   );
+});
 
-  it.each(zoomEntryLocationPairs())('%s location "%s" resolves to a real file', (_id, location) => {
-    expect(existsSync(path.join(process.cwd(), location))).toBe(true);
+describe('paragraph marker menu chord', () => {
+  const entry = rootKeyboardShortcuts.find(
+    (shortcut) => shortcut.id === 'scripture-open-paragraph-menu-from-marker',
+  );
+
+  it('shows no menu hint, since the chord works only on a selected paragraph marker', () => {
+    expect(entry).toBeDefined();
+    expect(entry?.command).toBeUndefined();
   });
 });

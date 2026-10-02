@@ -20,6 +20,9 @@ import path from 'path';
  */
 describe('_usj-nodes.scss vendored editor stylesheet', () => {
   const scss = readFileSync(path.resolve(__dirname, '_usj-nodes.scss'), 'utf8');
+  /** The stylesheet with its comments removed, so prose that names a selector cannot match it. */
+  const declarations = scss.replace(/\/\*[\s\S]*?\*\//g, '');
+  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
   it('still styles the UnknownNode containers (guards against reading the wrong/empty file)', () => {
     expect(scss).toContain('.marker-editable .unknown-block');
@@ -43,12 +46,8 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
    * whitespace and of the declaration's position within the block, so reformatting the stylesheet
    * cannot fail these pins for a reason that has nothing to do with what they guard.
    */
-  const rule = (selectors: string[], declaration: string) => {
-    const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(
-      `${selectors.map(escape).join(',\\s*')}\\s*\\{[^}]*${escape(declaration)}[^}]*\\}`,
-    );
-  };
+  const rule = (selectors: string[], declaration: string) =>
+    new RegExp(`${selectors.map(escape).join(',\\s*')}\\s*\\{[^}]*${escape(declaration)}[^}]*\\}`);
 
   describe('PT9 Standard-view marker glyph styling', () => {
     // Standard view renders marker glyphs as MarkerNode spans carrying marker-syntax classes
@@ -237,6 +236,59 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     });
   });
 
+  describe('selected paragraph marker row', () => {
+    // The editor marks the paragraph whose gutter marker is selected with `psc-para-marker-selected`.
+    // Selection gets a channel of its own, as in adr-list-selection-on-a-dedicated-visual-channel,
+    // never the active-text focus box. Unlike that ADR's comment cards, the row also takes a fill
+    // (its background carries no status), and fill and bar reach across the gutter as box-shadows.
+    const block = (selector: string) =>
+      declarations.match(new RegExp(`${escape(selector)}\\s*\\{([^}]*)\\}`))?.[1];
+
+    // Which tokens the bar and glyph are painted in is pinned by
+    // paragraph-marker-selection-contrast.test.ts, next to the contrast sweep over those tokens.
+    it('fills the row and reaches the fill and bar toward the left in LTR', () => {
+      const ltr = block('.psc-gutter-markers .psc-para-marker-selected');
+      expect(ltr).toContain('background-color: var(--accent)');
+      // Toward inline-start, which is the left in LTR.
+      expect(ltr).toMatch(/box-shadow:\s*calc\(4px - var\(--psc-para-marker-selection-reach\)\)/);
+    });
+
+    it('mirrors the fill and bar to the right in RTL', () => {
+      const rtl = block(".psc-gutter-markers[dir='rtl'] .psc-para-marker-selected");
+      expect(rtl).toMatch(/box-shadow:\s*calc\(var\(--psc-para-marker-selection-reach\) - 4px\)/);
+    });
+
+    it('strengthens the selected glyph', () => {
+      const glyph = block(
+        '.psc-gutter-markers .psc-para-marker-selected > .marker:not(.verse):not(.chapter):first-child',
+      );
+      expect(glyph).toContain('font-weight: 700');
+    });
+
+    it('keeps the selected row visible in forced colors, which drop the box-shadow and fill', () => {
+      const forcedColors = declarations.match(
+        /@media \(forced-colors: active\)\s*\{\s*\.psc-gutter-markers \.psc-para-marker-selected\s*\{([^}]*)\}/,
+      )?.[1];
+      expect(forcedColors).toMatch(/outline:[^;]*\bHighlight\b/);
+    });
+
+    it('uses no pseudo-element, which the focus box and book code already own', () => {
+      expect(declarations).not.toMatch(/\.psc-para-marker-selected[^{,]*::?(?:before|after)/);
+    });
+
+    it('paints the selected glyph after the base gutter glyph rule, which has equal specificity', () => {
+      // Equal specificity (0,6,0): source order decides.
+      const baseGlyph = '.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child';
+      const selectedGlyph =
+        '.psc-gutter-markers .psc-para-marker-selected > .marker:not(.verse):not(.chapter):first-child';
+      const baseIndex = declarations.indexOf(baseGlyph);
+      const selectedIndex = declarations.indexOf(selectedGlyph);
+      expect(baseIndex).toBeGreaterThanOrEqual(0);
+      expect(selectedIndex).toBeGreaterThanOrEqual(0);
+      expect(selectedIndex).toBeGreaterThan(baseIndex);
+    });
+  });
+
   describe('cross-copy drift pins (must agree with the demo copy in platform-bible-react)', () => {
     // The two vendored copies of the editor stylesheet (this one and
     // lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css) are pinned at
@@ -254,14 +306,12 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     });
     it('renders the active-text outline via ::after, never ::before (book-code collision)', () => {
       expect(scss).toMatch(/\.psc-active-focus \.psc-active-text::after\s*\{/);
-      expect(scss.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(
-        /\.psc-active-focus \.psc-active-text::before/,
-      );
+      expect(declarations).not.toMatch(/\.psc-active-focus \.psc-active-text::before/);
     });
     it('does not override text-align in the RTL gutter rule (Chrome/Firefox bidi paint quirk)', () => {
-      const rtlGutter = scss
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .match(/\.psc-gutter-markers\[dir='rtl'\] \.para[^{]*\{([^}]*)\}/);
+      const rtlGutter = declarations.match(
+        /\.psc-gutter-markers\[dir='rtl'\] \.para[^{]*\{([^}]*)\}/,
+      );
       expect(rtlGutter).not.toBeNull();
       expect(rtlGutter?.[1]).not.toContain('text-align');
     });

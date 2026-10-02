@@ -177,17 +177,46 @@ export function resolveFootnotesPaneAutoVisibility({
  * A still-live selection is left completely alone, and with no snapshot there is nothing to restore
  * (`focus()` keeps its default behavior).
  *
+ * A selected paragraph marker counts as a live selection too. `getSelection()` reports `undefined`
+ * for it, because a USJ selection is a text range and cannot represent a selected node, so without
+ * asking `getSelectedParaMarker()` this would restore the last caret over it and the paragraph
+ * dropdown would retag whichever paragraph that caret was in.
+ *
  * @param editor The live editor handle (e.g. `editorRef.current`); no-op when not mounted
  * @param lastFocusOutSelection The selection captured when focus last left the editor (a focusout
  *   listener reads it synchronously, ahead of the blur-path nulling), or `undefined` when none has
  *   been captured
  */
 export function restoreSelectionIfLost(
-  editor: Pick<EditorRef, 'getSelection' | 'setSelection'> | null,
+  editor: Pick<EditorRef, 'getSelection' | 'setSelection' | 'getSelectedParaMarker'> | null,
   lastFocusOutSelection: SelectionRange | undefined,
 ): void {
-  if (!editor || editor.getSelection()) return;
+  if (!editor || editor.getSelection() || editor.getSelectedParaMarker()) return;
   if (lastFocusOutSelection) editor.setSelection(lastFocusOutSelection);
+}
+
+/**
+ * Puts keyboard focus back in the editor, restoring a lost caret first.
+ *
+ * Lexical's `focus()` falls back to selecting the document END when the editor-state selection is
+ * null, and it cannot tell a genuinely-lost selection from one that was never there — so the
+ * restore has to happen BEFORE `focus()` runs, never after. Calling `focus()` alone after a
+ * selection has been nulled (e.g. a popover blur) would silently move the caret to the chapter
+ * end.
+ *
+ * @param editor The live editor handle (e.g. `editorRef.current`); no-op when not mounted
+ * @param lastFocusOutSelection The selection captured when focus last left the editor, passed
+ *   straight through to {@link restoreSelectionIfLost}
+ */
+export function returnFocusToEditor(
+  editor: Pick<
+    EditorRef,
+    'getSelection' | 'setSelection' | 'getSelectedParaMarker' | 'focus'
+  > | null,
+  lastFocusOutSelection: SelectionRange | undefined,
+): void {
+  restoreSelectionIfLost(editor, lastFocusOutSelection);
+  editor?.focus();
 }
 
 /**

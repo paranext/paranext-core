@@ -121,6 +121,7 @@ import {
   PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
 } from './paragraph-style-trigger.component';
 import { useMarkerSettleDelay } from './use-marker-settle-delay.hook';
+import { useParagraphMenuOpenState } from './use-paragraph-menu-open-state.hook';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 import { EmptyChapterView, EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.component';
 import {
@@ -191,6 +192,7 @@ import {
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
+  returnFocusToEditor,
   shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
@@ -1380,8 +1382,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   // Opening the paragraph switcher's Radix popover takes focus off `.editor-input`, where Lexical's
-  // blur processing can null the selection — and `formatPara` needs one, so the retag would refuse.
-  // The `\` and Enter palettes restore it the same way before they apply.
+  // blur processing can null a caret selection — and `formatPara` needs a selection, so the retag
+  // would refuse. A selected paragraph marker survives the blur and is left as it is. The `\` and
+  // Enter palettes restore the same way before they apply.
   const restoreEditorSelection = useCallback(() => {
     restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
   }, []);
@@ -1396,6 +1399,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         restoreEditorSelection,
       ),
     [localizedStrings, isStructureProtected, notifyStructureProtected, restoreEditorSelection],
+  );
+
+  const {
+    isMenuOpen: isParagraphMenuOpen,
+    setIsMenuOpen: setIsParagraphMenuOpen,
+    requestMenuFromEditor: handleParagraphMarkerMenuRequest,
+  } = useParagraphMenuOpenState({
+    isReadOnly: isReadOnlyEffective,
+    isStructureProtected,
+    hasBlockMarker: !!blockMarker,
+    notifyStructureProtected,
+  });
+
+  // The editor keeps a selected paragraph marker while focus is in the paragraph menu; focusing it
+  // again makes that selection live for the next key. Opening the popover can also null a caret
+  // selection the same way the paragraph switcher does above, so the restore has to run before the
+  // focus, not just a plain `editorRef.current?.focus()`.
+  const restoreCaretAndFocusEditor = useCallback(
+    () => returnFocusToEditor(editorRef.current, lastFocusOutSelectionRef.current),
+    [],
   );
 
   const insertCommentAtCurrentSelection = useCallback(() => {
@@ -3763,6 +3786,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               logger={logger}
               onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
               onSelectionChange={handleSelectionChange}
+              onParaMarkerMenuRequest={handleParagraphMarkerMenuRequest}
               onStateChange={(state) => {
                 setCanUndo(state.canUndo);
                 setCanRedo(state.canRedo);
@@ -3932,6 +3956,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   isStructureProtected={isStructureProtected}
                   markerMenuItems={paragraphSwitcherMenuItems}
                   localizedStrings={localizedStrings}
+                  isMenuOpen={isParagraphMenuOpen}
+                  onMenuOpenChange={setIsParagraphMenuOpen}
+                  onReturnFocusToEditor={restoreCaretAndFocusEditor}
                 />
               </>
             )}
