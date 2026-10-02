@@ -5,6 +5,7 @@ import {
   ChevronsUpDown,
   ChevronUp,
   CloudOff,
+  Scroll,
   ScrollText,
 } from 'lucide-react';
 import {
@@ -27,6 +28,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from 'platform-bible-react';
 import type { ProjectMetadata } from '@papi/core';
 import type { LocalizedStringValue } from 'platform-bible-utils';
@@ -67,6 +72,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_getResources%',
   '%resources_items%',
   '%resources_language%',
+  '%resources_lastSynchronized%',
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
   '%resources_noProjectsInstructionWithoutResources%',
@@ -74,7 +80,10 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_noResourcesFound%',
   '%resources_noSearchResults%',
   '%resources_open%',
+  '%resources_paratextProjectEditable_tooltip%',
+  '%resources_paratextProjectReadOnly_tooltip%',
   '%resources_paratextProjects_label%',
+  '%resources_resource_tooltip%',
   '%resources_resources_label%',
   '%resources_searchByNameOrLanguage%',
   '%resources_searchedFor%',
@@ -154,6 +163,11 @@ export type LocalProjectInfo = {
   fullName?: string;
   name: string;
   language: string;
+  /**
+   * Whether the project can be edited here. Absent means editable, as in `ProjectMetadata`; always
+   * `false` for a published resource.
+   */
+  isEditable?: boolean;
 };
 
 /**
@@ -165,6 +179,7 @@ export function metadataToLocalProjectInfo(data: ProjectMetadata): LocalProjectI
   return {
     projectId: data.id,
     isPublished: data.isPublished ?? false,
+    isEditable: data.isEditable ?? true,
     fullName: normalizeFullName(data.fullName),
     name: data.name ?? data.id,
     language: data.language ?? '',
@@ -178,6 +193,8 @@ export type MergedProjectInfo = {
   fullName?: string;
   language: string;
   isPublished: boolean;
+  /** Whether the project can be edited here. See {@link LocalProjectInfo.isEditable}. */
+  isEditable: boolean;
   isSendReceivable: boolean;
   isLocallyAvailable?: boolean;
   editedStatus?: EditedStatus;
@@ -322,6 +339,14 @@ export function Home({
     : getLocalizedString('%resources_items%');
   const countOfTotalText: string = getLocalizedString('%general_countOfTotal%');
   const languageText: string = getLocalizedString('%resources_language%');
+  const lastSynchronizedText: string = getLocalizedString('%resources_lastSynchronized%');
+  const paratextProjectEditableText: string = getLocalizedString(
+    '%resources_paratextProjectEditable_tooltip%',
+  );
+  const paratextProjectReadOnlyText: string = getLocalizedString(
+    '%resources_paratextProjectReadOnly_tooltip%',
+  );
+  const resourceTypeText: string = getLocalizedString('%resources_resource_tooltip%');
   const noProjectsText: string = getLocalizedString('%resources_noProjects%');
   const noProjectsInstructionText: string = getLocalizedString('%resources_noProjectsInstruction%');
   const noProjectsInstructionWithoutResourcesText: string = getLocalizedString(
@@ -378,6 +403,7 @@ export function Home({
     const newMergedProjectInfo: MergedProjectInfo[] = [];
     if (sharedProjectsInfo) {
       Object.entries(sharedProjectsInfo).forEach(([projectId, sharedProject]) => {
+        const localProject = localProjectsInfo?.find((project) => project.projectId === projectId);
         newMergedProjectInfo.push({
           projectId,
           name: sharedProject.name,
@@ -385,8 +411,11 @@ export function Home({
           language: sharedProject.language,
           // Shared (send/receive) projects are not published resources.
           isPublished: false,
+          // The server's list says nothing about editability. A downloaded copy has its own
+          // setting; one not on this machine yet has none to honor.
+          isEditable: localProject?.isEditable ?? true,
           isSendReceivable: true,
-          isLocallyAvailable: localProjectsInfo?.some((project) => project.projectId === projectId),
+          isLocallyAvailable: !!localProject,
           editedStatus: sharedProject.editedStatus,
           lastSendReceiveDate: sharedProject.lastSendReceiveDate,
         });
@@ -402,6 +431,7 @@ export function Home({
           fullName: project.fullName,
           language: project.language,
           isPublished: project.isPublished,
+          isEditable: project.isEditable ?? true,
           isSendReceivable: false,
           isLocallyAvailable: true,
         });
@@ -617,13 +647,71 @@ export function Home({
     return new Intl.RelativeTimeFormat(uiLocales, { style: 'long', numeric: 'auto' });
   }, [uiLocales]);
 
+  const exactDateTimeFormatter = useMemo(
+    () => new Intl.DateTimeFormat(uiLocales, { dateStyle: 'long', timeStyle: 'short' }),
+    [uiLocales],
+  );
+
+  /** The row's kind — its icon, and the words that name it in the tooltip and to screen readers. */
+  const getRowKind = (project: MergedProjectInfo) => {
+    if (project.isPublished) return { Icon: BookOpen, label: resourceTypeText };
+    if (!project.isEditable) return { Icon: Scroll, label: paratextProjectReadOnlyText };
+    return { Icon: ScrollText, label: paratextProjectEditableText };
+  };
+
   /**
-   * The Activity cell's text. Parsed by the same rule the Activity sort uses, so a date that does
-   * not parse is shown as no activity instead of throwing out of `Intl.RelativeTimeFormat`.
+   * The row's icon and short name, with its full name, language and kind in a tooltip. The icon is
+   * named by its kind too, so the kind does not depend on seeing the icon or hovering the row.
    */
-  const formatLastSendReceive = (project: MergedProjectInfo) => {
+  const renderNameWithDetails = (project: MergedProjectInfo) => {
+    const { Icon, label } = getRowKind(project);
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="tw:flex tw:flex-row tw:items-center tw:gap-4">
+            <div className="tw:flex tw:flex-row tw:items-center tw:gap-2">
+              {project.editedStatus === 'edited' && (
+                <div className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]" />
+              )}
+              <Icon className="tw:pr-0" size={18} role="img" aria-label={label} />
+            </div>
+            <div className="tw:whitespace-nowrap tw:cursor-default">{project.name}</div>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="right">
+          <div className="tw:flex tw:flex-col tw:gap-0.5">
+            {project.fullName && (
+              <div className="tw:wrap-anywhere tw:font-bold">{project.fullName}</div>
+            )}
+            <div className="tw:text-xs">{project.language}</div>
+            <div className="tw:text-xs tw:text-muted-foreground">{label}</div>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
+
+  /**
+   * The Activity cell: how long ago, with the exact time of the last sync in a tooltip. Parsed by
+   * the same rule the Activity sort uses, so a date that does not parse is shown as no activity
+   * instead of throwing out of `Intl.RelativeTimeFormat`.
+   */
+  const renderLastSendReceive = (project: MergedProjectInfo) => {
     const time = getLastSendReceiveTime(project);
-    return time === undefined ? undefined : formatTimeSpan(relativeTimeFormatter, new Date(time));
+    if (time === undefined) return undefined;
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span>{formatTimeSpan(relativeTimeFormatter, new Date(time))}</span>
+        </TooltipTrigger>
+        <TooltipContent side="left">
+          <div className="tw:flex tw:flex-col tw:gap-0.5">
+            <div className="tw:text-xs tw:text-muted-foreground">{lastSynchronizedText}</div>
+            <div>{exactDateTimeFormatter.format(new Date(time))}</div>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    );
   };
 
   const getSendReceiveButtonContent = (project: MergedProjectInfo) => {
@@ -803,110 +891,99 @@ export function Home({
                     </div>
                   </div>
                 ) : (
-                  <Table stickyHeader>
-                    <TableHeader className="tw:bg-none tw:max-[300px]:hidden" stickyHeader>
-                      <TableRow className="tw:rounded-sm">
-                        {buildTableHead('shortName', shortNameText, 'tw:ps-4')}
-                        {buildTableHead('fullName', fullNameText, 'tw:hidden tw:md:!table-cell')}
-                        {buildTableHead('language', languageText, 'tw:hidden tw:sm:!table-cell')}
-                        {hasActivityColumn &&
-                          buildTableHead('activity', activityText, 'tw:hidden tw:sm:!table-cell')}
-                        {buildTableHead('action', actionText)}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredAndSortedProjects.map((project) => (
-                        <TableRow
-                          onMouseDown={(e) => {
-                            // cancel double‑click text selection
-                            if (e.detail > 1) e.preventDefault();
-                          }}
-                          onDoubleClick={() =>
-                            project.isLocallyAvailable
-                              ? onOpenProject(project.projectId, project.isPublished)
-                              : !isSendReceiveInProgress &&
-                                handleSendReceiveProject(project.projectId)
-                          }
-                          key={project.projectId}
-                          className={cn('tw:rounded-sm', {
-                            'tw:text-muted-foreground/70 tw:hover:text-foreground':
-                              !project.isLocallyAvailable,
-                          })}
-                        >
-                          <TableCell
-                            className={cn({ 'tw:ps-2': project.editedStatus === 'edited' })}
-                          >
-                            <div
-                              className={cn(
-                                'tw:flex tw:flex-row tw:items-center tw:gap-4 tw:ps-2',
-                                { 'tw:ps-0': project.editedStatus === 'edited' },
-                              )}
-                            >
-                              <div className="tw:flex tw:flex-row tw:items-center tw:gap-2">
-                                {project.editedStatus === 'edited' && (
-                                  <div className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]" />
-                                )}
-                                {project.isPublished ? (
-                                  <BookOpen className="tw:pr-0" size={18} />
-                                ) : (
-                                  <ScrollText className="tw:pr-0" size={18} />
-                                )}
-                              </div>
-
-                              <div className="tw:whitespace-nowrap tw:cursor-default">
-                                {project.name}
-                              </div>
-
-                              <div className="tw:grow tw:hidden tw:max-[300px]:!flex">
-                                <div className="tw:grow" />
-                                <HomeItemDropdownMenu ellipsisButtonClassName="tw:h-6">
-                                  {(!project.isLocallyAvailable ||
-                                    project.editedStatus === 'edited') && (
-                                    <DropdownMenuItem asChild>
-                                      {syncOrGetButton(project, true)}
-                                    </DropdownMenuItem>
-                                  )}
-                                  {project.isLocallyAvailable && (
-                                    <DropdownMenuItem asChild>
-                                      {openButton(project, true)}
-                                    </DropdownMenuItem>
-                                  )}
-                                </HomeItemDropdownMenu>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="tw:hidden tw:md:!table-cell tw:font-medium tw:whitespace-normal tw:wrap-anywhere tw:cursor-default">
-                            {project.fullName}
-                          </TableCell>
-                          <TableCell className="tw:hidden tw:sm:!table-cell tw:cursor-default">
-                            {project.language}
-                          </TableCell>
-                          {hasActivityColumn && (
-                            <TableCell className="tw:hidden tw:sm:!table-cell tw:cursor-default">
-                              {formatLastSendReceive(project)}
-                            </TableCell>
-                          )}
-                          <TableCell className="tw:max-[300px]:hidden">
-                            <div className="tw:flex tw:justify-between tw:items-center">
-                              {project.isSendReceivable &&
-                              (!project.isLocallyAvailable || project.editedStatus === 'edited')
-                                ? syncOrGetButton(project)
-                                : openButton(project)}
-                              {project.isSendReceivable && project.isLocallyAvailable && (
-                                <HomeItemDropdownMenu>
-                                  <DropdownMenuItem asChild>
-                                    {project.editedStatus === 'edited'
-                                      ? openButton(project, true)
-                                      : syncOrGetButton(project, true)}
-                                  </DropdownMenuItem>
-                                </HomeItemDropdownMenu>
-                              )}
-                            </div>
-                          </TableCell>
+                  <TooltipProvider>
+                    <Table stickyHeader>
+                      <TableHeader className="tw:bg-none tw:max-[300px]:hidden" stickyHeader>
+                        <TableRow className="tw:rounded-sm">
+                          {buildTableHead('shortName', shortNameText, 'tw:ps-4')}
+                          {buildTableHead('fullName', fullNameText, 'tw:hidden tw:md:!table-cell')}
+                          {buildTableHead('language', languageText, 'tw:hidden tw:sm:!table-cell')}
+                          {hasActivityColumn &&
+                            buildTableHead('activity', activityText, 'tw:hidden tw:sm:!table-cell')}
+                          {buildTableHead('action', actionText)}
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredAndSortedProjects.map((project) => (
+                          <TableRow
+                            onMouseDown={(e) => {
+                              // cancel double‑click text selection
+                              if (e.detail > 1) e.preventDefault();
+                            }}
+                            onDoubleClick={() =>
+                              project.isLocallyAvailable
+                                ? onOpenProject(project.projectId, project.isPublished)
+                                : !isSendReceiveInProgress &&
+                                  handleSendReceiveProject(project.projectId)
+                            }
+                            key={project.projectId}
+                            className={cn('tw:rounded-sm', {
+                              'tw:text-muted-foreground/70 tw:hover:text-foreground':
+                                !project.isLocallyAvailable,
+                            })}
+                          >
+                            <TableCell
+                              className={cn({ 'tw:ps-2': project.editedStatus === 'edited' })}
+                            >
+                              <div
+                                className={cn(
+                                  'tw:flex tw:flex-row tw:items-center tw:gap-4 tw:ps-2',
+                                  { 'tw:ps-0': project.editedStatus === 'edited' },
+                                )}
+                              >
+                                {renderNameWithDetails(project)}
+
+                                <div className="tw:grow tw:hidden tw:max-[300px]:!flex">
+                                  <div className="tw:grow" />
+                                  <HomeItemDropdownMenu ellipsisButtonClassName="tw:h-6">
+                                    {(!project.isLocallyAvailable ||
+                                      project.editedStatus === 'edited') && (
+                                      <DropdownMenuItem asChild>
+                                        {syncOrGetButton(project, true)}
+                                      </DropdownMenuItem>
+                                    )}
+                                    {project.isLocallyAvailable && (
+                                      <DropdownMenuItem asChild>
+                                        {openButton(project, true)}
+                                      </DropdownMenuItem>
+                                    )}
+                                  </HomeItemDropdownMenu>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="tw:hidden tw:md:!table-cell tw:font-medium tw:whitespace-normal tw:wrap-anywhere tw:cursor-default">
+                              {project.fullName}
+                            </TableCell>
+                            <TableCell className="tw:hidden tw:sm:!table-cell tw:cursor-default">
+                              {project.language}
+                            </TableCell>
+                            {hasActivityColumn && (
+                              <TableCell className="tw:hidden tw:sm:!table-cell tw:cursor-default">
+                                {renderLastSendReceive(project)}
+                              </TableCell>
+                            )}
+                            <TableCell className="tw:max-[300px]:hidden">
+                              <div className="tw:flex tw:justify-between tw:items-center">
+                                {project.isSendReceivable &&
+                                (!project.isLocallyAvailable || project.editedStatus === 'edited')
+                                  ? syncOrGetButton(project)
+                                  : openButton(project)}
+                                {project.isSendReceivable && project.isLocallyAvailable && (
+                                  <HomeItemDropdownMenu>
+                                    <DropdownMenuItem asChild>
+                                      {project.editedStatus === 'edited'
+                                        ? openButton(project, true)
+                                        : syncOrGetButton(project, true)}
+                                    </DropdownMenuItem>
+                                  </HomeItemDropdownMenu>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TooltipProvider>
                 )}
               </div>
             )}

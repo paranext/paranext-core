@@ -9,6 +9,7 @@ import localizedStringsContribution from '../contributions/localizedStrings.json
 import {
   Home,
   HOME_STRING_KEYS,
+  metadataToLocalProjectInfo,
   type HomeProps,
   type LocalProjectInfo,
   type RemoteProjectsState,
@@ -934,5 +935,94 @@ describe('Home project/resource filter', () => {
     renderHomeList({ localProjectsInfo: [RESOURCE, PROJECT] });
 
     expect(screen.queryByText('2 items')).not.toBeNull();
+  });
+});
+
+/*
+ * What kind of item each row is — a Paratext project you can edit, one that is read-only, or a
+ * resource — shown by the row's icon and, with its full name and language, in a tooltip on the row.
+ * The icon carries the same words as its accessible name, so the distinction is not visual-only.
+ */
+describe('Home row type and details', () => {
+  const EDITABLE = enString('%resources_paratextProjectEditable_tooltip%');
+  const READ_ONLY = enString('%resources_paratextProjectReadOnly_tooltip%');
+  const RESOURCE_TYPE = enString('%resources_resource_tooltip%');
+  const PROJECT: LocalProjectInfo = {
+    projectId: 'editable1',
+    isPublished: false,
+    fullName: 'Editable Project',
+    name: 'EDT',
+    language: 'en',
+  };
+
+  it('names each row by its kind: editable project, read-only project, or resource', () => {
+    renderHomeList({
+      localProjectsInfo: [
+        PROJECT,
+        { ...PROJECT, projectId: 'readOnly1', name: 'RO', isEditable: false },
+        { ...PROJECT, projectId: 'resource1', name: 'RES', isPublished: true, isEditable: false },
+      ],
+    });
+
+    expect(screen.getAllByRole('img', { name: EDITABLE })).toHaveLength(1);
+    expect(screen.getAllByRole('img', { name: READ_ONLY })).toHaveLength(1);
+    // A resource is never editable, but it is a resource first.
+    expect(screen.getAllByRole('img', { name: RESOURCE_TYPE })).toHaveLength(1);
+  });
+
+  it('counts a server-only project as editable, and a downloaded one by its own setting', () => {
+    renderHomeList({
+      sharedProjectsInfo: SHARED_PROJECTS,
+      localProjectsInfo: [{ ...PROJECT, projectId: 'downloaded', name: 'DL', isEditable: false }],
+    });
+
+    // The server's list says nothing about editability; a project that is not on this machine yet
+    // has no read-only setting to honor.
+    expect(screen.getAllByRole('img', { name: EDITABLE })).toHaveLength(1);
+    expect(screen.getAllByRole('img', { name: READ_ONLY })).toHaveLength(1);
+  });
+
+  it("reads editability from a project's metadata, treating absent as editable", () => {
+    const metadata = { projectInterfaces: [], pdpFactoryInfo: {} };
+    expect(
+      metadataToLocalProjectInfo({ ...metadata, id: 'p1', isEditable: false }).isEditable,
+    ).toBe(false);
+    expect(metadataToLocalProjectInfo({ ...metadata, id: 'p2' }).isEditable).toBe(true);
+  });
+
+  it("shows a row's full name, language and kind in a tooltip", async () => {
+    renderHomeList({ localProjectsInfo: [{ ...PROJECT, isEditable: false }] });
+
+    await userEvent.setup().hover(screen.getByText('EDT'));
+
+    const tooltip = await screen.findByRole('tooltip');
+    expect(within(tooltip).queryByText('Editable Project')).not.toBeNull();
+    expect(within(tooltip).queryByText('en')).not.toBeNull();
+    expect(within(tooltip).queryByText(READ_ONLY)).not.toBeNull();
+  });
+
+  it('shows the exact time of the last sync in a tooltip on the Activity cell', async () => {
+    const lastSync = new Date('2026-08-16T14:30:00.000Z');
+    renderHomeList({
+      sharedProjectsInfo: {
+        [PROJECT_ID]: {
+          ...SHARED_PROJECTS[PROJECT_ID],
+          lastSendReceiveDate: lastSync.toISOString(),
+        },
+      },
+    });
+    const exactTime = new Intl.DateTimeFormat([], { dateStyle: 'long', timeStyle: 'short' }).format(
+      lastSync,
+    );
+    const relativeTime = screen
+      .getAllByRole('cell')
+      .find((cell) => /ago|last|yesterday/i.test(cell.textContent ?? ''));
+    if (!relativeTime) throw new Error('No Activity cell with a relative time was rendered');
+
+    await userEvent.setup().hover(within(relativeTime).getByText(/./));
+
+    const tooltip = await screen.findByRole('tooltip');
+    expect(within(tooltip).queryByText(enString('%resources_lastSynchronized%'))).not.toBeNull();
+    expect(within(tooltip).queryByText(exactTime)).not.toBeNull();
   });
 });
