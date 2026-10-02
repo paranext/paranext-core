@@ -31,14 +31,16 @@
  *   case a word in a different, untouched paragraph would pass even if this were broken.
  * - Once that pending edit settles, `setAnnotation` over the settled attribute's value (`['lemma']
  *   propertyOffset …`) and over a verse number (`['number'] propertyOffset …`) holds each
- *   annotation on those display bytes — never wrapping them in a mark — and leaves the document
- *   untouched.
+ *   annotation on those display bytes — never wrapping them in a mark, and painting exactly the
+ *   bytes held — and leaves the document untouched.
  * - A collapsed `selectRange` into the web view's own verse, sent the instant after another view
  *   moved the scroll group to a different verse, lands where it was asked to, stays there, and
  *   brings the scroll group back to its verse: the newer request wins over the older move the web
  *   view had not rendered yet.
  * - A position at the very end of the chapter's last text resolves to that text's own path and
  *   offset, not to the preceding verse's own `['number']` location.
+ * - Clicking an annotation held on only part of a verse number (`runAnnotationAction(…, 'clicked')`)
+ *   scrolls it into view, although the editor paints it with a highlight that no element carries.
  * - A collapsed `selectRange` at a verse text's own settled offset 0 reports that text's location,
  *   not the preceding verse number's `['number']` location: content wins over a verse glyph's own
  *   trailing separator.
@@ -66,7 +68,7 @@
  * by the C# backend into the empty root): `npm run test:e2e:isolated
  * tests/isolated/scripture-editor/standard-view-annotation-positions.spec.ts`.
  */
-import { FrameLocator } from '@playwright/test';
+import { FrameLocator, Locator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   chapterLocation,
@@ -121,6 +123,12 @@ const ANNOTATION_ID = 'settled-offset-probe';
 const PENDING_ANNOTATION_ID = 'pending-attribute-word-after';
 const ATTRIBUTE_ANNOTATION_ID = 'attribute-value-probe';
 const VERSE_ANNOTATION_ID = 'verse-number-probe';
+const CLICKED_ANNOTATION_ID = 'clicked-verse-number-probe';
+/**
+ * The command a clicked annotation runs. Nothing registers it: the web view scrolls to the
+ * annotation before it sends the command, so the send failing (and being logged) does not matter.
+ */
+const UNHANDLED_INTERACTION_COMMAND = 'e2eTest.unhandledAnnotationInteraction';
 
 /** The display separator the editor places between an opening marker glyph and its content. */
 const NBSP = '\u00a0';
@@ -196,6 +204,59 @@ const CONTROL_ANNOTATION_ID = 'different-node-word-probe';
 const MARKER_SETTLE_DELAY_SETTING_KEY = 'platformScriptureEditor.markerSettleDelayMs';
 /** The editor's own built-in idle delay — an unset setting behaves identically to this value. */
 const DEFAULT_MARKER_SETTLE_DELAY_MS = 1000;
+
+/** One piece of display text the editor paints with a CSS Custom Highlight. */
+interface HighlightedPiece {
+  /** The text the piece covers. */
+  text: string;
+  /** The whole text of the element the piece starts in. */
+  startElementText: string;
+  /** The number of the verse glyph the piece sits in, if it sits in one. */
+  verseNumber: string | undefined;
+}
+
+/**
+ * The names of the CSS Custom Highlights registered in the editor's frame.
+ *
+ * The editor paints the part of a display byte (an attribute value, a verse number) an annotation
+ * holds with a highlight rather than an element, so no element carries the annotation's class
+ * there. It registers one highlight per set of annotation class names, under names it does not
+ * publish, so a step takes the names before setting an annotation and reads the highlights added
+ * after.
+ */
+async function readHighlightNames(editorInput: Locator): Promise<string[]> {
+  return editorInput.evaluate(() => {
+    const names: string[] = [];
+    CSS.highlights.forEach((_, name) => names.push(name));
+    return names;
+  });
+}
+
+/** The pieces painted by every highlight in the editor's frame except those named in `except`. */
+async function readHighlightedPieces(
+  editorInput: Locator,
+  except: string[],
+): Promise<HighlightedPiece[]> {
+  return editorInput.evaluate((_, skippedNames) => {
+    const pieces: HighlightedPiece[] = [];
+    CSS.highlights.forEach((highlight, name) => {
+      if (skippedNames.includes(name)) return;
+      highlight.forEach((range) => {
+        if (!(range instanceof Range)) return;
+        const { startContainer } = range;
+        const start =
+          startContainer instanceof Element ? startContainer : startContainer.parentElement;
+        pieces.push({
+          text: range.toString(),
+          startElementText: start?.textContent ?? '',
+          verseNumber:
+            start?.closest('[data-marker="v"]')?.getAttribute('data-number') ?? undefined,
+        });
+      });
+    });
+    return pieces;
+  }, except);
+}
 
 test.use({
   interfaceMode: 'power',
@@ -472,6 +533,7 @@ test.describe('scripture editor settled positions', () => {
       if (textIndex === undefined) throw new Error('findVerseText returned an empty index chain');
       const wSpanPath = contentJsonPath([...verseFiveText.indexes.slice(0, -1), textIndex + 1]);
 
+      const highlightsBeforeAttribute = await readHighlightNames(editorInput);
       await sendToEditorController(editorId, 'setAnnotation', [
         {
           start: chapterPropertyLocation(SPAN_VERSE_REF, `${wSpanPath}['lemma']`, 0),
@@ -480,19 +542,21 @@ test.describe('scripture editor settled positions', () => {
         ANNOTATION_TYPE,
         ATTRIBUTE_ANNOTATION_ID,
       ]);
-      const attributeHolder = editorInput.locator(`.annotationId-${ATTRIBUTE_ANNOTATION_ID}`);
-      await expect(attributeHolder).toHaveCount(1, { timeout: 30_000 });
-      await expect(attributeHolder).toHaveClass(/(^|\s)display-annotation(\s|$)/);
-      // Held on the run itself, never a <mark> around (part of) it: the run stays whole.
-      await expect(editorInput.locator(`mark.annotationId-${ATTRIBUTE_ANNOTATION_ID}`)).toHaveCount(
-        0,
-      );
-      expect(await attributeHolder.textContent()).toBe(`|${SPAN_WORD}`);
+      // Exactly the value's bytes are painted, inside the `|grace` run: not its `|`.
+      await expect
+        .poll(() => readHighlightedPieces(editorInput, highlightsBeforeAttribute), {
+          timeout: 30_000,
+        })
+        .toEqual([{ text: SPAN_WORD, startElementText: `|${SPAN_WORD}`, verseNumber: undefined }]);
+      // Held on the run itself, never a <mark> around (part of) it, and never painted whole: the
+      // run stays whole.
+      await expect(editorInput.locator(`.annotationId-${ATTRIBUTE_ANNOTATION_ID}`)).toHaveCount(0);
       await expect(editorInput).toContainText(`${SPAN_WORD}|${SPAN_WORD}\\${WORD_MARKER}*`);
 
       const versePath = findVersePath(chapterUsj.content ?? [], String(TARGET_VERSE_REF.verseNum));
       if (!versePath)
         throw new Error(`No verse ${TARGET_VERSE_REF.verseNum} marker in the chapter USJ`);
+      const highlightsBeforeVerse = await readHighlightNames(editorInput);
       await sendToEditorController(editorId, 'setAnnotation', [
         {
           start: chapterPropertyLocation(TARGET_VERSE_REF, `${versePath}['number']`, 0),
@@ -501,13 +565,18 @@ test.describe('scripture editor settled positions', () => {
         ANNOTATION_TYPE,
         VERSE_ANNOTATION_ID,
       ]);
-      const verseHolder = editorInput.locator(`.annotationId-${VERSE_ANNOTATION_ID}`);
-      await expect(verseHolder).toHaveCount(1, { timeout: 30_000 });
-      await expect(verseHolder).toHaveClass(/(^|\s)display-annotation(\s|$)/);
-      // The verse glyph may render its separator as an NBSP; compare against a plain space so the
-      // assertion does not depend on which one the rendered text carries.
-      const verseHolderText = (await verseHolder.textContent())?.replaceAll(NBSP, ' ');
-      expect(verseHolderText?.startsWith('\\v 4')).toBe(true);
+      // Exactly the number's one byte is painted, inside verse 4's glyph: not its `\v` or its
+      // separator.
+      await expect
+        .poll(
+          async () =>
+            (await readHighlightedPieces(editorInput, highlightsBeforeVerse)).map(
+              ({ text, verseNumber }) => ({ text, verseNumber }),
+            ),
+          { timeout: 30_000 },
+        )
+        .toEqual([{ text: '4', verseNumber: '4' }]);
+      await expect(editorInput.locator(`.annotationId-${VERSE_ANNOTATION_ID}`)).toHaveCount(0);
     });
 
     await test.step("a selectRange to the web view's own verse lands even while the scroll group has just moved away", async () => {
@@ -595,6 +664,60 @@ test.describe('scripture editor settled positions', () => {
         await editorInput.press('Backspace');
         await pollLastVerseText(lastText);
       }
+    });
+
+    await test.step('a clicked annotation held on part of a verse number scrolls into view', async () => {
+      const freshChapter = await getChapterUsj(LAST_VERSE_REF);
+      const lastVersePath = findVersePath(freshChapter.content ?? [], '25');
+      if (!lastVersePath) throw new Error('No verse 25 marker in a fresh read of the chapter USJ');
+      // The first digit of `25` only: the editor paints it with a highlight, so no element carries
+      // the annotation's class and only its ranges say where it is.
+      const highlightsBefore = await readHighlightNames(editorInput);
+      await sendToEditorController(editorId, 'setAnnotation', [
+        {
+          start: chapterPropertyLocation(LAST_VERSE_REF, `${lastVersePath}['number']`, 0),
+          end: chapterPropertyLocation(LAST_VERSE_REF, `${lastVersePath}['number']`, 1),
+        },
+        ANNOTATION_TYPE,
+        CLICKED_ANNOTATION_ID,
+        UNHANDLED_INTERACTION_COMMAND,
+      ]);
+      await expect
+        .poll(
+          async () =>
+            (await readHighlightedPieces(editorInput, highlightsBefore)).map(
+              ({ text, verseNumber }) => ({ text, verseNumber }),
+            ),
+          { timeout: 30_000 },
+        )
+        .toEqual([{ text: '2', verseNumber: '25' }]);
+
+      // The previous step left the caret at the end of the chapter; scroll back to its top.
+      const lastVerseGlyph = editorInput
+        .locator(`span[data-marker="v"][data-number="${LAST_VERSE_REF.verseNum}"]`)
+        .first();
+      await editorInput.evaluate((root) => {
+        let element: Element | null = root;
+        while (element) {
+          const { overflowY } = getComputedStyle(element);
+          if (
+            (overflowY === 'auto' || overflowY === 'scroll') &&
+            element.scrollHeight > element.clientHeight
+          ) {
+            element.scrollTo({ top: 0, behavior: 'instant' });
+            return;
+          }
+          element = element.parentElement;
+        }
+      });
+      await expect(lastVerseGlyph).not.toBeInViewport({ timeout: 10_000 });
+
+      await sendToEditorController(editorId, 'runAnnotationAction', [
+        CLICKED_ANNOTATION_ID,
+        'clicked',
+      ]);
+
+      await expect(lastVerseGlyph).toBeInViewport({ timeout: 15_000 });
     });
 
     await test.step("a collapsed selectRange at a verse text's offset 0 reports that text", async () => {

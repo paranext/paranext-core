@@ -1575,7 +1575,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (domSelection && domSelection.rangeCount > 0) {
       const range = domSelection.getRangeAt(0).cloneRange();
       commentPopoverAnchor.setSource(
-        createPendingCommentAnchorSource(range, PENDING_COMMENT_ANNOTATION_ID, editorContainer),
+        createPendingCommentAnchorSource(
+          range,
+          () =>
+            editorRef.current?.getAnnotationRanges(
+              ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+              PENDING_COMMENT_ANNOTATION_ID,
+            ) ?? [],
+          editorContainer,
+        ),
       );
     } else {
       // Fallback to center of editor viewport
@@ -1869,7 +1877,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // If this is a click action, set the editor selection to the annotation's range so the
             // user sees it when the command runs.
             if (action === 'clicked') {
-              scrollToAnnotation(annotationId);
+              scrollToAnnotation(
+                () => editorRef.current?.getAnnotationRanges(annotationType, annotationId) ?? [],
+              );
               editorRef.current?.setSelection(annotationRange);
             }
 
