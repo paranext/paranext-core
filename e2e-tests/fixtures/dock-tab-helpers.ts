@@ -1,8 +1,4 @@
-/**
- * Helpers shared by the e2e specs that read rc-dock's tab bars and drag its tabs in a real window:
- * the drag-manager and drop-indicator selectors, the tab-bar reader, the tab and panel locators,
- * the drag start, and the "+" button's new tab.
- */
+/** Helpers shared by the e2e specs that read rc-dock's tab bars and drag its tabs in a real window. */
 import { type Locator, type Page, expect } from '@playwright/test';
 
 /** The global overlay rc-dock positions over whatever drop target the pointer is on. */
@@ -34,10 +30,12 @@ export async function tabIdsOf(page: Page, panelId: string): Promise<string[]> {
   return (await readBars(page)).find((bar) => bar.panelId === panelId)?.tabIds ?? [];
 }
 
+/** CSS selector for the dock panel with rc-dock id `panelId`, for use inside `page.evaluate`. */
 export function panelSelector(panelId: string): string {
   return `.dock-panel[data-dockid="${panelId}"]`;
 }
 
+/** The dock panel with rc-dock id `panelId`. */
 export function panelLocator(page: Page, panelId: string): Locator {
   return page.locator(panelSelector(panelId));
 }
