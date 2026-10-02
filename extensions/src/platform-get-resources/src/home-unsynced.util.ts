@@ -4,14 +4,20 @@ function isStringArray(value: unknown): value is string[] {
 
 /**
  * Collapse an unsynced-changes snapshot (`{ toSend, toReceive }`) into the single list of projects
- * Home marks: those with changes to send or to receive, upper-cased and listed once. A snapshot
- * missing either field, or carrying one that is not an array of strings, yields an empty list.
+ * Home marks: those with changes to send or to receive, upper-cased and listed once. Returns
+ * `undefined` for a snapshot missing either field or carrying one that is not an array of strings,
+ * so a caller can tell a malformed answer from an empty one.
  */
-export function toUnsyncedProjectIds(snapshot: unknown): readonly string[] {
-  if (typeof snapshot !== 'object' || snapshot === null) return [];
-  if (!('toSend' in snapshot) || !('toReceive' in snapshot)) return [];
+export function parseUnsyncedProjectIds(snapshot: unknown): readonly string[] | undefined {
+  if (!snapshot || typeof snapshot !== 'object') return undefined;
+  if (!('toSend' in snapshot) || !('toReceive' in snapshot)) return undefined;
   const { toSend, toReceive } = snapshot;
-  if (!isStringArray(toSend) || !isStringArray(toReceive)) return [];
+  if (!isStringArray(toSend) || !isStringArray(toReceive)) return undefined;
 
   return Array.from(new Set([...toSend, ...toReceive].map((id) => id.toUpperCase())));
+}
+
+/** Like {@link parseUnsyncedProjectIds}, with a malformed snapshot read as no projects. */
+export function toUnsyncedProjectIds(snapshot: unknown): readonly string[] {
+  return parseUnsyncedProjectIds(snapshot) ?? [];
 }
