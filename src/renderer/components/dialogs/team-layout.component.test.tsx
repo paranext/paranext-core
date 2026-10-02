@@ -205,13 +205,11 @@ describe('TeamLayoutDialogContent', () => {
     const SUMMARY = '%shareLayoutDialog_baseOrModelText_summary%';
     const MORE_INFO = '%webView_modelTextPanel_emptyState_moreInfo%';
     const LESS_INFO = '%webView_modelTextPanel_emptyState_lessInfo%';
-    const BODY_KEYS = [
-      '%webView_modelTextPanel_emptyState_baseOrModel_intro%',
-      '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%',
-      '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%',
-      '%webView_modelTextPanel_emptyState_baseOrModel_admin%',
-      '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%',
-    ];
+    // Every explanation key the dialog requests other than the toggle's own two labels.
+    const BODY_KEYS = BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS.filter(
+      (key) => key !== MORE_INFO && key !== LESS_INFO,
+    );
+    const key = (name: string) => `%webView_modelTextPanel_emptyState_baseOrModel_${name}%`;
 
     it('shows the one-line summary under the column label', () => {
       renderContent();
@@ -243,7 +241,7 @@ describe('TeamLayoutDialogContent', () => {
         'aria-expanded',
         'false',
       );
-      BODY_KEYS.forEach((key) => expect(screen.getByText(key)).not.toBeVisible());
+      BODY_KEYS.forEach((bodyKey) => expect(screen.getByText(bodyKey)).not.toBeVisible());
     });
 
     it('reveals every paragraph, with bold terms, when More info is clicked', () => {
@@ -256,19 +254,27 @@ describe('TeamLayoutDialogContent', () => {
       );
       // Every explanation key the dialog requests is rendered — a requested-but-unrendered key would
       // mean a paragraph of the panel's explanation silently missing here.
-      BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS.filter(
-        (key) => key !== MORE_INFO && key !== LESS_INFO,
-      ).forEach((key) => expect(screen.getByText(key)).toBeVisible());
-      [
-        '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',
-        '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%',
-        '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%',
-      ].forEach((key) => {
-        const term = screen.getByText(key);
-        expect(term.tagName).toBe('STRONG');
-        // Bold lead-in and what it introduces share one paragraph.
-        expect(term.parentElement?.tagName).toBe('P');
-      });
+      BODY_KEYS.forEach((bodyKey) => expect(screen.getByText(bodyKey)).toBeVisible());
+      ['baseTerm', 'modelTerm', 'copyrightTerm'].forEach((name) =>
+        expect(screen.getByText(key(name)).tagName).toBe('STRONG'),
+      );
+    });
+
+    // The same paragraphs, in the same order, with each term beside its own definition, as the
+    // Model Text panel's copy. Swapping two definitions here would otherwise pass every check above.
+    it('orders the paragraphs and pairs each term with its definition', () => {
+      renderContent();
+      const toggle = screen.getByRole('button', { name: MORE_INFO });
+      fireEvent.click(toggle);
+      const body = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
+
+      expect(Array.from(body?.querySelectorAll('p') ?? [], (p) => p.textContent)).toEqual([
+        key('intro'),
+        `${key('baseTerm')} ${key('baseDefinition')}`,
+        `${key('modelTerm')} ${key('modelDefinition')}`,
+        key('admin'),
+        `${key('copyrightTerm')} ${key('copyrightNote')}`,
+      ]);
     });
   });
 

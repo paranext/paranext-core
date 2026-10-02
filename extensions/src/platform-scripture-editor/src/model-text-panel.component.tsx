@@ -114,10 +114,10 @@ function BaseOrModelTextExplanation({
     </p>
   );
 
-  // Start-aligned, unlike the centered empty state around it, so the bold terms line up and the
-  // explanation reads the same as the Team layout dialog's.
+  // Start-aligned and normally wrapped, unlike the centered, balanced empty state around it, so the
+  // bold terms line up and the explanation reads the same as the Team layout dialog's.
   return (
-    <div className="tw:flex tw:flex-col tw:gap-2 tw:text-start">
+    <div className="tw:flex tw:flex-col tw:gap-2 tw:text-start tw:text-wrap">
       <p>{localize(localizedStrings, '%webView_modelTextPanel_emptyState_baseOrModel_intro%')}</p>
       {term(
         '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',

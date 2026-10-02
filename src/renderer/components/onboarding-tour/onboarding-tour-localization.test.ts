@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { STEP_LOCALIZE_KEYS } from './onboarding-tour.component';
 
 // Resolved from this file's location rather than `process.cwd()` so the test is not sensitive to
 // the directory `vitest` happens to be invoked from.
@@ -15,6 +16,18 @@ const spanish: { [key: string]: unknown } = readJson('es.json');
 const metadata: { [key: string]: { deprecationInfo?: { date: string; message: string } } } =
   readJson('metadata.json');
 
+// en and es are the two languages maintained in this repo, and nothing in the build enforces parity
+// between them, so every key a tour stop requests is checked in both. A missing or echoed value
+// would show as English (or a raw `%key%`) at that stop for Spanish users.
+describe.each(STEP_LOCALIZE_KEYS)('onboarding tour stop string %s', (key) => {
+  it('has distinct English and Spanish text', () => {
+    expect(english[key]).toEqual(expect.stringMatching(/\S/));
+    expect(spanish[key]).toEqual(expect.stringMatching(/\S/));
+    expect(english[key]).not.toBe(key);
+    expect(spanish[key]).not.toBe(english[key]);
+  });
+});
+
 // The tour's left-column stop names both Base and Model texts. The shipped stop keys name the model
 // text alone, a narrower meaning, so new keys carry the wording and the shipped ones are retired
 // with their values intact (Localization-Guide.md, "Existing Strings Are Immutable").
@@ -28,11 +41,9 @@ describe('onboarding tour Base/Model text stop', () => {
     '%onboardingTour_step_modelText_description%',
   ];
 
-  // en and es are the two languages maintained in this repo; nothing in the build enforces parity.
-  it.each(newKeys)('%s has English and Spanish text', (key) => {
-    expect(english[key]).toEqual(expect.stringMatching(/\S/));
-    expect(spanish[key]).toEqual(expect.stringMatching(/\S/));
-    expect(spanish[key]).not.toBe(english[key]);
+  it('requests the new keys at the left-column stop, not the retired ones', () => {
+    newKeys.forEach((key) => expect(STEP_LOCALIZE_KEYS).toContain(key));
+    retiredKeys.forEach((key) => expect(STEP_LOCALIZE_KEYS).not.toContain(key));
   });
 
   it('names both Base and Model in English', () => {

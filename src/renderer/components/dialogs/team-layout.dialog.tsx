@@ -21,8 +21,7 @@ import {
   TeamLayoutDialogContent,
   TeamLayoutDialogSkeleton,
   TeamLayoutResult,
-  TEAM_LAYOUT_DIALOG_STRING_KEYS,
-  BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
+  TEAM_LAYOUT_DIALOG_ALL_STRING_KEYS,
   isTeamLayoutActiveTab,
 } from '@renderer/components/dialogs/team-layout.component';
 import {
@@ -73,10 +72,7 @@ const NO_RESOURCES: DblResourceData[] = [];
 // `useLocalizedStrings`'s `localizationKeys` param must be a stable reference (see its JSDoc) —
 // spreading a frozen array into a new array literal on every render breaks that contract and
 // causes an infinite update loop. Hoist to module scope so the array identity never changes.
-const TEAM_LAYOUT_STRING_KEYS = [
-  ...TEAM_LAYOUT_DIALOG_STRING_KEYS,
-  ...BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
-];
+const TEAM_LAYOUT_STRING_KEYS = [...TEAM_LAYOUT_DIALOG_ALL_STRING_KEYS];
 const RESOURCE_PICKER_STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
 
 /**

@@ -33,7 +33,7 @@ import {
  */
 const PROFILE_TRIGGER_SELECTOR = '[data-testid="user-profile-popover-trigger"]';
 
-const STEP_LOCALIZE_KEYS: LocalizeKey[] = [
+export const STEP_LOCALIZE_KEYS: LocalizeKey[] = [
   '%onboardingTour_step_project_title%',
   '%onboardingTour_step_project_description%',
   '%onboardingTour_step_baseOrModelText_title%',

@@ -72,6 +72,16 @@ describe('PanelReadinessView', () => {
     expect(emptyState).not.toHaveClass('tw:justify-center');
   });
 
+  // An expanded explanation can be several paragraphs. Placed above the button, it would push the
+  // panel's only action below the fold the moment the user asks for more information.
+  it('places the pick action before the more-info disclosure', () => {
+    renderView('empty', { moreInfo: <p>Explanation.</p> });
+
+    const pick = screen.getByRole('button', { name: 'Pick Bible text…' });
+    const siblings = Array.from(pick.parentElement?.children ?? []);
+    expect(siblings.indexOf(pick)).toBeLessThan(siblings.indexOf(screen.getByText('Explanation.')));
+  });
+
   it('renders nothing when the panel has something to show', () => {
     const { container } = renderView('configured');
 

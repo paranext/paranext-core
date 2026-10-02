@@ -5,8 +5,7 @@ import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import {
-  BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
-  TEAM_LAYOUT_DIALOG_STRING_KEYS,
+  TEAM_LAYOUT_DIALOG_ALL_STRING_KEYS,
   TeamLayoutDialogContent,
   TeamLayoutDialogLocalizedStrings,
   TeamLayoutDialogSkeleton,
@@ -15,8 +14,7 @@ import {
 // Read from the shipped localization files (core and extensions) rather than restated here, so a
 // key the dialog adds can never show up in Storybook as a raw `%key%`.
 const TEAM_LAYOUT_STRINGS: TeamLayoutDialogLocalizedStrings = getLocalizedStrings([
-  ...TEAM_LAYOUT_DIALOG_STRING_KEYS,
-  ...BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
+  ...TEAM_LAYOUT_DIALOG_ALL_STRING_KEYS,
 ]);
 
 const RESOURCE_PICKER_STRINGS: ResourcePickerDialogLocalizedStrings = {
