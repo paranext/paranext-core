@@ -3004,8 +3004,9 @@ export async function openOrReloadWebView(
                   // as this handler returns, before the replacement document exists. When the
                   // renderer's React removes the iframe, this handler runs inside that commit, where
                   // an inline unmount would warn; the microtask is then most likely dropped with
-                  // this document's realm, so web-view.component.tsx's deferred unmount on close
-                  // remains what unmounts the root in that case.
+                  // this document's realm, so web-view.component.tsx unmounts the root instead: its
+                  // deferred unmount on close, or its iframe load handler when a tab move
+                  // re-inserts the iframe and a new document loads.
                   queueMicrotask(() => {
                     try {
                       root.unmount();
