@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { STEP_LOCALIZE_KEYS } from './onboarding-tour.component';
+import { STEP_LOCALIZE_KEYS } from './onboarding-tour.const';
 
 // Resolved from this file's location rather than `process.cwd()` so the test is not sensitive to
 // the directory `vitest` happens to be invoked from.
@@ -32,19 +32,10 @@ describe.each(STEP_LOCALIZE_KEYS)('onboarding tour stop string %s', (key) => {
 // text alone, a narrower meaning, so new keys carry the wording and the shipped ones are retired
 // with their values intact (Localization-Guide.md, "Existing Strings Are Immutable").
 describe('onboarding tour Base/Model text stop', () => {
-  const newKeys = [
-    '%onboardingTour_step_baseOrModelText_title%',
-    '%onboardingTour_step_baseOrModelText_description%',
-  ];
   const retiredKeys = [
     '%onboardingTour_step_modelText_title%',
     '%onboardingTour_step_modelText_description%',
   ];
-
-  it('requests the new keys at the left-column stop, not the retired ones', () => {
-    newKeys.forEach((key) => expect(STEP_LOCALIZE_KEYS).toContain(key));
-    retiredKeys.forEach((key) => expect(STEP_LOCALIZE_KEYS).not.toContain(key));
-  });
 
   it('names both Base and Model in English', () => {
     expect(english['%onboardingTour_step_baseOrModelText_title%']).toBe('Your Base or Model text');

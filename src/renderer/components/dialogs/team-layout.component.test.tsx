@@ -202,12 +202,13 @@ describe('TeamLayoutDialogContent', () => {
   // column does not tower over the other two.
   describe('Base or Model text explanation', () => {
     const LABEL = '%shareLayoutDialog_baseOrModelText_label%';
-    const SUMMARY = '%shareLayoutDialog_baseOrModelText_summary%';
+    const SUMMARY = '%webView_modelTextPanel_emptyState_baseOrModel_summary%';
     const MORE_INFO = '%webView_modelTextPanel_emptyState_moreInfo%';
     const LESS_INFO = '%webView_modelTextPanel_emptyState_lessInfo%';
-    // Every explanation key the dialog requests other than the toggle's own two labels.
+    // Every explanation key the dialog requests other than the always-visible summary and the
+    // toggle's own two labels.
     const BODY_KEYS = BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS.filter(
-      (key) => key !== MORE_INFO && key !== LESS_INFO,
+      (key) => key !== SUMMARY && key !== MORE_INFO && key !== LESS_INFO,
     );
     const key = (name: string) => `%webView_modelTextPanel_emptyState_baseOrModel_${name}%`;
 

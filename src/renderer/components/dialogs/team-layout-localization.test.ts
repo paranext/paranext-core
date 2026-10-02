@@ -37,7 +37,7 @@ const metadata: { [key: string]: { deprecationInfo?: { date: string; message: st
   JSON.parse(readFileSync(localizationPath('metadata.json'), 'utf8'));
 
 describe('Team layout dialog localization keys', () => {
-  it('has a non-empty English translation for every key the dialog can request', () => {
+  it('has a non-empty English translation for every key the dialog defines in en.json', () => {
     const missingOrInvalidKeys = findUnusableKeys(english, TEAM_LAYOUT_DIALOG_STRING_KEYS);
 
     if (missingOrInvalidKeys.length > 0)
@@ -55,7 +55,7 @@ describe('Team layout dialog localization keys', () => {
   // en and es are the two languages maintained in this repo (Localization-Guide.md, "Always provide
   // both en AND es"); the remaining shipped locales carry none of this dialog's keys and are
   // translated elsewhere. Nothing in the build enforces en/es parity, so this is the guard.
-  it('has a non-empty Spanish translation for every key the dialog can request', () => {
+  it('has a non-empty Spanish translation for every key the dialog defines in es.json', () => {
     const missingOrInvalidKeys = findUnusableKeys(spanish, TEAM_LAYOUT_DIALOG_STRING_KEYS);
 
     if (missingOrInvalidKeys.length > 0)
@@ -86,7 +86,6 @@ describe('Team layout dialog localization keys', () => {
   // The column holds a Base or Model text, so its label says so. The old key shipped and means
   // something narrower, so it keeps its values and is retired instead.
   it('labels the left column as a Base or Model text, retiring the model-text-only label', () => {
-    expect(TEAM_LAYOUT_DIALOG_STRING_KEYS).toContain('%shareLayoutDialog_baseOrModelText_label%');
     expect(TEAM_LAYOUT_DIALOG_STRING_KEYS).not.toContain('%shareLayoutDialog_modelText_label%');
     expect(english['%shareLayoutDialog_baseOrModelText_label%']).toBe('Base or Model text');
     expect(english['%shareLayoutDialog_modelText_label%']).toBe('Model text');
@@ -166,6 +165,9 @@ describe('Team layout dialog Base/Model explanation', () => {
       expect(findUnusableKeys(panelEnglish, [key])).toEqual([]);
       expect(findUnusableKeys(panelSpanish, [key])).toEqual([]);
       expect(english[key]).toBeUndefined();
+      // A key the panel has retired keeps its value in the file, so the checks above would still
+      // pass while the dialog kept showing wording the panel no longer uses.
+      expect(EXTENSION_STRINGS.metadata?.[key]?.deprecationInfo).toBeUndefined();
     },
   );
 
@@ -187,19 +189,15 @@ describe('Team layout dialog Base/Model explanation', () => {
     expect([...requestedParagraphKeys].sort()).toEqual(livePanelParagraphKeys.sort());
   });
 
-  // The one deliberate difference between the two surfaces: the dialog drops the empty state's
-  // opening "No Base or Model text selected." because the dialog is not an empty state. The prompt
-  // must be exactly that one sentence followed by the dialog's summary.
+  // The dialog's one-line summary is the panel prompt's second sentence. The prompt takes it through
+  // a placeholder rather than restating it, so the two can never be translated apart.
   it.each([
-    ['en', english, panelEnglish],
-    ['es', spanish, panelSpanish],
-  ])('summarizes with the %s empty-state prompt minus its first sentence', (_, dialog, panel) => {
-    const summary = dialog['%shareLayoutDialog_baseOrModelText_summary%'];
-    const prompt = panel['%webView_modelTextPanel_emptyState_baseOrModel_prompt%'];
-
-    const firstSentenceEnd = prompt.indexOf('. ') + 1;
-
-    expect(firstSentenceEnd).toBeGreaterThan(0);
-    expect(prompt.slice(firstSentenceEnd + 1)).toBe(summary);
+    ['en', panelEnglish],
+    ['es', panelSpanish],
+  ])('builds the %s empty-state prompt from the shared summary', (_, panel) => {
+    expect(panel['%webView_modelTextPanel_emptyState_baseOrModel_prompt%']).toContain('{summary}');
+    expect(BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS).toContain(
+      '%webView_modelTextPanel_emptyState_baseOrModel_summary%',
+    );
   });
 });

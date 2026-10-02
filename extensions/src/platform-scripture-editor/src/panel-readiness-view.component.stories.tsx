@@ -76,8 +76,9 @@ export const Empty: Story = { args: { readiness: 'empty' } };
 
 /**
  * The empty state with the optional `moreInfo` disclosure, as the Model Text and Bible Texts panels
- * pass it. The disclosure sits between the prompt and the pick button — the placement is the point
- * of this story, and it is not visible from the `Empty` story above.
+ * pass it. The disclosure sits below the pick button, so expanding it never pushes the panel's only
+ * action out of view — the placement is the point of this story, and it is not visible from the
+ * `Empty` story above.
  */
 export const EmptyWithMoreInfo: Story = {
   args: {

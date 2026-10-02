@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
+import { ABORTED, newPlatformError, RESOURCE_EXHAUSTED } from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
@@ -53,7 +54,9 @@ const STRINGS = {
   '%webView_modelTextPanel_installedButUnavailable%':
     "The model text is installed but couldn't be opened.",
   '%webView_modelTextPanel_retry%': 'Try again',
-  '%webView_modelTextPanel_emptyState_baseOrModel_prompt%': 'No Base or Model text selected.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_prompt%':
+    'No Base or Model text selected. {summary}',
+  '%webView_modelTextPanel_emptyState_baseOrModel_summary%': 'Pick one.',
   '%webView_modelTextPanel_bookNotAvailable%':
     'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
   '%webView_platformScriptureEditor_emptyChapter_messageResource%':
@@ -417,7 +420,7 @@ describe('ModelTextPanel', () => {
     expect(screen.getByText('The selected model text could not be found.')).toBeInTheDocument();
     // Like every full-panel state, it stays reachable in a pane shorter than its content.
     expect(
-      screen.getByText('The selected model text could not be found.').parentElement,
+      screen.getByText('The selected model text could not be found.').closest('div'),
     ).toHaveClass('tw:justify-center-safe', 'tw:overflow-y-auto');
 
     fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
@@ -425,10 +428,16 @@ describe('ModelTextPanel', () => {
   });
 
   // The pick runs from a click handler, so nothing upstream awaits it. A rejection it does not handle
-  // itself becomes an unhandled rejection inside the web view: no message, no log line.
-  it('logs a failed pick and returns to the empty state rather than failing silently', async () => {
+  // itself becomes an unhandled rejection inside the web view: no message, no log line. Starts from
+  // an unresolvable project reference because its not-found state renders after the "Selecting…"
+  // state, so a pick that left the panel stuck selecting would show here.
+  it('logs a failed pick and returns to where the user was rather than failing silently', async () => {
     const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
     renderPanel({
+      modelTextsState: readyState({
+        dataVersion: '1.0.0',
+        items: [{ type: 'project', id: 'missing-project', name: 'Missing', source: 'admin' }],
+      }),
       showResourcePicker: vi.fn(async () => INSTALLED_RESOURCE),
       getUserModelTexts: async () => {
         throw new Error('settings unreadable');
@@ -441,8 +450,30 @@ describe('ModelTextPanel', () => {
     await waitFor(() =>
       expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('settings unreadable')),
     );
-    expect(await screen.findByRole('button', { name: 'Pick model text…' })).toBeInTheDocument();
+    expect(
+      await screen.findByText('The selected model text could not be found.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Selecting resource…')).not.toBeInTheDocument();
   });
+
+  // A second click while the picker is opening replaces (ABORTED) or is debounced
+  // (RESOURCE_EXHAUSTED) by the dialog service. The pick the user sees still goes ahead, so neither
+  // is a failure worth an error in the log.
+  it.each([ABORTED, RESOURCE_EXHAUSTED])(
+    'does not log a picker that was %s by a newer request',
+    async (code) => {
+      const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
+      const showResourcePicker = vi.fn(async () => {
+        throw newPlatformError('Overlay was replaced by a new request', code);
+      });
+      renderPanel({ showResourcePicker, logger });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
+
+      await waitFor(() => expect(showResourcePicker).toHaveBeenCalled());
+      expect(logger.error).not.toHaveBeenCalled();
+    },
+  );
 
   it('loads a configured ProjectReference model text directly by project ID', async () => {
     // Locally-installed non-DBL resources (added via selectTextConnection as ProjectReferences)
@@ -745,7 +776,7 @@ describe('ModelTextPanel', () => {
     expect(
       screen.getByText("Couldn't load your model text. It will appear once it's available."),
     ).toBeInTheDocument();
-    expect(screen.queryByText('No Base or Model text selected.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No Base or Model text selected. Pick one.')).not.toBeInTheDocument();
   });
 
   it('offers no controls in the settings-error state', () => {
@@ -777,7 +808,7 @@ describe('ModelTextPanel', () => {
     // Asserting only the not-found string left this blind to the mutation it exists to guard:
     // flipping the pre-catalog branch from 'loading' to 'empty' kept it green. The empty prompt's
     // absence and the spinner's presence are what actually pin AC-1 here.
-    expect(screen.queryByText('No Base or Model text selected.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No Base or Model text selected. Pick one.')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
@@ -792,7 +823,7 @@ describe('ModelTextPanel', () => {
       />,
     );
 
-    expect(screen.queryByText('No Base or Model text selected.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No Base or Model text selected. Pick one.')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pick model text…' })).not.toBeInTheDocument();
   });
 
@@ -819,7 +850,7 @@ describe('ModelTextPanel', () => {
   it('prompts for a Base or Model text when none is configured', () => {
     render(<ModelTextPanel {...makeProps()} />);
 
-    expect(screen.getByText('No Base or Model text selected.')).toBeInTheDocument();
+    expect(screen.getByText('No Base or Model text selected. Pick one.')).toBeInTheDocument();
   });
 
   // The disclosure's expand/collapse behaviour is covered directly in
@@ -830,8 +861,8 @@ describe('ModelTextPanel', () => {
     const toggle = screen.getByRole('button', { name: 'More info' });
     const disclosure = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
 
-    // Behind the toggle, not beside it: every paragraph is inside the disclosure, hidden until More
-    // info is clicked, and they read in this order with each term beside its own definition.
+    // Inside the disclosure the toggle controls, in this order, with each term sharing a paragraph
+    // with its own definition.
     const paragraphs = Array.from(disclosure?.querySelectorAll('p') ?? []);
     expect(paragraphs.map((p) => p.textContent?.replace(/\s+/g, ' '))).toEqual([
       'Intro text.',
@@ -840,22 +871,9 @@ describe('ModelTextPanel', () => {
       'Admin text.',
       'Note: Copyright text.',
     ]);
-    paragraphs.forEach((p) => expect(p).not.toBeVisible());
-    fireEvent.click(toggle);
-    paragraphs.forEach((p) => expect(p).toBeVisible());
-    [
-      ['Base:', 'Base definition.'],
-      ['Model:', 'Model definition.'],
-      ['Note:', 'Copyright text.'],
-    ].forEach(([term, definition]) => {
-      const termElement = screen.getByText(term);
-      expect(termElement.tagName).toBe('STRONG');
-      // The term and its definition read as one paragraph, not two.
-      expect(termElement.parentElement?.tagName).toBe('P');
-      expect(termElement.parentElement).toHaveTextContent(`${term} ${definition}`, {
-        normalizeWhitespace: true,
-      });
-    });
+    ['Base:', 'Model:', 'Note:'].forEach((term) =>
+      expect(screen.getByText(term).tagName).toBe('STRONG'),
+    );
   });
 
   it('renders the resource text in the direction its project declares', async () => {

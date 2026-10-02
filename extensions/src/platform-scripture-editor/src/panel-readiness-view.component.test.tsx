@@ -82,8 +82,10 @@ describe('PanelReadinessView', () => {
     renderView('empty', { moreInfo: <p>Explanation.</p> });
 
     const pick = screen.getByRole('button', { name: 'Pick Bible text…' });
-    const siblings = Array.from(pick.parentElement?.children ?? []);
-    expect(siblings.indexOf(pick)).toBeLessThan(siblings.indexOf(screen.getByText('Explanation.')));
+    // Document order rather than sibling indices, so a wrapper around either one doesn't matter.
+    expect(pick.compareDocumentPosition(screen.getByText('Explanation.'))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 
   it('renders nothing when the panel has something to show', () => {

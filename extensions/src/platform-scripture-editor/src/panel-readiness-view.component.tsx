@@ -5,8 +5,9 @@ import {
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
+  RetryableErrorView,
 } from 'platform-bible-react';
-import { AlertTriangle, BookOpen, CloudOff } from 'lucide-react';
+import { BookOpen, CloudOff } from 'lucide-react';
 import { ReactNode } from 'react';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
 import {
@@ -77,16 +78,8 @@ export function PanelReadinessView({
   // An unreadable setting is its own answer — never the empty prompt, which would invite the user
   // to replace a resource that may already be configured.
   if (readiness === 'error') {
-    return (
-      <Empty className={PANEL_FILL_CLASSES} role="alert">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <AlertTriangle />
-          </EmptyMedia>
-          <EmptyDescription>{errorMessage}</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
+    // No `onRetry`: nothing here can re-drive the setting read, so the view shows its message alone.
+    return <RetryableErrorView className={PANEL_FILL_CLASSES} message={errorMessage} />;
   }
 
   // A failed catalog fetch, unlike an unreadable setting, can genuinely be re-driven — so this

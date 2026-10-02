@@ -64,6 +64,7 @@ import {
   advanceToLastStep,
   goBackTour,
   skipTour,
+  englishLabel,
 } from '../../fixtures/onboarding-tour.page';
 
 /** Title of the one stop whose anchor the toolbar renders in both interface modes. */
@@ -71,7 +72,7 @@ const PROFILE_STEP_TITLE = 'Profile';
 /** Titles (from `assets/localization/en.json`) of the stops that always resolve in this build. */
 const REQUIRED_STEP_TITLES = [
   'Your project',
-  'Your Base or Model text',
+  englishLabel('%onboardingTour_step_baseOrModelText_title%'),
   'Your resources and tools',
   PROFILE_STEP_TITLE,
 ];
