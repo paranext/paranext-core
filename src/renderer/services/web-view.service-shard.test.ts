@@ -1,4 +1,4 @@
-import vm from 'vm';
+import vm from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
 import { ProcessType } from '@shared/global-this.model';
 import { TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
@@ -3470,7 +3470,7 @@ describe('a layout load that drops a web view', () => {
 describe('React web view bootstrap teardown', () => {
   /**
    * Runs the generated React bootstrap script of `content` in a fresh context standing in for the
-   * iframe's window, with a fake `createRoot`, and answers the root it created plus a way to fire
+   * iframe's window, with a fake `createRoot`, and returns the root it created plus a way to fire
    * events on that window.
    */
   function runReactBootstrap(content: string) {
