@@ -60,7 +60,13 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
         // - Directory.GetFiles with AttributesToSkip = ReparsePoint (the one-flag way to stop link
         //   recursion) also skips FILES carrying ReparsePoint - which cloud-sync placeholders do
         //   (OneDrive Files On-Demand, Dropbox online-only) while GetDataStream reads them fine.
-        //   Caught by GetExistingDataStreamNames_FileThatIsASymbolicLink_IsListed.
+        //   Caught by GetExistingDataStreamNames_FileThatIsASymbolicLink_IsListed and, on Windows,
+        //   GetExistingDataStreamNames_CloudPlaceholderDirectory_IsDescendedInto.
+        // - Refusing to recurse into any directory carrying ReparsePoint (the obvious link test) also
+        //   refuses cloud-sync placeholder DIRECTORIES, which carry it here whatever the process's
+        //   placeholder mode - disguising hides it from DirectoryInfo.Attributes, not from this
+        //   enumeration - so in a OneDrive-synced project everything beneath one vanishes.
+        //   Caught by GetExistingDataStreamNames_CloudPlaceholderDirectory_IsDescendedInto.
         // - AttributesToSkip at its default (Hidden | System): .NET reports every dot-prefixed name
         //   as Hidden on Unix, so `.foo.json` and everything under `.cache/` vanish on macOS and
         //   Linux but not on Windows. Caught by GetExistingDataStreamNames_HiddenStreams_AreStillListed.
@@ -86,10 +92,12 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
             // yields directories too - it is not Directory.GetFiles.
             ShouldIncludePredicate = (ref FileSystemEntry entry) => !entry.IsDirectory,
             // Consulted only for directories: never descend into a symlink or junction. A FILE that
-            // is a link is still included above, because GetDataStream reads through it. The
-            // attribute alone is not the test: cloud-sync placeholder DIRECTORIES carry ReparsePoint
-            // too, and skipping them would hide everything beneath them. LinkTarget is non-null only
-            // for a real link, and the attribute check keeps that lookup off ordinary directories.
+            // is a link is still included above, because GetDataStream reads through it. LinkTarget
+            // is non-null only for a real link, not for a cloud placeholder (see above), and the
+            // attribute check keeps that lookup off ordinary directories. LinkTarget is also null
+            // when it cannot read a link's data at all, so such a link would be walked. Accepted
+            // rather than guarded: it opens the entry requesting no access rights, so that failure
+            // is all but impossible, and a guard would be a branch no test can reach.
             ShouldRecursePredicate = (ref FileSystemEntry entry) =>
                 (entry.Attributes & FileAttributes.ReparsePoint) == 0
                 || new DirectoryInfo(entry.ToFullPath()).LinkTarget == null,
