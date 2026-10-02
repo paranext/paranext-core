@@ -464,7 +464,7 @@
   "%navigationHistory_forward_tooltip%": "Avanzar una referencia",
   "%onboardingTour_button_done%": "Finalizar",
   "%onboardingTour_button_skip%": "Omitir recorrido",
-  "%onboardingTour_step_baseOrModelText_description%": "Esta columna muestra su texto base o modelo: la traducción de referencia desde la cual traduce. Normalmente lo elige su administrador para el equipo; consulte Más información en esta columna si necesita elegirlo usted mismo.",
+  "%onboardingTour_step_baseOrModelText_description%": "Esta columna muestra su texto base o modelo: la traducción de referencia desde la cual traduce. Normalmente lo elige su administrador para el equipo.",
   "%onboardingTour_step_baseOrModelText_title%": "Su texto base o modelo",
   "%onboardingTour_step_modelText_description%": "Este es su texto modelo: la referencia desde la cual traduce. Normalmente lo elige su administrador para el equipo; consulte Más información en esta columna si necesita elegirlo usted mismo.",
   "%onboardingTour_step_modelText_title%": "Su texto modelo",
