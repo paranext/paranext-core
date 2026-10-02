@@ -246,6 +246,16 @@ const FILTER_CHAR_REGEX = /^[a-z0-9+-]$/i;
 export function resolveFilterCharacter(event: MarkerPaletteKeyEvent): string | undefined {
   const { key, keyCode } = event;
 
+  // Nothing typed with Option held on macOS is marker input. Option is the compose/alternate
+  // modifier there: `Option+e` begins `é`, `Option+a` types `å`, `Option+c` types `ç`. None of
+  // those can name a marker, and — this is the part that bites — the PHYSICAL key underneath is
+  // still a plain letter, so both paths below would otherwise turn `Option+e` into a filtered `e`.
+  // Live-reported: `Option+e` then `e` filtered `ee` where it should filter `e`, the dead key
+  // contributing nothing. Off macOS this cannot be reached for a plain Alt chord (the chord branch
+  // closes the palette first) and must NOT apply to AltGr, which composes real marker characters
+  // on European layouts.
+  if (event.altKey && isMacOs()) return undefined;
+
   // What the user actually typed, when it can name a marker. Case comes along with it, which is
   // what custom markers need: `event.key` already folds Shift and CapsLock together, including
   // their cancelling each other out.

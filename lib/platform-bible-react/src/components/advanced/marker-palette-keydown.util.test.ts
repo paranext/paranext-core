@@ -1138,6 +1138,35 @@ describe('resolveFilterCharacter — the physical key, not the character the lay
     expect(resolveFilterCharacter(ev('z', { keyCode: 87 }))).toBe('z'); // QWERTZ `z`/`w` swap
   });
 
+  it('ignores anything typed with OPTION held on macOS — it is an alternate character', () => {
+    // Live-reported: with the palette open, `Option+e` then `e` filtered `ee` where it should
+    // filter `e`. Option is macOS's compose modifier — `Option+e` begins `é`, `Option+a` types
+    // `å` — so it never names a marker. Both resolution paths would otherwise produce a letter
+    // from it: the character path if the browser reports `e`, and the physical-key fallback if it
+    // reports the dead character `´`.
+    const { userAgent } = navigator;
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+      configurable: true,
+    });
+    try {
+      expect(resolveFilterCharacter(ev('e', { keyCode: 69, altKey: true }))).toBeUndefined();
+      expect(resolveFilterCharacter(ev('\u00b4', { keyCode: 69, altKey: true }))).toBeUndefined();
+      expect(resolveFilterCharacter(ev('Dead', { keyCode: 69, altKey: true }))).toBeUndefined();
+      expect(resolveFilterCharacter(ev('\u00e5', { keyCode: 65, altKey: true }))).toBeUndefined();
+      // The plain letter that FOLLOWS the dead key still filters — that is the whole point.
+      expect(resolveFilterCharacter(ev('e', { keyCode: 69 }))).toBe('e');
+    } finally {
+      Object.defineProperty(navigator, 'userAgent', { value: userAgent, configurable: true });
+    }
+  });
+
+  it('still accepts AltGr-composed characters off macOS', () => {
+    // AltGr reports `ctrlKey && altKey` on Windows and Linux and composes REAL marker characters
+    // on several European layouts, so the macOS rule above must not reach it.
+    expect(resolveFilterCharacter(ev('w', { keyCode: 87, ctrlKey: true, altKey: true }))).toBe('w');
+  });
+
   it('keeps `-` and `+` on layouts whose number row reports digit keyCodes', () => {
     // AZERTY keeps VK_0-VK_9 on the number row while producing `&é"'(-è_çà` unshifted, so its `-`
     // key reports keyCode 54. Reading that as a digit turned every milestone marker into `qt6`.
