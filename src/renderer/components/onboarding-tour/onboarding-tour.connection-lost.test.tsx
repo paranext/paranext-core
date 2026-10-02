@@ -96,7 +96,7 @@ describe('OnboardingTour with the real Tour overlay', () => {
     fireEvent.click(screen.getByRole('button', { name: NEXT_LABEL }));
     // The counter template is an un-substituted echoed key here, so the stop's own title is what
     // identifies which stop is showing.
-    expect(screen.getByText('%onboardingTour_step_modelText_title%')).toBeInTheDocument();
+    expect(screen.getByText('%onboardingTour_step_baseOrModelText_title%')).toBeInTheDocument();
 
     act(() => {
       reportConnectionLost();

@@ -23,12 +23,22 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_installFailedOffline%',
   '%webView_modelTextPanel_installedButUnavailable%',
   '%webView_modelTextPanel_retry%',
-  '%webView_modelTextPanel_emptyState_prompt%',
-  // The empty state's "More info" disclosure, which explains what a model text is and that the
-  // admin usually chooses it. Rendered through `PanelReadinessView`'s `moreInfo` slot.
+  '%webView_modelTextPanel_emptyState_baseOrModel_prompt%',
+  // The empty state's "More info" disclosure, which explains what Base and Model texts are, who
+  // chooses one, and that some copyright holders forbid the use. Rendered through
+  // `PanelReadinessView`'s `moreInfo` slot. The Team layout dialog requests these same keys (see
+  // `BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS`), so rewording one rewords it there too.
   '%webView_modelTextPanel_emptyState_moreInfo%',
   '%webView_modelTextPanel_emptyState_lessInfo%',
-  '%webView_modelTextPanel_emptyState_moreInfo_body%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_intro%',
+  // Each `...Term` is the bold lead-in to the definition or note that follows it.
+  '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_admin%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%',
   // Readiness states: the panel cannot read its setting, the DBL catalog failed, or either is still
   // in flight. See `getResourcePanelReadiness` and `PanelReadinessView`.
   '%webView_modelTextPanel_settingsUnavailable%',

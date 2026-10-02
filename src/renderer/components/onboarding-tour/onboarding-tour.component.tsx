@@ -36,8 +36,8 @@ const PROFILE_TRIGGER_SELECTOR = '[data-testid="user-profile-popover-trigger"]';
 const STEP_LOCALIZE_KEYS: LocalizeKey[] = [
   '%onboardingTour_step_project_title%',
   '%onboardingTour_step_project_description%',
-  '%onboardingTour_step_modelText_title%',
-  '%onboardingTour_step_modelText_description%',
+  '%onboardingTour_step_baseOrModelText_title%',
+  '%onboardingTour_step_baseOrModelText_description%',
   '%onboardingTour_step_resources_title%',
   '%onboardingTour_step_resources_description%',
   // The Send/Receive stop's heading reuses the toolbar's own label for the control it spotlights,
@@ -101,8 +101,8 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
       },
       {
         target: `[data-dockid="${SIMPLE_PANEL_ID_MODEL_TEXT}"]`,
-        title: strings['%onboardingTour_step_modelText_title%'] ?? '',
-        description: strings['%onboardingTour_step_modelText_description%'] ?? '',
+        title: strings['%onboardingTour_step_baseOrModelText_title%'] ?? '',
+        description: strings['%onboardingTour_step_baseOrModelText_description%'] ?? '',
         side: 'end',
         spotlightPadding: 1,
       },

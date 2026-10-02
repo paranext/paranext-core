@@ -88,6 +88,54 @@ export {
 const localize = (strings: ModelTextPanelLocalizedStrings, key: ModelTextPanelLocalizedStringKey) =>
   strings[key] ?? key;
 
+/**
+ * The empty state's "More info" body: what Base and Model texts are, who chooses one, and the
+ * copyright caveat. Each bold term shares a paragraph with what it introduces; the term carries its
+ * own punctuation so a translator controls it.
+ *
+ * The Team layout dialog (`team-layout.component.tsx`, `BaseOrModelTextInfo`) requests these same
+ * keys and restates this markup, so rewording a string changes both surfaces and a change to the
+ * paragraph structure must be made in both.
+ */
+function BaseOrModelTextExplanation({
+  localizedStrings,
+}: {
+  localizedStrings: ModelTextPanelLocalizedStrings;
+}) {
+  const term = (
+    termKey: ModelTextPanelLocalizedStringKey,
+    textKey: ModelTextPanelLocalizedStringKey,
+  ) => (
+    <p>
+      <strong className="tw:font-semibold tw:text-foreground">
+        {localize(localizedStrings, termKey)}
+      </strong>{' '}
+      {localize(localizedStrings, textKey)}
+    </p>
+  );
+
+  // Start-aligned, unlike the centered empty state around it, so the bold terms line up and the
+  // explanation reads the same as the Team layout dialog's.
+  return (
+    <div className="tw:flex tw:flex-col tw:gap-2 tw:text-start">
+      <p>{localize(localizedStrings, '%webView_modelTextPanel_emptyState_baseOrModel_intro%')}</p>
+      {term(
+        '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',
+        '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%',
+      )}
+      {term(
+        '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%',
+        '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%',
+      )}
+      <p>{localize(localizedStrings, '%webView_modelTextPanel_emptyState_baseOrModel_admin%')}</p>
+      {term(
+        '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%',
+        '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%',
+      )}
+    </div>
+  );
+}
+
 const DEFAULT_SCR_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
 
 export type ModelTextPanelProps = {
@@ -533,12 +581,15 @@ export function ModelTextPanel({
           '%webView_modelTextPanel_catalogUnavailable%',
         )}
         loadingLabel={localize(localizedStrings, '%webView_modelTextPanel_loading%')}
-        emptyPrompt={localize(localizedStrings, '%webView_modelTextPanel_emptyState_prompt%')}
+        emptyPrompt={localize(
+          localizedStrings,
+          '%webView_modelTextPanel_emptyState_baseOrModel_prompt%',
+        )}
         moreInfo={
           <ExpandableInfo
             moreLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_moreInfo%')}
             lessLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_lessInfo%')}
-            body={localize(localizedStrings, '%webView_modelTextPanel_emptyState_moreInfo_body%')}
+            body={<BaseOrModelTextExplanation localizedStrings={localizedStrings} />}
           />
         }
         pickLabel={localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}

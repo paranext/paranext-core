@@ -151,6 +151,15 @@
       "%webView_footnoteList_header%": "Footnotes",
       "%webView_modelTextPanel_bookNotAvailable%": "This book does not exist in this model text. Choose a different model text or go to a book it contains.",
       "%webView_modelTextPanel_catalogUnavailable%": "Couldn't load the list of available resources.",
+      "%webView_modelTextPanel_emptyState_baseOrModel_admin%": "If you are not the project admin you can choose a text to display as a Base or Model temporarily. When your admin makes a choice your selection will be replaced. If you will be the only person on this project, you will need to make a selection.",
+      "%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%": "A literal translation which expresses the wording of the Hebrew or Greek text (a word-for-word \"formal equivalent,\" like RSV).",
+      "%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%": "Base:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%": "Some copyright holders require that their texts are not used as a Base or Model text. These texts will display a clear warning.",
+      "%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%": "Note:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_intro%": "If you are not translating from the Hebrew and Greek, the Base and Model texts are the texts you are translating from:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%": "An idiomatic translation which expresses the meaning of the Hebrew or Greek text (a contextualized \"functional equivalent,\" like GNB).",
+      "%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%": "Model:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_prompt%": "No Base or Model text selected. Pick a text to display as a reference translation for your project.",
       "%webView_modelTextPanel_emptyState_lessInfo%": "Less info",
       "%webView_modelTextPanel_emptyState_moreInfo%": "More info",
       "%webView_modelTextPanel_emptyState_moreInfo_body%": "The model text is the text you are translating from (your reference/source). If you are not the project admin you can choose one, but your admin will usually choose it, and the admin's choice is what's displayed. If you will be the only person on this project, you'll need to choose it yourself.",
@@ -475,6 +484,15 @@
       "%webView_footnoteList_header%": "Notas al pie",
       "%webView_modelTextPanel_bookNotAvailable%": "Este libro no existe en este texto modelo. Elija otro texto modelo o vaya a un libro que este texto sí contenga.",
       "%webView_modelTextPanel_catalogUnavailable%": "No se pudo cargar la lista de recursos disponibles.",
+      "%webView_modelTextPanel_emptyState_baseOrModel_admin%": "Si no es el administrador del proyecto, puede elegir temporalmente un texto para mostrarlo como base o modelo. Cuando su administrador haga una elección, se reemplazará su selección. Si usted va a ser la única persona en este proyecto, deberá hacer una selección.",
+      "%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%": "Una traducción literal que expresa la redacción del texto hebreo o griego (una «equivalencia formal», palabra por palabra, como la RSV).",
+      "%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%": "Texto base:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%": "Algunos titulares de derechos de autor exigen que sus textos no se usen como texto base o modelo. Estos textos mostrarán una advertencia clara.",
+      "%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%": "Nota:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_intro%": "Si no traduce desde el hebreo y el griego, los textos base y modelo son los textos desde los cuales traduce:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%": "Una traducción idiomática que expresa el significado del texto hebreo o griego (una «equivalencia funcional» contextualizada, como la GNB).",
+      "%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%": "Texto modelo:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_prompt%": "Ningún texto base o modelo seleccionado. Elija un texto para mostrarlo como traducción de referencia para su proyecto.",
       "%webView_modelTextPanel_emptyState_lessInfo%": "Menos información",
       "%webView_modelTextPanel_emptyState_moreInfo%": "Más información",
       "%webView_modelTextPanel_emptyState_moreInfo_body%": "El texto modelo es el texto desde el cual usted traduce (su referencia o fuente). Si no es el administrador del proyecto, puede elegir uno, pero normalmente lo elegirá su administrador, y se muestra la elección del administrador. Si usted será la única persona en este proyecto, deberá elegirlo usted mismo.",
@@ -1164,6 +1182,18 @@
   "metadata": {
     "%webView_footnoteList_header%": {
       "fallbackKey": "%Paratext.ProjectMenu.ProjectPropertiesForm.showInFootnotes.HeaderText%"
+    },
+    "%webView_modelTextPanel_emptyState_moreInfo_body%": {
+      "deprecationInfo": {
+        "date": "2026-09-30",
+        "message": "The empty state now explains both Base and Model texts rather than the model text alone. The new key is %webView_modelTextPanel_emptyState_baseOrModel_intro% (with its _baseTerm, _baseDefinition, _modelTerm, _modelDefinition, _admin, _copyrightTerm and _copyrightNote siblings)."
+      }
+    },
+    "%webView_modelTextPanel_emptyState_prompt%": {
+      "deprecationInfo": {
+        "date": "2026-09-30",
+        "message": "The empty state now explains both Base and Model texts rather than the model text alone. The new key is %webView_modelTextPanel_emptyState_baseOrModel_prompt%."
+      }
     },
     "%webView_platformScriptureEditor_error_bookNotFoundProject%": {
       "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%"

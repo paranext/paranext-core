@@ -102,7 +102,9 @@ export function PanelReadinessView({
 
   if (readiness === 'empty') {
     return (
-      <Empty className="tw:h-screen">
+      // An expanded "More info" can be taller than the panel. Safe centering plus scrolling keeps
+      // the top reachable when it is — plain `center` would push it above the scrollable area.
+      <Empty className="tw:h-screen tw:justify-center-safe tw:overflow-y-auto">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <BookOpen />

@@ -3,52 +3,21 @@ import { Dialog } from 'platform-bible-react';
 import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react/experimental';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
+import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import {
+  BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
+  TEAM_LAYOUT_DIALOG_STRING_KEYS,
   TeamLayoutDialogContent,
   TeamLayoutDialogLocalizedStrings,
   TeamLayoutDialogSkeleton,
 } from './team-layout.component';
 
-const TEAM_LAYOUT_STRINGS: TeamLayoutDialogLocalizedStrings = {
-  '%shareLayoutDialog_teamLayout_title%': 'Team layout',
-  '%shareLayoutDialog_reviewAndSyncNotice%':
-    "Review what you're about to share with your team before confirming. Saving stores your changes now — they reach your team after you sync, and appear for them on their next sync.",
-  '%shareLayoutDialog_modelText_label%': 'Model text',
-  '%shareLayoutDialog_modelText_none%': 'None selected',
-  '%shareLayoutDialog_activeTab_label%': 'Default tab',
-  '%shareLayoutDialog_activeTab_sublabel%': 'For third column',
-  '%shareLayoutDialog_activeTab_none%': 'None selected',
-  '%shareLayoutDialog_activeTab_scriptureResource%': 'Bible texts',
-  '%shareLayoutDialog_activeTab_commentaryResource%': 'Commentaries',
-  '%shareLayoutDialog_activeTab_comments%': 'Comments',
-  '%shareLayoutDialog_activeTab_textCollection%': 'Text collection',
-  '%shareLayoutDialog_tab_scriptureResources%': 'Bible texts',
-  '%shareLayoutDialog_tab_commentaryResources%': 'Commentaries',
-  '%shareLayoutDialog_manageScriptureResources_label%': 'Manage',
-  '%shareLayoutDialog_manageCommentaryResources_label%': 'Manage',
-  '%shareLayoutDialog_textCollection_hint%':
-    'Text collection includes checked resources from all tabs ({count})',
-  '%shareLayoutDialog_teamLock_description%':
-    'Prevent team members from being able to change USFM structure including paragraphs, poetry, section headings, titles and introductions and more. Not typically recommended except when strictly following a model text or creating a revision.',
-  '%shareLayoutDialog_teamLock_label%': 'Lock USFM paragraph markers',
-  '%shareLayoutDialog_teamLock_loadError%':
-    "Can't read the current team lock setting, so it can't be changed here.",
-  '%shareLayoutDialog_resources_empty%':
-    'Add resources to choose which appear in the text collection.',
-  '%shareLayoutDialog_shownByDefault_label%': 'Show {resourceName} by default',
-  '%shareLayoutDialog_closePicker_label%': 'Close',
-  '%shareLayoutDialog_cancel_label%': 'Cancel',
-  '%shareLayoutDialog_saveFailed%':
-    "Couldn't save the team layout. Some settings may have been saved and others not. The values shown here are what you intended \u2014 try again to reapply them all.",
-  '%shareLayoutDialog_saveForTeam_label%': 'Save layout for team',
-  '%shareLayoutDialog_saving_label%': 'Saving\u2026',
-  '%shareLayoutDialog_hiddenResources_loadError%':
-    "{count} shared resources can't be shown because the list of available resources couldn't be loaded. They will be kept unchanged when you save.",
-  '%shareLayoutDialog_hiddenResources_unavailable%':
-    "{count} shared resources can't be shown because resource downloads aren't available on this installation. They will be kept unchanged when you save.",
-  '%shareLayoutDialog_retry%': 'Try again',
-  '%shareLayoutDialog_loading_label%': 'Loading team layout',
-};
+// Read from the shipped localization files (core and extensions) rather than restated here, so a
+// key the dialog adds can never show up in Storybook as a raw `%key%`.
+const TEAM_LAYOUT_STRINGS: TeamLayoutDialogLocalizedStrings = getLocalizedStrings([
+  ...TEAM_LAYOUT_DIALOG_STRING_KEYS,
+  ...BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
+]);
 
 const RESOURCE_PICKER_STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_title%': 'Resource picker',

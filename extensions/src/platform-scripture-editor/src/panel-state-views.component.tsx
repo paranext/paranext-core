@@ -72,12 +72,13 @@ export function PanelRetryableErrorView({
 /**
  * Toggle button + collapsible body for empty-state "More info / Less info" disclosures. Shared by
  * the Model Text and Resource (Bible Texts) panels, which render an identical block and differ only
- * in the localized labels and body text they resolve. Uses `Button variant="link"` rather than a
- * raw `<button>` so it stays on the component system.
+ * in the localized labels and body they pass. Uses `Button variant="link"` rather than a raw
+ * `<button>` so it stays on the component system.
  *
  * @param moreLabel Already-localized label shown when the body is collapsed (e.g. "More info").
  * @param lessLabel Already-localized label shown when the body is expanded (e.g. "Less info").
- * @param body Already-localized body text revealed when expanded.
+ * @param body Already-localized body revealed when expanded. May be several paragraphs, so the
+ *   wrapper is a `<div>`: a `<p>` cannot contain `<p>`s.
  */
 export function ExpandableInfo({
   moreLabel,
@@ -102,9 +103,9 @@ export function ExpandableInfo({
       >
         {isOpen ? lessLabel : moreLabel}
       </Button>
-      <p id={bodyId} hidden={!isOpen} className="tw:text-sm tw:text-muted-foreground tw:max-w-xs">
+      <div id={bodyId} hidden={!isOpen} className="tw:text-sm tw:text-muted-foreground tw:max-w-xs">
         {body}
-      </p>
+      </div>
     </>
   );
 }

@@ -61,6 +61,17 @@ describe('PanelReadinessView', () => {
     expect(onPick).toHaveBeenCalledTimes(1);
   });
 
+  // jsdom does no layout, so this pins the classes that do the work: an expanded "More info" can
+  // outgrow the panel, and plain `justify-center` would then push the prompt above the scrollable
+  // area where it cannot be reached.
+  it('keeps an over-tall empty state scrollable from its top', () => {
+    renderView('empty');
+    const emptyState = screen.getByText('No Bible text selected.').closest('[data-slot="empty"]');
+
+    expect(emptyState).toHaveClass('tw:justify-center-safe', 'tw:overflow-y-auto');
+    expect(emptyState).not.toHaveClass('tw:justify-center');
+  });
+
   it('renders nothing when the panel has something to show', () => {
     const { container } = renderView('configured');
 

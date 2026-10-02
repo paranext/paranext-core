@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { TEAM_LAYOUT_DIALOG_STRING_KEYS } from './team-layout.component';
+import {
+  BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
+  TEAM_LAYOUT_DIALOG_STRING_KEYS,
+} from './team-layout.component';
 
 // Resolved from this file's location rather than `process.cwd()` so the test is not sensitive to
 // the directory `vitest` happens to be invoked from.
@@ -28,6 +31,10 @@ function findUnusableKeys(strings: { [key: string]: unknown }, keys: readonly st
 
 const english = readStrings('en.json');
 const spanish = readStrings('es.json');
+// JSON.parse returns `any`, which assigns to the known shape of the metadata file without a type
+// assertion
+const metadata: { [key: string]: { deprecationInfo?: { date: string; message: string } } } =
+  JSON.parse(readFileSync(localizationPath('metadata.json'), 'utf8'));
 
 describe('Team layout dialog localization keys', () => {
   it('has a non-empty English translation for every key the dialog can request', () => {
@@ -76,6 +83,17 @@ describe('Team layout dialog localization keys', () => {
     );
   });
 
+  // The column holds a Base or Model text, so its label says so. The old key shipped and means
+  // something narrower, so it keeps its values and is retired instead.
+  it('labels the left column as a Base or Model text, retiring the model-text-only label', () => {
+    expect(TEAM_LAYOUT_DIALOG_STRING_KEYS).toContain('%shareLayoutDialog_baseOrModelText_label%');
+    expect(TEAM_LAYOUT_DIALOG_STRING_KEYS).not.toContain('%shareLayoutDialog_modelText_label%');
+    expect(english['%shareLayoutDialog_baseOrModelText_label%']).toBe('Base or Model text');
+    expect(english['%shareLayoutDialog_modelText_label%']).toBe('Model text');
+    expect(spanish['%shareLayoutDialog_modelText_label%']).toBe('Texto modelo');
+    expect(metadata['%shareLayoutDialog_modelText_label%']?.deprecationInfo).toBeDefined();
+  });
+
   // The resource tabs and the default-tab select happen to read alike, so one key could serve both
   // — until a translator rewords the select and silently reletters two tab headers with it.
   it('gives the resource tabs their own keys rather than the default-tab select keys', () => {
@@ -104,16 +122,18 @@ describe('Team layout dialog localization keys', () => {
  * `platform-scripture-editor` extension. `src/renderer` cannot import across the extension
  * boundary, so the file is parsed the same way `web-view.model.test.ts` parses its counterpart.
  */
-const EXTENSION_STRINGS: { localizedStrings: { [locale: string]: { [key: string]: string } } } =
-  JSON.parse(
-    readFileSync(
-      resolve(
-        __dirname,
-        '../../../../extensions/src/platform-scripture-editor/contributions/localizedStrings.json',
-      ),
-      'utf8',
+const EXTENSION_STRINGS: {
+  metadata?: { [key: string]: { deprecationInfo?: unknown } };
+  localizedStrings: { [locale: string]: { [key: string]: string } };
+} = JSON.parse(
+  readFileSync(
+    resolve(
+      __dirname,
+      '../../../../extensions/src/platform-scripture-editor/contributions/localizedStrings.json',
     ),
-  );
+    'utf8',
+  ),
+);
 
 describe('Team layout dialog tab labels', () => {
   // PT-4216 records this dialog's implicit coupling to the real tab titles, and PT-4550 changes
@@ -130,5 +150,56 @@ describe('Team layout dialog tab labels', () => {
   ])('keeps %s in step with the resource panel title it restates', (dialogKey, panelKey) => {
     expect(english[dialogKey]).toBe(EXTENSION_STRINGS.localizedStrings.en[panelKey]);
     expect(spanish[dialogKey]).toBe(EXTENSION_STRINGS.localizedStrings.es[panelKey]);
+  });
+});
+
+describe('Team layout dialog Base/Model explanation', () => {
+  const panelEnglish = EXTENSION_STRINGS.localizedStrings.en;
+  const panelSpanish = EXTENSION_STRINGS.localizedStrings.es;
+
+  // The dialog reads the Model Text panel's own explanation strings rather than copies of them, so
+  // users are never given two accounts of what a Base or Model text is. Those strings live in the
+  // extension, not in en.json — which is why the key list is checked against the extension's file.
+  it.each([...BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS])(
+    '%s is defined by the Model Text panel in English and Spanish',
+    (key) => {
+      expect(panelEnglish[key]).toEqual(expect.stringMatching(/\S/));
+      expect(panelSpanish[key]).toEqual(expect.stringMatching(/\S/));
+      expect(english[key]).toBeUndefined();
+    },
+  );
+
+  // A paragraph added to the panel's explanation must reach the dialog too, and a retired one must
+  // leave it. Everything under the panel's `_baseOrModel_` prefix is explanation except the empty
+  // state's own prompt; retired keys keep their values in the file but carry a deprecation notice.
+  it("requests exactly the live paragraphs of the panel's explanation", () => {
+    const livePanelParagraphKeys = Object.keys(panelEnglish).filter(
+      (key) =>
+        key.startsWith('%webView_modelTextPanel_emptyState_baseOrModel_') &&
+        key !== '%webView_modelTextPanel_emptyState_baseOrModel_prompt%' &&
+        !EXTENSION_STRINGS.metadata?.[key]?.deprecationInfo,
+    );
+    const requestedParagraphKeys = BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS.filter((key) =>
+      key.startsWith('%webView_modelTextPanel_emptyState_baseOrModel_'),
+    );
+
+    expect(livePanelParagraphKeys.length).toBeGreaterThan(0);
+    expect([...requestedParagraphKeys].sort()).toEqual(livePanelParagraphKeys.sort());
+  });
+
+  // The one deliberate difference between the two surfaces: the dialog drops the empty state's
+  // opening "No Base or Model text selected." because the dialog is not an empty state. The prompt
+  // must be exactly that one sentence followed by the dialog's summary.
+  it.each([
+    ['en', english, panelEnglish],
+    ['es', spanish, panelSpanish],
+  ])('summarizes with the %s empty-state prompt minus its first sentence', (_, dialog, panel) => {
+    const summary = dialog['%shareLayoutDialog_baseOrModelText_summary%'];
+    const prompt = panel['%webView_modelTextPanel_emptyState_baseOrModel_prompt%'];
+
+    const firstSentenceEnd = prompt.indexOf('. ') + 1;
+
+    expect(firstSentenceEnd).toBeGreaterThan(0);
+    expect(prompt.slice(firstSentenceEnd + 1)).toBe(summary);
   });
 });
