@@ -469,6 +469,22 @@ export function OverlayCommandPalettePresentational({
       // second set of rules — exactly what list mode exists to avoid — and a palette that renders
       // its own filter cannot be the one deciding which characters reach it.
       if (keyForwarding && (isListFocused || keyForwarding.keys.includes(e.key))) {
+        // A list-focused palette OWNS the keyboard while it is open, so nothing else in this
+        // document may also act on the key — even one the requester's table decides to ignore.
+        //
+        // This matters because of where the focus now is. While marker palettes were passive,
+        // focus stayed inside the requesting WebView's iframe and its keydowns never reached the
+        // renderer's document at all; the renderer's `document`-level shortcut bindings were
+        // therefore unreachable from an open palette. Focusing the list moved focus into THIS
+        // document, which put every one of those bindings back in the path: `PlatformMenubar`'s
+        // bare `alt` fires a SYNTHETIC Escape at a menu trigger (see its `useHotkeys` call), which
+        // dismissed the palette the moment a user reached for a dead key — Option is how `é` is
+        // typed on macOS — and `notification-display`'s Alt+T is the same shape.
+        //
+        // Stopping propagation here rather than fixing each binding keeps the rule in one place:
+        // the palette has focus, so the palette's table decides, and a binding that was never
+        // meant to compete with a focused surface does not get the chance to.
+        if (isListFocused) e.stopPropagation();
         keyForwarding.onKey({
           key: e.key,
           keyCode: e.keyCode,

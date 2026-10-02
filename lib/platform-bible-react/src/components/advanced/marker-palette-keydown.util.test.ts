@@ -667,6 +667,60 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     });
   });
 
+  it('treats OPTION as typing on macOS, not as a chord', () => {
+    // On macOS Option composes characters — `Option+e` begins `é`, `Option+n` begins `ñ` — so it
+    // holds the role AltGr holds on Windows and Linux. Reading it as a chord dismissed the palette
+    // the instant a Mac user reached for an accent: the dead key arrives with `altKey` set, so it
+    // never reached the rule that ignores keys which cannot name a marker. Live-reported.
+    const { userAgent } = navigator;
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+      configurable: true,
+    });
+    try {
+      (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+        const driver = makeDriver();
+        const event = makeEvent('Dead', { altKey: true });
+        expect({
+          kind,
+          outcome: handleMarkerPaletteSessionKeyDown(event, session(kind, 'q'), driver),
+        }).toEqual({ kind, outcome: 'continue' });
+        expect(driver.dismiss).not.toHaveBeenCalled();
+      });
+
+      // Cmd and Ctrl are still command modifiers on macOS, Option held alongside or not.
+      const cmdDriver = makeDriver();
+      expect(
+        handleMarkerPaletteSessionKeyDown(
+          makeEvent('c', { metaKey: true, altKey: true }),
+          session('enter', 'q'),
+          cmdDriver,
+        ),
+      ).toBe('ended');
+      expect(cmdDriver.dismiss).toHaveBeenCalledOnce();
+    } finally {
+      Object.defineProperty(navigator, 'userAgent', { value: userAgent, configurable: true });
+    }
+  });
+
+  it('keeps ALT as a chord modifier off macOS, where AltGr is the composing one', () => {
+    // Windows and Linux put composition on AltGr, which the chord branch excludes separately, so
+    // a plain Alt chord there really is a command gesture and still closes the palette.
+    const driver = makeDriver();
+    const event = makeEvent('e', { altKey: true });
+    expect(handleMarkerPaletteSessionKeyDown(event, session('enter', 'q'), driver)).toBe('ended');
+    expect(driver.dismiss).toHaveBeenCalledOnce();
+
+    // ...and AltGr typing (reported as ctrl+alt) is still not a chord.
+    const altGrDriver = makeDriver();
+    const altGr = makeEvent('w', { ctrlKey: true, altKey: true });
+    altGr.getModifierState = (k: string) => k === 'AltGraph';
+    expect(handleMarkerPaletteSessionKeyDown(altGr, session('enter', ''), altGrDriver)).toBe(
+      'continue',
+    );
+    expect(altGrDriver.dismiss).not.toHaveBeenCalled();
+  });
+
   it('SHIFT+Enter and Shift+Tab commit the highlighted item, like the unmodified keys', () => {
     // Shift is how an uppercase custom marker is typed, not a separate gesture, and a soft line
     // break has no USFM representation — it would serialize as a plain space, the same unmarked

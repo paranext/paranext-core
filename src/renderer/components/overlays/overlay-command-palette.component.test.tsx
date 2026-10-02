@@ -487,6 +487,53 @@ describe('OverlayCommandPalettePresentational', () => {
       ]);
     });
 
+    it('stops forwarded keys reaching this document\u2019s other shortcut bindings', () => {
+      // Regression: while marker palettes were passive, focus stayed in the requesting WebView\u2019s
+      // iframe and its keydowns never reached the renderer document, so the renderer\u2019s
+      // `document`-level shortcut bindings could not see them. Focusing the list moved focus into
+      // this document and put those bindings back in the path \u2014 `PlatformMenubar` binds bare
+      // `alt` and answers it by dispatching a SYNTHETIC Escape at a menu trigger, which closed the
+      // palette the instant a user reached for a dead key (Option is how `\u00e9` is typed on macOS).
+      const documentListener = vi.fn();
+      document.addEventListener('keydown', documentListener);
+      const onKey = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          keyForwarding={{ keys: [], onKey }}
+        />,
+      );
+
+      // A key the session IGNORES is still the palette's to own \u2014 that is the case that bit us.
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Alt', altKey: true });
+
+      expect(onKey).toHaveBeenCalledTimes(1);
+      expect(documentListener).not.toHaveBeenCalled();
+      document.removeEventListener('keydown', documentListener);
+    });
+
+    it('leaves the DEFAULT palette\u2019s keys reaching the document, as before', () => {
+      // Only list mode claims the keyboard this way; an ordinary focused palette keeps today's
+      // behaviour so other PAPI consumers are unaffected.
+      const documentListener = vi.fn();
+      document.addEventListener('keydown', documentListener);
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Alt', altKey: true });
+
+      expect(documentListener).toHaveBeenCalled();
+      document.removeEventListener('keydown', documentListener);
+    });
+
     it('hands Escape to the session too, instead of dismissing locally', () => {
       // Dismissal is the session's call: it has a caret to restore and a pending state to clear.
       const onKey = vi.fn();

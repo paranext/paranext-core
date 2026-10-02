@@ -68,6 +68,7 @@
  */
 
 import { MODIFIER_KEYS } from 'platform-bible-utils';
+import { isMacOs } from '@/utils/platform.util';
 import type { ForwardedPaletteKeyEvent, PaletteDriver } from 'platform-bible-utils/experimental';
 import type { MutableRefObject } from 'react';
 import {
@@ -354,7 +355,19 @@ export function handleMarkerPaletteSessionKeyDown(
     return 'passed';
   }
 
-  if ((event.ctrlKey || event.metaKey || event.altKey) && !event.getModifierState?.('AltGraph')) {
+  // Which modifiers make a CHORD is a platform question, not a fixed list. Ctrl and Cmd are
+  // command modifiers everywhere. Alt is not: on macOS, Option is how characters are COMPOSED —
+  // `Option+e` begins `é`, `Option+n` begins `ñ`, `Option+a` types `å` outright — so it holds the
+  // role AltGr holds on Windows and Linux, which the AltGraph exclusion below already covers.
+  // Reading Option as a chord dismissed the palette the instant a Mac user reached for an accent:
+  // the dead key arrives with `altKey` set, so it never got as far as the rule that ignores keys
+  // which cannot name a marker. Ctrl+Option and Cmd+Option are still chords — their command
+  // modifier is what decides.
+  const isAltAChordModifier = !isMacOs();
+  if (
+    (event.ctrlKey || event.metaKey || (event.altKey && isAltAChordModifier)) &&
+    !event.getModifierState?.('AltGraph')
+  ) {
     // A real chord (Ctrl+C, Cmd+V, …): never ingest it into the filter, and normally never claim
     // it — let it do its normal job. The palette is no longer relevant to what happens next. AltGr
     // is the exception: on Windows/Linux a character typed WITH AltGr held reports `ctrlKey &&
