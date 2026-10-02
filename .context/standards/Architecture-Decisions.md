@@ -7940,7 +7940,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 ## adr-unsynced-changes-signal-is-backend-read: "Unsynced changes" is read from the project's local Mercurial state in the backend and pushed as a snapshot
 
-- **Date:** 2026-10-01
+- **Date:** 2026-10-01 (⬆️ half); 2026-10-02 (⬇️ half)
 - **Status:** Accepted
 - **Context:** PT-4694. `adr-toolbar-sync-status-is-local` deferred the toolbar's "Unsynced changes"
   state because nothing Send/Receive emits says that a project holds local work that was never sent.
@@ -7950,7 +7950,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   halves: uncommitted changes (`HasUncommittedChanges`, an `hg status`) and changes already committed
   locally but never sent (the editor commits daily on project open and Find/Replace commits on
   demand), visible as a tip id that differs from the last-synced tip id kept in the Send/Receive
-  memento. Uncommitted-only detection would go dark after the first local commit.
+  memento. Uncommitted-only detection would go dark after the first local commit. Product and UX
+  want a three-state indicator: ⬆️ local changes not yet sent, ⬇️ the server holds changes this
+  installation has not received, and ↕️ both. Paratext 9 answers ⬇️ with a periodic batched server
+  lookup that compares each project's server tip id with the tip id recorded at the last successful
+  sync.
 - **Decision:** The backend owns the answer. A write-gate exit
   (`SendReceiveWriteLock.WriteScopeExited`) triggers a debounced local Mercurial check for that
   project, and the end of a sync rechecks every tracked project; checks are deferred while a sync is
@@ -7961,10 +7965,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   seed command `getUnsyncedChanges`), the same pattern as sync activity. The renderer's
   `useSyncStatus` gains `'unsynced'` with the precedence syncing, then failed, then unsynced, then
   synced, then idle or unknown: a failed last sync already implies unsent work and is the more
-  actionable fact. Home's dot and Sync button read the same event. The signal is strictly "local
-  changes not yet sent"; "the server has changes waiting to be received" is out of scope because it
-  needs server polling. Detection errors (no Mercurial, broken repository) log once per project and
-  report "not unsynced" rather than guess.
+  actionable fact. Home's dot and Sync button read the same event. The tracker's signal is strictly
+  "local changes not yet sent". Detection errors (no Mercurial, broken repository) log once per
+  project and report "not unsynced" rather than guess.
+
+  The ⬇️ half is a separate `RemoteChangesPoller` beside the tracker, not folded into it. It makes
+  one batched server-tip lookup covering all local shared projects, first about 10 seconds after the
+  startup baseline scan, then every 5 minutes, plus once after each sync end. A tick is skipped, not
+  deferred, while a sync is active, while internet use is disabled, or while a poll is already in
+  flight; the sync-end poll covers the skipped tick. A sync that ends during a lookup discards that
+  lookup's result and triggers one follow-up poll, because the result may predate the sync. A failed
+  lookup keeps the previous ⬇️ set and warns once until the next success. A project is ⬇️ when both
+  its server tip id and its last-synced tip id are known and differ. The notifier merges both
+  sources into one `{ toSend, toReceive }` snapshot on the same event and command, and a project in
+  both sets is ↕️. The server-tip lookup is a patch-filled seam (`GetServerTipIds`), so public
+  Platform.Bible never reports ⬇️; only Paratext 10 Studio does. The cadence is not
+  user-configurable.
 - **Alternatives:** **An in-memory dirty flag set on writes and cleared on sync** — rejected: it is
   wrong after a restart, when the unsent edits are still on disk, and it reports false positives for
   writes that change nothing (a no-op `PutText`, a settings save of an equal value). The Mercurial
@@ -7972,7 +7988,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   poll is a server round trip, the call is serialized against syncs so it stalls exactly when the
   answer is most interesting, and its edited status measures "modified by anyone against the server
   tip", not "modified here since the last sync". **Uncommitted-only detection** — rejected: it goes
-  dark after a local commit that was never sent.
+  dark after a local commit that was never sent. **Extending the tracker to poll the server too** —
+  rejected: it would mix a local-truth signal with a network-truth signal that has a different
+  cadence, different failure modes, and different gating (a sync defers the local check but only
+  skips the server tick; a network failure must keep the previous answer while a local failure
+  reports "not unsynced"). **Querying the server on every write-gate exit or on demand** — rejected:
+  it costs one network round trip per edit burst, and Paratext 9 parity is the fixed cadence.
+  **A server push** — not available: no such channel exists.
 - **Consequences:** One `hg status` runs per debounced write burst per project, and one per project
   during the startup baseline scan, which is why the scan runs after the startup barrier rather than
   on it. The last-synced tip id is owned by the Paratext 10 Studio patch: public core declares
@@ -7986,6 +8008,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   because as of 2026-10-01 the Paratext 10 patch raises no sync activity signal; once it does, a
   sync can trigger the recheck twice, and the tracker's per-project claim coalesces the second pass
   into at most one extra check per project.
+
+  The poller adds one server request per 5 minutes per installation plus one per sync, and ⬇️ can
+  lag the server by up to the poll interval. ⬇️ cannot distinguish "the server has newer changes"
+  from "this project was never received here". Public core carries an always-empty `toReceive`, and
+  the Studio patch must keep the exact `GetServerTipIds` signature so the seam keeps binding.
 - **Source:** PT-4694; the follow-up of `adr-toolbar-sync-status-is-local`.
 
 ## adr-usersnap-lives-in-product-patch: Usersnap keys and Help items live in the product's repo patch; core ships empty constants
