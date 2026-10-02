@@ -462,10 +462,8 @@ export function WebView({
   /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */
   const shouldUseSrc = contentType === WEB_VIEW_CONTENT_TYPE.URL;
 
-  // Clean up iframe content on unmount to prevent memory leaks
-  // When React removes the WebView component from the DOM, the iframe's srcDoc
-  // content can remain in memory. This effect ensures that we explicitly clear
-  // the content when the component unmounts to prevent memory leaks.
+  // Forget this pane's content zoom on unmount, and warn if the iframe reference was lost. The
+  // React roots are unmounted by the layout-effect cleanup below.
   useEffect(() => {
     // Capture the current iframe reference to use in cleanup
     const currentIframe = iframeRef.current;
