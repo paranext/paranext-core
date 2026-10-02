@@ -10,6 +10,19 @@ import type {
  */
 export const PROJECT_INTERFACE_PLATFORM_BASE = 'platform.base';
 
+/**
+ * The name of the `projectInterface` a Project Data Provider serves when it can list the
+ * `dataQualifier`s an extension has data for in a project (`listExtensionDataQualifiers`).
+ *
+ * This is its own `projectInterface`, not a member of `platform.base`: not every PDP can enumerate
+ * its extension data (one over a remote store may not be able to), and a PDP method is never
+ * optional (`adr-pdp-methods-are-never-optional`). A PDP that can enumerate advertises this
+ * interface and one that cannot leaves it off, so a consumer learns which it is from the project's
+ * metadata `projectInterfaces` instead of by calling and failing.
+ */
+export const PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION =
+  'platform.extensionDataEnumeration';
+
 /** Indicates to a PDP what extension data is being referenced */
 export type ExtensionDataScope = {
   /** Name of an extension as provided in its manifest */
@@ -27,6 +40,12 @@ export type ExtensionDataScope = {
    */
   dataQualifier: string;
 };
+
+/**
+ * Indicates to a PDP whose `dataQualifier`s to list: the extension named, and nothing narrower. The
+ * whole list comes back; filter it at the call site.
+ */
+export type ExtensionDataListScope = Pick<ExtensionDataScope, 'extensionName'>;
 
 /**
  * `DataProviderDataTypes` that each project data provider **must** implement. They are assumed to
@@ -129,4 +148,37 @@ export type WithProjectDataProviderEngineExtensionDataMethods<
     dataScope: ExtensionDataScope,
     data: string,
   ): Promise<DataProviderUpdateInstructions<TProjectDataTypes>>;
+};
+
+/**
+ * `DataProviderDataTypes` for the `platform.extensionDataEnumeration` `projectInterface`. There are
+ * none: the interface is one method with no paired setter and nothing to subscribe to, so it
+ * contributes no `get*`/`set*`/`subscribe*` trio.
+ */
+export type ExtensionDataEnumerationProjectDataTypes = {};
+
+/**
+ * The method a Project Data Provider Engine provides to serve the
+ * `platform.extensionDataEnumeration` `projectInterface`
+ * ({@link PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION}). It is the interface's whole
+ * surface; an engine that claims the interface must implement it.
+ */
+export type WithProjectDataProviderEngineExtensionDataEnumerationMethods = {
+  /**
+   * Lists the `dataQualifier`s an extension has data for in this project.
+   *
+   * Every returned string is a valid `dataQualifier` for `getExtensionData` under the same
+   * `extensionName`, exactly as it would be passed: forward slashes, relative to the extension's
+   * own data, nested paths included. The list is sorted and includes empty documents.
+   *
+   * Listing never creates anything, so an extension that has never written any data gets `[]`.
+   *
+   * Only a PDP that advertises `platform.extensionDataEnumeration` has this method. A consumer
+   * learns that from the project's metadata `projectInterfaces` before asking for the PDP; see
+   * `IExtensionDataEnumerationProjectDataProvider` in `papi-shared-types`.
+   *
+   * @param scope Which extension's `dataQualifier`s to list
+   * @returns Sorted `dataQualifier`s that exist for that extension in this project
+   */
+  listExtensionDataQualifiers(scope: ExtensionDataListScope): Promise<string[]>;
 };

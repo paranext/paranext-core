@@ -115,6 +115,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         var retVal = base.GetFunctions();
 
+        // Serves ProjectInterfaces.EXTENSION_DATA_ENUMERATION, which every Paratext project
+        // advertises, published or not. The base class registers only the platform.base methods.
+        retVal.Add(("listExtensionDataQualifiers", ListExtensionDataQualifiers));
+
         retVal.Add(("getBookUSFM", GetBookUsfm));
         retVal.Add(("setBookUSFM", SetBookUsfm));
         retVal.Add(("getChapterUSFM", GetChapterUsfm));
@@ -411,16 +415,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public override object? GetExtensionData(ProjectDataScope scope)
     {
-        if (string.IsNullOrEmpty(scope.ExtensionName))
+        if (string.IsNullOrWhiteSpace(scope.ExtensionName))
             throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
             throw new InvalidDataException("Must provide a data qualifier");
 
-        scope.ProjectID = ProjectDetails.Metadata.Id;
+        // A read must not create the document it looked for: a file under shared/** is committed by
+        // Send/Receive to every clone, and there is no delete API to take it back. An absent
+        // document reads as "" - the same answer as an empty one - because that is the contract
+        // callers were written against; distinguishing the two (the TS type permits undefined) is a
+        // separate contract change.
+        Stream? dataStream = GetExtensionStream(scope, createIfNotExists: false);
+        if (dataStream == null)
+            return "";
 
-        Stream? dataStream =
-            GetExtensionStream(scope, true)
-            ?? throw new InvalidDataException("Extension data not found");
         using (dataStream)
         {
             return new StreamReader(dataStream, Encoding.UTF8).ReadToEnd();
@@ -430,24 +438,29 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public override bool SetExtensionData(ProjectDataScope scope, string data)
     {
         using var _ = EnterSyncWriteScope();
-        if (string.IsNullOrEmpty(scope.ExtensionName))
+        if (string.IsNullOrWhiteSpace(scope.ExtensionName))
             throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
             throw new InvalidDataException("Must provide a data qualifier");
 
-        scope.ProjectID = ProjectDetails.Metadata.Id;
-
-        Stream? dataStream =
-            GetExtensionStream(scope, true)
-            ?? throw new InvalidDataException("Unable to create extension data");
-
         ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        // Refused before the lock is taken: a resource's extension data is what it was published
+        // with (see ResourceProjectStreamManager)
+        if (scrText.IsResourceProject)
+            throw new InvalidOperationException(
+                "Cannot write extension data to resource projects."
+            );
         RunWithinLock(
             WriteScope.EntireProject(scrText),
             writeLock =>
             {
                 if (!writeLock.Active)
                     throw new InvalidOperationException("Write lock is not active");
+                // Opened only once the lock is held: opening creates the document, and one created
+                // for a write that then cannot proceed is an empty file Send/Receive would commit
+                using Stream dataStream =
+                    GetExtensionStream(scope, createIfNotExists: true)
+                    ?? throw new InvalidDataException("Unable to create extension data");
                 dataStream.SetLength(0);
                 using TextWriter textWriter = new StreamWriter(dataStream, Encoding.UTF8);
                 textWriter.Write(data);
@@ -458,21 +471,127 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
+    /// <summary>
+    /// List the DataQualifiers that exist for the extension identified by
+    /// <paramref name="scope"/>. This is the one method of
+    /// <see cref="ProjectInterfaces.EXTENSION_DATA_ENUMERATION"/>, which every Paratext project
+    /// advertises.
+    ///
+    /// Listing creates nothing, so an extension that has never written any data gets an empty
+    /// array.
+    /// </summary>
+    /// <remarks>
+    /// Takes no sync write scope and no project write lock: this is a read, like
+    /// <see cref="GetExtensionData"/>.
+    /// </remarks>
+    /// <param name="scope">Whose data to list: ExtensionName selects the extension.</param>
+    /// <returns>
+    /// Every DataQualifier that exists for that extension, sorted with
+    /// <see cref="StringComparer.Ordinal"/>. Each is a valid DataQualifier for
+    /// <see cref="GetExtensionData"/> under the same ExtensionName, exactly as it would be passed:
+    /// forward slashes, relative to the extension's own data, nested paths included. Empty
+    /// documents are included; an extension with no data at all gets an empty array.
+    /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// The scope has no extension name, or one that would root the listing at the shared extensions
+    /// directory or above it. See <see cref="EnsureExtensionNameStaysInItsOwnDirectory"/>.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// The ExtensionName composes into a stream path the project's
+    /// <see cref="IProjectStreamManager"/> refuses — a name containing ".." anywhere, even without a
+    /// separator ("a..b"), is rejected before the filesystem is touched — exactly as
+    /// <see cref="GetExtensionData"/> and <see cref="SetExtensionData"/> reject the same name.
+    /// </exception>
+    public string[] ListExtensionDataQualifiers(ProjectDataScope scope)
+    {
+        if (string.IsNullOrWhiteSpace(scope.ExtensionName))
+            throw new InvalidDataException("Must provide an extension name");
+        EnsureExtensionNameStaysInItsOwnDirectory(scope.ExtensionName);
+
+        // Scoped to the named extension's directory so the listing is confined to that extension's
+        // data and a project's thousands of other files are never walked
+        return CreateExtensionStreamManager()
+            .GetExistingDataStreamNames(GetExtensionDataRoot(scope));
+    }
+
     private Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
     {
-        ProjectDetails projectDetails = _paratextProjects.GetProjectDetails(scope.ProjectID!);
-
-        IProjectStreamManager extensionStreamManager = CreateStreamManager(projectDetails);
-        return extensionStreamManager.GetDataStream(
-            $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{scope.ExtensionName}/{scope.DataQualifier}",
-            createIfNotExists
-        );
+        return CreateExtensionStreamManager()
+            .GetDataStream(
+                $"{GetExtensionDataRoot(scope)}/{scope.DataQualifier}",
+                createIfNotExists
+            );
     }
 
-    protected virtual IProjectStreamManager CreateStreamManager(ProjectDetails projectDetails)
+    /// <summary>
+    /// Where an extension's data lives, relative to the project. Listing and reading both compose
+    /// their stream names from this, which is what makes every name
+    /// <see cref="ListExtensionDataQualifiers"/> returns readable by
+    /// <see cref="GetExtensionData"/> — change the layout here and both sides move together.
+    ///
+    /// It deliberately validates nothing. The callers' checks differ — see
+    /// <see cref="EnsureExtensionNameStaysInItsOwnDirectory"/> for why the listing's check must not
+    /// be shared here — so composition and validation stay separate on purpose.
+    /// </summary>
+    private static string GetExtensionDataRoot(ProjectDataScope scope) =>
+        $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{scope.ExtensionName}";
+
+    /// <summary>
+    /// Reject an extension name that would root the listing at the shared extensions directory or
+    /// above it — "." or "./" alone, or any ".." segment — because enumerating there hands back every
+    /// extension's data instead of the one asked about. Nothing else is rejected: a nested name such
+    /// as "acme/tools" stays within its own subtree and is valid on every path, and Windows' trimming
+    /// of a trailing space or dot has always aliased such a name to the trimmed one and still
+    /// round-trips.
+    ///
+    /// This check belongs to the listing alone and must not move into
+    /// <see cref="GetExtensionDataRoot"/>, tempting as sharing it looks. An extension name is
+    /// caller-supplied and lands directly in a path, but for <see cref="GetExtensionData"/> and
+    /// <see cref="SetExtensionData"/> a bad name reaches nothing a caller could not reach by naming
+    /// the other extension outright — so a shared check would close no access there, while rejecting
+    /// names those methods have always accepted and stranding whatever was written under them.
+    /// ExtensionData_NestedExtensionName_WritesListsAndReadsBack pins that; the
+    /// ListExtensionDataQualifiers_*_Throws cases pin the rejections.
+    /// </summary>
+    /// <exception cref="InvalidDataException">The name escapes its own directory.</exception>
+    private static void EnsureExtensionNameStaysInItsOwnDirectory(string extensionName)
     {
-        return new RawDirectoryProjectStreamManager(projectDetails);
+        // Split on both separators, as GetFileNameFromStreamName normalizes both. Trimming is for the
+        // check only — a whitespace-only segment names no directory — and does not alter the path.
+        var segments = extensionName.Split(
+            ['/', '\\'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+        );
+        // All(...) is true for no segments at all, so a bare separator is rejected too
+        if (segments.All(segment => segment == ".") || segments.Contains(".."))
+            throw new InvalidDataException(
+                $"Extension name '{extensionName}' must stay within its own extension-data directory"
+            );
     }
+
+    private IProjectStreamManager CreateExtensionStreamManager() =>
+        CreateStreamManager(_paratextProjects.GetProjectDetails(ProjectDetails.Metadata.Id));
+
+    protected virtual IProjectStreamManager CreateStreamManager(ProjectDetails projectDetails) =>
+        CreateDefaultStreamManager(
+            LocalParatextProjects.GetParatextProject(projectDetails.Metadata.Id),
+            projectDetails
+        );
+
+    /// <summary>
+    /// A resource's streams are the entries of its archive; every other project's are files under
+    /// its own directory. A resource has no directory of its own — its
+    /// <see cref="ProjectDetails.HomeDirectory"/> is the folder holding its archive, shared with
+    /// every other resource there — so resolving its streams against that would give all of them
+    /// one bucket.
+    /// </summary>
+    internal static IProjectStreamManager CreateDefaultStreamManager(
+        ScrText scrText,
+        ProjectDetails projectDetails
+    ) =>
+        scrText.IsResourceProject
+            ? new ResourceProjectStreamManager(scrText.FileManager, scrText.FullPath)
+            : new RawDirectoryProjectStreamManager(projectDetails);
 
     #endregion
 
