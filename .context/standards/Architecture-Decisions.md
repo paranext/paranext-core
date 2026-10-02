@@ -3325,6 +3325,70 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
 
+## adr-marker-palettes-take-real-focus: Standard-view marker palettes hold real keyboard focus in the overlay; the editor stays editable
+
+- **Date:** 2026-10-01
+- **Status:** Accepted
+- **Context:** Standard view opens a marker palette from `\` and from Enter. The palette is rendered
+  by the renderer's overlay service, outside the web view's iframe, so it can extend past the web
+  view's edges — which means whichever document holds focus is the only one that sees a keystroke.
+  The product ruling is that only choosing a marker may change the scripture text, and that the
+  palette ignores non-basic-Latin input as Paratext 9 does. Neither can be met by cancelling keys
+  alone: `beforeinput` for `insertCompositionText` is not cancelable, and `compositionstart` accepts
+  `preventDefault()` and composes anyway (measured in this Electron build). An earlier
+  implementation met them by making the editor's content element `contenteditable="false"` for the
+  life of every session. That worked, but it blurred the editor: keys then landed on the page body,
+  so routing had to admit page-body keys; the caret had to be restored everywhere; a
+  `MutationObserver` fought Lexical over the attribute; `paste`/`cut`/`drop` needed separate
+  blocking; and the footnote popover and the footnote pane each needed their own lock. Focus also
+  never returned after a `\` palette closed. Separately, the palettes that DID ask for focus never
+  got it — the overlay's autofocus gave up when its input did not exist yet, which is always true on
+  an anchored palette's first pass because Radix's portal renders nothing then.
+- **Decision:** Fix the autofocus (retry until the element attaches, not just until focus sticks)
+  and give the overlay an opt-in `focusTarget: 'list'`: the palette focuses its result LIST, renders
+  the search box read-only over the host-driven filter, and forwards EVERY key back to the
+  requester. All three marker-palette kinds use it; no other PAPI consumer does. The editor stays
+  fully editable and keeps its caret for the life of a session, and key routing in both consumers is
+  simply "the editor has focus". One key table — Paratext 9's rules — serves every kind; letters and
+  digits are read from `keyCode` so a non-Latin layout still types a Latin marker name.
+- **Alternatives:**
+  - _The `contenteditable="false"` lock._ Stops composed input, but blurs the editor and every
+    consumer inherits the fallout above. Rejected once focus in the palette proved workable.
+  - _Lexical `setEditable(false)`._ Removes the observer and the separate paste blocking, but has
+    the same blur side effects and fires Lexical's editable listeners, so toolbars and plugins
+    react as if the project were read-only.
+  - _The lock moved into `scripture-editors` behind one API._ The best form of the lock, but focus
+    still ends up on the page body rather than on anything meaningful.
+  - _A hidden focusable element inside the iframe._ Measured: keys that hit it were dropped rather
+    than forwarded, simulated IME input still reached the editor through the DOM selection, and a
+    dead key followed by `e` was lost.
+  - _Focusing the palette's text INPUT and reading `keyCode`._ Works for ordinary keys and Windows
+    dead keys, but an IME composes in any focused text box, so the candidate window would appear
+    over the palette. Kept as the fallback if a real IME turns out to compose on a focused list.
+  - _Switching the keyboard layout while the palette is open._ Paratext 9 does not; Paratext 10's
+    keyboard-switching feature is unmerged, each switch costs several asynchronous PAPI calls, and
+    it cannot turn an IME off.
+  - _Letting composed text land and then removing it._ The candidate text shows in the verse, dead
+    keys flicker, and half-composed text can be saved in the meantime.
+  - _Taking focus back whenever the editor grabs it._ Focus ping-pong fires focus/blur events that
+    window-focus tracking and the footnote pane both react to, and the renderer's window-blur
+    handler dismisses the palette anyway.
+- **Consequences:** The editor is never put into a state the rest of the code has to remember. A
+  palette can be opened from any editor without that editor needing a lock of its own, which is what
+  lets the footnote popover and the footnote pane share the behaviour for free. `aria-activedescendant`
+  now speaks, because the element carrying it is focused — in the non-focusing passive mode it was
+  inert and the service announced through a live region instead. One gap remains by design: the
+  session is created synchronously in the trigger's keydown, and for a short window before the
+  palette has focus the editor still has it. Keys there are routed to the same table, but a
+  composition begun in that window cannot be forwarded, so the consumer closes the palette and lets
+  the composed text land as ordinary typing. Revisit if a real Windows or macOS IME composes even
+  with a non-editable list focused — then fall back to focusing the read-only input and clearing on
+  `compositionend`.
+- **Source:** `src/renderer/components/overlays/overlay-command-palette.component.tsx`;
+  `lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts`;
+  `.context/standards/Standard-View-Invariants.md` § 3; Paratext 9
+  `ParatextBase/ScriptureEditor/MarkerDropdownControl.cs:136-219`.
+
 ## adr-menu-close-focus-restores-without-the-ring: A pointer-closed menu returns focus to its trigger without showing the focus ring
 
 - **Date:** 2026-09-16

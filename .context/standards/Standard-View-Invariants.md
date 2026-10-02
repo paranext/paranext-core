@@ -57,77 +57,105 @@ repo's half for the facts each side holds alone.
 
 ## 3. Marker palette key semantics
 
-`lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts` is the single
-forwarding table for BOTH the scripture editor web view and the footnote-editor popover. The
-per-consumer copies drifted once already; there is one table now.
+`lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts` is the single key
+table for BOTH the scripture editor web view and the footnote-editor popover. The per-consumer
+copies drifted once already; there is one table now.
 
-The palette is **ACTIVE**: the `\` trigger never lands in the document, in any selection shape, and
-subsequent typing filters the palette rather than reaching the document.
+**All three session kinds obey the same rules.** Two palettes that look alike must not behave
+differently — a user should not have to know which one is open to predict what a key does. Paratext
+9 works this way (`MarkerDropdownControl.cs` KeyDown/KeyPress), and these are its rules. The kinds
+differ only in which markers they list and in how a HIGHLIGHTED item is applied: `'enter'` splits
+the paragraph with it, `'backslash'` retags or lands at the caret, `'selection'` wraps the selected
+text.
 
-| Key                   | Collapsed caret                                                             | Over a selection                                                                                            |
-| --------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Space                 | commits the marker literally TYPED; the span records `closed="false"`       | wraps the selection in that marker's CLOSED span; a marker not offered refuses visibly, selection intact     |
-| Space, nothing typed  | closes the palette, document untouched (P9 parity)                          | same                                                                                                          |
-| Enter / Tab           | commits the highlighted item, closer inserted                               | commits the highlighted item, wrapping the selection                                                          |
-| Enter / Tab, 0 matches| **no-op — the palette stays open** (P9 parity)                              | same                                                                                                          |
-| `*`                   | commits the typed marker's CLOSING form, no terminating space               | DELETES the selection and lands the closer in its place (P9 parity)                                           |
-| `\`                   | commits what was typed with no terminating space, then reopens a fresh palette | not a commit key — the wrap consumes the selection                                                         |
-| `\`, nothing typed    | ordinary character; it lands and no palette reopens                         | —                                                                                                             |
-| Escape                | closes the palette, document untouched                                      | same                                                                                                          |
+| Key                                                              | Behaviour                                                                                                                                       |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `a`–`z`, `A`–`Z`, `0`–`9`, `+`, `-`                              | narrows the filter. Letters and digits come from the PHYSICAL key (§3.1)                                                                         |
+| Backspace                                                        | widens the filter; with nothing typed, CLOSES the palette                                                                                       |
+| ArrowUp / ArrowDown                                              | moves the highlight                                                                                                                             |
+| Enter / Tab, unmodified or with Shift                            | commits the highlighted item; with 0 matches, a claimed no-op and the palette stays open (P9 parity)                                             |
+| Space                                                            | commits the marker literally TYPED; with nothing typed, closes and inserts nothing. Over a selection: wraps on an EXACT match, else refuses visibly with the selection intact |
+| `*`                                                              | commits the typed marker's CLOSING form, no terminating space. Over a selection: replaces it — except with nothing typed, where it closes and leaves the selection intact |
+| `\`                                                              | commits what was typed with no terminating space, then reopens a fresh palette, so `\qt-s\qt-e` is one flow; with nothing typed, ignored. Not a commit key over a selection — the wrap consumes it |
+| Escape                                                           | closes the palette, document untouched                                                                                                          |
+| Ctrl/Cmd/Alt chord (never AltGr)                                 | CLOSES the palette and does its normal job. Chord+Enter is still claimed on the way out, or the list would act on it too                         |
+| modifier and lock keys (Shift, CapsLock, …)                      | passed through: they are how a marker gets typed                                                                                                |
+| everything else — punctuation, accented Latin, non-Latin scripts, `Dead`, Delete, Left/Right/Home/End/PageUp/PageDown | IGNORED: claimed, so nothing reaches the text, and the palette stays open (P9's `IsMarkerCharacter`) |
 
 `\f` specifically commits like Enter on Space, emergently: `\f ` tokenizes to the full note. An
 unknown marker settles as typed at a caret, and cannot be committed from the list.
 
-**The Enter-split palette (`'enter'` kind) is PASSIVE and fully table-driven.** Its overlay does
-not hold browser focus, so the forwarding table owns every key of the session, as it does for
-`'backslash'`.
+### 3.1 Letters and digits come from the physical key
 
-It guards its keys the way `'selection'` does, and for the same reason: it holds something that a
-landing key would destroy. The web view claims the Enter and WITHHOLDS the paragraph split until the
-palette commits, so a key that reached Lexical would both land in the text and discard the split.
-The product ruling is that **only selecting a marker may change the scripture text**, so nothing
-lands and nothing dismisses implicitly. "Inert" below means claimed and ignored, with the palette
-left open:
+USFM marker names are always basic Latin; the translator's keyboard may not be. Letters are read
+from `keyCode` (65–90) and digits from the number row without Shift (48–57) or the numpad (96–105),
+so the key that is physically `q` filters `q` on a Cyrillic or AZERTY layout, where `event.key`
+would be `й` or `a`. `+` and `-` come from the character instead, since they move between physical
+keys. Packet-key input (Keyman, `keyCode` 231) falls back to the character when it is one the filter
+accepts — P9's own KeyPress fallback. Case is preserved for custom markers: from `event.key` when it
+is basic Latin (which already folds Shift and CapsLock), otherwise from the modifiers.
 
-| Key                                                                            | Enter-split palette                                                                |
-| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `a`–`z`, `A`–`Z`, `0`–`9`, `+`, `-`                                            | narrows the filter                                                                 |
-| Backspace                                                                      | widens the filter; with nothing typed, inert                                       |
-| ArrowUp / ArrowDown                                                            | moves the highlight                                                                |
-| Enter / Tab, unmodified                                                        | commits the highlighted item; with 0 matches, inert                                |
-| Enter / Tab with any modifier (Ctrl, Cmd, Alt or Shift)                        | inert                                                                              |
-| Escape                                                                         | closes the palette, document untouched                                             |
-| Space, `*`, `\`                                                                | inert — Space does NOT commit here, unlike in the `\` palette                      |
-| any other chord (Ctrl/Cmd/Alt + a key, e.g. Cmd+S, Cmd+C)                      | passed through unclaimed; the palette stays open and the chord does its normal job |
-| modifier-only, IME composition and dead keys                                   | passed through unclaimed; the palette stays open                                   |
-| every other key (punctuation, non-Latin and accented letters, navigation keys) | inert                                                                              |
+### 3.2 Nothing lands because the palette holds focus
 
-**Non-basic-Latin input is ignored, like every other non-selection key.** PT9's palette ignores
-non-basic-Latin and PT10 matches (product ruling). The table cannot stop a composed character on its
-own — measured in this Electron build, `beforeinput` for `insertCompositionText` is not cancelable
-and `compositionstart` accepts `preventDefault()` and composes regardless. Instead each editor that
-hosts a palette (the web view's main editor and the footnote popover) makes its content element
-non-editable for the life of any palette session, so composed input has nowhere to land. With the
-element non-editable the browser starts no composition at all, so a dead key arrives as an ordinary
-keydown carrying its physical key code rather than 229, and the table passes it through with nothing
-to land. The same lock cancels `paste`, `cut` and `drop` into the element, which the editor would
-otherwise still apply because it checks its own editable flag rather than the DOM attribute; that is
-what keeps a passed-through Cmd+V or Cmd+X from changing the text. Both come from the shared
-`createMarkerPaletteInputLock` (`marker-palette-input-lock.util.ts` in `platform-bible-react`).
+**Non-basic-Latin input is ignored, like every other key that cannot name a marker** (product
+ruling; P9 does the same). The table cannot stop a composed character on its own — measured in this
+Electron build, `beforeinput` for `insertCompositionText` is not cancelable and `compositionstart`
+accepts `preventDefault()` and composes regardless.
 
-With the editor blurred by the lock, keys land on the page, so both editors route a session's keys
-from the page and from the editor, but never from any other element (a comment box, say). If the
-editor turns read-only mid-session (an automatic Send/Receive), the web view ends the session, and
-until it does only Escape is routed: the editor's commit methods throw in read-only mode.
+So the palette takes real keyboard focus, on its LIST rather than a text box (the overlay's
+`focusTarget: 'list'`), and forwards every key it receives back to the table. Focusing something
+that cannot be edited is what keeps composition out: an IME or dead key begins composing in any
+focused input whatever a handler cancels, and once a composition is under way per-key rules no
+longer apply to it. With the list focused no composition starts, so a dead key arrives as an
+ordinary keydown and the ignore rule covers it.
 
-Contrast `'backslash'`: an unrelated key dismisses that palette and lands, and Backspace with nothing
-typed dismisses it. That is safe there because nothing is pending — the `\` trigger never landed and
-no split is withheld — so dismissing discards only the palette itself.
+**The editor stays fully editable and keeps its caret throughout.** An earlier design made the
+content element non-editable for the life of a session; that worked, but it blurred the editor, so
+keys landed on the page body, the caret was lost, focus did not come back after a `\` palette
+closed, and the popover and the footnote pane each needed their own copy. Routing is now simply
+"the editor has focus", in both consumers.
 
-Every keyboard handler change here must also update `src/shared/data/keyboard-shortcuts.data.ts` — see
-`.claude/rules/keyboard-shortcuts-catalog.md`.
+**Known gap — the editor's own settles can close a palette.** A pending marker edit settles on
+blur, and again one second after the last change. Both fire while a palette is open: the blur
+settle as focus moves to the palette, the idle settle a second later. A settle updates the editor,
+which moves the selection, which makes Lexical focus the editor root and pull focus out of the
+palette — and the renderer then dismisses it on window blur. Reproducible as `\qt-s`, `\`, wait:
+the reopened palette closes by itself.
 
----
+Settling before the palette opens does NOT fix this. `commitPendingMarkerEdits` deliberately skips
+the node under a live caret while the editor holds DOM focus, which is exactly where the pending
+edit is at trigger time — so it cannot settle the one node that matters, while it can force-settle
+unrelated pending nodes and push a history entry the user never asked for. Closing this needs a
+pause/resume API on `EditorRef` in `scripture-editors` (setting `markerSettleDelayMs` to `-1` is
+not enough: it does not cancel an already-armed timer), which has to land there first.
+
+**The one accepted gap:** the session is created synchronously in the trigger's keydown, and for a
+short window before the palette has focus the editor still does. Keys in that window are routed to
+the same table by each consumer's capture-phase listener, but a COMPOSITION begun there cannot be
+forwarded — so the consumer closes the palette on `compositionstart` and lets the composed text land
+as ordinary typing. Both consumers have their own handler for this, because each owns its own
+session.
+
+**Known gap — `paste`, `cut` and `drop` are no longer blocked.** The input lock used to cancel them
+in document capture, because the editor's own listeners check its editable FLAG rather than the DOM
+attribute. Nothing replaces that. Once the palette holds focus a paste goes to the palette, so the
+common case is covered by focus alone — but these events need neither a keydown nor focus: a drop
+is dispatched at the element under the pointer, and a context-menu or middle-click paste carries no
+keydown at all. So during the pre-focus window, or from the mouse at any time, content can still
+reach the text while a palette is open, which the "only choosing a marker may change the scripture
+text" rule says should be impossible. Closing it belongs with the change guard (a content change
+closes the palette) rather than with another lock.
+
+If the editor turns read-only mid-session (an automatic Send/Receive), the web view ends the
+session — including palettes it opened for the footnote popover's editor — because the editor's
+commit methods throw in read-only mode.
+
+### 3.3 Every way a session ends restores the caret
+
+A mouse click on the palette blurs the editor (the overlay renders outside its document) and
+Lexical's blur processing can NULL the editor-state selection; `focus()` then falls back to
+selecting the document END. So dismissals restore the caret from the focus-out capture exactly as
+commits do, before focusing. It is a no-op when the selection survived.
 
 ## 4. The footnote editor popover
 

@@ -76,7 +76,6 @@ import {
 } from 'platform-bible-react';
 import {
   clearPaletteSessionIfCurrent,
-  createMarkerPaletteInputLock,
   handleMarkerPaletteSessionKeyDown,
   type MarkerPaletteKeyEvent,
   type MarkerPaletteOpenSession,
@@ -537,15 +536,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /**
    * Session state for a standard-view marker-menu palette while it's open (single owner: the
-   * keydown flow in the effect below). Every kind is ACTIVE: the trigger is claimed and never
-   * lands, and typed characters are claimed by the while-open forwarding table and routed into the
-   * palette's query — never the document.
+   * keydown flow in the effect below). The trigger is claimed and never lands, and every typed
+   * character is claimed by the shared key table and routed into the palette's query — never the
+   * document.
    *
-   * `'backslash'` is the collapsed-caret `\` trigger's session. Its palette keeps the overlay's
-   * non-focus-stealing (`passive: true`) DISPLAY, so the forwarding table is the palette's only key
-   * path, not a safety net. Every kind holds the input lock (`setPaletteInputLock`) while open,
-   * which blurs the editor, so its caret is hidden until the session ends. The selection-wrap `\`
-   * trigger opens a _focused_ palette tracked as `'selection'`.
+   * Every kind opens the same kind of palette: one that takes real keyboard focus on its LIST
+   * (`focusTarget: 'list'`), renders this session's query read-only, and forwards every key back
+   * here. The editor keeps its caret and stays editable throughout. `'backslash'` is the
+   * collapsed-caret `\` trigger's session; the selection-wrap `\` trigger opens one tracked as
+   * `'selection'`.
    *
    * `'enter'` is the Enter-split palette's session. It also guards against a second Enter
    * re-opening a palette while the first request's round-trip to the overlay service is still in
@@ -872,51 +871,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const editorRef = useRef<EditorRef | null>(null);
 
   /**
-   * Mirrors `isReadOnlyEffective` so the input lock can restore the editor's REAL editable state
-   * instead of a hard-coded `true`. A ref, not the value, because the lock helper is declared above
-   * the memo that computes it.
-   */
-  const isReadOnlyEffectiveRef = useRef(false);
-  /** This editor's marker-palette input lock (see `createMarkerPaletteInputLock`). */
-  const paletteInputLock = useRef(createMarkerPaletteInputLock()).current;
-
-  /**
-   * Blocks input into the editor for the life of a marker-palette session, and releases it after.
-   *
-   * PT-4611, product ruling (Vladimir): PT9's palette "just ignores non-basic-Latin", and PT10 must
-   * match — composed text and clipboard edits cannot be claimed as keydowns, so the shared lock
-   * makes the content element non-editable. Scoped through `editorContainerRef` so the footnote
-   * popover's own `.editor-input` (which carries its own lock) is never touched.
-   */
-  const setPaletteInputLock = useCallback(
-    (locked: boolean) => {
-      const input = editorContainerRef.current?.querySelector<HTMLElement>('.editor-input');
-      if (locked && input) paletteInputLock.lock(input);
-      else paletteInputLock.unlock(!isReadOnlyEffectiveRef.current);
-    },
-    [paletteInputLock],
-  );
-
-  /**
-   * The ONLY writers of {@link paletteSession}: each keeps the input lock in step with it, so the
-   * editor is locked exactly while a palette session is open. A write that skipped the lock would
-   * leave the editor non-editable (and blurred) with no session left to release it.
+   * The ONLY writers of {@link paletteSession}. The editor stays fully editable for the life of a
+   * session: nothing can land in it while the palette holds focus, and making it non-editable
+   * instead blurred it, which put the user's keys on the page body and lost the caret.
    */
   const setPaletteSession = useCallback(
     (session: MarkerPaletteOpenSession<MarkerMenuItem> | undefined) => {
       paletteSession.current = session;
-      setPaletteInputLock(!!session);
     },
-    [setPaletteInputLock],
+    [],
   );
   /** Clears {@link paletteSession} only if it still holds the session `token` identifies. */
-  const clearPaletteSession = useCallback(
-    (token: number) => {
-      clearPaletteSessionIfCurrent(paletteSession, token);
-      setPaletteInputLock(!!paletteSession.current);
-    },
-    [setPaletteInputLock],
-  );
+  const clearPaletteSession = useCallback((token: number) => {
+    clearPaletteSessionIfCurrent(paletteSession, token);
+  }, []);
 
   /**
    * Ends the open marker-palette session the way the keydown table's Escape branch does — clear the
@@ -931,9 +899,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const dismissPaletteSessionIfOpen = useCallback(() => {
     if (!paletteSession.current) return;
-    // Releases the input lock with the session. It cannot wait for the show promise to settle:
-    // `dismissCommandPalette` is a no-op if no palette is active yet, so that promise may never
-    // settle.
+    // Cleared here rather than from the show promise: `dismissCommandPalette` is a no-op if no
+    // palette is active yet, so that promise may never settle.
     setPaletteSession(undefined);
     papi.overlays.dismissCommandPalette(webViewId).catch((error) => {
       logger.warn(`Error dismissing marker palette: ${getErrorMessage(error)}`);
@@ -1129,16 +1096,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     ],
   );
 
-  useEffect(() => {
-    isReadOnlyEffectiveRef.current = isReadOnlyEffective;
-  }, [isReadOnlyEffective]);
-
   // A palette cannot commit into a read-only editor (its commit methods throw), and read-only can
   // arrive mid-session with no user gesture (`isSyncBlocked` during an automatic Send/Receive), so
   // end the session rather than leave a palette open that nothing but Escape may act on.
   useEffect(() => {
-    if (isReadOnlyEffective) dismissPaletteSessionIfOpen();
-  }, [isReadOnlyEffective, dismissPaletteSessionIfOpen]);
+    if (!isReadOnlyEffective) return;
+    dismissPaletteSessionIfOpen();
+    // And any palette opened through `footnoteMarkerPalette` for the popover's editor: the popover
+    // owns that session, so the ref above says nothing about it, and one left open over a
+    // read-only note is just as unable to commit.
+    //
+    // Unconditional, with nothing tracked: `dismissCommandPalette` already returns immediately
+    // when no palette is active for this web view. Tracking it with a boolean instead was wrong —
+    // on the `\` reopen path the REPLACED palette's ABORTED rejection cleared the flag after the
+    // replacement had already set it, leaving it false while a palette was open and focused.
+    papi.overlays.dismissCommandPalette(webViewId).catch((error) => {
+      logger.warn(`Error dismissing footnote marker palette: ${getErrorMessage(error)}`);
+    });
+  }, [isReadOnlyEffective, dismissPaletteSessionIfOpen, webViewId]);
 
   /**
    * Places the footnote editor popover against a note's caller (or the note itself). The caller
@@ -1441,9 +1416,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [localizedStrings],
   );
 
-  // Opening the paragraph switcher's Radix popover takes focus off `.editor-input`, where Lexical's
-  // blur processing can null the selection — and `formatPara` needs one, so the retag would refuse.
-  // The `\` and Enter palettes restore it the same way before they apply.
+  // Puts the caret back when the live selection was nulled, from the focus-out capture. Anything
+  // that takes focus off `.editor-input` can trigger that: the paragraph switcher's Radix popover
+  // (where `formatPara` then needs a selection, so the retag would refuse) and a mouse click on a
+  // marker palette, which renders outside this document. The single place every palette commit and
+  // dismissal goes through, so one rule covers them all. A no-op when the selection is intact.
   const restoreEditorSelection = useCallback(() => {
     restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
   }, []);
@@ -2067,10 +2044,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    *   `EditorRef.splitParagraphWithMarker`. The web view claimed the Enter, so the split is pending
    *   until an item is chosen.
    *
-   * Every kind is ACTIVE — the caller claims the trigger and the table claims every filter
-   * character, so nothing of the palette's ever lands in the document. Every kind but `'selection'`
-   * is shown PASSIVE: the overlay cannot hold browser focus against Lexical's reconciles (PT-4188),
-   * so the host drives its filter and highlight from the keys this web view forwards.
+   * The caller claims the trigger and the table claims every filter character, so nothing of the
+   * palette's ever lands in the document. Every kind opens the same kind of palette: it takes real
+   * keyboard focus on its LIST, shows this session's query read-only, and forwards every key back
+   * here, so one table decides what each key means wherever focus happens to be.
    */
   const openMarkerPalette = useCallback(
     (ctx: MarkerMenuAnchorContext, items: MarkerMenuItem[], kind: MarkerPaletteSessionKind) => {
@@ -2098,7 +2075,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               // during that await were dropped.
               items: markerMenuItemsToResolvedPaletteItems(items, localizedStrings),
               anchor: ctx.anchorRect,
-              passive: kind !== 'selection',
+              // Focus goes to the palette's LIST, never a text box. That is what keeps composed
+              // input out of the verse: an IME or a dead key begins composing in any focused
+              // input whatever a handler cancels, while on a list no composition starts at all.
+              // The editor keeps its caret and stays editable the whole time.
+              focusTarget: 'list',
               // Marker palettes filter on the label ONLY (the label IS the marker): an exact
               // typed marker must never be buried under items whose descriptions contain the
               // typed text.
@@ -2125,8 +2106,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // selection (live-observed: the `\f` literal stranded in the document, no footnote
         // created, and the literal then reached the PDP as data), so a nulled selection is
         // restored from the focus-out capture before the spine focuses and applies.
-        restoreSelectionIfLost: () =>
-          restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current),
+        restoreSelectionIfLost: () => restoreEditorSelection(),
         focusEditor: () => editorRef.current?.focus(),
         applyItem: (selected) => {
           if (isEnter) {
@@ -2144,7 +2124,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           warnUnlessReplaced(isEnter ? 'Enter palette' : 'marker palette', error),
       });
     },
-    [webViewId, localizedStrings, setPaletteSession, clearPaletteSession],
+    [webViewId, localizedStrings, setPaletteSession, clearPaletteSession, restoreEditorSelection],
   );
 
   /**
@@ -2176,19 +2156,39 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const runPaletteSessionKey = useCallback(
     (event: MarkerPaletteKeyEvent) => {
       const session = paletteSession.current;
-      if (!session) return;
+      if (!session) {
+        // The palette outlived its session: it holds real focus and forwards EVERY key here, so
+        // returning would swallow them all — Escape included — leaving a box the keyboard cannot
+        // get out of. Reachable because a chapter change or a read-only flip clears the session
+        // ref eagerly (it has to: `dismissCommandPalette` no-ops while the show request is still
+        // in flight), after which the palette can still mount and take focus. Close it.
+        papi.overlays.dismissCommandPalette(webViewId).catch((error) => {
+          logger.warn(`Error dismissing orphaned marker palette: ${getErrorMessage(error)}`);
+        });
+        return;
+      }
+      // A read-only editor cannot take a commit: every commit method below throws in read-only
+      // mode. `isReadOnlyEffective` folds in `isSyncBlocked`, which a scheduled Send/Receive flips
+      // with no user gesture, and the effect that ends the session on that flip is a React effect
+      // plus an async round trip — so there is a window where keys still arrive. They arrive HERE,
+      // forwarded from the focused palette, which is why the capture-path gate alone is not enough.
+      // End the session instead of routing the key.
+      if (isReadOnlyEffective) {
+        dismissPaletteSessionIfOpen();
+        return;
+      }
       const outcome = handleMarkerPaletteSessionKeyDown(event, session, {
         update: (update) => papi.overlays.updateCommandPalette(webViewId, update),
         commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
         dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
         // Each editor-side commit restores the caret first, the way the shared spine does before
-        // its own apply. These run while the palette's input lock has the editor non-editable and
-        // therefore blurred, and Lexical's blur processing can NULL the editor-state selection.
+        // its own apply. A palette mouse click blurs the editor (the overlay renders outside this
+        // document) and Lexical's blur processing can NULL the editor-state selection.
         // `commitTypedMarker`/`commitTypedCloser` refuse without a range selection (returning false,
         // which nothing here reads), and `applyMarkerMenuSelection` would land at the document end
         // — so without this the user gets no marker, no error, and a caret somewhere else.
         commitTyped: (typed) => {
-          restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
+          restoreEditorSelection();
           editorRef.current?.commitTypedMarker(typed);
         },
         commitTypedAndReopen: (typed) => {
@@ -2196,18 +2196,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // fresh palette for the backslash just pressed. Showing a new palette replaces the
           // current overlay (the old show promise rejects ABORTED, already handled), so there is
           // no explicit dismiss to sequence against the commit.
-          restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
+          restoreEditorSelection();
           editorRef.current?.commitTypedMarker(typed, { trailingSpace: false });
           openMarkerPaletteAtCaret();
         },
         commitTypedCloser: (typed) => {
-          restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
+          restoreEditorSelection();
           editorRef.current?.commitTypedCloser(typed);
         },
         commitItem: (marker) => {
           const selected = session.items.find((item) => item.marker === marker);
           if (!selected) return;
-          restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
+          restoreEditorSelection();
           editorRef.current?.applyMarkerMenuSelection(selected, {
             trigger: 'backslash',
             literalPrefixLanded: false,
@@ -2218,7 +2218,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // session synchronously inside the table call, and an unconditional clear would kill it.
       if (outcome === 'ended') clearPaletteSession(session.token);
     },
-    [webViewId, openMarkerPaletteAtCaret, clearPaletteSession],
+    [
+      webViewId,
+      openMarkerPaletteAtCaret,
+      clearPaletteSession,
+      restoreEditorSelection,
+      isReadOnlyEffective,
+      dismissPaletteSessionIfOpen,
+    ],
   );
 
   useEffect(() => {
@@ -2237,11 +2244,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const footnoteMarkerPalette = useMemo<FootnoteEditorMarkerPalette>(
     () => ({
-      // All FOUR parameters forwarded. TypeScript accepts a shorter implementation arity, so a
-      // three-parameter version compiled while silently dropping `keyForwarding` — the popover's
-      // selection-`\` palette then opened focus-stealing with no forwarding, and the Space/`*`/
-      // `\`/Backspace commit semantics never ran.
-      show: (items, anchor, passive, keyForwarding) =>
+      show: ({ items, anchor, keyForwarding }) =>
         papi.overlays.showCommandPalette(
           {
             // Resolved here for the same reason the main editor resolves its own items: an
@@ -2251,7 +2254,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // has already moved on.
             items: resolvePaletteItemStrings(items, localizedStrings),
             anchor,
-            passive,
+            // Same as the main editor's marker palettes: focus the LIST, never a text box, so no
+            // IME or dead-key composition can start while the palette is open.
+            focusTarget: 'list',
             keyForwarding,
             // Marker palette: label-only matching (the label IS the marker), same as the main
             // editor's `\`/Enter palettes above.
@@ -2328,15 +2333,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // insert a footnote/cross-reference, and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
-    // Whether a key was typed somewhere other than the main editor or the page itself (where keys
-    // land once the palette's input lock has blurred the editor).
-    const isKeyTargetOtherElement = (target: unknown) => {
-      if (!(target instanceof Element)) return false;
-      if (target === document.body || target === document.documentElement) return false;
-      const editorInput = editorContainerRef.current?.querySelector('.editor-input');
-      return !editorInput?.contains(target);
-    };
-
     // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
     // root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
     // listener, so a window BUBBLE-phase handler runs too late — the paragraph has already split
@@ -2357,19 +2353,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Scoped to the MAIN editor instance via `isFocused()`, not a global `.editor-input` query:
       // the footnote-editor popover renders its own `.editor-input`, and a captured element goes
       // stale across an editor remount. Evaluated per-event so it always reflects current focus.
-      // An OPEN session admits keys whether or not the editor holds focus: while a palette is open
-      // the editor is deliberately non-editable (see `setPaletteInputLock`), which blurs it, so a
-      // focus gate would stop every forwarded key — filtering, Enter and even Escape — leaving the
-      // palette stuck open and the editor locked. Opening a palette still requires focus: the
-      // trigger branches below are only reachable when no session is open.
+      // Once the palette has focus the editor does not, and its keys arrive through key forwarding
+      // instead — this path covers only the frames between the trigger and that handoff.
       if (
         shouldRoutePaletteKey({
           viewType,
           isReadOnly: isReadOnlyEffective,
-          hasOpenSession: !!paletteSession.current,
           isEditorFocused: !!editorRef.current?.isFocused(),
-          key: event.key,
-          isTargetOtherElement: isKeyTargetOtherElement(event.target),
         })
       ) {
         const session = paletteSession.current;
@@ -2484,12 +2474,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       }
     };
 
+    // A composition that starts in the EDITOR while a palette is open closes the palette and lets
+    // the composed text land as ordinary typing.
+    //
+    // This is the one gap the design accepts. The palette focuses its list, where no composition
+    // can start — but the session is created synchronously in the trigger's keydown, and for the
+    // ~100ms before the palette actually has focus the editor still does. A composition begun in
+    // that window cannot be forwarded (it is not a sequence of keydowns the table can read) and
+    // cannot be cancelled either: `beforeinput` for `insertCompositionText` is not cancelable, and
+    // `compositionstart` accepts `preventDefault` and composes anyway. The only honest options are
+    // to let it land with the palette gone, or to make the editor non-editable — which is the lock
+    // this design removed, with all its fallout. So: close, and let the user see their character.
+    const handleCompositionStart = () => {
+      if (paletteSession.current) dismissPaletteSessionIfOpen();
+    };
+
     window.addEventListener('keydown', handleStandardViewTriggers, { capture: true });
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('compositionstart', handleCompositionStart, { capture: true });
 
     return () => {
       window.removeEventListener('keydown', handleStandardViewTriggers, { capture: true });
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('compositionstart', handleCompositionStart, { capture: true });
     };
   }, [
     insertCommentAtCurrentSelection,
@@ -2503,6 +2510,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     styleInfo,
     openMarkerPaletteAtCaret,
     openMarkerPalette,
+    dismissPaletteSessionIfOpen,
   ]);
 
   // #endregion Keydown Routing

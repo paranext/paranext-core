@@ -133,12 +133,44 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
     onShowError,
   } = options;
 
+  /**
+   * Puts the caret back where the user left it and returns focus to the editor.
+   *
+   * Restoring BEFORE focusing is the whole point: a mouse click on the palette blurs the editor
+   * (the overlay renders outside its document), and Lexical's blur processing can NULL the
+   * editor-state selection. `focus()` cannot bring a nulled selection back — it falls back to
+   * selecting the document END — so a commit would land there instead of at the caret the user last
+   * saw. Restoring first re-establishes that caret; `focus()` then re-asserts it.
+   *
+   * Every way a session ends runs this, for every kind. A dismissal that merely focused left the
+   * caret wherever the blur had put it, so the user's next keystroke went somewhere they did not
+   * choose — the same defect as a mis-landed commit, just quieter. It is a no-op when the selection
+   * is still intact.
+   *
+   * The `\` palette used to be excluded, on the reasoning that it is dismissed mid-typing and the
+   * overlay host's own focus restore would cover it. That held only while that palette was passive
+   * and never took focus. Now every palette takes focus, so the `\` one is the case that needs this
+   * MOST — and the host's restore cannot stand in for it: it refocuses the web view's iframe, not
+   * `.editor-input`, and it cannot rebuild a selection Lexical has nulled.
+   */
+  const restoreEditorSelection = () => {
+    restoreSelectionIfLost();
+    focusEditor();
+  };
+
   sessionCounterRef.current += 1;
   const token = sessionCounterRef.current;
-  // Focus goes back to the editor when a palette is dismissed, except after a `\` palette: there
-  // the user dismissed a palette they opened mid-typing, and focus is left to the overlay host's
-  // own focus restore.
-  const refocusOnDismiss = kind !== 'backslash';
+  /**
+   * Whether this session is still the newest one — false once a REPLACEMENT has been opened.
+   *
+   * A dismissal must not touch focus or the caret on behalf of a session that has already been
+   * superseded. The `\` commit-and-reopen flow shows a second palette, which rejects the first
+   * one's show promise with ABORTED; restoring from that handler would focus the editor out from
+   * under the palette that just opened — and restore from a focus-out capture taken BEFORE the
+   * commit, dragging the caret back behind the marker just inserted. The replacement's own focus
+   * attempt stops as soon as focus sticks once, so it never fights back.
+   */
+  const isStillCurrentSession = () => sessionCounterRef.current === token;
   const session: MarkerPaletteOpenSession<TItem> = { kind, token, filter: '', items };
   if (kind === 'backslash' && shouldSpaceCommit) session.shouldSpaceCommit = shouldSpaceCommit;
   setSession(session);
@@ -149,24 +181,17 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
     // Declared for the passive palette too: it never takes focus, so this is inert there, but one
     // code path means a palette that unexpectedly receives a key routes it to the session rather
     // than acting on it.
-    keys: getMarkerPaletteClaimedKeys(kind),
+    keys: getMarkerPaletteClaimedKeys(),
     onKey: (event) => runSessionKey(event),
   })
     .then((id) => {
       clearSessionIfCurrent(token);
       if (id !== undefined) {
-        // Restore the caret BEFORE focusing and applying: a mouse click on the palette blurred
-        // the editor (the overlay renders outside its document), and Lexical's blur processing
-        // can NULL the editor-state selection. `focus()` cannot bring a nulled selection back —
-        // it falls back to selecting the document END — so the apply would land there instead of
-        // at the caret the user last saw. Restoring first re-establishes that caret; `focus()`
-        // then re-asserts it, so a mouse commit applies exactly like a keyboard one.
-        restoreSelectionIfLost();
-        focusEditor();
+        restoreEditorSelection();
         const selected = items.find((item) => item.marker === id);
         if (selected) applyItem(selected);
-      } else if (refocusOnDismiss) {
-        focusEditor();
+      } else if (isStillCurrentSession()) {
+        restoreEditorSelection();
       }
       return undefined;
     })
@@ -174,7 +199,7 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
       // Replaced by a newer overlay request (PlatformError code ABORTED) or any other rejection —
       // treat the same as an explicit dismissal.
       clearSessionIfCurrent(token);
-      if (refocusOnDismiss) focusEditor();
+      if (isStillCurrentSession()) restoreEditorSelection();
       onShowError(error);
     });
 }

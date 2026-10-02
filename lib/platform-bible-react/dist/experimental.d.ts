@@ -1086,7 +1086,7 @@ export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
  * - `'enter'` — the Enter-split menu at a collapsed caret, for choosing the marker of the paragraph
  *   the split creates. Its only commit is the highlighted item (Enter or Tab). Forwarded, so the
  *   table owns its filter characters, Backspace and arrows; nothing it accepts may reach the
- *   document, because the overlay cannot rely on holding browser focus (PT-4188).
+ *   document.
  * - `'selection'` — the selection-wrap palette, opened with text selected. EVERY non-chord key is
  *   claimed, because anything that landed would replace the wrapped selection. Space wraps the
  *   selection in the marker the filter names exactly (ignoring case and the `+` nesting prefix);
@@ -1179,11 +1179,33 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
  */
 export type MarkerPaletteKeyOutcome = "passed" | "continue" | "ended";
 /**
- * The session kinds whose FILTER and per-key semantics this forwarding table drives — every kind.
- * Every kind is forwarded so that no palette depends on holding browser focus, which it cannot do
- * reliably: Lexical re-grabs focus on every reconcile (PT-4188).
+ * The filter character a keydown contributes, or `undefined` when the key is not palette input.
+ *
+ * USFM marker names are always basic Latin; the translator's keyboard may not be. So the rule is:
+ * take the character the layout actually produced whenever it can name a marker, and fall back to
+ * the PHYSICAL key only when it cannot. On a Cyrillic or Greek layout the `q` key produces `й` or
+ * `;`, which matches no marker, and the fallback turns it back into `q` — Paratext 9 does the same
+ * (`MarkerDropdownControl.cs` KeyDown reads `e.KeyCode`).
+ *
+ * Why the character has to win, rather than reading `keyCode` first:
+ *
+ * - `keyCode` does not mean the same thing on every platform. Chromium derives it from the native
+ *   virtual key, which Windows assigns per layout but macOS and Linux map through a US-layout
+ *   table. Reading it first made a French AZERTY `a` filter `a` on Windows and `q` on macOS, so the
+ *   same keyboard behaved differently per OS and a French or German translator on a Mac could not
+ *   type a marker at all.
+ * - Several layouts put marker characters on keys whose `keyCode` says otherwise. AZERTY keeps
+ *   VK_0–VK_9 on the number row while producing `&é"'(-è_çà` unshifted, so the `-` key reports
+ *   `keyCode` 54 — reading that first turned every milestone marker (`qt-s`, `ts-s`, `zpa-xb`) into
+ *   `qt6`. Czech QWERTZ puts `+` unshifted on Digit1, which became `1`, making the `\+w` nesting
+ *   prefix untypeable.
+ *
+ * The fallback covers letters only. Digits need none: every layout that reaches a digit produces
+ * the digit character, including the numpad and AZERTY's shifted number row. It also covers packet
+ * -key input (Keyman, `keyCode` 231) for free — such a key carries its character and no usable
+ * `keyCode`, so it never reaches the fallback.
  */
-export type ForwardedSessionKind = MarkerPaletteSessionKind;
+export declare function resolveFilterCharacter(event: MarkerPaletteKeyEvent): string | undefined;
 /**
  * Every `KeyboardEvent.key` this table acts on for `kind` — the list a session hands to its palette
  * as the `keys` of its `PaletteKeyForwarding` declaration so the palette forwards exactly these
@@ -1206,7 +1228,7 @@ export type ForwardedSessionKind = MarkerPaletteSessionKind;
  * Every kind currently claims the SAME set — the per-kind parameter is deliberate room for the key
  * sets to diverge later, not a difference today.
  */
-export declare function getMarkerPaletteClaimedKeys(kind: ForwardedSessionKind): string[];
+export declare function getMarkerPaletteClaimedKeys(): string[];
 /**
  * Routes one keydown through an open marker-palette session. See the module doc for the per-kind
  * semantics. Call from a CAPTURE-phase listener; on `'ended'` clear the session ref.
@@ -1228,42 +1250,6 @@ export declare function handleMarkerPaletteSessionKeyDown(event: MarkerPaletteKe
 export declare function clearPaletteSessionIfCurrent<TSession extends {
 	token: number;
 }>(sessionRef: React$1.MutableRefObject<TSession | undefined>, token: number): void;
-/**
- * Blocks input into an editor's content element for the life of a standard-view marker-palette
- * session — the one lock both consumers (`platform-scripture-editor.web-view.tsx` and
- * `footnote-editor.component.tsx`) use, so the product rule holds in both: while a palette is open,
- * only selecting a marker may change the scripture text.
- *
- * Two holes the keydown forwarding table cannot close, because neither arrives as a claimable
- * keydown:
- *
- * - Composed text (dead keys, and every IME — how most non-Latin scripts are typed) arrives through
- *   the input path. In this Electron build `beforeinput` for `insertCompositionText` reports
- *   `cancelable: false`, and `compositionstart` accepts `preventDefault()` and composes anyway, so
- *   making the element non-editable is the only thing that stops it.
- * - Clipboard and drag-and-drop edits (`paste`, `cut`, `drop`) are dispatched at the element holding
- *   the DOM selection, and the editor's own listeners check its editable FLAG, not the DOM
- *   attribute — so they would still edit the text under a non-editable element. They are cancelled
- *   in the capture phase while locked. A palette whose session a chord ends (the `\` palette on
- *   Cmd/Ctrl+V) is unlocked before the clipboard event fires, so its paste proceeds normally.
- */
-/** See the module header. */
-export interface MarkerPaletteInputLock {
-	/**
-	 * Locks `element`. Locking the element already locked is a no-op; locking a different element
-	 * (the editor remounted) releases the old one first.
-	 */
-	lock(element: HTMLElement): void;
-	/**
-	 * Releases the lock and restores `contenteditable` to `editable` — the editor's REAL editable
-	 * state, not a hard-coded `true`, which would hand the user a browser-editable document the
-	 * editor itself considers read-only. A no-op when nothing is locked. An element that has left the
-	 * document is released without being written to.
-	 */
-	unlock(editable: boolean): void;
-}
-/** Creates an unlocked {@link MarkerPaletteInputLock}. Each editor instance owns one. */
-export declare function createMarkerPaletteInputLock(): MarkerPaletteInputLock;
 /**
  * The session record {@link runMarkerPaletteSession} creates and hands to the consumer's session ref
  * — the forwarding table's {@link MarkerPaletteSessionState} plus the `token` that scopes async

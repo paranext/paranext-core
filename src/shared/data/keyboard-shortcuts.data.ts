@@ -342,11 +342,10 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Editing',
     context:
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
-    // Space commits what was TYPED, not the highlighted entry: at a collapsed caret it materializes
-    // the typed marker; over a selection it wraps only on an exact (case-insensitive) match and
-    // otherwise closes without touching the selection. In the Enter-triggered paragraph menu Space
-    // does NOTHING: only selecting a marker may change the scripture text there (PT-4611 product
-    // ruling), so Space is claimed — nothing lands — and the menu stays open.
+    // Space commits what was TYPED, not the highlighted entry — the same in the `\` menu and the
+    // Enter-triggered paragraph menu. At a collapsed caret it materializes the typed marker; with
+    // nothing typed it closes and inserts nothing. Over a selection it wraps only on an exact
+    // (case-insensitive) match and otherwise closes without touching the selection.
     keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },
@@ -356,12 +355,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Editing',
     context:
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
-    // Enter and Tab are one commit gesture, matching the editor package's own menus. Over a
-    // zero-match filter both are claimed no-ops (PT9 parity — the menu stays open). Enter also
-    // commits the Enter-triggered paragraph menu, through the same forwarding table. Only an
-    // UNMODIFIED Enter (or Tab) commits there: Enter or Tab with any modifier (Ctrl, Cmd, Alt or
-    // Shift) is claimed but inert, because only selecting a marker may change the scripture text
-    // (PT-4611 ruling).
+    // Enter and Tab are one commit gesture, matching the editor package's own menus, and the same
+    // in both menus. Shift+Enter and Shift+Tab commit too: Shift is how an uppercase custom marker
+    // is typed, and a soft line break has no USFM representation. A Ctrl/Cmd/Alt chord is not a
+    // commit — it closes the menu and does its normal job (the Enter is still claimed on the way
+    // out, or the menu's own list would act on it). Over a zero-match filter both keys are claimed
+    // no-ops and the menu stays open.
     keys: { macOS: '⏎ / ⇥', windows: 'Enter / Tab', linux: 'Enter / Tab' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },
@@ -372,9 +371,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context:
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Arrow keys move the highlighted entry; Backspace widens the typed filter, or closes the
-    // menu when nothing is typed. Marker characters (letters, digits, `+`, `-`) narrow it. In the
-    // Enter-triggered paragraph menu a Backspace with nothing typed is claimed but inert: closing
-    // there would discard the pending split, so only Escape dismisses it.
+    // menu when nothing is typed — the same in both menus. Marker characters (letters, digits,
+    // `+`, `-`) narrow it. Letters and digits are read from the PHYSICAL key, so a non-Latin
+    // layout still types the Latin marker name. Any other key — punctuation, accented or non-Latin
+    // characters, a dead key, Delete, Left/Right/Home/End/PageUp/PageDown — is ignored: it cannot
+    // name a marker, so the menu stays open and nothing reaches the text.
     keys: {
       macOS: '↑ / ↓ / ⌫',
       windows: 'Up / Down / Backspace',
@@ -389,10 +390,10 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context:
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // The counterpart to Space's opening-marker commit: commits the typed marker's closing form
-    // with no terminating space. Over a non-collapsed selection the selected content is replaced,
-    // which is what typing a closing marker by hand has always done. In the Enter-triggered
-    // paragraph menu it is claimed but inert: it is not a paragraph-marker gesture, and letting it
-    // through would discard the pending split.
+    // with no terminating space, in both menus. Over a non-collapsed selection the selected content
+    // is replaced, which is what typing a closing marker by hand has always done — except with
+    // nothing typed, where it closes the menu and leaves the selection intact rather than
+    // destroying it over one keystroke.
     keys: { macOS: '*', windows: '*', linux: '*' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },
@@ -403,10 +404,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context:
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Commits like Space but without the terminating space, then reopens for the backslash just
-    // pressed, so a paired marker is one continuous flow. With nothing typed there is nothing to
-    // commit and the backslash lands as an ordinary character. In the Enter-triggered paragraph
-    // menu it is claimed but inert, typed or not: only selecting a marker may change the scripture
-    // text there (PT-4611 product ruling), so nothing lands and the menu stays open.
+    // pressed, so a paired marker is one continuous flow — in both menus. With nothing typed there
+    // is nothing to commit, so it is ignored and the menu stays open. Not a commit key over a
+    // selection: the wrap consumes the selection, leaving nothing for a second marker.
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },

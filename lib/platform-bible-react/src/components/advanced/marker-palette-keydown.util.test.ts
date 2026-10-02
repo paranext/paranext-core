@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   clearPaletteSessionIfCurrent,
   getMarkerPaletteClaimedKeys,
+  resolveFilterCharacter,
   handleMarkerPaletteSessionKeyDown,
+  isImeCompositionKeyEvent,
   MarkerPaletteSessionDriver,
   MarkerPaletteSessionState,
 } from './marker-palette-keydown.util';
@@ -64,12 +66,11 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.dismiss).not.toHaveBeenCalled();
   });
 
-  it('passes lock and dead keys through untouched — never a dismissal, never a filter character', () => {
-    // CapsLock is how an uppercase CUSTOM marker gets typed mid-filter, NumLock can be tapped at
-    // any time, and Dead is how diacritics begin on many layouts — none of them is input, so none
-    // may dismiss the session or leak into the query.
-    (['backslash', 'selection'] as const).forEach((kind) => {
-      ['CapsLock', 'NumLock', 'Dead'].forEach((key) => {
+  it('passes lock keys through untouched — never a dismissal, never a filter character', () => {
+    // CapsLock is how an uppercase CUSTOM marker gets typed mid-filter and NumLock can be tapped
+    // at any time — neither is input, so neither may dismiss the session or leak into the query.
+    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+      ['CapsLock', 'NumLock'].forEach((key) => {
         const driver = makeDriver();
         const state = session(kind, 'w');
         const event = makeEvent(key);
@@ -79,6 +80,24 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
         expect(driver.dismiss).not.toHaveBeenCalled();
         expect(driver.update).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  it('IGNORES a dead key — claimed, filter untouched, palette stays open', () => {
+    // `Dead` is how a diacritic begins on many layouts. With the palette holding focus no
+    // composition starts, so it arrives as an ordinary keydown — and a key that cannot name a
+    // marker is ignored rather than dismissing a palette the user is mid-way through.
+    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+      const driver = makeDriver();
+      const state = session(kind, 'w');
+      const event = makeEvent('Dead');
+      expect({ kind, outcome: handleMarkerPaletteSessionKeyDown(event, state, driver) }).toEqual({
+        kind,
+        outcome: 'continue',
+      });
+      expect(event.defaultPrevented).toBe(true);
+      expect(state.filter).toBe('w');
+      expect(driver.dismiss).not.toHaveBeenCalled();
     });
   });
 
@@ -208,34 +227,29 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.commit).not.toHaveBeenCalled();
   });
 
-  it('zero-match detection matches the palette flavor: prefix for passive, containment for focused', () => {
-    // Same items and filter, different modes: 'd' prefixes nothing (passive backslash session
-    // has zero matches -> Enter no-ops) but is CONTAINED in 'nd' (focused selection session has
-    // a match -> Enter commits). The counts must agree with the overlay service's own
-    // filterAndRankPaletteItems, which uses exactly these per-mode semantics.
+  it('resolves zero matches by PREFIX for every kind — the palettes are all host-driven', () => {
+    // 'd' prefixes neither 'nd' nor 'add', so Enter no-ops and the palette stays open in all three
+    // kinds. Every marker palette now renders the session's query read-only and answers commits
+    // from the session's own list, so one matching rule has to serve them all: ranking a commit
+    // cmdk's way (containment) for any kind would commit an item the rendered list never offered.
     const items = [{ marker: 'nd' }, { marker: 'add' }];
 
-    const passiveDriver = makeDriver();
-    const passiveEvent = makeEvent('Enter');
-    expect(
-      handleMarkerPaletteSessionKeyDown(
-        passiveEvent,
-        session('backslash', 'd', items),
-        passiveDriver,
-      ),
-    ).toBe('continue');
-    expect(passiveDriver.commit).not.toHaveBeenCalled();
+    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+      const driver = makeDriver();
+      const event = makeEvent('Enter');
+      expect({
+        kind,
+        outcome: handleMarkerPaletteSessionKeyDown(event, session(kind, 'd', items), driver),
+      }).toEqual({ kind, outcome: 'continue' });
+      expect({ kind, commits: driver.commit.mock.calls.length }).toEqual({ kind, commits: 0 });
+    });
 
-    const focusedDriver = makeDriver();
-    const focusedEvent = makeEvent('Enter');
+    // A real prefix still commits, so the no-op above is the filter's doing, not a dead branch.
+    const driver = makeDriver();
     expect(
-      handleMarkerPaletteSessionKeyDown(
-        focusedEvent,
-        session('selection', 'd', items),
-        focusedDriver,
-      ),
+      handleMarkerPaletteSessionKeyDown(makeEvent('Enter'), session('enter', 'n', items), driver),
     ).toBe('ended');
-    expect(focusedDriver.commit).toHaveBeenCalledOnce();
+    expect(driver.commit).toHaveBeenCalledOnce();
   });
 
   it('Tab commits the highlighted item exactly like Enter — claimed, one overlay commit', () => {
@@ -422,18 +436,23 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.commitTyped).not.toHaveBeenCalled();
   });
 
-  it('backslash session: `\\` on an EMPTY filter lands a literal backslash and does NOT reopen', () => {
-    // Today's behavior, explicitly preserved: with nothing typed there is nothing to commit, so
-    // the backslash is an ordinary character. NOT claimed — it must reach the document — and no
-    // replacement palette opens.
-    const driver = makeDriver();
-    const state = session('backslash', '');
-    const event = makeEvent('\\');
-    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
-    expect(event.defaultPrevented).toBe(false);
-    expect(driver.commitTypedAndReopen).not.toHaveBeenCalled();
-    expect(driver.commitTyped).not.toHaveBeenCalled();
-    expect(driver.dismiss).toHaveBeenCalled();
+  it('`\\` on an EMPTY filter is IGNORED — claimed, nothing committed, palette stays open', () => {
+    // With nothing typed there is nothing to commit. The palette holds focus, so the backslash
+    // cannot reach the text whatever happens here — and a key that can only be a no-op must not
+    // also throw away the palette the user just opened.
+    (['backslash', 'enter'] as const).forEach((kind) => {
+      const driver = makeDriver();
+      const state = session(kind, '');
+      const event = makeEvent('\\');
+      expect({ kind, outcome: handleMarkerPaletteSessionKeyDown(event, state, driver) }).toEqual({
+        kind,
+        outcome: 'continue',
+      });
+      expect(event.defaultPrevented).toBe(true);
+      expect(driver.commitTypedAndReopen).not.toHaveBeenCalled();
+      expect(driver.commitTyped).not.toHaveBeenCalled();
+      expect(driver.dismiss).not.toHaveBeenCalled();
+    });
   });
 
   it('selection session: `\\` does NOT commit-and-reopen (the wrap consumes the selection)', () => {
@@ -598,86 +617,140 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     });
   });
 
-  it('enter session: a composition or dead key neither commits nor dismisses — PT9 parity', () => {
-    // Product ruling (Vladimir, PT-4611): "Palette's typing field just ignores non-basic-Latin" in
-    // PT9, and PT10 should match. Nothing but selecting a marker may change the scripture text, so
-    // the key does not commit the pending split, and the palette stays open.
-    //
-    // The table passes the key through unclaimed: a composed character arrives through the
-    // editor's input path rather than as a keydown, and what keeps it out of the document is the
-    // consumer's input lock (`marker-palette-input-lock.util.ts`). This pins the table half.
+  it('a composition keydown neither commits nor dismisses, in every kind', () => {
+    // A composed character arrives through the editor's input path, not as a keydown the table can
+    // ingest, and claiming the Enter that confirms a CJK candidate would corrupt the composition.
+    // With focus on the palette's list no composition should start at all; this is the guard for
+    // the window before the palette has focus.
     const cases = [
-      { label: 'dead key', event: makeEvent('Dead') },
       { label: 'composition (keyCode 229)', event: makeEvent('Process', { keyCode: 229 }) },
       { label: 'composition (isComposing)', event: makeEvent('e', { isComposing: true }) },
     ];
-    cases.forEach(({ label, event }) => {
-      const driver = makeDriver();
-      const outcome = handleMarkerPaletteSessionKeyDown(event, session('enter', 'q1'), driver);
-      expect({ label, outcome }).toEqual({ label, outcome: 'passed' });
-      expect({ label, commits: driver.commit.mock.calls.length }).toEqual({ label, commits: 0 });
-      expect(driver.dismiss).not.toHaveBeenCalled();
+    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+      cases.forEach(({ label, event }) => {
+        const driver = makeDriver();
+        const outcome = handleMarkerPaletteSessionKeyDown(event, session(kind, 'q1'), driver);
+        expect({ kind, label, outcome }).toEqual({ kind, label, outcome: 'passed' });
+        expect({ kind, label, commits: driver.commit.mock.calls.length }).toEqual({
+          kind,
+          label,
+          commits: 0,
+        });
+        expect(driver.dismiss).not.toHaveBeenCalled();
+      });
     });
   });
 
-  it('enter session: Ctrl/Cmd/Alt+Enter is inert — claimed, no commit, palette stays open', () => {
-    // Product ruling on PT-4611: only selecting a marker may change the scripture text, and a
-    // chorded Enter is not a selection — an unmodified Enter (or Tab) on the highlighted item is.
-    // Still CLAIMED rather than passed: the web view claims Enter in every modifier state when it
-    // opens this palette (PT9 parity), so an unclaimed one reaching Lexical would perform the
-    // unmarked plain split the palette exists to prevent.
-    //
-    // SHIFT counts as a modifier here, matching the keyboard-shortcuts catalog's "Only an UNMODIFIED
-    // Enter (or Tab) commits there". Shift+Tab in particular is "focus previous" everywhere else in
-    // the app and must not split a paragraph.
-    (['ctrlKey', 'metaKey', 'altKey', 'shiftKey'] as const).forEach((modifier) => {
-      const driver = makeDriver();
-      const event = makeEvent('Enter', { [modifier]: true });
-      const outcome = handleMarkerPaletteSessionKeyDown(event, session('enter', 'q1'), driver);
-      expect({ modifier, outcome, claimed: event.defaultPrevented }).toEqual({
-        modifier,
-        outcome: 'continue',
-        claimed: true,
+  it('Ctrl/Cmd/Alt+Enter CLOSES the palette in every kind, and is still claimed', () => {
+    // A chord is the user doing something else (Cmd+S, Ctrl+C): the palette is no longer relevant
+    // and closes, the same in both palettes. Enter stays CLAIMED even while closing — cmdk acts on
+    // any un-prevented Enter regardless of modifiers, so an unclaimed chord+Enter would click the
+    // highlighted item on the way out and commit a marker the user never chose.
+    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+      (['ctrlKey', 'metaKey', 'altKey'] as const).forEach((modifier) => {
+        const driver = makeDriver();
+        const event = makeEvent('Enter', { [modifier]: true });
+        const outcome = handleMarkerPaletteSessionKeyDown(event, session(kind, 'q1'), driver);
+        expect({ kind, modifier, outcome, claimed: event.defaultPrevented }).toEqual({
+          kind,
+          modifier,
+          outcome: 'ended',
+          claimed: true,
+        });
+        expect({ kind, modifier, commits: driver.commit.mock.calls.length }).toEqual({
+          kind,
+          modifier,
+          commits: 0,
+        });
+        expect(driver.dismiss).toHaveBeenCalledOnce();
       });
-      expect({ modifier, commits: driver.commit.mock.calls.length }).toEqual({
-        modifier,
-        commits: 0,
-      });
-      expect(driver.dismiss).not.toHaveBeenCalled();
     });
   });
 
-  it('enter session: Backspace on an EMPTY filter is inert — it must not discard the pending split', () => {
-    // For the other kinds an empty-filter Backspace closes the menu. Here that would throw away the
-    // paragraph split the web view is withholding, and because the key is claimed it would not
-    // delete the character before the caret either. Only Escape dismisses this palette.
-    const driver = makeDriver();
-    const state = session('enter', '');
-    const event = makeEvent('Backspace');
-    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('continue');
-    expect(event.defaultPrevented).toBe(true);
-    expect(driver.dismiss).not.toHaveBeenCalled();
-    expect(driver.commit).not.toHaveBeenCalled();
+  it('SHIFT+Enter and Shift+Tab commit the highlighted item, like the unmodified keys', () => {
+    // Shift is how an uppercase custom marker is typed, not a separate gesture, and a soft line
+    // break has no USFM representation — it would serialize as a plain space, the same unmarked
+    // data problem a plain split causes. Both palettes treat it as an ordinary commit.
+    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+      (['Enter', 'Tab'] as const).forEach((key) => {
+        const driver = makeDriver();
+        const event = makeEvent(key, { shiftKey: true });
+        const outcome = handleMarkerPaletteSessionKeyDown(
+          event,
+          session(kind, 'q1', [{ marker: 'q1' }]),
+          driver,
+        );
+        expect({ kind, key, outcome, claimed: event.defaultPrevented }).toEqual({
+          kind,
+          key,
+          outcome: 'ended',
+          claimed: true,
+        });
+        expect(driver.commit).toHaveBeenCalledOnce();
+      });
+    });
   });
 
-  it('enter session: Space, `*` and `\\` are inert — claimed, ignored, palette stays open', () => {
-    // Product ruling on PT-4611: ONLY selecting a marker may change the scripture text, so none of
-    // these commits. They are `\` palette gestures (Space commits the typed marker there, `*` its
-    // closing form, `\` commits-and-reopens) with no meaning for a paragraph-marker menu. They are
-    // claimed so nothing reaches the document, and ignored so the pending split is not discarded
-    // either — the palette stays open and the user chooses or escapes.
-    ([' ', '*', '\\'] as const).forEach((key) => {
+  it('Backspace on an EMPTY filter CLOSES the palette in every kind', () => {
+    // With nothing typed there is nothing to widen, so Backspace closes — Paratext 9's behaviour,
+    // and the same in both palettes. Claimed either way: nothing of the palette's ever landed, so
+    // an unclaimed Backspace would eat a real character out of the verse.
+    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
       const driver = makeDriver();
-      const event = makeEvent(key);
-      const outcome = handleMarkerPaletteSessionKeyDown(event, session('enter', 'q1'), driver);
-      expect({ key, outcome, claimed: event.defaultPrevented }).toEqual({
-        key,
-        outcome: 'continue',
-        claimed: true,
+      const state = session(kind, '');
+      const event = makeEvent('Backspace');
+      expect({ kind, outcome: handleMarkerPaletteSessionKeyDown(event, state, driver) }).toEqual({
+        kind,
+        outcome: 'ended',
       });
-      expect({ key, dismissed: driver.dismiss.mock.calls.length }).toEqual({ key, dismissed: 0 });
-      expect(driver.commitTypedCloser).not.toHaveBeenCalled();
-      expect(driver.commitTypedAndReopen).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(true);
+      expect(driver.dismiss).toHaveBeenCalledOnce();
+      expect(driver.commit).not.toHaveBeenCalled();
+    });
+  });
+
+  it('enter session: Space, `*` and `\\` commit the TYPED marker, like the `\\` palette', () => {
+    // One set of rules for both palettes: the typed-commit keys mean the same thing wherever a
+    // marker is being typed, so a user does not have to learn which palette they are looking at.
+    // The marker engine decides what the committed marker does to the document.
+    const spaceDriver = makeDriver();
+    const spaceEvent = makeEvent(' ');
+    expect(handleMarkerPaletteSessionKeyDown(spaceEvent, session('enter', 'q1'), spaceDriver)).toBe(
+      'ended',
+    );
+    expect(spaceEvent.defaultPrevented).toBe(true);
+    expect(spaceDriver.commitTyped).toHaveBeenCalledWith('q1');
+
+    const closerDriver = makeDriver();
+    const closerEvent = makeEvent('*');
+    expect(
+      handleMarkerPaletteSessionKeyDown(closerEvent, session('enter', 'q1'), closerDriver),
+    ).toBe('ended');
+    expect(closerEvent.defaultPrevented).toBe(true);
+    expect(closerDriver.commitTypedCloser).toHaveBeenCalledWith('q1');
+
+    const reopenDriver = makeDriver();
+    const reopenEvent = makeEvent('\\');
+    expect(
+      handleMarkerPaletteSessionKeyDown(reopenEvent, session('enter', 'q1'), reopenDriver),
+    ).toBe('ended');
+    expect(reopenEvent.defaultPrevented).toBe(true);
+    expect(reopenDriver.commitTypedAndReopen).toHaveBeenCalledWith('q1');
+  });
+
+  it('Space on an EMPTY filter closes and commits nothing, in every kind', () => {
+    // Nothing typed means no marker to commit; materializing anyway put a bare `\` and a space in
+    // the document. Paratext 9 closes the popup and leaves the text alone.
+    (['backslash', 'enter'] as const).forEach((kind) => {
+      const driver = makeDriver();
+      const event = makeEvent(' ');
+      expect({
+        kind,
+        outcome: handleMarkerPaletteSessionKeyDown(event, session(kind, ''), driver),
+      }).toEqual({ kind, outcome: 'ended' });
+      expect(event.defaultPrevented).toBe(true);
+      expect(driver.commitTyped).not.toHaveBeenCalled();
+      expect(driver.dismiss).toHaveBeenCalledOnce();
     });
   });
 
@@ -826,28 +899,54 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.dismiss).not.toHaveBeenCalled();
   });
 
-  it('selection session: every non-chord key is claimed — nothing may replace the wrapped selection', () => {
-    // filter char
+  it('selection session: a filter character narrows the query and is claimed', () => {
     const driver = makeDriver();
     const typed = makeEvent('w');
     const state = session('selection');
     expect(handleMarkerPaletteSessionKeyDown(typed, state, driver)).toBe('continue');
     expect(typed.defaultPrevented).toBe(true);
     expect(driver.update).toHaveBeenCalledWith({ filterText: 'w' });
-    // non-filter key: still claimed, session ends
-    const other = makeEvent('%');
-    expect(handleMarkerPaletteSessionKeyDown(other, state, driver)).toBe('ended');
-    expect(other.defaultPrevented).toBe(true);
-    expect(driver.dismiss).toHaveBeenCalledOnce();
   });
 
-  it('backslash sessions let unrelated keys land while dismissing', () => {
-    (['backslash'] as const).forEach((kind) => {
-      const driver = makeDriver();
-      const event = makeEvent('%');
-      expect(handleMarkerPaletteSessionKeyDown(event, session(kind), driver)).toBe('ended');
-      expect(event.defaultPrevented).toBe(false); // the user resumed editing; the key lands
-      expect(driver.dismiss).toHaveBeenCalledOnce();
+  it('IGNORES every key that cannot name a marker, in every kind', () => {
+    // Paratext 9's rule (`MarkerDropdownControl.IsMarkerCharacter`): a key that cannot narrow a
+    // marker name is not palette input. Claimed, so it cannot reach the verse, and ignored, so an
+    // accidental keystroke — or one character of a non-Latin layout — does not throw away a
+    // palette the user is still using.
+    const ignored = [
+      '%',
+      '.',
+      ',',
+      'é',
+      'ж',
+      '字',
+      'ArrowLeft',
+      'ArrowRight',
+      'Home',
+      'End',
+      'PageUp',
+      'PageDown',
+      'Delete',
+    ];
+    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+      ignored.forEach((key) => {
+        const driver = makeDriver();
+        const state = session(kind, 'q');
+        const event = makeEvent(key);
+        expect({
+          kind,
+          key,
+          outcome: handleMarkerPaletteSessionKeyDown(event, state, driver),
+        }).toEqual({ kind, key, outcome: 'continue' });
+        expect({ kind, key, claimed: event.defaultPrevented }).toEqual({
+          kind,
+          key,
+          claimed: true,
+        });
+        expect(state.filter).toBe('q'); // not ingested
+        expect(driver.dismiss).not.toHaveBeenCalled();
+        expect(driver.commit).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -904,7 +1003,7 @@ describe('getMarkerPaletteClaimedKeys', () => {
     // Every kind is forwarded, so each must claim these keys, or a palette that does receive focus
     // consumes them instead of forwarding them back to the session.
     (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
-      const keys = getMarkerPaletteClaimedKeys(kind);
+      const keys = getMarkerPaletteClaimedKeys();
       // The control keys the owner named explicitly, plus the ones the table has branches for.
       [' ', 'Enter', 'Escape', 'Tab', '*', 'Backspace', 'ArrowUp', 'ArrowDown'].forEach((key) => {
         // The kind is in the failure output via the surrounding forEach's own key list.
@@ -918,11 +1017,11 @@ describe('getMarkerPaletteClaimedKeys', () => {
   });
 
   it('claims the `\\` trigger so a commit-and-reopen works from a focused palette too', () => {
-    expect(getMarkerPaletteClaimedKeys('backslash')).toContain('\\');
+    expect(getMarkerPaletteClaimedKeys()).toContain('\\');
   });
 
   it('does not claim pure modifiers (they are not input and the table only passes them)', () => {
-    const keys = getMarkerPaletteClaimedKeys('backslash');
+    const keys = getMarkerPaletteClaimedKeys();
     ['Shift', 'Control', 'Alt', 'Meta'].forEach((key) => expect(keys).not.toContain(key));
   });
 
@@ -943,7 +1042,7 @@ describe('getMarkerPaletteClaimedKeys', () => {
     // ignores every key, so a stale entry is indistinguishable here from a listed one. For 'enter'
     // the sweep verifies only that no listed key is passed through unclaimed.
     (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
-      getMarkerPaletteClaimedKeys(kind).forEach((key) => {
+      getMarkerPaletteClaimedKeys().forEach((key) => {
         const driver = makeDriver();
         const state = session(kind, 'nd');
         const event = makeEvent(key);
@@ -957,5 +1056,109 @@ describe('getMarkerPaletteClaimedKeys', () => {
         });
       });
     });
+  });
+});
+
+describe('resolveFilterCharacter — the physical key, not the character the layout produced', () => {
+  const ev = (key: string, init: KeyboardEventInit & { keyCode?: number } = {}) =>
+    makeEvent(key, init);
+
+  it('falls back to keyCode for A-Z, so a non-Latin layout types the Latin marker letter', () => {
+    // The whole point: USFM marker names are always basic Latin, but the translator's keyboard may
+    // not be. On a Cyrillic layout the `q` key produces `й`, which matches no marker — the palette
+    // would be unusable for exactly the people most likely to need it.
+    expect(resolveFilterCharacter(ev('й', { keyCode: 81 }))).toBe('q');
+    expect(resolveFilterCharacter(ev('ф', { keyCode: 65 }))).toBe('a');
+    // Greek: the `q` key produces `;`, which is not a marker character either.
+    expect(resolveFilterCharacter(ev(';', { keyCode: 81 }))).toBe('q');
+  });
+
+  it('keeps a LATIN character the layout produced, whatever keyCode claims', () => {
+    // `keyCode` is not portable: Chromium takes it from the native virtual key, which Windows
+    // assigns per layout but macOS and Linux map through a US-layout table. The same French AZERTY
+    // `a` key therefore reports keyCode 65 on Windows and 81 on macOS. Reading keyCode first made
+    // that key filter `a` on one OS and `q` on the other, so a French or German translator on a Mac
+    // could not type a marker at all. The character the user actually typed is the same on both.
+    expect(resolveFilterCharacter(ev('a', { keyCode: 65 }))).toBe('a'); // AZERTY on Windows
+    expect(resolveFilterCharacter(ev('a', { keyCode: 81 }))).toBe('a'); // the SAME key on macOS
+    expect(resolveFilterCharacter(ev('z', { keyCode: 87 }))).toBe('z'); // QWERTZ `z`/`w` swap
+  });
+
+  it('keeps `-` and `+` on layouts whose number row reports digit keyCodes', () => {
+    // AZERTY keeps VK_0-VK_9 on the number row while producing `&é"'(-è_çà` unshifted, so its `-`
+    // key reports keyCode 54. Reading that as a digit turned every milestone marker into `qt6`.
+    expect(resolveFilterCharacter(ev('-', { keyCode: 54 }))).toBe('-');
+    // Czech/Slovak QWERTZ puts `+` unshifted on Digit1 — read as `1`, the `\\+w` nesting prefix
+    // could never be typed.
+    expect(resolveFilterCharacter(ev('+', { keyCode: 49 }))).toBe('+');
+  });
+
+  it('takes the letter after a DEAD key as an ordinary character', () => {
+    // With focus on the palette's LIST no composition starts, so a dead key arrives as a plain
+    // keydown (measured: `key=Dead`, then `key=e` with keyCode 69, and no composition events) —
+    // the dead key itself names no marker, and the letter after it filters normally.
+    //
+    // A dead key pressed while the EDITOR still has focus is different: it carries keyCode 229 and
+    // a composition does start. The table passes those through (`isImeCompositionKeyEvent`) rather
+    // than ingesting them, and the consumer closes the palette on `compositionstart` — the one
+    // accepted gap in the window before the palette takes focus.
+    expect(resolveFilterCharacter(ev('Dead', { keyCode: 0 }))).toBeUndefined();
+    expect(resolveFilterCharacter(ev('e', { keyCode: 69 }))).toBe('e');
+    expect(isImeCompositionKeyEvent(ev('Dead', { keyCode: 229 }))).toBe(true);
+  });
+
+  it('preserves case — from the typed character, in either script', () => {
+    // Custom markers may be capitalized, so case has to survive. `event.key` carries it in both
+    // paths: a Latin character is returned as typed, and a non-Latin one still says which case the
+    // user produced, whatever combination of Shift and CapsLock got them there.
+    expect(resolveFilterCharacter(ev('W', { keyCode: 87, shiftKey: true }))).toBe('W');
+    expect(resolveFilterCharacter(ev('w', { keyCode: 87 }))).toBe('w');
+    expect(resolveFilterCharacter(ev('Ц', { keyCode: 87, shiftKey: true }))).toBe('W');
+    expect(resolveFilterCharacter(ev('ц', { keyCode: 87 }))).toBe('w');
+    // CapsLock on, Shift held: the two cancel, and the character records that.
+    expect(resolveFilterCharacter(ev('ц', { keyCode: 87, shiftKey: true }))).toBe('w');
+  });
+
+  it('takes digits from the character, including the numpad and a shifted number row', () => {
+    expect(resolveFilterCharacter(ev('1', { keyCode: 49 }))).toBe('1');
+    expect(resolveFilterCharacter(ev('1', { keyCode: 97 }))).toBe('1'); // numpad
+    // AZERTY needs Shift for a digit; the character is still `1`.
+    expect(resolveFilterCharacter(ev('1', { keyCode: 49, shiftKey: true }))).toBe('1');
+    // Shift+8 is `*` on a US layout — a commit key, not a filter character.
+    expect(resolveFilterCharacter(ev('*', { keyCode: 56, shiftKey: true }))).toBeUndefined();
+    expect(resolveFilterCharacter(ev('!', { keyCode: 49, shiftKey: true }))).toBeUndefined();
+  });
+
+  it('takes `+` and `-` from the character, since they move between physical keys', () => {
+    // `\+w` nesting and `qt-s` milestones both need these, and they are not on one fixed key.
+    expect(resolveFilterCharacter(ev('+', { keyCode: 187, shiftKey: true }))).toBe('+');
+    expect(resolveFilterCharacter(ev('-', { keyCode: 189 }))).toBe('-');
+  });
+
+  it('falls back to the character for packet keys (Keyman), which report no usable keyCode', () => {
+    expect(resolveFilterCharacter(ev('w', { keyCode: 231 }))).toBe('w');
+    expect(resolveFilterCharacter(ev('7', { keyCode: 231 }))).toBe('7');
+    // Still nothing for a character that cannot name a marker.
+    expect(resolveFilterCharacter(ev('\u00e9', { keyCode: 231 }))).toBeUndefined();
+  });
+
+  it('returns undefined for everything that cannot name a marker', () => {
+    ['.', ',', '%', '\u00e9', '\u0436', '\u5b57', 'Enter', 'ArrowLeft', 'F1'].forEach((key) => {
+      expect({ key, resolved: resolveFilterCharacter(ev(key, { keyCode: 0 })) }).toEqual({
+        key,
+        resolved: undefined,
+      });
+    });
+  });
+
+  it('drives the SESSION filter through the table, not just in isolation', () => {
+    // The unit above is only useful if the table actually calls it: a Cyrillic keydown must narrow
+    // the query to the Latin marker letter.
+    const driver = makeDriver();
+    const state = session('enter', '');
+    handleMarkerPaletteSessionKeyDown(makeEvent('й', { keyCode: 81 }), state, driver);
+    handleMarkerPaletteSessionKeyDown(makeEvent('1', { keyCode: 49 }), state, driver);
+    expect(state.filter).toBe('q1');
+    expect(driver.update).toHaveBeenLastCalledWith({ filterText: 'q1' });
   });
 });

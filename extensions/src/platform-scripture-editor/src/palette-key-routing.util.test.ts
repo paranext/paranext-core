@@ -4,59 +4,46 @@ import { shouldRoutePaletteKey } from './palette-key-routing.util';
 const base = {
   viewType: 'standard',
   isReadOnly: false,
-  hasOpenSession: false,
   isEditorFocused: true,
-  key: 'a',
-  isTargetOtherElement: false,
 };
 
 describe('shouldRoutePaletteKey', () => {
-  it('routes keys while a session is open even though the locked editor has lost focus', () => {
-    // While a palette is open the editor is made non-editable so that non-basic-Latin cannot land
-    // (the only mechanism that works — `beforeinput` for `insertCompositionText` is not
-    // cancelable, and `compositionstart` accepts preventDefault and composes anyway). That blurs
-    // it, so a focus-only gate would stop routing: no filtering, no Enter, and no Escape to close
-    // the palette, leaving the editor locked. The table's own tests cannot catch that — they call
-    // the table directly, so they stay green while nothing reaches it.
-    expect(shouldRoutePaletteKey({ ...base, hasOpenSession: true, isEditorFocused: false })).toBe(
-      true,
-    );
-  });
-
-  it('routes keys when the editor is focused and no session is open, so a palette can be opened', () => {
+  it('routes keys typed in a focused Standard-view editor', () => {
+    // Both jobs run through this one gate: opening a palette from `\`/Enter, and driving a session
+    // that is already open during the few frames before the palette takes focus.
     expect(shouldRoutePaletteKey({ ...base })).toBe(true);
   });
 
-  it('does not route when neither a session is open nor the editor is focused', () => {
+  it('does not route when the editor does not hold focus', () => {
+    // Focus is the whole rule. Once the palette has focus its keys come back through key
+    // forwarding, not through here; anything else focused in the web view — the footnote
+    // popover's editor, a comment box — keeps its own keys. Claiming those would feed the
+    // palette's filter, or commit a marker, while the user types somewhere else entirely.
     expect(shouldRoutePaletteKey({ ...base, isEditorFocused: false })).toBe(false);
   });
 
-  it('never routes outside Standard view, even with a session somehow open', () => {
-    expect(shouldRoutePaletteKey({ ...base, viewType: 'formatted', hasOpenSession: true })).toBe(
-      false,
-    );
+  it('never routes outside Standard view', () => {
+    // Only Standard view has marker palettes. This is the gate that made the whole feature inert
+    // in a formatted-view editor, which is easy to mistake for a broken palette.
+    expect(shouldRoutePaletteKey({ ...base, viewType: 'formatted' })).toBe(false);
+    expect(shouldRoutePaletteKey({ ...base, viewType: 'markers' })).toBe(false);
   });
 
-  it('routes only Escape for an OPEN session once the editor turns read-only mid-session', () => {
-    // `isReadOnlyEffective` folds in `isSyncBlocked`, which a scheduled Send/Receive can flip with
-    // no user gesture. Escape must still close the palette; every other key could reach an editor
-    // commit method, and those throw in read-only mode.
-    const readOnlySession = { ...base, isReadOnly: true, hasOpenSession: true };
-    expect(shouldRoutePaletteKey({ ...readOnlySession, key: 'Escape' })).toBe(true);
-    [' ', '*', '\\', 'Enter', 'Tab', 'a'].forEach((key) =>
-      expect(shouldRoutePaletteKey({ ...readOnlySession, key })).toBe(false),
-    );
-  });
-
-  it('does not route an OPEN session key typed into another element in the web view', () => {
-    // A comment box, say: its keys must reach it, not filter the palette or commit a marker.
-    const otherElement = { ...base, hasOpenSession: true, isTargetOtherElement: true };
-    ['a', 'Enter', 'Tab', 'Escape'].forEach((key) =>
-      expect(shouldRoutePaletteKey({ ...otherElement, key })).toBe(false),
-    );
-  });
-
-  it('does not route in a read-only editor when no session is open, so none can be opened', () => {
+  it('does not route in a read-only editor (the CAPTURE path only — see note)', () => {
+    // A palette can neither open nor commit here: the editor's commit methods throw in read-only
+    // mode. `isReadOnlyEffective` folds in `isSyncBlocked`, which a scheduled Send/Receive can
+    // flip with no user gesture — a session already open when that happens is ended by the web
+    // view's own read-only effect, so no key is needed to get out of it.
     expect(shouldRoutePaletteKey({ ...base, isReadOnly: true })).toBe(false);
+  });
+
+  it('is only HALF the read-only story, which is why the session runner checks it too', () => {
+    // This predicate guards the capture path — keys typed in the editor before the palette takes
+    // focus. Once it has focus the keys arrive by forwarding instead and never pass through here,
+    // so a read-only flip mid-session (an automatic Send/Receive sets `isSyncBlocked` with no user
+    // gesture) would otherwise reach the commit drivers, which throw in read-only mode. The web
+    // view's `runPaletteSessionKey` repeats the check and ends the session; this test exists so
+    // that the duplication reads as deliberate rather than as something to tidy away.
+    expect(shouldRoutePaletteKey({ ...base, isReadOnly: true, isEditorFocused: true })).toBe(false);
   });
 });

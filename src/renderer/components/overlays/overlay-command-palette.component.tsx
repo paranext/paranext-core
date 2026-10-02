@@ -19,7 +19,10 @@ import {
   OverlayEntry,
   PaletteSearchField,
 } from '@renderer/services/overlays/overlay.service-model';
-import { filterPaletteItems } from '@renderer/services/overlays/overlay-palette-filter.util';
+import {
+  filterPaletteItems,
+  getPaletteFilterMode,
+} from '@renderer/services/overlays/overlay-palette-filter.util';
 import {
   cn,
   Command,
@@ -80,9 +83,17 @@ export type OverlayCommandPalettePresentationalProps = {
    */
   passive?: boolean;
   /**
-   * Current filter text. Passive mode only — ignored when `passive` is false (the active mode's
-   * input owns its own value, seeded and overridden by this prop). Shown verbatim in the passive
-   * search input so the user can see the query they are typing into the requesting WebView.
+   * Which element takes keyboard focus on mount — see {@link CommandPaletteRequest.focusTarget}.
+   * `'list'` focuses the result list, shows the search box read-only over the host-driven
+   * `filterText`, and forwards EVERY key to `keyForwarding`. Defaults to `'input'`. Ignored when
+   * `passive` is set, which takes no focus at all.
+   */
+  focusTarget?: 'input' | 'list';
+  /**
+   * Current filter text. Host-driven modes only — ignored when `passive` is false (the active
+   * mode's input owns its own value, seeded and overridden by this prop). Shown verbatim in the
+   * passive search input so the user can see the query they are typing into the requesting
+   * WebView.
    */
   filterText?: string;
   /**
@@ -344,6 +355,7 @@ export function OverlayCommandPalettePresentational({
   maxWidth,
   maxHeight,
   passive = false,
+  focusTarget = 'input',
   filterText,
   selectedIndex = 0,
   onSelect,
@@ -358,19 +370,33 @@ export function OverlayCommandPalettePresentational({
   const resolvedMaxWidth = maxWidth ?? DEFAULT_MAX_WIDTH;
   const resolvedMaxHeight = maxHeight ?? DEFAULT_MAX_HEIGHT;
 
+  // Focus goes to the LIST, and the search box becomes a read-only display. Keeping focus off
+  // every text box is what stops composed input: an IME or a dead key begins composing in any
+  // focused input regardless of what a key handler cancels, and once a composition is under way
+  // per-key rules no longer apply to it. On a list, a dead key arrives as an ordinary keydown.
+  const isListFocused = !passive && focusTarget === 'list';
+  // The REQUESTER owns the query and the highlight in both of these modes, so both render the
+  // plain-element list over a host-supplied `filterText` rather than cmdk's input-driven one.
+  // They differ only in who holds focus: a passive palette leaves it in the requesting WebView,
+  // while list mode takes it here and forwards every key back.
+  const isHostDriven = passive || isListFocused;
+
   // Fuzzy matching runs INSIDE cmdk, which owns filtering and highlight for the palettes where
   // that is safe: an ordinary focused palette, whose commits go through cmdk's own selection
   // (click/Enter/Space on the highlighted DOM item), so nothing host-side ever needs to agree
   // with the rendered list. Passive and key-forwarded palettes resolve commits and forwarded
   // keys from the HOST's filterPaletteItems list, so they always use containment — cmdk's
   // scorer is not reimplemented host-side, and the two lists must not disagree.
-  const cmdkFuzzyEnabled = !passive && !keyForwarding && !disableFuzzyMatching;
+  const cmdkFuzzyEnabled = !isHostDriven && !keyForwarding && !disableFuzzyMatching;
   // React's useRef requires null as the initial value for DOM refs
   // eslint-disable-next-line no-null/no-null
   const inputRef = useRef<HTMLInputElement>(null);
+  // React's useRef requires null as the initial value for DOM refs
+  // eslint-disable-next-line no-null/no-null
+  const listRef = useRef<HTMLDivElement>(null);
 
-  // Auto-focus the search input on mount. Skipped entirely in passive mode, which renders no
-  // search input and must never steal focus from the requesting WebView.
+  // Auto-focus on mount — the search input, or the result list in list mode. Skipped entirely in
+  // passive mode, which must never take focus from the requesting WebView.
   //
   // A single synchronous focus() reliably LOSES the focus
   // fight when the palette opens while an editor webview iframe holds focus — the iframe's own
@@ -384,10 +410,17 @@ export function OverlayCommandPalettePresentational({
     let attempts = 0;
     const MAX_FOCUS_ATTEMPTS = 20;
     const tryFocus = () => {
-      const input = inputRef.current;
-      if (!input) return;
-      input.focus();
-      if (document.activeElement === input || attempts >= MAX_FOCUS_ATTEMPTS) return;
+      const target = isListFocused ? listRef.current : inputRef.current;
+      // A missing target is a reason to RETRY, not to give up. An anchored palette renders through
+      // Radix's portal, which commits nothing on its first pass, so the element does not exist yet
+      // when this effect runs. Returning here meant focus was never requested for any anchored
+      // palette — so its keys kept reaching the editor underneath, which looked like the palette
+      // being unable to hold focus at all.
+      if (target) {
+        target.focus();
+        if (document.activeElement === target) return;
+      }
+      if (attempts >= MAX_FOCUS_ATTEMPTS) return;
       attempts += 1;
       rafId = requestAnimationFrame(tryFocus);
     };
@@ -395,7 +428,7 @@ export function OverlayCommandPalettePresentational({
     return () => {
       if (rafId !== undefined) cancelAnimationFrame(rafId);
     };
-  }, [passive]);
+  }, [passive, isListFocused]);
 
   // Active-mode search text: locally typed AND externally driven. When the cross-frame focus
   // fight loses (the editor iframe re-grabs focus on every Lexical commit), the extension
@@ -429,7 +462,13 @@ export function OverlayCommandPalettePresentational({
       // palette would otherwise do with them — its own Escape below, and cmdk's navigation (cmdk
       // calls this handler first and skips its own handling when the event is default-prevented).
       // The session decides whether to claim; an unclaimed forwarded key still behaves normally.
-      if (keyForwarding?.keys.includes(e.key)) {
+      //
+      // List mode forwards EVERY key, not just the declared ones: the whole point of focusing the
+      // list is that one table in the requester decides what each key means, including the keys
+      // it chooses to ignore. Leaving the undeclared ones to be handled here would reintroduce a
+      // second set of rules — exactly what list mode exists to avoid — and a palette that renders
+      // its own filter cannot be the one deciding which characters reach it.
+      if (keyForwarding && (isListFocused || keyForwarding.keys.includes(e.key))) {
         keyForwarding.onKey({
           key: e.key,
           keyCode: e.keyCode,
@@ -451,7 +490,7 @@ export function OverlayCommandPalettePresentational({
         onDismiss();
       }
     },
-    [keyForwarding, onDismiss],
+    [keyForwarding, onDismiss, isListFocused],
   );
 
   // Containment modes bypass cmdk's own filtering: the filtered list is computed with the same
@@ -465,17 +504,17 @@ export function OverlayCommandPalettePresentational({
         ? items
         : filterPaletteItems(
             items,
-            passive ? filterText : inputValue,
-            passive ? 'passive' : 'active',
+            isHostDriven ? filterText : inputValue,
+            isHostDriven ? 'passive' : 'active',
             searchFields,
           ),
-    [items, cmdkFuzzyEnabled, passive, filterText, inputValue, searchFields],
+    [items, cmdkFuzzyEnabled, isHostDriven, filterText, inputValue, searchFields],
   );
   // Highlight resolution, identical in both modes: clamp the driving index to the (possibly
   // just-narrowed) filtered list, exactly as the store clamps on every update, so neither mode can
   // point past the end of its own list. Passive is driven by the external `selectedIndex`, active
   // by the local mirror cmdk's arrow keys move.
-  const drivingSelectedIndex = passive ? selectedIndex : activeSelectedIndex;
+  const drivingSelectedIndex = isHostDriven ? selectedIndex : activeSelectedIndex;
   const highlightedIndex = Math.min(
     Math.max(drivingSelectedIndex, 0),
     Math.max(0, filteredItems.length - 1),
@@ -517,12 +556,12 @@ export function OverlayCommandPalettePresentational({
   // land on the page — so every ratified Space/Enter/Escape semantic would stop running.
   const searchInput = (
     <CommandInput
-      ref={passive ? undefined : inputRef}
+      ref={isHostDriven ? undefined : inputRef}
       placeholder={placeholder}
-      value={passive ? (filterText ?? '') : inputValue}
-      onValueChange={passive ? undefined : handleInputValueChange}
-      readOnly={passive}
-      tabIndex={passive ? -1 : undefined}
+      value={isHostDriven ? (filterText ?? '') : inputValue}
+      onValueChange={isHostDriven ? undefined : handleInputValueChange}
+      readOnly={isHostDriven}
+      tabIndex={isHostDriven ? -1 : undefined}
       // Space-on-empty-input picks the highlighted item (the Enter UX) for plain callers, where
       // the list is the whole point. A palette with key forwarding must NOT opt in: its session
       // owns Space (the wrap commit / visible refusal), so a local pick would bypass the session's
@@ -537,11 +576,11 @@ export function OverlayCommandPalettePresentational({
   // `block: 'nearest'` so a row that is already visible does not jump the list under the pointer.
   const highlightedDomId = highlightedItem ? getPassiveItemDomId(highlightedItem.id) : undefined;
   useEffect(() => {
-    if (!passive || !highlightedDomId) return;
+    if (!isHostDriven || !highlightedDomId) return;
     document.getElementById(highlightedDomId)?.scrollIntoView({ block: 'nearest' });
-  }, [passive, highlightedDomId]);
+  }, [isHostDriven, highlightedDomId]);
 
-  const paletteContent = passive ? (
+  const paletteContent = isHostDriven ? (
     <Command
       data-overlay-command-palette
       className="tw:rounded-lg tw:border"
@@ -559,18 +598,24 @@ export function OverlayCommandPalettePresentational({
     >
       {searchInput}
       {/* Not cmdk's CommandList: cmdk overrides a caller-supplied aria-activedescendant with its
-          own (empty in passive mode, which registers no cmdk items), so passive mode renders its
-          own listbox carrying the classes CommandList applies — including a visible scrollbar when
-          the list overflows. tabIndex matches CommandList; focus stays in the requesting WebView,
-          so aria-activedescendant alone is inert here (it only speaks from a focused element) —
-          the overlay service announces highlight and match-count changes through its live region
-          instead. The listbox still names itself for a screen reader that reaches it another way,
-          e.g. by browsing the page. */}
+          own (empty here, since host-driven modes register no cmdk items), so these modes render
+          their own listbox carrying the classes CommandList applies — including a visible
+          scrollbar when the list overflows.
+
+          tabIndex differs by mode, and that difference is the whole accessibility story.
+          In LIST mode this listbox is the focused element, so aria-activedescendant speaks:
+          a screen reader announces the highlighted marker as the user filters, which is the
+          standard combobox/listbox pattern. In PASSIVE mode focus stays in the requesting
+          WebView, nothing in the palette is focused, and aria-activedescendant is inert (it only
+          speaks from a focused element) — there the overlay service announces highlight and
+          match-count changes through its live region instead. The listbox names itself either way
+          for a screen reader that reaches it another way, e.g. by browsing the page. */}
       <div
+        ref={listRef}
         data-slot="command-list"
         role="listbox"
         aria-label={listAriaLabel}
-        tabIndex={-1}
+        tabIndex={isListFocused ? 0 : -1}
         aria-activedescendant={
           highlightedItem ? getPassiveItemDomId(highlightedItem.id) : undefined
         }
@@ -842,7 +887,7 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
   // (For a cmdk-fuzzy palette the containment count here can undercount what cmdk displays;
   // that is fine — nothing resolves against the store for those palettes, the count only clamps
   // a selectedIndex that stays 0 there, and announcements run off the forwarded path only.)
-  const filterMode = overlay.request.passive ? 'passive' : 'active';
+  const filterMode = getPaletteFilterMode(overlay.request);
 
   const handleFilterTextChange = useCallback(
     (filterText: string) => {
@@ -894,6 +939,7 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
       maxWidth={overlay.request.maxWidth}
       maxHeight={overlay.request.maxHeight}
       passive={overlay.request.passive}
+      focusTarget={overlay.request.focusTarget}
       filterText={overlay.filterText}
       selectedIndex={overlay.selectedIndex}
       onSelect={handleSelect}

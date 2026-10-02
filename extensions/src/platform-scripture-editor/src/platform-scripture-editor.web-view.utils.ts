@@ -247,8 +247,13 @@ export interface EditingSessionActivityInput {
  * therefore overwritten by the editor's pre-merge content as soon as a write is accepted (a push
  * made while an automatic Send/Receive holds the backend write gate is rejected; one after it
  * clears is not). The window-blur flush of the debounced save is the only save path a palette
- * session suppresses. Closing the gap means giving palette sessions a staleness bound like the note
- * session's refreshed-at bound, not dismissing the palette on unrelated keys.
+ * session suppresses.
+ *
+ * Tracked as PT-4817. The intended fix is a staleness bound like the note session's refreshed-at
+ * bound — a palette session defers only within the editor-ownership window of the last local edit,
+ * after which the update applies and the change guard closes the palette — not dismissing the
+ * palette on unrelated keys. An automatic Send/Receive now dismisses the palette before it writes,
+ * so that particular collision is closed; other external writers can still be overwritten.
  *
  * @returns `isActive` — whether any live session should keep deferring incoming PDP updates;
  *   `isNoteSessionStale` — whether an open note session exceeded the bound (the caller must clear

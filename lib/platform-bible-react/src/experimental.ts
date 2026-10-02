@@ -84,8 +84,8 @@ export { readDirection, persistDirection, type Direction } from './utils/dir-hel
 // open-session orchestration, the shared input lock, and the shared filter/ranking — one API family, kept together.
 export {
   clearPaletteSessionIfCurrent,
-  type ForwardedSessionKind,
   getMarkerPaletteClaimedKeys,
+  resolveFilterCharacter,
   handleMarkerPaletteSessionKeyDown,
   type MarkerPaletteKeyEvent,
   type MarkerPaletteKeyOutcome,
@@ -93,10 +93,6 @@ export {
   type MarkerPaletteSessionKind,
   type MarkerPaletteSessionState,
 } from './components/advanced/marker-palette-keydown.util';
-export {
-  createMarkerPaletteInputLock,
-  type MarkerPaletteInputLock,
-} from './components/advanced/marker-palette-input-lock.util';
 export {
   type MarkerPaletteOpenSession,
   runMarkerPaletteSession,

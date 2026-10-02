@@ -182,6 +182,26 @@ export interface CommandPaletteRequest {
    */
   passive?: boolean;
   /**
+   * Which element inside the palette takes keyboard focus when it opens. Defaults to `'input'` —
+   * the palette's search box, which owns the query and the arrow-key highlight itself.
+   *
+   * `'list'` focuses the palette's result list instead and renders the search box read-only,
+   * showing the host-driven {@link IOverlayService.updateCommandPalette} filter text exactly as
+   * {@link CommandPaletteRequest.passive} does. The requester keeps ownership of every key semantic:
+   * EVERY keydown the palette receives is handed to {@link PaletteKeyForwarding.onKey}, not only the
+   * keys named in {@link PaletteKeyForwarding.keys}, so one table decides what each key means.
+   *
+   * @remarks
+   * Focusing something that cannot be edited is what keeps composed input out: an IME or a dead key
+   * starts composing in any focused text box, no matter what the palette cancels, which would put
+   * candidate text in the palette and — once a composition is under way — out of reach of per-key
+   * rules. With focus on the list, no composition starts and a dead key arrives as an ordinary
+   * keydown.
+   *
+   * Ignored when `passive` is true, which takes no focus at all.
+   */
+  focusTarget?: 'input' | 'list';
+  /**
    * Keys the REQUESTING session claims while this palette is open, and where to send them.
    *
    * The palette and the session that opened it live in different documents, so whichever holds
