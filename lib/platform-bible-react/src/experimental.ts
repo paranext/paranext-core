@@ -94,6 +94,11 @@ export {
   type MarkerPaletteSessionState,
 } from './components/advanced/marker-palette-keydown.util';
 export {
+  captureEditorContentSnapshot,
+  hasEditorChanged,
+  type EditorContentSnapshot,
+} from './components/advanced/marker-palette-change-guard.util';
+export {
   type MarkerPaletteOpenSession,
   runMarkerPaletteSession,
   type RunMarkerPaletteSessionOptions,

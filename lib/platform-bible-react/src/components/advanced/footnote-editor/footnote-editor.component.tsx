@@ -25,6 +25,11 @@ import {
   type MarkerPaletteKeyEvent,
 } from '@/components/advanced/marker-palette-keydown.util';
 import {
+  captureEditorContentSnapshot,
+  hasEditorChanged,
+  type EditorContentSnapshot,
+} from '@/components/advanced/marker-palette-change-guard.util';
+import {
   runMarkerPaletteSession,
   type MarkerPaletteOpenSession,
 } from '@/components/advanced/marker-palette-session.util';
@@ -347,6 +352,13 @@ export default function FootnoteEditor({
    * note loads so a stale capture can never place a commit inside the wrong note.
    */
   const lastFocusOutSelectionRef = useRef<SelectionRange | undefined>(undefined);
+
+  /**
+   * This popover editor's content and caret as focus left it for an open palette — the baseline the
+   * change guard compares against. Same moment and same reason as the capture above: it is the last
+   * point the caret is readable before Lexical's blur processing nulls it.
+   */
+  const paletteBaselineSnapshotRef = useRef<EditorContentSnapshot | undefined>(undefined);
 
   /**
    * Restores the caret when the editor's selection has been lost, leaving a live one alone.
@@ -794,9 +806,13 @@ export default function FootnoteEditor({
         sessionCounterRef: paletteSessionCounter,
         setSession: (session) => {
           paletteSession.current = session;
+          // A baseline describes the editor as THIS session's palette took focus; carrying one
+          // into the next session would compare against a stale document and refuse a good commit.
+          paletteBaselineSnapshotRef.current = undefined;
         },
         clearSessionIfCurrent: (token) => {
           clearPaletteSessionIfCurrent(paletteSession, token);
+          if (!paletteSession.current) paletteBaselineSnapshotRef.current = undefined;
         },
         // Through the ref so the palette always runs the CURRENT handler — the callback is
         // captured once, at show time, while the session it drives is replaced on every reopen.
@@ -811,6 +827,14 @@ export default function FootnoteEditor({
         // invalid trailing span after the note's closing marker while the typed literal strands at
         // the real caret (live-observed: a red `\fq` after `\f*`).
         restoreSelectionIfLost,
+        hasEditorChangedSinceFocus: () =>
+          hasEditorChanged(
+            paletteBaselineSnapshotRef.current,
+            captureEditorContentSnapshot(
+              () => editorRef.current?.getUsj(),
+              () => editorRef.current?.getSelection(),
+            ),
+          ),
         focusEditor: () => editorRef.current?.focus(),
         applyItem: (selected) =>
           editorRef.current?.applyMarkerMenuSelection(selected, {
@@ -933,6 +957,12 @@ export default function FootnoteEditor({
       if (!editorInput || event.target !== editorInput) return;
       const selection = editorRef.current?.getSelection();
       if (selection) lastFocusOutSelectionRef.current = selection;
+      // Baseline for the change guard, only while this popover has a palette open.
+      if (paletteSession.current)
+        paletteBaselineSnapshotRef.current = captureEditorContentSnapshot(
+          () => editorRef.current?.getUsj(),
+          () => editorRef.current?.getSelection(),
+        );
     };
     document.addEventListener('focusout', handleFocusOut);
     return () => document.removeEventListener('focusout', handleFocusOut);

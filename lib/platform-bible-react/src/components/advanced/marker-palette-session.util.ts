@@ -98,6 +98,20 @@ export interface RunMarkerPaletteSessionOptions<TItem extends { marker: string }
    * ordering comment in {@link runMarkerPaletteSession}.
    */
   restoreSelectionIfLost(): void;
+  /**
+   * Whether the editor's content or caret changed since the palette took focus.
+   *
+   * A commit applies AT THE CARET, so a palette whose editor moved underneath it can only land the
+   * marker somewhere the user never chose — and the caret restored from the focus-out capture would
+   * address content that no longer exists. When this reports true the session ends without applying
+   * anything, and the user reopens the palette where they do want it.
+   *
+   * Supplied by each consumer, because only it can read its own editor; see
+   * `marker-palette-change-guard.util.ts` for the comparison rules — notably that a caret nulled on
+   * blur is NOT a move, since that is the normal state while a palette holds focus. Omit it and no
+   * guard runs.
+   */
+  hasEditorChangedSinceFocus?(): boolean;
   /** Focuses the consumer's editor. */
   focusEditor(): void;
   /** Applies the committed item to the consumer's editor. */
@@ -128,6 +142,7 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
     runSessionKey,
     show,
     restoreSelectionIfLost,
+    hasEditorChangedSinceFocus,
     focusEditor,
     applyItem,
     onShowError,
@@ -188,7 +203,12 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
       clearSessionIfCurrent(token);
       if (id !== undefined) {
         restoreEditorSelection();
-        const selected = items.find((item) => item.marker === id);
+        // The editor moved under the open palette, so the caret this commit would apply at is no
+        // longer the one the user chose. Focus and the caret still go back; the marker does not
+        // land, and the user reopens the palette where they actually want it.
+        const selected = hasEditorChangedSinceFocus?.()
+          ? undefined
+          : items.find((item) => item.marker === id);
         if (selected) applyItem(selected);
       } else if (isStillCurrentSession()) {
         restoreEditorSelection();

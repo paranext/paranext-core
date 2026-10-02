@@ -75,8 +75,11 @@ import {
   useViewVisibility,
 } from 'platform-bible-react';
 import {
+  captureEditorContentSnapshot,
   clearPaletteSessionIfCurrent,
   handleMarkerPaletteSessionKeyDown,
+  hasEditorChanged,
+  type EditorContentSnapshot,
   type MarkerPaletteKeyEvent,
   type MarkerPaletteOpenSession,
   type MarkerPaletteSessionKind,
@@ -535,6 +538,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const lastFocusOutSelectionRef = useRef<SelectionRange | undefined>(undefined);
 
   /**
+   * The editor's content and caret as focus left it for an open palette — the baseline the change
+   * guard compares against. Captured in the same focusout listener as
+   * {@link lastFocusOutSelectionRef}, and for the same reason: that is the last moment the caret is
+   * readable before Lexical's blur processing nulls it. Only set while a session is open, and
+   * cleared with the session, so an ordinary click away from the editor records nothing.
+   */
+  const paletteBaselineSnapshotRef = useRef<EditorContentSnapshot | undefined>(undefined);
+
+  /**
    * Session state for a standard-view marker-menu palette while it's open (single owner: the
    * keydown flow in the effect below). The trigger is claimed and never lands, and every typed
    * character is claimed by the shared key table and routed into the palette's query — never the
@@ -548,12 +560,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    *
    * `'enter'` is the Enter-split palette's session. It also guards against a second Enter
    * re-opening a palette while the first request's round-trip to the overlay service is still in
-   * flight, and its palette is PASSIVE like the `\` one — the forwarding table is its only key
-   * path, not a safety net. `'selection'` still carries the capture-phase forwarding table as a
-   * SAFETY NET: focused palettes are designed to be driven by the renderer overlay's own input, but
-   * the cross-frame focus handoff can lose (the editor iframe re-grabs focus on Lexical commits),
-   * and without the safety net the keystrokes then hit the document instead — typing REPLACED the
-   * wrapped selection and Escape fell through to Lexical.
+   * flight. Every kind carries the capture-phase key table for the window before its palette takes
+   * focus, and receives forwarded keys after; both run the same table, so the semantics do not
+   * change with who holds focus.
    *
    * `token` (allocated from the monotonic counter below) identifies which session an async
    * show-promise settlement belongs to, so a stale promise's cleanup can only clear its own
@@ -878,12 +887,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const setPaletteSession = useCallback(
     (session: MarkerPaletteOpenSession<MarkerMenuItem> | undefined) => {
       paletteSession.current = session;
+      // A baseline outlives nothing: it describes the editor as THIS session's palette took focus,
+      // so carrying it into the next one would compare against a document two edits old and refuse
+      // a commit the user did choose.
+      paletteBaselineSnapshotRef.current = undefined;
     },
     [],
   );
   /** Clears {@link paletteSession} only if it still holds the session `token` identifies. */
   const clearPaletteSession = useCallback((token: number) => {
     clearPaletteSessionIfCurrent(paletteSession, token);
+    if (!paletteSession.current) paletteBaselineSnapshotRef.current = undefined;
   }, []);
 
   /**
@@ -2107,6 +2121,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // created, and the literal then reached the PDP as data), so a nulled selection is
         // restored from the focus-out capture before the spine focuses and applies.
         restoreSelectionIfLost: () => restoreEditorSelection(),
+        hasEditorChangedSinceFocus: () =>
+          hasEditorChanged(
+            paletteBaselineSnapshotRef.current,
+            captureEditorContentSnapshot(
+              () => editorRef.current?.getUsj(),
+              () => editorRef.current?.getSelection(),
+            ),
+          ),
         focusEditor: () => editorRef.current?.focus(),
         applyItem: (selected) => {
           if (isEnter) {
@@ -2296,6 +2318,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       if (!editorInput || event.target !== editorInput) return;
       const selection = editorRef.current?.getSelection();
       if (selection) lastFocusOutSelectionRef.current = selection;
+      // Baseline for the change guard, taken only when focus is leaving for a palette this web
+      // view has open. Same moment, same reason as the capture above.
+      if (paletteSession.current)
+        paletteBaselineSnapshotRef.current = captureEditorContentSnapshot(
+          () => editorRef.current?.getUsj(),
+          () => editorRef.current?.getSelection(),
+        );
     };
     window.addEventListener('focusout', handleFocusOut);
     return () => window.removeEventListener('focusout', handleFocusOut);
@@ -3212,6 +3241,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // by `DeltaOnChangePlugin`'s ignore list), so it never reaches this callback at all — the
       // source gate is belt-and-braces on top of that.
       if (source === 'local') lastLocalEditTimestamp.current = Date.now();
+      // The editor changed under an open palette. Close it rather than leave it floating over text
+      // it no longer describes: a commit applies at the caret, and that caret may have moved with
+      // the content. The spine refuses such a commit too, but refusing LOOKS like nothing
+      // happening, so close at the moment of the change and let the user reopen where they want.
+      //
+      // Reachable with no keystroke at all — a drag-and-drop, a context-menu paste, an incoming
+      // update for this chapter — which is why this lives here rather than in the key table. The
+      // guard reads false until the palette has taken focus and a baseline exists, and the session
+      // is already cleared by the time a palette's own commit lands here, so neither self-triggers.
+      if (
+        paletteSession.current &&
+        hasEditorChanged(
+          paletteBaselineSnapshotRef.current,
+          captureEditorContentSnapshot(
+            () => editorRef.current?.getUsj(),
+            () => editorRef.current?.getSelection(),
+          ),
+        )
+      )
+        dismissPaletteSessionIfOpen();
       // Capture the current chapter's save fn and chapter key into the debounce payload so a
       // pending trailing save always targets the chapter this content was typed in.
       //
@@ -3262,7 +3311,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         else if (!editorRef.current?.getNoteOps(editingNoteKey.current)) closeFootnoteEditor(false); // false => the note caller is already gone.
       } else openFootnoteEditorOnNewNote(ops, insertedNodeKey);
     },
-    [closeFootnoteEditor, openFootnoteEditorOnNewNote, saveUsjToPdpDebounced],
+    [
+      closeFootnoteEditor,
+      openFootnoteEditorOnNewNote,
+      saveUsjToPdpDebounced,
+      dismissPaletteSessionIfOpen,
+    ],
   );
 
   // #endregion Debounced Save Scheduling

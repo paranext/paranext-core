@@ -1251,6 +1251,55 @@ export declare function clearPaletteSessionIfCurrent<TSession extends {
 	token: number;
 }>(sessionRef: React$1.MutableRefObject<TSession | undefined>, token: number): void;
 /**
+ * Decides whether the editor changed underneath an open marker palette.
+ *
+ * A palette commit applies AT THE CARET. If something moved the caret or changed the content while
+ * the palette was open — an incoming update for the same chapter, a drag-and-drop, a context-menu
+ * paste, the editor's own marker settle — then applying would put the marker somewhere the user
+ * never chose, and the caret restored from the focus-out capture would address content that no
+ * longer exists. So a changed editor ends the session instead of committing into it.
+ *
+ * The baseline is taken when focus LEAVES the editor for the palette, which is the last moment the
+ * caret is still readable: Lexical's blur processing nulls the editor-state selection just after,
+ * and the consumers already capture there for the same reason.
+ *
+ * Deliberately NOT based on Lexical's dirty-node markers: the root is marked dirty on every commit,
+ * so they report a change for every palette that ever applies anything. This compares actual
+ * content and the actual caret.
+ */
+/** A point-in-time fingerprint of the editor's content and caret. */
+export interface EditorContentSnapshot {
+	/**
+	 * The settled content, serialized for comparison. Settled rather than live so a marker edit the
+	 * user has pending does not read as a change the moment it settles on its own.
+	 */
+	content: string;
+	/**
+	 * The caret at capture, serialized, or `undefined` when it could not be read. Absent is not the
+	 * same as moved — see {@link hasEditorChanged}.
+	 */
+	caret: string | undefined;
+}
+/**
+ * Builds a snapshot from whatever the consumer can read right now. Both reads are allowed to fail:
+ * an editor that cannot report its content yields `undefined`, and the guard then declines to block
+ * anything rather than guessing.
+ */
+export declare function captureEditorContentSnapshot(readContent: () => unknown, readCaret: () => unknown): EditorContentSnapshot | undefined;
+/**
+ * Whether `current` represents a change from `baseline` that should end the session.
+ *
+ * Two deliberate non-changes:
+ *
+ * - **No baseline, or no current snapshot.** Never block on ignorance: a guard that fires when it
+ *   cannot see is worse than no guard, because it breaks the ordinary commit path.
+ * - **A caret that has gone missing.** Lexical nulls the editor-state selection on blur, which is
+ *   exactly what happens when the palette takes focus — so an absent caret is the NORMAL state
+ *   while a palette is open, not evidence that anything moved. A caret that is present and
+ *   different is a real move.
+ */
+export declare function hasEditorChanged(baseline: EditorContentSnapshot | undefined, current: EditorContentSnapshot | undefined): boolean;
+/**
  * The session record {@link runMarkerPaletteSession} creates and hands to the consumer's session ref
  * — the forwarding table's {@link MarkerPaletteSessionState} plus the `token` that scopes async
  * settle-time cleanup to THIS session (see `clearPaletteSessionIfCurrent`) and the consumer's own
@@ -1320,6 +1369,20 @@ export interface RunMarkerPaletteSessionOptions<TItem extends {
 	 * ordering comment in {@link runMarkerPaletteSession}.
 	 */
 	restoreSelectionIfLost(): void;
+	/**
+	 * Whether the editor's content or caret changed since the palette took focus.
+	 *
+	 * A commit applies AT THE CARET, so a palette whose editor moved underneath it can only land the
+	 * marker somewhere the user never chose — and the caret restored from the focus-out capture would
+	 * address content that no longer exists. When this reports true the session ends without applying
+	 * anything, and the user reopens the palette where they do want it.
+	 *
+	 * Supplied by each consumer, because only it can read its own editor; see
+	 * `marker-palette-change-guard.util.ts` for the comparison rules — notably that a caret nulled on
+	 * blur is NOT a move, since that is the normal state while a palette holds focus. Omit it and no
+	 * guard runs.
+	 */
+	hasEditorChangedSinceFocus?(): boolean;
 	/** Focuses the consumer's editor. */
 	focusEditor(): void;
 	/** Applies the committed item to the consumer's editor. */

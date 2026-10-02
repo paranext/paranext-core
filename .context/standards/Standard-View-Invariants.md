@@ -142,15 +142,39 @@ attribute. Nothing replaces that. Once the palette holds focus a paste goes to t
 common case is covered by focus alone — but these events need neither a keydown nor focus: a drop
 is dispatched at the element under the pointer, and a context-menu or middle-click paste carries no
 keydown at all. So during the pre-focus window, or from the mouse at any time, content can still
-reach the text while a palette is open, which the "only choosing a marker may change the scripture
-text" rule says should be impossible. Closing it belongs with the change guard (a content change
-closes the palette) rather than with another lock.
+reach the text while a palette is open. The change guard (§3.3) is what answers this: the content
+change closes the palette and refuses the commit, so the dropped text is the user's own edit rather
+than a marker landing somewhere they never chose. The drop itself still lands — that is the
+remaining difference from the old lock, which cancelled it outright.
 
 If the editor turns read-only mid-session (an automatic Send/Receive), the web view ends the
 session — including palettes it opened for the footnote popover's editor — because the editor's
 commit methods throw in read-only mode.
 
-### 3.3 Every way a session ends restores the caret
+### 3.3 Nothing may change the editor under an open palette
+
+A commit applies AT THE CARET. If the content or the caret moves while a palette is open, applying
+would put the marker somewhere the user never chose, and the caret restored from the focus-out
+capture would address content that no longer exists. So a changed editor ends the session instead
+of committing into it.
+
+The baseline is taken when focus LEAVES the editor for the palette — the last moment the caret is
+still readable, since Lexical's blur processing nulls the editor-state selection just after. Both
+consumers already capture there for the same reason, so the guard rides along with that listener.
+
+Two deliberate non-changes: a **missing** caret is not a move (that is the normal state while a
+palette holds focus), and a missing baseline or sample never blocks — a guard that fires when it
+cannot see would break the ordinary commit path, which is worse than not guarding. The comparison
+is against actual content and the actual caret, never Lexical's dirty-node markers: the root is
+marked dirty on every commit, so those report a change for every palette that applies anything.
+
+It acts twice. The editor's change callback closes the palette at the moment of the change, because
+a palette floating over text it no longer describes is confusing and refusing later just looks like
+nothing happening. The shared spine then refuses the apply as a backstop, which is what covers a
+change arriving between the user's choice and the commit. This is also what covers `paste`, `cut`
+and `drop`: they are no longer blocked, so instead the content change they cause closes the palette.
+
+### 3.4 Every way a session ends restores the caret
 
 A mouse click on the palette blurs the editor (the overlay renders outside its document) and
 Lexical's blur processing can NULL the editor-state selection; `focus()` then falls back to
