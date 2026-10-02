@@ -223,7 +223,9 @@ internal class ParatextProjectSendReceiveService(
     /// <summary>
     /// The Send/Receive server's current tip id for each of <paramref name="projects"/>, keyed by
     /// upper-cased project id; a <see langword="null"/> value means the server reported no tip.
-    /// One batched request. Must not be called while a sync is active; the caller guarantees that.
+    /// One batched request. Callers do not start a lookup while a sync is known to be active, but a
+    /// sync may start while a lookup runs: the lookup must tolerate that, and its result is
+    /// discarded at the end of that sync.
     /// <para>
     /// Scaffolding: public Platform.Bible cannot reach the Send/Receive server, so this returns no
     /// entries here. The Paratext 10 patch replaces the body with the repository source's batched

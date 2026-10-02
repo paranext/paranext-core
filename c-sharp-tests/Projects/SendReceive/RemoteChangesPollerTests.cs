@@ -15,6 +15,9 @@ namespace TestParanextDataProvider.Projects.SendReceive
     [ExcludeFromCodeCoverage]
     internal class RemoteChangesPollerTests
     {
+        // Bounds every wait, so a regression fails the test instead of hanging the run.
+        private static readonly TimeSpan s_bound = TimeSpan.FromSeconds(10);
+
         private volatile IReadOnlyCollection<string>? _next;
         private volatile bool _syncing;
         private volatile bool _internet;
@@ -45,7 +48,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         {
             _next = ["a"];
             _poller.Tick();
-            await _poller.FlushAsync();
+            await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_poller.GetState(), Is.EquivalentTo(new[] { "A" }), "ids are upper-cased");
             Assert.That(_events, Is.EqualTo(1));
         }
@@ -55,10 +58,10 @@ namespace TestParanextDataProvider.Projects.SendReceive
         {
             _next = ["A"];
             _poller.Tick();
-            await _poller.FlushAsync();
+            await _poller.FlushAsync().WaitAsync(s_bound);
             _next = ["a"]; // same set by value
             _poller.Tick();
-            await _poller.FlushAsync();
+            await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_fetchCalls, Is.EqualTo(2));
             Assert.That(_events, Is.EqualTo(1));
         }
@@ -68,10 +71,10 @@ namespace TestParanextDataProvider.Projects.SendReceive
         {
             _next = ["A"];
             _poller.Tick();
-            await _poller.FlushAsync();
+            await _poller.FlushAsync().WaitAsync(s_bound);
             _next = null;
             _poller.Tick();
-            await _poller.FlushAsync();
+            await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_fetchCalls, Is.EqualTo(2));
             Assert.That(_poller.GetState(), Is.EquivalentTo(new[] { "A" }));
             Assert.That(_events, Is.EqualTo(1));
@@ -86,10 +89,10 @@ namespace TestParanextDataProvider.Projects.SendReceive
                     fail ? throw new InvalidOperationException("server unreachable") : new[] { "A" }
             );
             poller.Tick();
-            await poller.FlushAsync();
+            await poller.FlushAsync().WaitAsync(s_bound);
             fail = true;
             poller.Tick();
-            await poller.FlushAsync();
+            await poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(poller.GetState(), Is.EquivalentTo(new[] { "A" }));
         }
 
@@ -99,7 +102,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _syncing = true;
             _next = ["A"];
             _poller.Tick();
-            await _poller.FlushAsync();
+            await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_fetchCalls, Is.Zero);
             Assert.That(_poller.GetState(), Is.Empty);
         }
@@ -109,12 +112,12 @@ namespace TestParanextDataProvider.Projects.SendReceive
         {
             _next = ["A"];
             _poller.Tick();
-            await _poller.FlushAsync();
+            await _poller.FlushAsync().WaitAsync(s_bound);
             _internet = false;
             _next = [];
             _poller.Tick();
             _poller.OnSyncEnded();
-            await _poller.FlushAsync();
+            await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_fetchCalls, Is.EqualTo(1));
             Assert.That(_poller.GetState(), Is.EquivalentTo(new[] { "A" }));
         }
@@ -124,7 +127,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         {
             _next = ["B"];
             _poller.OnSyncEnded();
-            await _poller.FlushAsync();
+            await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_fetchCalls, Is.EqualTo(1));
             Assert.That(_poller.GetState(), Is.EquivalentTo(new[] { "B" }));
         }
@@ -152,7 +155,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 Is.True,
                 "the timer ran the first poll"
             );
-            await poller.FlushAsync();
+            await poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(poller.GetState(), Is.EquivalentTo(new[] { "A" }));
         }
 
@@ -166,15 +169,21 @@ namespace TestParanextDataProvider.Projects.SendReceive
             {
                 Interlocked.Increment(ref calls);
                 started.Set();
-                gate.Wait();
+                gate.Wait(s_bound);
                 return ["A"];
             });
-            poller.Tick();
-            Assert.That(started.Wait(TimeSpan.FromSeconds(5)), Is.True, "first poll started");
-            poller.Tick();
-            poller.Tick();
-            gate.Set();
-            await poller.FlushAsync();
+            try
+            {
+                poller.Tick();
+                Assert.That(started.Wait(s_bound), Is.True, "first poll started");
+                poller.Tick();
+                poller.Tick();
+            }
+            finally
+            {
+                gate.Set();
+            }
+            await poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(calls, Is.EqualTo(1), "ticks during a poll are dropped, not queued");
         }
 
@@ -190,7 +199,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 if (Interlocked.Increment(ref calls) == 1)
                 {
                     started.Set();
-                    gate.Wait();
+                    gate.Wait(s_bound);
                     return ["OLD"];
                 }
                 return ["NEW"];
@@ -200,11 +209,17 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 lock (raisedStates)
                     raisedStates.Add([.. poller.GetState()]);
             };
-            poller.Tick();
-            Assert.That(started.Wait(TimeSpan.FromSeconds(5)), Is.True, "first poll started");
-            poller.OnSyncEnded();
-            gate.Set();
-            await poller.FlushAsync();
+            try
+            {
+                poller.Tick();
+                Assert.That(started.Wait(s_bound), Is.True, "first poll started");
+                poller.OnSyncEnded();
+            }
+            finally
+            {
+                gate.Set();
+            }
+            await poller.FlushAsync().WaitAsync(s_bound);
 
             Assert.That(calls, Is.EqualTo(2), "one follow-up poll after the stale one");
             Assert.That(poller.GetState(), Is.EquivalentTo(new[] { "NEW" }));
@@ -217,7 +232,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
-        public async Task Dispose_StopsTimerAndUnsubscribes()
+        public void Dispose_Unsubscribes()
         {
             using var client = new DummyPapiClient();
             using var projects = new DummyLocalParatextProjects();
@@ -235,17 +250,69 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 Assert.That(SubscriptionsOf(poller, service), Is.EqualTo((1, 1)));
                 poller.Dispose();
                 Assert.That(SubscriptionsOf(poller, service), Is.EqualTo((0, 0)));
-
-                // A disposed poller no longer polls.
-                poller.Tick();
-                poller.OnSyncEnded();
-                await poller.FlushAsync();
-                Assert.That(poller.GetState(), Is.Empty);
             }
             finally
             {
                 poller.Dispose();
             }
+        }
+
+        [Test]
+        public async Task Dispose_StopsPolling()
+        {
+            _next = ["A"];
+            _poller.Dispose();
+            _poller.Start();
+            _poller.Tick();
+            _poller.OnSyncEnded();
+            await _poller.FlushAsync().WaitAsync(s_bound);
+            Assert.That(_fetchCalls, Is.Zero);
+            Assert.That(_poller.GetState(), Is.Empty);
+        }
+
+        [Test]
+        public async Task Start_PollsAgainAfterInterval()
+        {
+            using var secondPoll = new ManualResetEventSlim(false);
+            int calls = 0;
+            using var poller = new RemoteChangesPoller(
+                () =>
+                {
+                    if (Interlocked.Increment(ref calls) >= 2)
+                        secondPoll.Set();
+                    return ["A"];
+                },
+                () => false,
+                () => true,
+                TimeSpan.FromMilliseconds(20),
+                TimeSpan.FromMilliseconds(20)
+            );
+            poller.Start();
+            Assert.That(
+                secondPoll.Wait(TimeSpan.FromSeconds(5)),
+                Is.True,
+                "the timer polled twice"
+            );
+            poller.Dispose();
+            await poller.FlushAsync().WaitAsync(s_bound);
+            Assert.That(Volatile.Read(ref calls), Is.GreaterThanOrEqualTo(2));
+        }
+
+        [Test]
+        public async Task SyncEnd_WhileOtherSignalStillSyncing_IsSkipped()
+        {
+            _next = ["A"];
+            _syncing = true;
+            _poller.OnSyncEnded();
+            await _poller.FlushAsync().WaitAsync(s_bound);
+            Assert.That(_fetchCalls, Is.Zero);
+            Assert.That(_poller.GetState(), Is.Empty);
+
+            _syncing = false;
+            _poller.Tick();
+            await _poller.FlushAsync().WaitAsync(s_bound);
+            Assert.That(_fetchCalls, Is.EqualTo(1));
+            Assert.That(_poller.GetState(), Is.EquivalentTo(new[] { "A" }));
         }
 
         private RemoteChangesPoller CreatePoller(Func<IReadOnlyCollection<string>?> fetch)
