@@ -160,10 +160,11 @@ describe('useCommentDrafts', () => {
   });
 
   it('flushes a pending debounced save on pagehide, WITHOUT unmounting', () => {
-    // Every teardown of the iframe's document -- a project switch's reload, a panel close, a
-    // window/app close -- fires `pagehide` before any unmount of this React tree (a window close
-    // has none at all), so the listener is what flushes on those paths; a cleanup-on-unmount-only
-    // flush (the previous test) would miss the window close.
+    // A project switch's reload and a panel close fire `pagehide` before any unmount of this React
+    // tree, and a window/app close runs no unmount at all, so the listener is what flushes on those
+    // paths; a cleanup-on-unmount-only flush (the previous test) would miss the window close. A
+    // window destroyed outright can skip `pagehide` too, which is why `beforeunload` (next test)
+    // pairs with it.
     // Asserting the flush WITHOUT calling `unmount()` is what exercises the listener, since RTL's
     // `unmount()` runs React's cleanup unconditionally and would pass even if no `pagehide`
     // listener existed at all.
