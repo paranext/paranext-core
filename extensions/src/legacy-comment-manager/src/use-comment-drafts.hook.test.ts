@@ -144,8 +144,10 @@ describe('useCommentDrafts', () => {
   });
 
   it('flushes a pending debounced save on unmount so it is not lost', () => {
-    // Writes are debounced 500ms; closing the panel mid-burst must not lose the last keystrokes.
-    // Unmounting well before the debounce would fire on its own means only the cleanup's
+    // Writes are debounced 500ms; a project switch mid-burst must not lose the last keystrokes. It
+    // reloads the web view, and the reload unmounts this React root before the browser reaches its
+    // `pagehide` listener, so the unmount cleanup is the flush that saves them. Unmounting well
+    // before the debounce would fire on its own means only the cleanup's
     // `debouncedSaveDrafts.flush()` call can be responsible for this write reaching storage.
     const { result, unmount } = renderCommentDrafts();
 
@@ -160,14 +162,12 @@ describe('useCommentDrafts', () => {
   });
 
   it('flushes a pending debounced save on pagehide, WITHOUT unmounting', () => {
-    // This is the real regression: `web-view.component.tsx` renders this web view's content via
-    // `srcDoc`, and both `openCommentListPanel`'s `reloadWebView` (on every project switch) and a
-    // window/app close replace or destroy the iframe's document without ever unmounting this
-    // React tree -- so a cleanup-on-unmount-only flush (the previous test) never runs on either
-    // real path. `pagehide` fires on the iframe's own window in both cases; asserting the flush
-    // WITHOUT calling `unmount()` is what actually exercises that path, since RTL's `unmount()`
-    // runs React's cleanup unconditionally and would pass even if no `pagehide` listener existed
-    // at all.
+    // A panel close fires `pagehide` before the renderer's deferred unmount of this React tree,
+    // and a window/app close destroys the iframe's document with no unmount at all, so on those
+    // paths a cleanup-on-unmount-only flush (the previous test) runs too late or never. Asserting
+    // the flush WITHOUT calling `unmount()` is what exercises the listener, since RTL's
+    // `unmount()` runs React's cleanup unconditionally and would pass even if no `pagehide`
+    // listener existed at all.
     const { result } = renderCommentDrafts();
 
     const lastKeystroke = makeEditorState('typed just before the iframe document is replaced');
