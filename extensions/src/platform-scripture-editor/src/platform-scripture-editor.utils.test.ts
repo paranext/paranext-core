@@ -481,12 +481,16 @@ interface PickerMocks {
   fireWebViewUpdate: (webViewType?: string) => void;
   /** Synthesize a `paratextBibleSendReceive.onSyncStateChanged` event from within a test. */
   fireSync: (event: { isSyncing: boolean }) => void;
+  /** Synthesize a `platform.onDidChangeProjects` event from within a test. */
+  fireProjectsChanged: () => void;
   /** `true` once the driver has unsubscribed from `onDidOpenWebView`. */
   isWebViewOpenUnsubscribed: () => boolean;
   /** `true` once the driver has unsubscribed from `onDidUpdateWebView`. */
   isWebViewUpdateUnsubscribed: () => boolean;
   /** `true` once the driver has unsubscribed from `onSyncStateChanged`. */
   isSyncUnsubscribed: () => boolean;
+  /** `true` once the driver has unsubscribed from `onDidChangeProjects`. */
+  isProjectsChangedUnsubscribed: () => boolean;
 }
 
 function createPickerMocks(): PickerMocks {
@@ -522,17 +526,14 @@ function createPickerMocks(): PickerMocks {
     };
   });
 
-  let syncListener: ((evt: { isSyncing: boolean }) => void) | undefined;
-  let syncUnsubscribed = false;
-  const mockGetNetworkEvent = vi.fn((eventName: string) => (listener: typeof syncListener) => {
-    if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
-      syncListener = listener;
-    }
+  // Network-event listeners by event name, and the names the driver has unsubscribed from.
+  const networkEventListeners = new Map<string, (evt: unknown) => void>();
+  const unsubscribedNetworkEvents = new Set<string>();
+  const mockGetNetworkEvent = vi.fn((eventName: string) => (listener: (evt: unknown) => void) => {
+    networkEventListeners.set(eventName, listener);
     return () => {
-      if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
-        syncUnsubscribed = true;
-        syncListener = undefined;
-      }
+      unsubscribedNetworkEvents.add(eventName);
+      networkEventListeners.delete(eventName);
     };
   });
 
@@ -603,12 +604,21 @@ function createPickerMocks(): PickerMocks {
       webViewUpdateListener({ webView: { webViewType } });
     },
     fireSync: (event) => {
-      if (!syncListener) throw new Error('fireSync: no listener captured');
-      syncListener(event);
+      const listener = networkEventListeners.get('paratextBibleSendReceive.onSyncStateChanged');
+      if (!listener) throw new Error('fireSync: no listener captured');
+      listener(event);
+    },
+    fireProjectsChanged: () => {
+      const listener = networkEventListeners.get('platform.onDidChangeProjects');
+      if (!listener) throw new Error('fireProjectsChanged: no listener captured');
+      listener(undefined);
     },
     isWebViewOpenUnsubscribed: () => webViewOpenUnsubscribed,
     isWebViewUpdateUnsubscribed: () => webViewUpdateUnsubscribed,
-    isSyncUnsubscribed: () => syncUnsubscribed,
+    isSyncUnsubscribed: () =>
+      unsubscribedNetworkEvents.has('paratextBibleSendReceive.onSyncStateChanged'),
+    isProjectsChangedUnsubscribed: () =>
+      unsubscribedNetworkEvents.has('platform.onDidChangeProjects'),
   };
 }
 
@@ -2259,6 +2269,20 @@ describe('startDefaultProjectPicker', () => {
     expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1);
   });
 
+  it('re-runs the picker when the set of projects changes', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireProjectsChanged();
+
+    await vi.waitFor(() => {
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('coalesces multiple triggers during an in-flight run into a single follow-up', async () => {
     const mocks = createPickerMocks();
     // Block the initial picker call on a controllable promise so we can fire triggers while it's
@@ -2301,6 +2325,7 @@ describe('startDefaultProjectPicker', () => {
     expect(mocks.isWebViewOpenUnsubscribed()).toBe(true);
     expect(mocks.isWebViewUpdateUnsubscribed()).toBe(true);
     expect(mocks.isSyncUnsubscribed()).toBe(true);
+    expect(mocks.isProjectsChangedUnsubscribed()).toBe(true);
   });
 
   it('warns and keeps running when openDefaultActiveProjectIfApplicable throws unexpectedly', async () => {
