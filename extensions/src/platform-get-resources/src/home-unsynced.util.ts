@@ -16,8 +16,3 @@ export function parseUnsyncedProjectIds(snapshot: unknown): readonly string[] | 
 
   return Array.from(new Set([...toSend, ...toReceive].map((id) => id.toUpperCase())));
 }
-
-/** Like {@link parseUnsyncedProjectIds}, with a malformed snapshot read as no projects. */
-export function toUnsyncedProjectIds(snapshot: unknown): readonly string[] {
-  return parseUnsyncedProjectIds(snapshot) ?? [];
-}

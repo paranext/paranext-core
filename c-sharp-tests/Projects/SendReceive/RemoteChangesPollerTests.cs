@@ -97,6 +97,54 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
+        public async Task ThrowingFetch_WarnsOnceUntilSuccess()
+        {
+            bool fail = true;
+            using var poller = CreatePoller(
+                () =>
+                    fail
+                        ? throw new InvalidOperationException("server unreachable")
+                        : Array.Empty<string>()
+            );
+            var originalError = Console.Error;
+            var captured = new StringWriter();
+            Console.SetError(captured);
+            try
+            {
+                const string warning = "Poll failed";
+                poller.Tick();
+                await poller.FlushAsync().WaitAsync(s_bound);
+                poller.Tick();
+                await poller.FlushAsync().WaitAsync(s_bound);
+                Assert.That(CountOf(captured.ToString(), warning), Is.EqualTo(1));
+
+                fail = false;
+                poller.Tick();
+                await poller.FlushAsync().WaitAsync(s_bound);
+                fail = true;
+                poller.Tick();
+                await poller.FlushAsync().WaitAsync(s_bound);
+                Assert.That(CountOf(captured.ToString(), warning), Is.EqualTo(2));
+            }
+            finally
+            {
+                Console.SetError(originalError);
+            }
+        }
+
+        private static int CountOf(string text, string needle)
+        {
+            int count = 0;
+            for (
+                int at = text.IndexOf(needle, StringComparison.Ordinal);
+                at >= 0;
+                at = text.IndexOf(needle, at + needle.Length, StringComparison.Ordinal)
+            )
+                count++;
+            return count;
+        }
+
+        [Test]
         public async Task WhileSyncing_TickIsSkipped()
         {
             _syncing = true;

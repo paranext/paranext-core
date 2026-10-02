@@ -1,7 +1,11 @@
 // null is a value the wire can deliver, so the malformed cases pass it deliberately.
 /* eslint-disable no-null/no-null */
 import { describe, expect, it } from 'vitest';
-import { parseUnsyncedProjectIds, toUnsyncedProjectIds } from './home-unsynced.util';
+import { parseUnsyncedProjectIds } from './home-unsynced.util';
+
+/** The union Home shows: a malformed snapshot reads as no projects. */
+const toUnsyncedProjectIds = (snapshot: unknown): readonly string[] =>
+  parseUnsyncedProjectIds(snapshot) ?? [];
 
 describe('toUnsyncedProjectIds', () => {
   it('merges the send and receive sets', () => {
@@ -38,7 +42,7 @@ describe('toUnsyncedProjectIds', () => {
     expect(toUnsyncedProjectIds({ toSend: [], toReceive: null })).toEqual([]);
   });
 
-  it('returns an empty list for the old projectIds shape', () => {
+  it('returns an empty list for a payload carrying only a single project list', () => {
     expect(toUnsyncedProjectIds({ projectIds: ['AAA'] })).toEqual([]);
   });
 
