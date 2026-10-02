@@ -331,8 +331,9 @@ export function WebView({
     // re-inserts the iframe, which loads a new document while this component stays mounted, and
     // React comes from this window, so the replaced document's root stays mounted here unless it is
     // unmounted now. After a reload its own unload handler has already unmounted it, making this a
-    // no-op. The `contentWindow` always resolves to the current document, so a stored unmount equal
-    // to the current one is the live root and is kept.
+    // no-op; it is also the fallback should that `unload` not run, though the replaced root can then
+    // render into the loading document until this load. The `contentWindow` always resolves to the
+    // current document, so a stored unmount equal to the current one is the live root and is kept.
     const currentUnmountRoot = getCurrentDocumentUnmountRoot(iframeRef.current);
     const replacedUnmountRoot = unmountRootFunctionRef.current;
     if (replacedUnmountRoot && replacedUnmountRoot !== currentUnmountRoot) {
