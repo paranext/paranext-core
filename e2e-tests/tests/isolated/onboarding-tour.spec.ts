@@ -71,7 +71,7 @@ const PROFILE_STEP_TITLE = 'Profile';
 /** Titles (from `assets/localization/en.json`) of the stops that always resolve in this build. */
 const REQUIRED_STEP_TITLES = [
   'Your project',
-  'Your model text',
+  'Your Base or Model text',
   'Your resources and tools',
   PROFILE_STEP_TITLE,
 ];

@@ -53,7 +53,7 @@ const STRINGS = {
   '%webView_modelTextPanel_installedButUnavailable%':
     "The model text is installed but couldn't be opened.",
   '%webView_modelTextPanel_retry%': 'Try again',
-  '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_prompt%': 'No Base or Model text selected.',
   '%webView_modelTextPanel_bookNotAvailable%':
     'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
   '%webView_platformScriptureEditor_emptyChapter_messageResource%':
@@ -65,7 +65,14 @@ const STRINGS = {
   '%webView_resourcePanel_textUnavailable%': 'This text could not be loaded.',
   '%webView_modelTextPanel_emptyState_moreInfo%': 'More info',
   '%webView_modelTextPanel_emptyState_lessInfo%': 'Less info',
-  '%webView_modelTextPanel_emptyState_moreInfo_body%': 'Detail text here.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_intro%': 'Intro text.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%': 'Base:',
+  '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%': 'Base definition.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%': 'Model:',
+  '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%': 'Model definition.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_admin%': 'Admin text.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%': 'Note:',
+  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%': 'Copyright text.',
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -714,7 +721,7 @@ describe('ModelTextPanel', () => {
     expect(
       screen.getByText("Couldn't load your model text. It will appear once it's available."),
     ).toBeInTheDocument();
-    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No Base or Model text selected.')).not.toBeInTheDocument();
   });
 
   it('offers no controls in the settings-error state', () => {
@@ -746,7 +753,7 @@ describe('ModelTextPanel', () => {
     // Asserting only the not-found string left this blind to the mutation it exists to guard:
     // flipping the pre-catalog branch from 'loading' to 'empty' kept it green. The empty prompt's
     // absence and the spinner's presence are what actually pin AC-1 here.
-    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No Base or Model text selected.')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
@@ -761,7 +768,7 @@ describe('ModelTextPanel', () => {
       />,
     );
 
-    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No Base or Model text selected.')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pick model text…' })).not.toBeInTheDocument();
   });
 
@@ -785,14 +792,40 @@ describe('ModelTextPanel', () => {
     expect(label).toHaveClass('tw:truncate');
   });
 
-  // The disclosure's expand/collapse behaviour is covered directly in
-  // panel-state-views.component.test.tsx. What this panel owns is that it supplies one at all,
-  // with its own model-text copy.
-  it('renders the More info disclosure with the model text body copy', () => {
+  it('prompts for a Base or Model text when none is configured', () => {
     render(<ModelTextPanel {...makeProps()} />);
 
-    expect(screen.getByRole('button', { name: 'More info' })).toBeInTheDocument();
-    expect(screen.getByText('Detail text here.')).toBeInTheDocument();
+    expect(screen.getByText('No Base or Model text selected.')).toBeInTheDocument();
+  });
+
+  // The disclosure's expand/collapse behaviour is covered directly in
+  // panel-state-views.component.test.tsx. What this panel owns is that it supplies one at all,
+  // with its own Base/Model copy.
+  it('renders the More info disclosure with the Base/Model explanation, terms in bold', () => {
+    render(<ModelTextPanel {...makeProps()} />);
+    const toggle = screen.getByRole('button', { name: 'More info' });
+    const disclosure = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
+
+    // Behind the toggle, not beside it: hidden until More info is clicked.
+    expect(screen.getByText('Intro text.')).not.toBeVisible();
+    fireEvent.click(toggle);
+    ['Intro text.', 'Admin text.'].forEach((text) => {
+      expect(screen.getByText(text)).toBeVisible();
+      expect(disclosure).toContainElement(screen.getByText(text));
+    });
+    [
+      ['Base:', 'Base definition.'],
+      ['Model:', 'Model definition.'],
+      ['Note:', 'Copyright text.'],
+    ].forEach(([term, definition]) => {
+      const termElement = screen.getByText(term);
+      expect(termElement.tagName).toBe('STRONG');
+      // The term and its definition read as one paragraph, not two.
+      expect(termElement.parentElement?.tagName).toBe('P');
+      expect(termElement.parentElement).toHaveTextContent(`${term} ${definition}`, {
+        normalizeWhitespace: true,
+      });
+    });
   });
 
   it('renders the resource text in the direction its project declares', async () => {

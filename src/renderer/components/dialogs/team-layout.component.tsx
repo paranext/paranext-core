@@ -109,7 +109,8 @@ export type TeamLayoutResult = {
 export const TEAM_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_teamLayout_title%',
   '%shareLayoutDialog_reviewAndSyncNotice%',
-  '%shareLayoutDialog_modelText_label%',
+  '%shareLayoutDialog_baseOrModelText_label%',
+  '%shareLayoutDialog_baseOrModelText_summary%',
   '%shareLayoutDialog_modelText_none%',
   '%shareLayoutDialog_teamLock_description%',
   '%shareLayoutDialog_teamLock_label%',
@@ -139,8 +140,30 @@ export const TEAM_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_retry%',
 ] as const);
 
+/**
+ * The left column's "More info" explanation of Base and Model texts. These are the Model Text
+ * panel's own empty-state strings, provided at runtime by the platform-scripture-editor extension's
+ * localizedStrings.json — they will not appear in en.json. Reading the panel's keys rather than
+ * copies of them is what keeps the two surfaces from ever explaining Base and Model differently, in
+ * any language.
+ */
+export const BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS = Object.freeze([
+  '%webView_modelTextPanel_emptyState_moreInfo%',
+  '%webView_modelTextPanel_emptyState_lessInfo%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_intro%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_admin%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%',
+] as const);
+
 export type TeamLayoutDialogLocalizedStrings = {
-  [key in (typeof TEAM_LAYOUT_DIALOG_STRING_KEYS)[number]]?: string;
+  [key in
+    | (typeof TEAM_LAYOUT_DIALOG_STRING_KEYS)[number]
+    | (typeof BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS)[number]]?: string;
 };
 
 export type TeamLayoutDialogContentProps = {
@@ -316,6 +339,79 @@ function PickerCloseButton({ label, onClose }: { label: string; onClose: () => v
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  );
+}
+
+/**
+ * The left column's "More info" disclosure: what Base and Model texts are, who chooses one, and the
+ * copyright caveat. Collapsed by default so the column does not tower over the other two.
+ *
+ * The same explanation, from the same strings, as the Model Text panel's empty state in
+ * `platform-scripture-editor` (`model-text-panel.component.tsx`). The renderer cannot import that
+ * component across the extension boundary, so the markup is restated here; keep the two in step.
+ *
+ * @param columnLabelId Id of the column heading. It describes the toggle rather than naming it, so
+ *   the toggle's accessible name stays the visible "More info" / "Less info".
+ */
+function BaseOrModelTextInfo({
+  strings,
+  columnLabelId,
+}: {
+  strings: TeamLayoutDialogLocalizedStrings;
+  columnLabelId: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const bodyId = useId();
+  const text = (key: keyof TeamLayoutDialogLocalizedStrings) => localizeString(strings, key);
+  const term = (
+    termKey: keyof TeamLayoutDialogLocalizedStrings,
+    textKey: keyof TeamLayoutDialogLocalizedStrings,
+  ) => (
+    <p>
+      <strong className="tw:font-semibold tw:text-foreground">{text(termKey)}</strong>{' '}
+      {text(textKey)}
+    </p>
+  );
+
+  return (
+    <div className="tw:flex tw:flex-col tw:items-start tw:gap-1">
+      <Button
+        variant="link"
+        className="tw:h-auto tw:p-0 tw:text-sm"
+        aria-expanded={isOpen}
+        aria-controls={bodyId}
+        aria-describedby={columnLabelId}
+        onClick={() => setIsOpen((prev) => !prev)}
+      >
+        {text(
+          isOpen
+            ? '%webView_modelTextPanel_emptyState_lessInfo%'
+            : '%webView_modelTextPanel_emptyState_moreInfo%',
+        )}
+      </Button>
+      <div
+        id={bodyId}
+        hidden={!isOpen}
+        // `max-w-md` only bites once the grid stacks into one wide column, where unbounded lines
+        // would run the width of the dialog.
+        className="tw:max-w-md tw:space-y-2 tw:text-sm tw:text-muted-foreground"
+      >
+        <p>{text('%webView_modelTextPanel_emptyState_baseOrModel_intro%')}</p>
+        {term(
+          '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',
+          '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%',
+        )}
+        {term(
+          '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%',
+          '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%',
+        )}
+        <p>{text('%webView_modelTextPanel_emptyState_baseOrModel_admin%')}</p>
+        {term(
+          '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%',
+          '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%',
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -555,6 +651,10 @@ export function TeamLayoutDialogContent({
   const activeTabLabelId = useId();
   const activeTabSublabelId = useId();
   const activeTabTriggerId = useId();
+  // Same for the Base or Model text picker, whose trigger shows only the current selection.
+  const modelTextLabelId = useId();
+  const modelTextSummaryId = useId();
+  const modelTextTriggerId = useId();
   // Ties the team-lock switch to its label and to the explanation under it.
   const teamLockLabelId = useId();
   const teamLockDescriptionId = useId();
@@ -825,9 +925,14 @@ export function TeamLayoutDialogContent({
         >
           <div className="tw:grid tw:items-stretch tw:divide-y tw:divide-border tw:xl:grid-cols-3 tw:xl:divide-x tw:xl:divide-y-0">
             <div className="tw:flex tw:min-w-0 tw:flex-col tw:gap-3 tw:px-4 tw:py-3">
-              <span className="tw:font-medium">
-                {localizeString(strings, '%shareLayoutDialog_modelText_label%')}
-              </span>
+              <div className="tw:flex tw:flex-col tw:gap-1">
+                <span className="tw:font-medium" id={modelTextLabelId}>
+                  {localizeString(strings, '%shareLayoutDialog_baseOrModelText_label%')}
+                </span>
+                <span className="tw:text-sm tw:text-muted-foreground" id={modelTextSummaryId}>
+                  {localizeString(strings, '%shareLayoutDialog_baseOrModelText_summary%')}
+                </span>
+              </div>
               {/* Same nested-modal treatment as the Manage pickers above, for the same reasons. */}
               <Dialog open={isModelTextPickerOpen} onOpenChange={setIsModelTextPickerOpen}>
                 <TooltipProvider>
@@ -838,6 +943,9 @@ export function TeamLayoutDialogContent({
                         <Button
                           variant="outline"
                           className="tw:w-full tw:justify-between tw:gap-2 tw:font-normal"
+                          id={modelTextTriggerId}
+                          aria-labelledby={`${modelTextLabelId} ${modelTextTriggerId}`}
+                          aria-describedby={modelTextSummaryId}
                         >
                           <span
                             ref={modelTextLabelRef}
@@ -895,6 +1003,9 @@ export function TeamLayoutDialogContent({
                   />
                 </DialogContent>
               </Dialog>
+              {/* Below the picker rather than above it, so expanding the explanation grows the
+                  column downward instead of pushing the column's one control out of place. */}
+              <BaseOrModelTextInfo strings={strings} columnLabelId={modelTextLabelId} />
             </div>
 
             {/* The editor, stood in for by the project it edits. Headed by the project name in the
