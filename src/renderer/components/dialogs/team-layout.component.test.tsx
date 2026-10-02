@@ -10,6 +10,7 @@ import {
   Z_INDEX_NESTED_MODAL,
   Z_INDEX_NESTED_MODAL_BACKDROP,
 } from 'platform-bible-react';
+import { BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS } from 'platform-bible-react/experimental';
 import { TeamLayoutDialogContent } from './team-layout.component';
 
 // jsdom does not implement ResizeObserver; platform-bible-react's Tooltip wires ResizeObservers.
@@ -192,6 +193,74 @@ describe('TeamLayoutDialogContent', () => {
       scriptureResources: [ESV, NIV],
       commentaryResources: [],
       isStructureProtectedForTeam: false,
+    });
+  });
+
+  // The left column explains what belongs in it, with the full explanation behind More info so the
+  // column does not tower over the other two.
+  describe('Base or Model text explanation', () => {
+    const LABEL = '%shareLayoutDialog_baseOrModelText_label%';
+    const SUMMARY = '%webView_modelTextPanel_emptyState_baseOrModel_summary%';
+    const MORE_INFO = '%webView_modelTextPanel_emptyState_moreInfo%';
+    const LESS_INFO = '%webView_modelTextPanel_emptyState_lessInfo%';
+    // The explanation body is platform-bible-react's `BaseOrModelTextExplanation`, which shows English
+    // fallbacks for unresolved keys, so these tests pass it real (short) strings to look for.
+    const label = (key: string) =>
+      `${key.replace(/^%webView_modelTextPanel_emptyState_baseOrModel_|%$/g, '')}.`;
+    const EXPLANATION_STRINGS = Object.fromEntries(
+      BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS.map((key) => [key, label(key)]),
+    );
+    const BODY_TEXTS = Object.values(EXPLANATION_STRINGS);
+
+    it('shows the one-line summary under the column label', () => {
+      renderContent();
+
+      expect(screen.getByText(SUMMARY)).toBeVisible();
+    });
+
+    // The trigger's own text is only the current selection ("None selected"), which says nothing
+    // about what is being chosen.
+    it('names the picker by the column label and describes it with the summary', () => {
+      renderContent();
+      const trigger = screen.getByRole('button', {
+        name: `${LABEL} %shareLayoutDialog_modelText_none%`,
+      });
+
+      expect(trigger).toHaveAccessibleDescription(SUMMARY);
+    });
+
+    it('describes the More info toggle by the column label', () => {
+      renderContent();
+
+      expect(screen.getByRole('button', { name: MORE_INFO })).toHaveAccessibleDescription(LABEL);
+    });
+
+    it('keeps the full explanation collapsed until More info is clicked', () => {
+      renderContent({ localizedStrings: EXPLANATION_STRINGS });
+
+      expect(screen.getByRole('button', { name: MORE_INFO })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+      BODY_TEXTS.forEach((text) => expect(screen.getByText(text)).not.toBeVisible());
+    });
+
+    // The shared component owns the paragraphs' order and pairing (its own tests pin them); what
+    // the dialog owns is passing its strings through and keeping them behind the toggle.
+    it('reveals the shared explanation, from the dialog’s strings, when More info is clicked', () => {
+      renderContent({ localizedStrings: EXPLANATION_STRINGS });
+      const toggle = screen.getByRole('button', { name: MORE_INFO });
+      fireEvent.click(toggle);
+      const body = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
+
+      expect(screen.getByRole('button', { name: LESS_INFO })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+      BODY_TEXTS.forEach((text) => {
+        expect(screen.getByText(text)).toBeVisible();
+        expect(body).toContainElement(screen.getByText(text));
+      });
     });
   });
 
@@ -675,9 +744,11 @@ describe('TeamLayoutDialogContent', () => {
   it('clears the model text when the already-selected resource is picked again', () => {
     const { onConfirm } = renderContent({ initialModelText: ESV });
 
-    // Open the picker from the trigger, which now names the current selection.
-    const trigger = screen.getByText('%shareLayoutDialog_modelText_label%').closest('div');
-    fireEvent.click(within(trigger ?? document.body).getByRole('button'));
+    // Open the picker from the trigger, which is named by the column label followed by the current
+    // selection.
+    fireEvent.click(
+      screen.getByRole('button', { name: /^%shareLayoutDialog_baseOrModelText_label% / }),
+    );
     // The already-selected row: clicking it is the deselect.
     fireEvent.click(screen.getByRole('button', { name: 'ESV' }));
 

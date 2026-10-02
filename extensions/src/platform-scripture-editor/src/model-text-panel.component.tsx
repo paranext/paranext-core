@@ -4,6 +4,7 @@ import {
   EditorRef,
   getDefaultViewOptions,
 } from '@eten-tech-foundation/platform-editor';
+import { BaseOrModelTextExplanation } from 'platform-bible-react/experimental';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -17,7 +18,11 @@ import {
   useTruncationTooltip,
   Spinner,
 } from 'platform-bible-react';
-import { getErrorMessage, type DblResourceData } from 'platform-bible-utils';
+import {
+  formatReplacementString,
+  getErrorMessage,
+  type DblResourceData,
+} from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -37,6 +42,7 @@ import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook'
 import { useIsOnline } from './use-is-online.hook';
 import {
   ExpandableInfo,
+  PANEL_FILL_CLASSES,
   PanelRetryableErrorView,
   LoadingView,
 } from './panel-state-views.component';
@@ -475,10 +481,25 @@ export function ModelTextPanel({
     [getUserModelTexts, setUserModelTexts, installResource, clearInstallFailure, markInstallFailed],
   );
 
+  // One pick at a time. The Pick buttons stay enabled while a pick runs, and a second one would
+  // either replace the open picker (the dialog service rejects the first with an error that reaches
+  // us without its code) or, if it starts while the first one's resource is still installing, race
+  // it and let the older pick's write land last.
+  const isPickingRef = useRef(false);
+
+  // Called from click handlers, which nothing awaits, so a failure is caught here or nowhere.
   const handlePickModelText = useCallback(async () => {
-    const resource = await showResourcePicker(currentModelTextIds);
-    if (resource) await handleResourceSelect(resource);
-  }, [showResourcePicker, currentModelTextIds, handleResourceSelect]);
+    if (isPickingRef.current) return;
+    isPickingRef.current = true;
+    try {
+      const resource = await showResourcePicker(currentModelTextIds);
+      if (resource) await handleResourceSelect(resource);
+    } catch (e) {
+      logger?.error(`Model text selection failed: ${getErrorMessage(e)}`);
+    } finally {
+      isPickingRef.current = false;
+    }
+  }, [showResourcePicker, currentModelTextIds, handleResourceSelect, logger]);
 
   const handleScrRefChange = useCallback(
     (newScrRef: SerializedVerseRef) => {
@@ -494,7 +515,9 @@ export function ModelTextPanel({
   // catalog, a non-DBL reference, or an entry missing its id). Offer the picker so the user can
   // recover rather than being stranded.
   const notFoundState = (
-    <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
+    <div
+      className={`tw:flex tw:flex-col tw:items-center tw:gap-4 tw:p-8 tw:text-center ${PANEL_FILL_CLASSES}`}
+    >
       <p>{localize(localizedStrings, '%webView_modelTextPanel_unknownResource%')}</p>
       <Button onClick={() => handlePickModelText()}>
         {localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
@@ -533,15 +556,30 @@ export function ModelTextPanel({
           '%webView_modelTextPanel_catalogUnavailable%',
         )}
         loadingLabel={localize(localizedStrings, '%webView_modelTextPanel_loading%')}
-        emptyPrompt={localize(localizedStrings, '%webView_modelTextPanel_emptyState_prompt%')}
+        emptyPrompt={formatReplacementString(
+          localize(localizedStrings, '%webView_modelTextPanel_emptyState_baseOrModel_prompt%'),
+          {
+            summary: localize(
+              localizedStrings,
+              '%webView_modelTextPanel_emptyState_baseOrModel_summary%',
+            ),
+          },
+        )}
         moreInfo={
           <ExpandableInfo
             moreLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_moreInfo%')}
             lessLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_lessInfo%')}
-            body={localize(localizedStrings, '%webView_modelTextPanel_emptyState_moreInfo_body%')}
+            body={
+              // Start-aligned and normally wrapped, unlike the centered, balanced empty state
+              // around it, so the bold terms line up and it reads like the Team layout dialog's.
+              <BaseOrModelTextExplanation
+                localizedStrings={localizedStrings}
+                className="tw:text-start tw:text-wrap"
+              />
+            }
           />
         }
-        pickLabel={localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
+        pickLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_pickText%')}
         retryLabel={localize(localizedStrings, '%webView_modelTextPanel_retry%')}
         onPick={() => handlePickModelText()}
         onRetryCatalog={onRetryCatalog}

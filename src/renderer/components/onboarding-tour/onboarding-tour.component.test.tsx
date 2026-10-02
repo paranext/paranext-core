@@ -65,6 +65,10 @@ vi.mock('./tour.component', async (importOriginal) => {
       <div data-testid="mock-tour">
         <span data-testid="step-count">{steps.length}</span>
         <span data-testid="step-sides">{steps.map((s: TourStep) => s.side).join(',')}</span>
+        <span data-testid="step-titles">{steps.map((s: TourStep) => s.title).join(',')}</span>
+        <span data-testid="step-descriptions">
+          {steps.map((s: TourStep) => s.description).join(',')}
+        </span>
         <span data-testid="step-padding">
           {steps.map((s: TourStep) => s.spotlightPadding ?? '').join(',')}
         </span>
@@ -118,6 +122,17 @@ describe('OnboardingTour', () => {
     expect(screen.getByTestId('step-count').textContent).toBe('5');
     // Logical sides only — never physical left/right (Tour resolves those via readDirection).
     expect(screen.getByTestId('step-sides').textContent).toBe('start,end,start,bottom,bottom');
+  });
+
+  // The second stop spotlights a column that holds a Base or Model text, so it must name both
+  // rather than the model text alone.
+  it('names both Base and Model texts at the left-column stop', () => {
+    render(<OnboardingTour />);
+    const titles = screen.getByTestId('step-titles').textContent?.split(',');
+    const descriptions = screen.getByTestId('step-descriptions').textContent?.split(',');
+
+    expect(titles?.[1]).toBe('%onboardingTour_step_baseOrModelText_title%');
+    expect(descriptions?.[1]).toBe('%onboardingTour_step_baseOrModelText_description%');
   });
 
   it('resolves the tour chrome keys Tour declares, alongside its own step keys', () => {

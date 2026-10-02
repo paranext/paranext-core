@@ -23,12 +23,28 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_installFailedOffline%',
   '%webView_modelTextPanel_installedButUnavailable%',
   '%webView_modelTextPanel_retry%',
-  '%webView_modelTextPanel_emptyState_prompt%',
-  // The empty state's "More info" disclosure, which explains what a model text is and that the
-  // admin usually chooses it. Rendered through `PanelReadinessView`'s `moreInfo` slot.
+  // `{summary}` is filled from the summary key, which the Team layout dialog also shows on its own.
+  '%webView_modelTextPanel_emptyState_baseOrModel_prompt%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_summary%',
+  // The empty state's "More info" disclosure toggle. Rendered through `PanelReadinessView`'s
+  // `moreInfo` slot; the Team layout dialog's toggle reads these same two keys.
   '%webView_modelTextPanel_emptyState_moreInfo%',
   '%webView_modelTextPanel_emptyState_lessInfo%',
-  '%webView_modelTextPanel_emptyState_moreInfo_body%',
+  // The empty state's pick button. Generic ("a text") because the column holds a Base or a Model
+  // text; the not-found state keeps `%webView_modelTextPanel_pickModelText%` beside its own message.
+  '%webView_modelTextPanel_emptyState_pickText%',
+  // The disclosure's body: platform-bible-react's `BaseOrModelTextExplanation`, which the Team
+  // layout dialog renders too, reads these. Listed here rather than spread from its
+  // `BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS` so this module stays free of the library (see
+  // above); `model-text-panel.component.test.tsx` checks the two lists agree.
+  '%webView_modelTextPanel_emptyState_baseOrModel_intro%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_admin%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%',
   // Readiness states: the panel cannot read its setting, the DBL catalog failed, or either is still
   // in flight. See `getResourcePanelReadiness` and `PanelReadinessView`.
   '%webView_modelTextPanel_settingsUnavailable%',

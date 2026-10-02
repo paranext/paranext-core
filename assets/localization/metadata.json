@@ -109,6 +109,18 @@
   "%mainMenu_visitSupportBible%": {
     "fallbackKey": "%mainMenu_helpInfo_visitCommunitySupportPage%"
   },
+  "%onboardingTour_step_modelText_description%": {
+    "deprecationInfo": {
+      "date": "2026-09-30",
+      "message": "The tour's left-column stop now names both Base and Model texts rather than the model text alone. The new key is %onboardingTour_step_baseOrModelText_description%."
+    }
+  },
+  "%onboardingTour_step_modelText_title%": {
+    "deprecationInfo": {
+      "date": "2026-09-30",
+      "message": "The tour's left-column stop now names both Base and Model texts rather than the model text alone. The new key is %onboardingTour_step_baseOrModelText_title%."
+    }
+  },
   "%product_shortName%": {
     "fallbackKey": "%product_name%"
   },
@@ -222,6 +234,12 @@
     "deprecationInfo": {
       "date": "2026-09-21",
       "message": "The description now also states when saved changes reach the team. The new key is %shareLayoutDialog_reviewAndSyncNotice%."
+    }
+  },
+  "%shareLayoutDialog_modelText_label%": {
+    "deprecationInfo": {
+      "date": "2026-09-30",
+      "message": "The Team layout dialog's left column now names both Base and Model texts rather than the model text alone. The new key is %shareLayoutDialog_baseOrModelText_label%."
     }
   },
   "%shareLayoutDialog_scriptureResources_label%": {

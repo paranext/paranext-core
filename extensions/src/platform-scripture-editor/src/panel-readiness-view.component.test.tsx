@@ -61,6 +61,33 @@ describe('PanelReadinessView', () => {
     expect(onPick).toHaveBeenCalledTimes(1);
   });
 
+  // jsdom does no layout, so this pins the classes that do the work. Any full-panel state can be
+  // taller than a short pane (an expanded "More info", or just a pane dragged small), and plain
+  // `justify-center` would then push its top above the scrollable area where it cannot be reached.
+  it.each([
+    ['empty', STRINGS.emptyPrompt],
+    ['error', STRINGS.errorMessage],
+    ['catalogError', STRINGS.catalogErrorMessage],
+  ] as const)('keeps an over-tall %s state scrollable from its top', (readiness, message) => {
+    renderView(readiness);
+    const panelState = screen.getByText(message).closest('[data-slot="empty"]');
+
+    expect(panelState).toHaveClass('tw:justify-center-safe', 'tw:overflow-y-auto');
+    expect(panelState).not.toHaveClass('tw:justify-center');
+  });
+
+  // An expanded explanation can be several paragraphs. Placed above the button, it would push the
+  // panel's only action below the fold the moment the user asks for more information.
+  it('places the pick action before the more-info disclosure', () => {
+    renderView('empty', { moreInfo: <p>Explanation.</p> });
+
+    const pick = screen.getByRole('button', { name: 'Pick Bible text…' });
+    // Document order rather than sibling indices, so a wrapper around either one doesn't matter.
+    expect(pick.compareDocumentPosition(screen.getByText('Explanation.'))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
   it('renders nothing when the panel has something to show', () => {
     const { container } = renderView('configured');
 

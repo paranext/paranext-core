@@ -1462,6 +1462,46 @@ export type NavigationHistoryButtonsProps = {
  */
 export declare function NavigationHistoryButtons({ canGoBack, canGoForward, backItems, forwardItems, onNavigate, localizedStrings, showKeyboardShortcuts, className, variant, groupClassName, showDivider, }: NavigationHistoryButtonsProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * The keys this explanation reads. They are defined by the platform-scripture-editor extension (its
+ * Model Text panel shows the same explanation in its empty state), so every consumer resolves them
+ * from there.
+ *
+ * Each `...Term` key is the bold lead-in to the definition or note that follows it, and carries its
+ * own punctuation so a translator controls it.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS: readonly [
+	"%webView_modelTextPanel_emptyState_baseOrModel_intro%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_admin%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%"
+];
+/** @experimental This export is unstable and may change shape or disappear without notice */
+export type BaseOrModelTextExplanationLocalizedStrings = {
+	[key in (typeof BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS)[number]]?: string;
+};
+/** @experimental This export is unstable and may change shape or disappear without notice */
+export type BaseOrModelTextExplanationProps = {
+	/** Localized strings; pass strings resolved from `BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS`. */
+	localizedStrings?: BaseOrModelTextExplanationLocalizedStrings;
+	/** Class name for the wrapper, so each surface owns its width, alignment and wrapping. */
+	className?: string;
+};
+/**
+ * What Base and Model texts are, who chooses one, and the copyright caveat, as five paragraphs with
+ * each term in bold beside what it introduces. Shown behind a "More info" disclosure by both the
+ * Model Text panel's empty state and the Team layout dialog, which each own their own toggle; one
+ * component so the two can never explain Base and Model differently.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function BaseOrModelTextExplanation({ localizedStrings, className, }: BaseOrModelTextExplanationProps): import("react/jsx-runtime").JSX.Element;
+/**
  * How the app is permitted to use the internet. Local alias — identical string literals to the
  * extension's `InternetUse` type, defined here so platform-bible-react does not depend on the
  * paratext-registration extension package.

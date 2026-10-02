@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { TEAM_LAYOUT_DIALOG_STRING_KEYS } from './team-layout.component';
+import {
+  TEAM_LAYOUT_PANEL_STRING_KEYS,
+  TEAM_LAYOUT_DIALOG_STRING_KEYS,
+} from './team-layout.component';
 
 // Resolved from this file's location rather than `process.cwd()` so the test is not sensitive to
 // the directory `vitest` happens to be invoked from.
@@ -28,9 +31,13 @@ function findUnusableKeys(strings: { [key: string]: unknown }, keys: readonly st
 
 const english = readStrings('en.json');
 const spanish = readStrings('es.json');
+// JSON.parse returns `any`, which assigns to the known shape of the metadata file without a type
+// assertion
+const metadata: { [key: string]: { deprecationInfo?: { date: string; message: string } } } =
+  JSON.parse(readFileSync(localizationPath('metadata.json'), 'utf8'));
 
 describe('Team layout dialog localization keys', () => {
-  it('has a non-empty English translation for every key the dialog can request', () => {
+  it('has a non-empty English translation for every key the dialog defines in en.json', () => {
     const missingOrInvalidKeys = findUnusableKeys(english, TEAM_LAYOUT_DIALOG_STRING_KEYS);
 
     if (missingOrInvalidKeys.length > 0)
@@ -48,7 +55,7 @@ describe('Team layout dialog localization keys', () => {
   // en and es are the two languages maintained in this repo (Localization-Guide.md, "Always provide
   // both en AND es"); the remaining shipped locales carry none of this dialog's keys and are
   // translated elsewhere. Nothing in the build enforces en/es parity, so this is the guard.
-  it('has a non-empty Spanish translation for every key the dialog can request', () => {
+  it('has a non-empty Spanish translation for every key the dialog defines in es.json', () => {
     const missingOrInvalidKeys = findUnusableKeys(spanish, TEAM_LAYOUT_DIALOG_STRING_KEYS);
 
     if (missingOrInvalidKeys.length > 0)
@@ -74,6 +81,16 @@ describe('Team layout dialog localization keys', () => {
     expect(english['%shareLayoutDialog_description%']).toBe(
       "Review what you're about to share with your team before confirming.",
     );
+  });
+
+  // The column holds a Base or Model text, so its label says so. The old key shipped and means
+  // something narrower, so it keeps its values and is retired instead.
+  it('labels the left column as a Base or Model text, retiring the model-text-only label', () => {
+    expect(TEAM_LAYOUT_DIALOG_STRING_KEYS).not.toContain('%shareLayoutDialog_modelText_label%');
+    expect(english['%shareLayoutDialog_baseOrModelText_label%']).toBe('Base or Model text');
+    expect(english['%shareLayoutDialog_modelText_label%']).toBe('Model text');
+    expect(spanish['%shareLayoutDialog_modelText_label%']).toBe('Texto modelo');
+    expect(metadata['%shareLayoutDialog_modelText_label%']?.deprecationInfo).toBeDefined();
   });
 
   // The resource tabs and the default-tab select happen to read alike, so one key could serve both
@@ -104,16 +121,18 @@ describe('Team layout dialog localization keys', () => {
  * `platform-scripture-editor` extension. `src/renderer` cannot import across the extension
  * boundary, so the file is parsed the same way `web-view.model.test.ts` parses its counterpart.
  */
-const EXTENSION_STRINGS: { localizedStrings: { [locale: string]: { [key: string]: string } } } =
-  JSON.parse(
-    readFileSync(
-      resolve(
-        __dirname,
-        '../../../../extensions/src/platform-scripture-editor/contributions/localizedStrings.json',
-      ),
-      'utf8',
+const EXTENSION_STRINGS: {
+  metadata?: { [key: string]: { deprecationInfo?: unknown } };
+  localizedStrings: { [locale: string]: { [key: string]: string } };
+} = JSON.parse(
+  readFileSync(
+    resolve(
+      __dirname,
+      '../../../../extensions/src/platform-scripture-editor/contributions/localizedStrings.json',
     ),
-  );
+    'utf8',
+  ),
+);
 
 describe('Team layout dialog tab labels', () => {
   // PT-4216 records this dialog's implicit coupling to the real tab titles, and PT-4550 changes
@@ -130,5 +149,52 @@ describe('Team layout dialog tab labels', () => {
   ])('keeps %s in step with the resource panel title it restates', (dialogKey, panelKey) => {
     expect(english[dialogKey]).toBe(EXTENSION_STRINGS.localizedStrings.en[panelKey]);
     expect(spanish[dialogKey]).toBe(EXTENSION_STRINGS.localizedStrings.es[panelKey]);
+  });
+});
+
+describe('Team layout dialog Base/Model explanation', () => {
+  const panelEnglish = EXTENSION_STRINGS.localizedStrings.en;
+  const panelSpanish = EXTENSION_STRINGS.localizedStrings.es;
+
+  // The dialog reads the Model Text panel's own explanation strings rather than copies of them, so
+  // users are never given two accounts of what a Base or Model text is. Those strings live in the
+  // extension, not in en.json — which is why the key list is checked against the extension's file.
+  it.each([...TEAM_LAYOUT_PANEL_STRING_KEYS])(
+    '%s is defined by the Model Text panel in English and Spanish',
+    (key) => {
+      expect(findUnusableKeys(panelEnglish, [key])).toEqual([]);
+      expect(findUnusableKeys(panelSpanish, [key])).toEqual([]);
+      expect(english[key]).toBeUndefined();
+      // A key the panel has retired keeps its value in the file, so the checks above would still
+      // pass while the dialog kept showing wording the panel no longer uses.
+      expect(EXTENSION_STRINGS.metadata?.[key]?.deprecationInfo).toBeUndefined();
+    },
+  );
+
+  // A paragraph added to the panel's explanation must reach the dialog too, and a retired one must
+  // leave it. Everything under the panel's `_baseOrModel_` prefix is explanation except the empty
+  // state's own prompt; retired keys keep their values in the file but carry a deprecation notice.
+  it("requests exactly the live paragraphs of the panel's explanation", () => {
+    const livePanelParagraphKeys = Object.keys(panelEnglish).filter(
+      (key) =>
+        key.startsWith('%webView_modelTextPanel_emptyState_baseOrModel_') &&
+        key !== '%webView_modelTextPanel_emptyState_baseOrModel_prompt%' &&
+        !EXTENSION_STRINGS.metadata?.[key]?.deprecationInfo,
+    );
+    const requestedParagraphKeys = TEAM_LAYOUT_PANEL_STRING_KEYS.filter((key) =>
+      key.startsWith('%webView_modelTextPanel_emptyState_baseOrModel_'),
+    );
+
+    expect(livePanelParagraphKeys.length).toBeGreaterThan(0);
+    expect([...requestedParagraphKeys].sort()).toEqual(livePanelParagraphKeys.sort());
+  });
+
+  // The dialog's one-line summary is the panel prompt's second sentence. The prompt takes it through
+  // a placeholder rather than restating it, so the two can never be translated apart.
+  it.each([
+    ['en', panelEnglish],
+    ['es', panelSpanish],
+  ])('builds the %s empty-state prompt from the shared summary', (_, panel) => {
+    expect(panel['%webView_modelTextPanel_emptyState_baseOrModel_prompt%']).toContain('{summary}');
   });
 });

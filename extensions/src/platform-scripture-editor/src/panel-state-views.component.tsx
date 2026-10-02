@@ -2,6 +2,14 @@ import { Button, RetryableErrorView, Spinner } from 'platform-bible-react';
 import { ReactNode, useId, useState } from 'react';
 
 /**
+ * Classes for a full-panel state whose content is centered vertically. A panel can be shorter than
+ * its content (a long "More info", or a pane dragged small); `justify-center-safe` then falls back
+ * to top alignment and the panel scrolls, where plain `justify-center` would push the top above the
+ * scrollable area, out of reach. Overrides `Empty`'s own `justify-center` through `cn`.
+ */
+export const PANEL_FILL_CLASSES = 'tw:h-screen tw:justify-center-safe tw:overflow-y-auto';
+
+/**
  * Full-panel loading state: a spinner beside a label saying what is being waited on. Shared by the
  * Model Text and Resource (Bible Texts / Commentaries) panels, which render an identical block and
  * differ only in the localized label they resolve.
@@ -27,23 +35,22 @@ export function LoadingView({ label }: { label: ReactNode }) {
 }
 
 /**
- * Full-panel error state with a retry action, for any failure a retry can actually act on — a
- * failed install, or a failed resource-catalog fetch. Shared by the Model Text and Resource panels,
- * which render an identical block and differ only in the localized strings they resolve. The inline
- * message is the single user-facing channel for these failures (no accompanying toast), so callers
- * own the recovery affordance here rather than duplicating it.
+ * Full-panel error state for the Model Text and Resource panels, which render an identical block
+ * and differ only in the localized strings they resolve. The inline message is the single
+ * user-facing channel for these failures (no accompanying toast), so callers own the recovery
+ * affordance here rather than duplicating it.
  *
- * The settings-read failure deliberately does NOT use this view: nothing in either panel can
- * re-drive that read, so it renders a message alone (see `PanelReadinessView`) rather than offering
- * an inert button.
+ * Pass `onRetry` for a failure a retry can actually act on — a failed install, or a failed
+ * resource-catalog fetch. Omit it where nothing in the panel can re-drive the failure (an
+ * unreadable setting): the view then shows its message alone rather than an inert button.
  *
  * Wraps the library's `RetryableErrorView` — the same one the resource picker, Get Resources, and
- * the Text Collection grid render for these very failures — and adds only the full-panel height
- * those surfaces do not want. The panels' own props stay as they are so their callers need no
- * change.
+ * the Text Collection grid render for these very failures — and adds only the full-panel sizing
+ * (`PANEL_FILL_CLASSES`: full height, safe centering and its own scrolling) those surfaces do not
+ * want.
  *
  * @param message Already-localized failure message (callers vary it per failure and for offline).
- * @param retryLabel Already-localized label for the retry button.
+ * @param retryLabel Already-localized label for the retry button. Required alongside `onRetry`.
  * @param onRetry Re-attempts whatever failed — the install, or the catalog fetch.
  * @param icon Overrides the default warning glyph so distinct failures stay distinguishable.
  */
@@ -54,13 +61,13 @@ export function PanelRetryableErrorView({
   icon,
 }: {
   message: ReactNode;
-  retryLabel: ReactNode;
-  onRetry: () => void;
+  retryLabel?: ReactNode;
+  onRetry?: () => void;
   icon?: ReactNode;
 }) {
   return (
     <RetryableErrorView
-      className="tw:h-screen"
+      className={PANEL_FILL_CLASSES}
       message={message}
       retryLabel={retryLabel}
       onRetry={onRetry}
@@ -72,12 +79,13 @@ export function PanelRetryableErrorView({
 /**
  * Toggle button + collapsible body for empty-state "More info / Less info" disclosures. Shared by
  * the Model Text and Resource (Bible Texts) panels, which render an identical block and differ only
- * in the localized labels and body text they resolve. Uses `Button variant="link"` rather than a
- * raw `<button>` so it stays on the component system.
+ * in the localized labels and body they pass. Uses `Button variant="link"` rather than a raw
+ * `<button>` so it stays on the component system.
  *
  * @param moreLabel Already-localized label shown when the body is collapsed (e.g. "More info").
  * @param lessLabel Already-localized label shown when the body is expanded (e.g. "Less info").
- * @param body Already-localized body text revealed when expanded.
+ * @param body Already-localized body revealed when expanded. May be several paragraphs, so the
+ *   wrapper is a `<div>`: a `<p>` cannot contain `<p>`s.
  */
 export function ExpandableInfo({
   moreLabel,
@@ -102,9 +110,9 @@ export function ExpandableInfo({
       >
         {isOpen ? lessLabel : moreLabel}
       </Button>
-      <p id={bodyId} hidden={!isOpen} className="tw:text-sm tw:text-muted-foreground tw:max-w-xs">
+      <div id={bodyId} hidden={!isOpen} className="tw:text-sm tw:text-muted-foreground tw:max-w-xs">
         {body}
-      </p>
+      </div>
     </>
   );
 }

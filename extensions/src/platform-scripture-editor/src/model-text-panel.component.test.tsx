@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
+import { BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS } from 'platform-bible-react/experimental';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
+import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
 import {
   MODEL_TEXT_EDITOR_CONTAINER_TEST_ID,
   ModelTextPanel,
@@ -41,11 +43,16 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   };
 });
 
+// The empty-state prompt as the STRINGS below render it (`{summary}` filled in). One constant, so
+// the "prompt is not shown" checks cannot go vacuous when the fixture text changes.
+const EMPTY_PROMPT = 'No Base or Model text selected. Pick one.';
+
 const STRINGS = {
   '%webView_modelTextPanel_installing%': 'Installing resource…',
   '%webView_modelTextPanel_selecting%': 'Selecting resource…',
   '%webView_modelTextPanel_noProject%': 'No project.',
   '%webView_modelTextPanel_pickModelText%': 'Pick model text…',
+  '%webView_modelTextPanel_emptyState_pickText%': 'Pick a text…',
   '%webView_modelTextPanel_unknownResource%': 'The selected model text could not be found.',
   '%webView_modelTextPanel_installFailed%': "The model text couldn't be installed.",
   '%webView_modelTextPanel_installFailedOffline%':
@@ -53,7 +60,9 @@ const STRINGS = {
   '%webView_modelTextPanel_installedButUnavailable%':
     "The model text is installed but couldn't be opened.",
   '%webView_modelTextPanel_retry%': 'Try again',
-  '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_prompt%':
+    'No Base or Model text selected. {summary}',
+  '%webView_modelTextPanel_emptyState_baseOrModel_summary%': 'Pick one.',
   '%webView_modelTextPanel_bookNotAvailable%':
     'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
   '%webView_platformScriptureEditor_emptyChapter_messageResource%':
@@ -65,7 +74,14 @@ const STRINGS = {
   '%webView_resourcePanel_textUnavailable%': 'This text could not be loaded.',
   '%webView_modelTextPanel_emptyState_moreInfo%': 'More info',
   '%webView_modelTextPanel_emptyState_lessInfo%': 'Less info',
-  '%webView_modelTextPanel_emptyState_moreInfo_body%': 'Detail text here.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_intro%': 'Intro text.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%': 'Base:',
+  '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%': 'Base definition.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%': 'Model:',
+  '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%': 'Model definition.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_admin%': 'Admin text.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%': 'Note:',
+  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%': 'Copyright text.',
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -180,9 +196,10 @@ afterEach(() => {
 });
 
 describe('ModelTextPanel', () => {
-  it('shows the "Pick model text" empty state when no model text is configured', () => {
+  // The column holds a Base or a Model text, so the empty state's button names neither.
+  it('shows the "Pick a text" empty state when no model text is configured', () => {
     renderPanel();
-    expect(screen.getByRole('button', { name: 'Pick model text…' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pick a text…' })).toBeInTheDocument();
   });
 
   it('auto-installs a configured model text whose resource is matched but not installed', async () => {
@@ -408,9 +425,63 @@ describe('ModelTextPanel', () => {
       showResourcePicker,
     });
     expect(screen.getByText('The selected model text could not be found.')).toBeInTheDocument();
+    // Like every full-panel state, it stays reachable in a pane shorter than its content.
+    expect(
+      screen.getByText('The selected model text could not be found.').closest('div'),
+    ).toHaveClass('tw:justify-center-safe', 'tw:overflow-y-auto');
 
     fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
     await waitFor(() => expect(showResourcePicker).toHaveBeenCalled());
+  });
+
+  // The pick runs from a click handler, so nothing upstream awaits it. A rejection it does not handle
+  // itself becomes an unhandled rejection inside the web view: no message, no log line. Starts from
+  // an unresolvable project reference because its not-found state renders after the "Selecting…"
+  // state, so a pick that left the panel stuck selecting would show here.
+  it('logs a failed pick and returns to where the user was', async () => {
+    const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
+    renderPanel({
+      modelTextsState: readyState({
+        dataVersion: '1.0.0',
+        items: [{ type: 'project', id: 'missing-project', name: 'Missing', source: 'admin' }],
+      }),
+      showResourcePicker: vi.fn(async () => INSTALLED_RESOURCE),
+      getUserModelTexts: async () => {
+        throw new Error('settings unreadable');
+      },
+      logger,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
+
+    await waitFor(() =>
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('settings unreadable')),
+    );
+    expect(
+      await screen.findByText('The selected model text could not be found.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Selecting resource…')).not.toBeInTheDocument();
+  });
+
+  // A second click would replace the open picker, or race a pick whose resource is still
+  // installing. Both Pick buttons stay enabled during a pick, so the panel itself must ignore it.
+  it('ignores a second pick until the first one finishes', async () => {
+    let closePicker: (resource: DblResourceData | undefined) => void = () => {};
+    const showResourcePicker = vi.fn(
+      () =>
+        new Promise<DblResourceData | undefined>((resolve) => {
+          closePicker = resolve;
+        }),
+    );
+    renderPanel({ showResourcePicker });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
+    expect(showResourcePicker).toHaveBeenCalledTimes(1);
+
+    await act(async () => closePicker(undefined));
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
+    expect(showResourcePicker).toHaveBeenCalledTimes(2);
   });
 
   it('loads a configured ProjectReference model text directly by project ID', async () => {
@@ -714,7 +785,7 @@ describe('ModelTextPanel', () => {
     expect(
       screen.getByText("Couldn't load your model text. It will appear once it's available."),
     ).toBeInTheDocument();
-    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+    expect(screen.queryByText(EMPTY_PROMPT)).not.toBeInTheDocument();
   });
 
   it('offers no controls in the settings-error state', () => {
@@ -746,7 +817,7 @@ describe('ModelTextPanel', () => {
     // Asserting only the not-found string left this blind to the mutation it exists to guard:
     // flipping the pre-catalog branch from 'loading' to 'empty' kept it green. The empty prompt's
     // absence and the spinner's presence are what actually pin AC-1 here.
-    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+    expect(screen.queryByText(EMPTY_PROMPT)).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
@@ -761,8 +832,8 @@ describe('ModelTextPanel', () => {
       />,
     );
 
-    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Pick model text…' })).not.toBeInTheDocument();
+    expect(screen.queryByText(EMPTY_PROMPT)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pick a text…' })).not.toBeInTheDocument();
   });
 
   it('puts the header label in its own element so a long resource name ellipsises', async () => {
@@ -785,14 +856,42 @@ describe('ModelTextPanel', () => {
     expect(label).toHaveClass('tw:truncate');
   });
 
-  // The disclosure's expand/collapse behaviour is covered directly in
-  // panel-state-views.component.test.tsx. What this panel owns is that it supplies one at all,
-  // with its own model-text copy.
-  it('renders the More info disclosure with the model text body copy', () => {
+  it('prompts for a Base or Model text when none is configured', () => {
     render(<ModelTextPanel {...makeProps()} />);
 
-    expect(screen.getByRole('button', { name: 'More info' })).toBeInTheDocument();
-    expect(screen.getByText('Detail text here.')).toBeInTheDocument();
+    expect(screen.getByText(EMPTY_PROMPT)).toBeInTheDocument();
+  });
+
+  // The panel requests its strings from MODEL_TEXT_PANEL_STRING_KEYS, so a key the shared
+  // explanation reads but the panel never requests would render as English fallback text in
+  // every language.
+  it('requests every string the shared Base/Model explanation reads', () => {
+    BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS.forEach((key) =>
+      expect(MODEL_TEXT_PANEL_STRING_KEYS).toContain(key),
+    );
+  });
+
+  // The disclosure's expand/collapse behaviour is covered directly in
+  // panel-state-views.component.test.tsx. What this panel owns is that it supplies one at all,
+  // with its own Base/Model copy.
+  it('renders the More info disclosure with the Base/Model explanation, terms in bold', () => {
+    render(<ModelTextPanel {...makeProps()} />);
+    const toggle = screen.getByRole('button', { name: 'More info' });
+    const disclosure = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
+
+    // Inside the disclosure the toggle controls, in this order, with each term sharing a paragraph
+    // with its own definition.
+    const paragraphs = Array.from(disclosure?.querySelectorAll('p') ?? []);
+    expect(paragraphs.map((p) => p.textContent?.replace(/\s+/g, ' '))).toEqual([
+      'Intro text.',
+      'Base: Base definition.',
+      'Model: Model definition.',
+      'Admin text.',
+      'Note: Copyright text.',
+    ]);
+    ['Base:', 'Model:', 'Note:'].forEach((term) =>
+      expect(screen.getByText(term).tagName).toBe('STRONG'),
+    );
   });
 
   it('renders the resource text in the direction its project declares', async () => {
