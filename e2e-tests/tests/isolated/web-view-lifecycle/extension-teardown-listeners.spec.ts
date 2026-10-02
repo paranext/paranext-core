@@ -31,10 +31,10 @@ import {
 } from './web-view-lifecycle.util';
 
 /** Where the probe records, on the renderer's own window, what ran during the reload */
-const LOG_KEY = '__extensionPagehideListenerProbe';
+const LOG_KEY = '__extensionTeardownListenersProbe';
 
 /** Where the spec keeps, on the renderer's own window, the document the reload replaces */
-const REPLACED_DOCUMENT_KEY = '__extensionPagehideReplacedDocument';
+const REPLACED_DOCUMENT_KEY = '__extensionTeardownReplacedDocument';
 
 /** One record of the probe */
 type ProbeEntry = { event: string; rootRendered?: boolean; whileOwnDocumentCurrent?: boolean };
