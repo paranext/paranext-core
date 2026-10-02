@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.Repository;
+using Paratext.Data.Users;
 using static Paranext.DataProvider.NetworkObjects.Documentation.ExperimentalMethodDocumentation;
 
 namespace Paranext.DataProvider.Projects.SendReceive;
@@ -218,6 +219,66 @@ internal class ParatextProjectSendReceiveService(
     /// </para>
     /// </summary>
     protected internal string? GetLastSyncedTipId(ScrText scrText) => null;
+
+    /// <summary>
+    /// The Send/Receive server's current tip id for each of <paramref name="projects"/>, keyed by
+    /// upper-cased project id; a <see langword="null"/> value means the server reported no tip.
+    /// One batched request. Must not be called while a sync is active; the caller guarantees that.
+    /// <para>
+    /// Scaffolding: public Platform.Bible cannot reach the Send/Receive server, so this returns no
+    /// entries here. The Paratext 10 patch replaces the body with the repository source's batched
+    /// lookup. Do not remove — removing it breaks the patch.
+    /// </para>
+    /// </summary>
+    protected internal virtual IReadOnlyDictionary<string, string?> GetServerTipIds(
+        IReadOnlyCollection<ScrText> projects
+    ) => new Dictionary<string, string?>();
+
+    /// <summary>
+    /// Whether the user allows unrestricted internet use (the Paratext internet setting).
+    /// </summary>
+    protected internal virtual bool IsInternetUseEnabled() =>
+        InternetAccess.Status == InternetUse.Enabled;
+
+    private int _serverTipLookupWarned;
+
+    /// <summary>
+    /// The projects among <paramref name="projects"/> for which the server holds changes not yet
+    /// received here — see <see cref="UnreceivedChangesRule"/>. Returns <see langword="null"/> when
+    /// the server lookup failed, so a caller can keep its previous answer; logs that failure once
+    /// until a later lookup succeeds.
+    /// </summary>
+    public IReadOnlyCollection<string>? GetProjectsWithUnreceivedChanges(
+        IReadOnlyCollection<ScrText> projects
+    )
+    {
+        IReadOnlyDictionary<string, string?> serverTips;
+        try
+        {
+            serverTips = GetServerTipIds(projects);
+        }
+        catch (Exception ex)
+        {
+            if (Interlocked.Exchange(ref _serverTipLookupWarned, 1) == 0)
+            {
+                Console.Error.WriteLine(
+                    $"Could not read server tip ids for the sync-direction indicator: {ex.Message}"
+                );
+            }
+            return null;
+        }
+        Interlocked.Exchange(ref _serverTipLookupWarned, 0);
+
+        var result = new List<string>();
+        foreach (ScrText scrText in projects)
+        {
+            string id = scrText.Guid.ToString().ToUpperInvariant();
+            serverTips.TryGetValue(id, out string? serverTip);
+            if (UnreceivedChangesRule.Evaluate(serverTip, GetLastSyncedTipId(scrText)))
+                result.Add(id);
+        }
+        return result;
+    }
 
     // The three properties below are read only by the closed-source Paratext 10 patch,
     // which replaces this class's stub bodies with real implementations. Do not remove them —
