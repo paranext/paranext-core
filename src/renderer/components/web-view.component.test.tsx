@@ -212,8 +212,8 @@ describe('the iframe loading a new document unmounts the React root of the one i
 
   /**
    * Stands in for a React web view's bootstrap having run in the iframe's current document: each
-   * document publishes its own root's unmount on its `window`, and the iframe's `contentWindow`
-   * always resolves to whichever document is current.
+   * document publishes its own root's unmount on its `window`, and the iframe element's
+   * `contentWindow` always resolves to whichever document is current.
    */
   function publishRootOfNewDocument(iframe: HTMLIFrameElement, unmountRoot: () => void) {
     const { contentWindow } = iframe;
@@ -253,6 +253,29 @@ describe('the iframe loading a new document unmounts the React root of the one i
 
     expect(unmountFirstRoot).toHaveBeenCalledTimes(1);
     expect(unmountSecondRoot).not.toHaveBeenCalled();
+  });
+
+  test('unmounts the previous root even when the post-load lookup runs before the next load', async () => {
+    // The component also looks the unmount up 200ms after a load. When a move's new document has
+    // already published its root by then but has not fired its load yet, that lookup must not
+    // overwrite the previous document's unmount, or the load would take the old root for the live one
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const { iframe } = await renderWebView();
+      const unmountFirstRoot = vi.fn();
+      const unmountSecondRoot = vi.fn();
+
+      publishRootOfNewDocument(iframe, unmountFirstRoot);
+      fireEvent.load(iframe);
+      publishRootOfNewDocument(iframe, unmountSecondRoot);
+      vi.advanceTimersByTime(200);
+      fireEvent.load(iframe);
+
+      expect(unmountFirstRoot).toHaveBeenCalledTimes(1);
+      expect(unmountSecondRoot).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('leaves the live root mounted when the same document reports a second load', async () => {
