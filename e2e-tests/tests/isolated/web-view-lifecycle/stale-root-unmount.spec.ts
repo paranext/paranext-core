@@ -25,47 +25,21 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
 import { closeDockTab } from '../../../fixtures/content-zoom-helpers';
-
-/** A small React web view every build ships, whose provider answers a reload of an existing tab */
-const REACT_WEB_VIEW_TYPE = 'platformGetResources.newTab';
+import {
+  type PapiWindow,
+  REACT_WEB_VIEW_TYPE,
+  crashLines,
+  currentRootChildCount,
+  iframeSelector,
+  openReactWebViewTab,
+  unmountDuringRenderLines,
+} from './web-view-lifecycle.util';
 
 /** Back-to-back reloads, each of which replaces the iframe's document */
 const RELOAD_COUNT = 3;
 
 /** Where the spec keeps, on the renderer's own window, the root containers of replaced documents */
 const PROBE_KEY = '__staleRootUnmountProbe';
-
-type PapiWindow = {
-  papi: {
-    webViews: {
-      openWebView: (type: string, layout?: unknown) => Promise<string | undefined>;
-      reloadWebView: (type: string, id: string) => Promise<string | undefined>;
-    };
-  };
-  updateWebViewDefinitionById: (id: string, update: { title?: string }) => boolean;
-};
-
-function iframeSelector(webViewId: string): string {
-  return `iframe[data-web-view-id="${webViewId}"]`;
-}
-
-/**
- * How many elements the iframe's CURRENT document has rendered into its React root container, or -1
- * while that document has no container yet.
- */
-async function currentRootChildCount(page: Page, webViewId: string): Promise<number> {
-  return page.evaluate((selector) => {
-    const iframe = document.querySelector<HTMLIFrameElement>(selector);
-    return iframe?.contentDocument?.getElementById('root')?.childElementCount ?? -1;
-  }, iframeSelector(webViewId));
-}
-
-/** Waits until the iframe's current document has rendered its React root */
-async function waitForRenderedRoot(page: Page, webViewId: string): Promise<void> {
-  await expect
-    .poll(() => currentRootChildCount(page, webViewId), { timeout: 60_000 })
-    .toBeGreaterThan(0);
-}
 
 /**
  * Keeps a handle to the iframe's current document and its root container on the renderer's window,
@@ -99,7 +73,7 @@ async function reloadAndWaitForNewDocument(page: Page, webViewId: string): Promi
     },
     { type: REACT_WEB_VIEW_TYPE, id: webViewId },
   );
-  expect(reloadedId, 'the reload answers the same web view').toBe(webViewId);
+  expect(reloadedId, 'the reload returns the same web view').toBe(webViewId);
 
   await expect
     .poll(
@@ -149,14 +123,7 @@ test.describe('web view reload', () => {
     const consoleLines: string[] = [];
     page.on('console', (message) => consoleLines.push(message.text()));
 
-    const webViewId = await page.evaluate(async (type) => {
-      // The renderer sets `globalThis.papi`; it is untyped in the Playwright context.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const { papi } = window as unknown as PapiWindow;
-      return papi.webViews.openWebView(type, { type: 'tab' });
-    }, REACT_WEB_VIEW_TYPE);
-    if (!webViewId) throw new Error('openWebView answered no id');
-    await waitForRenderedRoot(page, webViewId);
+    const webViewId = await openReactWebViewTab(page);
 
     for (let reload = 0; reload < RELOAD_COUNT; reload++) {
       // Sequential on purpose: each reload replaces the document the previous one produced
@@ -204,12 +171,10 @@ test.describe('web view reload', () => {
     });
     const closeLines = consoleLines.slice(reloadLines.length);
 
-    const crashLines = (lines: string[]) =>
-      lines.filter((line) => line.includes(webViewId) && line.includes('crashed while rendering'));
-    const unmountDuringRenderLines = (lines: string[]) =>
-      lines.filter((line) => line.includes('Attempted to synchronously unmount a root'));
-    expect.soft(crashLines(reloadLines), 'no crash reported while reloading').toEqual([]);
-    expect.soft(crashLines(closeLines), 'no crash reported on close').toEqual([]);
+    expect
+      .soft(crashLines(reloadLines, [webViewId]), 'no crash reported while reloading')
+      .toEqual([]);
+    expect.soft(crashLines(closeLines, [webViewId]), 'no crash reported on close').toEqual([]);
     expect
       .soft(unmountDuringRenderLines(reloadLines), 'no unmount-during-render warning on reload')
       .toEqual([]);
