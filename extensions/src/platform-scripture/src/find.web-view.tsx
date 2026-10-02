@@ -1739,40 +1739,69 @@ global.webViewComponent = function FindWebView({
     };
   }, [editorWebViewController]);
 
+  /**
+   * The result the editor was last asked to select, so a failure that arrives late can tell whether
+   * the user has since moved on to another result.
+   */
+  const lastEditorSelectRequestRef = useRef<HidableFindResult | undefined>(undefined);
+
+  /**
+   * Moves the scroll group to a result's verse when the editor could not be asked to select it —
+   * the fallback for both ways {@link callControllerSafely} reports a failure. Only for the result
+   * still selected: a slow rejection for a result the user has already arrowed past would otherwise
+   * drag the editor back to it.
+   */
+  const fallBackToResultVerse = useCallback(
+    (searchResult: HidableFindResult, error: unknown) => {
+      logger.warn(`Find: failed to select result in editor: ${getErrorMessage(error)}`);
+      if (lastEditorSelectRequestRef.current !== searchResult) return;
+      setVerseRefSetting(searchResult.start.verseRef);
+    },
+    [setVerseRefSetting],
+  );
+
   const handleFocusedResultChange = useCallback(
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
-      setVerseRefSetting(searchResult.start.verseRef);
-      if (targetEditorWebViewId && editorWebViewController) {
-        // Preview the match in the editor (select + highlight) without stealing focus, so the user
-        // can keep navigating results. Double-click / reference-click shift focus to the editor.
-        //
-        // Hidden case (see .claude/rules/cross-view-sync-hidden-views.md): nothing to do here. This
-        // panel cannot observe the editor's visibility (useViewVisibility only sees this panel's own
-        // iframe), but the editor can: `selectRange` applies the selection at once and scrolls to the
-        // match when the editor's tab is next shown. Selection and annotation are data-driven, so
-        // they persist while hidden.
-        try {
-          editorWebViewController
-            .selectRange({ start: searchResult.start, end: searchResult.end })
-            .catch((e) =>
-              logger.warn(`Find: failed to select result in editor: ${getErrorMessage(e)}`),
-            );
-          editorWebViewController
-            .setAnnotation(
-              { start: searchResult.start, end: searchResult.end },
-              'find-result-highlight',
-              'find-current-result',
-            )
-            .catch((e) =>
-              logger.warn(`Find: failed to highlight result in editor: ${getErrorMessage(e)}`),
-            );
-        } catch {
-          // Ignore any synchronous errors from the controller methods.
-        }
+      if (!targetEditorWebViewId || !editorWebViewController) {
+        setVerseRefSetting(searchResult.start.verseRef);
+        return;
+      }
+      // Preview the match in the editor (select + highlight) without stealing focus, so the user
+      // can keep navigating results. Double-click / reference-click shift focus to the editor.
+      //
+      // The editor moves the scroll group itself (its `selectRange` handler), and only after it has
+      // recorded that a range jump owns the verse. Moving the group from here as well would race
+      // that: the group's update can reach the editor first, and its ordinary verse scroll then
+      // runs unclaimed and parks the verse's start at the top, leaving the match wherever that
+      // puts it. So this sets the reference only when the editor could not be asked.
+      //
+      // Hidden case (see .claude/rules/cross-view-sync-hidden-views.md): nothing to do here. This
+      // panel cannot observe the editor's visibility (useViewVisibility only sees this panel's own
+      // iframe), but the editor can: `selectRange` applies the selection at once and scrolls to the
+      // match when the editor's tab is next shown. Selection and annotation are data-driven, so
+      // they persist while hidden.
+      lastEditorSelectRequestRef.current = searchResult;
+      callControllerSafely(
+        () =>
+          editorWebViewController.selectRange({ start: searchResult.start, end: searchResult.end }),
+        (e) => fallBackToResultVerse(searchResult, e),
+      );
+      try {
+        editorWebViewController
+          .setAnnotation(
+            { start: searchResult.start, end: searchResult.end },
+            'find-result-highlight',
+            'find-current-result',
+          )
+          .catch((e) =>
+            logger.warn(`Find: failed to highlight result in editor: ${getErrorMessage(e)}`),
+          );
+      } catch {
+        // Ignore any synchronous errors from the controller methods.
       }
     },
-    [editorWebViewController, targetEditorWebViewId, setVerseRefSetting],
+    [editorWebViewController, targetEditorWebViewId, setVerseRefSetting, fallBackToResultVerse],
   );
 
   /**
@@ -1783,7 +1812,10 @@ global.webViewComponent = function FindWebView({
   const handleOpenAtResult = useCallback(
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
-      setVerseRefSetting(searchResult.start.verseRef);
+      // With an editor to ask, the editor moves the scroll group itself — see
+      // `handleFocusedResultChange` for why this must not do it too.
+      if (!targetEditorWebViewId || !editorWebViewController)
+        setVerseRefSetting(searchResult.start.verseRef);
       if (targetReferencePanelWebViewId && !targetEditorWebViewId) {
         // The scripture is showing in a read-only reference panel, which registers no web view
         // controller — so activating its tab IS the navigation. `setVerseRefSetting` above already
@@ -1803,20 +1835,28 @@ global.webViewComponent = function FindWebView({
         // "Tried to send payload while not connected" races). Wrapped because the tab can close
         // between this callback being handed to the result list and the user activating it, leaving a
         // revoked proxy whose property read throws synchronously — see `callControllerSafely`.
+        lastEditorSelectRequestRef.current = searchResult;
         callControllerSafely(
           () =>
             editorWebViewController
               .selectRange({ start: searchResult.start, end: searchResult.end })
-              .then(() => {
-                if (targetEditorWebViewId && editorWebViewController)
-                  return editorWebViewController.setAnnotation(
-                    { start: searchResult.start, end: searchResult.end },
-                    'find-result-highlight',
-                    'find-current-result',
-                  );
-                return undefined;
-              }),
-          (e) => logger.warn(`Find: failed to update editor: ${getErrorMessage(e)}`),
+              .then(
+                () =>
+                  callControllerSafely(
+                    () =>
+                      editorWebViewController.setAnnotation(
+                        { start: searchResult.start, end: searchResult.end },
+                        'find-result-highlight',
+                        'find-current-result',
+                      ),
+                    (e) =>
+                      logger.warn(
+                        `Find: failed to highlight result in editor: ${getErrorMessage(e)}`,
+                      ),
+                  ),
+                (e) => fallBackToResultVerse(searchResult, e),
+              ),
+          (e) => fallBackToResultVerse(searchResult, e),
         );
       }
     },
@@ -1825,6 +1865,7 @@ global.webViewComponent = function FindWebView({
       targetEditorWebViewId,
       targetReferencePanelWebViewId,
       setVerseRefSetting,
+      fallBackToResultVerse,
     ],
   );
 
