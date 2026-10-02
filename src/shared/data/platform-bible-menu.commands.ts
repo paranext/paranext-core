@@ -52,7 +52,7 @@ export function handleMenuCommand(command: MenuItemContainingCommand, tabId?: st
     case 'platform.visitGettingStartedPage':
       executeCommandWithErrorHandling(
         'platform.openWindow',
-        'https://studio.paratext.org/start ',
+        'https://studio.paratext.org/start',
         command.command,
         tabId,
       );
@@ -61,14 +61,6 @@ export function handleMenuCommand(command: MenuItemContainingCommand, tabId?: st
       executeCommandWithErrorHandling(
         'platform.openWindow',
         'https://support.bible/paratext-10-studio',
-        command.command,
-        tabId,
-      );
-      break;
-    case 'platform.visitFeatureRoadmapPage':
-      executeCommandWithErrorHandling(
-        'platform.openWindow',
-        'https://studio.paratext.org/roadmap',
         command.command,
         tabId,
       );

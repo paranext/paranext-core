@@ -41,12 +41,29 @@ describe('Help menu links open the destinations their labels promise', () => {
     );
   });
 
-  test.each([
-    ['platform.visitGettingStartedPage', 'https://studio.paratext.org/start '],
-    ['platform.visitFeatureRoadmapPage', 'https://studio.paratext.org/roadmap'],
-  ] as const)('%s still opens %s', (command, url) => {
-    handleMenuCommand(menuItem(command));
+  test('Getting started opens the Getting Started page', () => {
+    handleMenuCommand(menuItem('platform.visitGettingStartedPage'));
 
-    expect(commandService.sendCommand).toHaveBeenCalledWith('platform.openWindow', url);
+    expect(commandService.sendCommand).toHaveBeenCalledWith(
+      'platform.openWindow',
+      'https://studio.paratext.org/start',
+    );
+  });
+
+  /**
+   * A command with no Help-link case is dispatched as itself. The Feature roadmap id is the example
+   * because its page is unpublished, so it must never be given a case that opens a web page.
+   */
+  test('a command with no Help-link case is dispatched unchanged rather than opened as a page', () => {
+    handleMenuCommand(menuItem('platform.visitFeatureRoadmapPage'));
+
+    expect(commandService.sendCommand).toHaveBeenCalledWith(
+      'platform.visitFeatureRoadmapPage',
+      undefined,
+    );
+    expect(commandService.sendCommand).not.toHaveBeenCalledWith(
+      'platform.openWindow',
+      expect.anything(),
+    );
   });
 });

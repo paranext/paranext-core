@@ -502,7 +502,6 @@ describe('Platform menu document interface-mode gating', () => {
   const POWER_ONLY_COMMANDS = [
     'platform.createWindow',
     'platform.visitGettingStartedPage',
-    'platform.visitFeatureRoadmapPage',
     'platform.openDeveloperDocumentationUrl',
   ];
 

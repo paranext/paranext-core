@@ -247,9 +247,13 @@ async function runCommitFlow({
   if (stealFocus) {
     // The mouse press on the palette item: focus leaves the editor FIRST (focusout fires
     // synchronously at the moment of the steal), THEN Lexical's blur-path selection processing
-    // nulls the editor-state selection — the exact order of the live failure.
+    // nulls the editor-state selection — the exact order of the live failure. Focus must really
+    // leave (`blur`, not a synthetic focusout): with the editor still the active element, jsdom's
+    // timer-queued `selectionchange` can reach the popover's stray-caret snap before the commit,
+    // and the snap re-selects the note end, so the commit sees a live selection and skips the
+    // restore.
     await act(async () => {
-      editorInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      editorInput.blur();
       // Lexical's selection type is `BaseSelection | null` — null IS the "no selection" state
       // this test must produce, and undefined does not typecheck for $setSelection.
       // eslint-disable-next-line no-null/no-null
@@ -331,21 +335,12 @@ describe('FootnoteEditor palette commit of fp (the footnote-paragraph BREAK)', (
     expect(outcome.noteCharMarkers).toEqual(['fr', 'ft', 'fp']);
   });
 
-  // Bounded retry for a jsdom-only listener-interleaving race: the synthetic focusout's dispatch
-  // order between Lexical's own blur processing and the popover's document-level capture is not
-  // fully deterministic under parallel-suite load, and when Lexical's nulling wins, the capture
-  // reads no selection and the break falls back to document end. A real equivalence regression
-  // fails on every try; only the interleaving artifact is intermittent.
-  it(
-    'mouse (focus-stolen) commit produces the SAME result as the live-selection one',
-    { retry: 2 },
-    async () => {
-      const liveOutcome = await runCommitFlow({ stealFocus: false, marker: 'fp', caretAt: 'mid' });
-      const stolenOutcome = await runCommitFlow({ stealFocus: true, marker: 'fp', caretAt: 'mid' });
+  it('mouse (focus-stolen) commit produces the SAME result as the live-selection one', async () => {
+    const liveOutcome = await runCommitFlow({ stealFocus: false, marker: 'fp', caretAt: 'mid' });
+    const stolenOutcome = await runCommitFlow({ stealFocus: true, marker: 'fp', caretAt: 'mid' });
 
-      expect(stolenOutcome.markerCharCount).toBe(1);
-      expect(stolenOutcome.strandedLiteralTexts).toEqual([]);
-      expect(stolenOutcome.tree).toBe(liveOutcome.tree);
-    },
-  );
+    expect(stolenOutcome.markerCharCount).toBe(1);
+    expect(stolenOutcome.strandedLiteralTexts).toEqual([]);
+    expect(stolenOutcome.tree).toBe(liveOutcome.tree);
+  });
 });

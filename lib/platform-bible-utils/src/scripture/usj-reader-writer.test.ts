@@ -90,16 +90,15 @@ const usjReaderWriterOptionsParatext3_0: UsjReaderWriterOptions = {
 const matthew1And2Usfm = readTestDataFile('web-matthew-1-and-2.usfm');
 
 /**
- * WEB Matthew 1-2 output in USJ from Paratext 10 Studio 0.3.0-rc.0 (version 3.1 replaced with 3.0
- * in the USJ marker because that is more accurate. The USJ version handling isn't great yet).
+ * WEB Matthew 1-2 output in USJ from Paratext 10 0.3.0-rc.0 (version 3.1 replaced with 3.0 in the
+ * USJ marker because that is more accurate. The USJ version handling isn't great yet).
  *
  * Also includes the chapter marker for chapter 3 but no contents of chapter 3.
  */
 const matthew1And2Usj: Usj = JSON.parse(readTestDataFile('web-matthew-1-and-2.usj'));
 
 /**
- * Small portion of WEB Matthew 2 output in USJ from Paratext 10 Studio 0.3.0-rc.0 and modified by
- * hand.
+ * Small portion of WEB Matthew 2 output in USJ from Paratext 10 0.3.0-rc.0 and modified by hand.
  *
  * Includes the first paragraph and last two paragraphs of chapter 2 with verses 21 and 22 combined.
  */
@@ -118,8 +117,8 @@ const matthew2verseRangeUsj = JSON.parse(readTestDataFile('web-matthew-2-verse-r
 const webMatthew5Usfm = readTestDataFile('web-matthew-5-section-header.usfm');
 
 /**
- * WEB Matthew 1-2 output in USJ from Paratext 10 Studio 0.3.0-rc.0 (version 3.1 replaced with 3.0
- * in the USJ marker because that is more accurate. The USJ version handling isn't great yet).
+ * WEB Matthew 1-2 output in USJ from Paratext 10 0.3.0-rc.0 (version 3.1 replaced with 3.0 in the
+ * USJ marker because that is more accurate. The USJ version handling isn't great yet).
  *
  * Also includes the chapter marker for chapter 3 but no contents of chapter 3.
  */
