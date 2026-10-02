@@ -3,7 +3,15 @@ import { SyncStatus, SyncingProject, useSyncStatus } from '@renderer/hooks/use-s
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
-import { CircleAlert, CircleArrowUp, CircleCheck, CircleHelp, RefreshCw } from 'lucide-react';
+import {
+  ArrowDownUp,
+  CircleAlert,
+  CircleArrowDown,
+  CircleArrowUp,
+  CircleCheck,
+  CircleHelp,
+  RefreshCw,
+} from 'lucide-react';
 import {
   Button,
   Popover,
@@ -72,7 +80,8 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_sync_popover_idle%',
   '%toolbar_sync_popover_synced%',
   '%toolbar_sync_popover_unknown%',
-  '%toolbar_sync_popover_unsynced%',
+  '%toolbar_sync_popover_unsynced_receive%',
+  '%toolbar_sync_popover_unsynced_send%',
   '%toolbar_sync_progress_item%',
   '%toolbar_sync_status_cancelled%',
   '%toolbar_sync_status_failed%',
@@ -89,14 +98,20 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 
 /**
  * The popover's list of project names, shared by the syncing and unsynced states so both render the
- * same markup.
+ * same markup. `testId` tells apart the lists that can be on screen together.
  */
-function ProjectList({ projects }: { projects: readonly SyncingProject[] }) {
+function ProjectList({
+  projects,
+  testId = 'toolbar-sync-popover-projects',
+}: {
+  projects: readonly SyncingProject[];
+  testId?: string;
+}) {
   return (
     // Tailwind's reset strips list semantics in Safari; role="list" re-establishes
     // them for VoiceOver, as `first-run/steps/sync-progress.component.tsx` documents.
     // eslint-disable-next-line jsx-a11y/no-redundant-roles
-    <ul role="list" data-testid="toolbar-sync-popover-projects" className="tw:text-sm">
+    <ul role="list" data-testid={testId} className="tw:text-sm">
       {projects.map((project) => (
         // Keyed on the id, not the name: two projects can share a name, and a name
         // falls back to the id only when its metadata couldn't be read.
@@ -117,7 +132,9 @@ function ProjectList({ projects }: { projects: readonly SyncingProject[] }) {
  * messages, warnings).
  *
  * "Unsynced changes" is driven by `useUnsyncedChanges` through `useSyncStatus`, which reads each
- * project's repository for local changes not yet sent; the popover names those projects.
+ * project's repository for local changes not yet sent and, where the build can query the server,
+ * for server changes not yet received. The icon shows which direction applies, and the popover
+ * names the projects under a heading per direction.
  *
  * Deferred: two of the richer states in the design — "Connection problem" and "Unsaved changes" —
  * are not implemented, because neither is derivable from what Send/Receive currently emits; each
@@ -128,7 +145,8 @@ function ProjectList({ projects }: { projects: readonly SyncingProject[] }) {
  */
 export function SyncStatusButton() {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
-  const { status, syncingProjects, unsyncedProjects, syncProgress } = useSyncStatus();
+  const { status, syncingProjects, unsyncedProjects, unsyncedDirection, syncProgress } =
+    useSyncStatus();
   const [isOpen, setIsOpen] = useState(false);
   const [isCancelEnabled, setIsCancelEnabled] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -586,6 +604,9 @@ export function SyncStatusButton() {
     });
   })();
 
+  const unsyncedToSend = unsyncedProjects.filter((project) => project.direction !== 'receive');
+  const unsyncedToReceive = unsyncedProjects.filter((project) => project.direction !== 'send');
+
   const popoverStatusMessage = (() => {
     if (status === 'synced') return localizedStrings['%toolbar_sync_popover_synced%'];
     if (wasCancelled) return localizedStrings['%toolbar_sync_popover_cancelled%'];
@@ -672,13 +693,33 @@ export function SyncStatusButton() {
                   {status === 'idle' && (
                     <RefreshCw className="tw:h-4 tw:w-4 tw:shrink-0" aria-hidden />
                   )}
-                  {status === 'unsynced' && (
-                    <CircleArrowUp
-                      data-testid="toolbar-sync-unsynced-icon"
+                  {status === 'unsynced' && unsyncedDirection === 'receive' && (
+                    <CircleArrowDown
+                      data-testid="toolbar-sync-unsynced-icon-receive"
                       className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-primary"
                       aria-hidden
                     />
                   )}
+                  {status === 'unsynced' && unsyncedDirection === 'both' && (
+                    <ArrowDownUp
+                      data-testid="toolbar-sync-unsynced-icon-both"
+                      className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-primary"
+                      aria-hidden
+                    />
+                  )}
+                  {/*
+                   * The send icon is also the fallback while the direction is still `undefined`
+                   * (project names resolve after the status does), so the icon never blinks out.
+                   */}
+                  {status === 'unsynced' &&
+                    unsyncedDirection !== 'receive' &&
+                    unsyncedDirection !== 'both' && (
+                      <CircleArrowUp
+                        data-testid="toolbar-sync-unsynced-icon-send"
+                        className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-primary"
+                        aria-hidden
+                      />
+                    )}
                   {status === 'unknown' && (
                     <CircleHelp
                       className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground"
@@ -770,9 +811,32 @@ export function SyncStatusButton() {
             )}
             {status === 'unsynced' && (
               <>
-                <p className="tw:text-sm">{localizedStrings['%toolbar_sync_popover_unsynced%']}</p>
-                {/* The names resolve after the status does, so the list can be empty for a moment. */}
-                {unsyncedProjects.length > 0 && <ProjectList projects={unsyncedProjects} />}
+                {/*
+                 * A project with changes in both directions appears under both headings. The names
+                 * resolve after the status does, so both groups can be empty for a moment.
+                 */}
+                {unsyncedToSend.length > 0 && (
+                  <>
+                    <p className="tw:text-sm">
+                      {localizedStrings['%toolbar_sync_popover_unsynced_send%']}
+                    </p>
+                    <ProjectList
+                      projects={unsyncedToSend}
+                      testId="toolbar-sync-popover-projects-send"
+                    />
+                  </>
+                )}
+                {unsyncedToReceive.length > 0 && (
+                  <>
+                    <p className="tw:text-sm">
+                      {localizedStrings['%toolbar_sync_popover_unsynced_receive%']}
+                    </p>
+                    <ProjectList
+                      projects={unsyncedToReceive}
+                      testId="toolbar-sync-popover-projects-receive"
+                    />
+                  </>
+                )}
               </>
             )}
             {status !== 'syncing' && status !== 'unsynced' && (

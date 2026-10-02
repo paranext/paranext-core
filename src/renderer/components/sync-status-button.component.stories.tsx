@@ -29,6 +29,16 @@ const TWO_PROJECTS: SyncStatusMock['unsyncedProjects'] = [
   { projectId: 'proj-tpts', name: 'TPTS', direction: 'send' },
 ];
 
+const RECEIVE_PROJECTS: SyncStatusMock['unsyncedProjects'] = [
+  { projectId: 'proj-hnf', name: 'HNF', direction: 'receive' },
+];
+
+/** One project with changes in each direction, and one waiting only to be received. */
+const BOTH_PROJECTS: SyncStatusMock['unsyncedProjects'] = [
+  { projectId: 'proj-hnf', name: 'HNF', direction: 'both' },
+  { projectId: 'proj-tpts', name: 'TPTS', direction: 'receive' },
+];
+
 /** Long enough to clip inside the button's 180px cap, so the truncation tooltip is exercisable. */
 const LONG_NAME_PROJECT = [
   { projectId: 'proj-long', name: 'Hunde New Testament and Portions Revision' },
@@ -183,6 +193,30 @@ export const Unsynced: Story = {
   ],
 };
 
+/** Changes are waiting on the server only: nothing local to send, so the receive icon shows. */
+export const UnsyncedReceive: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'unsynced',
+      syncingProjects: [],
+      unsyncedProjects: RECEIVE_PROJECTS,
+      unsyncedDirection: 'receive',
+    }),
+  ],
+};
+
+/** Changes are waiting in both directions, so the combined icon shows. */
+export const UnsyncedBoth: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'unsynced',
+      syncingProjects: [],
+      unsyncedProjects: BOTH_PROJECTS,
+      unsyncedDirection: 'both',
+    }),
+  ],
+};
+
 /**
  * The status could not be read at all. Deliberately not `idle`: "nothing has synced" would be a
  * positive claim resting on a read that never answered — which is what the question-mark icon says,
@@ -277,6 +311,22 @@ export const PopoverUnsynced: Story = {
       syncingProjects: [],
       unsyncedProjects: TWO_PROJECTS,
       unsyncedDirection: 'send',
+    }),
+  ],
+  play: openPopover,
+};
+
+/**
+ * Popover with changes in both directions: a project with both appears under each heading, and a
+ * receive-only project appears under "Changes to receive:" alone.
+ */
+export const PopoverUnsyncedBoth: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'unsynced',
+      syncingProjects: [],
+      unsyncedProjects: BOTH_PROJECTS,
+      unsyncedDirection: 'both',
     }),
   ],
   play: openPopover,
