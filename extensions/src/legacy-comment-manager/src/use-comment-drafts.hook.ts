@@ -188,8 +188,7 @@ export function useCommentDrafts({
   //   the unmount cleanup flushes -- and removes this effect's listeners before the browser
   //   reaches them.
   // - Panel close: the renderer removes the iframe inside its own React commit, which fires
-  //   `pagehide` synchronously, so the `pagehide` listener flushes before the renderer's deferred
-  //   unmount of this root.
+  //   `pagehide` synchronously, so the `pagehide` listener flushes before any unmount of this root.
   // - Window/app close: the renderer and every iframe in it go away with no React unmount at all,
   //   so only the listeners can flush. `beforeunload` is the belt-and-suspenders pair for this
   //   path, matching the pairing `platform-scripture-editor.web-view.tsx` uses for its own
