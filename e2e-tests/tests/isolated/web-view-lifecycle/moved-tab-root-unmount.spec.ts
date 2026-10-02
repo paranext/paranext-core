@@ -12,6 +12,11 @@
  * unmount. The move is a real drag through rc-dock's drag manager, released on the tab bar's empty
  * space after the tabs so the dragged tab becomes the panel's last.
  *
+ * That this spec goes red without the web view component's load-handler unmount relies on Chromium
+ * dropping the replaced document's queued unmount along with that document; the component's unit
+ * tests (`web-view.component.test.tsx`) pin the load-handler unmount whatever the browser does, and
+ * this spec is the end-to-end proof.
+ *
  * ## How to run
  *
  * `e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated tests/isolated/web-view-lifecycle/ --
@@ -20,24 +25,23 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
-
-/** A small React web view every build ships */
-const REACT_WEB_VIEW_TYPE = 'platformGetResources.newTab';
+import {
+  DRAGGING_LAYER,
+  panelSelector,
+  readBars,
+  startDrag,
+} from '../../../fixtures/dock-tab-helpers';
+import {
+  type PapiWindow,
+  crashLines,
+  currentRootChildCount,
+  iframeSelector,
+  openReactWebViewTab,
+  unmountDuringRenderLines,
+} from './web-view-lifecycle.util';
 
 /** Where the spec keeps, on the renderer's own window, each web view's documents and containers */
 const PROBE_KEY = '__movedTabRootUnmountProbe';
-
-/** Appended to `<body>` by rc-dock's drag manager for the duration of a tab drag */
-const DRAGGING_LAYER = 'body > .dragging-layer';
-
-type PapiWindow = {
-  papi: {
-    webViews: {
-      openWebView: (type: string, layout?: unknown) => Promise<string | undefined>;
-    };
-  };
-  updateWebViewDefinitionById: (id: string, update: { title?: string }) => boolean;
-};
 
 /** One kept document of a web view, as the probe reports it back */
 type KeptRoot = {
@@ -48,64 +52,27 @@ type KeptRoot = {
   childCount: number;
 };
 
-function iframeSelector(webViewId: string): string {
-  return `iframe[data-web-view-id="${webViewId}"]`;
-}
-
-/** The web view ids of each dock panel's tabs, in tab order, keyed by panel id */
-async function readBars(page: Page): Promise<{ panelId: string; tabIds: string[] }[]> {
-  return page.locator('.dock-panel[data-dockid]').evaluateAll((panels) =>
-    panels.map((panel) => ({
-      panelId: panel.getAttribute('data-dockid') ?? '',
-      tabIds: Array.from(
-        panel.querySelectorAll('.dock-nav-list .platform-tab-title[data-web-view-id]'),
-      ).map((title) => title.getAttribute('data-web-view-id') ?? ''),
-    })),
-  );
-}
-
-async function openNewTab(page: Page): Promise<string> {
-  const webViewId = await page.evaluate(async (type) => {
-    // The renderer sets `globalThis.papi`; it is untyped in the Playwright context.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const { papi } = window as unknown as PapiWindow;
-    return papi.webViews.openWebView(type, { type: 'tab' });
-  }, REACT_WEB_VIEW_TYPE);
-  if (!webViewId) throw new Error('openWebView answered no id');
-  await expect
-    .poll(
-      () =>
-        page.evaluate((selector) => {
-          const iframe = document.querySelector<HTMLIFrameElement>(selector);
-          return iframe?.contentDocument?.getElementById('root')?.childElementCount ?? -1;
-        }, iframeSelector(webViewId)),
-      { message: `web view ${webViewId} rendered its React root`, timeout: 60_000 },
-    )
-    .toBeGreaterThan(0);
-  return webViewId;
-}
+/** What the probe keeps on the renderer's window for one web view */
+type KeptDocument = { webViewId: string; selector: string; doc: Document; root: Element };
 
 /** Keeps each web view's current document and root container on the renderer's window */
 async function keepCurrentRoots(page: Page, webViewIds: string[]): Promise<void> {
   await page.evaluate(
-    ({ ids, probeKey }) => {
+    ({ webViews, probeKey }) => {
       // The probe is the spec's own scratch space on the renderer's window, untyped there.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const probeWindow = window as unknown as Record<
-        string,
-        { webViewId: string; doc: Document; root: Element }[]
-      >;
-      probeWindow[probeKey] = ids.map((webViewId) => {
-        const iframe = document.querySelector<HTMLIFrameElement>(
-          `iframe[data-web-view-id="${webViewId}"]`,
-        );
-        const doc = iframe?.contentDocument;
+      const probeWindow = window as unknown as Record<string, KeptDocument[]>;
+      probeWindow[probeKey] = webViews.map(({ webViewId, selector }) => {
+        const doc = document.querySelector<HTMLIFrameElement>(selector)?.contentDocument;
         const root = doc?.getElementById('root');
         if (!doc || !root) throw new Error(`no React root in web view ${webViewId}`);
-        return { webViewId, doc, root };
+        return { webViewId, selector, doc, root };
       });
     },
-    { ids: webViewIds, probeKey: PROBE_KEY },
+    {
+      webViews: webViewIds.map((webViewId) => ({ webViewId, selector: iframeSelector(webViewId) })),
+      probeKey: PROBE_KEY,
+    },
   );
 }
 
@@ -113,65 +80,38 @@ async function readKeptRoots(page: Page): Promise<KeptRoot[]> {
   return page.evaluate((probeKey) => {
     // The probe the spec keeps on the renderer's window is untyped there.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const probeWindow = window as unknown as Record<
-      string,
-      { webViewId: string; doc: Document; root: Element }[]
-    >;
-    return probeWindow[probeKey].map(({ webViewId, doc, root }) => {
-      const iframe = document.querySelector<HTMLIFrameElement>(
-        `iframe[data-web-view-id="${webViewId}"]`,
-      );
-      return {
-        webViewId,
-        replaced: iframe?.contentDocument !== doc,
-        childCount: root.childElementCount,
-      };
-    });
+    const probeWindow = window as unknown as Record<string, KeptDocument[]>;
+    return probeWindow[probeKey].map(({ webViewId, selector, doc, root }) => ({
+      webViewId,
+      replaced: document.querySelector<HTMLIFrameElement>(selector)?.contentDocument !== doc,
+      childCount: root.childElementCount,
+    }));
   }, PROBE_KEY);
 }
 
 /** Element counts rendered into each web view's CURRENT document's root, -1 while it has none */
 async function liveRootChildCounts(page: Page, webViewIds: string[]): Promise<number[]> {
-  return page.evaluate(
-    (ids) =>
-      ids.map(
-        (webViewId) =>
-          document
-            .querySelector<HTMLIFrameElement>(`iframe[data-web-view-id="${webViewId}"]`)
-            ?.contentDocument?.getElementById('root')?.childElementCount ?? -1,
-      ),
-    webViewIds,
-  );
+  return Promise.all(webViewIds.map((webViewId) => currentRootChildCount(page, webViewId)));
 }
 
 /**
  * Drags a tab onto its own bar's empty space after the tabs, which makes it the panel's last tab.
- * rc-dock listens to pointer events and starts a drag only after a few pixels of movement, and the
- * "+" button moves once a drag starts, so the target is measured only after that.
+ * The "+" button moves once a drag starts, so the target is measured only after that.
  */
 async function dragTabToEndOfItsBar(page: Page, webViewId: string, panelId: string) {
-  const panel = `.dock-panel[data-dockid="${panelId}"]`;
-  const tabButton = page.locator('.dock-tab-btn', {
-    has: page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`),
-  });
-  const box = await tabButton.boundingBox();
-  if (!box) throw new Error(`tab ${webViewId} has no box`);
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
   try {
-    await page.mouse.move(box.x + box.width / 2 + 6, box.y + box.height / 2, { steps: 3 });
-    await expect(page.locator(DRAGGING_LAYER)).toBeAttached({ timeout: 5_000 });
-    const target = await page.evaluate((panelSelector) => {
+    await startDrag(page, webViewId);
+    const target = await page.evaluate((panel) => {
       const rect = (selector: string) => {
-        const element = document.querySelector(`${panelSelector} ${selector}`);
-        if (!element) throw new Error(`no ${selector} in ${panelSelector}`);
+        const element = document.querySelector(`${panel} ${selector}`);
+        if (!element) throw new Error(`no ${selector} in ${panel}`);
         return element.getBoundingClientRect();
       };
       const zone = rect('.platform-tab-bar-drop-zone');
       const plus = rect('.new-tab-button');
       const bar = rect('.dock-bar');
       return { x: zone.left + 0.75 * (plus.left - zone.left), y: (bar.top + bar.bottom) / 2 };
-    }, panel);
+    }, panelSelector(panelId));
     await page.mouse.move(target.x, target.y, { steps: 10 });
   } finally {
     await page.mouse.up();
@@ -198,13 +138,14 @@ test.describe('web view tab moved within its window', () => {
     const consoleLines: string[] = [];
     page.on('console', (message) => consoleLines.push(message.text()));
 
-    const moved = await openNewTab(page);
-    const stayed = await openNewTab(page);
+    const moved = await openReactWebViewTab(page);
+    const stayed = await openReactWebViewTab(page);
     const webViewIds = [moved, stayed];
 
-    const panelId = (await readBars(page)).find((bar) => bar.tabIds.includes(moved))?.panelId;
+    const barsBefore = await readBars(page);
+    const panelId = barsBefore.find((bar) => bar.tabIds.includes(moved))?.panelId;
     if (!panelId) throw new Error(`web view ${moved} is in no panel`);
-    const tabsBefore = (await readBars(page)).find((bar) => bar.panelId === panelId)?.tabIds ?? [];
+    const tabsBefore = barsBefore.find((bar) => bar.panelId === panelId)?.tabIds ?? [];
     expect(tabsBefore, 'both web views share one panel').toContain(stayed);
     expect(tabsBefore.at(-1), 'the tab to move is not already last').not.toBe(moved);
 
@@ -215,7 +156,7 @@ test.describe('web view tab moved within its window', () => {
     await expect
       .poll(
         async () => (await readBars(page)).find((bar) => bar.panelId === panelId)?.tabIds.at(-1),
-        { message: 'the dragged tab is now its panel last', timeout: 10_000 },
+        { message: "the dragged tab is now its panel's last tab", timeout: 10_000 },
       )
       .toBe(moved);
 
@@ -254,30 +195,21 @@ test.describe('web view tab moved within its window', () => {
         { message: 'every replaced document has had its React root unmounted', timeout: 10_000 },
       )
       .toEqual([]);
-    const keptAfter = await readKeptRoots(page);
-    // Control: a document the move did not replace is still rendered, and so is every live one, so
-    // the zeros above are the replaced roots' unmount and not every web view root reading empty
+    // Control: the tab that stayed kept its document, which is still rendered, and so is every live
+    // one, so the zeros above are the replaced roots' unmount and not every web view root reading
+    // empty. Moving a tab to the end of its bar makes React re-insert only that tab's pane.
+    const stayedKept = (await readKeptRoots(page)).find((kept) => kept.webViewId === stayed);
     expect(
-      keptAfter.filter((kept) => !kept.replaced).every((kept) => kept.childCount > 0),
-      'documents the move did not replace are still rendered',
-    ).toBe(true);
+      stayedKept?.replaced,
+      'the move did not replace the document of the tab that stayed',
+    ).toBe(false);
+    expect(stayedKept?.childCount, 'the tab that stayed is still rendered').toBeGreaterThan(0);
     expect(Math.min(...(await liveRootChildCounts(page, webViewIds)))).toBeGreaterThan(0);
 
     const moveLines = consoleLines.slice(linesBeforeMove);
+    expect.soft(crashLines(moveLines, webViewIds), 'no crash reported while moving').toEqual([]);
     expect
-      .soft(
-        moveLines.filter(
-          (line) =>
-            webViewIds.some((id) => line.includes(id)) && line.includes('crashed while rendering'),
-        ),
-        'no crash reported while moving',
-      )
-      .toEqual([]);
-    expect
-      .soft(
-        moveLines.filter((line) => line.includes('Attempted to synchronously unmount a root')),
-        'no unmount-during-render warning while moving',
-      )
+      .soft(unmountDuringRenderLines(moveLines), 'no unmount-during-render warning while moving')
       .toEqual([]);
   });
 });
