@@ -28,6 +28,7 @@ import { Frame, Locator, Page } from '@playwright/test';
 import {
   test,
   expect,
+  getFindHistory,
   openScriptureEditor,
   waitForProjects,
   WEB_COPY_PROJECT_ID,
@@ -394,6 +395,11 @@ test.describe('Replace operations', () => {
     if (!(await regexCheckbox.isChecked())) await regexCheckbox.click();
     await expect(regexCheckbox).toBeChecked();
     await regexCheckbox.press('Escape');
+    // Wait for the panel to finish closing before typing. Closing it from the keyboard hands focus
+    // back to the filters button when the exit animation ends; typing before then has that focus
+    // move land after the fill, which steals focus from the search box and opens the button's
+    // tooltip over the Find/Replace toggle, where it swallows the click below.
+    await expect(regexCheckbox).not.toBeVisible({ timeout: 5_000 });
 
     await frame.locator('#search-term').fill(REPLACE_SEARCH_TERM);
     await frame.locator('#search-term').press('Enter');
@@ -490,33 +496,16 @@ test.describe('Search history on close', () => {
   test('adds the search term to history when the Find panel is closed', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
 
-    // Seed one entry so the history control exists at all. RecentSearches renders nothing when the
-    // list is empty, so on a profile with no history the dropdown this test opens is simply absent
-    // — which would fail as if the control had regressed. Earlier tests in this file happen to
-    // leave history behind, but relying on that makes running this one alone fail confusingly.
-    await frame.locator('#search-term').fill(`histtest-seed-${Date.now()}`);
-    await frame.locator('#search-term').press('Enter');
-
     const term = `histtest-unmount-${Date.now()}`;
     await frame.locator('#search-term').fill(term);
     const filledAt = Date.now();
 
     // Positive control. Neither of the other two routes into history can have fired: Enter was
     // never pressed and the inactivity debounce has not elapsed. So if the term were already
-    // here, the assertion after the close would pass without the close doing anything.
-    await openHistoryDropdown(frame);
-    await expect(frame.getByRole('menuitem', { name: term })).toHaveCount(0);
-    await frame.locator('#search-term').press('Escape');
-
-    // Opening the dropdown leaves the pointer on its trigger, and the tooltip that follows renders
-    // in a popper wrapper OUTSIDE the panel — so it outlives the panel's close and sits over the
-    // editor's menu button, swallowing the click that reopens Find. Park the pointer and wait for
-    // it to go before closing. The wait is deliberately short: everything between filling the term
-    // and closing has to finish inside the inactivity debounce below.
-    await mainPage.mouse.move(0, 0);
-    await expect(mainPage.locator('[data-slot="tooltip-content"]')).toHaveCount(0, {
-      timeout: 2_000,
-    });
+    // here, the assertion after the close would pass without the close doing anything. Read from
+    // the store rather than the history dropdown: opening the dropdown is a click into the web
+    // view, which can take most of the debounce on its own (see `resolveWebViewFrame`).
+    expect(await getFindHistory(WEB_COPY_PROJECT_ID)).not.toContain(term);
 
     await closeFindPanel(mainPage);
 
