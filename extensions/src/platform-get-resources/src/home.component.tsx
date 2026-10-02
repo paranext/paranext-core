@@ -149,8 +149,14 @@ export type MergedProjectInfo = {
   isSendReceivable: boolean;
   isLocallyAvailable?: boolean;
   editedStatus?: EditedStatus;
+  /** Whether the project has local changes that have not been sent to the server. */
+  hasUnsyncedChanges?: boolean;
   lastSendReceiveDate?: string;
 };
+
+/** Whether a project has local changes to send, by its server-reported status or the live set. */
+const isEdited = (project: MergedProjectInfo) =>
+  project.editedStatus === 'edited' || !!project.hasUnsyncedChanges;
 
 export type HomeProps = {
   /**
@@ -189,6 +195,12 @@ export type HomeProps = {
   showGetResourcesButton?: boolean;
   /** Whether a send/receive operation is in progress. */
   isSendReceiveInProgress?: boolean;
+  /**
+   * Normalized (upper-cased) IDs of the projects with changes to send or receive, the union of the
+   * two sets `paratextBibleSendReceive.getUnsyncedChanges` returns. Listed projects are marked and
+   * offer Sync first.
+   */
+  unsyncedProjectIds?: readonly string[];
   /** Whether loading local projects is in progress. */
   isLoadingLocalProjects?: boolean;
   /**
@@ -253,6 +265,7 @@ export function Home({
   onGetStarted = () => {},
   showGetResourcesButton = true,
   isSendReceiveInProgress = false,
+  unsyncedProjectIds,
   isLoadingLocalProjects = false,
   remoteProjectsState = 'absent',
   shouldShowProjectsOnly = false,
@@ -342,6 +355,7 @@ export function Home({
           isSendReceivable: true,
           isLocallyAvailable: localProjectsInfo?.some((project) => project.projectId === projectId),
           editedStatus: sharedProject.editedStatus,
+          hasUnsyncedChanges: unsyncedProjectIds?.includes(projectId.toUpperCase()),
           lastSendReceiveDate: sharedProject.lastSendReceiveDate,
         });
       });
@@ -358,6 +372,7 @@ export function Home({
           isPublished: project.isPublished,
           isSendReceivable: false,
           isLocallyAvailable: true,
+          hasUnsyncedChanges: unsyncedProjectIds?.includes(project.projectId.toUpperCase()),
         });
       }
     });
@@ -368,7 +383,7 @@ export function Home({
     return shouldShowProjectsOnly
       ? newMergedProjectInfo.filter((project) => !project.isPublished)
       : newMergedProjectInfo;
-  }, [localProjectsInfo, sharedProjectsInfo, shouldShowProjectsOnly]);
+  }, [localProjectsInfo, sharedProjectsInfo, shouldShowProjectsOnly, unsyncedProjectIds]);
 
   const [textFilter, setTextFilter] = useState<string>('');
 
@@ -640,18 +655,19 @@ export function Home({
                             'tw:text-muted-foreground/70': !project.isLocallyAvailable,
                           })}
                         >
-                          <TableCell
-                            className={cn({ 'tw:ps-2': project.editedStatus === 'edited' })}
-                          >
+                          <TableCell className={cn({ 'tw:ps-2': isEdited(project) })}>
                             <div
                               className={cn(
                                 'tw:flex tw:flex-row tw:items-center tw:gap-4 tw:ps-2',
-                                { 'tw:ps-0': project.editedStatus === 'edited' },
+                                { 'tw:ps-0': isEdited(project) },
                               )}
                             >
                               <div className="tw:flex tw:flex-row tw:items-center tw:gap-2">
-                                {project.editedStatus === 'edited' && (
-                                  <div className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]" />
+                                {isEdited(project) && (
+                                  <div
+                                    data-testid="home-project-unsynced-dot"
+                                    className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]"
+                                  />
                                 )}
                                 {project.isPublished ? (
                                   <BookOpen className="tw:pr-0" size={18} />
@@ -667,8 +683,7 @@ export function Home({
                               <div className="tw:grow tw:hidden tw:max-[300px]:!flex">
                                 <div className="tw:grow" />
                                 <HomeItemDropdownMenu ellipsisButtonClassName="tw:h-6">
-                                  {(!project.isLocallyAvailable ||
-                                    project.editedStatus === 'edited') && (
+                                  {(!project.isLocallyAvailable || isEdited(project)) && (
                                     <DropdownMenuItem asChild>
                                       {syncOrGetButton(project, true)}
                                     </DropdownMenuItem>
@@ -700,13 +715,13 @@ export function Home({
                           <TableCell className="tw:max-[300px]:hidden">
                             <div className="tw:flex tw:justify-between tw:items-center">
                               {project.isSendReceivable &&
-                              (!project.isLocallyAvailable || project.editedStatus === 'edited')
+                              (!project.isLocallyAvailable || isEdited(project))
                                 ? syncOrGetButton(project)
                                 : openButton(project)}
                               {project.isSendReceivable && project.isLocallyAvailable && (
                                 <HomeItemDropdownMenu>
                                   <DropdownMenuItem asChild>
-                                    {project.editedStatus === 'edited'
+                                    {isEdited(project)
                                       ? openButton(project, true)
                                       : syncOrGetButton(project, true)}
                                   </DropdownMenuItem>
