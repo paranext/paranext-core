@@ -3554,6 +3554,26 @@ describe('React web view bootstrap teardown', () => {
     expect(root.unmount).toHaveBeenCalledTimes(1);
   });
 
+  test('logs a root that fails to unmount instead of throwing out of the unload', async () => {
+    const { root, dispatch } = runReactBootstrap(await openReactWebViewContent());
+    const unmountError = new Error('root failed to unmount');
+    root.unmount.mockImplementation(() => {
+      throw unmountError;
+    });
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      dispatch('pagehide');
+      dispatch('unload');
+      // An error escaping the queued unmount would surface as an unhandled error and fail the run
+      await Promise.resolve();
+
+      expect(root.unmount).toHaveBeenCalledTimes(1);
+      expect(consoleLog).toHaveBeenCalledWith('Error unmounting WebView React root', unmountError);
+    } finally {
+      consoleLog.mockRestore();
+    }
+  });
+
   test('tears down only once if the document is hidden and unloaded again', async () => {
     const { root, unsubscribeUpdateWebView, dispatch } = runReactBootstrap(
       await openReactWebViewContent(),
