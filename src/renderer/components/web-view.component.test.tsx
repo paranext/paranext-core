@@ -303,6 +303,27 @@ describe('the iframe loading a new document unmounts the React root of the one i
     expect(unmountFirstRoot).toHaveBeenCalledTimes(1);
   });
 
+  test('unmounts the current document root when the web view closes before that document loads', async () => {
+    // A reload or move replaces the document; closing the tab before the new document's load leaves
+    // only the replaced root stored, and the new document's own unmount is dropped with its realm
+    const { iframe, unmount } = await renderWebView();
+    const unmountFirstRoot = vi.fn();
+    const unmountSecondRoot = vi.fn();
+    publishRootOfNewDocument(iframe, unmountFirstRoot);
+    fireEvent.load(iframe);
+    publishRootOfNewDocument(iframe, unmountSecondRoot);
+
+    unmount();
+    // The close-time unmount is deferred a timer turn so it never lands inside React's commit
+    expect(unmountSecondRoot).not.toHaveBeenCalled();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(unmountSecondRoot).toHaveBeenCalledTimes(1);
+    expect(unmountFirstRoot).toHaveBeenCalledTimes(1);
+  });
+
   test("still keeps the new document's root when unmounting the replaced one throws", async () => {
     const { iframe, unmount } = await renderWebView();
     const unmountFirstRoot = vi.fn(() => {
