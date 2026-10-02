@@ -1,7 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
+using System.IO.Enumeration;
 using System.Text;
 using Paranext.DataProvider.Projects;
 using SIL.TestUtilities;
+using static TestParanextDataProvider.CloudPlaceholders;
 using static TestParanextDataProvider.FileSystemLinks;
 
 namespace TestParanextDataProvider.Projects
@@ -146,8 +148,10 @@ namespace TestParanextDataProvider.Projects
         {
             // A cloud-sync placeholder (OneDrive Files On-Demand, Dropbox online-only) is a file
             // carrying the ReparsePoint attribute that File.Open reads fine. A file symlink has the
-            // same shape and is the closest a test can construct, so this pins that the listing
-            // does not skip reparse-point files - the tempting one-flag way to stop link recursion
+            // same shape and can be made on every platform, so this pins that the listing does not
+            // skip reparse-point files - the tempting one-flag way to stop link recursion. On
+            // Windows, GetExistingDataStreamNames_CloudPlaceholderDirectory_IsDescendedInto pins it
+            // with real placeholders
             WriteStream($"{ExtensionPath}/real.json", "real");
             var extensionDirectory = Path.Join(
                 _projectFolder.Path,
@@ -214,6 +218,39 @@ namespace TestParanextDataProvider.Projects
             var streamNames = _streamManager.GetExistingDataStreamNames(ExtensionPath);
 
             Assert.That(streamNames, Is.EqualTo(new[] { "mine.json" }));
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_CloudPlaceholderDirectory_IsDescendedInto()
+        {
+            // A project in a OneDrive-synced folder, where every synced directory and file is a
+            // cloud placeholder: it carries ReparsePoint as a link does, but has no LinkTarget, and
+            // GetDataStream reads through it like any other entry
+            WriteStream($"{ExtensionPath}/top.json", "top");
+            WriteStream($"{ExtensionPath}/byMachine/ledger/abc.json", "nested");
+            var extensionDirectory = Path.Join(
+                _projectFolder.Path,
+                ExtensionPath.Replace('/', Path.DirectorySeparatorChar)
+            );
+            using var syncRoot = RegisterSyncRootOrIgnore(_projectFolder.Path);
+            ConvertToPlaceholderOrIgnore(Path.Join(extensionDirectory, "top.json"));
+            ConvertToPlaceholderOrIgnore(Path.Join(extensionDirectory, "byMachine"));
+            ConvertToPlaceholderOrIgnore(
+                Path.Join(extensionDirectory, "byMachine", "ledger", "abc.json")
+            );
+            // Read as the listing reads it. DirectoryInfo.Attributes would not do: a process that
+            // disguises placeholders sees no ReparsePoint there, while the enumeration still
+            // reports it - and without it this test would not exercise the recursion predicate
+            Assume.That(
+                EnumeratedAttributes(extensionDirectory, "byMachine")
+                    .HasFlag(FileAttributes.ReparsePoint),
+                Is.True,
+                "The placeholder directory must carry ReparsePoint for this test to mean anything"
+            );
+
+            var streamNames = _streamManager.GetExistingDataStreamNames(ExtensionPath);
+
+            Assert.That(streamNames, Is.EqualTo(new[] { "byMachine/ledger/abc.json", "top.json" }));
         }
 
         [Test]
@@ -315,6 +352,21 @@ namespace TestParanextDataProvider.Projects
             using StreamWriter writer = new(stream, new UTF8Encoding(false));
             writer.Write(contents);
         }
+
+        /// <summary>
+        /// The attributes the directory enumeration reports for one entry of
+        /// <paramref name="directory"/> - the same view the listing's predicates get.
+        /// </summary>
+        private static FileAttributes EnumeratedAttributes(string directory, string name) =>
+            new FileSystemEnumerable<FileAttributes>(
+                directory,
+                (ref FileSystemEntry entry) => entry.Attributes,
+                new EnumerationOptions { AttributesToSkip = 0 }
+            )
+            {
+                ShouldIncludePredicate = (ref FileSystemEntry entry) =>
+                    entry.FileName.SequenceEqual(name.AsSpan()),
+            }.Single();
 
         private string ReadStream(string streamName)
         {
