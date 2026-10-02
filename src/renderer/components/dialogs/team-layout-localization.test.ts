@@ -163,8 +163,8 @@ describe('Team layout dialog Base/Model explanation', () => {
   it.each([...BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS])(
     '%s is defined by the Model Text panel in English and Spanish',
     (key) => {
-      expect(panelEnglish[key]).toEqual(expect.stringMatching(/\S/));
-      expect(panelSpanish[key]).toEqual(expect.stringMatching(/\S/));
+      expect(findUnusableKeys(panelEnglish, [key])).toEqual([]);
+      expect(findUnusableKeys(panelSpanish, [key])).toEqual([]);
       expect(english[key]).toBeUndefined();
     },
   );

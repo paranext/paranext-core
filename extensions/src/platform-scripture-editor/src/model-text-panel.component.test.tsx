@@ -806,13 +806,19 @@ describe('ModelTextPanel', () => {
     const toggle = screen.getByRole('button', { name: 'More info' });
     const disclosure = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
 
-    // Behind the toggle, not beside it: hidden until More info is clicked.
-    expect(screen.getByText('Intro text.')).not.toBeVisible();
+    // Behind the toggle, not beside it: every paragraph is inside the disclosure, hidden until More
+    // info is clicked, and they read in this order with each term beside its own definition.
+    const paragraphs = Array.from(disclosure?.querySelectorAll('p') ?? []);
+    expect(paragraphs.map((p) => p.textContent?.replace(/\s+/g, ' '))).toEqual([
+      'Intro text.',
+      'Base: Base definition.',
+      'Model: Model definition.',
+      'Admin text.',
+      'Note: Copyright text.',
+    ]);
+    paragraphs.forEach((p) => expect(p).not.toBeVisible());
     fireEvent.click(toggle);
-    ['Intro text.', 'Admin text.'].forEach((text) => {
-      expect(screen.getByText(text)).toBeVisible();
-      expect(disclosure).toContainElement(screen.getByText(text));
-    });
+    paragraphs.forEach((p) => expect(p).toBeVisible());
     [
       ['Base:', 'Base definition.'],
       ['Model:', 'Model definition.'],

@@ -160,10 +160,18 @@ export const BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%',
 ] as const);
 
+/**
+ * Every key the dialog renders: its own (`TEAM_LAYOUT_DIALOG_STRING_KEYS`, defined in en.json) and
+ * the Model Text panel's Base/Model explanation. Request this list, not either half, or the half
+ * left out renders as raw `%key%` text.
+ */
+export const TEAM_LAYOUT_DIALOG_ALL_STRING_KEYS = Object.freeze([
+  ...TEAM_LAYOUT_DIALOG_STRING_KEYS,
+  ...BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
+] as const);
+
 export type TeamLayoutDialogLocalizedStrings = {
-  [key in
-    | (typeof TEAM_LAYOUT_DIALOG_STRING_KEYS)[number]
-    | (typeof BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS)[number]]?: string;
+  [key in (typeof TEAM_LAYOUT_DIALOG_ALL_STRING_KEYS)[number]]?: string;
 };
 
 export type TeamLayoutDialogContentProps = {
@@ -929,7 +937,7 @@ export function TeamLayoutDialogContent({
                 <span className="tw:font-medium" id={modelTextLabelId}>
                   {localizeString(strings, '%shareLayoutDialog_baseOrModelText_label%')}
                 </span>
-                <span className="tw:text-sm tw:text-muted-foreground" id={modelTextSummaryId}>
+                <span className="tw:text-xs tw:text-muted-foreground" id={modelTextSummaryId}>
                   {localizeString(strings, '%shareLayoutDialog_baseOrModelText_summary%')}
                 </span>
               </div>

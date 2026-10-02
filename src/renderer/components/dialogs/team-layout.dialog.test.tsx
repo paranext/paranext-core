@@ -15,6 +15,12 @@ import {
   TEAM_LAYOUT_DIALOG_STRING_KEYS,
 } from '@renderer/components/dialogs/team-layout.component';
 
+/**
+ * The left column's heading. It renders only once the dialog body has mounted, so the tests below
+ * wait for it (or assert its absence) to tell whether the body is showing.
+ */
+const BODY_MOUNTED_TEXT = '%shareLayoutDialog_baseOrModelText_label%';
+
 // Importing the real `DIALOGS` map transitively pulls in `project-picker.dialog.tsx` ->
 // `use-project-picker-data.hook.ts` -> the renderer web view host and `papi-frontend.service.ts`,
 // which start most of the renderer's services at module load. Mock both service boundaries
@@ -277,7 +283,7 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.queryByText('%shareLayoutDialog_baseOrModelText_label%')).not.toBeInTheDocument();
+    expect(screen.queryByText(BODY_MOUNTED_TEXT)).not.toBeInTheDocument();
 
     await act(async () => {
       resolveCatalog({
@@ -287,7 +293,7 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
       await Promise.resolve();
     });
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     editResourceList();
     await confirmDialog();
 
@@ -320,7 +326,7 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.queryByText('%shareLayoutDialog_baseOrModelText_label%')).not.toBeInTheDocument();
+    expect(screen.queryByText(BODY_MOUNTED_TEXT)).not.toBeInTheDocument();
 
     const savedResource: ResourceReference = { type: 'dblResource', name: 'ESV', id: 'esv-uid' };
     mockState.referencedProjectsAndResources = { dataVersion: '2.0.0', items: [savedResource] };
@@ -331,7 +337,7 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
       await Promise.resolve();
     });
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     editResourceList();
     await confirmDialog();
 
@@ -356,14 +362,14 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.queryByText('%shareLayoutDialog_baseOrModelText_label%')).not.toBeInTheDocument();
+    expect(screen.queryByText(BODY_MOUNTED_TEXT)).not.toBeInTheDocument();
 
     await act(async () => {
       resolvePersonal(EMPTY_RESOURCE_LIST);
       await Promise.resolve();
     });
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
   });
 
   it('renders the dialog with a stated count and a retry when the catalog fetch failed', async () => {
@@ -388,7 +394,7 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
 
       // The dialog still opens: the tab and model-text settings have nothing to do with DBL, and
       // replacing the whole dialog would put them out of reach over a transient fetch.
-      await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+      await screen.findByText(BODY_MOUNTED_TEXT);
       // The saved DBL reference cannot be classified without a catalog, so it is absent from the
       // rows — said out loud rather than left for the admin to notice.
       expect(screen.getByText('%shareLayoutDialog_hiddenResources_loadError%')).toBeInTheDocument();
@@ -408,7 +414,7 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
 
     renderWrapper();
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     expect(screen.getByText('%shareLayoutDialog_hiddenResources_unavailable%')).toBeInTheDocument();
     // Nothing to retry — the credentials are not coming.
     expect(screen.queryByText('%shareLayoutDialog_retry%')).not.toBeInTheDocument();
@@ -430,7 +436,7 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
 
     renderWrapper();
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     editResourceList();
     await confirmDialog();
 
@@ -461,7 +467,7 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
     renderWrapper();
 
     const retry = await screen.findByText('%shareLayoutDialog_retry%');
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     // Nothing classifiable, so no rows — the state the hint is there to explain.
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
     expect(screen.getByText('%shareLayoutDialog_hiddenResources_loadError%')).toBeInTheDocument();
@@ -500,7 +506,7 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
     renderWrapper();
 
     const retry = await screen.findByText('%shareLayoutDialog_retry%');
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
 
     // An edit the remount would discard. The lists are empty here, so the lock is the only control
     // there is to touch — which is exactly the state this case is about.
@@ -536,7 +542,7 @@ describe('TeamLayoutDialogWrapper catalog gate', () => {
     renderWrapper();
 
     const retry = await screen.findByText('%shareLayoutDialog_retry%');
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
 
     await act(async () => {
       retry.click();
@@ -567,7 +573,7 @@ describe('TeamLayoutDialogWrapper heading', () => {
 
     renderWrapper();
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     expect(screen.getByText('HNF')).toBeInTheDocument();
     expect(screen.queryByText('HNF - HNF')).not.toBeInTheDocument();
   });
@@ -581,7 +587,7 @@ describe('TeamLayoutDialogWrapper strings', () => {
     mockState.canWritePromise = Promise.resolve(true);
 
     renderWrapper();
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
 
     const requestedKeys = vi.mocked(useLocalizedStrings).mock.calls.flatMap(([keys]) => keys);
     [...TEAM_LAYOUT_DIALOG_STRING_KEYS, ...BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS].forEach(
@@ -631,7 +637,7 @@ describe('TeamLayoutDialogWrapper mount-gate latches', () => {
 
     const { rerender } = renderWrapper();
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     act(() => {
       screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
     });
@@ -697,7 +703,7 @@ describe('TeamLayoutDialogWrapper admin gate', () => {
 
     // Still loading: nothing resembling the real dialog content is rendered, and no settings
     // have been written.
-    expect(screen.queryByText('%shareLayoutDialog_baseOrModelText_label%')).not.toBeInTheDocument();
+    expect(screen.queryByText(BODY_MOUNTED_TEXT)).not.toBeInTheDocument();
     expect(mockState.setReferencedProjectsAndResources).not.toHaveBeenCalled();
     expect(mockState.setModelTexts).not.toHaveBeenCalled();
     expect(mockState.setSharedLayoutDefaultTab).not.toHaveBeenCalled();
@@ -712,7 +718,7 @@ describe('TeamLayoutDialogWrapper admin gate', () => {
     });
 
     await waitFor(() => expect(cancelDialog).toHaveBeenCalledTimes(1));
-    expect(screen.queryByText('%shareLayoutDialog_baseOrModelText_label%')).not.toBeInTheDocument();
+    expect(screen.queryByText(BODY_MOUNTED_TEXT)).not.toBeInTheDocument();
     expect(mockState.setReferencedProjectsAndResources).not.toHaveBeenCalled();
     expect(mockState.setModelTexts).not.toHaveBeenCalled();
     expect(mockState.setSharedLayoutDefaultTab).not.toHaveBeenCalled();
@@ -748,7 +754,7 @@ describe('TeamLayoutDialogWrapper admin gate', () => {
 
     const { cancelDialog } = renderWrapper();
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     expect(cancelDialog).not.toHaveBeenCalled();
   });
 });
@@ -773,7 +779,7 @@ describe('TeamLayoutDialogWrapper loading state', () => {
     expect(screen.getByText('%shareLayoutDialog_teamLayout_title%')).toBeInTheDocument();
     expect(screen.getByText('%shareLayoutDialog_saveForTeam_label%')).toBeInTheDocument();
     // ...but with no content mounted, and no action that could write from an unloaded snapshot.
-    expect(screen.queryByText('%shareLayoutDialog_baseOrModelText_label%')).not.toBeInTheDocument();
+    expect(screen.queryByText(BODY_MOUNTED_TEXT)).not.toBeInTheDocument();
     expect(screen.getByText('%shareLayoutDialog_saveForTeam_label%')).toBeDisabled();
   });
 
@@ -821,7 +827,7 @@ describe('TeamLayoutDialogWrapper team structure lock', () => {
       await Promise.resolve();
     });
 
-    expect(screen.queryByText('%shareLayoutDialog_baseOrModelText_label%')).not.toBeInTheDocument();
+    expect(screen.queryByText(BODY_MOUNTED_TEXT)).not.toBeInTheDocument();
   });
 
   it('writes the team lock on save', async () => {
@@ -830,7 +836,7 @@ describe('TeamLayoutDialogWrapper team structure lock', () => {
 
     renderWrapper();
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     act(() => {
       screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
     });
@@ -845,7 +851,7 @@ describe('TeamLayoutDialogWrapper team structure lock', () => {
 
     renderWrapper();
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     act(() => {
       screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
     });
@@ -863,7 +869,7 @@ describe('TeamLayoutDialogWrapper team structure lock', () => {
 
     const { cancelDialog, submitDialog } = renderWrapper();
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     act(() => {
       screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
     });
@@ -909,7 +915,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
 
     renderWrapper();
     const retry = await screen.findByText('%shareLayoutDialog_retry%');
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
 
     // A retry from inside the open dialog: a fresh catalog object, so `allResources` — and every
     // memo that takes it as a dep — takes a new identity.
@@ -951,7 +957,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     });
 
     renderWrapper();
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
 
     // Edit the list, so an unguarded Confirm would definitely write it.
     editResourceList();
@@ -974,7 +980,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     mockState.sharedLayoutDefaultTab = 'ScriptureResource';
 
     const { rerender } = renderWrapper();
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
 
     // A concurrent change to the same setting, delivered by the subscription the wrapper reads.
     mockState.sharedLayoutDefaultTab = 'Comments';
@@ -1007,7 +1013,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     vi.mocked(sendCommand).mockResolvedValue({ status: 'available', resources: [] });
 
     const { submitDialog } = renderWrapper();
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
 
     editResourceList();
     await confirmDialog();
@@ -1025,7 +1031,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     vi.mocked(sendCommand).mockResolvedValue({ status: 'available', resources: [] });
 
     const { submitDialog } = renderWrapper();
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
 
     act(() => {
       screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
@@ -1042,7 +1048,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     mockState.structureProtected = false;
 
     const { submitDialog, rerender } = renderWrapper();
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
 
     act(() => {
       screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
@@ -1085,7 +1091,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
 
     renderWrapper();
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     editResourceList();
     await confirmDialog();
 
@@ -1114,7 +1120,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
 
     renderWrapper();
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     act(() => {
       screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
     });
@@ -1130,7 +1136,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
 
     const { submitDialog } = renderWrapper();
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     await confirmDialog();
 
     expect(submitDialog).toHaveBeenCalledWith(true);
@@ -1147,7 +1153,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
 
     const { submitDialog } = renderWrapper();
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     act(() => {
       screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }).click();
     });
@@ -1166,7 +1172,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
 
     renderWrapper();
 
-    await screen.findByText('%shareLayoutDialog_baseOrModelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     expect(
       screen.getByRole('switch', { name: '%shareLayoutDialog_teamLock_label%' }),
     ).toBeDisabled();
