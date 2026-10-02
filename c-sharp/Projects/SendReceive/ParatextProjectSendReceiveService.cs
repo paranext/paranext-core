@@ -262,7 +262,7 @@ internal class ParatextProjectSendReceiveService(
             if (Interlocked.Exchange(ref _serverTipLookupWarned, 1) == 0)
             {
                 Console.Error.WriteLine(
-                    $"Could not read server tip ids for the sync-direction indicator: {ex.Message}"
+                    $"Could not read server tip ids for the sync-direction indicator: {ex.GetType().Name}: {ex.Message}"
                 );
             }
             return null;
