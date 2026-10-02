@@ -50,7 +50,7 @@ These belong to no subset; run them by path (see "How to run").
 - `scroll-groups/` (one Electron per test) — tests for scroll-group synchronization between scripture editors
 - `title-bar/` (one Electron per test) — tests for title bar layout at narrow window widths. The reserved-space spec, which attaches to a running app, lives in `tests/attached/`
 - `verse-navigation/` (one Electron per worker) — tests for verse navigation keyboard shortcuts
-- `web-view-lifecycle/` (one Electron per test) — tests for a web view's React root when its iframe gets a new document: a reload, or a tab move within the window, unmounts the root of the document it replaces, and neither that nor the tab's close logs a crash or React's unmount-during-render warning, and a reload runs the web view's own `pagehide` listeners before that unmount
+- `web-view-lifecycle/` (one Electron per test) — tests for a web view's React root when its iframe gets a new document: a reload, or a tab move within the window, unmounts the root of the document it replaces, and neither that nor the tab's close logs a crash or React's unmount-during-render warning. A reload runs the web view's own `pagehide` and `unload` listeners before that unmount
 
 ## Running on Windows
 

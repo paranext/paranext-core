@@ -6,13 +6,15 @@
  * unmounting runs every effect cleanup. If that ran during `pagehide`, a listener the web view had
  * registered in an effect and removes in its cleanup would be removed before the browser reached
  * it, and a web view saving its last edit from that listener would lose it. The bootstrap therefore
- * unmounts on the old document's `unload`, after every `pagehide` listener has run, and still while
- * that document is current. This spec pins both halves on a real reload.
+ * unmounts on the old document's `unload`, from a listener it adds during `pagehide`, so after
+ * every `pagehide` listener and every `unload` listener the web view added earlier, and still while
+ * that document is current. This spec pins that order on a real reload.
  *
  * The probe wraps the New Tab web view's component, in the iframe's own realm, with a child whose
  * effect adds two `pagehide` listeners — one removed in the effect's cleanup, one never removed —
- * and records each listener's call and the cleanup into an array that lives on the renderer's
- * window, so the record survives the document it came from.
+ * and an `unload` listener removed in the cleanup, and records each listener's call and the cleanup
+ * into an array that lives on the renderer's window, so the record survives the document it came
+ * from.
  *
  * ## How to run
  *
@@ -55,7 +57,7 @@ test.use({
 test.describe('web view reload', () => {
   test.setTimeout(300_000);
 
-  test("runs the web view's own pagehide listeners before unmounting its root", async ({
+  test("runs the web view's own pagehide and unload listeners before unmounting its root", async ({
     mainPage: page,
   }) => {
     await waitForAppReady(page, { timeout: 180_000 });
@@ -99,8 +101,11 @@ test.describe('web view reload', () => {
             log.push({ event: 'removed-in-cleanup listener ran', rootRendered: rootRendered() });
           const neverRemoved = () =>
             log.push({ event: 'never-removed listener ran', rootRendered: rootRendered() });
+          const unloadRemovedInCleanup = () =>
+            log.push({ event: 'unload listener ran', rootRendered: rootRendered() });
           window.addEventListener('pagehide', removedInCleanup);
           window.addEventListener('pagehide', neverRemoved);
+          window.addEventListener('unload', unloadRemovedInCleanup);
           log.push({ event: 'effect mounted' });
           return () => {
             log.push({
@@ -108,6 +113,7 @@ test.describe('web view reload', () => {
               whileOwnDocumentCurrent: window.document === mountedDocument,
             });
             window.removeEventListener('pagehide', removedInCleanup);
+            window.removeEventListener('unload', unloadRemovedInCleanup);
           };
         }, []);
         return undefined;
@@ -169,8 +175,8 @@ test.describe('web view reload', () => {
       )
       .toBeGreaterThan(0);
 
-    // Both listeners run while the old root is still rendered, and only then does the unmount run
-    // the cleanup — before the replacement document becomes current
+    // Every listener the web view added runs while the old root is still rendered, and only then
+    // does the unmount run the cleanup — before the replacement document becomes current
     await expect
       .poll(readLog, {
         message: 'what ran while the reload replaced the document',
@@ -180,6 +186,7 @@ test.describe('web view reload', () => {
         { event: 'effect mounted' },
         { event: 'removed-in-cleanup listener ran', rootRendered: true },
         { event: 'never-removed listener ran', rootRendered: true },
+        { event: 'unload listener ran', rootRendered: true },
         { event: 'effect cleanup ran', whileOwnDocumentCurrent: true },
       ]);
   });
