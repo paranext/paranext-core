@@ -35,6 +35,17 @@ namespace TestParanextDataProvider.Projects.SendReceive
             );
 
         [Test]
+        public void GetHashCode_SetsAreNotInterchangeable() =>
+            // Regression guard, not a contract: hash collisions are allowed, but a symmetric
+            // combine of the two sets would make every swapped pair collide.
+            Assert.That(
+                new UnsyncedChangesState(new[] { "a" }, Array.Empty<string>()).GetHashCode(),
+                Is.Not.EqualTo(
+                    new UnsyncedChangesState(Array.Empty<string>(), new[] { "a" }).GetHashCode()
+                )
+            );
+
+        [Test]
         public void GetHashCode_EqualStates_Match() =>
             Assert.That(
                 new UnsyncedChangesState(new[] { "a", "b" }, new[] { "c" }).GetHashCode(),

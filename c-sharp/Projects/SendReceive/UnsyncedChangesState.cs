@@ -8,7 +8,9 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <param name="ToSend">The projects with unsent local changes. Normalized (upper-cased) by
 /// whoever publishes it.</param>
 /// <param name="ToReceive">The projects with server changes not yet received. Normalized
-/// (upper-cased) by whoever publishes it; always empty where the server cannot be queried.</param>
+/// (upper-cased) by whoever publishes it; always empty where the server cannot be queried. Only a
+/// build that fills <c>ParatextProjectSendReceiveService.GetServerTipIds</c> (Paratext 10 Studio)
+/// can populate it; public Platform.Bible never reports a project here.</param>
 /// <remarks>
 /// Serializes to <c>{ toSend, toReceive }</c> via the shared PAPI camelCase JSON options
 /// (<c>PropertyNamingPolicy = CamelCase</c>, configured on the JSON-RPC formatter in
