@@ -904,6 +904,7 @@ describe('useSyncStatus', () => {
     expect(result.current.status).toBe('idle');
     expect(result.current.unsyncedProjects).toEqual([]);
   });
+
   // --- Sync direction ---
 
   it('reports unsynced with direction receive when only the server holds changes', async () => {
@@ -994,6 +995,7 @@ describe('useSyncStatus', () => {
 
     expect(result.current.unsyncedDirection).toBeUndefined();
   });
+
   it('does not name a project the sets have released while the new names are still loading', async () => {
     commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
     unsyncedChanges.sets = unsyncedSets(['PROJ1']);
