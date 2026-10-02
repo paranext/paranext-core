@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
+using Paratext.Data.Users;
 using SIL.Scripture;
 
 namespace TestParanextDataProvider.Projects
@@ -316,6 +317,15 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void SetExtensionData_ResourceProject_IsRefusedAndCreatesNothing()
         {
+            // Without a Paratext registration, GetParatextProject refuses every resource
+            // (RegistrationRequiredException) before this check is reached, and a test cannot fake
+            // one: a user is valid only with a real license code. So this runs on registered
+            // machines and skips on the hosted CI runners
+            Assume.That(
+                RegistrationInfo.DefaultUser.IsValid,
+                Is.True,
+                "Needs a Paratext registration on this machine"
+            );
             using DummyResourceScrText resource = new();
             ProjectDetails resourceDetails = CreateProjectDetails(resource);
             ParatextProjects.FakeAddProject(resourceDetails, resource);
