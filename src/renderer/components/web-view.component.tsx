@@ -114,6 +114,29 @@ async function retrieveWebViewContent(webViewType: string, id: string): Promise<
     logger.error(`WebView with type ${webViewType} and id ${id} loaded into id ${loadedId}!`);
 }
 
+/**
+ * The unmount that a React web view's bootstrap published for the root of the iframe's CURRENT
+ * document (`contentWindow` always resolves to the current one), or `undefined` if that document
+ * published none or is cross-origin.
+ */
+function getCurrentDocumentUnmountRoot(
+  iframe: HTMLIFrameElement | null | undefined,
+): (() => void) | undefined {
+  try {
+    // Align with WebViewCleanup from globalThis
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const contentWindowWithCleanup = iframe?.contentWindow as
+      | (Window & { webViewCleanup?: typeof globalThis.webViewCleanup })
+      | null
+      | undefined;
+    return contentWindowWithCleanup?.webViewCleanup?.unmountRoot;
+  } catch {
+    // While closing the WebView, we log a warning if the cleanup function is missing. Logging here
+    // would only add startup noise, since the unmount is looked for several times
+    return undefined;
+  }
+}
+
 export function WebView({
   id,
   webViewType,
@@ -167,19 +190,10 @@ export function WebView({
     if (!currentIframe) return;
 
     const extractCleanupFunction = () => {
-      try {
-        // Align with WebViewCleanup from globalThis
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const contentWindowWithCleanup = currentIframe.contentWindow as Window & {
-          webViewCleanup?: typeof globalThis.webViewCleanup;
-        };
-
-        if (contentWindowWithCleanup?.webViewCleanup?.unmountRoot)
-          unmountRootFunctionRef.current = contentWindowWithCleanup.webViewCleanup.unmountRoot;
-      } catch {
-        // While closing the WebView, we log a warning if the cleanup function is missing
-        // If we log these errors when capturing, it causes noise during startup that isn't important since we try capturing multiple times
-      }
+      // Never replaces a stored unmount: that is the load handler's job, because a stored unmount
+      // can belong to a document the iframe is replacing, and only the load handler unmounts it
+      if (unmountRootFunctionRef.current) return;
+      unmountRootFunctionRef.current = getCurrentDocumentUnmountRoot(currentIframe);
     };
 
     // Try to extract immediately in case iframe is already loaded
@@ -313,6 +327,25 @@ export function WebView({
   }, [id, postMessageCallback]);
 
   const handleLoadIframe = useCallback(() => {
+    // A new document's root replaces the stored one. rc-dock moving this tab within the window
+    // re-inserts the iframe, which loads a new document while this component stays mounted, and
+    // React comes from this window, so the replaced document's root stays mounted here unless it is
+    // unmounted now. After a reload its own hide handler has already unmounted it, making this a
+    // no-op. The `contentWindow` always resolves to the current document, so a stored unmount equal
+    // to the current one is the live root and is kept.
+    const currentUnmountRoot = getCurrentDocumentUnmountRoot(iframeRef.current);
+    const replacedUnmountRoot = unmountRootFunctionRef.current;
+    if (replacedUnmountRoot && replacedUnmountRoot !== currentUnmountRoot) {
+      try {
+        replacedUnmountRoot();
+      } catch (error) {
+        logger.warn(
+          `Failed to unmount replaced React root for WebView ${id}: ${getErrorMessage(error)}`,
+        );
+      }
+    }
+    unmountRootFunctionRef.current = currentUnmountRoot;
+
     // Mark that the iframe content has loaded so messages can be sent
     iframeHasLoadedRef.current = true;
     // Increment the tracker for the number of times the iframe has loaded
