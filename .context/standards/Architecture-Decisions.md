@@ -1547,6 +1547,36 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Only the zoomability is held per open menu, not the whole item list, because Power mode's window targets arrive after the menu opens.
 - **Source:** UX feedback 2026-09-22; epic PT-4575.
 
+## adr-core-dialog-reuses-panel-strings: A core dialog that explains what an extension panel explains renders a shared library component from the extension's own keys
+
+- **Date:** 2026-10-02
+- **Status:** Accepted
+- **Context:** PT-4811 gave the Model Text panel's empty state (platform-scripture-editor) and the
+  Team layout dialog (`src/renderer`) the same five-paragraph Base/Model explanation. The renderer
+  cannot import an extension's component, and copying the strings into `en.json` would let the two
+  surfaces be translated apart. A hand-copied explanation in each, kept in step by tests, drifted
+  in review (paragraph order and term pairing could change on one side with CI green).
+- **Decision:** The explanation is `BaseOrModelTextExplanation` in `platform-bible-react/experimental`,
+  with `BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS` naming the **extension's** keys and English
+  fallbacks. Both surfaces render it; each resolves the same keys (the renderer requests extension
+  keys from the shared localization store, as `identify-step` does) and keeps its own disclosure
+  toggle, width and alignment. The dialog's one-line summary is likewise the panel's key, which the
+  panel's prompt includes through a `{summary}` placeholder rather than restating it. Precedent:
+  `InternetAccessOptionList`, which reads `%paratextRegistration_*%` keys for both first-run and the
+  paratext-registration extension.
+- **Alternatives:** **Copy the strings into `en.json`** — rejected: two translations of one
+  explanation. **Read the extension's keys but hand-render the markup in each surface, kept in step
+  by tests** — tried first, rejected: every structural change had to be made twice, and the tests
+  that guarded it kept missing ways the copies could differ. **Move the strings into `en.json` and
+  have the extension read them** — not taken: the panel is the explanation's home and the dialog its
+  second surface; the library guide allows extension-owned keys for library components.
+- **Consequences:** Rewording a paragraph changes both surfaces; a change to the paragraphs'
+  structure is one edit in the library (plus a `dist/` rebuild). The library's tests keep its English
+  fallbacks equal to the extension's shipped English. The dialog shows English fallbacks if the
+  extension is absent, which cannot happen today because the extension's button is the dialog's only
+  opener.
+- **Source:** PT-4811 (paranext-core#2879), review rounds 3–5.
+
 ## adr-core-does-not-distribute-a-binary: `paranext-core` builds installers but publishes none
 
 - **Date:** 2026-09-04

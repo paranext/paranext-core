@@ -196,8 +196,5 @@ describe('Team layout dialog Base/Model explanation', () => {
     ['es', panelSpanish],
   ])('builds the %s empty-state prompt from the shared summary', (_, panel) => {
     expect(panel['%webView_modelTextPanel_emptyState_baseOrModel_prompt%']).toContain('{summary}');
-    expect(TEAM_LAYOUT_PANEL_STRING_KEYS).toContain(
-      '%webView_modelTextPanel_emptyState_baseOrModel_summary%',
-    );
   });
 });

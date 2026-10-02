@@ -5,7 +5,6 @@ import {
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
-  RetryableErrorView,
 } from 'platform-bible-react';
 import { BookOpen, CloudOff } from 'lucide-react';
 import { ReactNode } from 'react';
@@ -79,7 +78,7 @@ export function PanelReadinessView({
   // to replace a resource that may already be configured.
   if (readiness === 'error') {
     // No `onRetry`: nothing here can re-drive the setting read, so the view shows its message alone.
-    return <RetryableErrorView className={PANEL_FILL_CLASSES} message={errorMessage} />;
+    return <PanelRetryableErrorView message={errorMessage} />;
   }
 
   // A failed catalog fetch, unlike an unreadable setting, can genuinely be re-driven — so this
