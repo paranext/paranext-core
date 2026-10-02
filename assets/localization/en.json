@@ -347,7 +347,7 @@
   "%navigationHistory_forward_tooltip%": "Go forward one reference",
   "%onboardingTour_button_done%": "Done",
   "%onboardingTour_button_skip%": "Skip tour",
-  "%onboardingTour_step_baseOrModelText_description%": "This column shows your Base or Model text — the reference translation you're translating from. Your admin usually picks it for the team; see More info in this column if you need to pick it yourself.",
+  "%onboardingTour_step_baseOrModelText_description%": "This column shows your Base or Model text — the reference translation you're translating from. Your admin usually picks it for the team.",
   "%onboardingTour_step_baseOrModelText_title%": "Your Base or Model text",
   "%onboardingTour_step_modelText_description%": "This is your model text — the reference you're translating from. Your admin usually picks it for the team; see More info in this column if you need to pick it yourself.",
   "%onboardingTour_step_modelText_title%": "Your model text",

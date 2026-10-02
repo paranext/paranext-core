@@ -44,6 +44,15 @@ describe('onboarding tour Base/Model text stop', () => {
     );
   });
 
+  // The stop spotlights the column whether or not a text is chosen, but "More info" exists only in
+  // the column's empty state, so the stop must not send the user looking for it.
+  it.each([
+    ['English', english, /More info/],
+    ['Spanish', spanish, /Más información/],
+  ])('does not point to More info in %s', (_, strings, moreInfo) => {
+    expect(strings['%onboardingTour_step_baseOrModelText_description%']).not.toMatch(moreInfo);
+  });
+
   it.each(retiredKeys)('%s carries a deprecation notice', (key) => {
     expect(metadata[key]?.deprecationInfo).toBeDefined();
   });

@@ -616,7 +616,7 @@ export function ModelTextPanel({
             body={<BaseOrModelTextExplanation localizedStrings={localizedStrings} />}
           />
         }
-        pickLabel={localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
+        pickLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_pickText%')}
         retryLabel={localize(localizedStrings, '%webView_modelTextPanel_retry%')}
         onPick={() => handlePickModelText()}
         onRetryCatalog={onRetryCatalog}

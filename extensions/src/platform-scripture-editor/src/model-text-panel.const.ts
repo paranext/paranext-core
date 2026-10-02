@@ -32,6 +32,9 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   // `BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS`), so rewording one rewords it there too.
   '%webView_modelTextPanel_emptyState_moreInfo%',
   '%webView_modelTextPanel_emptyState_lessInfo%',
+  // The empty state's pick button. Generic ("a text") because the column holds a Base or a Model
+  // text; the not-found state keeps `%webView_modelTextPanel_pickModelText%` beside its own message.
+  '%webView_modelTextPanel_emptyState_pickText%',
   '%webView_modelTextPanel_emptyState_baseOrModel_intro%',
   // Each `...Term` is the bold lead-in to the definition or note that follows it.
   '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',

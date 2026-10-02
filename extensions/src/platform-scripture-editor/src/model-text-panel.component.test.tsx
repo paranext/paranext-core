@@ -47,6 +47,7 @@ const STRINGS = {
   '%webView_modelTextPanel_selecting%': 'Selecting resource…',
   '%webView_modelTextPanel_noProject%': 'No project.',
   '%webView_modelTextPanel_pickModelText%': 'Pick model text…',
+  '%webView_modelTextPanel_emptyState_pickText%': 'Pick a text…',
   '%webView_modelTextPanel_unknownResource%': 'The selected model text could not be found.',
   '%webView_modelTextPanel_installFailed%': "The model text couldn't be installed.",
   '%webView_modelTextPanel_installFailedOffline%':
@@ -190,9 +191,10 @@ afterEach(() => {
 });
 
 describe('ModelTextPanel', () => {
-  it('shows the "Pick model text" empty state when no model text is configured', () => {
+  // The column holds a Base or a Model text, so the empty state's button names neither.
+  it('shows the "Pick a text" empty state when no model text is configured', () => {
     renderPanel();
-    expect(screen.getByRole('button', { name: 'Pick model text…' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pick a text…' })).toBeInTheDocument();
   });
 
   it('auto-installs a configured model text whose resource is matched but not installed', async () => {
@@ -468,7 +470,7 @@ describe('ModelTextPanel', () => {
       });
       renderPanel({ showResourcePicker, logger });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
 
       await waitFor(() => expect(showResourcePicker).toHaveBeenCalled());
       expect(logger.error).not.toHaveBeenCalled();
@@ -824,7 +826,7 @@ describe('ModelTextPanel', () => {
     );
 
     expect(screen.queryByText('No Base or Model text selected. Pick one.')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Pick model text…' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pick a text…' })).not.toBeInTheDocument();
   });
 
   it('puts the header label in its own element so a long resource name ellipsises', async () => {
