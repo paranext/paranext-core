@@ -32,8 +32,9 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <para>
 /// Both sync signals the <see cref="UnsyncedChangesTracker"/> uses are consumed:
 /// <see cref="ParatextProjectSendReceiveService.SyncActivityChanged"/> going idle and
-/// <see cref="SendReceiveWriteLock.BlockStateChanged"/> disarming. When both end one sync, the
-/// second signal's poll is dropped or folded into the follow-up of the first.
+/// <see cref="SendReceiveWriteLock.BlockStateChanged"/> disarming. When both end one sync, this
+/// costs at most one extra poll; a signal whose poll would start while the other source still
+/// reads active is skipped.
 /// </para>
 /// </summary>
 internal sealed class RemoteChangesPoller : IDisposable
@@ -58,6 +59,8 @@ internal sealed class RemoteChangesPoller : IDisposable
     private Timer? _timer;
     private bool _started;
     private bool _disposed;
+
+    private int _pollFailureWarned; // warn once per run of failures, until a poll succeeds
 
     public RemoteChangesPoller(
         ParatextProjectSendReceiveService service,
@@ -266,36 +269,62 @@ internal sealed class RemoteChangesPoller : IDisposable
 
     private void Poll(long generation)
     {
-        IReadOnlyCollection<string>? result;
         try
         {
-            result = _fetch();
+            IReadOnlyCollection<string>? result;
+            try
+            {
+                result = _fetch();
+            }
+            catch (Exception ex)
+            {
+                // The lookup keeps failing the same way while the server is unreachable, so one
+                // line per run of failures is enough.
+                if (Interlocked.Exchange(ref _pollFailureWarned, 1) == 0)
+                {
+                    Console.Error.WriteLine(
+                        $"[RemoteChangesPoller] Poll failed: {ex.GetType().Name}: {ex.Message}"
+                    );
+                }
+                result = null;
+            }
+            if (result is not null)
+            {
+                Interlocked.Exchange(ref _pollFailureWarned, 0);
+                if (Apply(result, generation))
+                    RaiseChanged();
+            }
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[RemoteChangesPoller] Poll failed: {ex}");
-            result = null;
+            Console.Error.WriteLine($"[RemoteChangesPoller] Could not apply the poll result: {ex}");
         }
-
-        bool changed = false;
-        if (result is not null)
+        finally
         {
-            var next = new HashSet<string>(
-                result.Select(id => id.ToUpperInvariant()),
-                StringComparer.OrdinalIgnoreCase
-            );
-            lock (_lock)
-            {
-                if (!_disposed && generation == _generation && !next.SetEquals(_toReceive))
-                {
-                    _toReceive = next;
-                    changed = true;
-                }
-            }
+            ReleaseAndFollowUp();
         }
-        if (changed)
-            RaiseChanged();
+    }
 
+    // Publishes the result unless a sync ended since the poll was claimed. True when the set
+    // changed by value.
+    private bool Apply(IReadOnlyCollection<string> result, long generation)
+    {
+        var next = new HashSet<string>(
+            result.Select(id => id.ToUpperInvariant()),
+            StringComparer.OrdinalIgnoreCase
+        );
+        lock (_lock)
+        {
+            if (_disposed || generation != _generation || next.SetEquals(_toReceive))
+                return false;
+            _toReceive = next;
+            return true;
+        }
+    }
+
+    // Releases the in-flight claim and runs the follow-up a sync end requested during the poll.
+    private void ReleaseAndFollowUp()
+    {
         bool followUp;
         lock (_lock)
         {
