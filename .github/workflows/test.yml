@@ -40,6 +40,14 @@ jobs:
         # Make sure these match with the env values above
         os: [windows-latest, macos-15, ubuntu-22.04]
         dotnet_version: [8.0.x]
+        # The name each leg uploads its app under, and the name its cleanup step deletes by
+        include:
+          - os: windows-latest
+            artifact_name: app-windows-test
+          - os: macos-15
+            artifact_name: app-macos-test
+          - os: ubuntu-22.04
+            artifact_name: app-linux-test
 
     steps:
       - name: Install MacPorts
@@ -366,17 +374,24 @@ jobs:
         if: ${{ matrix.os == env.OS_LINUX }}
         run: npm run assert:snap-metadata
 
-      - name: Delete previous Windows artifacts created by this workflow
-        if: ${{ matrix.os == env.OS_WINDOWS }}
+      # Best-effort housekeeping, one step for every leg so the failure policy cannot drift between
+      # them: `continue-on-error` turns any list or delete failure into an annotation rather than a
+      # failed build, and `shell: bash` (Git Bash on windows) runs with `pipefail` so a failed list
+      # call is reported instead of silently feeding `xargs` nothing.
+      #
+      # Lists only this leg's artifact name, on the server, and pages through the results: the
+      # unfiltered repo-wide list is big enough that GitHub sometimes returns it cut off
+      # ("unexpected end of JSON input"), and one unpaged page holds only the newest 30 artifacts.
+      # The API paths have no leading `/` because Git Bash rewrites such an argument into a Windows
+      # file path before handing it to `gh`.
+      - name: Delete previous artifacts created by this workflow
+        continue-on-error: true
         timeout-minutes: 90
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Lists only this artifact name, on the server, and pages through the results: the
-        # unfiltered repo-wide list is big enough that GitHub sometimes returns it cut off
-        # ("unexpected end of JSON input"), and one unpaged page holds only the newest 30 artifacts.
-        # Empty lines are skipped so no DELETE is sent without an id.
         run: |
-          gh api --paginate "/repos/${{ github.repository }}/actions/artifacts?name=app-windows-test&per_page=100" --jq '.artifacts[] | select(.workflow_run.head_branch == "${{ github.ref_name }}") | .id' | Where-Object { $_ } | ForEach-Object { gh api -X DELETE "/repos/${{ github.repository }}/actions/artifacts/$_" }
+          gh api --paginate "repos/${{ github.repository }}/actions/artifacts?name=${{ matrix.artifact_name }}&per_page=100" --jq '.artifacts[] | select(.workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/{}"
 
       - name: Rename Windows exe to include GitHub Action Run ID
         if: ${{ matrix.os == env.OS_WINDOWS }}
@@ -394,20 +409,11 @@ jobs:
         timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
-          name: app-windows-test
+          name: ${{ matrix.artifact_name }}
           retention-days: 14
           path: |
             ./release/build/*.exe
             !./release/build/*Setup*.exe
-
-      - name: Delete previous macOS artifacts created by this workflow
-        if: ${{ matrix.os == env.OS_MACOS }}
-        timeout-minutes: 90
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Filtered and paged on the server, like the Windows step above.
-        run: |
-          gh api --paginate "/repos/${{ github.repository }}/actions/artifacts?name=app-macos-test&per_page=100" --jq '.artifacts[] | select(.workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE "/repos/${{ github.repository }}/actions/artifacts/{}"
 
       - name: Rename macOS dmg to include GitHub Action Run ID
         if: ${{ matrix.os == env.OS_MACOS }}
@@ -423,19 +429,10 @@ jobs:
         timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
-          name: app-macos-test
+          name: ${{ matrix.artifact_name }}
           retention-days: 14
           path: |
             ./release/build/*.dmg
-
-      - name: Delete previous Linux artifacts created by this workflow
-        if: ${{ matrix.os == env.OS_LINUX }}
-        timeout-minutes: 90
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Filtered and paged on the server, like the Windows step above.
-        run: |
-          gh api --paginate "/repos/${{ github.repository }}/actions/artifacts?name=app-linux-test&per_page=100" --jq '.artifacts[] | select(.workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE "/repos/${{ github.repository }}/actions/artifacts/{}"
 
       # `!cancelled()` rather than the implicit `success()`, matching the Playwright upload above: a
       # snap that fails the metadata check is the one someone needs to unsquash to see what shipped,
@@ -463,7 +460,7 @@ jobs:
         timeout-minutes: 90
         uses: actions/upload-artifact@v4
         with:
-          name: app-linux-test${{ (steps.packaging.outcome == 'failure' || steps.snap-metadata.outcome == 'failure') && '-failed-check' || '' }}
+          name: ${{ matrix.artifact_name }}${{ (steps.packaging.outcome == 'failure' || steps.snap-metadata.outcome == 'failure') && '-failed-check' || '' }}
           retention-days: 14
           path: |
             ./release/build/*.snap
