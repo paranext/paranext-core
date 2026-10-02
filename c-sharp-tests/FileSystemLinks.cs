@@ -1,9 +1,10 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 
 namespace TestParanextDataProvider;
 
 /// <summary>
-/// Symbolic-link creation for tests that need one.
+/// Symbolic-link and junction creation for tests that need one.
 /// </summary>
 [ExcludeFromCodeCoverage]
 internal static class FileSystemLinks
@@ -27,5 +28,30 @@ internal static class FileSystemLinks
         {
             Assert.Ignore($"Symbolic links cannot be created in this environment: {e.Message}");
         }
+    }
+
+    /// <summary>
+    /// Create a Windows directory junction, or <see cref="Assert.Ignore(string)"/> the current test
+    /// where that is not possible. .NET has no API for junctions, so this runs <c>mklink /J</c>;
+    /// unlike a symbolic link, a junction needs no privilege.
+    /// </summary>
+    public static void CreateJunctionOrIgnore(string junctionPath, string targetPath)
+    {
+        if (!OperatingSystem.IsWindows())
+            Assert.Ignore("Directory junctions exist only on Windows");
+
+        using var mklink = Process.Start(
+            new ProcessStartInfo("cmd.exe")
+            {
+                ArgumentList = { "/c", "mklink", "/J", junctionPath, targetPath },
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            }
+        )!;
+        var error = mklink.StandardError.ReadToEnd();
+        mklink.WaitForExit();
+        if (mklink.ExitCode != 0)
+            Assert.Ignore($"A directory junction could not be created: {error}");
     }
 }
