@@ -2188,7 +2188,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   document after every settle, so the loss of an annotation's last holder — a mark or a
   display-byte carrier — fires one more report through display bytes, `"removed"` or `"destroyed"`,
   exactly once; an annotation whose marks still exist keeps reporting through its marks only.
-  Painting stays whole-node, per `adr-editor-annotations-on-display-bytes`.
+  Painting stays whole-node, per `adr-editor-annotations-on-display-bytes`. _(Superseded by
+  `adr-editor-annotations-paint-exactly`: painting now follows the held bytes exactly.)_
 - **Alternatives:** Splitting the covered inline element into two elements to carry a partial mark
   — rejected: it clones the element and changes the document, which `setAnnotation` promises never
   to do. Keeping the whole-element move and documenting the extra bytes it marks — rejected: bytes
@@ -2215,7 +2216,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-editor-annotations-on-display-bytes: An annotation over display bytes is carrier node state, never a mark wrapping them
 
 - **Date:** 2026-09-28
-- **Status:** Accepted
+- **Status:** Accepted; its painting (whole-carrier classes, class lookups) superseded by
+  `adr-editor-annotations-paint-exactly`
 - **Context:** A checks result, a comment, or any other `setAnnotation` caller must be able to
   annotate essentially any location the position model resolves — a marker glyph, a verse or
   chapter number, a note caller, an attribute value — not only ordinary content text. The editor's
@@ -2235,7 +2237,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   settle rewrite, and exporter depends on is completely unchanged. Painting and events come from a
   per-editor index that adds the same class names `TypedMarkNode` would (`<typedMark>-<type>`,
   `<typedMarkOverlap>-<type>`, `annotationId-<id>`) plus `display-annotation` to the carrier's DOM
-  element, so host CSS and `scrollToAnnotation` (`.annotationId-<id>`) work unchanged. `getUsj()`
+  element, so host CSS and `scrollToAnnotation` (`.annotationId-<id>`) work unchanged. _(Superseded
+  by `adr-editor-annotations-paint-exactly`: only a carrier painted in full gets the classes, and
+  hosts find annotations with `EditorRef.getAnnotationRanges`.)_ `getUsj()`
   carries none of this — attribute values are plain strings with no sub-string annotation shape in
   USJ — so the host re-applies its own anchors after a reload, as it already does today.
 - **Alternatives:** **Option A — let marks sit inside display runs and make every reader
@@ -2252,7 +2256,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** The carrier is painted WHOLE even where the stored range covers only part of
   it — a check naming one attribute's value highlights the whole attribute-run text, and a check on
   a verse number highlights the glyph's whole `\v 12 ` — because splitting the carrier node is the
-  corruption this decision exists to avoid. The exact range is stored regardless, so painting only
+  corruption this decision exists to avoid. _(Superseded by `adr-editor-annotations-paint-exactly`,
+  which paints the held part with the Highlight API rejected for now below.)_ The exact range is stored regardless, so painting only
   the named bytes (the Highlight API, or overlay rectangles) can be added later without redoing this
   work. No `zmsc` (or other USJ shape) exists for an annotation held only on display bytes;
   `getUsj()` never carries it, and a host that needs it back after a `setUsj` reload re-applies from
@@ -2260,6 +2265,72 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   other marks of the same id survive) is unchanged by this decision — the carrier path is a
   distinct removal accounting that does not touch marks' existing behavior.
 - **Source:** PT-4370; paranext-core PR #2823, scripture-editors PR paranext/scripture-editors#11.
+
+## adr-editor-annotations-paint-exactly: An annotation paints exactly the bytes it holds, and hosts find it by its ranges
+
+- **Date:** 2026-10-01
+- **Status:** Accepted
+- **Context:** `adr-editor-annotations-on-display-bytes` held an annotation exactly but painted its
+  carrier whole: a check on `G5485` lit all of `|lemma="grace" strong="G5485"`, one on the `2` of
+  `\v 12 ` lit the glyph and its trailing space, and a click anywhere on a run fired every
+  annotation it held. The same entry deferred the CSS Custom Highlight API because `::highlight()`
+  cannot paint most of what host class rules set.
+- **Decision:** Paint from what each annotation holds. A leaf every annotation on it covers in full
+  keeps element classes (`<typedMark>-<type>`, `<typedMarkOverlap>-<type>`, `annotationId-<id>`,
+  `display-annotation`), so host styling, `:hover` and element events are unchanged there. A
+  display byte held only in part is painted with a CSS Custom Highlight per class set, which the
+  editor styles by translating the host's own class rules: it measures a hidden probe carrying the
+  classes against one carrying none and copies what differs among `background-color`, `color`,
+  `text-decoration` and `text-shadow`; a bottom border becomes an underline. Every other property,
+  and `:hover`, applies only to bytes painted as elements. Whitespace between two held bytes of one
+  annotation in one block (a separator, a char opener's no-break space) is painted, so `12 In` has
+  no hole; whitespace at an annotation's edges never is. Bytes a view does not display (a `\va`
+  where markers are hidden) are held and reported on removal but paint nothing. A read-only
+  decorator's holds are stored in the bytes it stands for and mapped onto what it draws only when
+  read, so a collapse, an expand, or a write while it is drawn differently never widens one. Click
+  and hover fire only for the annotation painted under the pointer. Hosts measure, scroll to and
+  hit-test an annotation with `EditorRef.getAnnotationRanges(type, id)` — live DOM ranges over
+  everything it paints, in document order — never by its class, which no element carries where a
+  highlight paints; `platform-scripture-editor`'s `editor-dom.util.ts` does.
+- **Alternatives:** **Keep whole-carrier painting** — rejected: it shows more than the check or
+  comment names, and its click target is wider than what is painted. **Split the carrier to wrap
+  the held part in an element** — rejected for the reason `adr-editor-annotations-on-display-bytes`
+  gives: it is the run-corrupting shape that entry exists to avoid. **Overlay rectangles** —
+  rejected: they must be repositioned on every reflow and scroll, and take no part in the host's
+  class rules. **Ask hosts for highlight-specific styles** — rejected: hosts keep one class
+  contract, and the editor translates it.
+- **Consequences:** A partly held byte cannot show borders, padding, font changes or `:hover`
+  styling; a host that needs them there needs the byte held whole. Without the highlight API a held
+  display byte is painted whole. A host that still looks annotations up by `.annotationId-<id>`
+  misses partly held display bytes; CSS rules keyed on the class keep working, since the editor
+  translates them. The annotation-location oracle checks painted bytes against held bytes plus
+  interior whitespace in every view.
+- **Source:** PT-4370 round 9; paranext-core PR #2823, scripture-editors PR
+  paranext/scripture-editors#11.
+
+## adr-editor-collapsed-note-hides-its-annotations: An annotation inside a collapsed note is not shown, as in Paratext 9
+
+- **Date:** 2026-10-01
+- **Status:** Accepted
+- **Context:** A collapsed note shows only its caller. An annotation on its hidden content (its
+  `\fr`/`\ft` text, its marker glyphs) held the hidden bytes and showed nothing, but one on the
+  note's `\cat` was held by the caller and painted it, so a check on a category lit up a caller.
+  Paratext 9 shows no annotation inside a closed note: `Standard.xslt` renders a closed note as its
+  caller span and writes the note's content only into comments
+  (`ParatextInternalShared/ScriptureViews/Standard.xslt:352-437`), and an annotation can attach only
+  to a fragment (`ParatextInternalShared/ScriptureEditor/Annotator.cs:264-280`), which `\cat` never
+  is.
+- **Decision:** Follow Paratext 9. An annotation inside a collapsed note's content, the undisplayed
+  `\cat` included, is not shown and is never painted on the caller; the caller holds an annotation
+  only when the range names the caller itself. The hidden content keeps its holders, invisible, so
+  the annotation reappears when the note is expanded and still reports its removal. A position on an
+  undisplayed category resolves behind the note's caller, the closest position to its left.
+- **Alternatives:** **Paint the caller for any annotation inside the note** — rejected: it differs
+  from Paratext 9 and makes a caller look checked when only its hidden content is. **Drop holds on
+  hidden content** — rejected: expanding the note would lose the annotation, and its removal would
+  never be reported.
+- **Consequences:** A host that wants a collapsed note's annotations visible has to expand the note.
+- **Source:** PT-4370 round 9; scripture-editors commit `c3a19c19` (paranext/scripture-editors#11).
 
 ## adr-editor-context-menu-follows-its-area-via-a-container: The editor library renders its context menu into an element the host supplies
 
@@ -2310,6 +2381,36 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   inlining a fourth copy.
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
+
+## adr-editor-opener-rename-renames-closer: A char opener rename renames its closer, and a pending `getUsj()` equals the settled document
+
+- **Date:** 2026-10-01
+- **Status:** Accepted
+- **Context:** Typing a name byte after a char opener (`\w grace\w*` + `x`) puts `\wx grace\w*` on
+  screen. The live settle renamed opener and closer in place, but `getUsj()` while the edit was
+  pending re-tokenized the paragraph and returned an unknown `\wx` with an unmatched `\w*`; the same
+  bytes typed into the content text instead of the glyph settled through that re-tokenize too. One
+  keystroke therefore had two settled documents, depending on the node it landed in and on when the
+  host asked.
+- **Decision:** An opener rename renames its closer, on screen, in `getUsj()` while pending, and on
+  settle; one decision (`$pendingCharOpenerRename`) feeds the live settle, the read-only settle and
+  the settled-position basis. `getUsj()` while an edit is pending equals the document after it
+  settles. The editor repo enforces this with a generated oracle: every single keystroke (a name
+  character, space, `*`, `\`, `|`, Backspace, Delete, and delete-then-type) at every offset of every
+  editable node over a corpus of paragraphs, spans, notes, verses and milestones, in the Standard,
+  expanded-notes and unformatted views, must give pending `getUsj()` equal to settled `getUsj()`,
+  a screen equal to the saved file byte for byte (whitespace included, normalized only as a USFM
+  reader would), and every caret position reporting exactly what the same bytes report once
+  settled — or, only where the settled document has nothing there, what the closest position to
+  their left reports. Cases it still lists each carry their reason, and the list must only shrink.
+- **Alternatives:** **Leave the closer and let the settle produce an unknown marker** — rejected: the
+  user sees a renamed span, and the file would not match it. **Hand-picked pending-versus-settled
+  cases** — rejected: none of them covered an opener rename on a closed span, which is how this
+  divergence went unseen.
+- **Consequences:** A host may read `getUsj()` at any moment without waiting for a settle. A change
+  to the settle or the position model that breaks the contract fails the oracle rather than a host.
+- **Source:** PT-4370 round 9; scripture-editors commits `17ac1ed0`, `c74ea17c`, `1eb8296e`,
+  `f7e8c2a0` (paranext/scripture-editors#11).
 
 ## adr-editor-outbound-positions-snap-left: The editor reports every caret, snapping bytes with no settled counterpart left
 
