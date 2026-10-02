@@ -127,7 +127,6 @@ describe("The scripture editor's Project menu, per mode", () => {
           'platformScriptureEditor.changeView',
           'platformScriptureEditor.toggleFootnotes',
           'platformScriptureEditor.changeFootnotesPaneLocation',
-          'platformScriptureEditor.toggleFootnotesAutoShow',
         ],
       ],
       [
@@ -249,9 +248,6 @@ describe("The scripture editor's Project menu, per mode", () => {
     'platformScripture.openMarkersInventory',
     'platformScripture.openPunctuationInventory',
     'platformScripture.openMarkersChecklist',
-    // The auto-show footnote pane toggle: Simple keeps PT9's manual footnotes pane, which Show
-    // footnotes opens and which then stays open, so Simple has no automatic behavior to turn on.
-    'platformScriptureEditor.toggleFootnotesAutoShow',
     // Manage books: book management is a Power-mode task; Simple's missing-book message instead
     // tells the user to ask their project administrator.
     'platformScripture.openManageBooks',

@@ -28,14 +28,18 @@ import {
   isEchoOfPublishedScrRef,
   isSameScrollGeometry,
   isSameVerseRef,
+  keepScrollPositionAcross,
   measureAnnotation,
   measureBaselineOffset,
+  focusPaneSelectedRow,
+  FOOTNOTES_PANE_ATTRIBUTE,
   measureRangeScrollGeometry,
   paraAtPoint,
   RANGE_SCROLL_TOP_OFFSET,
   resolveScrollBehavior,
   SCROLL_MAX_WAIT_MS,
   scrollToAnnotation,
+  scrollToNoteCaller,
   scrollToRange,
   scrollToVerse,
   waitForLayoutToSettle,
@@ -182,9 +186,64 @@ function buildAnnotationDom(options: EditorDomOptions = {}): EditorDom & {
   return { ...dom, annotation };
 }
 
+function buildNotesDom(options: EditorDomOptions = {}): EditorDom & { notes: HTMLElement[] } {
+  const dom = buildEditorDom({ ...options, verseNumbers: [] });
+  const notes = [1500, 1800].map((top) => {
+    const note = document.createElement('span');
+    note.className = 'note collapsed usfm_f';
+    stubRect(note, top, 20);
+    dom.editorContainer.append(note);
+    return note;
+  });
+  return { ...dom, notes };
+}
+
 afterEach(() => {
   document.body.innerHTML = '';
   vi.clearAllMocks();
+});
+
+describe('keepScrollPositionAcross', () => {
+  /** Runs the frame callbacks `requestAnimationFrame` was handed, in order. */
+  function captureAnimationFrames() {
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    return () => frames.splice(0).forEach((callback) => callback(0));
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.replaceChildren();
+  });
+
+  it('puts the text back where it was after the action scrolls it, on the next frame', () => {
+    const { wrapper, editorContainer } = buildEditorDom();
+    wrapper.scrollTop = 800;
+    const runFrames = captureAnimationFrames();
+
+    keepScrollPositionAcross(editorContainer, () => {
+      // What focusing the text does when its caret is elsewhere: scrolls the caret into view.
+      wrapper.scrollTop = 0;
+    });
+    expect(wrapper.scrollTop).toBe(0);
+
+    runFrames();
+    expect(wrapper.scrollTop).toBe(800);
+  });
+
+  it('just runs the action when the text has no scroll container', () => {
+    const { editorContainer } = buildEditorDom({ wrapperScrolls: false });
+    const action = vi.fn();
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame');
+
+    keepScrollPositionAcross(editorContainer, action);
+
+    expect(action).toHaveBeenCalledOnce();
+    expect(requestFrame).not.toHaveBeenCalled();
+  });
 });
 
 describe('findScrollContainer', () => {
@@ -558,6 +617,66 @@ describe('scrollToAnnotation', () => {
 
     expect(annotationElement).toBeUndefined();
     expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+});
+
+describe('scrollToNoteCaller', () => {
+  it('does not scroll when the caller is already fully visible', () => {
+    const { notes, wrapperScrollTo } = buildNotesDom();
+    stubRect(notes[0], 400, 20); // within [0, 900), scrollTop 0
+    scrollToNoteCaller(notes[0]);
+    expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+
+  it('aligns the caller to the closer edge when it is out of view', () => {
+    const { notes, wrapperScrollTo } = buildNotesDom(); // note 1 rect top 1800, height 20
+    scrollToNoteCaller(notes[1]);
+    // noteTop = 1800, bottom = 1820; distanceToTop = 1800, distanceToBottom = |900 - 1820| = 920
+    // -> bottom edge; targetTop = 1820 - 900 + 80 = 1000
+    expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 1000 });
+  });
+});
+
+describe('focusPaneSelectedRow', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    // `focus()` leaves a collapsed Selection on the focused element in jsdom, and `addRange` is a
+    // no-op while the document already holds a range — so a test later in this file that builds
+    // its own selection would silently get none.
+    document.getSelection()?.removeAllRanges();
+  });
+
+  /**
+   * The pane's list, preceded by another list whose highlighted option is also `aria-selected` - a
+   * portalled menu, say, which the helper must not reach.
+   */
+  function buildRows() {
+    document.body.innerHTML = `
+      <ul role="listbox">
+        <li role="option" aria-selected="true" id="menu-item" tabindex="0">menu item</li>
+      </ul>
+      <div ${FOOTNOTES_PANE_ATTRIBUTE}>
+        <ul role="listbox">
+          <li role="option" aria-selected="false" id="first" tabindex="0">first</li>
+          <li role="option" aria-selected="true" id="selected" tabindex="0">selected</li>
+        </ul>
+      </div>`;
+  }
+
+  it("focuses the pane's selected row", () => {
+    buildRows();
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    expect(focusPaneSelectedRow()?.id).toBe('selected');
+    expect(document.activeElement?.id).toBe('selected');
+  });
+
+  // A chapter change driven from the toolbar or another view also ends a row session; focusing a
+  // row then would take focus away from where the user is working.
+  it('leaves focus alone while the document does not hold it', () => {
+    buildRows();
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    expect(focusPaneSelectedRow()).toBeUndefined();
+    expect(document.activeElement).toBe(document.body);
   });
 });
 

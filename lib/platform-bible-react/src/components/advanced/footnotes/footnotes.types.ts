@@ -1,6 +1,49 @@
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
+import { ReactNode } from 'react';
 
 export type FootnoteLayout = 'horizontal' | 'vertical';
+
+/**
+ * Where the caret should land within a footnote's text.
+ *
+ * The offset origin is the note's CONTENT: every character run the note contains (including a
+ * leading `fr`/`xo` target reference, which PT9's notes pane and `FootnoteItem` alike render inline
+ * at the head of the note text), AND text written directly in the note, alongside its runs rather
+ * than inside one. It excludes the caller (`FootnoteItem` renders it in a separate header div), the
+ * USFM markers themselves and the note's `\cat` category, which is a field on the note rather than
+ * part of its content (see `RowTextKind` in `footnote-caret.utils.ts`).
+ *
+ * That origin is the note's USJ text, NOT any one rendering of it, which is what lets a position
+ * captured over a read-only row resolve inside a live editor: the editor adds its own display
+ * artifacts around the same content (marker glyphs that are real text under `markerMode:
+ * "editable"`, NBSP separators, structural spacers), and only the editor can tell those from
+ * content — so `EditorRef.selectNoteTextOffset` resolves the offset against its own nodes rather
+ * than any consumer walking its DOM.
+ *
+ * - `'end'`: after the last character of the note's text.
+ * - `{ utf16Offset }`: a flat offset over the note's content text, in UTF-16 code units (the unit
+ *   used by DOM Selection APIs and the editor's text nodes). Offsets originate from browser caret
+ *   APIs (`caretPositionFromPoint`), which only produce positions at valid caret boundaries, so
+ *   surrogate pairs and combining sequences are never split by construction. An offset past the
+ *   available text resolves to `'end'`.
+ * - `field: 'category'`: the offset is into the note's `\cat` category value instead, which is
+ *   outside the content origin above but still text the user can edit.
+ * - `glyph`: the caret is inside a marker the note editor shows as editable text - a run's opening or
+ *   closing marker (`\ft`, `\ft*`, `\+nd`), an unmatched marker, or `\cat`/`\cat*` - rather than in
+ *   text. `glyph.index` says which of the markers sitting at `utf16Offset` (from 0: `\fr*\ft` puts
+ *   two between the same two characters; `\cat` sits at the category's start and `\cat*` at its
+ *   end), and `glyph.offset` how far into that marker's own text, its trailing separator excluded.
+ *   Addressing markers relative to the content offset keeps every content offset the same whether
+ *   or not a rendering shows markers. The note's own marker, caller and closing marker are never
+ *   addressed: the note editor governs those through its own controls.
+ */
+export type FootnoteCaretPosition =
+  | 'end'
+  | {
+      utf16Offset: number;
+      field?: 'category';
+      glyph?: { index: number; offset: number };
+    };
 
 /** Interface defining the properties for a single footnote item component */
 export interface FootnoteItemProps {
@@ -15,10 +58,13 @@ export interface FootnoteItemProps {
   /**
    * Determines how footnotes are displayed:
    *
-   * - `'horizontal'`: caller and reference appear in a leading-aligned column, with the contents in a
-   *   second column (typically used in a wide pane below the text).
-   * - `'vertical'`: caller and reference appear on the first line, with the contents displayed
-   *   beneath (typically used side-by-side with the text).
+   * - `'horizontal'`: the note's marker and caller appear in a leading-aligned column, with the note
+   *   text in a second column (typically used in a wide pane below the text).
+   * - `'vertical'`: the note's marker and caller appear on the first line, with the note text
+   *   displayed beneath (typically used side-by-side with the text).
+   *
+   * A leading `\fr`/`\xo` target reference is part of the note text in both layouts, as it is in
+   * PT9's notes pane - it is not aligned in a column of its own.
    *
    * @default 'horizontal'
    */
@@ -35,6 +81,12 @@ export interface FootnoteItemProps {
 
 /** Interface defining the properties for the FootnoteList component */
 export interface FootnoteListProps {
+  /**
+   * Localized accessible name for the list, announced by screen readers when focus reaches a row.
+   *
+   * @default 'Footnotes'
+   */
+  ariaLabel?: string;
   /** Optional additional class name for styling */
   className?: string;
   /** Optional additional class name for styling the `Card` for each `FootnoteItem` in the list */
@@ -44,17 +96,25 @@ export interface FootnoteListProps {
   /**
    * Determines how footnotes are displayed:
    *
-   * - `'horizontal'`: caller and reference appear in a leading-aligned column, with the contents in a
-   *   second column (typically used in a wide pane below the text).
-   * - `'vertical'`: caller and reference appear on the first line, with the contents displayed
-   *   beneath (typically used side-by-side with the text).
+   * - `'horizontal'`: the note's marker and caller appear in a leading-aligned column, with the note
+   *   text in a second column (typically used in a wide pane below the text).
+   * - `'vertical'`: the note's marker and caller appear on the first line, with the note text
+   *   displayed beneath (typically used side-by-side with the text).
+   *
+   * A leading `\fr`/`\xo` target reference is part of the note text in both layouts, as it is in
+   * PT9's notes pane - it is not aligned in a column of its own.
    *
    * @default 'horizontal'
    */
   layout?: FootnoteLayout;
   /**
    * ID provided by the caller that should change whenever the list changes (due to additions,
-   * deletions or — unlikely — reordering) )
+   * deletions or — unlikely — reordering).
+   *
+   * Changing it re-mints every read-only row. The row named by
+   * {@link FootnoteListProps.editingFootnoteIndex} is exempt: it hosts a live editor holding state
+   * no prop carries, and it stays mounted across list-id changes so a note added or removed
+   * elsewhere cannot discard an edit in progress.
    */
   listId: string | number;
   /** The currently selected footnote (or undefined if none) */
@@ -83,4 +143,36 @@ export interface FootnoteListProps {
   formatCaller?: (caller: string | undefined, index: number) => string | undefined;
   /** Callback to handle clicking/selecting a footnote in the list */
   onFootnoteSelected?: (footnote: MarkerObject, index: number, listId: string | number) => void;
+  /**
+   * Callback requesting that a footnote open for editing (e.g. swap the row for an inline editor).
+   * When provided, a row click or Enter keypress fires this INSTEAD of `onFootnoteSelected`; Space
+   * still fires `onFootnoteSelected`. `caretPosition` maps the click point into the note text (see
+   * {@link FootnoteCaretPosition}); keyboard activation passes `'end'`.
+   */
+  onFootnoteEditRequested?: (
+    footnote: MarkerObject,
+    index: number,
+    listId: string | number,
+    caretPosition: FootnoteCaretPosition,
+  ) => void;
+  /**
+   * Fires when keyboard or pointer focus lands on a row (with its index) and when it leaves one
+   * (with `undefined`). Focus on a row is not a selection - only a click, Enter, or Space selects -
+   * but a consumer can still follow it, e.g. to mark the focused note in the text as the user Tabs
+   * or arrows through the list. Focus moving from one row to the next reports `undefined` and then
+   * the new index.
+   */
+  onFocusedFootnoteChange?: (index: number | undefined) => void;
+  /**
+   * Index of the footnote currently being edited in place, if any. When set (and
+   * `renderEditingFootnote` is provided), that row renders the editor slot instead of its read-only
+   * display and is highlighted as the active editing row.
+   */
+  editingFootnoteIndex?: number;
+  /**
+   * Render prop for the in-place editor shown for `editingFootnoteIndex`'s row. The list stays
+   * presentation-only: it never imports an editor component; the consumer supplies one (e.g. an
+   * inline `FootnoteEditor`).
+   */
+  renderEditingFootnote?: (footnote: MarkerObject, index: number) => ReactNode;
 }

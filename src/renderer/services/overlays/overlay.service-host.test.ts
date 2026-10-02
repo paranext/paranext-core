@@ -1873,6 +1873,41 @@ describe('overlay.service-host', () => {
       expect(getOverlays()).toHaveLength(0);
     });
 
+    it('should leave a command palette whose session claims Escape to that session', async () => {
+      vi.useFakeTimers();
+
+      const claimingRequest: CommandPaletteRequest = {
+        ...paletteRequest,
+        passive: true,
+        keyForwarding: { keys: ['Escape', 'Enter'], onKey: vi.fn() },
+      };
+      const palettePromise = overlayService.showCommandPalette(claimingRequest, 'claims-escape');
+      vi.advanceTimersByTime(PAST_GRACE_MS);
+
+      emitAppWindowInput('escape');
+      expect(getOverlays().map((overlay) => overlay.type)).toEqual(['commandPalette']);
+
+      // Only Escape is left to the session; a click elsewhere still closes the palette.
+      emitAppWindowInput('mouseDown');
+      vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
+      await expect(palettePromise).resolves.toBeUndefined();
+      expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('should still close a command palette whose session forwards keys other than Escape', async () => {
+      vi.useFakeTimers();
+
+      const palettePromise = overlayService.showCommandPalette(
+        { ...paletteRequest, keyForwarding: { keys: ['Enter'], onKey: vi.fn() } },
+        'forwards-enter',
+      );
+      vi.advanceTimersByTime(PAST_GRACE_MS);
+
+      emitAppWindowInput('escape');
+      await expect(palettePromise).resolves.toBeUndefined();
+      expect(getOverlays()).toHaveLength(0);
+    });
+
     it('should close the newer of two command palettes on escape, and the older on the next escape', async () => {
       vi.useFakeTimers();
 

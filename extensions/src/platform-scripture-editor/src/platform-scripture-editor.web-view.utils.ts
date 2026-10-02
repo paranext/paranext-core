@@ -24,12 +24,20 @@ import {
 } from 'platform-bible-utils';
 import type { MutableRefObject } from 'react';
 import type {
+  DeltaOpInsertNoteEmbed,
   EditorRef,
   MarkerMenuItem as EditorMarkerMenuItem,
   SelectionRange,
 } from '@eten-tech-foundation/platform-editor';
-import { markerMenuItemToPaletteItem, type MarkerMenuItem } from 'platform-bible-react';
+import {
+  markerMenuItemToPaletteItem,
+  type FootnoteEditorHandle,
+  type MarkerMenuItem,
+} from 'platform-bible-react';
 import { stripMarkerNestingPrefix } from 'platform-bible-react/experimental';
+import type { FlushableDebouncer } from './flushable-debouncer.util';
+import type { NoteSessionUpdateDecision } from './platform-scripture-editor.utils';
+import { EDITOR_OWNERSHIP_WINDOW_MS } from './use-editor-pdp-sync.hook';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
 /**
@@ -101,10 +109,9 @@ export function generateInlineMarkerMenuListItems(
 }
 
 /**
- * Identity of one loaded chapter, for the two places that need to compare "the chapter then"
- * against "the chapter now": the debounced save's chapter-safety guard and the footnotes pane's
- * per-chapter manual override. One helper so those two can never disagree about what counts as the
- * same chapter.
+ * Identity of one loaded chapter, for comparing "the chapter then" against "the chapter now" — used
+ * by the debounced save's chapter-safety guard to tell whether a pending save still targets the
+ * chapter it was scheduled for.
  *
  * Carries every identity field of the chapter-data selector (minus `verseNum`, which never changes
  * which document the subscription delivers): book, chapter number, AND versification. A
@@ -118,49 +125,6 @@ export function getChapterKey(
   versificationStr: string | undefined,
 ): string {
   return `${book}|${chapterNum}|${versificationStr ?? ''}`;
-}
-
-/** Inputs to {@link resolveFootnotesPaneAutoVisibility}. */
-export interface FootnotesPaneAutoVisibilityInput {
-  /** Whether the footnotes pane's auto-show/hide behavior is turned on. */
-  isAutoShowEnabled: boolean;
-  /** Whether the chapter currently loaded in the editor has at least one note. */
-  chapterHasNotes: boolean;
-  /**
-   * The chapter the user last manually showed or hid the pane in, or `undefined` when they have not
-   * done so. Same shape as {@link currentChapterKey}.
-   */
-  manualOverrideChapterKey: string | undefined;
-  /** The chapter currently loaded in the editor. */
-  currentChapterKey: string;
-}
-
-/**
- * Decides what the footnotes pane's auto-show/hide behavior should do right now: show the pane,
- * hide it, or leave it exactly as the user has it.
- *
- * Auto-show/hide is a PT9 divergence, off by default in Simple mode (so PT9's manual, persistent
- * pane visibility is what ships there) and on by default in Power mode — see the web view's
- * effective-setting derivation. It applies in EVERY editor view. When it applies, the pane follows
- * the loaded chapter: shown for a chapter that has notes, hidden for one that doesn't.
- *
- * A manual show/hide wins over that, but only for the chapter it was made in — the user asked for
- * THIS chapter to look a particular way, not for the feature to stop working. Recording the
- * override against a chapter, rather than as a flag some other code has to clear, is what makes it
- * expire on navigation without depending on which effect runs first.
- *
- * @returns `true` to show the pane, `false` to hide it, or `undefined` when the auto behavior has
- *   no opinion and the pane must be left however it already is
- */
-export function resolveFootnotesPaneAutoVisibility({
-  isAutoShowEnabled,
-  chapterHasNotes,
-  manualOverrideChapterKey,
-  currentChapterKey,
-}: FootnotesPaneAutoVisibilityInput): boolean | undefined {
-  if (!isAutoShowEnabled) return undefined;
-  if (manualOverrideChapterKey === currentChapterKey) return undefined;
-  return chapterHasNotes;
 }
 
 /**
@@ -188,6 +152,56 @@ export function restoreSelectionIfLost(
 ): void {
   if (!editor || editor.getSelection()) return;
   if (lastFocusOutSelection) editor.setSelection(lastFocusOutSelection);
+}
+
+/**
+ * Hands DOM focus back to the Scripture text, putting the caret back first — unless this web view's
+ * document does not have focus.
+ *
+ * A close can be driven from outside this web view (a chapter change from another view or a global
+ * shortcut closes an open popover), and web views share one window: focusing here would pull focus
+ * into this editor, and the user's typing would then be saved into this text instead of the one
+ * they are typing in. `hasFocus`, not the active element, because the note editor blurs itself as
+ * it closes.
+ *
+ * @param editor The live editor handle; no-op when not mounted
+ * @param restoreSelection Puts back the caret the user left in the text
+ * @param afterNoteIndex The note to put the caret just past instead of restoring it
+ * @param ownerDocument The web view's document
+ */
+export function returnFocusToScriptureTextIfDocumentFocused(
+  editor: Pick<EditorRef, 'selectAfterNote' | 'focus'> | null | undefined,
+  restoreSelection: () => void,
+  afterNoteIndex?: number,
+  ownerDocument: Pick<Document, 'hasFocus'> = document,
+): void {
+  if (!ownerDocument.hasFocus()) return;
+  if (afterNoteIndex === undefined) restoreSelection();
+  else editor?.selectAfterNote(afterNoteIndex);
+  editor?.focus();
+}
+
+/**
+ * Lands a footnotes-pane row editor's pending edits in the document, then flushes the debounced
+ * save that reads the document — for the paths that must not lose the last few keystrokes (page
+ * teardown, and an external replace about to overwrite the document).
+ *
+ * The order matters: the row's latest keystrokes sit in the row editor's own live-apply debounce,
+ * not yet in the document, so a save flushed first would write the document without them. Landing
+ * them can itself schedule the save, which is why the save's pending state is read only
+ * afterwards.
+ *
+ * @param rowEditor The open row editor, or `undefined`/`null` when no row session is open
+ * @param save The web view's debounced save
+ * @returns The flushed save's promise, or `undefined` when no save was pending
+ */
+export function flushRowEditsThenSave(
+  rowEditor: Pick<FootnoteEditorHandle, 'flushPendingEdits'> | null | undefined,
+  save: Pick<FlushableDebouncer<unknown[]>, 'isPending' | 'flush'>,
+): Promise<void> | undefined {
+  rowEditor?.flushPendingEdits();
+  if (!save.isPending()) return undefined;
+  return save.flush();
 }
 
 /**
@@ -219,12 +233,25 @@ export interface EditingSessionActivityInput {
   noteSessionRefreshedAtMs: number | undefined;
   /** `Date.now()` at the moment of the decision. */
   nowMs: number;
+  /**
+   * Set when the open note session is the footnotes pane's row editor; `undefined` for the popover.
+   * The row editor applies each edit to the text as it is made, as the Scripture editor itself
+   * does, so it holds incoming updates back on the Scripture editor's terms: only while focus is in
+   * the pane and a note was edited there within {@link EDITOR_OWNERSHIP_WINDOW_MS}. The popover
+   * applies nothing until Save, so its session holds them back until it closes or goes stale.
+   */
+  paneSession?: {
+    /** Whether DOM focus is inside the footnotes pane. */
+    hasFocus: boolean;
+    /** `Date.now()` of the last edit made in the pane's row editor, or `undefined` if none was. */
+    lastEditAtMs: number | undefined;
+  };
 }
 
 /**
- * Decides whether an editing SESSION (marker palette or footnote-popover note edit) should keep the
- * PDP-sync deferral open, applying the {@link STALE_NOTE_EDITING_SESSION_MS} time bound to the note
- * session.
+ * Decides whether an editing SESSION (marker palette, or a note edit in the popover or the
+ * footnotes pane) should keep the PDP-sync deferral open, applying the
+ * {@link STALE_NOTE_EDITING_SESSION_MS} time bound to a popover note session.
  *
  * The note-session bound exists because the session key alone is not proof of a live session: if
  * the popover dies without cleanup, the orphaned key would otherwise defer every incoming PDP
@@ -237,6 +264,10 @@ export interface EditingSessionActivityInput {
  * A palette session carries no time bound here: its lifecycle is owned by the overlay service's
  * show promise, which always settles (select, dismiss, or replacement rejection).
  *
+ * A pane session is never reported stale: it stops holding updates back once the user stops editing
+ * in it (see {@link EditingSessionActivityInput.paneSession}), and the update it then lets through
+ * ends the session itself.
+ *
  * @returns `isActive` — whether any live session should keep deferring incoming PDP updates;
  *   `isNoteSessionStale` — whether an open note session exceeded the bound (the caller must clear
  *   it even when a palette session keeps `isActive` true)
@@ -246,8 +277,18 @@ export function resolveEditingSessionActivity({
   editingNoteKey,
   noteSessionRefreshedAtMs,
   nowMs,
+  paneSession,
 }: EditingSessionActivityInput): { isActive: boolean; isNoteSessionStale: boolean } {
   const isNoteSessionOpen = editingNoteKey !== undefined;
+  if (isNoteSessionOpen && paneSession) {
+    const ownsContent =
+      paneSession.lastEditAtMs !== undefined &&
+      nowMs - paneSession.lastEditAtMs < EDITOR_OWNERSHIP_WINDOW_MS;
+    return {
+      isActive: hasPaletteSession || (paneSession.hasFocus && ownsContent),
+      isNoteSessionStale: false,
+    };
+  }
   const isNoteSessionStale =
     isNoteSessionOpen &&
     (noteSessionRefreshedAtMs === undefined ||
@@ -345,4 +386,33 @@ export function shouldSpaceCommitNoteMarker(
 export function parseCallerSequenceSetting(value: string): string[] | undefined {
   const callers = value.split(/\s+/).filter((caller) => caller.length > 0);
   return callers.length > 0 ? callers : undefined;
+}
+
+/**
+ * The ops array a footnotes-pane note session holds after an editor change, given what
+ * `decideNoteSessionUpdate` made of that change.
+ *
+ * The array's IDENTITY is what the mounted row editor reloads on, so:
+ *
+ * - `reloadRowEditor` (the note changed from elsewhere): a fresh array, which reloads the row.
+ * - `rekey` (the row editor's own apply replaced the note): the SAME array with its op replaced in
+ *   place. The mounted editor is left alone, but an editor remounted mid-session (its row keyed
+ *   afresh) loads from this array, and must load what the note now holds rather than what it held
+ *   when the session opened.
+ * - Otherwise: the array as it was.
+ *
+ * @param editingNoteOps The session's current ops array
+ * @param noteOp The session note's op as the document holds it now, if it resolved
+ * @param decision What the change does to the session
+ * @returns The array the session should hold next
+ */
+export function nextEditingNoteOps(
+  editingNoteOps: DeltaOpInsertNoteEmbed[] | undefined,
+  noteOp: DeltaOpInsertNoteEmbed | undefined,
+  decision: Pick<NoteSessionUpdateDecision, 'action' | 'reloadRowEditor'>,
+): DeltaOpInsertNoteEmbed[] | undefined {
+  if (!noteOp) return editingNoteOps;
+  if (decision.reloadRowEditor) return [noteOp];
+  if (decision.action === 'rekey' && editingNoteOps) editingNoteOps[0] = noteOp;
+  return editingNoteOps;
 }

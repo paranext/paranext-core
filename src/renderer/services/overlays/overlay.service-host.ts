@@ -1143,6 +1143,14 @@ function handleAppWindowInput(event: AppWindowInputEvent): void {
     const topmost = getTopmostOverlay(() => true);
     if (!topmost || topmost.type === 'modalDialog') return;
     if (!dismissableOverlayIds.has(topmost.id)) return;
+    // A command palette whose requesting session claims Escape (`keyForwarding`) is closed by that
+    // session: the key reaches it either directly (a passive palette never takes focus) or
+    // forwarded from the palette. Dismissing it here as well races that keydown, which this signal
+    // usually wins, and a session that finds its palette already gone no longer claims the key, so
+    // the SAME press then also reaches whatever the session sits in - closing a footnotes pane row
+    // editor along with the marker palette opened in it.
+    if (topmost.type === 'commandPalette' && topmost.request.keyForwarding?.keys.includes('Escape'))
+      return;
     dismissTransientOverlays('escape', new Set([topmost.id]));
     return;
   }
