@@ -2,7 +2,6 @@ import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
-  ForwardedSessionKind,
   getMarkerPaletteClaimedKeys,
   handleMarkerPaletteSessionKeyDown,
   MarkerPaletteSessionDriver,
@@ -425,6 +424,232 @@ describe('OverlayCommandPalettePresentational', () => {
       });
       expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
       expect(document.body).toHaveFocus();
+    });
+  });
+
+  describe("focusTarget: 'list' — focus on something that cannot be edited", () => {
+    // Why this mode exists: an IME or a dead key begins composing in ANY focused text box no
+    // matter what a key handler cancels, and once a composition is under way per-key rules no
+    // longer apply to it. Focusing the list means no composition ever starts, so a dead key
+    // arrives as an ordinary keydown the requester's table can ignore.
+
+    it('focuses the LIST, not the search input', async () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const list = screen.getByRole('listbox');
+      await vi.waitFor(() => expect(list).toHaveFocus());
+      expect(screen.getByRole('combobox')).not.toHaveFocus();
+    });
+
+    it('focuses an ANCHORED list palette, whose list mounts after the first attempt', async () => {
+      // Same portal timing as the input case: Radix commits nothing on its first pass, so the
+      // retry must survive a target that does not exist yet.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      await vi.waitFor(() => expect(screen.getByRole('listbox')).toHaveFocus());
+    });
+
+    it('renders the search box read-only, out of the tab order, over the HOST filter', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          filterText="se"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      expect(input).toHaveAttribute('readonly');
+      expect(input).toHaveAttribute('tabindex', '-1');
+      expect(input).toHaveValue('se');
+    });
+
+    it('puts the focused list in the tab order and points it at the highlighted item', async () => {
+      // aria-activedescendant only speaks from a FOCUSED element. Passive mode cannot use it (it
+      // focuses nothing) and falls back to the service's live region; list mode can, which is the
+      // accessibility gain over passive.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          selectedIndex={1}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const list = screen.getByRole('listbox');
+      await vi.waitFor(() => expect(list).toHaveFocus());
+      expect(list).toHaveAttribute('tabindex', '0');
+      const activeId = list.getAttribute('aria-activedescendant');
+      expect(activeId).toBeTruthy();
+      expect(document.getElementById(activeId ?? '')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('forwards EVERY key to the session, including keys it never declared', () => {
+      // The point of list mode: one table in the requester decides what each key means, including
+      // the ones it ignores. Declaring them all would duplicate that table here.
+      const onKey = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          keyForwarding={{ keys: ['Enter'], onKey }}
+        />,
+      );
+
+      const list = screen.getByRole('listbox');
+      fireEvent.keyDown(list, { key: 'Enter' });
+      fireEvent.keyDown(list, { key: 'q' });
+      fireEvent.keyDown(list, { key: '.' });
+      fireEvent.keyDown(list, { key: 'Dead' });
+      fireEvent.keyDown(list, { key: 'ArrowDown' });
+
+      expect(onKey.mock.calls.map(([event]) => event.key)).toEqual([
+        'Enter',
+        'q',
+        '.',
+        'Dead',
+        'ArrowDown',
+      ]);
+    });
+
+    it('stops forwarded keys reaching this document\u2019s other shortcut bindings', () => {
+      // Regression: while marker palettes were passive, focus stayed in the requesting WebView\u2019s
+      // iframe and its keydowns never reached the renderer document, so the renderer\u2019s
+      // `document`-level shortcut bindings could not see them. Focusing the list moved focus into
+      // this document and put those bindings back in the path \u2014 `PlatformMenubar` binds bare
+      // `alt` and answers it by dispatching a SYNTHETIC Escape at a menu trigger, which closed the
+      // palette the instant a user reached for a dead key (Option is how `\u00e9` is typed on macOS).
+      const documentListener = vi.fn();
+      document.addEventListener('keydown', documentListener);
+      const onKey = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          keyForwarding={{ keys: [], onKey }}
+        />,
+      );
+
+      // A key the session IGNORES is still the palette's to own \u2014 that is the case that bit us.
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Alt', altKey: true });
+
+      expect(onKey).toHaveBeenCalledTimes(1);
+      expect(documentListener).not.toHaveBeenCalled();
+      document.removeEventListener('keydown', documentListener);
+    });
+
+    it('leaves the DEFAULT palette\u2019s keys reaching the document, as before', () => {
+      // Only list mode claims the keyboard this way; an ordinary focused palette keeps today's
+      // behaviour so other PAPI consumers are unaffected.
+      const documentListener = vi.fn();
+      document.addEventListener('keydown', documentListener);
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Alt', altKey: true });
+
+      expect(documentListener).toHaveBeenCalled();
+      document.removeEventListener('keydown', documentListener);
+    });
+
+    it('hands Escape to the session too, instead of dismissing locally', () => {
+      // Dismissal is the session's call: it has a caret to restore and a pending state to clear.
+      const onKey = vi.fn();
+      const onDismiss = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+          keyForwarding={{ keys: [], onKey }}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
+
+      expect(onKey).toHaveBeenCalledTimes(1);
+      expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it('still dismisses on Escape when the requester declared no forwarding at all', () => {
+      const onDismiss = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
+
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves the DEFAULT palette untouched — input focused and editable', async () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      await vi.waitFor(() => expect(input).toHaveFocus());
+      expect(input).not.toHaveAttribute('readonly');
+    });
+
+    it('does not forward undeclared keys, and dismisses locally, outside list mode', () => {
+      // A key-forwarding palette that is NOT list-focused keeps today's behaviour in both
+      // respects: only its declared keys go back to the session, and Escape is its own. (It also
+      // leaves focus alone — covered by the anchored-palette focus tests above.)
+      const onKey = vi.fn();
+      const onDismiss = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+          keyForwarding={{ keys: ['Enter'], onKey }}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      fireEvent.keyDown(input, { key: 'q' });
+      expect(onKey).not.toHaveBeenCalled();
+      fireEvent.keyDown(input, { key: 'Escape' });
+      expect(onDismiss).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -884,6 +1109,37 @@ describe('OverlayCommandPalettePresentational', () => {
         'aria-selected',
         'true',
       );
+    });
+
+    it('should scroll the newly highlighted item into view when selectedIndex changes', () => {
+      // Passive items are plain elements, so cmdk's own scroll-to-selected never runs; without the
+      // palette doing it, a host-driven highlight can move below the fold unseen.
+      const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+      const { rerender } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={0}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      scrollIntoView.mockClear();
+
+      rerender(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={2}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const newlyHighlighted = screen.getByText('Close Tab').closest('[data-slot="command-item"]');
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+      expect(scrollIntoView.mock.contexts).toContain(newlyHighlighted);
+      scrollIntoView.mockRestore();
     });
 
     it('should render items with role="option" and point the listbox aria-activedescendant at the highlighted item', () => {
@@ -1390,9 +1646,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
   }
 
   function renderForwardingPalette(
-    // The forwarded kinds only: an 'enter' session never declares key forwarding (its palette is
-    // always focused), so getMarkerPaletteClaimedKeys does not accept it.
-    session: MarkerPaletteSessionState & { kind: ForwardedSessionKind },
+    session: MarkerPaletteSessionState,
     driver: MarkerPaletteSessionDriver,
     onSelect = vi.fn(),
   ) {
@@ -1402,7 +1656,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
         onSelect={onSelect}
         onDismiss={vi.fn()}
         keyForwarding={{
-          keys: getMarkerPaletteClaimedKeys(session.kind),
+          keys: getMarkerPaletteClaimedKeys(),
           onKey: (event) => handleMarkerPaletteSessionKeyDown(event, session, driver),
         }}
       />,
@@ -1412,7 +1666,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
 
   it('routes typed characters into the SESSION filter, not the palette input', () => {
     // Without this the session would commit an empty query while the screen showed a full one.
-    const session: MarkerPaletteSessionState & { kind: ForwardedSessionKind } = {
+    const session: MarkerPaletteSessionState = {
       kind: 'selection',
       filter: '',
       items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
@@ -1430,7 +1684,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
   it('overlay-focused + NON-EMPTY filter + Space performs the ratified selection wrap', () => {
     // Previously: Space was an ordinary character appended to cmdk's filter, so the wrap never
     // happened and the query stopped matching anything.
-    const session: MarkerPaletteSessionState & { kind: ForwardedSessionKind } = {
+    const session: MarkerPaletteSessionState = {
       kind: 'selection',
       filter: '',
       items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
@@ -1453,7 +1707,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
     // item, committing something the user never typed and bypassing the session entirely. With
     // the patch opt-in (a palette with key forwarding does not opt in) and Space forwarded, the
     // session's own visible refusal runs instead.
-    const session: MarkerPaletteSessionState & { kind: ForwardedSessionKind } = {
+    const session: MarkerPaletteSessionState = {
       kind: 'selection',
       filter: '',
       items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
@@ -1479,7 +1733,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
         onSelect={vi.fn()}
         onDismiss={onDismiss}
         keyForwarding={{
-          keys: getMarkerPaletteClaimedKeys('backslash'),
+          keys: getMarkerPaletteClaimedKeys(),
           onKey: (event) => handleMarkerPaletteSessionKeyDown(event, session, driver),
         }}
       />,

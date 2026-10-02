@@ -25,6 +25,11 @@ import {
   type MarkerPaletteKeyEvent,
 } from '@/components/advanced/marker-palette-keydown.util';
 import {
+  captureEditorContentSnapshot,
+  hasEditorChanged,
+  type EditorContentSnapshot,
+} from '@/components/advanced/marker-palette-change-guard.util';
+import {
   runMarkerPaletteSession,
   type MarkerPaletteOpenSession,
 } from '@/components/advanced/marker-palette-session.util';
@@ -121,23 +126,25 @@ export interface FootnoteEditorProps {
  */
 export interface FootnoteEditorMarkerPalette extends PaletteDriver {
   /**
-   * Shows the palette anchored at the given position. `passive` mirrors
-   * `CommandPaletteRequest.passive` — when true, the palette never steals focus and its filter and
-   * highlighted selection are driven externally via the driver's `update`.
+   * Shows the palette anchored at the given position.
+   *
+   * ONE options object, deliberately, rather than positional parameters: TypeScript accepts an
+   * implementation with a shorter arity, so a version that omitted the last parameter compiled
+   * while silently dropping it — which is how the popover's selection palette once opened with no
+   * key forwarding at all, and none of its commit semantics ran.
    *
    * @returns The selected item's `id`, or `undefined` if dismissed.
    */
-  show(
-    items: PaletteItem[],
-    anchor: { x: number; y: number; width?: number; height?: number },
-    passive: boolean,
+  show(options: {
+    items: PaletteItem[];
+    anchor: { x: number; y: number; width?: number; height?: number };
     /**
      * Keys the session claims while the palette is open. The palette forwards exactly these back
      * instead of acting on them, so the session's semantics run whichever document holds focus —
-     * without it, a palette that takes focus silently takes the session's keys with it.
+     * and a list-focused palette forwards every key regardless.
      */
-    keyForwarding?: PaletteKeyForwarding,
-  ): Promise<string | undefined>;
+    keyForwarding?: PaletteKeyForwarding;
+  }): Promise<string | undefined>;
 }
 
 /**
@@ -346,6 +353,13 @@ export default function FootnoteEditor({
    * note loads so a stale capture can never place a commit inside the wrong note.
    */
   const lastFocusOutSelectionRef = useRef<SelectionRange | undefined>(undefined);
+
+  /**
+   * This popover editor's content and caret as focus left it for an open palette — the baseline the
+   * change guard compares against. Same moment and same reason as the capture above: it is the last
+   * point the caret is readable before Lexical's blur processing nulls it.
+   */
+  const paletteBaselineSnapshotRef = useRef<EditorContentSnapshot | undefined>(undefined);
 
   /**
    * Restores the caret when the editor's selection has been lost, leaving a live one alone.
@@ -776,14 +790,16 @@ export default function FootnoteEditor({
     (
       ctx: { anchorRect?: { x: number; y: number; width: number; height: number } },
       items: EditorMarkerMenuItem[],
-      openOptions: { passive: boolean },
+      openOptions: { hasTextSelection: boolean },
     ) => {
       const { anchorRect } = ctx;
       if (!markerPalette || !anchorRect) return;
-      const { passive } = openOptions;
+      const { hasTextSelection } = openOptions;
       runMarkerPaletteSession({
         items,
-        passive,
+        // The kind decides how a commit APPLIES — wrap the selected text, or land at the caret.
+        // It no longer decides anything about focus: every marker palette focuses its list.
+        kind: hasTextSelection ? 'selection' : 'backslash',
         // No `shouldSpaceCommit`, deliberately: the Space note-marker exception exists for
         // Standard-view BODY text, where a materialized `\f ` literal absorbs the following word
         // as the new footnote's caller. This palette offers note-INTERNAL markers for content
@@ -791,22 +807,35 @@ export default function FootnoteEditor({
         sessionCounterRef: paletteSessionCounter,
         setSession: (session) => {
           paletteSession.current = session;
+          // A baseline describes the editor as THIS session's palette took focus; carrying one
+          // into the next session would compare against a stale document and refuse a good commit.
+          paletteBaselineSnapshotRef.current = undefined;
         },
-        clearSessionIfCurrent: (token) => clearPaletteSessionIfCurrent(paletteSession, token),
+        clearSessionIfCurrent: (token) => {
+          clearPaletteSessionIfCurrent(paletteSession, token);
+          if (!paletteSession.current) paletteBaselineSnapshotRef.current = undefined;
+        },
         // Through the ref so the palette always runs the CURRENT handler — the callback is
         // captured once, at show time, while the session it drives is replaced on every reopen.
         runSessionKey: (event) => runPaletteSessionKeyRef.current(event),
         show: (keyForwarding) =>
-          markerPalette.show(
-            items.map(markerMenuItemToPaletteItem),
-            anchorRect,
-            passive,
+          markerPalette.show({
+            items: items.map(markerMenuItemToPaletteItem),
+            anchor: anchorRect,
             keyForwarding,
-          ),
+          }),
         // What a lost selection costs on this path specifically: the apply lands the marker as an
         // invalid trailing span after the note's closing marker while the typed literal strands at
         // the real caret (live-observed: a red `\fq` after `\f*`).
         restoreSelectionIfLost,
+        hasEditorChangedSinceFocus: () =>
+          hasEditorChanged(
+            paletteBaselineSnapshotRef.current,
+            captureEditorContentSnapshot(
+              () => editorRef.current?.getUsj(),
+              () => editorRef.current?.getSelection(),
+            ),
+          ),
         focusEditor: () => editorRef.current?.focus(),
         applyItem: (selected) =>
           editorRef.current?.applyMarkerMenuSelection(selected, {
@@ -840,7 +869,7 @@ export default function FootnoteEditor({
     if (!ctx) return false;
     const items = getMarkerMenuItems(options.styleInfo ?? defaultStyleInfo, ctx);
     if (items.length === 0) return false;
-    openMarkerPalette(ctx, items, { passive: !ctx.hasTextSelection });
+    openMarkerPalette(ctx, items, { hasTextSelection: !!ctx.hasTextSelection });
     return true;
   }, [openMarkerPalette, options.styleInfo]);
 
@@ -852,7 +881,14 @@ export default function FootnoteEditor({
   const runPaletteSessionKey = useCallback(
     (event: MarkerPaletteKeyEvent) => {
       const session = paletteSession.current;
-      if (!session || !markerPalette) return;
+      if (!markerPalette) return;
+      if (!session) {
+        // The palette outlived its session: it holds real focus and forwards EVERY key here, so
+        // returning would swallow them all — Escape included — leaving a box the keyboard cannot
+        // get out of. Close it instead.
+        markerPalette.dismiss();
+        return;
+      }
       const outcome = handleMarkerPaletteSessionKeyDown(event, session, {
         // Overlay ops delegate to the host-supplied driver; the commit ops are EDITOR-side
         // applies this popover owns (it holds the editor ref). The table calls `dismiss()` right
@@ -861,19 +897,33 @@ export default function FootnoteEditor({
         update: (update) => markerPalette.update(update),
         commit: () => markerPalette.commit(),
         dismiss: () => markerPalette.dismiss(),
-        commitTyped: (typed) => editorRef.current?.commitTypedMarker(typed),
+        // Each editor-side commit restores the caret FIRST, the way the shared spine does before
+        // its own apply. This palette takes focus now, so `.editor-input` is blurred while these
+        // run and Lexical's blur processing can null the editor-state selection:
+        // `commitTypedMarker`/`commitTypedCloser` then refuse and return false — which nothing
+        // here reads — and `applyMarkerMenuSelection` lands at the document end. Without this the
+        // user gets no marker, no error, and a caret somewhere else.
+        commitTyped: (typed) => {
+          restoreSelectionIfLost();
+          editorRef.current?.commitTypedMarker(typed);
+        },
         commitTypedAndReopen: (typed) => {
           // The `\` commit: same materialization as Space with NO terminating space, then a
           // fresh palette for the backslash just pressed. Showing a new palette replaces the
           // current overlay (the old show promise rejects ABORTED, handled below), so there is
           // no explicit dismiss to sequence against the commit.
+          restoreSelectionIfLost();
           editorRef.current?.commitTypedMarker(typed, { trailingSpace: false });
           openMarkerPaletteAtCaret();
         },
-        commitTypedCloser: (typed) => editorRef.current?.commitTypedCloser(typed),
+        commitTypedCloser: (typed) => {
+          restoreSelectionIfLost();
+          editorRef.current?.commitTypedCloser(typed);
+        },
         commitItem: (marker) => {
           const selected = session.items.find((item) => item.marker === marker);
           if (!selected) return;
+          restoreSelectionIfLost();
           editorRef.current?.applyMarkerMenuSelection(selected, {
             trigger: 'backslash',
             literalPrefixLanded: false,
@@ -882,9 +932,11 @@ export default function FootnoteEditor({
       });
       // Clear only if this session is still the current one: a `\` commit opens a REPLACEMENT
       // session synchronously inside the table call, and an unconditional clear would kill it.
-      if (outcome === 'ended') clearPaletteSessionIfCurrent(paletteSession, session.token);
+      if (outcome === 'ended') {
+        clearPaletteSessionIfCurrent(paletteSession, session.token);
+      }
     },
-    [markerPalette, openMarkerPaletteAtCaret],
+    [markerPalette, openMarkerPaletteAtCaret, restoreSelectionIfLost],
   );
 
   useEffect(() => {
@@ -906,6 +958,12 @@ export default function FootnoteEditor({
       if (!editorInput || event.target !== editorInput) return;
       const selection = editorRef.current?.getSelection();
       if (selection) lastFocusOutSelectionRef.current = selection;
+      // Baseline for the change guard, only while this popover has a palette open.
+      if (paletteSession.current)
+        paletteBaselineSnapshotRef.current = captureEditorContentSnapshot(
+          () => editorRef.current?.getUsj(),
+          () => editorRef.current?.getSelection(),
+        );
     };
     document.addEventListener('focusout', handleFocusOut);
     return () => document.removeEventListener('focusout', handleFocusOut);
@@ -967,6 +1025,10 @@ export default function FootnoteEditor({
         // this outer guard covers only this handler's own trigger paths.)
         if (isImeCompositionKeyEvent(event)) return;
         const editorInput = getEditorInput();
+        // Focus is the whole rule, for an open session as much as for the trigger paths below.
+        // The editor keeps focus (and its caret) for the life of a session, so its own keys route
+        // here; once the palette has taken focus its keys come back through key forwarding
+        // instead, and anything else focused in this document keeps its own keys.
         if (!editorInput || document.activeElement !== editorInput) return;
         const session = paletteSession.current;
 
@@ -1020,10 +1082,9 @@ export default function FootnoteEditor({
           editorRef.current?.focus();
           return;
         }
-        // ACTIVE palette: the trigger never lands, whatever the selection shape — typing filters
-        // the palette, not the document. In capture, the claim keeps Lexical from ever seeing
-        // the `\`. (`passive` still selects the overlay's non-focus-stealing display for the
-        // collapsed caret.)
+        // The trigger never lands, whatever the selection shape — typing filters the palette, not
+        // the note. In capture, the claim keeps Lexical from ever seeing the `\`.
+        //
         // Claimed only when a palette actually opens: with nothing to offer, the `\` is an
         // ordinary character and must still reach the document.
         if (openMarkerPaletteAtCaret()) {
@@ -1050,12 +1111,30 @@ export default function FootnoteEditor({
         editorRef.current?.focus();
       };
 
+      // A composition that starts in THIS editor while a palette is open closes the palette and
+      // lets the composed text land as ordinary typing — the same accepted gap the main editor
+      // has, and it needs its own handler because this popover owns its own session.
+      //
+      // The palette focuses its list, where no composition can start. But the session is created
+      // synchronously in the trigger's keydown, and for the short window before the palette has
+      // focus this editor still does. A composition begun there cannot be forwarded — it is not a
+      // sequence of keydowns the table can read — and cannot be cancelled either: `beforeinput`
+      // for `insertCompositionText` is not cancelable and `compositionstart` composes regardless
+      // of `preventDefault`. So: close, and let the user see their character.
+      const handleCompositionStart = () => {
+        if (paletteSession.current) markerPalette?.dismiss();
+      };
+
       document.addEventListener('keydown', handleKeyDown, { capture: true });
       document.addEventListener('paste', handlePaste, { capture: true });
+      document.addEventListener('compositionstart', handleCompositionStart, { capture: true });
 
       return () => {
         document.removeEventListener('keydown', handleKeyDown, { capture: true });
         document.removeEventListener('paste', handlePaste, { capture: true });
+        document.removeEventListener('compositionstart', handleCompositionStart, {
+          capture: true,
+        });
       };
     }
 

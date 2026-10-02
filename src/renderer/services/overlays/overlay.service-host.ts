@@ -46,7 +46,7 @@ import {
   PopoverContent,
   PopoverRequest,
 } from './overlay.service-model';
-import { filterPaletteItems } from './overlay-palette-filter.util';
+import { filterPaletteItems, getPaletteFilterMode } from './overlay-palette-filter.util';
 import { convertContributionToContextMenuItems } from './overlay-menu-converter';
 import {
   validateCommandPaletteRequest,
@@ -973,7 +973,7 @@ async function updateCommandPalette(
   const filteredItems = filterPaletteItems(
     entry.items,
     nextFilterText,
-    entry.request.passive ? 'passive' : 'active',
+    getPaletteFilterMode(entry.request),
     entry.request.searchFields,
   );
   updateCommandPaletteState(entry.id, {
@@ -987,7 +987,12 @@ async function updateCommandPalette(
 
   // Re-read the entry for the index the store clamped, rather than clamping a second time here.
   const updatedEntry = getActiveCommandPalette(webViewId);
-  if (updatedEntry)
+  // PASSIVE palettes only. This live region exists because a passive palette focuses nothing, so
+  // its `aria-activedescendant` cannot speak. A list-focused palette DOES focus the listbox that
+  // carries it, so the highlight is already announced the standard way — announcing again here
+  // speaks every marker twice, and the second utterance talks over the next keystroke. The two
+  // come from different channels, so the de-dupe inside the announcer cannot suppress it.
+  if (updatedEntry?.request.passive)
     announceCommandPaletteState(updatedEntry.id, filteredItems, updatedEntry.selectedIndex);
 }
 
@@ -1015,7 +1020,7 @@ async function commitCommandPaletteSelection(webViewId: string): Promise<void> {
   const filtered = filterPaletteItems(
     entry.items,
     entry.filterText,
-    entry.request.passive ? 'passive' : 'active',
+    getPaletteFilterMode(entry.request),
     entry.request.searchFields,
   );
   if (filtered.length === 0) {

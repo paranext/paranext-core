@@ -1,11 +1,12 @@
 /**
- * Shared open-session orchestration for standard-view `\` marker palettes — the ONE spine behind
- * BOTH consumers' `openMarkerPalette` flows (`platform-scripture-editor.web-view.tsx` and
- * `footnote-editor.component.tsx`), the same way `marker-palette-keydown.util.ts` is the one
- * while-open forwarding table. Neither consumer may carry its own copy: the spine owns session
- * token allocation, session construction, the key-forwarding declaration, and the show promise's
- * settlement handling — the commit ordering (restore the caret, focus, apply), the dismissal
- * refocus, and the failure cleanup — so the two palettes cannot drift apart in any of those.
+ * Shared open-session orchestration for standard-view marker palettes — the ONE spine behind every
+ * palette both consumers open (`platform-scripture-editor.web-view.tsx`'s `\` and Enter-split
+ * palettes, and `footnote-editor.component.tsx`'s `\` palette), the same way
+ * `marker-palette-keydown.util.ts` is the one while-open forwarding table. Neither consumer may
+ * carry its own copy: the spine owns session token allocation, session construction, the
+ * key-forwarding declaration, and the show promise's settlement handling — the commit ordering
+ * (restore the caret, focus, apply), the dismissal refocus, and the failure cleanup — so the two
+ * palettes cannot drift apart in any of those.
  *
  * What GENUINELY differs between the consumers stays caller-supplied through
  * {@link RunMarkerPaletteSessionOptions}:
@@ -16,15 +17,16 @@
  *   focus-out capture, and only the popover has a meaningful last-resort target (the end of its
  *   single note).
  * - The `'backslash'` Space exception (`shouldSpaceCommit`), the failure logging (`onShowError`), and
- *   the editor-side `focusEditor`/`applyItem` handles.
+ *   the editor-side `focusEditor`/`applyItem` handles (the Enter-split palette's apply splits the
+ *   paragraph).
  */
 
 import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import type { MutableRefObject } from 'react';
 import {
   getMarkerPaletteClaimedKeys,
-  type ForwardedSessionKind,
   type MarkerPaletteKeyEvent,
+  type MarkerPaletteSessionKind,
   type MarkerPaletteSessionState,
 } from '@/components/advanced/marker-palette-keydown.util';
 
@@ -36,8 +38,7 @@ import {
  */
 export interface MarkerPaletteOpenSession<TItem extends { marker: string }>
   extends MarkerPaletteSessionState {
-  /** Only the two forwarded kinds: the Enter-split (`'enter'`) palette has its own open path. */
-  kind: ForwardedSessionKind;
+  kind: MarkerPaletteSessionKind;
   /** Identifies this session to async settle-time cleanup, from the consumer's monotonic counter. */
   token: number;
   items: readonly TItem[];
@@ -55,11 +56,11 @@ export interface RunMarkerPaletteSessionOptions<TItem extends { marker: string }
    */
   items: readonly TItem[];
   /**
-   * Selects the session flavor: `true` opens the collapsed-caret `'backslash'` session (shown in
-   * the overlay's non-focus-stealing display), `false` the FOCUSED selection-wrap `'selection'`
-   * session.
+   * The session's kind (see `MarkerPaletteSessionKind`). `'selection'` is the one FOCUSED palette;
+   * the others are shown in the overlay's non-focus-stealing (passive) display, and the consumer's
+   * `show` must display them that way.
    */
-  passive: boolean;
+  kind: MarkerPaletteSessionKind;
   /**
    * See {@link MarkerPaletteSessionState.shouldSpaceCommit}. Attached to `'backslash'` sessions only
    * — Space over a selection is the wrap commit, which has no typed-literal route to except.
@@ -67,9 +68,8 @@ export interface RunMarkerPaletteSessionOptions<TItem extends { marker: string }
   shouldSpaceCommit?: (filter: string) => boolean;
   /**
    * The consumer's monotonic token allocator. Caller-owned (not module state) so ALL of a
-   * consumer's palette opens — including kinds outside this spine, like the web view's Enter-split
-   * palette — draw from ONE sequence and stale-settlement cleanup stays totally ordered across
-   * them.
+   * consumer's palette opens draw from ONE sequence and stale-settlement cleanup stays totally
+   * ordered across them.
    */
   sessionCounterRef: MutableRefObject<number>;
   /** Stores the freshly created session as the consumer's current one. */
@@ -98,6 +98,20 @@ export interface RunMarkerPaletteSessionOptions<TItem extends { marker: string }
    * ordering comment in {@link runMarkerPaletteSession}.
    */
   restoreSelectionIfLost(): void;
+  /**
+   * Whether the editor's content or caret changed since the palette took focus.
+   *
+   * A commit applies AT THE CARET, so a palette whose editor moved underneath it can only land the
+   * marker somewhere the user never chose — and the caret restored from the focus-out capture would
+   * address content that no longer exists. When this reports true the session ends without applying
+   * anything, and the user reopens the palette where they do want it.
+   *
+   * Supplied by each consumer, because only it can read its own editor; see
+   * `marker-palette-change-guard.util.ts` for the comparison rules — notably that a caret nulled on
+   * blur is NOT a move, since that is the normal state while a palette holds focus. Omit it and no
+   * guard runs.
+   */
+  hasEditorChangedSinceFocus?(): boolean;
   /** Focuses the consumer's editor. */
   focusEditor(): void;
   /** Applies the committed item to the consumer's editor. */
@@ -120,7 +134,7 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
 ): void {
   const {
     items,
-    passive,
+    kind,
     shouldSpaceCommit,
     sessionCounterRef,
     setSession,
@@ -128,14 +142,50 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
     runSessionKey,
     show,
     restoreSelectionIfLost,
+    hasEditorChangedSinceFocus,
     focusEditor,
     applyItem,
     onShowError,
   } = options;
 
+  /**
+   * Puts the caret back where the user left it and returns focus to the editor.
+   *
+   * Restoring BEFORE focusing is the whole point: a mouse click on the palette blurs the editor
+   * (the overlay renders outside its document), and Lexical's blur processing can NULL the
+   * editor-state selection. `focus()` cannot bring a nulled selection back — it falls back to
+   * selecting the document END — so a commit would land there instead of at the caret the user last
+   * saw. Restoring first re-establishes that caret; `focus()` then re-asserts it.
+   *
+   * Every way a session ends runs this, for every kind. A dismissal that merely focused left the
+   * caret wherever the blur had put it, so the user's next keystroke went somewhere they did not
+   * choose — the same defect as a mis-landed commit, just quieter. It is a no-op when the selection
+   * is still intact.
+   *
+   * The `\` palette used to be excluded, on the reasoning that it is dismissed mid-typing and the
+   * overlay host's own focus restore would cover it. That held only while that palette was passive
+   * and never took focus. Now every palette takes focus, so the `\` one is the case that needs this
+   * MOST — and the host's restore cannot stand in for it: it refocuses the web view's iframe, not
+   * `.editor-input`, and it cannot rebuild a selection Lexical has nulled.
+   */
+  const restoreEditorSelection = () => {
+    restoreSelectionIfLost();
+    focusEditor();
+  };
+
   sessionCounterRef.current += 1;
   const token = sessionCounterRef.current;
-  const kind: ForwardedSessionKind = passive ? 'backslash' : 'selection';
+  /**
+   * Whether this session is still the newest one — false once a REPLACEMENT has been opened.
+   *
+   * A dismissal must not touch focus or the caret on behalf of a session that has already been
+   * superseded. The `\` commit-and-reopen flow shows a second palette, which rejects the first
+   * one's show promise with ABORTED; restoring from that handler would focus the editor out from
+   * under the palette that just opened — and restore from a focus-out capture taken BEFORE the
+   * commit, dragging the caret back behind the marker just inserted. The replacement's own focus
+   * attempt stops as soon as focus sticks once, so it never fights back.
+   */
+  const isStillCurrentSession = () => sessionCounterRef.current === token;
   const session: MarkerPaletteOpenSession<TItem> = { kind, token, filter: '', items };
   if (kind === 'backslash' && shouldSpaceCommit) session.shouldSpaceCommit = shouldSpaceCommit;
   setSession(session);
@@ -146,26 +196,22 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
     // Declared for the passive palette too: it never takes focus, so this is inert there, but one
     // code path means a palette that unexpectedly receives a key routes it to the session rather
     // than acting on it.
-    keys: getMarkerPaletteClaimedKeys(kind),
+    keys: getMarkerPaletteClaimedKeys(),
     onKey: (event) => runSessionKey(event),
   })
     .then((id) => {
       clearSessionIfCurrent(token);
       if (id !== undefined) {
-        // Restore the caret BEFORE focusing and applying: a mouse click on the palette blurred
-        // the editor (the overlay renders outside its document), and Lexical's blur processing
-        // can NULL the editor-state selection. `focus()` cannot bring a nulled selection back —
-        // it falls back to selecting the document END — so the apply would land there instead of
-        // at the caret the user last saw. Restoring first re-establishes that caret; `focus()`
-        // then re-asserts it, so a mouse commit applies exactly like a keyboard one.
-        restoreSelectionIfLost();
-        focusEditor();
-        const selected = items.find((item) => item.marker === id);
+        restoreEditorSelection();
+        // The editor moved under the open palette, so the caret this commit would apply at is no
+        // longer the one the user chose. Focus and the caret still go back; the marker does not
+        // land, and the user reopens the palette where they actually want it.
+        const selected = hasEditorChangedSinceFocus?.()
+          ? undefined
+          : items.find((item) => item.marker === id);
         if (selected) applyItem(selected);
-      } else if (!passive) {
-        // Focused palette dismissed: focus never left the passive case, but the focused palette's
-        // own search input had it, so bring it back to the editor.
-        focusEditor();
+      } else if (isStillCurrentSession()) {
+        restoreEditorSelection();
       }
       return undefined;
     })
@@ -173,7 +219,7 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
       // Replaced by a newer overlay request (PlatformError code ABORTED) or any other rejection —
       // treat the same as an explicit dismissal.
       clearSessionIfCurrent(token);
-      if (!passive) focusEditor();
+      if (isStillCurrentSession()) restoreEditorSelection();
       onShowError(error);
     });
 }

@@ -409,11 +409,11 @@ describe('FootnoteEditor marker palette wiring', () => {
   });
 
   describe('editable marker mode with markerPalette, collapsed caret (non-focus-stealing palette)', () => {
-    it('claims the trigger (never lands) and opens the palette in its non-focus-stealing display', () => {
-      // ACTIVE palette: the trigger `\` is claimed in every selection shape — nothing of the
-      // palette's ever reaches the document. The collapsed-caret palette still requests the
-      // `passive: true` DISPLAY (no focus steal; filter and highlight driven via the session
-      // table), which is now purely an overlay display mode, not a typing mode.
+    it('claims the trigger (never lands) and opens the palette with ONE options object', () => {
+      // The trigger `\` is claimed in every selection shape — nothing of the palette's ever
+      // reaches the note. One options object rather than positional parameters, so an
+      // implementation cannot silently drop the last one (which is how the popover's palette once
+      // opened with no key forwarding at all).
       mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
       const show = vi.fn(() => new Promise<string | undefined>(() => {}));
       const markerPalette = makeMarkerPalette(show);
@@ -436,17 +436,16 @@ describe('FootnoteEditor marker palette wiring', () => {
       );
 
       expect(notPrevented).toBe(false); // claimed — the trigger never lands
-      expect(show).toHaveBeenCalledWith(
-        [markerMenuItemToPaletteItem(makeItem())],
-        { x: 1, y: 2, width: 3, height: 4 },
-        true,
+      expect(show).toHaveBeenCalledWith({
+        items: [markerMenuItemToPaletteItem(makeItem())],
+        anchor: { x: 1, y: 2, width: 3, height: 4 },
         // The session declares the keys it owns so a palette that takes focus forwards them back
         // instead of consuming them.
-        expect.objectContaining({
+        keyForwarding: expect.objectContaining({
           keys: expect.arrayContaining([' ', 'Enter', 'Escape', 'Tab', '*', '\\']),
           onKey: expect.any(Function),
         }),
-      );
+      });
     });
 
     it('never shows a palette (and starts no session) when there are no marker menu items', () => {
@@ -758,15 +757,149 @@ describe('FootnoteEditor marker palette wiring', () => {
       // Flush the promise microtask queue so the `.then` handler runs.
       await Promise.resolve();
 
-      expect(focusMock).toHaveBeenCalled(); // the palette's search input had focus — hand it back
+      expect(focusMock).toHaveBeenCalled(); // the palette had focus — hand it back
       expect(editorRef.applyMarkerMenuSelection).not.toHaveBeenCalled();
-      // A dismissal must not move the caret — only a commit restores/repositions it.
-      expect(editorRef.setSelection).not.toHaveBeenCalled();
-      expect(editorRef.selectNote).not.toHaveBeenCalled();
+      // A DISMISSAL restores the caret too, not only a commit. The palette takes focus, so
+      // Lexical's blur processing can null the editor-state selection; focusing without restoring
+      // first leaves the caret wherever that put it — `focus()` falls back to the document END —
+      // and the user's next keystroke lands somewhere they never chose. The same defect as a
+      // mis-landed commit, just quieter. (This harness reports no live selection, so the restore
+      // runs here; it is a no-op whenever the selection survived.) Nothing is applied either way.
+      expect(editorRef.selectNote).toHaveBeenCalled();
+    });
+
+    it('restores the caret when a COLLAPSED-CARET `\\` palette is dismissed too', async () => {
+      // The `\\` palette was excluded from the dismissal restore while it was passive and never
+      // took focus; the overlay host's own restore was expected to cover it. Now every palette
+      // takes focus, so this is the kind that needs it most — and the host's restore cannot stand
+      // in: it refocuses the web view's iframe rather than `.editor-input`, and cannot rebuild a
+      // selection Lexical nulled on blur.
+      mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'nd' })]);
+      let resolveShow: (id: string | undefined) => void = () => {};
+      const showPromise = new Promise<string | undefined>((resolve) => {
+        resolveShow = resolve;
+      });
+      const markerPalette = makeMarkerPalette(vi.fn(() => showPromise));
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false, // collapsed caret -> kind 'backslash'
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+      placeDomCaretInsideNote(editorInput);
+      editorInput.ownerDocument.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      // Every mocked EditorRef method is a `vi.fn()` (see `renderFootnoteEditor`); reaching
+      // `.mockClear` needs the same cast `mockMarkerMenuContext` uses. Mount-time focus calls are
+      // cleared so the assertion below isolates the palette-outcome path.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (editorRef.focus as ReturnType<typeof vi.fn>).mockClear();
+
+      resolveShow(undefined);
+      await showPromise;
+      await Promise.resolve();
+
+      expect(editorRef.focus).toHaveBeenCalled();
+      expect(editorRef.selectNote).toHaveBeenCalled();
     });
   });
 
   describe('editable marker mode with markerPalette, an open session forwarding table', () => {
+    /** Opens a passive `\` palette session in the popover and returns the rendered parts. */
+    function openPassiveSession() {
+      mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
+      const markerPalette = makeMarkerPalette(
+        vi.fn(() => new Promise<string | undefined>(() => {})),
+      );
+      const rendered = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(rendered.editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false,
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+      placeDomCaretInsideNote(rendered.editorInput);
+      rendered.editorInput.focus();
+      rendered.editorInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      return { ...rendered, markerPalette };
+    }
+
+    it('leaves the popover editor EDITABLE for the life of a session', () => {
+      // Making it non-editable instead blurred it, which put the user's keys on the page body and
+      // lost the caret — the fallout this design removes. Nothing can land in the editor anyway
+      // while the palette holds focus.
+      const { editorInput, markerPalette } = openPassiveSession();
+      const editableBefore = editorInput.getAttribute('contenteditable');
+      expect(markerPalette.show).toHaveBeenCalled();
+      // Never disabled while the session is open — the lock used to set this to 'false' here.
+      expect(editorInput.getAttribute('contenteditable')).not.toBe('false');
+      expect(editorInput.getAttribute('contenteditable')).toBe(editableBefore);
+
+      editorInput.ownerDocument.body.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+
+      expect(markerPalette.dismiss).toHaveBeenCalled();
+      expect(editorInput.getAttribute('contenteditable')).toBe(editableBefore);
+    });
+
+    it('routes session keys typed in the editor during the window before the palette has focus', () => {
+      // The session is created synchronously in the trigger's keydown, while the editor still has
+      // focus. Keys typed in those few frames would otherwise land in the note.
+      const { editorInput, markerPalette } = openPassiveSession();
+
+      editorInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }),
+      );
+
+      expect(markerPalette.update).toHaveBeenCalledWith({ filterText: 'w' });
+    });
+
+    it('leaves keys typed into another element alone while a session is open', () => {
+      // Keys belong to whatever holds focus. A comment box or any other input in this document
+      // keeps its own, and claiming them would feed the palette's filter — or commit a marker —
+      // while the user is typing somewhere else entirely.
+      const { markerPalette } = openPassiveSession();
+      const otherInput = document.createElement('textarea');
+      document.body.appendChild(otherInput);
+      otherInput.focus();
+
+      const notPrevented = otherInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }),
+      );
+
+      expect(notPrevented).toBe(true);
+      expect(markerPalette.update).not.toHaveBeenCalled();
+      otherInput.remove();
+    });
+
+    it('does NOT cancel a paste — the editor is never made non-editable', () => {
+      // Paste blocking was part of the input lock. With the palette holding focus a paste goes to
+      // the palette, not the editor, so there is nothing to block; a paste that does reach the
+      // editor (only possible before the palette has focus) is handled by closing the palette
+      // rather than by disabling the editor.
+      const { editorInput } = openPassiveSession();
+      const paste = new Event('paste', { bubbles: true, cancelable: true });
+
+      editorInput.dispatchEvent(paste);
+
+      expect(paste.defaultPrevented).toBe(false);
+    });
+
     it('claims the trigger and typed characters — they filter the palette, never the document', () => {
       // ACTIVE palette: under the passive palette the `\` and the typed characters landed as
       // literals and were only mirrored; now the trigger and every filter character are claimed,
@@ -1122,9 +1255,10 @@ describe('FootnoteEditor marker palette wiring', () => {
       expect(show.mock.calls.length).toBe(showCallsBefore + 1);
     });
 
-    it('`\\` on an EMPTY filter lands a literal backslash and opens NO new palette', () => {
-      // With nothing typed there is nothing to commit, so the backslash is an ordinary character
-      // and must reach the document unclaimed.
+    it('`\\` on an EMPTY filter is IGNORED — claimed, no commit, no new palette', () => {
+      // With nothing typed there is nothing to commit. The palette holds focus, so the backslash
+      // cannot reach the note text whatever happens here — and a key that can only be a no-op
+      // must not also throw away the palette the user just opened.
       mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'nd' })]);
       const show = vi.fn(() => new Promise<string | undefined>(() => {}));
       const markerPalette = makeMarkerPalette(show);
@@ -1151,10 +1285,10 @@ describe('FootnoteEditor marker palette wiring', () => {
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
       );
 
-      expect(secondTriggerNotPrevented).toBe(true); // NOT claimed — the backslash lands
+      expect(secondTriggerNotPrevented).toBe(false); // CLAIMED — nothing reaches the note
       expect(editorRef.commitTypedMarker).not.toHaveBeenCalled();
       expect(show.mock.calls.length).toBe(showCallsBefore);
-      expect(markerPalette.dismiss).toHaveBeenCalled();
+      expect(markerPalette.dismiss).not.toHaveBeenCalled(); // the palette stays open
     });
 
     it('selection wrap: typed exact match + Space applies THAT item over the selection', () => {
@@ -1581,9 +1715,17 @@ describe('close-and-save settle (abandonment window)', () => {
       new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
     );
 
+    // Opening a palette settles once, deliberately, so the editor's own blur/idle settles have
+    // nothing left to do while it is open. Everything after that point is what this test is about.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const settleMock = editorRef.commitPendingMarkerEdits as ReturnType<typeof vi.fn>;
+    const settlesBefore = settleMock.mock.calls.length;
+
     rerenderScrRef(nextChapterScrRef);
 
-    expect(editorRef.commitPendingMarkerEdits).not.toHaveBeenCalled();
+    // The close-and-save settle stays skipped: a settle here would update the editor, move the
+    // selection, and pull focus out of the open palette.
+    expect(settleMock.mock.calls.length).toBe(settlesBefore);
   });
 });
 

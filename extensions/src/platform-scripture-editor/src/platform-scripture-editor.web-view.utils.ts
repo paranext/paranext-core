@@ -242,7 +242,25 @@ export interface EditingSessionActivityInput {
  * close path, keeping popover state consistent) and stop deferring.
  *
  * A palette session carries no time bound here: its lifecycle is owned by the overlay service's
- * show promise, which always settles (select, dismiss, or replacement rejection).
+ * show promise, which settles on select, dismiss, or replacement rejection.
+ *
+ * Settling is not bounded in time, though: an open palette closes only on Escape, a commit, a
+ * chapter change, or a gesture that reaches the overlay service, so a palette the user leaves open
+ * and untouched keeps `isActive` true for as long as it stays open. Known gap: while it does,
+ * `useEditorPdpSync` treats every differing same-document PDP update as an echo to defer — it keeps
+ * the incoming update unapplied and pushes the editor's content back up through
+ * `saveUsjToPdpIfUpdated`, which writes whatever differs from the incoming update. An external
+ * change that lands meanwhile (e.g. a Send/Receive merge delivering a collaborator's edit) is
+ * therefore overwritten by the editor's pre-merge content as soon as a write is accepted (a push
+ * made while an automatic Send/Receive holds the backend write gate is rejected; one after it
+ * clears is not). The window-blur flush of the debounced save is the only save path a palette
+ * session suppresses.
+ *
+ * Tracked as PT-4817. The intended fix is a staleness bound like the note session's refreshed-at
+ * bound — a palette session defers only within the editor-ownership window of the last local edit,
+ * after which the update applies and the change guard closes the palette — not dismissing the
+ * palette on unrelated keys. An automatic Send/Receive now dismisses the palette before it writes,
+ * so that particular collision is closed; other external writers can still be overwritten.
  *
  * @returns `isActive` — whether any live session should keep deferring incoming PDP updates;
  *   `isNoteSessionStale` — whether an open note session exceeded the bound (the caller must clear

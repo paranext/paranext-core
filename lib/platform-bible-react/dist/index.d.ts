@@ -1344,24 +1344,30 @@ export interface FootnoteEditorProps {
  */
 export interface FootnoteEditorMarkerPalette extends PaletteDriver {
 	/**
-	 * Shows the palette anchored at the given position. `passive` mirrors
-	 * `CommandPaletteRequest.passive` — when true, the palette never steals focus and its filter and
-	 * highlighted selection are driven externally via the driver's `update`.
+	 * Shows the palette anchored at the given position.
+	 *
+	 * ONE options object, deliberately, rather than positional parameters: TypeScript accepts an
+	 * implementation with a shorter arity, so a version that omitted the last parameter compiled
+	 * while silently dropping it — which is how the popover's selection palette once opened with no
+	 * key forwarding at all, and none of its commit semantics ran.
 	 *
 	 * @returns The selected item's `id`, or `undefined` if dismissed.
 	 */
-	show(items: PaletteItem[], anchor: {
-		x: number;
-		y: number;
-		width?: number;
-		height?: number;
-	}, passive: boolean, 
-	/**
-	 * Keys the session claims while the palette is open. The palette forwards exactly these back
-	 * instead of acting on them, so the session's semantics run whichever document holds focus —
-	 * without it, a palette that takes focus silently takes the session's keys with it.
-	 */
-	keyForwarding?: PaletteKeyForwarding): Promise<string | undefined>;
+	show(options: {
+		items: PaletteItem[];
+		anchor: {
+			x: number;
+			y: number;
+			width?: number;
+			height?: number;
+		};
+		/**
+		 * Keys the session claims while the palette is open. The palette forwards exactly these back
+		 * instead of acting on them, so the session's semantics run whichever document holds focus —
+		 * and a list-focused palette forwards every key regardless.
+		 */
+		keyForwarding?: PaletteKeyForwarding;
+	}): Promise<string | undefined>;
 }
 /**
  * Maps a library marker-menu item to the shared palette-item shape — THE one converter for marker

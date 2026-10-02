@@ -1084,10 +1084,9 @@ export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
  *   commits the marker the user literally typed, `*` commits it as a CLOSING marker, and `\`
  *   commits and immediately reopens the palette so `\qt-s\qt-e` is one flow.
  * - `'enter'` — the Enter-split menu at a collapsed caret, for choosing the marker of the paragraph
- *   the split creates. Its only commit is the highlighted item. Always a FOCUSED palette with no
- *   key forwarding, so the forwarding table drives only the two keys that decide the session's
- *   fate, and only while the overlay is still winning focus; the kind otherwise exists for
- *   session-tracking (re-entrancy guards, token cleanup) in the session owners.
+ *   the split creates. Its only commit is the highlighted item (Enter or Tab). Forwarded, so the
+ *   table owns its filter characters, Backspace and arrows; nothing it accepts may reach the
+ *   document.
  * - `'selection'` — the selection-wrap palette, opened with text selected. EVERY non-chord key is
  *   claimed, because anything that landed would replace the wrapped selection. Space wraps the
  *   selection in the marker the filter names exactly (ignoring case and the `+` nesting prefix);
@@ -1180,15 +1179,33 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
  */
 export type MarkerPaletteKeyOutcome = "passed" | "continue" | "ended";
 /**
- * The session kinds whose FILTER and per-key semantics this forwarding table drives. `'enter'` is
- * deliberately absent: the Enter-split palette is always FOCUSED with no key forwarding
- * (`openEnterPalette`'s own doc — nothing lands on the Enter keypress itself), which makes per-kind
- * `'enter'` filter entries here dead code and a drift trap. An `'enter'` session still reaches
- * {@link handleMarkerPaletteSessionKeyDown} during the sub-frame race before the overlay takes
- * focus, where Enter and Escape are claimed so they cannot reach the document; nothing else about
- * an `'enter'` session is table-driven.
+ * The filter character a keydown contributes, or `undefined` when the key is not palette input.
+ *
+ * USFM marker names are always basic Latin; the translator's keyboard may not be. So the rule is:
+ * take the character the layout actually produced whenever it can name a marker, and fall back to
+ * the PHYSICAL key only when it cannot. On a Cyrillic or Greek layout the `q` key produces `й` or
+ * `;`, which matches no marker, and the fallback turns it back into `q` — Paratext 9 does the same
+ * (`MarkerDropdownControl.cs` KeyDown reads `e.KeyCode`).
+ *
+ * Why the character has to win, rather than reading `keyCode` first:
+ *
+ * - `keyCode` does not mean the same thing on every platform. Chromium derives it from the native
+ *   virtual key, which Windows assigns per layout but macOS and Linux map through a US-layout
+ *   table. Reading it first made a French AZERTY `a` filter `a` on Windows and `q` on macOS, so the
+ *   same keyboard behaved differently per OS and a French or German translator on a Mac could not
+ *   type a marker at all.
+ * - Several layouts put marker characters on keys whose `keyCode` says otherwise. AZERTY keeps
+ *   VK_0–VK_9 on the number row while producing `&é"'(-è_çà` unshifted, so the `-` key reports
+ *   `keyCode` 54 — reading that first turned every milestone marker (`qt-s`, `ts-s`, `zpa-xb`) into
+ *   `qt6`. Czech QWERTZ puts `+` unshifted on Digit1, which became `1`, making the `\+w` nesting
+ *   prefix untypeable.
+ *
+ * The fallback covers letters only. Digits need none: every layout that reaches a digit produces
+ * the digit character, including the numpad and AZERTY's shifted number row. It also covers packet
+ * -key input (Keyman, `keyCode` 231) for free — such a key carries its character and no usable
+ * `keyCode`, so it never reaches the fallback.
  */
-export type ForwardedSessionKind = Exclude<MarkerPaletteSessionKind, "enter">;
+export declare function resolveFilterCharacter(event: MarkerPaletteKeyEvent): string | undefined;
 /**
  * Every `KeyboardEvent.key` this table acts on for `kind` — the list a session hands to its palette
  * as the `keys` of its `PaletteKeyForwarding` declaration so the palette forwards exactly these
@@ -1208,10 +1225,10 @@ export type ForwardedSessionKind = Exclude<MarkerPaletteSessionKind, "enter">;
  * pins the reverse direction, failing on a listed key the handler no longer acts on. Pure modifiers
  * are excluded: the table only passes them through, and claiming them would break `+` chords.
  *
- * Both kinds currently claim the SAME set — the per-kind parameter is deliberate room for the key
+ * Every kind currently claims the SAME set — the per-kind parameter is deliberate room for the key
  * sets to diverge later, not a difference today.
  */
-export declare function getMarkerPaletteClaimedKeys(kind: ForwardedSessionKind): string[];
+export declare function getMarkerPaletteClaimedKeys(): string[];
 /**
  * Routes one keydown through an open marker-palette session. See the module doc for the per-kind
  * semantics. Call from a CAPTURE-phase listener; on `'ended'` clear the session ref.
@@ -1234,6 +1251,55 @@ export declare function clearPaletteSessionIfCurrent<TSession extends {
 	token: number;
 }>(sessionRef: React$1.MutableRefObject<TSession | undefined>, token: number): void;
 /**
+ * Decides whether the editor changed underneath an open marker palette.
+ *
+ * A palette commit applies AT THE CARET. If something moved the caret or changed the content while
+ * the palette was open — an incoming update for the same chapter, a drag-and-drop, a context-menu
+ * paste, the editor's own marker settle — then applying would put the marker somewhere the user
+ * never chose, and the caret restored from the focus-out capture would address content that no
+ * longer exists. So a changed editor ends the session instead of committing into it.
+ *
+ * The baseline is taken when focus LEAVES the editor for the palette, which is the last moment the
+ * caret is still readable: Lexical's blur processing nulls the editor-state selection just after,
+ * and the consumers already capture there for the same reason.
+ *
+ * Deliberately NOT based on Lexical's dirty-node markers: the root is marked dirty on every commit,
+ * so they report a change for every palette that ever applies anything. This compares actual
+ * content and the actual caret.
+ */
+/** A point-in-time fingerprint of the editor's content and caret. */
+export interface EditorContentSnapshot {
+	/**
+	 * The settled content, serialized for comparison. Settled rather than live so a marker edit the
+	 * user has pending does not read as a change the moment it settles on its own.
+	 */
+	content: string;
+	/**
+	 * The caret at capture, serialized, or `undefined` when it could not be read. Absent is not the
+	 * same as moved — see {@link hasEditorChanged}.
+	 */
+	caret: string | undefined;
+}
+/**
+ * Builds a snapshot from whatever the consumer can read right now. Both reads are allowed to fail:
+ * an editor that cannot report its content yields `undefined`, and the guard then declines to block
+ * anything rather than guessing.
+ */
+export declare function captureEditorContentSnapshot(readContent: () => unknown, readCaret: () => unknown): EditorContentSnapshot | undefined;
+/**
+ * Whether `current` represents a change from `baseline` that should end the session.
+ *
+ * Two deliberate non-changes:
+ *
+ * - **No baseline, or no current snapshot.** Never block on ignorance: a guard that fires when it
+ *   cannot see is worse than no guard, because it breaks the ordinary commit path.
+ * - **A caret that has gone missing.** Lexical nulls the editor-state selection on blur, which is
+ *   exactly what happens when the palette takes focus — so an absent caret is the NORMAL state
+ *   while a palette is open, not evidence that anything moved. A caret that is present and
+ *   different is a real move.
+ */
+export declare function hasEditorChanged(baseline: EditorContentSnapshot | undefined, current: EditorContentSnapshot | undefined): boolean;
+/**
  * The session record {@link runMarkerPaletteSession} creates and hands to the consumer's session ref
  * — the forwarding table's {@link MarkerPaletteSessionState} plus the `token` that scopes async
  * settle-time cleanup to THIS session (see `clearPaletteSessionIfCurrent`) and the consumer's own
@@ -1242,8 +1308,7 @@ export declare function clearPaletteSessionIfCurrent<TSession extends {
 export interface MarkerPaletteOpenSession<TItem extends {
 	marker: string;
 }> extends MarkerPaletteSessionState {
-	/** Only the two forwarded kinds: the Enter-split (`'enter'`) palette has its own open path. */
-	kind: ForwardedSessionKind;
+	kind: MarkerPaletteSessionKind;
 	/** Identifies this session to async settle-time cleanup, from the consumer's monotonic counter. */
 	token: number;
 	items: readonly TItem[];
@@ -1262,11 +1327,11 @@ export interface RunMarkerPaletteSessionOptions<TItem extends {
 	 */
 	items: readonly TItem[];
 	/**
-	 * Selects the session flavor: `true` opens the collapsed-caret `'backslash'` session (shown in
-	 * the overlay's non-focus-stealing display), `false` the FOCUSED selection-wrap `'selection'`
-	 * session.
+	 * The session's kind (see `MarkerPaletteSessionKind`). `'selection'` is the one FOCUSED palette;
+	 * the others are shown in the overlay's non-focus-stealing (passive) display, and the consumer's
+	 * `show` must display them that way.
 	 */
-	passive: boolean;
+	kind: MarkerPaletteSessionKind;
 	/**
 	 * See {@link MarkerPaletteSessionState.shouldSpaceCommit}. Attached to `'backslash'` sessions only
 	 * — Space over a selection is the wrap commit, which has no typed-literal route to except.
@@ -1274,9 +1339,8 @@ export interface RunMarkerPaletteSessionOptions<TItem extends {
 	shouldSpaceCommit?: (filter: string) => boolean;
 	/**
 	 * The consumer's monotonic token allocator. Caller-owned (not module state) so ALL of a
-	 * consumer's palette opens — including kinds outside this spine, like the web view's Enter-split
-	 * palette — draw from ONE sequence and stale-settlement cleanup stays totally ordered across
-	 * them.
+	 * consumer's palette opens draw from ONE sequence and stale-settlement cleanup stays totally
+	 * ordered across them.
 	 */
 	sessionCounterRef: React$1.MutableRefObject<number>;
 	/** Stores the freshly created session as the consumer's current one. */
@@ -1305,6 +1369,20 @@ export interface RunMarkerPaletteSessionOptions<TItem extends {
 	 * ordering comment in {@link runMarkerPaletteSession}.
 	 */
 	restoreSelectionIfLost(): void;
+	/**
+	 * Whether the editor's content or caret changed since the palette took focus.
+	 *
+	 * A commit applies AT THE CARET, so a palette whose editor moved underneath it can only land the
+	 * marker somewhere the user never chose — and the caret restored from the focus-out capture would
+	 * address content that no longer exists. When this reports true the session ends without applying
+	 * anything, and the user reopens the palette where they do want it.
+	 *
+	 * Supplied by each consumer, because only it can read its own editor; see
+	 * `marker-palette-change-guard.util.ts` for the comparison rules — notably that a caret nulled on
+	 * blur is NOT a move, since that is the normal state while a palette holds focus. Omit it and no
+	 * guard runs.
+	 */
+	hasEditorChangedSinceFocus?(): boolean;
 	/** Focuses the consumer's editor. */
 	focusEditor(): void;
 	/** Applies the committed item to the consumer's editor. */

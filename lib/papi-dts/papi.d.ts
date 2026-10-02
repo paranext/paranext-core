@@ -12023,6 +12023,26 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      */
     passive?: boolean;
     /**
+     * Which element inside the palette takes keyboard focus when it opens. Defaults to `'input'` —
+     * the palette's search box, which owns the query and the arrow-key highlight itself.
+     *
+     * `'list'` focuses the palette's result list instead and renders the search box read-only,
+     * showing the host-driven {@link IOverlayService.updateCommandPalette} filter text exactly as
+     * {@link CommandPaletteRequest.passive} does. The requester keeps ownership of every key semantic:
+     * EVERY keydown the palette receives is handed to {@link PaletteKeyForwarding.onKey}, not only the
+     * keys named in {@link PaletteKeyForwarding.keys}, so one table decides what each key means.
+     *
+     * @remarks
+     * Focusing something that cannot be edited is what keeps composed input out: an IME or a dead key
+     * starts composing in any focused text box, no matter what the palette cancels, which would put
+     * candidate text in the palette and — once a composition is under way — out of reach of per-key
+     * rules. With focus on the list, no composition starts and a dead key arrives as an ordinary
+     * keydown.
+     *
+     * Ignored when `passive` is true, which takes no focus at all.
+     */
+    focusTarget?: 'input' | 'list';
+    /**
      * Keys the REQUESTING session claims while this palette is open, and where to send them.
      *
      * The palette and the session that opened it live in different documents, so whichever holds
@@ -14426,6 +14446,7 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
   import { type PaletteFilterMode } from 'platform-bible-react/experimental';
   import type {
     CommandPaletteItem,
+    CommandPaletteRequest,
     PaletteSearchField,
   } from 'renderer/services/overlays/overlay.service-model';
   /**
@@ -14435,6 +14456,23 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
    * identity (marker palettes) opt into `['label']` per request instead.
    */
   export const DEFAULT_PALETTE_SEARCH_FIELDS: readonly PaletteSearchField[];
+  /**
+   * Whether the REQUESTER resolves this palette's filtered list rather than the palette resolving it
+   * itself — true for a passive palette and for one that focuses its list.
+   *
+   * Both render a read-only search box over a host-supplied filter and answer commits from the
+   * requester's own list, so both must match by containment: the requester reimplementing cmdk's
+   * fuzzy scorer is the only way the two lists could agree, and a disagreement commits an item the
+   * user cannot see. Derived in one place so the palette's display and the host's commit resolution
+   * can never drift apart.
+   */
+  export function isHostDrivenPalette(
+    request: Pick<CommandPaletteRequest, 'passive' | 'focusTarget'>,
+  ): boolean;
+  /** The {@link PaletteFilterMode} a request's palette filters by. */
+  export function getPaletteFilterMode(
+    request: Pick<CommandPaletteRequest, 'passive' | 'focusTarget'>,
+  ): PaletteFilterMode;
   /**
    * Filters command palette items by matching `filterText` against each item's text, with
    * per-{@link PaletteFilterMode} semantics and the request's `searchFields` deciding which fields

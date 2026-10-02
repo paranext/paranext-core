@@ -81,11 +81,11 @@ export { Z_INDEX_TOOLTIP } from './components/z-index';
 export { ALL_BOOK_IDS } from './components/shared/book.utils';
 export { readDirection, persistDirection, type Direction } from './utils/dir-helper.util';
 // The standard-view marker-palette machinery: the shared keydown forwarding table, the shared
-// open-session orchestration, and the shared filter/ranking — one API family, kept together.
+// open-session orchestration, the shared input lock, and the shared filter/ranking — one API family, kept together.
 export {
   clearPaletteSessionIfCurrent,
-  type ForwardedSessionKind,
   getMarkerPaletteClaimedKeys,
+  resolveFilterCharacter,
   handleMarkerPaletteSessionKeyDown,
   type MarkerPaletteKeyEvent,
   type MarkerPaletteKeyOutcome,
@@ -93,6 +93,11 @@ export {
   type MarkerPaletteSessionKind,
   type MarkerPaletteSessionState,
 } from './components/advanced/marker-palette-keydown.util';
+export {
+  captureEditorContentSnapshot,
+  hasEditorChanged,
+  type EditorContentSnapshot,
+} from './components/advanced/marker-palette-change-guard.util';
 export {
   type MarkerPaletteOpenSession,
   runMarkerPaletteSession,

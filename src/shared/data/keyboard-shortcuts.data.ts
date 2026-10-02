@@ -344,11 +344,10 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Editing',
     context:
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
-    // Space commits what was TYPED, not the highlighted entry: at a collapsed caret it materializes
-    // the typed marker; over a selection it wraps only on an exact (case-insensitive) match and
-    // otherwise closes without touching the selection. (The Enter-triggered paragraph menu is a
-    // focused palette the forwarding table does not drive; its Space behavior is the overlay
-    // input's own.)
+    // Space commits what was TYPED, not the highlighted entry — the same in the `\` menu and the
+    // Enter-triggered paragraph menu. At a collapsed caret it materializes the typed marker; with
+    // nothing typed it closes and inserts nothing. Over a selection it wraps only on an exact
+    // (case-insensitive) match and otherwise closes without touching the selection.
     keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },
@@ -358,11 +357,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Editing',
     context:
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
-    // Enter and Tab are one commit gesture, matching the editor package's own menus. Over a
-    // zero-match filter both are claimed no-ops (PT9 parity — the menu stays open). Enter also
-    // commits the Enter-triggered paragraph menu — normally through the overlay's own input, and
-    // through the forwarding table during the frames before that input wins focus, so an
-    // Enter-Enter cannot reach the document.
+    // Enter and Tab are one commit gesture, matching the editor package's own menus, and the same
+    // in both menus. Shift+Enter and Shift+Tab commit too: Shift is how an uppercase custom marker
+    // is typed, and a soft line break has no USFM representation. A Ctrl/Cmd/Alt chord is not a
+    // commit — it closes the menu and does its normal job (the Enter is still claimed on the way
+    // out, or the menu's own list would act on it). Over a zero-match filter both keys are claimed
+    // no-ops and the menu stays open.
     keys: { macOS: '⏎ / ⇥', windows: 'Enter / Tab', linux: 'Enter / Tab' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },
@@ -373,7 +373,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context:
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Arrow keys move the highlighted entry; Backspace widens the typed filter, or closes the
-    // menu when nothing is typed. Marker characters (letters, digits, `+`, `-`) narrow it.
+    // menu when nothing is typed — the same in both menus. Marker characters (letters, digits,
+    // `+`, `-`) narrow it. The character the layout produced is what counts whenever it can name a
+    // marker; the PHYSICAL key is the fallback only when it cannot, so a Cyrillic or Greek layout
+    // still types the Latin marker name while AZERTY and QWERTZ keep theirs. Any other key —
+    // punctuation, accented or non-Latin characters, a dead key, Delete,
+    // Left/Right/Home/End/PageUp/PageDown — is ignored: it cannot name a marker, so the menu stays
+    // open and nothing reaches the text.
     keys: {
       macOS: '↑ / ↓ / ⌫',
       windows: 'Up / Down / Backspace',
@@ -388,9 +394,10 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context:
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // The counterpart to Space's opening-marker commit: commits the typed marker's closing form
-    // with no terminating space. Over a non-collapsed selection the selected content is replaced,
-    // which is what typing a closing marker by hand has always done. Not offered in the
-    // Enter-triggered paragraph menu.
+    // with no terminating space, in both menus. Over a non-collapsed selection the selected content
+    // is replaced, which is what typing a closing marker by hand has always done — except with
+    // nothing typed, where it closes the menu and leaves the selection intact rather than
+    // destroying it over one keystroke.
     keys: { macOS: '*', windows: '*', linux: '*' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },
@@ -401,8 +408,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context:
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Commits like Space but without the terminating space, then reopens for the backslash just
-    // pressed, so a paired marker is one continuous flow. With nothing typed there is nothing to
-    // commit and the backslash lands as an ordinary character.
+    // pressed, so a paired marker is one continuous flow — in both menus. With nothing typed there
+    // is nothing to commit, so it is ignored and the menu stays open. Not a commit key over a
+    // selection: the wrap consumes the selection, leaving nothing for a second marker.
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },
@@ -411,6 +419,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Close the inline markers menu',
     category: 'Editing',
     context: 'Scripture editor web view',
+    // A Ctrl/Cmd/Alt chord closes it too, and then does its normal job — the menu is no longer
+    // relevant to what the user asked for. Two exclusions, both because the modifier is being used
+    // to TYPE rather than to command: AltGr on Windows and Linux, and Option on macOS, where
+    // `Option+e` begins `é` and `Option+n` begins `ñ`. Ctrl+Option and Cmd+Option are still chords,
+    // since their command modifier is what decides.
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
