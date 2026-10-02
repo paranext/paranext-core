@@ -374,10 +374,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Arrow keys move the highlighted entry; Backspace widens the typed filter, or closes the
     // menu when nothing is typed — the same in both menus. Marker characters (letters, digits,
-    // `+`, `-`) narrow it. Letters and digits are read from the PHYSICAL key, so a non-Latin
-    // layout still types the Latin marker name. Any other key — punctuation, accented or non-Latin
-    // characters, a dead key, Delete, Left/Right/Home/End/PageUp/PageDown — is ignored: it cannot
-    // name a marker, so the menu stays open and nothing reaches the text.
+    // `+`, `-`) narrow it. The character the layout produced is what counts whenever it can name a
+    // marker; the PHYSICAL key is the fallback only when it cannot, so a Cyrillic or Greek layout
+    // still types the Latin marker name while AZERTY and QWERTZ keep theirs. Any other key —
+    // punctuation, accented or non-Latin characters, a dead key, Delete,
+    // Left/Right/Home/End/PageUp/PageDown — is ignored: it cannot name a marker, so the menu stays
+    // open and nothing reaches the text.
     keys: {
       macOS: '↑ / ↓ / ⌫',
       windows: 'Up / Down / Backspace',
@@ -417,6 +419,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Close the inline markers menu',
     category: 'Editing',
     context: 'Scripture editor web view',
+    // A Ctrl/Cmd/Alt chord closes it too, and then does its normal job — the menu is no longer
+    // relevant to what the user asked for. Two exclusions, both because the modifier is being used
+    // to TYPE rather than to command: AltGr on Windows and Linux, and Option on macOS, where
+    // `Option+e` begins `é` and `Option+n` begins `ñ`. Ctrl+Option and Cmd+Option are still chords,
+    // since their command modifier is what decides.
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
