@@ -98,20 +98,23 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 
 /**
  * The popover's list of project names, shared by the syncing and unsynced states so both render the
- * same markup. `testId` tells apart the lists that can be on screen together.
+ * same markup. `testId` tells apart the lists that can be on screen together, and `labelledBy` is
+ * the id of the heading that names a list.
  */
 function ProjectList({
   projects,
   testId = 'toolbar-sync-popover-projects',
+  labelledBy = undefined,
 }: {
   projects: readonly SyncingProject[];
   testId?: string;
+  labelledBy?: string;
 }) {
   return (
     // Tailwind's reset strips list semantics in Safari; role="list" re-establishes
     // them for VoiceOver, as `first-run/steps/sync-progress.component.tsx` documents.
     // eslint-disable-next-line jsx-a11y/no-redundant-roles
-    <ul role="list" data-testid={testId} className="tw:text-sm">
+    <ul role="list" data-testid={testId} aria-labelledby={labelledBy} className="tw:text-sm">
       {projects.map((project) => (
         // Keyed on the id, not the name: two projects can share a name, and a name
         // falls back to the id only when its metadata couldn't be read.
@@ -817,23 +820,25 @@ export function SyncStatusButton() {
                  */}
                 {unsyncedToSend.length > 0 && (
                   <>
-                    <p className="tw:text-sm">
+                    <p id="toolbar-sync-popover-heading-send" className="tw:text-sm">
                       {localizedStrings['%toolbar_sync_popover_unsynced_send%']}
                     </p>
                     <ProjectList
                       projects={unsyncedToSend}
                       testId="toolbar-sync-popover-projects-send"
+                      labelledBy="toolbar-sync-popover-heading-send"
                     />
                   </>
                 )}
                 {unsyncedToReceive.length > 0 && (
                   <>
-                    <p className="tw:text-sm">
+                    <p id="toolbar-sync-popover-heading-receive" className="tw:text-sm">
                       {localizedStrings['%toolbar_sync_popover_unsynced_receive%']}
                     </p>
                     <ProjectList
                       projects={unsyncedToReceive}
                       testId="toolbar-sync-popover-projects-receive"
+                      labelledBy="toolbar-sync-popover-heading-receive"
                     />
                   </>
                 )}
