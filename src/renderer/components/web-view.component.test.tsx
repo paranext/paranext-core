@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(webViewType: string, id: string, options?: unknown) => Promise<string | undefined>>(),
   getSavedWebViewDefinitionSync: vi.fn<(id: string) => unknown>(),
   loggerDebug: vi.fn(),
+  loggerWarn: vi.fn(),
   loggerError: vi.fn(),
   setFocus: vi.fn(async () => true),
 }));
@@ -49,13 +50,18 @@ import {
 // Factory rather than the repo's automock (whose methods are plain functions): which level a
 // missing reload is reported at is the whole of what these tests assert, which needs spies
 vi.mock('@shared/services/logger.service', () => ({
-  logger: { debug: mocks.loggerDebug, info: vi.fn(), warn: vi.fn(), error: mocks.loggerError },
+  logger: {
+    debug: mocks.loggerDebug,
+    info: vi.fn(),
+    warn: mocks.loggerWarn,
+    error: mocks.loggerError,
+  },
 }));
 
 // The rest of the component's import graph reaches services that connect to the network on load.
 // Most of it never runs here: most of these tests call the tab loader, which builds the element
-// without rendering it. The iframe-lifecycle suite below does render the component, so it
-// configures `useData` itself to keep the (unshown) toolbar menu lookup from crashing.
+// without rendering it. The iframe suites below do render the component, so `useData` is
+// configured in the top-level `beforeEach` to keep the (unshown) toolbar menu lookup from crashing.
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useData: vi.fn(),
   useLocalizedStrings: vi.fn(() => [{}]),
@@ -95,6 +101,12 @@ const RESTORED_TAB: SavedTabInfo = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The curried useData return type is a deeply-generic object; its shape is tested in the
+  // papi-hooks tests. Replicating it here would create brittle coupling.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion -- necessary for mock helper flexibility
+  vi.mocked(useData).mockReturnValue({
+    WebViewMenu: () => [undefined, vi.fn(), false],
+  } as never);
 });
 
 describe('a restored tab fetching the content it was saved without', () => {
@@ -168,15 +180,6 @@ describe('a restored tab fetching the content it was saved without', () => {
 describe('the iframe lifecycle notifies content zoom', () => {
   const CONTENT_ZOOM_WEB_VIEW_ID = 'zoom-view';
 
-  beforeEach(() => {
-    // The curried useData return type is a deeply-generic object; its shape is tested in the
-    // papi-hooks tests. Replicating it here would create brittle coupling.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion -- necessary for mock helper flexibility
-    vi.mocked(useData).mockReturnValue({
-      WebViewMenu: () => [undefined, vi.fn(), false],
-    } as never);
-  });
-
   test('applies content zoom when the iframe loads, and forgets it on unmount', async () => {
     const { WebView } = await import('./web-view.component');
     const { container, unmount } = render(
@@ -201,14 +204,6 @@ describe('the iframe lifecycle notifies content zoom', () => {
 
 describe('the iframe loading a new document unmounts the React root of the one it replaced', () => {
   const ROOT_WEB_VIEW_ID = 'root-view';
-
-  beforeEach(() => {
-    // Same stub as the content-zoom suite above, for the same reason.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion -- necessary for mock helper flexibility
-    vi.mocked(useData).mockReturnValue({
-      WebViewMenu: () => [undefined, vi.fn(), false],
-    } as never);
-  });
 
   /**
    * Stands in for a React web view's bootstrap having run in the iframe's current document: each
@@ -307,18 +302,34 @@ describe('the iframe loading a new document unmounts the React root of the one i
     expect(unmountSecondRoot).toHaveBeenCalledTimes(1);
     expect(unmountFirstRoot).toHaveBeenCalledTimes(1);
   });
+
+  test("still keeps the new document's root when unmounting the replaced one throws", async () => {
+    const { iframe, unmount } = await renderWebView();
+    const unmountFirstRoot = vi.fn(() => {
+      throw new Error('replaced root failed to unmount');
+    });
+    const unmountSecondRoot = vi.fn();
+    publishRootOfNewDocument(iframe, unmountFirstRoot);
+    fireEvent.load(iframe);
+    publishRootOfNewDocument(iframe, unmountSecondRoot);
+    fireEvent.load(iframe);
+
+    expect(unmountFirstRoot).toHaveBeenCalledTimes(1);
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(
+      expect.stringMatching(new RegExp(`${ROOT_WEB_VIEW_ID}[\\s\\S]*replaced root failed`)),
+    );
+
+    // The new document's root was stored despite the throw, so closing unmounts it
+    unmount();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(unmountSecondRoot).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('the iframe asks for its tab to be focused when it loads', () => {
   const FOCUS_WEB_VIEW_ID = 'focus-view';
-
-  beforeEach(() => {
-    // Same stub as the content-zoom suite above, for the same reason.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion -- necessary for mock helper flexibility
-    vi.mocked(useData).mockReturnValue({
-      WebViewMenu: () => [undefined, vi.fn(), false],
-    } as never);
-  });
 
   /**
    * Renders a web view and loads its iframe with the given client rects. rc-dock keeps an inactive
