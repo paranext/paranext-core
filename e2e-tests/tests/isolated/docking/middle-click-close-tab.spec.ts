@@ -26,47 +26,22 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
-
-/** The global overlay rc-dock positions over whatever drop target the pointer is on. */
-const DROP_INDICATOR = '.dock-layout > .dock-drop-indicator';
-
-/** Appended to `<body>` by rc-dock's drag manager for the duration of a tab drag. */
-const DRAGGING_LAYER = 'body > .dragging-layer';
+import {
+  DRAGGING_LAYER,
+  DROP_INDICATOR,
+  type Point,
+  type TabBar,
+  addNewTab,
+  panelLocator,
+  readBars,
+  tabButton,
+  tabIdsOf,
+} from '../../../fixtures/dock-tab-helpers';
 
 /** How long the app ignores a repeat middle click after a close (`REPEAT_CLOSE_GUARD_MS`). */
 const REPEAT_CLOSE_GUARD_MS = 500;
 
-type TabBar = { panelId: string; tabIds: string[] };
-
-type Point = { x: number; y: number };
-
 // #region probes
-
-/** Each dock panel's id and the web view ids of its tabs, in DOM order. */
-async function readBars(page: Page): Promise<TabBar[]> {
-  return page.locator('.dock-panel[data-dockid]').evaluateAll((panels) =>
-    panels.map((panel) => ({
-      panelId: panel.getAttribute('data-dockid') ?? '',
-      tabIds: Array.from(
-        panel.querySelectorAll('.dock-nav-list .platform-tab-title[data-web-view-id]'),
-      ).map((title) => title.getAttribute('data-web-view-id') ?? ''),
-    })),
-  );
-}
-
-async function tabIdsOf(page: Page, panelId: string): Promise<string[]> {
-  return (await readBars(page)).find((bar) => bar.panelId === panelId)?.tabIds ?? [];
-}
-
-function panelLocator(page: Page, panelId: string) {
-  return page.locator(`.dock-panel[data-dockid="${panelId}"]`);
-}
-
-function tabButton(page: Page, webViewId: string) {
-  return page.locator('.dock-tab-btn', {
-    has: page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`),
-  });
-}
 
 async function centerOf(page: Page, webViewId: string): Promise<Point> {
   const box = await tabButton(page, webViewId).boundingBox();
@@ -128,19 +103,6 @@ async function waitForTabRowToSettle(page: Page, panelId: string): Promise<void>
 // #endregion
 
 // #region actions
-
-/** Click a panel's "+" and answer the id of the tab it added. */
-async function addNewTab(page: Page, panelId: string): Promise<string> {
-  const before = await tabIdsOf(page, panelId);
-  await panelLocator(page, panelId).locator('.new-tab-button').click();
-  let added: string | undefined;
-  await expect(async () => {
-    added = (await tabIdsOf(page, panelId)).find((id) => !before.includes(id));
-    expect(added).toBeDefined();
-  }).toPass({ timeout: 30_000 });
-  if (!added) throw new Error(`no tab was added to panel ${panelId}`);
-  return added;
-}
 
 /** Add New Tabs to a panel one at a time and answer their ids in order. */
 async function addNewTabs(page: Page, panelId: string, count: number): Promise<string[]> {

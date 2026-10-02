@@ -1,10 +1,10 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.1.6
+version: 1.1.7
 status: active
 created: 2026-03-04
-last_updated: 2026-09-24
+last_updated: 2026-10-02
 ---
 
 # Extension Development Guide
@@ -244,6 +244,10 @@ Never use editable content in list item keys:
 // ✅ GOOD - stable key
 {items.map(item => <Input key={item.id} value={item.name} />)}
 ```
+
+### Saving on Teardown
+
+Flush pending work (a debounced save, a draft) in a `pagehide` listener, and in an effect's unmount cleanup as well. When a web view reloads (for example on `reloadWebView`), the platform unmounts the replaced document's React root on that document's `unload`, after every `pagehide` listener has run and while the old document is still current, so a `pagehide` listener that your effect cleanup removes still fires. An `unload` listener added in an effect also runs before that unmount, but `pagehide` is the flush point to rely on. A window or app close may run no unmount, or skip `pagehide`, so pair the `pagehide` listener with `beforeunload`. `use-comment-drafts.hook.ts` (`legacy-comment-manager`) does both.
 
 ### Opening WebViews with Layouts
 
@@ -500,3 +504,4 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.4   | 2026-09-23 | Pop-ups stay at interface scale: replace "Pop-ups follow their area" and the `papi.overlays` scaling note with one rule; `ContentZoomAreaProvider`, the pop-up attribute and `EditorOptions.contextMenuContainer` are gone. |
 | 1.1.5   | 2026-09-23 | "Content Zoom": mark the project text, not a content root — per-element markers sharing one id, `as="span"`, `ContentZoomTextProvider` / `useContentZoomTextProps`. |
 | 1.1.6   | 2026-09-24 | "Content Zoom": the area `label` and the zoom scope attribute (both experimental), pointing to Component-Builder-Patterns; the Text Collection grid is the reference, with one `resource-<id>` area per resource. |
+| 1.1.7   | 2026-10-02 | Add "Saving on Teardown" under WebViews: flush in a `pagehide` listener and in the unmount cleanup; a reload unmounts the root on `unload`, after the web view's own `pagehide` listeners. |

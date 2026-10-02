@@ -2926,6 +2926,27 @@ export async function openOrReloadWebView(
           legacyTokenNames,
         );
 
+      // The bootstrap unmounts this document's React root when the document unloads. React comes
+      // from the parent window, so the root would otherwise outlive this document: a reload only
+      // swaps the iframe's `srcdoc`, and a root left mounted keeps rendering with `window` resolving
+      // to the replacement document.
+      //
+      // The bootstrap's `pagehide` handler registers a one-time `unload` listener rather than
+      // unmounting itself. The handler is registered before any web view effect runs, and
+      // unmounting runs every effect cleanup, so an unmount during `pagehide` would remove a
+      // listener the web view registered in an effect before the browser reached it, losing a last
+      // save made there. `unload` follows every `pagehide` listener and still precedes the
+      // replacement document. Being added during `pagehide`, the listener also follows any `unload`
+      // listener the web view added earlier, so those still see its React tree.
+      //
+      // The unmount is then a microtask, not a timer: on a navigation it runs as soon as the
+      // `unload` listener returns, before the replacement document exists. When the renderer's React
+      // removes the iframe, both events fire inside that commit, where an inline unmount would warn,
+      // so `web-view.component.tsx` unmounts the root as well: its deferred unmount on close, or its
+      // iframe load handler when a tab move re-inserts the iframe and a new document loads.
+      // Correctness does not depend on whether the queued microtask still runs in that case, because
+      // a second `root.unmount()` is a no-op.
+      //
       // Add the component as a script
       // WARNING: DO NOT add anything between the closing of the script tag and the insertion of
       // reactWebView.contents. Doing so would mess up debugging web views
@@ -2990,13 +3011,26 @@ export async function openOrReloadWebView(
                   },
                 );
 
-                const unsubscriber = () => {
+                const handlePageHide = () => {
                   try {
                     unsubscribeUpdateWebView();
-                    window.removeEventListener('pagehide', unsubscriber);
+                    window.removeEventListener('pagehide', handlePageHide);
                   } catch (e) {
                     console.log('Error unsubscribing from WebView updates', e);
                   }
+                  // On unload, then queued: see the bootstrap comment in web-view.service-shard.ts
+                  window.addEventListener(
+                    'unload',
+                    () =>
+                      queueMicrotask(() => {
+                        try {
+                          root.unmount();
+                        } catch (e) {
+                          console.log('Error unmounting WebView React root', e);
+                        }
+                      }),
+                    { once: true },
+                  );
                 };
 
                 renderRoot();
@@ -3006,7 +3040,7 @@ export async function openOrReloadWebView(
                   unmountRoot: root.unmount.bind(root),
                 };
 
-                window.addEventListener('pagehide', unsubscriber);
+                window.addEventListener('pagehide', handlePageHide);
               }
 
               if (document.readyState === 'loading')
