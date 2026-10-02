@@ -194,20 +194,18 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       if (
         !isMounted.current ||
         didReceiveUnsyncedEventRef.current ||
-        !Array.isArray(snapshot?.projectIds)
+        !Array.isArray(snapshot?.toSend)
       )
         return;
-      setUnsyncedProjectIds(snapshot.projectIds.map((id) => id.toUpperCase()));
+      setUnsyncedProjectIds(snapshot.toSend.map((id) => id.toUpperCase()));
     })();
   }, []);
 
   useEvent(
     papi.network.getNetworkEvent('paratextBibleSendReceive.onUnsyncedChangesChanged'),
-    useCallback(({ projectIds }: { projectIds: string[] }) => {
+    useCallback(({ toSend }: { toSend: string[] }) => {
       didReceiveUnsyncedEventRef.current = true;
-      setUnsyncedProjectIds(
-        Array.isArray(projectIds) ? projectIds.map((id) => id.toUpperCase()) : [],
-      );
+      setUnsyncedProjectIds(Array.isArray(toSend) ? toSend.map((id) => id.toUpperCase()) : []);
     }, []),
   );
 

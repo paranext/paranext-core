@@ -13,6 +13,9 @@
  *
  * With no story opted in, this returns the inert `idle` state the real hook shows in Storybook
  * anyway, so stories that merely contain a toolbar are unaffected.
+ *
+ * A story asking for `unsynced` names its projects with a `direction` each (`send`, `receive` or
+ * `both`) and sets the matching `unsyncedDirection`, as the real hook reports them together.
  */
 import { useContext } from 'react';
 // Type-only, so nothing of the real hook is pulled into the bundle. Deep relative (not
@@ -21,11 +24,13 @@ import type {
   SyncStatus,
   SyncingProject,
   SyncStatusInfo,
+  UnsyncedDirection,
+  UnsyncedProject,
 } from '../../src/renderer/hooks/use-sync-status.hook';
 import { SyncStatusMockContext } from './sync-status-mock-channel';
 
 // Re-exported so the mock presents the same surface as the module it replaces.
-export type { SyncStatus, SyncingProject, SyncStatusInfo };
+export type { SyncStatus, SyncingProject, SyncStatusInfo, UnsyncedDirection, UnsyncedProject };
 
 /** Frozen so a consumer cannot mutate the shared default. Stable identity across renders. */
 const IDLE: SyncStatusInfo = Object.freeze({
