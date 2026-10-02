@@ -384,6 +384,8 @@ jobs:
       # ("unexpected end of JSON input"), and one unpaged page holds only the newest 30 artifacts.
       # All ids are collected before any is deleted: deleting while later pages are still being
       # fetched shifts the remaining rows onto pages already read, and those rows are never seen.
+      # One failed DELETE (say, a 404 for an artifact a concurrent run already removed) is warned
+      # about and does not stop the others.
       # The API paths have no leading `/` because Git Bash rewrites such an argument into a Windows
       # file path before handing it to `gh`.
       #
@@ -407,7 +409,8 @@ jobs:
           fi
           ids=$(gh api --paginate "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" --jq '.artifacts[] | select(.workflow_run.head_branch == env.BRANCH) | .id')
           for id in $ids; do
-            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id" \
+              || echo "::warning::Could not delete artifact $id"
           done
 
       - name: Rename Windows exe to include GitHub Action Run ID
