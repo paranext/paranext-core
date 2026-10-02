@@ -63,8 +63,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   ]),
 }));
 
-// The unsynced-changes signal reads project repositories, which is not what this suite exercises;
-// each test names the unsynced project ids directly. Unset (reset to `undefined`) means "not read
+// The unsynced-changes signal reads project repositories and the server, which is not what this
+// suite exercises; each test names the unsynced project ids directly. Unset (reset to `undefined`) means "not read
 // yet", which contributes no `unsynced` status.
 vi.mock('@renderer/hooks/use-unsynced-changes.hook', () => ({ useUnsyncedChanges: vi.fn() }));
 
@@ -2448,7 +2448,7 @@ describe('SyncStatusButton — accessibility', () => {
 
 describe('SyncStatusButton — unsynced changes', () => {
   const mockUnsyncedProjectIds = (projectIds: string[]) => {
-    vi.mocked(useUnsyncedChanges).mockReturnValue(projectIds);
+    vi.mocked(useUnsyncedChanges).mockReturnValue({ toSend: projectIds, toReceive: [] });
   };
 
   it('labels the button and shows the unsynced icon', async () => {

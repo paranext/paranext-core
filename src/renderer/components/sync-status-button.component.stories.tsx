@@ -24,9 +24,9 @@ const SEVERAL_PROJECTS = [
   { projectId: 'proj-web', name: 'WEB' },
 ];
 
-const TWO_PROJECTS = [
-  { projectId: 'proj-hnf', name: 'HNF' },
-  { projectId: 'proj-tpts', name: 'TPTS' },
+const TWO_PROJECTS: SyncStatusMock['unsyncedProjects'] = [
+  { projectId: 'proj-hnf', name: 'HNF', direction: 'send' },
+  { projectId: 'proj-tpts', name: 'TPTS', direction: 'send' },
 ];
 
 /** Long enough to clip inside the button's 180px cap, so the truncation tooltip is exercisable. */
@@ -174,7 +174,12 @@ export const Cancelled: Story = {
  */
 export const Unsynced: Story = {
   decorators: [
-    withSyncStatus({ status: 'unsynced', syncingProjects: [], unsyncedProjects: TWO_PROJECTS }),
+    withSyncStatus({
+      status: 'unsynced',
+      syncingProjects: [],
+      unsyncedProjects: TWO_PROJECTS,
+      unsyncedDirection: 'send',
+    }),
   ],
 };
 
@@ -267,7 +272,12 @@ export const PopoverFailed: Story = {
 /** Popover with unsent local changes: the projects that hold them, by name. */
 export const PopoverUnsynced: Story = {
   decorators: [
-    withSyncStatus({ status: 'unsynced', syncingProjects: [], unsyncedProjects: TWO_PROJECTS }),
+    withSyncStatus({
+      status: 'unsynced',
+      syncingProjects: [],
+      unsyncedProjects: TWO_PROJECTS,
+      unsyncedDirection: 'send',
+    }),
   ],
   play: openPopover,
 };

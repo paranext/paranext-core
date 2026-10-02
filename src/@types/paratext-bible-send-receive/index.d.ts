@@ -403,11 +403,11 @@ declare module 'paratext-bible-send-receive' {
   };
 
   /**
-   * Backend-authoritative snapshot of the projects whose LOCAL repository holds changes
-   * Send/Receive has not yet sent — uncommitted edits, or local commits made since the last
-   * successful sync. Carried identically by the `paratextBibleSendReceive.onUnsyncedChangesChanged`
-   * event and the `paratextBibleSendReceive.getUnsyncedChanges` command return. Says nothing about
-   * changes waiting on the server.
+   * Backend-authoritative snapshot of the projects that are out of step with the Send/Receive
+   * server, in each direction. Carried identically by the
+   * `paratextBibleSendReceive.onUnsyncedChangesChanged` event and the
+   * `paratextBibleSendReceive.getUnsyncedChanges` command return. A project can appear in both
+   * lists.
    *
    * Emitted by core's own `UnsyncedChangesNotifierService`, so every build serves it; only a
    * Paratext 10 build can also detect "committed but unsent" (it alone records the last-synced
@@ -416,8 +416,23 @@ declare module 'paratext-bible-send-receive' {
    * @experimental This type is unstable and may change shape or disappear without notice
    */
   export type UnsyncedChangesSnapshot = {
-    /** Normalized (upper-case) ids of the projects with unsent local changes; empty when none. */
-    projectIds: string[];
+    /**
+     * Projects with local changes not yet sent (⬆️). Normalized (upper-case) ids of the projects
+     * whose local repository holds uncommitted edits or local commits made since the last
+     * successful sync; empty when none.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    toSend: string[];
+    /**
+     * Projects for which the server holds changes not yet received (⬇️). Always empty in public
+     * Platform.Bible. Normalized (upper-case) ids. Read from the server periodically rather than
+     * live, so it can lag the server: an empty list is not a claim that the server holds nothing
+     * new.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    toReceive: string[];
   };
 }
 
@@ -684,6 +699,10 @@ declare module 'papi-shared-types' {
      * from the dotnet process (registered by core's `UnsyncedChangesNotifierService`); a cold-start
      * rejection must be retried, not read as "nothing is unsynced".
      *
+     * `toReceive` is filled only by a Paratext 10 build, which refreshes it every few minutes and
+     * after each sync, so it can lag the server by up to that interval. In public Platform.Bible it
+     * is always empty.
+     *
      * @returns The current {@link UnsyncedChangesSnapshot}
      * @experimental This command is unstable and may change or disappear without notice
      */
@@ -726,10 +745,14 @@ declare module 'papi-shared-types' {
      */
     'paratextBibleSendReceive.onSyncActivityChanged': SyncActivitySnapshot;
     /**
-     * Emitted by the dotnet process whenever the set of projects with unsent local changes changes,
-     * carrying the full current {@link UnsyncedChangesSnapshot}. Also emitted once as a baseline per
-     * backend (re)start; no replay, so a consumer seeds from
+     * Emitted by the dotnet process whenever either list of out-of-step projects changes, carrying
+     * the full current {@link UnsyncedChangesSnapshot}. Also emitted once as a baseline per backend
+     * (re)start; no replay, so a consumer seeds from
      * `paratextBibleSendReceive.getUnsyncedChanges`.
+     *
+     * `toReceive` is filled only by a Paratext 10 build, which refreshes it every few minutes and
+     * after each sync; a change on the server therefore reaches subscribers on that cadence rather
+     * than the moment it is pushed. In public Platform.Bible it is always empty.
      *
      * @experimental This event is unstable and may change or disappear without notice
      */

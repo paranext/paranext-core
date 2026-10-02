@@ -74,8 +74,8 @@ describe('useUnsyncedChanges', () => {
     vi.useRealTimers();
   });
 
-  it('seeds from getUnsyncedChanges', async () => {
-    mockSeed({ projectIds: ['proj1'] });
+  it('seeds from getUnsyncedChanges, normalizing both sets', async () => {
+    mockSeed({ toSend: ['a'], toReceive: ['B', 'b'] });
     captureEvent();
 
     const { result } = renderHook(() => useUnsyncedChanges());
@@ -83,45 +83,60 @@ describe('useUnsyncedChanges', () => {
     await flush();
 
     expect(sendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getUnsyncedChanges');
-    expect(result.current).toEqual(['PROJ1']);
+    expect(result.current).toEqual({ toSend: ['A'], toReceive: ['B'] });
   });
 
   it('applies onUnsyncedChangesChanged events', async () => {
-    mockSeed({ projectIds: [] });
+    mockSeed({ toSend: [], toReceive: [] });
     const { emit } = captureEvent();
 
     const { result } = renderHook(() => useUnsyncedChanges());
     await flush();
-    expect(result.current).toEqual([]);
+    expect(result.current).toEqual({ toSend: [], toReceive: [] });
 
-    emit({ projectIds: ['A', 'B'] });
+    emit({ toSend: ['B', 'A'], toReceive: ['C'] });
 
-    expect(result.current).toEqual(['A', 'B']);
+    expect(result.current).toEqual({ toSend: ['A', 'B'], toReceive: ['C'] });
   });
 
   it('event beats a late seed', async () => {
-    mockSeed({ projectIds: ['STALE'] }, 5000);
+    mockSeed({ toSend: ['STALE'], toReceive: ['STALE'] }, 5000);
     const { emit } = captureEvent();
 
     const { result } = renderHook(() => useUnsyncedChanges());
-    emit({ projectIds: ['FRESH'] });
+    emit({ toSend: ['FRESH'], toReceive: [] });
     await flush(6000);
 
-    expect(result.current).toEqual(['FRESH']);
+    expect(result.current).toEqual({ toSend: ['FRESH'], toReceive: [] });
   });
 
   it('malformed payload is ignored', async () => {
-    mockSeed({ projectIds: ['PROJ1'] });
+    mockSeed({ toSend: ['PROJ1'], toReceive: [] });
     const { emit } = captureEvent();
 
     const { result } = renderHook(() => useUnsyncedChanges());
     await flush();
-    expect(result.current).toEqual(['PROJ1']);
+    expect(result.current).toEqual({ toSend: ['PROJ1'], toReceive: [] });
 
-    emit({ projectIds: 'x' });
+    emit({ toSend: ['PROJ2'], toReceive: 'x' });
 
-    expect(result.current).toEqual(['PROJ1']);
+    expect(result.current).toEqual({ toSend: ['PROJ1'], toReceive: [] });
     expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('a payload carrying only a single project list is treated as malformed', async () => {
+    mockSeed({ projectIds: ['A'] });
+    const { emit } = captureEvent();
+
+    const { result } = renderHook(() => useUnsyncedChanges());
+    await flush();
+    expect(result.current).toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+
+    emit({ projectIds: ['A'] });
+
+    expect(result.current).toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledTimes(2);
   });
 
   it('rejecting command past the retry window yields undefined', async () => {
@@ -136,17 +151,31 @@ describe('useUnsyncedChanges', () => {
     expect(vi.mocked(sendCommand).mock.calls.length).toBeGreaterThan(1);
   });
 
-  it('returns the same array instance when the set is unchanged', async () => {
-    mockSeed({ projectIds: ['proj1', 'proj2'] });
+  it('returns the same instance when both sets are unchanged', async () => {
+    mockSeed({ toSend: ['proj1', 'proj2'], toReceive: ['proj3'] });
     const { emit } = captureEvent();
 
     const { result } = renderHook(() => useUnsyncedChanges());
     await flush();
     const before = result.current;
-    expect(before).toEqual(['PROJ1', 'PROJ2']);
+    expect(before).toEqual({ toSend: ['PROJ1', 'PROJ2'], toReceive: ['PROJ3'] });
 
-    emit({ projectIds: ['PROJ2', 'proj1'] });
+    emit({ toSend: ['PROJ2', 'proj1'], toReceive: ['PROJ3', 'proj3'] });
 
     expect(result.current).toBe(before);
+  });
+
+  it('returns a new instance when only one set changes', async () => {
+    mockSeed({ toSend: ['PROJ1'], toReceive: [] });
+    const { emit } = captureEvent();
+
+    const { result } = renderHook(() => useUnsyncedChanges());
+    await flush();
+    const before = result.current;
+
+    emit({ toSend: ['PROJ1'], toReceive: ['PROJ2'] });
+
+    expect(result.current).not.toBe(before);
+    expect(result.current).toEqual({ toSend: ['PROJ1'], toReceive: ['PROJ2'] });
   });
 });

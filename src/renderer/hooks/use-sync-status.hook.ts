@@ -7,7 +7,10 @@ import {
   getSyncActivityState,
   subscribeToSyncActivity,
 } from '@renderer/services/sync-activity-store';
-import { useUnsyncedChanges } from '@renderer/hooks/use-unsynced-changes.hook';
+import {
+  type UnsyncedChangeSets,
+  useUnsyncedChanges,
+} from '@renderer/hooks/use-unsynced-changes.hook';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
@@ -34,8 +37,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
  * - `unknown` — the status could not be read. Distinct from `idle` because "nothing has synced" is a
  *   positive claim, and a consumer must not make it on the strength of a failed read
  * - `unsynced` — no sync is running, the last sync (if any) did not fail, and at least one project
- *   has local changes not yet sent. Reported only on a successful read of those changes: a set that
- *   could not be read never yields it
+ *   has local changes not yet sent or server changes not yet received. Reported only on a
+ *   successful read of those changes: sets that could not be read never yield it
  */
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'failed' | 'unknown' | 'unsynced';
 
@@ -48,6 +51,21 @@ export type SyncingProject = {
    * for it. Not unique: two projects can share a name, so this must not be used as a list key.
    */
   name: string;
+};
+
+/**
+ * Which way a project, or the unsynced projects taken together, are out of step with the server.
+ *
+ * - `send` — local changes not yet sent
+ * - `receive` — server changes not yet received
+ * - `both` — changes waiting in both directions
+ */
+export type UnsyncedDirection = 'send' | 'receive' | 'both';
+
+/** A project out of step with the server, and in which direction. */
+export type UnsyncedProject = SyncingProject & {
+  /** Which way this project is out of step with the server. */
+  direction: UnsyncedDirection;
 };
 
 /** How far along the running sync is, when the backend is reporting that. */
@@ -76,13 +94,22 @@ export type SyncStatusInfo = {
    */
   syncingProjects: readonly SyncingProject[];
   /**
-   * The projects whose local changes have not yet been sent, sorted the same way as
-   * {@link SyncStatusInfo.syncingProjects}. Empty both when nothing is unsent and while that is not
-   * known, so — as with `syncingProjects` — use {@link SyncStatusInfo.status} to tell the two apart.
-   * Filled whatever the status — not only under `unsynced` — because it is read independently of
-   * the sync signals, so a `failed` status can still name the projects left unsent.
+   * The projects out of step with the server — local changes not yet sent, server changes not yet
+   * received, or both — each with its {@link UnsyncedProject.direction}, sorted the same way as
+   * {@link SyncStatusInfo.syncingProjects}. Empty both when nothing is out of step and while that is
+   * not known, so — as with `syncingProjects` — use {@link SyncStatusInfo.status} to tell the two
+   * apart. Filled whatever the status — not only under `unsynced` — because it is read
+   * independently of the sync signals, so a `failed` status can still name the projects left
+   * unsent.
    */
-  unsyncedProjects: readonly SyncingProject[];
+  unsyncedProjects: readonly UnsyncedProject[];
+  /**
+   * The direction of {@link SyncStatusInfo.unsyncedProjects} taken together: `both` when any project
+   * is out of step both ways or when some projects only need sending and others only receiving,
+   * otherwise the one direction they share. `undefined` when nothing is out of step and while that
+   * is not known. Like `unsyncedProjects`, set whatever the status.
+   */
+  unsyncedDirection?: UnsyncedDirection;
   /**
    * Progress within the running sync, or `undefined` when there is none to report — nothing is
    * syncing, or the backend has not sent a progress tick yet.
@@ -103,6 +130,49 @@ export type SyncStatusInfo = {
 const NO_SYNCING_PROJECTS: readonly SyncingProject[] = Object.freeze([]);
 /** Same reasoning as {@link NO_SYNCING_PROJECTS}, for the ids held in state. */
 const NO_PROJECT_IDS: readonly string[] = Object.freeze([]);
+/** Same reasoning as {@link NO_SYNCING_PROJECTS}, for the unsynced list. */
+const NO_UNSYNCED_PROJECTS: readonly UnsyncedProject[] = Object.freeze([]);
+
+/**
+ * The direction of the unsynced sets taken together. Both lists being non-empty always means
+ * `both`: either some project is in both, or one project needs sending and another receiving.
+ */
+function deriveUnsyncedDirection(
+  sets: UnsyncedChangeSets | undefined,
+): UnsyncedDirection | undefined {
+  const hasSend = (sets?.toSend.length ?? 0) > 0;
+  const hasReceive = (sets?.toReceive.length ?? 0) > 0;
+  if (hasSend && hasReceive) return 'both';
+  if (hasSend) return 'send';
+  if (hasReceive) return 'receive';
+  return undefined;
+}
+
+/**
+ * Attaches each named project's direction from the sets. A project in neither set is dropped: the
+ * names resolve asynchronously, so for the length of a lookup the named list can still hold a
+ * project the sets have since released, and naming it would claim changes that are no longer
+ * waiting.
+ */
+function withDirections(
+  projects: readonly SyncingProject[],
+  sets: UnsyncedChangeSets | undefined,
+): readonly UnsyncedProject[] {
+  if (!sets || projects.length === 0) return NO_UNSYNCED_PROJECTS;
+  // Both sides normalized, so the match holds whatever casing either source reports.
+  const toSend = new Set(sets.toSend.map(normalizeProjectId));
+  const toReceive = new Set(sets.toReceive.map(normalizeProjectId));
+  const result: UnsyncedProject[] = [];
+  projects.forEach((project) => {
+    const id = normalizeProjectId(project.projectId);
+    const isSend = toSend.has(id);
+    const isReceive = toReceive.has(id);
+    if (isSend && isReceive) result.push({ ...project, direction: 'both' });
+    else if (isSend) result.push({ ...project, direction: 'send' });
+    else if (isReceive) result.push({ ...project, direction: 'receive' });
+  });
+  return result.length > 0 ? result : NO_UNSYNCED_PROJECTS;
+}
 
 /**
  * Re-exported so consumers and tests that pace against this hook's seeding keep one import site.
@@ -294,10 +364,12 @@ function isValidSyncState(state: unknown): state is ReadableSyncState {
  * A project whose metadata can't be fetched falls back to its id, so a partial failure loses
  * precision but never a project.
  *
- * Local changes not yet sent come from a third input, `useUnsyncedChanges`, which reads each
- * project's repository rather than either sync signal. It contributes the `unsynced` status and
- * {@link SyncStatusInfo.unsyncedProjects}, named and sorted exactly as the syncing projects are; how
- * it ranks against the sync signals is set out at the `status` derivation below.
+ * Projects out of step with the server come from a third input, `useUnsyncedChanges`, which reports
+ * local changes not yet sent and server changes not yet received rather than reading either sync
+ * signal. It contributes the `unsynced` status, {@link SyncStatusInfo.unsyncedProjects} (named and
+ * sorted exactly as the syncing projects are, each with its direction) and
+ * {@link SyncStatusInfo.unsyncedDirection}; how it ranks against the sync signals is set out at the
+ * `status` derivation below.
  */
 export function useSyncStatus(): SyncStatusInfo {
   // Starts `unknown`, not `idle`: until the seed answers, nothing here knows whether a sync is
@@ -632,8 +704,20 @@ export function useSyncStatus(): SyncStatusInfo {
     didClaimSeeActivitySyncRef.current = false;
   }, [activitySyncing, claimStatus]);
 
-  const unsyncedProjectIds = useUnsyncedChanges();
-  const hasUnsynced = (unsyncedProjectIds?.length ?? 0) > 0;
+  const unsyncedSets = useUnsyncedChanges();
+  const unsyncedDirection = deriveUnsyncedDirection(unsyncedSets);
+  const hasUnsynced = unsyncedDirection !== undefined;
+  /**
+   * Every project in either set, once. Derived from the sets' identity, which the unsynced-changes
+   * hook keeps while both lists are unchanged, so the name lookup keyed on this does not re-run.
+   */
+  const unsyncedProjectIds = useMemo(
+    () =>
+      unsyncedSets
+        ? Object.freeze([...new Set([...unsyncedSets.toSend, ...unsyncedSets.toReceive])])
+        : NO_PROJECT_IDS,
+    [unsyncedSets],
+  );
 
   /**
    * The single derived status. The OR is deliberate and monotone: either input claiming a sync is
@@ -658,14 +742,15 @@ export function useSyncStatus(): SyncStatusInfo {
    * start. A genuinely stranded claim would need a signal that distinguishes the two, which neither
    * input carries today.
    *
-   * Unsent local changes are a separate input, read from each project's repository rather than from
-   * either sync signal, and they rank below a running sync and below a failed one. A running sync
-   * is in the middle of sending them, so `syncing` is the true and current answer. A failed sync
-   * already implies work was left unsent and is the more actionable of the two facts — it leads the
+   * Changes waiting in either direction are a separate input, read independently of either sync
+   * signal, and they rank below a running sync and below a failed one. A running sync is in the
+   * middle of exchanging them, so `syncing` is the true and current answer. A failed sync already
+   * implies work was left unexchanged and is the more actionable of the two facts — it leads the
    * user to the details that say why — so `failed` keeps the indicator. Over every other state the
-   * set wins: a sync finishing says nothing about edits made since, and neither a claim that could
-   * not be read nor a stale verdict unmakes a fact read from the repository. A set that is not
-   * known (`undefined`) is no input at all, never a claim that something is unsent.
+   * sets win: a sync finishing says nothing about edits made since, on either side, and neither a
+   * claim that could not be read nor a stale verdict unmakes a fact read from the repository or the
+   * server. Sets that are not known (`undefined`) are no input at all, never a claim that something
+   * is waiting.
    */
   const status: SyncStatus = (() => {
     if (activitySyncing) return 'syncing';
@@ -701,11 +786,15 @@ export function useSyncStatus(): SyncStatusInfo {
     syncingProjectIds.length > 0 || isClaimRereadInFlight ? syncingProjectIds : activityProjectIds;
 
   const syncingProjects = useProjectNames(effectiveProjectIds);
-  const unsyncedProjects = useProjectNames(unsyncedProjectIds ?? NO_PROJECT_IDS);
+  const namedUnsyncedProjects = useProjectNames(unsyncedProjectIds);
+  const unsyncedProjects = useMemo(
+    () => withDirections(namedUnsyncedProjects, unsyncedSets),
+    [namedUnsyncedProjects, unsyncedSets],
+  );
 
   return useMemo(
-    () => ({ status, syncingProjects, unsyncedProjects, syncProgress }),
-    [status, syncingProjects, unsyncedProjects, syncProgress],
+    () => ({ status, syncingProjects, unsyncedProjects, unsyncedDirection, syncProgress }),
+    [status, syncingProjects, unsyncedProjects, unsyncedDirection, syncProgress],
   );
 }
 
