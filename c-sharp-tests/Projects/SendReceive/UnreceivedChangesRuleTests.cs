@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using Paranext.DataProvider;
+using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Data;
 
@@ -46,5 +48,72 @@ namespace TestParanextDataProvider.Projects.SendReceive
             Assert.That(result, Is.Not.Null);
             Assert.That(result, Is.Empty);
         }
+
+        private sealed class ScriptedTipService(
+            PapiClient client,
+            ParatextProjectDataProviderFactory factory,
+            AppInfo appInfo,
+            LocalParatextProjects projects
+        ) : ParatextProjectSendReceiveService(client, factory, appInfo, projects)
+        {
+            public bool Throw { get; set; }
+
+            protected internal override IReadOnlyDictionary<string, string?> GetServerTipIds(
+                IReadOnlyCollection<ScrText> scrTexts
+            ) =>
+                Throw
+                    ? throw new InvalidOperationException("lookup failed")
+                    : new Dictionary<string, string?>();
+        }
+
+        private ScriptedTipService CreateScriptedService() =>
+            new(
+                Client,
+                new ParatextProjectDataProviderFactory(Client, ParatextProjects),
+                new AppInfo("test", "1.0.0", "test"),
+                ParatextProjects
+            );
+
+        [Test]
+        public void GetProjectsWithUnreceivedChanges_LookupThrows_ReturnsNull()
+        {
+            var service = CreateScriptedService();
+            service.Throw = true;
+
+            Assert.That(service.GetProjectsWithUnreceivedChanges(Array.Empty<ScrText>()), Is.Null);
+        }
+
+        [Test]
+        public void GetProjectsWithUnreceivedChanges_WarnsOnceUntilSuccess()
+        {
+            const string warning = "Could not read server tip ids";
+            var service = CreateScriptedService();
+            var original = Console.Error;
+            var captured = new StringWriter();
+            Console.SetError(captured);
+            try
+            {
+                service.Throw = true;
+                service.GetProjectsWithUnreceivedChanges(Array.Empty<ScrText>());
+                service.GetProjectsWithUnreceivedChanges(Array.Empty<ScrText>());
+                Assert.That(CountOccurrences(captured.ToString(), warning), Is.EqualTo(1));
+
+                service.Throw = false;
+                Assert.That(
+                    service.GetProjectsWithUnreceivedChanges(Array.Empty<ScrText>()),
+                    Is.Empty
+                );
+                service.Throw = true;
+                service.GetProjectsWithUnreceivedChanges(Array.Empty<ScrText>());
+                Assert.That(CountOccurrences(captured.ToString(), warning), Is.EqualTo(2));
+            }
+            finally
+            {
+                Console.SetError(original);
+            }
+        }
+
+        private static int CountOccurrences(string text, string value) =>
+            text.Split(value).Length - 1;
     }
 }
