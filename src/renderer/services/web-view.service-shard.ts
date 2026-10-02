@@ -3016,10 +3016,10 @@ export async function openOrReloadWebView(
                   },
                 );
 
-                const unsubscriber = () => {
+                const handlePageHide = () => {
                   try {
                     unsubscribeUpdateWebView();
-                    window.removeEventListener('pagehide', unsubscriber);
+                    window.removeEventListener('pagehide', handlePageHide);
                   } catch (e) {
                     console.log('Error unsubscribing from WebView updates', e);
                   }
@@ -3045,7 +3045,7 @@ export async function openOrReloadWebView(
                   unmountRoot: root.unmount.bind(root),
                 };
 
-                window.addEventListener('pagehide', unsubscriber);
+                window.addEventListener('pagehide', handlePageHide);
               }
 
               if (document.readyState === 'loading')
