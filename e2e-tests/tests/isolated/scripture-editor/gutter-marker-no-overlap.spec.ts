@@ -21,7 +21,6 @@
  * standard-default-power-mode.spec.ts). Run: `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { suppressOnboardingTour } from '../../../fixtures/onboarding-tour.page';
 import {
   COLUMN_FLOOR_CEILING_PX,
   dragEditorColumnDividerLeft,
@@ -122,11 +121,6 @@ test.describe('gutter marker glyphs versus paragraph text', () => {
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
     const editorRoot = editorFrame.locator('.editor-input');
     await editorRoot.waitFor({ timeout: 60_000 });
-
-    // Simple mode opens the onboarding tour on a fresh profile, asynchronously, once the project
-    // panel exists; its full-screen overlay intercepts every pointer event, including the toolbar
-    // click below and the divider drags later.
-    await suppressOnboardingTour(mainPage);
 
     await navigateToolbarBcv(mainPage, 'Obadiah 1:8');
 
