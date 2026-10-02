@@ -135,7 +135,7 @@ Avoid:
 
 - inventing a visually divergent `*-book-comparison-table` / `*-file-comparison-table` design when the Manage Books grid's approach fits
 
-*Why*: one consistent comparison-grid design across features. (Note: this is the file/book-level grid. Verse-level USFM diff for a single selected file is a separate surface — see the `DifferencesToolView` shared diff surface.)
+*Why*: one consistent comparison-grid design across features. (Note: this is the file/book-level grid. Verse-level USFM diff for a single selected file would be a separate surface — a shared diff surface, not yet built.) <!-- aspirational: not yet in repo -->
 
 ## Icons
 
