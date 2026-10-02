@@ -33,7 +33,12 @@ import {
   Z_INDEX_NESTED_MODAL,
   Z_INDEX_NESTED_MODAL_BACKDROP,
 } from 'platform-bible-react';
-import { focusResourcePickerOnOpen, ResourcePickerDialog } from 'platform-bible-react/experimental';
+import {
+  BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
+  BaseOrModelTextExplanation,
+  focusResourcePickerOnOpen,
+  ResourcePickerDialog,
+} from 'platform-bible-react/experimental';
 import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react/experimental';
 import { ChevronDown, X } from 'lucide-react';
 // Provides `overlay-modal-backdrop`, the 40%-black backdrop `OverlayModalDialog` gives this
@@ -140,25 +145,18 @@ export const TEAM_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
 ] as const);
 
 /**
- * The left column's "More info" explanation of Base and Model texts. These are the Model Text
- * panel's own empty-state strings, provided at runtime by the platform-scripture-editor extension's
- * localizedStrings.json — they will not appear in en.json. Reading the panel's keys rather than
- * copies of them is what keeps the two surfaces from ever explaining Base and Model differently, in
- * any language.
+ * The left column's Base/Model strings, which the dialog borrows from the Model Text panel: they
+ * are provided at runtime by the platform-scripture-editor extension's localizedStrings.json and
+ * will not appear in en.json. Reading the panel's keys rather than copies of them, and rendering
+ * the explanation with the same `BaseOrModelTextExplanation`, is what keeps the two surfaces from
+ * ever explaining Base and Model differently, in any language.
  */
-export const BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS = Object.freeze([
+export const TEAM_LAYOUT_PANEL_STRING_KEYS = Object.freeze([
   // The one-line summary under the column label; the panel's empty-state prompt ends with it.
   '%webView_modelTextPanel_emptyState_baseOrModel_summary%',
   '%webView_modelTextPanel_emptyState_moreInfo%',
   '%webView_modelTextPanel_emptyState_lessInfo%',
-  '%webView_modelTextPanel_emptyState_baseOrModel_intro%',
-  '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',
-  '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%',
-  '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%',
-  '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%',
-  '%webView_modelTextPanel_emptyState_baseOrModel_admin%',
-  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%',
-  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%',
+  ...BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
 ] as const);
 
 /**
@@ -168,7 +166,7 @@ export const BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS = Object.freeze([
  */
 export const TEAM_LAYOUT_DIALOG_ALL_STRING_KEYS = Object.freeze([
   ...TEAM_LAYOUT_DIALOG_STRING_KEYS,
-  ...BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
+  ...TEAM_LAYOUT_PANEL_STRING_KEYS,
 ] as const);
 
 export type TeamLayoutDialogLocalizedStrings = {
@@ -355,9 +353,8 @@ function PickerCloseButton({ label, onClose }: { label: string; onClose: () => v
  * The left column's "More info" disclosure: what Base and Model texts are, who chooses one, and the
  * copyright caveat. Collapsed by default so the column does not tower over the other two.
  *
- * The same explanation, from the same strings, as the Model Text panel's empty state in
- * `platform-scripture-editor` (`model-text-panel.component.tsx`). The renderer cannot import that
- * component across the extension boundary, so the markup is restated here; keep the two in step.
+ * The body is platform-bible-react's `BaseOrModelTextExplanation`, the same component and strings
+ * the Model Text panel shows in its empty state; only the toggle is this dialog's own.
  *
  * @param columnLabelId Id of the column heading. It describes the toggle rather than naming it, so
  *   the toggle's accessible name stays the visible "More info" / "Less info".
@@ -372,15 +369,6 @@ function BaseOrModelTextInfo({
   const [isOpen, setIsOpen] = useState(false);
   const bodyId = useId();
   const text = (key: keyof TeamLayoutDialogLocalizedStrings) => localizeString(strings, key);
-  const renderTermParagraph = (
-    termKey: keyof TeamLayoutDialogLocalizedStrings,
-    textKey: keyof TeamLayoutDialogLocalizedStrings,
-  ) => (
-    <p>
-      <strong className="tw:font-semibold tw:text-foreground">{text(termKey)}</strong>{' '}
-      {text(textKey)}
-    </p>
-  );
 
   return (
     <div className="tw:flex tw:flex-col tw:items-start tw:gap-1">
@@ -403,22 +391,9 @@ function BaseOrModelTextInfo({
         hidden={!isOpen}
         // `max-w-md` only bites once the grid stacks into one wide column, where unbounded lines
         // would run the width of the dialog.
-        className="tw:max-w-md tw:space-y-2 tw:text-sm tw:text-muted-foreground"
+        className="tw:max-w-md tw:text-sm tw:text-muted-foreground"
       >
-        <p>{text('%webView_modelTextPanel_emptyState_baseOrModel_intro%')}</p>
-        {renderTermParagraph(
-          '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',
-          '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%',
-        )}
-        {renderTermParagraph(
-          '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%',
-          '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%',
-        )}
-        <p>{text('%webView_modelTextPanel_emptyState_baseOrModel_admin%')}</p>
-        {renderTermParagraph(
-          '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%',
-          '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%',
-        )}
+        <BaseOrModelTextExplanation localizedStrings={strings} />
       </div>
     </div>
   );

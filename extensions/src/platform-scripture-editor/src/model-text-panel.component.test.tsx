@@ -5,10 +5,12 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
+import { BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS } from 'platform-bible-react/experimental';
 import { ABORTED, newPlatformError, RESOURCE_EXHAUSTED } from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
+import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
 import {
   MODEL_TEXT_EDITOR_CONTAINER_TEST_ID,
   ModelTextPanel,
@@ -853,6 +855,15 @@ describe('ModelTextPanel', () => {
     render(<ModelTextPanel {...makeProps()} />);
 
     expect(screen.getByText('No Base or Model text selected. Pick one.')).toBeInTheDocument();
+  });
+
+  // The panel requests its strings from MODEL_TEXT_PANEL_STRING_KEYS, so a key the shared
+  // explanation reads but the panel never requests would render as English fallback text in
+  // every language.
+  it('requests every string the shared Base/Model explanation reads', () => {
+    BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS.forEach((key) =>
+      expect(MODEL_TEXT_PANEL_STRING_KEYS).toContain(key),
+    );
   });
 
   // The disclosure's expand/collapse behaviour is covered directly in

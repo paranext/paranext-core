@@ -10,10 +10,8 @@ import {
   Z_INDEX_NESTED_MODAL,
   Z_INDEX_NESTED_MODAL_BACKDROP,
 } from 'platform-bible-react';
-import {
-  BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
-  TeamLayoutDialogContent,
-} from './team-layout.component';
+import { BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS } from 'platform-bible-react/experimental';
+import { TeamLayoutDialogContent } from './team-layout.component';
 
 // jsdom does not implement ResizeObserver; platform-bible-react's Tooltip wires ResizeObservers.
 beforeAll(() => {
@@ -205,12 +203,14 @@ describe('TeamLayoutDialogContent', () => {
     const SUMMARY = '%webView_modelTextPanel_emptyState_baseOrModel_summary%';
     const MORE_INFO = '%webView_modelTextPanel_emptyState_moreInfo%';
     const LESS_INFO = '%webView_modelTextPanel_emptyState_lessInfo%';
-    // Every explanation key the dialog requests other than the always-visible summary and the
-    // toggle's own two labels.
-    const BODY_KEYS = BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS.filter(
-      (key) => key !== SUMMARY && key !== MORE_INFO && key !== LESS_INFO,
+    // The explanation body is platform-bible-react's `BaseOrModelTextExplanation`, which shows English
+    // fallbacks for unresolved keys, so these tests pass it real (short) strings to look for.
+    const label = (key: string) =>
+      `${key.replace(/^%webView_modelTextPanel_emptyState_baseOrModel_|%$/g, '')}.`;
+    const EXPLANATION_STRINGS = Object.fromEntries(
+      BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS.map((key) => [key, label(key)]),
     );
-    const key = (name: string) => `%webView_modelTextPanel_emptyState_baseOrModel_${name}%`;
+    const BODY_TEXTS = Object.values(EXPLANATION_STRINGS);
 
     it('shows the one-line summary under the column label', () => {
       renderContent();
@@ -236,46 +236,31 @@ describe('TeamLayoutDialogContent', () => {
     });
 
     it('keeps the full explanation collapsed until More info is clicked', () => {
-      renderContent();
+      renderContent({ localizedStrings: EXPLANATION_STRINGS });
 
       expect(screen.getByRole('button', { name: MORE_INFO })).toHaveAttribute(
         'aria-expanded',
         'false',
       );
-      BODY_KEYS.forEach((bodyKey) => expect(screen.getByText(bodyKey)).not.toBeVisible());
+      BODY_TEXTS.forEach((text) => expect(screen.getByText(text)).not.toBeVisible());
     });
 
-    it('reveals every paragraph, with bold terms, when More info is clicked', () => {
-      renderContent();
-      fireEvent.click(screen.getByRole('button', { name: MORE_INFO }));
+    // The shared component owns the paragraphs' order and pairing (its own tests pin them); what
+    // the dialog owns is passing its strings through and keeping them behind the toggle.
+    it('reveals the shared explanation, from the dialog’s strings, when More info is clicked', () => {
+      renderContent({ localizedStrings: EXPLANATION_STRINGS });
+      const toggle = screen.getByRole('button', { name: MORE_INFO });
+      fireEvent.click(toggle);
+      const body = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
 
       expect(screen.getByRole('button', { name: LESS_INFO })).toHaveAttribute(
         'aria-expanded',
         'true',
       );
-      // Every explanation key the dialog requests is rendered — a requested-but-unrendered key would
-      // mean a paragraph of the panel's explanation silently missing here.
-      BODY_KEYS.forEach((bodyKey) => expect(screen.getByText(bodyKey)).toBeVisible());
-      ['baseTerm', 'modelTerm', 'copyrightTerm'].forEach((name) =>
-        expect(screen.getByText(key(name)).tagName).toBe('STRONG'),
-      );
-    });
-
-    // The same paragraphs, in the same order, with each term beside its own definition, as the
-    // Model Text panel's copy. Swapping two definitions here would otherwise pass every check above.
-    it('orders the paragraphs and pairs each term with its definition', () => {
-      renderContent();
-      const toggle = screen.getByRole('button', { name: MORE_INFO });
-      fireEvent.click(toggle);
-      const body = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
-
-      expect(Array.from(body?.querySelectorAll('p') ?? [], (p) => p.textContent)).toEqual([
-        key('intro'),
-        `${key('baseTerm')} ${key('baseDefinition')}`,
-        `${key('modelTerm')} ${key('modelDefinition')}`,
-        key('admin'),
-        `${key('copyrightTerm')} ${key('copyrightNote')}`,
-      ]);
+      BODY_TEXTS.forEach((text) => {
+        expect(screen.getByText(text)).toBeVisible();
+        expect(body).toContainElement(screen.getByText(text));
+      });
     });
   });
 

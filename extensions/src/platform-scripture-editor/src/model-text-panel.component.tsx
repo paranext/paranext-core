@@ -4,6 +4,7 @@ import {
   EditorRef,
   getDefaultViewOptions,
 } from '@eten-tech-foundation/platform-editor';
+import { BaseOrModelTextExplanation } from 'platform-bible-react/experimental';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -95,54 +96,6 @@ export {
  */
 const localize = (strings: ModelTextPanelLocalizedStrings, key: ModelTextPanelLocalizedStringKey) =>
   strings[key] ?? key;
-
-/**
- * The empty state's "More info" body: what Base and Model texts are, who chooses one, and the
- * copyright caveat. Each bold term shares a paragraph with what it introduces; the term carries its
- * own punctuation so a translator controls it.
- *
- * The Team layout dialog (`team-layout.component.tsx`, `BaseOrModelTextInfo`) requests these same
- * keys and restates this markup, so rewording a string changes both surfaces and a change to the
- * paragraph structure must be made in both.
- */
-function BaseOrModelTextExplanation({
-  localizedStrings,
-}: {
-  localizedStrings: ModelTextPanelLocalizedStrings;
-}) {
-  const renderTermParagraph = (
-    termKey: ModelTextPanelLocalizedStringKey,
-    textKey: ModelTextPanelLocalizedStringKey,
-  ) => (
-    <p>
-      <strong className="tw:font-semibold tw:text-foreground">
-        {localize(localizedStrings, termKey)}
-      </strong>{' '}
-      {localize(localizedStrings, textKey)}
-    </p>
-  );
-
-  // Start-aligned and normally wrapped, unlike the centered, balanced empty state around it, so the
-  // bold terms line up and the explanation reads the same as the Team layout dialog's.
-  return (
-    <div className="tw:flex tw:flex-col tw:gap-2 tw:text-start tw:text-wrap">
-      <p>{localize(localizedStrings, '%webView_modelTextPanel_emptyState_baseOrModel_intro%')}</p>
-      {renderTermParagraph(
-        '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',
-        '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%',
-      )}
-      {renderTermParagraph(
-        '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%',
-        '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%',
-      )}
-      <p>{localize(localizedStrings, '%webView_modelTextPanel_emptyState_baseOrModel_admin%')}</p>
-      {renderTermParagraph(
-        '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%',
-        '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%',
-      )}
-    </div>
-  );
-}
 
 const DEFAULT_SCR_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
 
@@ -613,7 +566,14 @@ export function ModelTextPanel({
           <ExpandableInfo
             moreLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_moreInfo%')}
             lessLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_lessInfo%')}
-            body={<BaseOrModelTextExplanation localizedStrings={localizedStrings} />}
+            body={
+              // Start-aligned and normally wrapped, unlike the centered, balanced empty state
+              // around it, so the bold terms line up and it reads like the Team layout dialog's.
+              <BaseOrModelTextExplanation
+                localizedStrings={localizedStrings}
+                className="tw:text-start tw:text-wrap"
+              />
+            }
           />
         }
         pickLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_pickText%')}

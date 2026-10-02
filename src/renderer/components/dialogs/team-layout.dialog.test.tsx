@@ -11,7 +11,7 @@ import { TEAM_LAYOUT_DIALOG } from '@renderer/components/dialogs/team-layout.dia
 import { sendCommand } from '@shared/services/command.service';
 import { useLocalizedStrings, useProjectDataProvider } from '@renderer/hooks/papi-hooks';
 import {
-  BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
+  TEAM_LAYOUT_PANEL_STRING_KEYS,
   TEAM_LAYOUT_DIALOG_STRING_KEYS,
 } from '@renderer/components/dialogs/team-layout.component';
 
@@ -590,8 +590,8 @@ describe('TeamLayoutDialogWrapper strings', () => {
     await screen.findByText(BODY_MOUNTED_TEXT);
 
     const requestedKeys = vi.mocked(useLocalizedStrings).mock.calls.flatMap(([keys]) => keys);
-    [...TEAM_LAYOUT_DIALOG_STRING_KEYS, ...BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS].forEach(
-      (key) => expect(requestedKeys).toContain(key),
+    [...TEAM_LAYOUT_DIALOG_STRING_KEYS, ...TEAM_LAYOUT_PANEL_STRING_KEYS].forEach((key) =>
+      expect(requestedKeys).toContain(key),
     );
   });
 });
