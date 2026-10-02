@@ -699,9 +699,10 @@ declare module 'papi-shared-types' {
      * from the dotnet process (registered by core's `UnsyncedChangesNotifierService`); a cold-start
      * rejection must be retried, not read as "nothing is unsynced".
      *
-     * `toReceive` is filled only by a Paratext 10 build, which refreshes it every few minutes and
-     * after each sync, so it can lag the server by up to that interval. In public Platform.Bible it
-     * is always empty.
+     * `toReceive` is filled only by builds that implement the server lookup (e.g., Paratext 10),
+     * which refresh it every few minutes and after each sync, so it can lag the server, and by
+     * longer than that while the server cannot be reached. In public Platform.Bible it is always
+     * empty.
      *
      * @returns The current {@link UnsyncedChangesSnapshot}
      * @experimental This command is unstable and may change or disappear without notice
@@ -750,9 +751,10 @@ declare module 'papi-shared-types' {
      * (re)start; no replay, so a consumer seeds from
      * `paratextBibleSendReceive.getUnsyncedChanges`.
      *
-     * `toReceive` is filled only by a Paratext 10 build, which refreshes it every few minutes and
-     * after each sync; a change on the server therefore reaches subscribers on that cadence rather
-     * than the moment it is pushed. In public Platform.Bible it is always empty.
+     * `toReceive` is filled only by builds that implement the server lookup (e.g., Paratext 10),
+     * which refresh it every few minutes and after each sync; a change on the server therefore
+     * reaches subscribers on that cadence rather than the moment it is pushed. In public
+     * Platform.Bible it is always empty.
      *
      * @experimental This event is unstable and may change or disappear without notice
      */
