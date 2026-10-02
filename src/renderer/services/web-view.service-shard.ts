@@ -40,6 +40,7 @@ import {
   getFullWebViewStateById,
   setFullWebViewStateById,
 } from '@renderer/services/web-view-state.service';
+import { mergeStateChangedDuringReload } from '@renderer/services/web-view-state-merge.util';
 import { WindowClosingError } from '@renderer/services/window-closing-error.model';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
@@ -2785,6 +2786,16 @@ export async function openOrReloadWebView(
   )
     throw new Error(
       `getWebView: URL WebView content ${webView.content} did not match any of its allowedFrameSources!`,
+    );
+
+  // The live web view kept running during the provider await above and may have written state; the
+  // provider's answer was built from the snapshot it was handed, so docking it as-is would undo
+  // those writes. Only a reload of an open web view has a live web view to have written anything.
+  if (isReloadOfAnOpenWebView && webView.state)
+    webView.state = mergeStateChangedDuringReload(
+      savedWebViewDefinition.state ?? {},
+      webView.state,
+      getFullWebViewStateSync(savedWebViewDefinition.id),
     );
 
   if (webView.state)

@@ -168,6 +168,16 @@ describe('Home localized string keys', () => {
 
     expect(missingKeys).toEqual([]);
   });
+
+  it("describes the search box by what it matches, which isn't type", () => {
+    renderHomeList({ localProjectsInfo: [] });
+
+    // The search matches name and language only; the type filter beside it is the control for type.
+    expect(screen.getByRole('textbox')).toHaveProperty(
+      'placeholder',
+      enString('%resources_searchByNameOrLanguage%'),
+    );
+  });
 });
 
 describe('Home send/receive failures', () => {

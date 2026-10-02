@@ -221,6 +221,49 @@ describe('content arriving through a door that names no caller', () => {
   });
 });
 
+describe('state the live web view writes while its reload waits on the provider', () => {
+  test('survives the reload instead of being overwritten by the snapshot', async () => {
+    // The live definition the dock holds; the reload snapshots its state before asking the provider.
+    const liveDefinition: WebViewDefinition = { ...LIVE_DEFINITION, state: { filter: 'all' } };
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { networkObjectService } = await import('@shared/services/network-object.service');
+    const addWebViewToDock = vi.fn<(...args: unknown[]) => { type: string }>(() => ({
+      type: 'tab',
+    }));
+    module.registerDockLayout({
+      onLayoutChangeRef: { current: undefined },
+      loadLayout: () => {},
+      getAllWebViewDefinitions: () => [],
+      getWebViewDefinition: () => liveDefinition,
+      addWebViewToDock: (...args: unknown[]) => addWebViewToDock(...args),
+      simpleLayout: EMPTY_LAYOUT,
+      testLayout: EMPTY_LAYOUT,
+    } as unknown as PapiDockLayout);
+    await module.startWebViewServiceShard();
+    const [, shard] = vi.mocked(networkObjectService.set).mock.calls[0];
+    const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
+    const { localThemeService } = await import('@renderer/services/theme.service');
+    (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
+      async () => ({
+        getWebView: async (saved: SavedWebViewDefinition) => {
+          // The user changes the filter in the still-live iframe while the provider works.
+          liveDefinition.state = { filter: 'resource' };
+          // A provider that echoes the snapshot it was handed, as most do.
+          return { ...saved, contentType: 'html', content: '<p>reloaded</p>' };
+        },
+      }),
+    );
+    (localThemeService as { getCurrentThemeSync?: unknown }).getCurrentThemeSync = vi.fn(() => ({
+      cssVariables: {},
+    }));
+
+    await (shard as unknown as ReloadShard).reloadWebView('test.type', 'open-view');
+
+    const [dockedWebView] = addWebViewToDock.mock.calls[0];
+    expect(dockedWebView).toEqual(expect.objectContaining({ state: { filter: 'resource' } }));
+  });
+});
+
 describe('a failed reload of an open web view', () => {
   test('leaves the live view alone: no close event, state kept, error logged', async () => {
     const { shard } = await shardOverDockHoldingLiveView();

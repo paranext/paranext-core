@@ -1,5 +1,9 @@
 {
-  "metadata": {},
+  "metadata": {
+    "%resources_filterInput%": {
+      "fallbackKey": "%resources_searchByNameOrLanguage%"
+    }
+  },
   "localizedStrings": {
     "en": {
       "%new_tab_dialog_title%": "New Tab",
@@ -45,6 +49,7 @@
       "%resources_resources_label%": "Resources",
       "%resources_results%": "results",
       "%resources_retry%": "Try again",
+      "%resources_searchByNameOrLanguage%": "Search by name or language",
       "%resources_searchedFor%": "Searched for",
       "%resources_serverProjectsUnavailable_title%": "Can't list projects from the sync server",
       "%resources_serverUnreachable_description%": "Showing only the projects already on your computer.",
@@ -114,6 +119,7 @@
       "%resources_resources_label%": "Recursos",
       "%resources_results%": "resultados",
       "%resources_retry%": "Reintentar",
+      "%resources_searchByNameOrLanguage%": "Buscar por nombre o idioma",
       "%resources_searchedFor%": "Buscado:",
       "%resources_serverProjectsUnavailable_title%": "No se pueden listar los proyectos del servidor de sincronización",
       "%resources_serverUnreachable_description%": "Mostrando solo los proyectos que ya están en su computadora.",
