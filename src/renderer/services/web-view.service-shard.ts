@@ -2791,11 +2791,17 @@ export async function openOrReloadWebView(
   // The live web view kept running during the provider await above and may have written state; the
   // provider's answer was built from the snapshot it was handed, so docking it as-is would undo
   // those writes. Only a reload of an open web view has a live web view to have written anything.
-  if (isReloadOfAnOpenWebView && webView.state)
+  // Its tab can leave this window's dock during the same await; with no tab there is no live state
+  // to read, and merging against an empty one would read as the live web view removing every key.
+  // The dock-read bail-out further down is what answers a reload whose tab has gone.
+  const liveWebViewDefinition = isReloadOfAnOpenWebView
+    ? getDockLayoutSync().getWebViewDefinition(savedWebViewDefinition.id)
+    : undefined;
+  if (liveWebViewDefinition && webView.state)
     webView.state = mergeStateChangedDuringReload(
       savedWebViewDefinition.state ?? {},
       webView.state,
-      getFullWebViewStateSync(savedWebViewDefinition.id),
+      liveWebViewDefinition.state ?? {},
     );
 
   if (webView.state)
