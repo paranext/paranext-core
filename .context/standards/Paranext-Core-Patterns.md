@@ -1422,6 +1422,52 @@ hook or command decide with the real `ScrVers`; a genuinely identical versificat
 
 ---
 
+## Writes Paratext Refuses Outright (Repair at the Save Boundary)
+
+Some project writes are not partially accepted or coerced — `ParatextData` refuses the whole write.
+Refusals of that kind are **self-perpetuating** whenever the content that caused them lives in a
+surface that goes on holding it: the refusal changes nothing on screen, so the next save sends the
+same refused content, and the feature appears to stop working with nothing to tell the user why.
+
+**Repair the content on the way out; do not prevent the edit that produced it.** A refused write is
+a writer constraint, not a typing rule, and policing it at the keystroke changes how the editing
+surface behaves — and diverges from Paratext 9, which lets the typing happen and fixes the content
+in its own save path.
+
+**Repair in EVERY layer that can originate the write, not just the backend.** A correction made only
+in C# is invisible to a focused editor: `useEditorPdpSync`
+(`extensions/src/platform-scripture-editor/src/use-editor-pdp-sync.hook.ts`) defers an incoming PDP
+update for up to `EDITOR_OWNERSHIP_WINDOW_MS` while the editor is focused and recently edited, so
+the editor keeps its own uncorrected document and writes it back over the correction. Concretely:
+
+- **The originating surface repairs its own content**, pushes the repaired document back into
+  itself, and tells the user. The push-back is what breaks the loop — without it the same repair
+  fires again on every later save.
+- **The backend repairs as a backstop**, silently, for writers that do not correct their own
+  content. A backstop that fires on traffic from an already-repairing surface means that surface's
+  repair has a gap, so keep the two in agreement.
+- **Scope the repair to the write that knows the answer.** Only a write aimed at a single chapter
+  knows which `\c` is the right one; a book-level write legitimately carries one per chapter and
+  must be left alone.
+- **Check what else the refusal was catching.** A repair makes every write of that shape succeed,
+  including ones the refusal was stopping for a different reason. The chapter-number refusal also
+  stopped one chapter's content being written into another, which the editor attempts after
+  navigation while it still holds the chapter it is leaving. The editor guards that
+  separately (`isEditorContentForChapter`).
+
+**Chapter markers — the invariant both ports must hold.** A restored `\c` for any chapter after the
+first goes at **position 0**. Nothing may precede it, not even an `\id` book node typed into the
+chapter, because `ScrText.ValidateChapterNumber` refuses a later chapter carrying any content ahead
+of its marker ("Text present before chapter marker."). Chapter 1 is the sole exception: its marker
+stays behind the author's introduction and may legitimately be absent altogether. The two
+implementations — `extensions/src/platform-scripture-editor/src/chapter-marker-repair.util.ts` (USJ)
+and `c-sharp/Projects/ChapterMarkerCorrection.cs` (USFM) — must agree, and both are pinned to
+Paratext 9's `UsfmEditorTextLoader.FixChapterNumbers` test table.
+
+See `adr-chapter-marker-repair-at-the-save-boundary` for the why and the alternatives rejected.
+
+---
+
 ## Experimental APIs
 
 The `@experimental` marker applies to any PAPI surface — whether built into the platform or contributed by an extension. Mark an API experimental when it is not a confident, solid, general-purpose contract. Common cases:

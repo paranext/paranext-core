@@ -82,6 +82,31 @@ export function resolveUsjToSaveToPdp(
 }
 
 /**
+ * Whether content read from the editor may be written through a save bound to the chapter
+ * `saveChapterKey`.
+ *
+ * The editor does not always hold the chapter that is selected. After navigation it goes on showing
+ * the chapter it is leaving, still editable, until the new chapter's content arrives — and every
+ * save scheduled in that window is bound to the NEW chapter. Writing the editor's content through
+ * such a save puts one chapter's text over another, and nothing downstream stops it: the
+ * chapter-marker repair renumbers the marker to the chapter being written, so Paratext's own
+ * chapter-number check passes too. So the save is dropped. Its keystrokes are not written to the
+ * chapter being left either: they were typed after the user had already asked to move on, and the
+ * editor replaces them with the new chapter as soon as it arrives.
+ *
+ * @param editorDocumentKey Chapter key (`getChapterKey`) of the document the editor holds, or
+ *   `undefined` when no document has been applied to it yet — nothing then contradicts the save's
+ *   own chapter.
+ * @param saveChapterKey Chapter key of the chapter the save writes to.
+ */
+export function isEditorContentForChapter(
+  editorDocumentKey: string | undefined,
+  saveChapterKey: string,
+): boolean {
+  return editorDocumentKey === undefined || editorDocumentKey === saveChapterKey;
+}
+
+/**
  * Runs one fire of the debounced keystroke-driven PDP save, choosing the correct save target so a
  * pending trailing save can NEVER be written to the wrong chapter document (a different chapter, or
  * the same chapter re-selected under a different versification — the chapter keys carry both; see
@@ -109,7 +134,9 @@ export function resolveUsjToSaveToPdp(
  * which is re-pointed to the new chapter's setter from a `useEffect` BODY, not during render. A
  * cross-chapter flush (itself running in an effect CLEANUP) still relies on React's
  * cleanup-before-body ordering to observe the OLD chapter's setter there before that `useEffect`
- * body reassigns it.
+ * body reassigns it. Were that ordering to change, the flush would be dropped rather than written
+ * to the wrong chapter: the ref carries the chapter its setter writes to, and a save bound to
+ * another chapter refuses it.
  */
 export function performDebouncedPdpSave({
   usj,

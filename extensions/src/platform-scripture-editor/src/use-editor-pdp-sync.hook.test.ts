@@ -701,6 +701,99 @@ describe('useEditorPdpSync', () => {
     });
   });
 
+  // The web view reads the editor's document identity to refuse a save whose content came from a
+  // different chapter than the one it writes to. After navigation, the editor keeps the chapter it
+  // is leaving — still editable — until the new chapter arrives, and a save typed in that window is
+  // scheduled for the NEW chapter. The replace path flushes that save, so the identity it reads
+  // there must still name the chapter the editor is holding, or the save goes through and writes the
+  // old chapter's text over the new one.
+  describe("the caller's editor document selector", () => {
+    const lev15 = makeChapterUsj('15', 'Chapter fifteen text.', { verseNumber: '1' });
+
+    function setUpEditorShowingLev14(onFlush: () => void) {
+      const editorDocumentSelector: { current: EditorDocumentSelector | undefined } = {
+        current: undefined,
+      };
+      let isSavePending = false;
+      const flushPendingDebouncedSave = vi.fn(() => {
+        if (!isSavePending) return undefined;
+        isSavePending = false;
+        onFlush();
+        return Promise.resolve();
+      });
+      const editorRef: { current: EditorRef | null } = {
+        // EditorRef has many members; casting from a minimal stub is intentional in tests
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        current: {
+          setUsj: vi.fn(),
+          getUsj: () => levUsj,
+          isFocused: () => true,
+        } as unknown as EditorRef,
+      };
+      const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+      const setEditorUsj = { current: vi.fn() };
+
+      const { rerender } = renderHook(
+        ({
+          usjFromPdp,
+          documentSelector,
+        }: {
+          usjFromPdp: Usj;
+          documentSelector: EditorDocumentSelector;
+        }) => {
+          useEditorPdpSync({
+            usjFromPdp,
+            documentSelector,
+            editorRef,
+            usjSentToPdp,
+            lastLocalEditTimestamp,
+            setEditorUsj,
+            saveUsjToPdpIfUpdated: vi.fn(),
+            flushPendingDebouncedSave,
+            editorDocumentSelector,
+          });
+        },
+        { initialProps: { usjFromPdp: levUsj, documentSelector: lev14Selector } },
+      );
+      return {
+        rerender,
+        editorDocumentSelector,
+        flushPendingDebouncedSave,
+        markSavePending: () => {
+          isSavePending = true;
+        },
+      };
+    }
+
+    it('names the applied chapter, and keeps naming it while the next chapter is loading', () => {
+      const { rerender, editorDocumentSelector } = setUpEditorShowingLev14(() => {});
+      expect(editorDocumentSelector.current).toBe(lev14Selector);
+
+      // Navigated to LEV 15: the selector moves at once, the data does not.
+      act(() => rerender({ usjFromPdp: levUsj, documentSelector: lev15Selector }));
+      expect(editorDocumentSelector.current).toBe(lev14Selector);
+
+      act(() => rerender({ usjFromPdp: lev15, documentSelector: lev15Selector }));
+      expect(editorDocumentSelector.current).toBe(lev15Selector);
+    });
+
+    it('still names the chapter being left while the arriving chapter flushes a pending save', () => {
+      const seenDuringFlush: (EditorDocumentSelector | undefined)[] = [];
+      const harness = setUpEditorShowingLev14(() => {
+        seenDuringFlush.push(harness.editorDocumentSelector.current);
+      });
+      act(() => harness.rerender({ usjFromPdp: levUsj, documentSelector: lev15Selector }));
+      // A keystroke into the still-showing LEV 14 schedules a save while LEV 15 is selected.
+      harness.markSavePending();
+
+      act(() => harness.rerender({ usjFromPdp: lev15, documentSelector: lev15Selector }));
+
+      expect(harness.flushPendingDebouncedSave).toHaveBeenCalled();
+      expect(seenDuringFlush).toEqual([lev14Selector]);
+      expect(harness.editorDocumentSelector.current).toBe(lev15Selector);
+    });
+  });
+
   // The applied-document identity must be recorded on BOTH exits of the delivery effect. A
   // delivery that matches the last-sent content applies nothing, but it still proves which
   // document the editor is showing — and it can be the ONLY delivery a chapter ever gets before
