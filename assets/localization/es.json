@@ -665,7 +665,6 @@
   "%shareLayoutDialog_activeTab_sublabel%": "Para la tercera columna",
   "%shareLayoutDialog_activeTab_textCollection%": "Colección de textos",
   "%shareLayoutDialog_baseOrModelText_label%": "Texto base o modelo",
-  "%shareLayoutDialog_baseOrModelText_summary%": "Elija un texto para mostrarlo como traducción de referencia para su proyecto.",
   "%shareLayoutDialog_cancel_label%": "Cancelar",
   "%shareLayoutDialog_closePicker_label%": "Cerrar",
   "%shareLayoutDialog_commentaryResources_label%": "Comentarios del proyecto",

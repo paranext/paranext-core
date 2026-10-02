@@ -10,6 +10,7 @@ import {
   SIMPLE_PANEL_ID_RESOURCES,
 } from '@renderer/components/docking/simple-layout.data';
 import { Tour, TourStep, TOUR_LOCALIZE_KEYS } from './tour.component';
+import { STEP_LOCALIZE_KEYS } from './onboarding-tour.const';
 import {
   getTourReplayCount,
   readTourDone,
@@ -32,22 +33,6 @@ import {
  * target below and what the readiness gate waits for in Power.
  */
 const PROFILE_TRIGGER_SELECTOR = '[data-testid="user-profile-popover-trigger"]';
-
-export const STEP_LOCALIZE_KEYS: LocalizeKey[] = [
-  '%onboardingTour_step_project_title%',
-  '%onboardingTour_step_project_description%',
-  '%onboardingTour_step_baseOrModelText_title%',
-  '%onboardingTour_step_baseOrModelText_description%',
-  '%onboardingTour_step_resources_title%',
-  '%onboardingTour_step_resources_description%',
-  // The Send/Receive stop's heading reuses the toolbar's own label for the control it spotlights,
-  // rather than shipping a third "Sync" for translators alongside %toolbar_sync% and
-  // %firstRun_button_sync%.
-  '%toolbar_sync%',
-  '%onboardingTour_step_sendReceive_description%',
-  '%onboardingTour_step_profile_title%',
-  '%onboardingTour_step_profile_description%',
-];
 
 // The tour's own chrome keys come from Tour itself, so the button/counter half of this list has a
 // single source rather than being restated here.

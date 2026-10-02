@@ -46,9 +46,9 @@ export function LoadingView({ label }: { label: ReactNode }) {
  * an inert button.
  *
  * Wraps the library's `RetryableErrorView` — the same one the resource picker, Get Resources, and
- * the Text Collection grid render for these very failures — and adds only the full-panel height
- * those surfaces do not want. The panels' own props stay as they are so their callers need no
- * change.
+ * the Text Collection grid render for these very failures — and adds only the full-panel sizing
+ * (`PANEL_FILL_CLASSES`: full height, safe centering and its own scrolling) those surfaces do not
+ * want. The panels' own props stay as they are so their callers need no change.
  *
  * @param message Already-localized failure message (callers vary it per failure and for offline).
  * @param retryLabel Already-localized label for the retry button.

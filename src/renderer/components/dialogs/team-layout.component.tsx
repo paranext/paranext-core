@@ -110,7 +110,6 @@ export const TEAM_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_teamLayout_title%',
   '%shareLayoutDialog_reviewAndSyncNotice%',
   '%shareLayoutDialog_baseOrModelText_label%',
-  '%shareLayoutDialog_baseOrModelText_summary%',
   '%shareLayoutDialog_modelText_none%',
   '%shareLayoutDialog_teamLock_description%',
   '%shareLayoutDialog_teamLock_label%',
@@ -148,6 +147,8 @@ export const TEAM_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
  * any language.
  */
 export const BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS = Object.freeze([
+  // The one-line summary under the column label; the panel's empty-state prompt ends with it.
+  '%webView_modelTextPanel_emptyState_baseOrModel_summary%',
   '%webView_modelTextPanel_emptyState_moreInfo%',
   '%webView_modelTextPanel_emptyState_lessInfo%',
   '%webView_modelTextPanel_emptyState_baseOrModel_intro%',
@@ -371,7 +372,7 @@ function BaseOrModelTextInfo({
   const [isOpen, setIsOpen] = useState(false);
   const bodyId = useId();
   const text = (key: keyof TeamLayoutDialogLocalizedStrings) => localizeString(strings, key);
-  const term = (
+  const renderTermParagraph = (
     termKey: keyof TeamLayoutDialogLocalizedStrings,
     textKey: keyof TeamLayoutDialogLocalizedStrings,
   ) => (
@@ -405,16 +406,16 @@ function BaseOrModelTextInfo({
         className="tw:max-w-md tw:space-y-2 tw:text-sm tw:text-muted-foreground"
       >
         <p>{text('%webView_modelTextPanel_emptyState_baseOrModel_intro%')}</p>
-        {term(
+        {renderTermParagraph(
           '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',
           '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%',
         )}
-        {term(
+        {renderTermParagraph(
           '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%',
           '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%',
         )}
         <p>{text('%webView_modelTextPanel_emptyState_baseOrModel_admin%')}</p>
-        {term(
+        {renderTermParagraph(
           '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%',
           '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%',
         )}
@@ -938,7 +939,10 @@ export function TeamLayoutDialogContent({
                   {localizeString(strings, '%shareLayoutDialog_baseOrModelText_label%')}
                 </span>
                 <span className="tw:text-xs tw:text-muted-foreground" id={modelTextSummaryId}>
-                  {localizeString(strings, '%shareLayoutDialog_baseOrModelText_summary%')}
+                  {localizeString(
+                    strings,
+                    '%webView_modelTextPanel_emptyState_baseOrModel_summary%',
+                  )}
                 </span>
               </div>
               {/* Same nested-modal treatment as the Manage pickers above, for the same reasons. */}

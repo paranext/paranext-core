@@ -17,7 +17,14 @@ import {
   useTruncationTooltip,
   Spinner,
 } from 'platform-bible-react';
-import { getErrorMessage, type DblResourceData } from 'platform-bible-utils';
+import {
+  ABORTED,
+  formatReplacementString,
+  getErrorMessage,
+  isPlatformError,
+  RESOURCE_EXHAUSTED,
+  type DblResourceData,
+} from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -103,7 +110,7 @@ function BaseOrModelTextExplanation({
 }: {
   localizedStrings: ModelTextPanelLocalizedStrings;
 }) {
-  const term = (
+  const renderTermParagraph = (
     termKey: ModelTextPanelLocalizedStringKey,
     textKey: ModelTextPanelLocalizedStringKey,
   ) => (
@@ -120,16 +127,16 @@ function BaseOrModelTextExplanation({
   return (
     <div className="tw:flex tw:flex-col tw:gap-2 tw:text-start tw:text-wrap">
       <p>{localize(localizedStrings, '%webView_modelTextPanel_emptyState_baseOrModel_intro%')}</p>
-      {term(
+      {renderTermParagraph(
         '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',
         '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%',
       )}
-      {term(
+      {renderTermParagraph(
         '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%',
         '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%',
       )}
       <p>{localize(localizedStrings, '%webView_modelTextPanel_emptyState_baseOrModel_admin%')}</p>
-      {term(
+      {renderTermParagraph(
         '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%',
         '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%',
       )}
@@ -524,13 +531,16 @@ export function ModelTextPanel({
     [getUserModelTexts, setUserModelTexts, installResource, clearInstallFailure, markInstallFailed],
   );
 
-  // Called from click handlers, which nothing awaits, so a failure is caught here or nowhere. The
-  // Resource panel logs the same failure the same way.
+  // Called from click handlers, which nothing awaits, so a failure is caught here or nowhere. A
+  // second click while the picker opens makes the dialog service replace (`ABORTED`) or debounce
+  // (`RESOURCE_EXHAUSTED`) the earlier request; the picker the user sees still runs, so those are
+  // not failures.
   const handlePickModelText = useCallback(async () => {
     try {
       const resource = await showResourcePicker(currentModelTextIds);
       if (resource) await handleResourceSelect(resource);
     } catch (e) {
+      if (isPlatformError(e) && (e.code === ABORTED || e.code === RESOURCE_EXHAUSTED)) return;
       logger?.error(`Model text selection failed: ${getErrorMessage(e)}`);
     }
   }, [showResourcePicker, currentModelTextIds, handleResourceSelect, logger]);
@@ -590,9 +600,14 @@ export function ModelTextPanel({
           '%webView_modelTextPanel_catalogUnavailable%',
         )}
         loadingLabel={localize(localizedStrings, '%webView_modelTextPanel_loading%')}
-        emptyPrompt={localize(
-          localizedStrings,
-          '%webView_modelTextPanel_emptyState_baseOrModel_prompt%',
+        emptyPrompt={formatReplacementString(
+          localize(localizedStrings, '%webView_modelTextPanel_emptyState_baseOrModel_prompt%'),
+          {
+            summary: localize(
+              localizedStrings,
+              '%webView_modelTextPanel_emptyState_baseOrModel_summary%',
+            ),
+          },
         )}
         moreInfo={
           <ExpandableInfo

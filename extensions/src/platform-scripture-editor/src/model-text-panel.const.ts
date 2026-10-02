@@ -23,7 +23,9 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_installFailedOffline%',
   '%webView_modelTextPanel_installedButUnavailable%',
   '%webView_modelTextPanel_retry%',
+  // `{summary}` is filled from the summary key, which the Team layout dialog also shows on its own.
   '%webView_modelTextPanel_emptyState_baseOrModel_prompt%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_summary%',
   // The empty state's "More info" disclosure, which explains what Base and Model texts are, who
   // chooses one, and that some copyright holders forbid the use. Rendered through
   // `PanelReadinessView`'s `moreInfo` slot. The Team layout dialog requests these same keys (see
