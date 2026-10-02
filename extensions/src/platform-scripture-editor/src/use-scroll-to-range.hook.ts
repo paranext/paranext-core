@@ -5,6 +5,7 @@ import { deepEqual, serialize } from 'platform-bible-utils';
 import { MutableRefObject, useCallback, useEffect, useRef, useState } from 'react';
 import {
   EDITOR_LOAD_DELAY_TIME,
+  getEditorScrollTop,
   getEditorSelectionRange,
   isSameScrollGeometry,
   isSameVerseRef,
@@ -57,6 +58,13 @@ type RangeScrollRequest = {
   id: number;
   /** The chapter the editor was showing when the jump was asked for */
   chapterKeyAtRequest: string | undefined;
+  /**
+   * The editor content's `scrollTop` the user was looking at when they asked for the jump: read at
+   * the request, or carried over from the request it replaces while that one is still pending,
+   * since the pending jump may already have moved the view. `undefined` when the view was hidden or
+   * nothing scrolled.
+   */
+  scrollTopAtRequest: number | undefined;
 };
 
 /**
@@ -291,6 +299,12 @@ export function useScrollToRange({
   const requestScrollToRange = useCallback(
     (range: SelectionRange, verseRef: SerializedVerseRef) => {
       nextRequestIdRef.current += 1;
+      // One gesture can ask twice (a click focuses its result, then clicks it), and by the second
+      // ask the first may already have moved the view.
+      const pendingRequest = requestRef.current;
+      let scrollTopAtRequest: number | undefined;
+      if (pendingRequest) scrollTopAtRequest = pendingRequest.scrollTopAtRequest;
+      else if (isViewVisibleRef.current) scrollTopAtRequest = getEditorScrollTop();
       wasHiddenRef.current = !isViewVisibleRef.current;
       targetVerseRef.current = verseRef;
       setRequest({
@@ -298,6 +312,7 @@ export function useScrollToRange({
         verseRef,
         id: nextRequestIdRef.current,
         chapterKeyAtRequest: editorChapterKeyRef.current,
+        scrollTopAtRequest,
       });
     },
     [],
@@ -488,7 +503,20 @@ export function useScrollToRange({
           return 'settled';
         }
 
-        if (!sample.selectionRange || !scrollToRange(sample.selectionRange, behavior))
+        // A range already in view stays put only if the view is still the one the user was looking
+        // at. The engine scrolls a focused editor to the collapsed caret it places at the verse
+        // start on a reference change, which can park the range flush against the top edge — "in
+        // view", but not where the jump lands it.
+        const hasViewMovedSinceRequest =
+          request.scrollTopAtRequest !== undefined &&
+          sample.status === 'measured' &&
+          !isSameScrollGeometry(request.scrollTopAtRequest, sample.scrollTop);
+        if (
+          !sample.selectionRange ||
+          !scrollToRange(sample.selectionRange, behavior, {
+            stayPutWhenInView: !hasViewMovedSinceRequest,
+          })
+        )
           scrollToVerse(request.verseRef, behavior);
         finish();
         return 'settled';

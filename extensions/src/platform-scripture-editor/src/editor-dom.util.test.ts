@@ -22,6 +22,7 @@ import {
   createPendingCommentAnchorSource,
   createPendingCommentCenterAnchorSource,
   findScrollContainer,
+  getEditorScrollTop,
   getEditorSelectionRange,
   getVerseElement,
   hasNewScrollTarget,
@@ -825,6 +826,17 @@ describe('computeRangeScrollTop', () => {
     ).toBeUndefined();
   });
 
+  it('lands a range already in view at its offset when told not to stay put', () => {
+    expect(
+      computeRangeScrollTop({
+        ...viewport,
+        rangeTop: 1000,
+        rangeBottom: 1020,
+        stayPutWhenInView: false,
+      }),
+    ).toBe(920);
+  });
+
   it('counts a range a sub-pixel outside the viewport as in view', () => {
     // A fractional devicePixelRatio puts fractions on every one of these numbers, and scrolling by
     // a fraction of a pixel for a range already flush against an edge is a move for nothing.
@@ -1013,6 +1025,19 @@ describe('measureRangeScrollGeometry', () => {
   });
 });
 
+describe('getEditorScrollTop', () => {
+  it('reads the scroll position of the container that actually scrolls the editor content', () => {
+    const { wrapper } = buildEditorDom({ verseNumbers: [] });
+    wrapper.scrollTop = 569;
+
+    expect(getEditorScrollTop()).toBe(569);
+  });
+
+  it('is undefined when no editor content is mounted', () => {
+    expect(getEditorScrollTop()).toBeUndefined();
+  });
+});
+
 describe('scrollToRange', () => {
   it('scrolls the element that actually scrolls so the range lands just under the top', () => {
     const { editorContainer, wrapperScrollTo, editorContainerScrollTo } = buildEditorDom({
@@ -1040,6 +1065,18 @@ describe('scrollToRange', () => {
 
     expect(scrollToRange(rangeInEditor(editorContainer, 400, 20), 'smooth')).toBe(true);
     expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+
+  it('scrolls a range already in view to its offset when told not to stay put', () => {
+    const { editorContainer, wrapperScrollTo } = buildEditorDom({ verseNumbers: [] });
+
+    expect(
+      scrollToRange(rangeInEditor(editorContainer, 400, 20), 'smooth', {
+        stayPutWhenInView: false,
+      }),
+    ).toBe(true);
+    // scrollTop 0 + rect top 400 - container top 0 - offset 80 = 320
+    expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 320 });
   });
 
   it('reports a measurement but does not scroll when the content does not overflow', () => {

@@ -357,7 +357,8 @@ export function scrollToVerse(
  * leading edge against the bottom of the viewport, with the text itself still out of sight:
  *
  * - A range already FULLY inside the viewport stays put, so stepping between results on one screen
- *   does not make the text jump.
+ *   does not make the text jump — unless the caller says the view in front of the user is not the
+ *   one being measured (`stayPutWhenInView: false`), in which case there is nothing to keep still.
  * - Otherwise the range's first line lands {@link RANGE_SCROLL_TOP_OFFSET} below the top edge, capped
  *   to a quarter of the viewport's own height. A short pane (Power mode gives an editor little
  *   room) would otherwise land the match past the midpoint, with barely any of the surrounding text
@@ -369,7 +370,8 @@ export function scrollToVerse(
  * - The target is clamped to the container's scroll range, so a range at the very start or end of a
  *   chapter lands wherever the chapter's own edge allows — still fully in view.
  *
- * @returns The `scrollTop` to scroll to, or `undefined` when the range is already fully in view
+ * @returns The `scrollTop` to scroll to, or `undefined` when the range is already fully in view and
+ *   `stayPutWhenInView` is not `false`
  */
 export function computeRangeScrollTop({
   rangeTop,
@@ -377,14 +379,18 @@ export function computeRangeScrollTop({
   scrollTop,
   clientHeight,
   scrollHeight,
+  stayPutWhenInView = true,
 }: {
   rangeTop: number;
   rangeBottom: number;
   scrollTop: number;
   clientHeight: number;
   scrollHeight: number;
+  /** `false` to land the range at its offset even when it is already fully in view */
+  stayPutWhenInView?: boolean;
 }): number | undefined {
   if (
+    stayPutWhenInView &&
     rangeTop >= scrollTop - SCROLL_GEOMETRY_EPSILON_PX &&
     rangeBottom <= scrollTop + clientHeight + SCROLL_GEOMETRY_EPSILON_PX
   )
@@ -428,6 +434,17 @@ export function getEditorSelectionRange(): Range | undefined {
       ? commonAncestorContainer
       : commonAncestorContainer.parentElement;
   return element?.closest('.editor-container') ? range : undefined;
+}
+
+/**
+ * The editor content's current scroll position, read from the container that actually scrolls it.
+ *
+ * @returns That container's `scrollTop`, or `undefined` when no editor content is mounted or
+ *   nothing scrolls it
+ */
+export function getEditorScrollTop(): number | undefined {
+  const editorContainer = document.querySelector<HTMLElement>('.editor-container');
+  return editorContainer ? findScrollContainer(editorContainer)?.scrollTop : undefined;
 }
 
 /**
@@ -517,11 +534,18 @@ export function measureRangeScrollGeometry(
  * @param behavior `'smooth'` for a jump the user watches; `'instant'` to catch up a view that was
  *   hidden when the jump was asked for. Downgraded to `'instant'` automatically for a user who
  *   prefers reduced motion — see {@link resolveScrollBehavior}
+ * @param options `stayPutWhenInView: false` when the view has moved since the user asked for the
+ *   jump, so a range that is now in view is landed at its offset rather than left wherever that
+ *   move put it — see {@link computeRangeScrollTop}. `stayPutWhenInView` defaults to `true`
  * @returns `true` when the range was measured, whether or not it needed a scroll; `false` when it
  *   has no layout to measure (inside a `display: none` iframe every rect is zeros), so the caller
  *   can fall back
  */
-export function scrollToRange(range: Range, behavior: ScrollBehavior): boolean {
+export function scrollToRange(
+  range: Range,
+  behavior: ScrollBehavior,
+  { stayPutWhenInView = true }: { stayPutWhenInView?: boolean } = {},
+): boolean {
   const measurement = measureRangeScrollGeometry(range);
   if (measurement.status === 'no-layout') return false;
   // No scroll container: nothing overflows, so everything is already in view.
@@ -533,6 +557,7 @@ export function scrollToRange(range: Range, behavior: ScrollBehavior): boolean {
     scrollTop: measurement.scrollTop,
     clientHeight: measurement.clientHeight,
     scrollHeight: measurement.scrollHeight,
+    stayPutWhenInView,
   });
   if (targetTop !== undefined)
     measurement.scrollContainer.scrollTo({

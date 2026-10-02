@@ -6,6 +6,7 @@ import { useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   EDITOR_LOAD_DELAY_TIME,
+  getEditorScrollTop,
   getEditorSelectionRange,
   measureRangeScrollGeometry,
   RangeScrollGeometry,
@@ -26,6 +27,7 @@ vi.mock('./editor-dom.util', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
+    getEditorScrollTop: vi.fn(),
     getEditorSelectionRange: vi.fn(),
     measureRangeScrollGeometry: vi.fn(),
     scrollToRange: vi.fn(),
@@ -127,6 +129,7 @@ describe('useScrollToRange', () => {
     document.body.append(editorContainer);
     measuredRange = document.createRange();
     vi.mocked(getEditorSelectionRange).mockReturnValue(measuredRange);
+    vi.mocked(getEditorScrollTop).mockReturnValue(undefined);
     vi.mocked(measureRangeScrollGeometry).mockReturnValue(measured(stableGeometry()));
     vi.mocked(scrollToRange).mockReturnValue(true);
     // The verse marker is present by default, so a verse fallback is a real move that the range
@@ -152,8 +155,83 @@ describe('useScrollToRange', () => {
     expect(fake.setSelection).toHaveBeenCalledWith(MATCH);
     await runFrames();
     expect(scrollToRange).toHaveBeenCalledTimes(1);
-    expect(scrollToRange).toHaveBeenCalledWith(measuredRange, 'smooth');
+    expect(scrollToRange).toHaveBeenCalledWith(measuredRange, 'smooth', {
+      stayPutWhenInView: true,
+    });
     expect(scrollToVerse).not.toHaveBeenCalled();
+  });
+
+  it('lets a range already in view stay put while the view is where the user left it', async () => {
+    vi.mocked(getEditorScrollTop).mockReturnValue(stableGeometry().scrollTop);
+    const fake = createFakeEditor();
+    const { result } = renderScrollToRange(fake.editor, {
+      editorChapterKey: 'GEN 10',
+      isViewVisible: true,
+    });
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    await runFrames();
+
+    expect(scrollToRange).toHaveBeenCalledWith(measuredRange, 'smooth', {
+      stayPutWhenInView: true,
+    });
+  });
+
+  it('lands the range at its offset when the view moved after the request, even if it is now in view', async () => {
+    // The engine scrolls a focused editor to the caret it places at the verse start, which can
+    // leave the range flush against the top edge before the jump measures it.
+    vi.mocked(getEditorScrollTop).mockReturnValue(stableGeometry().scrollTop + 442);
+    const fake = createFakeEditor();
+    const { result } = renderScrollToRange(fake.editor, {
+      editorChapterKey: 'GEN 10',
+      isViewVisible: true,
+    });
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    await runFrames();
+
+    expect(scrollToRange).toHaveBeenCalledWith(measuredRange, 'smooth', {
+      stayPutWhenInView: false,
+    });
+  });
+
+  it('keeps the view the user was looking at across a second ask for the same jump', async () => {
+    // A click focuses a Find result and then clicks it, asking twice; the first ask's verse change
+    // can scroll the editor before the second ask is read.
+    const fake = createFakeEditor();
+    const { result } = renderScrollToRange(fake.editor, {
+      editorChapterKey: 'GEN 10',
+      isViewVisible: true,
+    });
+
+    vi.mocked(getEditorScrollTop).mockReturnValue(stableGeometry().scrollTop + 442);
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    vi.mocked(getEditorScrollTop).mockReturnValue(stableGeometry().scrollTop);
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    await runFrames();
+
+    expect(scrollToRange).toHaveBeenCalledTimes(1);
+    expect(scrollToRange).toHaveBeenCalledWith(measuredRange, 'smooth', {
+      stayPutWhenInView: false,
+    });
+  });
+
+  it('does not read the scroll position of a hidden view as where the user left it', async () => {
+    vi.mocked(getEditorScrollTop).mockReturnValue(stableGeometry().scrollTop + 442);
+    const fake = createFakeEditor();
+    const { result, rerender } = renderScrollToRange(fake.editor, {
+      editorChapterKey: 'GEN 10',
+      isViewVisible: false,
+    });
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    rerender({ editorChapterKey: 'GEN 10', isViewVisible: true });
+    await runFrames();
+
+    expect(getEditorScrollTop).not.toHaveBeenCalled();
+    expect(scrollToRange).toHaveBeenCalledWith(measuredRange, 'instant', {
+      stayPutWhenInView: true,
+    });
   });
 
   it('different chapter: waits until the engine has the target chapter before selecting or scrolling', async () => {
@@ -255,7 +333,9 @@ describe('useScrollToRange', () => {
     rerender({ editorChapterKey: 'GEN 10', isViewVisible: true });
     await runFrames();
     expect(scrollToRange).toHaveBeenCalledTimes(1);
-    expect(scrollToRange).toHaveBeenCalledWith(measuredRange, 'instant');
+    expect(scrollToRange).toHaveBeenCalledWith(measuredRange, 'instant', {
+      stayPutWhenInView: true,
+    });
 
     // A later hide-and-show is a bare reveal: nothing new to scroll to.
     rerender({ editorChapterKey: 'GEN 10', isViewVisible: false });
@@ -295,7 +375,9 @@ describe('useScrollToRange', () => {
 
     rerender({ editorChapterKey: 'GEN 10', isViewVisible: true });
     await runFrames();
-    expect(scrollToRange).toHaveBeenCalledWith(measuredRange, 'instant');
+    expect(scrollToRange).toHaveBeenCalledWith(measuredRange, 'instant', {
+      stayPutWhenInView: true,
+    });
   });
 
   it('a newer request replaces one still settling', async () => {
