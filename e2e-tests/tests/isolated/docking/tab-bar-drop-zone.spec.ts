@@ -27,14 +27,20 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
+import {
+  DRAGGING_LAYER,
+  DROP_INDICATOR,
+  type Point,
+  type TabBar,
+  addNewTab,
+  panelSelector,
+  readBars,
+  startDrag,
+  tabButton,
+  tabIdsOf,
+} from '../../../fixtures/dock-tab-helpers';
 
 const NEW_TAB_WEB_VIEW_TYPE = 'platformGetResources.newTab';
-
-/** The global overlay rc-dock positions over whatever drop target the pointer is on. */
-const DROP_INDICATOR = '.dock-layout > .dock-drop-indicator';
-
-/** Appended to `<body>` by rc-dock's drag manager for the duration of a tab drag. */
-const DRAGGING_LAYER = 'body > .dragging-layer';
 
 /**
  * The flex gap between the drop zone and the "+" button (`$tab-bar-extra-gap` in
@@ -47,39 +53,7 @@ const BAR_END_SLACK_PX = 24;
 
 type Rect = { left: number; right: number; top: number; bottom: number; width: number };
 
-type TabBar = { panelId: string; tabIds: string[] };
-
 // #region probes
-
-/** Each dock panel's id and the web view ids of its tabs, in DOM order. */
-async function readBars(page: Page): Promise<TabBar[]> {
-  return page.locator('.dock-panel[data-dockid]').evaluateAll((panels) =>
-    panels.map((panel) => ({
-      panelId: panel.getAttribute('data-dockid') ?? '',
-      tabIds: Array.from(
-        panel.querySelectorAll('.dock-nav-list .platform-tab-title[data-web-view-id]'),
-      ).map((title) => title.getAttribute('data-web-view-id') ?? ''),
-    })),
-  );
-}
-
-async function tabIdsOf(page: Page, panelId: string): Promise<string[]> {
-  return (await readBars(page)).find((bar) => bar.panelId === panelId)?.tabIds ?? [];
-}
-
-function panelSelector(panelId: string): string {
-  return `.dock-panel[data-dockid="${panelId}"]`;
-}
-
-function panelLocator(page: Page, panelId: string) {
-  return page.locator(panelSelector(panelId));
-}
-
-function tabButton(page: Page, webViewId: string) {
-  return page.locator('.dock-tab-btn', {
-    has: page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`),
-  });
-}
 
 /** The element's viewport rect, as the mouse sees it. */
 async function rectOf(page: Page, selector: string): Promise<Rect> {
@@ -131,19 +105,6 @@ async function panelHolding(page: Page, webViewId: string): Promise<string | und
 
 // #region actions
 
-/** Click a panel's "+" and answer the id of the tab it added. */
-async function addNewTab(page: Page, panelId: string): Promise<string> {
-  const before = await tabIdsOf(page, panelId);
-  await panelLocator(page, panelId).locator('.new-tab-button').click();
-  let added: string | undefined;
-  await expect(async () => {
-    added = (await tabIdsOf(page, panelId)).find((id) => !before.includes(id));
-    expect(added).toBeDefined();
-  }).toPass({ timeout: 30_000 });
-  if (!added) throw new Error(`no tab was added to panel ${panelId}`);
-  return added;
-}
-
 /** Open a New Tab web view in a panel of its own, to the right, and answer that panel's id. */
 async function openPanelToTheRight(page: Page): Promise<{ panelId: string; tabId: string }> {
   const tabId = await page.evaluate(async (webViewType) => {
@@ -166,21 +127,6 @@ async function openPanelToTheRight(page: Page): Promise<{ panelId: string; tabId
   }).toPass({ timeout: 30_000 });
   if (!panelId) throw new Error(`web view ${tabId} is in no panel`);
   return { panelId, tabId };
-}
-
-type Point = { x: number; y: number };
-
-/**
- * Press on a tab and move just far enough for rc-dock to start a drag. Target geometry must be read
- * only after this: the "+" button moves once a drag starts.
- */
-async function startDrag(page: Page, webViewId: string): Promise<void> {
-  const box = await tabButton(page, webViewId).boundingBox();
-  if (!box) throw new Error(`tab ${webViewId} has no box`);
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + 6, box.y + box.height / 2, { steps: 3 });
-  await expect(page.locator(DRAGGING_LAYER)).toBeAttached({ timeout: 5_000 });
 }
 
 /**
