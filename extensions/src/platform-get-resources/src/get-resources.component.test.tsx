@@ -372,6 +372,18 @@ function openLanguageFilter() {
   return screen.queryAllByRole('option').map((option) => option.textContent ?? '');
 }
 
+describe('GetResources search box', () => {
+  it("is described by what it matches, which isn't type", () => {
+    renderGetResources();
+
+    // The search matches name and language only; the type filter is the control for type.
+    expect(screen.getByRole('textbox')).toHaveAttribute(
+      'placeholder',
+      '%resources_searchByNameOrLanguage%',
+    );
+  });
+});
+
 describe('GetResources language filter', () => {
   it('offers only languages that have a resource of a selected type', () => {
     renderGetResources();

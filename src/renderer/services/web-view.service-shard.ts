@@ -40,6 +40,7 @@ import {
   getFullWebViewStateById,
   setFullWebViewStateById,
 } from '@renderer/services/web-view-state.service';
+import { mergeStateChangedDuringReload } from '@renderer/services/web-view-state-merge.util';
 import { WindowClosingError } from '@renderer/services/window-closing-error.model';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
@@ -2785,6 +2786,22 @@ export async function openOrReloadWebView(
   )
     throw new Error(
       `getWebView: URL WebView content ${webView.content} did not match any of its allowedFrameSources!`,
+    );
+
+  // The live web view kept running during the provider await above and may have written state; the
+  // provider's answer was built from the snapshot it was handed, so docking it as-is would undo
+  // those writes. Only a reload of an open web view has a live web view to have written anything.
+  // Its tab can leave this window's dock during the same await; with no tab there is no live state
+  // to read, and merging against an empty one would read as the live web view removing every key.
+  // The dock-read bail-out further down is what answers a reload whose tab has gone.
+  const liveWebViewDefinition = isReloadOfAnOpenWebView
+    ? getDockLayoutSync().getWebViewDefinition(savedWebViewDefinition.id)
+    : undefined;
+  if (liveWebViewDefinition && webView.state)
+    webView.state = mergeStateChangedDuringReload(
+      savedWebViewDefinition.state ?? {},
+      webView.state,
+      liveWebViewDefinition.state ?? {},
     );
 
   if (webView.state)

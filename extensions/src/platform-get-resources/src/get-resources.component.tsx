@@ -74,7 +74,6 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_dialog_title%',
   '%resources_downloadsUnavailable%',
   '%resources_filterBy%',
-  '%resources_filterInput%',
   '%resources_fullName%',
   '%resources_get%',
   '%resources_installed%',
@@ -89,6 +88,7 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_remove%',
   '%resources_results%',
   '%resources_retry%',
+  '%resources_searchByNameOrLanguage%',
   '%resources_showing%',
   '%resources_size%',
   '%resources_type%',
@@ -369,7 +369,7 @@ export function GetResources({
   const anyType: string = getLocalizedString('%resources_any_type%');
   const dialogSubtitleText: string = getLocalizedString('%resources_dialog_subtitle%');
   const dialogTitleText: string = getLocalizedString('%resources_dialog_title%');
-  const filterInputText: string = getLocalizedString('%resources_filterInput%');
+  const filterInputText: string = getLocalizedString('%resources_searchByNameOrLanguage%');
   const filterByText: string = getLocalizedString('%resources_filterBy%');
   const fullNameText: string = getLocalizedString('%resources_fullName%');
   const getText: string = getLocalizedString('%resources_get%');

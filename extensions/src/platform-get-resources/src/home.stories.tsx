@@ -167,7 +167,8 @@ function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactE
   const onlyWebProjectList: LocalProjectInfo[] = [
     {
       projectId: '0',
-      isPublished: true,
+      // The bundled WEB sample is a plain project, not a published resource.
+      isPublished: false,
       fullName: 'The WEB project',
       name: 'WEB',
       language: 'myLanguage',
@@ -254,9 +255,10 @@ export const ServerUnreachable: Story = {
 };
 
 /**
- * Home as the title bar's project picker footer opens it: scoped to editable projects, with the
- * published resources left out. Compare with `Default`, which is the same data unscoped — the
- * resource rows (`Res1`, `Res2`, `SdDict`) are the difference.
+ * Home as the title bar's project picker footer opens it: the type filter starts on Paratext
+ * projects, with the published resources left out until the user widens it. Compare with `Default`,
+ * which is the same data unfiltered — the resource rows (`Res1`, `Res2`, `SdDict`) are the
+ * difference.
  */
 function ProjectsOnlyDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
   return (
@@ -265,7 +267,7 @@ function ProjectsOnlyDecorator(Story: (update?: { args: HomeProps }) => ReactEle
         localizedStringsWithLoadingState: [localizedStrings, false],
         localProjectsInfo: staticLocalProjectsAndResources,
         sharedProjectsInfo: staticProjectsAndResources,
-        shouldShowProjectsOnly: true,
+        initialProjectResourceFilter: 'paratextProject',
         headerContent: (
           <>
             <HomeIcon size="36" />

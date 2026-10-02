@@ -15,6 +15,10 @@ import {
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.component';
+import {
+  isProjectResourceFilterValue,
+  type ProjectResourceFilterValue,
+} from './project-resource-filter.component';
 import { useLocalProjects } from './use-local-projects.hook';
 
 const defaultInterfaceLanguages: string[] = ['en'];
@@ -25,10 +29,17 @@ const SEND_RECEIVE_ATTEMPTS = 4;
 const SEND_RECEIVE_RETRY_MS = 2000;
 
 globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewProps) {
-  // Seeded by the web view provider from the caller's open options, and scrubbed back to `false` on
-  // every open that does not ask for it — so a projects-only launch cannot survive into a later
-  // menu open or a restored layout. See `buildHomeWebViewState`.
-  const [shouldShowProjectsOnly] = useWebViewState<boolean>('shouldShowProjectsOnly', false);
+  // Set by the web view provider from an opener's preset, and otherwise kept as the user left it.
+  // The user's changes are written back so it survives window moves and reloads, and so `openHome`
+  // can tell whether the filter on screen matches what a later caller asks for. See
+  // `buildHomeWebViewState`.
+  const [savedProjectResourceFilter, setProjectResourceFilter] =
+    useWebViewState<ProjectResourceFilterValue>('projectResourceFilter', 'all');
+  // Saved state is untyped at rest, and a layout from another build may carry a value this one does
+  // not know. Filtering on it would hide items behind a trigger that reads "All".
+  const projectResourceFilter = isProjectResourceFilterValue(savedProjectResourceFilter)
+    ? savedProjectResourceFilter
+    : 'all';
 
   const isMounted = useRef(false);
   useEffect(() => {
@@ -392,7 +403,8 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       isSendReceiveInProgress={isSendReceiveInProgress}
       isLoadingLocalProjects={isLoadingLocalProjects}
       remoteProjectsState={remoteProjectsState}
-      shouldShowProjectsOnly={shouldShowProjectsOnly}
+      initialProjectResourceFilter={projectResourceFilter}
+      onProjectResourceFilterChange={setProjectResourceFilter}
       localProjectsInfo={localProjectsInfo}
       sharedProjectsInfo={sharedProjectsInfo}
       activeSendReceiveProjects={activeSendReceiveProjects}
