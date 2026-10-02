@@ -61,8 +61,8 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _tracker.OnWriteScopeExited("a");
             await _tracker.FlushAsync();
             Assert.That(_events, Has.Count.EqualTo(1));
-            Assert.That(_events[0].ProjectIds, Is.EquivalentTo(new[] { "A" }));
-            Assert.That(_tracker.GetState().ProjectIds, Is.EquivalentTo(new[] { "A" }));
+            Assert.That(_events[0].ToSend, Is.EquivalentTo(new[] { "A" }));
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "A" }));
         }
 
         [Test]
@@ -96,7 +96,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             await _tracker.FlushAsync();
 
             Assert.That(_detectCalls, Is.EqualTo(1));
-            Assert.That(_tracker.GetState().ProjectIds, Is.EquivalentTo(new[] { "A" }));
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "A" }));
         }
 
         [Test]
@@ -109,8 +109,8 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
             _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
             await _tracker.FlushAsync();
-            Assert.That(_tracker.GetState().ProjectIds, Is.Empty);
-            Assert.That(_events.Last().ProjectIds, Is.Empty);
+            Assert.That(_tracker.GetState().ToSend, Is.Empty);
+            Assert.That(_events.Last().ToSend, Is.Empty);
         }
 
         [Test]
@@ -120,7 +120,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _repo["B"] = true;
             _tracker.StartBaselineScan();
             await _tracker.FlushAsync();
-            Assert.That(_tracker.GetState().ProjectIds, Is.EquivalentTo(new[] { "B" }));
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "B" }));
             int eventsBefore = _events.Count;
 
             // The sync sends B. A gains changes too, so checking A before B would raise a state
@@ -131,8 +131,8 @@ namespace TestParanextDataProvider.Projects.SendReceive
             await _tracker.FlushAsync();
 
             Assert.That(_events.Count, Is.GreaterThan(eventsBefore));
-            Assert.That(_events[eventsBefore].ProjectIds, Is.Empty, "B is cleared first");
-            Assert.That(_tracker.GetState().ProjectIds, Is.EquivalentTo(new[] { "A" }));
+            Assert.That(_events[eventsBefore].ToSend, Is.Empty, "B is cleared first");
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "A" }));
         }
 
         [Test]
@@ -144,7 +144,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _repo.Remove("A");
             _tracker.OnWriteScopeExited("A");
             await _tracker.FlushAsync();
-            Assert.That(_tracker.GetState().ProjectIds, Is.Empty);
+            Assert.That(_tracker.GetState().ToSend, Is.Empty);
         }
 
         [Test]
@@ -153,7 +153,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _repo["B"] = true;
             _tracker.StartBaselineScan();
             await _tracker.FlushAsync();
-            Assert.That(_tracker.GetState().ProjectIds, Is.EquivalentTo(new[] { "B" }));
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "B" }));
             Assert.That(_detectCalls, Is.EqualTo(2));
         }
 
@@ -203,8 +203,8 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _repo["A"] = false;
             _tracker.OnBlockStateChanged(new SendReceiveBlockState(false, Array.Empty<string>()));
             await _tracker.FlushAsync();
-            Assert.That(_tracker.GetState().ProjectIds, Is.Empty);
-            Assert.That(_events.Last().ProjectIds, Is.Empty);
+            Assert.That(_tracker.GetState().ToSend, Is.Empty);
+            Assert.That(_events.Last().ToSend, Is.Empty);
         }
 
         [Test]

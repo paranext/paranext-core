@@ -105,7 +105,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             var (eventType, payload) = client.NextSentEvent;
             Assert.That(eventType, Is.EqualTo(UnsyncedChangesChangedEvent));
             var state = (UnsyncedChangesState)payload!;
-            Assert.That(state.ProjectIds, Is.EquivalentTo(new[] { "A" }));
+            Assert.That(state.ToSend, Is.EquivalentTo(new[] { "A" }));
         }
 
         [Test]
@@ -113,7 +113,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         {
             var before = (UnsyncedChangesState)
                 Client.InvokeRequestHandler(GetUnsyncedChangesCommand)!;
-            Assert.That(before.ProjectIds, Is.Empty);
+            Assert.That(before.ToSend, Is.Empty);
 
             _tracker.OnWriteScopeExited("A");
             await _tracker.FlushAsync();
@@ -121,7 +121,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             var after = (UnsyncedChangesState)
                 Client.InvokeRequestHandler(GetUnsyncedChangesCommand)!;
             Assert.That(after, Is.EqualTo(_tracker.GetState()));
-            Assert.That(after.ProjectIds, Is.EquivalentTo(new[] { "A" }));
+            Assert.That(after.ToSend, Is.EquivalentTo(new[] { "A" }));
         }
     }
 }

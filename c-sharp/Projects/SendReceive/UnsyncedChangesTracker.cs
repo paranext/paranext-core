@@ -109,7 +109,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     public UnsyncedChangesState GetState()
     {
         lock (_lock)
-            return new(_unsynced.ToArray());
+            return new(_unsynced.ToArray(), Array.Empty<string>());
     }
 
     /// <summary>
@@ -436,7 +436,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
             {
                 if (_disposed)
                     return;
-                latest = new(_unsynced.ToArray());
+                latest = new(_unsynced.ToArray(), Array.Empty<string>());
             }
             if (latest.Equals(_lastRaised))
                 return;
