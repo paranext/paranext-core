@@ -112,6 +112,14 @@ export {
   type NavigationHistoryItem,
 } from './components/advanced/navigation-history-buttons/navigation-history-buttons.component';
 export {
+  default as BaseOrModelTextExplanation,
+  BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
+} from './components/advanced/base-or-model-text-explanation/base-or-model-text-explanation.component';
+export type {
+  BaseOrModelTextExplanationLocalizedStrings,
+  BaseOrModelTextExplanationProps,
+} from './components/advanced/base-or-model-text-explanation/base-or-model-text-explanation.component';
+export {
   default as InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
   isSupportedInternetUse,

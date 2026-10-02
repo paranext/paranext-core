@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
+  TEAM_LAYOUT_PANEL_STRING_KEYS,
   TEAM_LAYOUT_DIALOG_STRING_KEYS,
 } from './team-layout.component';
 
@@ -159,7 +159,7 @@ describe('Team layout dialog Base/Model explanation', () => {
   // The dialog reads the Model Text panel's own explanation strings rather than copies of them, so
   // users are never given two accounts of what a Base or Model text is. Those strings live in the
   // extension, not in en.json — which is why the key list is checked against the extension's file.
-  it.each([...BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS])(
+  it.each([...TEAM_LAYOUT_PANEL_STRING_KEYS])(
     '%s is defined by the Model Text panel in English and Spanish',
     (key) => {
       expect(findUnusableKeys(panelEnglish, [key])).toEqual([]);
@@ -181,7 +181,7 @@ describe('Team layout dialog Base/Model explanation', () => {
         key !== '%webView_modelTextPanel_emptyState_baseOrModel_prompt%' &&
         !EXTENSION_STRINGS.metadata?.[key]?.deprecationInfo,
     );
-    const requestedParagraphKeys = BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS.filter((key) =>
+    const requestedParagraphKeys = TEAM_LAYOUT_PANEL_STRING_KEYS.filter((key) =>
       key.startsWith('%webView_modelTextPanel_emptyState_baseOrModel_'),
     );
 
@@ -196,7 +196,7 @@ describe('Team layout dialog Base/Model explanation', () => {
     ['es', panelSpanish],
   ])('builds the %s empty-state prompt from the shared summary', (_, panel) => {
     expect(panel['%webView_modelTextPanel_emptyState_baseOrModel_prompt%']).toContain('{summary}');
-    expect(BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS).toContain(
+    expect(TEAM_LAYOUT_PANEL_STRING_KEYS).toContain(
       '%webView_modelTextPanel_emptyState_baseOrModel_summary%',
     );
   });

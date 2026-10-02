@@ -26,17 +26,18 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   // `{summary}` is filled from the summary key, which the Team layout dialog also shows on its own.
   '%webView_modelTextPanel_emptyState_baseOrModel_prompt%',
   '%webView_modelTextPanel_emptyState_baseOrModel_summary%',
-  // The empty state's "More info" disclosure, which explains what Base and Model texts are, who
-  // chooses one, and that some copyright holders forbid the use. Rendered through
-  // `PanelReadinessView`'s `moreInfo` slot. The Team layout dialog requests these same keys (see
-  // `BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS`), so rewording one rewords it there too.
+  // The empty state's "More info" disclosure toggle. Rendered through `PanelReadinessView`'s
+  // `moreInfo` slot; the Team layout dialog's toggle reads these same two keys.
   '%webView_modelTextPanel_emptyState_moreInfo%',
   '%webView_modelTextPanel_emptyState_lessInfo%',
   // The empty state's pick button. Generic ("a text") because the column holds a Base or a Model
   // text; the not-found state keeps `%webView_modelTextPanel_pickModelText%` beside its own message.
   '%webView_modelTextPanel_emptyState_pickText%',
+  // The disclosure's body: platform-bible-react's `BaseOrModelTextExplanation`, which the Team
+  // layout dialog renders too, reads these. Listed here rather than spread from its
+  // `BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS` so this module stays free of the library (see
+  // above); `model-text-panel.component.test.tsx` checks the two lists agree.
   '%webView_modelTextPanel_emptyState_baseOrModel_intro%',
-  // Each `...Term` is the bold lead-in to the definition or note that follows it.
   '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',
   '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%',
   '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%',
