@@ -202,6 +202,14 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 Assert.That(state.ToSend, Is.EquivalentTo(new[] { "A" }));
                 Assert.That(state.ToReceive, Is.EquivalentTo(new[] { "B" }));
             });
+
+            // The command answers with present state, not with the last event's payload.
+            _remote = new[] { "B", "C" };
+            _poller.Tick();
+            await _poller.FlushAsync();
+            var later = (UnsyncedChangesState)
+                Client.InvokeRequestHandler(GetUnsyncedChangesCommand)!;
+            Assert.That(later.ToReceive, Is.EquivalentTo(new[] { "B", "C" }));
         }
     }
 }
