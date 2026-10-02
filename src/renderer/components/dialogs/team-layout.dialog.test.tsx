@@ -589,10 +589,12 @@ describe('TeamLayoutDialogWrapper strings', () => {
     renderWrapper();
     await screen.findByText(BODY_MOUNTED_TEXT);
 
-    const requestedKeys = vi.mocked(useLocalizedStrings).mock.calls.flatMap(([keys]) => keys);
-    [...TEAM_LAYOUT_DIALOG_STRING_KEYS, ...TEAM_LAYOUT_PANEL_STRING_KEYS].forEach((key) =>
-      expect(requestedKeys).toContain(key),
-    );
+    // One call for all of them: the resource picker's own request is a separate call, and keys
+    // that only arrived through it would still be missing from the dialog's strings.
+    expect(vi.mocked(useLocalizedStrings)).toHaveBeenCalledWith([
+      ...TEAM_LAYOUT_DIALOG_STRING_KEYS,
+      ...TEAM_LAYOUT_PANEL_STRING_KEYS,
+    ]);
   });
 });
 

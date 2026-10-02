@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { CONTENT_ZOOM_ROOT_ATTRIBUTE } from 'platform-bible-react';
 import { BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS } from 'platform-bible-react/experimental';
-import { ABORTED, newPlatformError, RESOURCE_EXHAUSTED } from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
@@ -43,6 +42,10 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     useExtraValidMarkers: () => [],
   };
 });
+
+// The empty-state prompt as the STRINGS below render it (`{summary}` filled in). One constant, so
+// the "prompt is not shown" checks cannot go vacuous when the fixture text changes.
+const EMPTY_PROMPT = 'No Base or Model text selected. Pick one.';
 
 const STRINGS = {
   '%webView_modelTextPanel_installing%': 'Installing resource…',
@@ -435,7 +438,7 @@ describe('ModelTextPanel', () => {
   // itself becomes an unhandled rejection inside the web view: no message, no log line. Starts from
   // an unresolvable project reference because its not-found state renders after the "Selecting…"
   // state, so a pick that left the panel stuck selecting would show here.
-  it('logs a failed pick and returns to where the user was rather than failing silently', async () => {
+  it('logs a failed pick and returns to where the user was', async () => {
     const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
     renderPanel({
       modelTextsState: readyState({
@@ -460,24 +463,26 @@ describe('ModelTextPanel', () => {
     expect(screen.queryByText('Selecting resource…')).not.toBeInTheDocument();
   });
 
-  // A second click while the picker is opening replaces (ABORTED) or is debounced
-  // (RESOURCE_EXHAUSTED) by the dialog service. The pick the user sees still goes ahead, so neither
-  // is a failure worth an error in the log.
-  it.each([ABORTED, RESOURCE_EXHAUSTED])(
-    'does not log a picker that was %s by a newer request',
-    async (code) => {
-      const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
-      const showResourcePicker = vi.fn(async () => {
-        throw newPlatformError('Overlay was replaced by a new request', code);
-      });
-      renderPanel({ showResourcePicker, logger });
+  // A second click would replace the open picker, or race a pick whose resource is still
+  // installing. Both Pick buttons stay enabled during a pick, so the panel itself must ignore it.
+  it('ignores a second pick until the first one finishes', async () => {
+    let closePicker: (resource: DblResourceData | undefined) => void = () => {};
+    const showResourcePicker = vi.fn(
+      () =>
+        new Promise<DblResourceData | undefined>((resolve) => {
+          closePicker = resolve;
+        }),
+    );
+    renderPanel({ showResourcePicker });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
+    expect(showResourcePicker).toHaveBeenCalledTimes(1);
 
-      await waitFor(() => expect(showResourcePicker).toHaveBeenCalled());
-      expect(logger.error).not.toHaveBeenCalled();
-    },
-  );
+    await act(async () => closePicker(undefined));
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
+    expect(showResourcePicker).toHaveBeenCalledTimes(2);
+  });
 
   it('loads a configured ProjectReference model text directly by project ID', async () => {
     // Locally-installed non-DBL resources (added via selectTextConnection as ProjectReferences)
@@ -780,7 +785,7 @@ describe('ModelTextPanel', () => {
     expect(
       screen.getByText("Couldn't load your model text. It will appear once it's available."),
     ).toBeInTheDocument();
-    expect(screen.queryByText('No Base or Model text selected. Pick one.')).not.toBeInTheDocument();
+    expect(screen.queryByText(EMPTY_PROMPT)).not.toBeInTheDocument();
   });
 
   it('offers no controls in the settings-error state', () => {
@@ -812,7 +817,7 @@ describe('ModelTextPanel', () => {
     // Asserting only the not-found string left this blind to the mutation it exists to guard:
     // flipping the pre-catalog branch from 'loading' to 'empty' kept it green. The empty prompt's
     // absence and the spinner's presence are what actually pin AC-1 here.
-    expect(screen.queryByText('No Base or Model text selected. Pick one.')).not.toBeInTheDocument();
+    expect(screen.queryByText(EMPTY_PROMPT)).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
@@ -827,7 +832,7 @@ describe('ModelTextPanel', () => {
       />,
     );
 
-    expect(screen.queryByText('No Base or Model text selected. Pick one.')).not.toBeInTheDocument();
+    expect(screen.queryByText(EMPTY_PROMPT)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pick a text…' })).not.toBeInTheDocument();
   });
 
@@ -854,7 +859,7 @@ describe('ModelTextPanel', () => {
   it('prompts for a Base or Model text when none is configured', () => {
     render(<ModelTextPanel {...makeProps()} />);
 
-    expect(screen.getByText('No Base or Model text selected. Pick one.')).toBeInTheDocument();
+    expect(screen.getByText(EMPTY_PROMPT)).toBeInTheDocument();
   });
 
   // The panel requests its strings from MODEL_TEXT_PANEL_STRING_KEYS, so a key the shared

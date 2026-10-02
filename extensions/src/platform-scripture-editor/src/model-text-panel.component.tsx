@@ -19,11 +19,8 @@ import {
   Spinner,
 } from 'platform-bible-react';
 import {
-  ABORTED,
   formatReplacementString,
   getErrorMessage,
-  isPlatformError,
-  RESOURCE_EXHAUSTED,
   type DblResourceData,
 } from 'platform-bible-utils';
 import type {
@@ -484,17 +481,23 @@ export function ModelTextPanel({
     [getUserModelTexts, setUserModelTexts, installResource, clearInstallFailure, markInstallFailed],
   );
 
-  // Called from click handlers, which nothing awaits, so a failure is caught here or nowhere. A
-  // second click while the picker opens makes the dialog service replace (`ABORTED`) or debounce
-  // (`RESOURCE_EXHAUSTED`) the earlier request; the picker the user sees still runs, so those are
-  // not failures.
+  // One pick at a time. The Pick buttons stay enabled while a pick runs, and a second one would
+  // either replace the open picker (the dialog service rejects the first with an error that reaches
+  // us without its code) or, if it starts while the first one's resource is still installing, race
+  // it and let the older pick's write land last.
+  const isPickingRef = useRef(false);
+
+  // Called from click handlers, which nothing awaits, so a failure is caught here or nowhere.
   const handlePickModelText = useCallback(async () => {
+    if (isPickingRef.current) return;
+    isPickingRef.current = true;
     try {
       const resource = await showResourcePicker(currentModelTextIds);
       if (resource) await handleResourceSelect(resource);
     } catch (e) {
-      if (isPlatformError(e) && (e.code === ABORTED || e.code === RESOURCE_EXHAUSTED)) return;
       logger?.error(`Model text selection failed: ${getErrorMessage(e)}`);
+    } finally {
+      isPickingRef.current = false;
     }
   }, [showResourcePicker, currentModelTextIds, handleResourceSelect, logger]);
 
