@@ -106,6 +106,11 @@ internal class ParatextProjectSendReceiveService(
     private readonly ConcurrentDictionary<string, bool> _unsyncedCheckWarned = new();
 
     /// <summary>
+    /// 1 while a server tip lookup failure has been logged and no later lookup has succeeded.
+    /// </summary>
+    private int _serverTipLookupWarned;
+
+    /// <summary>
     /// Whether the persistent C# Send/Receive toast should be shown for a sync starting now.
     /// <para>
     /// Scaffolding for the Paratext 10 patch, which owns the toast
@@ -242,8 +247,6 @@ internal class ParatextProjectSendReceiveService(
     protected internal virtual bool IsInternetUseEnabled() =>
         InternetAccess.Status == InternetUse.Enabled;
 
-    private int _serverTipLookupWarned;
-
     /// <summary>
     /// The projects among <paramref name="projects"/> for which the server holds changes not yet
     /// received here — see <see cref="UnreceivedChangesRule"/>. Returns <see langword="null"/> when
@@ -271,11 +274,17 @@ internal class ParatextProjectSendReceiveService(
         }
         Interlocked.Exchange(ref _serverTipLookupWarned, 0);
 
+        // The implementer chooses the dictionary's comparer; a case-insensitive view keeps a key
+        // spelled in another case from silently reading as "no tip".
+        var tipsById = new Dictionary<string, string?>(
+            serverTips,
+            StringComparer.OrdinalIgnoreCase
+        );
         var result = new List<string>();
         foreach (ScrText scrText in projects)
         {
             string id = scrText.Guid.ToString().ToUpperInvariant();
-            serverTips.TryGetValue(id, out string? serverTip);
+            tipsById.TryGetValue(id, out string? serverTip);
             if (UnreceivedChangesRule.Evaluate(serverTip, GetLastSyncedTipId(scrText)))
                 result.Add(id);
         }

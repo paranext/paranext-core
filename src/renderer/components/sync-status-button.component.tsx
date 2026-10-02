@@ -711,8 +711,8 @@ export function SyncStatusButton() {
                     />
                   )}
                   {/*
-                   * The send icon is also the fallback while the direction is still `undefined`
-                   * (project names resolve after the status does), so the icon never blinks out.
+                   * The real hook always reports a direction with `unsynced`; the send icon is the
+                   * fallback for a consumer or mock that omits it, so the icon never blinks out.
                    */}
                   {status === 'unsynced' &&
                     unsyncedDirection !== 'receive' &&

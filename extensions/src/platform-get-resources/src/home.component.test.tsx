@@ -10,7 +10,7 @@ import {
   type LocalProjectInfo,
   type RemoteProjectsState,
 } from './home.component';
-import { toUnsyncedProjectIds } from './home-unsynced.util';
+import { parseUnsyncedProjectIds } from './home-unsynced.util';
 
 /*
  * `onSendReceiveProject`'s contract is that a rejection surfaces to the user: the prop's TSDoc says
@@ -374,7 +374,7 @@ describe('Home unsent local changes marker', () => {
       sharedProjectsInfo: SHARED_PROJECTS,
       localProjectsInfo: [LOCAL_COPY],
       // The web view merges the send and receive sets into this one list.
-      unsyncedProjectIds: toUnsyncedProjectIds({ toSend: [], toReceive: [PROJECT_ID] }),
+      unsyncedProjectIds: parseUnsyncedProjectIds({ toSend: [], toReceive: [PROJECT_ID] }) ?? [],
     });
 
     expect(screen.queryByTestId('home-project-unsynced-dot')).not.toBeNull();

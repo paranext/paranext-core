@@ -243,8 +243,10 @@ internal sealed class RemoteChangesPoller : IDisposable
             }
             catch (Exception ex)
             {
+                // Message only: a project that stays broken would otherwise print a stack trace
+                // every poll.
                 Console.Error.WriteLine(
-                    $"[RemoteChangesPoller] Could not resolve project {details.Metadata.Id}: {ex}"
+                    $"[RemoteChangesPoller] Could not resolve project {details.Metadata.Id}: {ex.GetType().Name}: {ex.Message}"
                 );
             }
         }

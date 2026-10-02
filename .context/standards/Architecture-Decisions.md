@@ -8010,8 +8010,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   into at most one extra check per project.
 
   The poller adds one server request per 5 minutes per installation plus one per sync, and ⬇️ can
-  lag the server by up to the poll interval. ⬇️ cannot distinguish "the server has newer changes"
-  from "this project was never received here". Public core carries an always-empty `toReceive`, and
+  lag the server by up to the poll interval. ⬇️ compares tip ids only, so a project restored from
+  a backup that carries a stale last-synced tip reads as ⬇️ until its next sync, and a project
+  with no last-synced tip at all is never ⬇️. Public core carries an always-empty `toReceive`, and
   the Studio patch must keep the exact `GetServerTipIds` signature so the seam keeps binding.
 - **Source:** PT-4694; the follow-up of `adr-toolbar-sync-status-is-local`.
 
