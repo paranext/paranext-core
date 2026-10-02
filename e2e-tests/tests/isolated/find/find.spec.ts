@@ -592,11 +592,19 @@ async function readTextGeometry(
  * Waits until `text` is in the chapter and has stopped moving — two reads 250 ms apart agree — and
  * answers where it came to rest. Smooth scrolling means a single read can catch the text
  * mid-flight.
+ *
+ * @param isWhereItShouldRest Keeps waiting through rests that fail it. Give it whenever the text is
+ *   expected to MOVE first: a jump does not start scrolling the instant the result is clicked — the
+ *   editor navigates, waits out its load delay and lets layout settle before it measures — so the
+ *   text sits still where it was for longer than one 250 ms read, and without this that first rest
+ *   would be taken for the landing. A jump that never lands where this asks still fails, at
+ *   `timeout`.
  */
 async function waitForGeometryToSettle(
   editorFrame: Frame,
   text: string,
   timeout = 30_000,
+  isWhereItShouldRest: (geometry: TextGeometry) => boolean = () => true,
 ): Promise<TextGeometry> {
   let previous: TextGeometry | undefined;
   let settled: TextGeometry | undefined;
@@ -610,6 +618,7 @@ async function waitForGeometryToSettle(
     previous = current;
     expect(isResting).toBe(true);
     settled = current;
+    if (current) expect(isWhereItShouldRest(current)).toBe(true);
   }).toPass({ timeout, intervals: [250] });
   if (!settled) throw new Error(`"${text}" never settled in the editor`);
   return settled;
@@ -634,9 +643,14 @@ async function showEditorAt(
   return waitForGeometryToSettle(editorFrame, settleText);
 }
 
-/** Asserts the text came to rest entirely inside the editor's scroll viewport. */
+/**
+ * Asserts the text came to rest entirely inside the editor's scroll viewport, waiting through any
+ * rest before that — see {@link waitForGeometryToSettle}.
+ */
 async function expectFullyInView(editorFrame: Frame, text: string): Promise<TextGeometry> {
-  const geometry = await waitForGeometryToSettle(editorFrame, text);
+  const isFullyInView = (geometry: TextGeometry) =>
+    geometry.matchTop >= 0 && geometry.matchBottom <= geometry.viewportHeight;
+  const geometry = await waitForGeometryToSettle(editorFrame, text, 30_000, isFullyInView);
   expect(geometry.matchTop).toBeGreaterThanOrEqual(0);
   expect(geometry.matchBottom).toBeLessThanOrEqual(geometry.viewportHeight);
   return geometry;
@@ -658,15 +672,15 @@ const MATCH_TOP_TOLERANCE = 50;
  *
  * This is what separates scrolling to the match from scrolling to the start of its verse. Both
  * leave the match "visible" whenever the verse is short, so a visibility-only assertion cannot tell
- * them apart: measured against the verse-start behaviour, a mid-verse match rests ~150 px lower
- * than this band allows, because the verse's start takes the offset instead.
+ * them apart, and the tolerance band alone cannot either once the match is fewer lines below its
+ * verse's start than the band is wide.
  *
- * @param verseStartText Text at the START of the match's own verse, several lines above the match.
- *   Given it, the assertion calibrates itself against the live layout instead of a tolerance:
- *   whatever the column width and line height turn out to be, only the offset the verse's start
- *   would have taken can put it back on screen, so requiring it to be ABOVE the viewport is a
- *   direct statement that the verse start is not what got the offset. Omit for a match too close to
- *   its verse's start for the two positions to differ by a whole line.
+ * @param verseStartText Text at the START of the match's own verse, at least a line above the
+ *   match. Given it, the assertion calibrates itself against the live layout instead of a
+ *   tolerance: one of the two took the offset, and it must be the match. So the match has to rest
+ *   nearer the offset than the verse's start does — which holds however many lines apart the column
+ *   width and line height put them, as long as they are on different lines. Omit for a match on its
+ *   verse's first line.
  */
 async function expectLandedAtTop(
   editorFrame: Frame,
@@ -679,25 +693,27 @@ async function expectLandedAtTop(
   if (verseStartText !== undefined) {
     const verseStart = await readTextGeometry(editorFrame, verseStartText);
     if (!verseStart) throw new Error(`"${verseStartText}" is not in the chapter on screen`);
-    expect(verseStart.matchTop).toBeLessThan(0);
+    const matchDistanceFromOffset = Math.abs(geometry.matchTop - EXPECTED_MATCH_TOP_OFFSET);
+    const verseStartDistanceFromOffset = Math.abs(verseStart.matchTop - EXPECTED_MATCH_TOP_OFFSET);
+    expect(matchDistanceFromOffset).toBeLessThan(verseStartDistanceFromOffset);
   }
   return geometry;
 }
 
 /**
- * Resizes the first app window's content area to `width`, keeping its height, and returns a
- * function that restores the original size.
+ * Resizes the first app window's content area, keeping whichever dimension is not given, and
+ * returns a function that restores the original size.
  */
-async function setWindowContentWidth(
+async function setWindowContentSize(
   electronApp: ElectronApplication,
-  width: number,
+  newSize: { width?: number; height?: number },
 ): Promise<() => Promise<void>> {
-  const original = await electronApp.evaluate(({ BrowserWindow }, newWidth) => {
+  const original = await electronApp.evaluate(({ BrowserWindow }, requested) => {
     const [appWindow] = BrowserWindow.getAllWindows();
     const [originalWidth, originalHeight] = appWindow.getContentSize();
-    appWindow.setContentSize(newWidth, originalHeight);
+    appWindow.setContentSize(requested.width ?? originalWidth, requested.height ?? originalHeight);
     return { width: originalWidth, height: originalHeight };
-  }, width);
+  }, newSize);
   return async () => {
     await electronApp.evaluate(({ BrowserWindow }, size) => {
       const [appWindow] = BrowserWindow.getAllWindows();
@@ -1342,18 +1358,19 @@ test.describe('Scope Switching', () => {
 // ---------------------------------------------------------------------------
 
 /**
- * Occurs once in the whole Bible, at the very end of Matthew 5:22 — several lines below its own
- * verse's start, in a chapter tall enough for the match to still reach the top of the viewport.
+ * Occurs once in the whole Bible, at the very end of Matthew 5:22 — lines below its own verse's
+ * start, in a chapter tall enough for the match to still reach the top of the viewport.
  *
- * Both properties are load-bearing. A match close to its verse start, or one near the end of a
+ * Both properties are load-bearing. A match on its verse's first line, or one near the end of a
  * chapter too short to scroll further, comes to rest in the same place whether the editor scrolls
  * to the verse or to the match, and so cannot tell the two apart.
  */
 const MID_CHAPTER_TERM = 'in danger of the fire of Gehenna';
 /**
- * The start of {@link MID_CHAPTER_TERM}'s own verse (Matthew 5:22), several lines above the match.
- * Under the verse-start behaviour this is what took the 80 px offset; under the match behaviour it
- * is pushed off the top of the viewport. See {@link expectLandedAtTop}.
+ * The start of {@link MID_CHAPTER_TERM}'s own verse (Matthew 5:22), lines above the match. Under the
+ * verse-start behaviour this is what takes the 80 px offset; under the match behaviour it rests
+ * above the offset by the match's distance below it — off the top of the viewport in a narrow
+ * column, still on screen in a wide one. See {@link expectLandedAtTop}.
  */
 const MID_CHAPTER_VERSE_START_TERM = 'everyone who is angry';
 /**
@@ -1369,12 +1386,19 @@ const CHAPTER_END_TERM = 'divided from these';
 const OTHER_CHAPTER_SETTLE_TERM = 'Zerubbabel';
 /** Content width that squeezes the editor column well below its width at the suite's 1280 px. */
 const NARROW_WINDOW_WIDTH = 960;
+/**
+ * Content height for {@link REPORTED_REPRO_TERM}'s test. At the suite's 800 px the match sits on the
+ * viewport's last line when Genesis 10 is scrolled to its top — whether it is clipped by a couple
+ * of pixels or fits depends on the font metrics, so the test would decide whether the editor needs
+ * to scroll at all. A shorter window puts the match clearly below the fold.
+ */
+const SHORT_WINDOW_HEIGHT = 600;
 
 test.describe('Jumping to a result scrolls the editor to the match', () => {
   /**
-   * Set by the narrow-width test. Restored here rather than in that test's own `finally`, because
-   * the window belongs to the whole worker: a Playwright TEST timeout unwinds the test without
-   * running its `finally`, which would leave every later test in the worker at the narrow width.
+   * Set by the tests that resize the window. Restored here rather than in a test's own `finally`,
+   * because the window belongs to the whole worker: a Playwright TEST timeout unwinds the test
+   * without running its `finally`, which would leave every later test in the worker at that size.
    */
   let restoreWindowSize: (() => Promise<void>) | undefined;
 
@@ -1410,8 +1434,10 @@ test.describe('Jumping to a result scrolls the editor to the match', () => {
 
   test('the reported repro: a match at the end of a mid-chapter verse lands at the top', async ({
     mainPage,
+    electronApp,
   }) => {
     const editorFrame = await findScriptureEditorFrame(mainPage);
+    restoreWindowSize = await setWindowContentSize(electronApp, { height: SHORT_WINDOW_HEIGHT });
     const before = await showEditorAt(
       mainPage,
       editorFrame,
@@ -1505,7 +1531,7 @@ test.describe('Jumping to a result scrolls the editor to the match', () => {
   }) => {
     const editorFrame = await findScriptureEditorFrame(mainPage);
     const wide = await showEditorAt(mainPage, editorFrame, 'Matthew 5:1', MID_CHAPTER_TERM, 'top');
-    restoreWindowSize = await setWindowContentWidth(electronApp, NARROW_WINDOW_WIDTH);
+    restoreWindowSize = await setWindowContentSize(electronApp, { width: NARROW_WINDOW_WIDTH });
 
     const narrow = await showEditorAt(
       mainPage,
