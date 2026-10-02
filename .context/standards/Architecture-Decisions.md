@@ -4543,7 +4543,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** add one method, `listExtensionDataQualifiers(scope)`, returning sorted
   `dataQualifier`s that round-trip verbatim into `getExtensionData` — forward slashes on every
   platform, recursive, scoped to `{EXTENSION_DATA_SUBDIRECTORY}/{extensionName}`, empty documents
-  included, and **creating nothing**. Four shape choices go with it. (1) `list*`, not `get*`:
+  included, and **creating nothing**. Five shape choices go with it. (1) `list*`, not `get*`:
   `get`/`set`/`subscribe` are magic prefixes for the data-provider service, and a `get*` name would
   demand a paired setter with nothing to set and imply a subscriber with nothing to notify. (2) **Its
   own `projectInterface`, `platform.extensionDataEnumeration`, with the method required there** —
@@ -4562,7 +4562,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `subscribeExtensionData` on a known qualifier already covers change notification. (4)
   `GetExtensionData` **stops creating** the document it looks for (`createIfNotExists: false`); an
   absent document reads as `""`, the same answer callers always got for one, so the wire behavior is
-  unchanged and only the side effect is gone.
+  unchanged and only the side effect is gone. (5) **A resource's extension data is what its archive
+  carries.** `ScrText.Directory` for a resource is the folder *holding* its .p8z, so resolving
+  extension data against it gave every resource in `_Resources` one shared bucket (and those in
+  `_resourcesById` a second), never read the archive, and let `setExtensionData` write loose files
+  into that folder. `ResourceProjectStreamManager` now reads through the resource's own
+  `ScrText.FileManager` and lists the archive's entries, keeping only those that file manager will
+  read (an encrypted resource's unencrypted entries are refused on read, so they are not listed), and
+  `setExtensionData` refuses a resource before taking the write lock.
 - **Alternatives:** *Optional on the engine, required on the consumer, inside `platform.base`* —
   the shape the PR first took, superseded before merge: a member optional to implement but required
   to call cannot be reasoned about from either side, and it is discovered by failure, because the
@@ -4581,7 +4588,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   comb and a `#platform-changes` announcement to land something less capable. *Not adding the method
   and shipping only the create-on-read fix* — rejected: the fix removes the cost of probing but not
   the need to guess; a consumer whose file names are minted on other machines
-  (`decisionLedger/<machineId>`) cannot guess them at all. *Enumerate the project root and filter
+  (`byMachine/<document>/<machineId>.json`) cannot guess them at all. *Enumerate the project root and filter
   afterwards* — rejected: project directories hold thousands of files, and returning `Settings.xml`
   and every book file to an extension asking about its own data leaks the project layout. *A
   `dataQualifierPrefix` narrowing parameter on the scope* — dropped before shipping: it saved a
@@ -4591,7 +4598,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `undefined` for an absent document* — deferred: the TS type permits it, but `""` is what every
   caller was written against; telling absent from empty is a separate contract change.
 - **Consequences:** extensions can drop hand-maintained index documents and their self-healing
-  repair logic (the Checking Assistant carries two such indexes; `platform-scripture` stores
+  repair logic (the Checking Assistant carries two: the `machines.json` list behind its per-machine
+  documents, and the index of its shared gloss books; `platform-scripture` stores
   `deniedResultsList` as one shared read-modify-write blob) — with one caveat: nothing notifies a
   consumer that a *new* qualifier has appeared (another machine's file arriving via Send/Receive),
   since `subscribeExtensionData` needs a name and no subscription covers the set, so a consumer that
@@ -4603,9 +4611,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   it used to be backslashed; it had no callers. A PDP over a store that cannot enumerate simply does
   not advertise the interface. The method takes no Send/Receive write scope: it is a read. No
   `platform.base` type changed in either direction, so nothing breaks for existing engines or
-  consumers.
-- **Source:** PT-4527;
-  PR #2786 and its review. The `list*`-vs-`get*` naming rule it applies is already in
+  consumers. Extension data written to a resource before (5) sits as loose files beside the
+  archives and is no longer read.
+- **Source:** PT-4527; PR #2786 and its review. The `list*`-vs-`get*` naming rule it applies is already in
   `Paranext-Core-Patterns.md` ("Naming rule (read first)"); the own-`projectInterface` shape is
   promoted there as "A capability not every PDP can serve is its own `projectInterface`".
 
