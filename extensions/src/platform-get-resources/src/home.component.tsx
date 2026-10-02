@@ -196,9 +196,9 @@ export type HomeProps = {
   /** Whether a send/receive operation is in progress. */
   isSendReceiveInProgress?: boolean;
   /**
-   * Normalized (upper-cased) IDs of the projects with local changes not yet sent, as returned by
-   * `paratextBibleSendReceive.getUnsyncedChanges`. Listed projects are marked and offer Sync
-   * first.
+   * Normalized (upper-cased) IDs of the projects with changes to send or receive, the union of the
+   * two sets `paratextBibleSendReceive.getUnsyncedChanges` returns. Listed projects are marked and
+   * offer Sync first.
    */
   unsyncedProjectIds?: readonly string[];
   /** Whether loading local projects is in progress. */

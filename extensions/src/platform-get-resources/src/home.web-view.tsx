@@ -15,6 +15,7 @@ import {
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.component';
+import { toUnsyncedProjectIds } from './home-unsynced.util';
 import { useLocalProjects } from './use-local-projects.hook';
 
 const defaultInterfaceLanguages: string[] = ['en'];
@@ -183,7 +184,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
             return await papi.commands.sendCommand('paratextBibleSendReceive.getUnsyncedChanges');
           } catch (e) {
             logger.warn(
-              `Home web view could not read the projects with unsent changes: ${getErrorMessage(e)}`,
+              `Home web view could not read the projects with unsynced changes: ${getErrorMessage(e)}`,
             );
             return undefined;
           }
@@ -191,21 +192,16 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
         (result) => result !== undefined || !isMounted.current,
         { maxAttempts: SEND_RECEIVE_ATTEMPTS, delayMs: SEND_RECEIVE_RETRY_MS },
       );
-      if (
-        !isMounted.current ||
-        didReceiveUnsyncedEventRef.current ||
-        !Array.isArray(snapshot?.toSend)
-      )
-        return;
-      setUnsyncedProjectIds(snapshot.toSend.map((id) => id.toUpperCase()));
+      if (!isMounted.current || didReceiveUnsyncedEventRef.current) return;
+      setUnsyncedProjectIds(toUnsyncedProjectIds(snapshot));
     })();
   }, []);
 
   useEvent(
     papi.network.getNetworkEvent('paratextBibleSendReceive.onUnsyncedChangesChanged'),
-    useCallback(({ toSend }: { toSend: string[] }) => {
+    useCallback((snapshot: unknown) => {
       didReceiveUnsyncedEventRef.current = true;
-      setUnsyncedProjectIds(Array.isArray(toSend) ? toSend.map((id) => id.toUpperCase()) : []);
+      setUnsyncedProjectIds(toUnsyncedProjectIds(snapshot));
     }, []),
   );
 
