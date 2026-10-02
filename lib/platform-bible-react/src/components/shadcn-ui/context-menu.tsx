@@ -107,6 +107,13 @@ function ContextMenuItem({
       className={cn(
         // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
         'pr-twp tw:group/context-menu-item tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:px-1.5 tw:py-1 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-inset:ps-7 tw:data-[variant=destructive]:text-destructive tw:data-[variant=destructive]:focus:bg-destructive/10 tw:data-[variant=destructive]:focus:text-destructive tw:dark:data-[variant=destructive]:focus:bg-destructive/20 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4 tw:focus:*:[svg]:text-accent-foreground tw:data-[variant=destructive]:*:[svg]:text-destructive',
+        // CUSTOM: Added tw:not-data-[variant=destructive]:focus:**:text-accent-foreground, which
+        // recolors every descendant of a highlighted non-destructive item to the accent foreground.
+        // A descendant that sets its own color, such as the muted Kbd keycaps in a
+        // ContextMenuShortcut, otherwise keeps its muted color on the accent background while the
+        // text around it turns accent-foreground. DropdownMenuItem and MenubarItem carry the same
+        // rule.
+        'tw:not-data-[variant=destructive]:focus:**:text-accent-foreground',
         className,
       )}
       {...props}

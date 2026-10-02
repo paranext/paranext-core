@@ -35,8 +35,9 @@ export type KeyboardShortcutEntry = {
   locations: string[];
   /**
    * The PAPI command the chord runs. Menu items that run it show the shortcut as a hint. Set it
-   * only if the chord works everywhere those items appear — not for a chord the main process
-   * handles regardless of focus, or one that works only in some editor views.
+   * only if the chord works everywhere those items appear: not for a chord the main process handles
+   * regardless of focus (unless that handler runs this same command), nor one that works only in
+   * some editor views.
    */
   command?: CommandNames;
 };

@@ -157,19 +157,35 @@ describe('NavigationHistoryButtons', () => {
     // key. jsdom's userAgent is non-Mac, so the Windows/Linux hints apply.
     await user.hover(backButton);
     // Radix Tooltip can render the content text more than once (a visually-hidden copy for screen
-    // readers), so assert on "at least one" rather than exactly one
-    const hints = await screen.findAllByText('Alt+→');
-    expect(hints.length).toBeGreaterThan(0);
-    expect(screen.queryByText('Alt+←')).toBeNull();
+    // readers), so assert on "at least one" rather than exactly one.
+    await screen.findByRole('tooltip');
+    const altKeycaps = screen.getAllByText('Alt');
+    expect(altKeycaps.length).toBeGreaterThan(0);
+    altKeycaps.forEach((keycap) => expect(keycap.tagName).toBe('KBD'));
+    const rightArrowKeycaps = screen.getAllByText('→');
+    expect(rightArrowKeycaps.length).toBeGreaterThan(0);
+    rightArrowKeycaps.forEach((keycap) => expect(keycap.tagName).toBe('KBD'));
+    altKeycaps.forEach((keycap) =>
+      expect(keycap.closest('[data-slot="kbd-group"]')?.textContent).toBe('Alt+→'),
+    );
+    expect(screen.queryByText('←')).toBeNull();
   });
 
   test('LTR back tooltip shows the unswapped shortcut hint', async () => {
     const user = userEvent.setup();
     render(<NavigationHistoryButtons {...defaultProps} />);
     await user.hover(screen.getByTestId('navigation-history-back-button'));
-    const hints = await screen.findAllByText('Alt+←');
-    expect(hints.length).toBeGreaterThan(0);
-    expect(screen.queryByText('Alt+→')).toBeNull();
+    await screen.findByRole('tooltip');
+    const altKeycaps = screen.getAllByText('Alt');
+    expect(altKeycaps.length).toBeGreaterThan(0);
+    altKeycaps.forEach((keycap) => expect(keycap.tagName).toBe('KBD'));
+    const leftArrowKeycaps = screen.getAllByText('←');
+    expect(leftArrowKeycaps.length).toBeGreaterThan(0);
+    leftArrowKeycaps.forEach((keycap) => expect(keycap.tagName).toBe('KBD'));
+    altKeycaps.forEach((keycap) =>
+      expect(keycap.closest('[data-slot="kbd-group"]')?.textContent).toBe('Alt+←'),
+    );
+    expect(screen.queryByText('→')).toBeNull();
   });
 
   test('hovering a disabled button still shows its tooltip (span wrapper is the trigger)', async () => {

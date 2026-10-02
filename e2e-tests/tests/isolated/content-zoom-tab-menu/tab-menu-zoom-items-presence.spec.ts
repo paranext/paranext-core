@@ -118,9 +118,7 @@ test.describe('Power mode', () => {
       await expect(mainPage.getByRole('menuitem', { name: 'Float tab' })).toBeVisible();
       await expect(mainPage.getByRole('menuitem', { name: 'Zoom in' })).toHaveCount(0);
       await expect(mainPage.getByRole('menuitem', { name: 'Zoom out' })).toHaveCount(0);
-      await expect(mainPage.getByRole('menuitem', { name: 'Reset zoom to default' })).toHaveCount(
-        0,
-      );
+      await expect(mainPage.getByRole('menuitem', { name: 'Zoom reset' })).toHaveCount(0);
       await mainPage.keyboard.press('Escape');
     });
   });

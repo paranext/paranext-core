@@ -1,6 +1,6 @@
 import { Button, type ButtonProps } from '@/components/shadcn-ui/button';
 import { ButtonGroup, ButtonGroupSeparator } from '@/components/shadcn-ui/button-group';
-import { Kbd } from '@/components/shadcn-ui/kbd';
+import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
   Tooltip,
   TooltipContent,
@@ -96,7 +96,7 @@ export function UndoRedoButtons({
               {showKeyboardShortcuts && (
                 <>
                   {' '}
-                  <Kbd>{isMac ? '⌘Z' : 'Ctrl+Z'}</Kbd>
+                  <ShortcutKeys hint={isMac ? '⌘Z' : 'Ctrl+Z'} />
                 </>
               )}
             </p>
@@ -125,7 +125,7 @@ export function UndoRedoButtons({
                 {showKeyboardShortcuts && (
                   <>
                     {' '}
-                    <Kbd>{isMac ? '⌘⇧Z' : 'Ctrl+Y'}</Kbd>
+                    <ShortcutKeys hint={isMac ? '⇧⌘Z' : 'Ctrl+Y'} />
                   </>
                 )}
               </p>

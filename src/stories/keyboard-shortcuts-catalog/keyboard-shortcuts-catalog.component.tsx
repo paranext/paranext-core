@@ -1,7 +1,5 @@
 import { Fragment, useMemo } from 'react';
 import {
-  Kbd,
-  KbdGroup,
   Table,
   TableBody,
   TableCell,
@@ -9,11 +7,12 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
 import type {
   KeyboardShortcutEntry,
   KeyboardShortcutKeys,
 } from '@shared/data/keyboard-shortcuts.model';
-import { type KeycapGroup, parseShortcutKeycaps } from './keyboard-shortcut-keycaps.util';
+import { parseShortcutKeycaps } from './keyboard-shortcut-keycaps.util';
 
 /** Localizable string keys for {@link KeyboardShortcutsCatalog} column headers. */
 export const KEYBOARD_SHORTCUTS_CATALOG_STRING_KEYS = Object.freeze([
@@ -85,24 +84,17 @@ function buildOsRows(keys: KeyboardShortcutKeys): OsKeyRow[] {
 }
 
 /**
- * Renders one key combination: a single key is a lone keycap, while a combination puts every key in
- * its own keycap inside a group. The Windows/Linux `+` is plain text between the keycaps rather
- * than part of one, and macOS symbols sit adjacent with nothing between them.
+ * Renders one key combination through the shared {@link ShortcutKeys} renderer.
+ *
+ * The wrapping span's muted, small text only reaches `ShortcutKeys`' unstyled `+` separator: each
+ * `Kbd` sets its own color and size explicitly, so this is the catalog page's own styling choice
+ * rather than something `ShortcutKeys` should hard-code for every consumer.
  */
-function KeycapCombination({ group }: { group: KeycapGroup }) {
-  const { keycaps, separator } = group;
-  if (keycaps.length === 1) return <Kbd>{keycaps[0]}</Kbd>;
+function KeycapCombination({ hint }: { hint: string }) {
   return (
-    <KbdGroup>
-      {keycaps.map((keycap, index) => (
-        <Fragment key={keycap}>
-          {index > 0 && separator && (
-            <span className="tw:text-xs tw:text-muted-foreground">{separator}</span>
-          )}
-          <Kbd>{keycap}</Kbd>
-        </Fragment>
-      ))}
-    </KbdGroup>
+    <span className="tw:text-xs tw:text-muted-foreground">
+      <ShortcutKeys hint={hint} />
+    </span>
   );
 }
 
@@ -113,10 +105,10 @@ function OsKeys({ keys }: { keys: string }) {
     return <span className="tw:text-xs tw:text-muted-foreground">{parsed.text}</span>;
   return (
     <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-1">
-      {parsed.groups.map((group, index) => (
-        <Fragment key={group.keycaps.join(group.separator)}>
+      {parsed.alternatives.map((alternative, index) => (
+        <Fragment key={alternative}>
           {index > 0 && <span className="tw:text-xs tw:text-muted-foreground">/</span>}
-          <KeycapCombination group={group} />
+          <KeycapCombination hint={alternative} />
         </Fragment>
       ))}
     </span>

@@ -1,5 +1,7 @@
 import { Meta } from '@storybook/addon-docs/blocks';
 import { Kbd, KbdGroup } from '@/components/shadcn-ui/kbd';
+import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
+import { isMacOs } from '@/utils/platform.util';
 import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
 
 <Meta title="Guidelines/Keyboard shortcuts" />
@@ -46,7 +48,7 @@ For rendering shortcuts in the UI (the `Kbd` component, parentheses vs. no paren
 
 ## Combining keys
 
-These rules describe the **plain-text string** form of a combination — what you write in a menu accelerator, a plain-text hint, or the `src/shared/data/keyboard-shortcuts.data.ts` catalog. When you render a shortcut in React UI, do **not** emit this joined string into a single `Kbd`; put each key in its own `Kbd` inside a `KbdGroup` (see [Detecting the platform](#detecting-the-platform) below). The per-OS symbol/word choice and modifier order still apply to each key either way.
+These rules describe the **plain-text string** form of a combination — what you write in a menu accelerator, a plain-text hint, or the `src/shared/data/keyboard-shortcuts.data.ts` catalog. When you render a shortcut in React UI, do **not** emit this joined string into a single `Kbd`; pass it to the `ShortcutKeys` component instead (see [Detecting the platform](#detecting-the-platform) below), which puts each key in its own `Kbd` inside a `KbdGroup` for you. The per-OS symbol/word choice and modifier order still apply to each key either way.
 
 - **macOS:** concatenate the symbols with no separator and no spaces. Order: Control, Option, Shift, Command, then the key. Example: `⌃⌥⇧⌘T`.
 - **Windows:** join with `+` and no spaces. Order: Ctrl, Shift, Alt, then the key. Example: `Ctrl+Shift+T`.
@@ -54,9 +56,18 @@ These rules describe the **plain-text string** form of a combination — what yo
 
 ## Detecting the platform
 
-For shortcuts rendered at runtime, branch on the user's OS rather than hardcoding one convention. Render **one `Kbd` per key inside a `KbdGroup`** — never a single `Kbd` wrapping the whole combination — matching [Keyboard shortcuts in tooltips](?path=/docs/guidelines-tooltips--docs#keyboard-shortcuts-in-tooltips).
+For shortcuts rendered at runtime, pick the hint for the user's OS, then render it with the `ShortcutKeys` component rather than building a `KbdGroup` by hand. `ShortcutKeys` does not detect the OS: it renders the spelling it is given, so the caller chooses it, typically with `isMacOs()` (Windows and Linux usually share a spelling; `isWindows()` tells them apart where they don't):
 
-The `KbdGroup` is only needed when a shortcut combines **more than one key**. A single-key shortcut — for example, `\` to open the marker menu — is just a naked `Kbd` with no group.
+```tsx
+import { isMacOs } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
+
+<ShortcutKeys hint={isMacOs() ? '⌘Z' : 'Ctrl+Z'} />
+```
+
+Pass it the same plain-text hint described above (`⌘Z`, `Ctrl+Shift+T`, …) and it renders **one `Kbd` per key inside a `KbdGroup`** — never a single `Kbd` wrapping the whole combination — matching [Keyboard shortcuts in tooltips](?path=/docs/guidelines-tooltips--docs#keyboard-shortcuts-in-tooltips). See [Basics/ShortcutKeys](?path=/docs/basics-shortcutkeys--docs) for the full set of examples (single key, Windows/Linux multi-key, macOS adjacent symbols, `Ctrl++`).
+
+The `KbdGroup` it renders is only present when a shortcut combines **more than one key**. A single-key shortcut — for example, `\` to open the marker menu — comes out as a naked `Kbd` with no group.
 
 The per-OS separator carries over from the string conventions above: **macOS** places its symbols adjacent with no separator, while **Windows** and **Linux** put a literal `+` between keys, rendered as a plain `<span>` between the `Kbd` boxes (per the [shadcn Kbd docs](https://ui.shadcn.com/docs/components/base/kbd)).
 
@@ -66,11 +77,23 @@ The per-OS separator carries over from the string conventions above: **macOS** p
     with the separator baked into the text. Individual keys can't be spaced or styled as keycaps.
   </ExampleBlock>
 
-  <ExampleBlock variant="prefer" preview={<KbdGroup><Kbd>Ctrl</Kbd><span>+</span><Kbd>Z</Kbd></KbdGroup>} code="<KbdGroup><Kbd>Ctrl</Kbd><span>+</span><Kbd>Z</Kbd></KbdGroup>">
-    One <code>Kbd</code> per key inside a <code>KbdGroup</code>: macOS symbols sit adjacent,
-    Windows/Linux get a <code>+</code> separator as a plain <code>span</code>.
+  <ExampleBlock variant="prefer" preview={<ShortcutKeys hint={isMacOs() ? '⌘Z' : 'Ctrl+Z'} />} code={"<ShortcutKeys hint={isMacOs() ? '⌘Z' : 'Ctrl+Z'} />"}>
+    Pick the spelling for the user's OS, then render it through <code>ShortcutKeys</code> instead
+    of hand-building the group. It splits the hint into one keycap per key and keeps the
+    separator the spelling uses.
   </ExampleBlock>
 </ExampleBlockGroup>
+
+<ExampleBlock
+  variant="neutral"
+  title="What ShortcutKeys renders"
+  preview={<KbdGroup><Kbd>Ctrl</Kbd><span>+</span><Kbd>Z</Kbd></KbdGroup>}
+  code="<KbdGroup><Kbd>Ctrl</Kbd><span>+</span><Kbd>Z</Kbd></KbdGroup>"
+>
+  This is the DOM <code>ShortcutKeys</code> produces for <code>hint="Ctrl+Z"</code>: one{' '}
+  <code>Kbd</code> per key inside a <code>KbdGroup</code>, with a plain <code>span</code> separator
+  on Windows/Linux. Build this by hand only where <code>ShortcutKeys</code> genuinely doesn't fit.
+</ExampleBlock>
 
 ## Why this matters
 
