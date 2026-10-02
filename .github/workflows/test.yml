@@ -376,8 +376,8 @@ jobs:
 
       # Best-effort housekeeping, one step for every leg so the failure policy cannot drift between
       # them: `continue-on-error` turns any list or delete failure into an annotation rather than a
-      # failed build, and `shell: bash` (Git Bash on windows) runs with `pipefail` so a failed list
-      # call is reported instead of silently feeding `xargs` nothing.
+      # failed build, and `shell: bash` (Git Bash on windows) runs with `-e` so a failed list call
+      # ends the step and is reported.
       #
       # Lists only this leg's artifact name, on the server, and pages through the results: the
       # unfiltered repo-wide list is big enough that GitHub sometimes returns it cut off
@@ -392,8 +392,11 @@ jobs:
       # An artifact records the branch its run was for, which on a pull_request run is the PR's
       # source branch (`head_ref`), not `ref_name` (`<number>/merge`). The branch name comes in
       # through `env` because a PR author chooses it, so it must never be pasted into the script.
-      # An empty `artifact_name` would list every artifact of the branch, this run's own included,
-      # so the step stops instead.
+      # Only artifacts from this run or older ones are deleted (run ids only increase), so an older
+      # run that reaches this step late cannot delete a newer run's upload; `<=` rather than `<`
+      # so a re-run attempt still clears its earlier attempt's artifact of the same name.
+      # An empty `artifact_name` would list the branch's artifacts of every name, so the step
+      # stops instead.
       - name: Delete previous artifacts created by this workflow
         continue-on-error: true
         timeout-minutes: 90
@@ -402,12 +405,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ARTIFACT_NAME: ${{ matrix.artifact_name }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           if [ -z "$ARTIFACT_NAME" ]; then
             echo "::error::No artifact_name in the matrix include list for this leg; skipping cleanup"
             exit 1
           fi
-          ids=$(gh api --paginate "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" --jq '.artifacts[] | select(.workflow_run.head_branch == env.BRANCH) | .id')
+          ids=$(gh api --paginate "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" --jq '.artifacts[] | select(.workflow_run.head_branch == env.BRANCH and .workflow_run.id <= (env.RUN_ID | tonumber)) | .id')
           for id in $ids; do
             gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id" \
               || echo "::warning::Could not delete artifact $id"
