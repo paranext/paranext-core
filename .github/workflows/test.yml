@@ -4,7 +4,7 @@ name: Test
 # run on record, so a slow service still passes, but a stall fails with its diagnostics. The job's
 # 180-minute cap only catches what the step caps miss; a job timeout cancels, skipping diagnostics.
 
-# Make sure these match with the matrix.os values below
+# Make sure these match with the matrix.os values below and its `include` entries
 env:
   OS_WINDOWS: windows-latest
   OS_MACOS: macos-15
@@ -37,7 +37,7 @@ jobs:
       # on Linux, so cancelling it because Windows was slow leaves the PR with no signal at all.
       fail-fast: false
       matrix:
-        # Make sure these match with the env values above
+        # Make sure these match with the env values above and the `include` entries below
         os: [windows-latest, macos-15, ubuntu-22.04]
         dotnet_version: [8.0.x]
         # The name each leg uploads its app under, and the name its cleanup step deletes by
@@ -382,16 +382,33 @@ jobs:
       # Lists only this leg's artifact name, on the server, and pages through the results: the
       # unfiltered repo-wide list is big enough that GitHub sometimes returns it cut off
       # ("unexpected end of JSON input"), and one unpaged page holds only the newest 30 artifacts.
+      # All ids are collected before any is deleted: deleting while later pages are still being
+      # fetched shifts the remaining rows onto pages already read, and those rows are never seen.
       # The API paths have no leading `/` because Git Bash rewrites such an argument into a Windows
       # file path before handing it to `gh`.
+      #
+      # An artifact records the branch its run was for, which on a pull_request run is the PR's
+      # source branch (`head_ref`), not `ref_name` (`<number>/merge`). The branch name comes in
+      # through `env` because a PR author chooses it, so it must never be pasted into the script.
+      # An empty `artifact_name` would list every artifact of the branch, this run's own included,
+      # so the step stops instead.
       - name: Delete previous artifacts created by this workflow
         continue-on-error: true
         timeout-minutes: 90
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_NAME: ${{ matrix.artifact_name }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
-          gh api --paginate "repos/${{ github.repository }}/actions/artifacts?name=${{ matrix.artifact_name }}&per_page=100" --jq '.artifacts[] | select(.workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/{}"
+          if [ -z "$ARTIFACT_NAME" ]; then
+            echo "::error::No artifact_name in the matrix include list for this leg; skipping cleanup"
+            exit 1
+          fi
+          ids=$(gh api --paginate "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" --jq '.artifacts[] | select(.workflow_run.head_branch == env.BRANCH) | .id')
+          for id in $ids; do
+            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+          done
 
       - name: Rename Windows exe to include GitHub Action Run ID
         if: ${{ matrix.os == env.OS_WINDOWS }}
