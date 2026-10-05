@@ -17,6 +17,7 @@ import {
   DirectionFromTabAdjacent,
   Layout,
   LayoutInfo,
+  PanelDirection,
   SavedTabInfo,
   TAB_TYPE_WEBVIEW,
   TabInfo,
@@ -981,6 +982,66 @@ function findTabGroupById(
 }
 
 /**
+ * Whether a tab group is in the docked area (rc-dock's dock box) rather than floating, in its own
+ * window, or maximized. rc-dock's root boxes are told apart by mode: only the dock box, and the
+ * boxes inside it, are laid out `horizontal` or `vertical`.
+ *
+ * @param tabGroup The tab group to check
+ * @returns `true` if the tab group is in the docked area, `false` otherwise
+ */
+function isInDockedArea(tabGroup: PanelData): boolean {
+  let rootBox = tabGroup.parent;
+  while (rootBox?.parent) rootBox = rootBox.parent;
+  return rootBox?.mode === 'horizontal' || rootBox?.mode === 'vertical';
+}
+
+/**
+ * Adds a new tab as a tab group of its own beside the tab group holding `targetTab`.
+ *
+ * If that tab group is not in the docked area (it floats, sits in its own window, or is maximized),
+ * the new tab group goes at the right edge of the docked area instead, whichever side was asked
+ * for. rc-dock would otherwise wrap both groups in a new box inside the floating, windowed or
+ * maximized layer. Those layers draw only the tab groups directly inside them, so both groups would
+ * disappear while their tabs stayed open.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tab The new tab to add
+ * @param targetTab The tab to place the new tab beside. If it is not a tab in a tab group, the new
+ *   tab is placed against the docked area as a whole
+ * @param direction The side of the target's tab group to place the new tab on
+ */
+function addTabAsPanel(
+  dockLayout: DockLayout,
+  tab: RCDockTabInfo,
+  targetTab: PanelData | TabData | BoxData | undefined,
+  direction: PanelDirection,
+): void {
+  const targetTabGroup =
+    isTab(targetTab) && isPanel(targetTab.parent) ? targetTab.parent : undefined;
+
+  if (!targetTabGroup) {
+    dockLayout.dockMove(
+      tab,
+      // Find the first thing (the dock box) and add the tab to it
+      dockLayout.find(() => true) ??
+        // Null required by the external API
+        // eslint-disable-next-line no-null/no-null
+        null,
+      direction,
+    );
+    return;
+  }
+
+  if (!isInDockedArea(targetTabGroup)) {
+    dockLayout.dockMove(tab, dockLayout.getLayout().dockbox, 'right');
+    return;
+  }
+
+  dockLayout.dockMove(tab, targetTabGroup, direction);
+}
+
+/**
  * Add or update a tab in the layout
  *
  * @param savedTabInfo Info for tab to add or update
@@ -1111,16 +1172,10 @@ export function addTabToDock(
       // Didn't ask for a specific tab, so just get the previous tab and go from there
       else targetTab = findPreviousTab(dockLayout);
 
-      dockLayout.dockMove(
+      addTabAsPanel(
+        dockLayout,
         tab,
-        // Add to the parent of the found tab if we found a tab. Assert the more specific type.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        (targetTab?.parent as PanelData) ??
-          // Otherwise find the first thing (the dock box) and add the tab to it
-          dockLayout.find(() => true) ??
-          // Null required by the external API
-          // eslint-disable-next-line no-null/no-null
-          null,
+        targetTab,
         // Defaults are added in `layoutDefaults`.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         updatedLayout.direction!,
