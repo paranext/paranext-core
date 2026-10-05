@@ -430,6 +430,7 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
         'a null and a primitive child',
         {
           dockbox: { mode: 'horizontal', children: [dockedGroup] },
+          // A null child is part of the malformed input under test
           // eslint-disable-next-line no-null/no-null
           floatbox: { mode: 'float', children: [null, 5, boxWithRescuedGroup] },
         },
