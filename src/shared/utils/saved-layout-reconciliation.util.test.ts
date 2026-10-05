@@ -415,6 +415,61 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
     expect(layout).toEqual(original);
   });
 
+  describe('with malformed nodes beside a box in the floating layer', () => {
+    const dockedGroup = { tabs: [tab('docked')] };
+    const rescuedGroup = { tabs: [tab('rescued')] };
+    const boxWithRescuedGroup = { mode: 'horizontal', children: [rescuedGroup] };
+
+    test.each<[string, LayoutInfo, LayoutInfo]>([
+      [
+        'no dockbox',
+        { floatbox: { mode: 'float', children: [boxWithRescuedGroup] } },
+        { dockbox: { mode: 'horizontal', children: [rescuedGroup] } },
+      ],
+      [
+        'a null and a primitive child',
+        {
+          dockbox: { mode: 'horizontal', children: [dockedGroup] },
+          // eslint-disable-next-line no-null/no-null
+          floatbox: { mode: 'float', children: [null, 5, boxWithRescuedGroup] },
+        },
+        { dockbox: { mode: 'horizontal', children: [dockedGroup, rescuedGroup] } },
+      ],
+      [
+        'a box child whose children is not an array',
+        {
+          dockbox: { mode: 'horizontal', children: [dockedGroup] },
+          floatbox: {
+            mode: 'float',
+            children: [
+              { mode: 'horizontal', children: 'not an array' },
+              boxWithRescuedGroup,
+              { tabs: [tab('floating')], x: 1, y: 2, w: 300, h: 200 },
+            ],
+          },
+        },
+        {
+          dockbox: { mode: 'horizontal', children: [dockedGroup, rescuedGroup] },
+          floatbox: {
+            mode: 'float',
+            children: [{ tabs: [tab('floating')], x: 1, y: 2, w: 300, h: 200 }],
+          },
+        },
+      ],
+      [
+        'a dockbox that is an array',
+        {
+          dockbox: [dockedGroup],
+          floatbox: { mode: 'float', children: [boxWithRescuedGroup] },
+        },
+        // The array is neither a panel nor a box, so it is dropped from the new horizontal dock box
+        { dockbox: { mode: 'horizontal', children: [rescuedGroup] } },
+      ],
+    ])('does not throw and returns a usable layout for %s', (_name, layout, expected) => {
+      expect(reconcileSavedLayout(layout)).toEqual(expected);
+    });
+  });
+
   test('leaves tab groups directly in the windowed and maximized layers where they are', () => {
     const layout: LayoutInfo = {
       dockbox: { mode: 'horizontal', children: [{ tabs: [tab('project-a')] }] },
