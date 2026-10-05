@@ -312,7 +312,7 @@ describe('Text Collection per-resource zoom strings', () => {
   it('keeps the shipped English and Spanish values', () => {
     expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomIn%']).toBe('Zoom in');
     expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomOut%']).toBe('Zoom out');
-    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_resetZoom%']).toBe('Reset zoom');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_resetZoom%']).toBe('Zoom reset');
     expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomOptions%']).toBe(
       'Zoom options for {resourceName}',
     );

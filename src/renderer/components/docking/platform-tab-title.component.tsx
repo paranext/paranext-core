@@ -52,6 +52,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
 import {
   getErrorMessage,
   isLocalizeKey,
@@ -269,7 +270,11 @@ function renderTabMenuItems(
         }}
       >
         {item.label}
-        {item.shortcut && <ContextMenuShortcut>{item.shortcut}</ContextMenuShortcut>}
+        {item.shortcut && (
+          <ContextMenuShortcut>
+            <ShortcutKeys hint={item.shortcut} />
+          </ContextMenuShortcut>
+        )}
       </ContextMenuItem>
     );
   });

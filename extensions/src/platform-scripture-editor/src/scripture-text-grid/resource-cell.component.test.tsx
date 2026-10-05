@@ -598,7 +598,7 @@ describe('ResourceCell right-click menu', () => {
 const zoomMenuLabels = {
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
-  reset: 'Reset zoom',
+  reset: 'Zoom reset',
   options: 'Zoom options for {resourceName}',
 };
 
@@ -622,17 +622,17 @@ describe('ResourceCell zoom menu', () => {
       <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
     );
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom in' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Zoom in/ }));
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom out' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Zoom out/ }));
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    await user.click(screen.getByRole('menuitem', { name: 'Reset zoom' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Zoom reset/ }));
     expect(zoom.adjustZoom).toHaveBeenNthCalledWith(1, 'r1', 1);
     expect(zoom.adjustZoom).toHaveBeenNthCalledWith(2, 'r1', -1);
     expect(zoom.resetZoom).toHaveBeenCalledWith('r1');
   });
 
-  it('disables Zoom in and Reset zoom for a resource that follows a 300 % default', () => {
+  it('disables Zoom in and Zoom reset for a resource that follows a 300 % default', () => {
     // No level of its own, and the Tab content default zoom is at the top of the range.
     const zoom = makeZoom({ getZoom: () => 3, hasOwnLevel: () => false });
     setUsjResult(chapter, false);
@@ -640,32 +640,32 @@ describe('ResourceCell zoom menu', () => {
       <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
     );
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    expect(screen.getByRole('menuitem', { name: 'Zoom in' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Zoom in/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(screen.getByRole('menuitem', { name: 'Zoom out' })).not.toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Zoom out/ })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(screen.getByRole('menuitem', { name: 'Reset zoom' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Zoom reset/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
   });
 
-  it('disables Zoom out at 50 % and enables Reset zoom for a resource with its own level', () => {
+  it('disables Zoom out at 50 % and enables Zoom reset for a resource with its own level', () => {
     const zoom = makeZoom({ getZoom: () => 0.5, hasOwnLevel: () => true });
     setUsjResult(chapter, false);
     render(
       <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
     );
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    expect(screen.getByRole('menuitem', { name: 'Zoom out' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Zoom out/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(screen.getByRole('menuitem', { name: 'Reset zoom' })).not.toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Zoom reset/ })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );

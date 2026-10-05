@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   isMacOs,
-  Kbd,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
 import { Lock, LockOpen } from 'lucide-react';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 
@@ -225,7 +225,7 @@ export function LockToggleButtonView({
           <span className="tw:flex tw:items-center tw:gap-2">
             <span>{localize(localizedStrings, tooltipKey)}</span>
             {/* Hidden when disabled: the shortcut is a no-op while the button is disabled. */}
-            {!isDisabled && <Kbd>{shortcut.hint}</Kbd>}
+            {!isDisabled && <ShortcutKeys hint={shortcut.hint} />}
           </span>
         </TooltipContent>
       </Tooltip>
