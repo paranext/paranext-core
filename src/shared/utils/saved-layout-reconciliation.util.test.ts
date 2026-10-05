@@ -199,6 +199,237 @@ describe('reconcileSavedLayout', () => {
   });
 });
 
+describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
+  /** A saved tab group, the way rc-dock serializes one that is not floating */
+  function savedTabGroup(id: string, tabIds: string[]): Record<string, unknown> {
+    return {
+      id,
+      size: 200,
+      tabs: tabIds.map((tabId) => tab(tabId)),
+      group: 'card platform-bible',
+      activeId: tabIds[0],
+    };
+  }
+
+  /** The layout rc-dock saves after a panel was docked beside its only floating tab group */
+  function layoutWithBoxInFloatbox(): LayoutInfo {
+    // rc-dock wraps both groups in a box inside the floating layer, which draws only the tab
+    // groups directly inside it
+    return {
+      dockbox: {
+        id: '+1',
+        size: 200,
+        mode: 'horizontal',
+        children: [savedTabGroup('docked-group', ['project-a'])],
+      },
+      floatbox: {
+        id: '+2',
+        size: 1,
+        mode: 'float',
+        children: [
+          {
+            id: '+7',
+            size: 200,
+            mode: 'horizontal',
+            children: [
+              savedTabGroup('floating-group', ['project-f']),
+              savedTabGroup('+6', ['find']),
+            ],
+          },
+        ],
+      },
+      windowbox: { id: '+3', size: 1, mode: 'window', children: [] },
+      maxbox: { id: '+4', size: 1, mode: 'maximize', children: [] },
+    };
+  }
+
+  test('moves the tab groups of a box in the floating layer to the right edge of the dock box', () => {
+    expect(reconcileSavedLayout(layoutWithBoxInFloatbox())).toEqual({
+      dockbox: {
+        id: '+1',
+        size: 200,
+        mode: 'horizontal',
+        children: [
+          savedTabGroup('docked-group', ['project-a']),
+          savedTabGroup('floating-group', ['project-f']),
+          savedTabGroup('+6', ['find']),
+        ],
+      },
+    });
+  });
+
+  test('drops the floating position of a tab group it moves, but not of one still floating', () => {
+    const layout: LayoutInfo = {
+      dockbox: { mode: 'horizontal', children: [{ tabs: [tab('project-a')] }] },
+      floatbox: {
+        mode: 'float',
+        children: [
+          { tabs: [tab('notes')], x: 5, y: 6, z: 2, w: 300, h: 200 },
+          {
+            mode: 'horizontal',
+            children: [
+              { tabs: [tab('project-f')], x: 10, y: 20, z: 3, w: 400, h: 300 },
+              { tabs: [tab('find')] },
+            ],
+          },
+        ],
+      },
+    };
+
+    expect(reconcileSavedLayout(layout)).toEqual({
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          { tabs: [tab('project-a')] },
+          { tabs: [tab('project-f')] },
+          { tabs: [tab('find')] },
+        ],
+      },
+      floatbox: {
+        mode: 'float',
+        children: [{ tabs: [tab('notes')], x: 5, y: 6, z: 2, w: 300, h: 200 }],
+      },
+    });
+  });
+
+  test('moves tab groups from boxes nested at any depth, in layout order', () => {
+    const layout: LayoutInfo = {
+      dockbox: { mode: 'horizontal', children: [{ tabs: [tab('project-a')] }] },
+      floatbox: {
+        mode: 'float',
+        children: [
+          {
+            mode: 'vertical',
+            children: [
+              {
+                mode: 'horizontal',
+                children: [{ tabs: [tab('first')] }, { tabs: [tab('second')] }],
+              },
+              { tabs: [tab('third')] },
+            ],
+          },
+        ],
+      },
+    };
+
+    expect(reconcileSavedLayout(layout)).toEqual({
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          { tabs: [tab('project-a')] },
+          { tabs: [tab('first')] },
+          { tabs: [tab('second')] },
+          { tabs: [tab('third')] },
+        ],
+      },
+    });
+  });
+
+  test('puts a dock box laid out top to bottom beside the moved tab groups', () => {
+    const layout: LayoutInfo = {
+      dockbox: {
+        mode: 'vertical',
+        children: [{ tabs: [tab('upper')] }, { tabs: [tab('lower')] }],
+      },
+      floatbox: {
+        mode: 'float',
+        children: [
+          {
+            mode: 'horizontal',
+            children: [{ tabs: [tab('project-f')] }, { tabs: [tab('find')] }],
+          },
+        ],
+      },
+    };
+
+    expect(reconcileSavedLayout(layout)).toEqual({
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          { mode: 'vertical', children: [{ tabs: [tab('upper')] }, { tabs: [tab('lower')] }] },
+          { tabs: [tab('project-f')] },
+          { tabs: [tab('find')] },
+        ],
+      },
+    });
+  });
+
+  test.each([
+    ['windowbox', 'window'],
+    ['maxbox', 'maximize'],
+  ])('moves the tab groups of a box in the %s too', (key, mode) => {
+    const layout: LayoutInfo = {
+      dockbox: { mode: 'horizontal', children: [{ tabs: [tab('project-a')] }] },
+      [key]: {
+        mode,
+        children: [
+          {
+            mode: 'horizontal',
+            children: [{ tabs: [tab('project-f')] }, { tabs: [tab('find')] }],
+          },
+        ],
+      },
+    };
+
+    expect(reconcileSavedLayout(layout)).toEqual({
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          { tabs: [tab('project-a')] },
+          { tabs: [tab('project-f')] },
+          { tabs: [tab('find')] },
+        ],
+      },
+    });
+  });
+
+  test('keeps the docked copy when a moved tab group repeats a docked tab', () => {
+    const layout: LayoutInfo = {
+      dockbox: { mode: 'horizontal', children: [{ tabs: [tab('project-a'), tab('find')] }] },
+      floatbox: {
+        mode: 'float',
+        children: [
+          {
+            mode: 'horizontal',
+            children: [{ tabs: [tab('project-f')] }, { tabs: [tab('find')], activeId: 'find' }],
+          },
+        ],
+      },
+    };
+
+    expect(reconcileSavedLayout(layout)).toEqual({
+      dockbox: {
+        mode: 'horizontal',
+        children: [{ tabs: [tab('project-a'), tab('find')] }, { tabs: [tab('project-f')] }],
+      },
+    });
+  });
+
+  test('is idempotent and does not mutate its input', () => {
+    const layout = layoutWithBoxInFloatbox();
+    const original = JSON.parse(JSON.stringify(layout));
+
+    const once = reconcileSavedLayout(layout);
+
+    expect(reconcileSavedLayout(once)).toEqual(once);
+    expect(layout).toEqual(original);
+  });
+
+  test('leaves tab groups directly in the windowed and maximized layers where they are', () => {
+    const layout: LayoutInfo = {
+      dockbox: { mode: 'horizontal', children: [{ tabs: [tab('project-a')] }] },
+      windowbox: {
+        mode: 'window',
+        children: [{ tabs: [tab('popped-out')], x: 1, y: 2, w: 300, h: 200 }],
+      },
+      maxbox: { mode: 'maximize', children: [{ tabs: [tab('big')] }] },
+    };
+    const original = JSON.parse(JSON.stringify(layout));
+
+    expect(reconcileSavedLayout(layout)).toEqual(original);
+  });
+});
+
 describe('savedLayoutHasViewableTabs', () => {
   test('sees a docked tab', () => {
     expect(
