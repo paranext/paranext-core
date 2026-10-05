@@ -995,14 +995,95 @@ function isInDockedArea(tabGroup: PanelData): boolean {
   return rootBox?.mode === 'horizontal' || rootBox?.mode === 'vertical';
 }
 
+/** A panel direction that places a tab group against one side of another */
+type PanelSideDirection = 'left' | 'right' | 'top' | 'bottom';
+
 /**
- * Adds a new tab as a tab group of its own beside the tab group holding `targetTab`.
+ * Whether a panel direction places the new tab group against one side of the target's tab group, as
+ * opposed to the tab-position and state directions rc-dock also accepts
+ */
+function isPanelSideDirection(direction: PanelDirection): direction is PanelSideDirection {
+  return (
+    direction === 'left' || direction === 'right' || direction === 'top' || direction === 'bottom'
+  );
+}
+
+/** The rc-dock box mode that lays tab groups out along `direction`'s axis */
+function getModeAlong(direction: PanelSideDirection): 'horizontal' | 'vertical' {
+  return direction === 'left' || direction === 'right' ? 'horizontal' : 'vertical';
+}
+
+/**
+ * The tab group in `branch` that touches the edge `branch` shares with whatever lies before it in
+ * `direction`, which is the group a new tab group arriving from that side would sit against.
  *
- * If that tab group is not in the docked area (it floats, sits in its own window, or is maximized),
- * the new tab group goes at the right edge of the docked area instead, whichever side was asked
- * for. rc-dock would otherwise wrap both groups in a new box inside the floating, windowed or
- * maximized layer. Those layers draw only the tab groups directly inside them, so both groups would
- * disappear while their tabs stayed open.
+ * In a box laid out along `direction`'s axis only the nearest child touches that edge. In a box
+ * laid out across it every child does, and the first one is used, since rc-dock's layout data
+ * carries no geometry to choose a better-aligned one.
+ *
+ * @param branch The tab group or box lying in `direction` from the starting tab group
+ * @param direction The direction travelled from the starting tab group to reach `branch`
+ * @returns The tab group touching that edge, or `undefined` if `branch` holds no tab group
+ */
+function getTabGroupFacing(
+  branch: PanelData | BoxData,
+  direction: PanelSideDirection,
+): PanelData | undefined {
+  if (isPanel(branch)) return branch;
+  if (branch.children.length === 0) return undefined;
+  const isNearestChildLast =
+    branch.mode === getModeAlong(direction) && (direction === 'left' || direction === 'top');
+  return getTabGroupFacing(
+    branch.children[isNearestChildLast ? branch.children.length - 1 : 0],
+    direction,
+  );
+}
+
+/**
+ * Finds the docked tab group directly on the `direction` side of a docked tab group: the group a
+ * new tab group created on that side would sit against.
+ *
+ * Walks up from `tabGroup` to the nearest box laid out along `direction`'s axis in which the branch
+ * holding `tabGroup` has a sibling on that side. Boxes laid out across the axis, and boxes in which
+ * that branch is already the last one on that side, are passed through. Within the sibling,
+ * {@link getTabGroupFacing} picks the group touching the shared edge.
+ *
+ * @param tabGroup The docked tab group to look from
+ * @param direction The side to look on
+ * @returns The adjacent tab group, or `undefined` if `tabGroup` is at that edge of the docked area
+ */
+function findAdjacentTabGroup(
+  tabGroup: PanelData,
+  direction: PanelSideDirection,
+): PanelData | undefined {
+  const mode = getModeAlong(direction);
+  const step = direction === 'right' || direction === 'bottom' ? 1 : -1;
+  let branch: PanelData | BoxData = tabGroup;
+  let box = tabGroup.parent;
+  while (box) {
+    const branchIndex = box.children.indexOf(branch);
+    if (box.mode === mode && branchIndex >= 0) {
+      const sibling = box.children[branchIndex + step];
+      if (sibling) return getTabGroupFacing(sibling, direction);
+    }
+    branch = box;
+    box = box.parent;
+  }
+  return undefined;
+}
+
+/**
+ * Adds a new tab beside the tab group holding `targetTab`: into the tab group already on that side
+ * if there is one it can join, otherwise as a tab group of its own.
+ *
+ * - A target tab group that is not in the docked area (it floats, sits in its own window, or is
+ *   maximized) gets the new tab group at the right edge of the docked area instead, whichever side
+ *   was asked for. rc-dock would otherwise wrap both groups in a new box inside the floating,
+ *   windowed or maximized layer. Those layers draw only the tab groups directly inside them, so
+ *   both groups would disappear while their tabs stayed open.
+ * - A docked target whose `direction` side already holds a tab group (see
+ *   {@link findAdjacentTabGroup}) gets the new tab added to that group as its active tab, rather
+ *   than a new group squeezed in between.
  *
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
@@ -1036,6 +1117,21 @@ function addTabAsPanel(
   if (!isInDockedArea(targetTabGroup)) {
     dockLayout.dockMove(tab, dockLayout.getLayout().dockbox, 'right');
     return;
+  }
+
+  if (isPanelSideDirection(direction)) {
+    const adjacentTabGroup = findAdjacentTabGroup(targetTabGroup, direction);
+    // A tab group with no tabs is the stand-in rc-dock keeps where a maximized group will be
+    // restored, which would drop a tab added to it. A tab group of another rc-dock group cannot
+    // hold this tab: rc-dock refuses that drop too.
+    if (
+      adjacentTabGroup &&
+      adjacentTabGroup.tabs.length > 0 &&
+      adjacentTabGroup.group === tab.group
+    ) {
+      dockLayout.dockMove(tab, adjacentTabGroup, 'middle');
+      return;
+    }
   }
 
   dockLayout.dockMove(tab, targetTabGroup, direction);

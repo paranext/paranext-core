@@ -7,6 +7,7 @@ import type { Layout, PanelDirection, SavedTabInfo } from '@shared/models/dockin
 import { TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
 import { resetActivationLatchForTesting } from '@renderer/services/window-activation.util';
 import { isPanel, isTab } from './docking-framework-internal.model';
+import { HEADLESS_GROUP } from './dock-tab-group.util';
 import { addTabToDock, loadTab } from './platform-dock-layout-storage.util';
 
 // Rendering a real dock renders the app's own tab titles, whose hooks and services reach PAPI. These
@@ -272,6 +273,186 @@ describe('opening a tab as a panel beside a tab group that is not docked', () =>
     expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
       mode: 'horizontal',
       children: [{ mode: 'vertical', children: [['project-a'], ['notes']] }, ['find']],
+    });
+  });
+});
+
+describe('opening a tab as a panel beside a docked tab group', () => {
+  it('adds the tab to the tab group already on that side, as its active tab', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [tabGroup('target-group', ['project-a']), tabGroup('right-group', ['notes'])],
+      },
+    });
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'right', targetTabId: 'project-a' });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['project-a'], ['notes', 'find']],
+    });
+    expect(tabGroupOf(dockLayout, 'find').id).toBe('right-group');
+    expect(tabGroupOf(dockLayout, 'find').activeId).toBe('find');
+  });
+
+  it('adds a new tab group on that side when the target is already at that edge', () => {
+    const dockLayout = renderDock({
+      dockbox: { mode: 'horizontal', children: [tabGroup('only-group', ['project-a'])] },
+    });
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'right', targetTabId: 'project-a' });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['project-a'], ['find']],
+    });
+  });
+
+  it.each<[PanelDirection, string, string[][]]>([
+    ['bottom', 'project-a', [['project-a'], ['notes', 'find']]],
+    ['top', 'notes', [['project-a', 'find'], ['notes']]],
+  ])('joins the tab group %s of the target in a column', (direction, targetTabId, expected) => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'vertical',
+        children: [tabGroup('upper-group', ['project-a']), tabGroup('lower-group', ['notes'])],
+      },
+    });
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction, targetTabId });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'vertical',
+      children: expected,
+    });
+  });
+
+  it('adds a new tab group below a target with nothing below it', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [tabGroup('left-group', ['project-a']), tabGroup('right-group', ['notes'])],
+      },
+    });
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'bottom', targetTabId: 'project-a' });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [{ mode: 'vertical', children: [['project-a'], ['find']] }, ['notes']],
+    });
+  });
+
+  it('looks past the column the target is in to the tab group beyond it', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          {
+            mode: 'vertical',
+            children: [tabGroup('upper-left', ['project-a']), tabGroup('lower-left', ['notes'])],
+          },
+          tabGroup('side-group', ['project-b']),
+        ],
+      },
+    });
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'right', targetTabId: 'project-a' });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [{ mode: 'vertical', children: [['project-a'], ['notes']] }, ['project-b', 'find']],
+    });
+  });
+
+  it('joins the top tab group of a column it reaches from the side', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          tabGroup('left-group', ['project-a']),
+          {
+            mode: 'vertical',
+            children: [tabGroup('upper-right', ['notes']), tabGroup('lower-right', ['project-b'])],
+          },
+        ],
+      },
+    });
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'right', targetTabId: 'project-a' });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['project-a'], { mode: 'vertical', children: [['notes', 'find'], ['project-b']] }],
+    });
+  });
+
+  it('joins the nearest tab group of a row it reaches along the row', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          {
+            mode: 'horizontal',
+            children: [tabGroup('far-group', ['notes']), tabGroup('near-group', ['project-b'])],
+          },
+          {
+            mode: 'vertical',
+            children: [tabGroup('target-group', ['project-a']), tabGroup('below-group', ['other'])],
+          },
+        ],
+      },
+    });
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'left', targetTabId: 'project-a' });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [
+        { mode: 'horizontal', children: [['notes'], ['project-b', 'find']] },
+        { mode: 'vertical', children: [['project-a'], ['other']] },
+      ],
+    });
+  });
+
+  it('adds a new tab group rather than joining one of another rc-dock group', () => {
+    // A Simple-mode fixed column carries its column's group, and its tab bar may be hidden. rc-dock
+    // itself refuses to drop a tab into a tab group of another group
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          tabGroup('target-group', ['project-a']),
+          tabGroup('column-group', ['notes'], { group: HEADLESS_GROUP }),
+        ],
+      },
+    });
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'right', targetTabId: 'project-a' });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['project-a'], ['find'], ['notes']],
+    });
+  });
+
+  it('adds a new tab group rather than joining the stand-in for a maximized tab group', () => {
+    // While a group is maximized, rc-dock keeps an empty stand-in in its place and later restores the
+    // group over it, so a tab added to the stand-in would be lost
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [tabGroup('target-group', ['project-a']), tabGroup('right-group', ['notes'])],
+      },
+    });
+    maximize(dockLayout, 'right-group');
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'right', targetTabId: 'project-a' });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['project-a'], ['find'], ['notes']],
     });
   });
 });
