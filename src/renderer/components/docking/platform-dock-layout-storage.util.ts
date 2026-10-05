@@ -17,6 +17,7 @@ import {
   DirectionFromTabAdjacent,
   Layout,
   LayoutInfo,
+  PanelDirection,
   SavedTabInfo,
   TAB_TYPE_WEBVIEW,
   TabInfo,
@@ -26,6 +27,7 @@ import {
 } from '@shared/models/docking-framework.model';
 import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
 import { getErrorMessage } from 'platform-bible-utils';
+import { readDirection } from 'platform-bible-react/experimental';
 
 import { DIALOGS } from '@renderer/components/dialogs';
 import {
@@ -981,6 +983,196 @@ function findTabGroupById(
 }
 
 /**
+ * Whether a tab group is in the docked area (rc-dock's dock box) rather than floating, in its own
+ * window, or maximized. Of rc-dock's root boxes, only the dock box is laid out `horizontal` or
+ * `vertical`; boxes nested in the other root boxes can be either, so the check walks up to the root
+ * and reads its mode.
+ *
+ * @param tabGroup The tab group to check
+ * @returns `true` if the tab group is in the docked area, `false` otherwise
+ */
+function isInDockedArea(tabGroup: PanelData): boolean {
+  let rootBox = tabGroup.parent;
+  while (rootBox?.parent) rootBox = rootBox.parent;
+  return rootBox?.mode === 'horizontal' || rootBox?.mode === 'vertical';
+}
+
+/** A panel direction that places a tab group against one side of another */
+type PanelSideDirection = 'left' | 'right' | 'top' | 'bottom';
+
+/**
+ * Whether a panel direction places the new tab group against one side of the target's tab group, as
+ * opposed to the tab-position and state directions rc-dock also accepts
+ */
+function isPanelSideDirection(direction: PanelDirection): direction is PanelSideDirection {
+  return (
+    direction === 'left' || direction === 'right' || direction === 'top' || direction === 'bottom'
+  );
+}
+
+/** The rc-dock box mode that lays tab groups out along `direction`'s axis */
+function getModeAlong(direction: PanelSideDirection): 'horizontal' | 'vertical' {
+  return direction === 'left' || direction === 'right' ? 'horizontal' : 'vertical';
+}
+
+/**
+ * The tab group in `branch` that touches the edge `branch` shares with whatever lies before it in
+ * `direction`, which is the group a new tab group arriving from that side would sit against.
+ *
+ * In a box laid out along `direction`'s axis only the nearest child touches that edge. In a box
+ * laid out across it every child does, and the first one is used, since rc-dock's layout data
+ * carries no geometry to choose a better-aligned one.
+ *
+ * @param branch The tab group or box lying in `direction` from the starting tab group
+ * @param direction The direction travelled from the starting tab group to reach `branch`
+ * @returns The tab group touching that edge, or `undefined` if `branch` holds no tab group
+ */
+function getTabGroupFacing(
+  branch: PanelData | BoxData,
+  direction: PanelSideDirection,
+): PanelData | undefined {
+  if (isPanel(branch)) return branch;
+  if (branch.children.length === 0) return undefined;
+  const isNearestChildLast =
+    branch.mode === getModeAlong(direction) && (direction === 'left' || direction === 'top');
+  return getTabGroupFacing(
+    branch.children[isNearestChildLast ? branch.children.length - 1 : 0],
+    direction,
+  );
+}
+
+/**
+ * Finds the docked tab group directly on the `direction` side of a docked tab group: the group a
+ * new tab group created on that side would sit against.
+ *
+ * Walks up from `tabGroup` to the nearest box laid out along `direction`'s axis in which the branch
+ * holding `tabGroup` has a sibling on that side. Boxes laid out across the axis, and boxes in which
+ * that branch is already the last one on that side, are passed through. Within the sibling,
+ * {@link getTabGroupFacing} picks the group touching the shared edge.
+ *
+ * @param tabGroup The docked tab group to look from
+ * @param direction The side to look on
+ * @returns The adjacent tab group, or `undefined` if `tabGroup` is at that edge of the docked area
+ */
+function findAdjacentTabGroup(
+  tabGroup: PanelData,
+  direction: PanelSideDirection,
+): PanelData | undefined {
+  const mode = getModeAlong(direction);
+  const step = direction === 'right' || direction === 'bottom' ? 1 : -1;
+  let branch: PanelData | BoxData = tabGroup;
+  let box = tabGroup.parent;
+  while (box) {
+    const branchIndex = box.children.indexOf(branch);
+    if (box.mode === mode && branchIndex >= 0) {
+      const sibling = box.children[branchIndex + step];
+      if (sibling) return getTabGroupFacing(sibling, direction);
+    }
+    branch = box;
+    box = box.parent;
+  }
+  return undefined;
+}
+
+/**
+ * Mirrors `left` and `right` in a right-to-left UI. rc-dock lays the dock out left to right
+ * whatever the UI direction, so a caller asking for a panel on the `right` (the reading-end side)
+ * means rc-dock's left in a right-to-left UI. That holds only while nothing sets `dir` or
+ * `direction: rtl` on the dock's ancestors: rc-dock's `.dock-hbox` is a plain flex row and would
+ * mirror under them, which would make this swap flip twice. If the dock is ever mirrored by CSS,
+ * remove the swap. `top`, `bottom` and the non-side directions pass through.
+ *
+ * @param direction The side a caller asked for, in reading order
+ * @returns The side to hand rc-dock
+ */
+function resolvePanelDirection(direction: PanelDirection): PanelDirection {
+  if (readDirection() !== 'rtl') return direction;
+  if (direction === 'right') return 'left';
+  if (direction === 'left') return 'right';
+  return direction;
+}
+
+/**
+ * Adds a new tab beside the tab group holding `targetTab`: into the tab group already on that side
+ * if there is one it can join, otherwise as a tab group of its own.
+ *
+ * - A target tab group that is not in the docked area (it floats, sits in its own window, or is
+ *   maximized) gets the new tab group at the reading-end edge of the docked area instead (right, or
+ *   left in a right-to-left UI), whichever side was asked for. rc-dock would otherwise wrap both
+ *   groups in a new box inside the floating, windowed or maximized layer. Those layers draw only
+ *   the tab groups directly inside them, so both groups would disappear while their tabs stayed
+ *   open.
+ * - A docked target whose `direction` side already holds a tab group (see
+ *   {@link findAdjacentTabGroup}) gets the new tab added to that group, rather than a new group
+ *   squeezed in between. The new tab is that group's active tab when `shouldBringToFront` is true;
+ *   otherwise the group keeps the tab it was showing.
+ * - `left` and `right` are mirrored in a right-to-left UI (see {@link resolvePanelDirection}).
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tab The new tab to add
+ * @param targetTab The tab to place the new tab beside. If it is not a tab in a tab group, the new
+ *   tab is placed against the docked area as a whole
+ * @param direction The side of the target's tab group to place the new tab on, in reading order
+ * @param shouldBringToFront Whether the new tab should become the active tab of the tab group it
+ *   joins. Has no effect when the new tab gets a tab group of its own
+ */
+function addTabAsPanel(
+  dockLayout: DockLayout,
+  tab: RCDockTabInfo,
+  targetTab: PanelData | TabData | BoxData | undefined,
+  direction: PanelDirection,
+  shouldBringToFront: boolean,
+): void {
+  const resolvedDirection = resolvePanelDirection(direction);
+  const targetTabGroup =
+    isTab(targetTab) && isPanel(targetTab.parent) ? targetTab.parent : undefined;
+
+  if (!targetTabGroup) {
+    dockLayout.dockMove(
+      tab,
+      // Find the first thing (the dock box) and add the tab to it
+      dockLayout.find(() => true) ??
+        // Null required by the external API
+        // eslint-disable-next-line no-null/no-null
+        null,
+      resolvedDirection,
+    );
+    return;
+  }
+
+  if (!isInDockedArea(targetTabGroup)) {
+    dockLayout.dockMove(tab, dockLayout.getLayout().dockbox, resolvePanelDirection('right'));
+    return;
+  }
+
+  if (isPanelSideDirection(resolvedDirection)) {
+    const adjacentTabGroup = findAdjacentTabGroup(targetTabGroup, resolvedDirection);
+    // A tab group with no tabs is the stand-in rc-dock keeps where a maximized group will be
+    // restored, which would drop a tab added to it. A tab group of another rc-dock group cannot
+    // hold this tab: rc-dock refuses that drop too.
+    if (
+      adjacentTabGroup &&
+      adjacentTabGroup.tabs.length > 0 &&
+      adjacentTabGroup.group === tab.group
+    ) {
+      const previousActiveTabId = adjacentTabGroup.activeId;
+      dockLayout.dockMove(tab, adjacentTabGroup, 'middle');
+      // rc-dock always makes the added tab the active one. A null tab asks `updateTab` to only
+      // activate the tab with the given id.
+      if (!shouldBringToFront && previousActiveTabId !== undefined) {
+        // Null required by the external API
+        // eslint-disable-next-line no-null/no-null
+        dockLayout.updateTab(previousActiveTabId, null, true);
+      }
+      return;
+    }
+  }
+
+  dockLayout.dockMove(tab, targetTabGroup, resolvedDirection);
+}
+
+/**
  * Add or update a tab in the layout
  *
  * @param savedTabInfo Info for tab to add or update
@@ -1111,19 +1303,14 @@ export function addTabToDock(
       // Didn't ask for a specific tab, so just get the previous tab and go from there
       else targetTab = findPreviousTab(dockLayout);
 
-      dockLayout.dockMove(
+      addTabAsPanel(
+        dockLayout,
         tab,
-        // Add to the parent of the found tab if we found a tab. Assert the more specific type.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        (targetTab?.parent as PanelData) ??
-          // Otherwise find the first thing (the dock box) and add the tab to it
-          dockLayout.find(() => true) ??
-          // Null required by the external API
-          // eslint-disable-next-line no-null/no-null
-          null,
+        targetTab,
         // Defaults are added in `layoutDefaults`.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         updatedLayout.direction!,
+        shouldBringToFront,
       );
       break;
 

@@ -234,9 +234,21 @@ export type PanelDirection =
   | 'active'
   | 'update';
 
-/** Information about a panel */
+/**
+ * Information about a panel: a tab opened beside the tab group holding `targetTabId`.
+ *
+ * When a tab group already exists on the `direction` side of the target's tab group, the tab is
+ * added to that group (becoming its active tab when the open brings it to front) instead of a new
+ * group being created. When the target's tab group is floating, maximized or in its own window, the
+ * tab opens as a new group at the edge of the dock area. `left` and `right` are mirrored in a
+ * right-to-left UI.
+ */
 interface PanelLayout {
   type: 'panel';
+  /**
+   * The side of the target's tab group to open on, in reading order: `right` is the reading-end
+   * side, which is the left in a right-to-left UI
+   */
   direction?: PanelDirection;
   /** If undefined, it will add in the `direction` relative to the previously added tab. */
   targetTabId?: string;

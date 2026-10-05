@@ -88,18 +88,91 @@ function emptiedBox(value: unknown): LayoutNode {
 }
 
 /**
- * Returns a copy of a saved layout with phantom content removed: duplicate tab ids (the first
+ * The root boxes whose children rc-dock draws only when they are tab groups: `FloatBox`,
+ * `WindowBox` and `MaxBox` each render a child only if it carries `tabs`, so a box among their
+ * children (and every tab inside it) is never shown
+ */
+const TAB_GROUP_ONLY_ROOT_BOX_KEYS = ['floatbox', 'windowbox', 'maxbox'] as const;
+
+/** Position fields a tab group uses only while it floats or sits in its own window */
+const FLOATING_POSITION_KEYS = ['x', 'y', 'z', 'w', 'h'] as const;
+
+/** Whether a node is a box (it has `children`) rather than a tab group (it has `tabs`) */
+function isBoxNode(value: unknown): boolean {
+  const node = asLayoutNode(value);
+  return !!node && !Array.isArray(node.tabs) && Array.isArray(node.children);
+}
+
+/**
+ * Every tab group inside a node, at any depth and in layout order, each copied without the position
+ * fields it would use only while floating
+ */
+function collectTabGroups(value: unknown): LayoutNode[] {
+  const node = asLayoutNode(value);
+  if (!node) return [];
+  if (Array.isArray(node.tabs)) {
+    const tabGroup: LayoutNode = { ...node };
+    FLOATING_POSITION_KEYS.forEach((key) => delete tabGroup[key]);
+    return [tabGroup];
+  }
+  return Array.isArray(node.children)
+    ? node.children.flatMap((child) => collectTabGroups(child))
+    : [];
+}
+
+/**
+ * Returns a shallow copy of a saved layout in which every tab group rc-dock would never draw (any
+ * inside a box among the children of `floatbox`, `windowbox` or `maxbox`) has been moved into
+ * `dockbox` as a tab group of its own at its end (right) edge, so the tabs in it can be reached
+ * again. The emptied boxes are removed from those root boxes. A `dockbox` laid out other than
+ * `horizontal` is placed beside the moved tab groups in a new horizontal `dockbox`, the way rc-dock
+ * itself docks a tab group at the edge of a vertical dock box. The input is never mutated.
+ */
+function moveHiddenTabGroupsIntoDockbox(layout: LayoutInfo): LayoutInfo {
+  const result: LayoutInfo = { ...layout };
+  const movedTabGroups: LayoutNode[] = [];
+  TAB_GROUP_ONLY_ROOT_BOX_KEYS.forEach((key) => {
+    const rootBox = asLayoutNode(result[key]);
+    if (!rootBox || !Array.isArray(rootBox.children) || !rootBox.children.some(isBoxNode)) return;
+    const keptChildren: unknown[] = [];
+    rootBox.children.forEach((child) => {
+      if (isBoxNode(child)) movedTabGroups.push(...collectTabGroups(child));
+      else keptChildren.push(child);
+    });
+    result[key] = { ...rootBox, children: keptChildren };
+  });
+  if (movedTabGroups.length === 0) return result;
+
+  const dockbox = asLayoutNode(result.dockbox);
+  if (dockbox?.mode === 'horizontal' && Array.isArray(dockbox.children)) {
+    result.dockbox = { ...dockbox, children: [...dockbox.children, ...movedTabGroups] };
+  } else {
+    result.dockbox = {
+      mode: 'horizontal',
+      children: dockbox ? [dockbox, ...movedTabGroups] : movedTabGroups,
+    };
+  }
+  return result;
+}
+
+/**
+ * Returns a copy of a saved layout with phantom content removed, and with content rc-dock would
+ * never draw moved to where it is drawn.
+ *
+ * First, every tab group inside a box nested in `floatbox`, `windowbox` or `maxbox` (whose children
+ * rc-dock draws only when they are tab groups) is moved into `dockbox` as a tab group of its own at
+ * its right edge, without its floating position. Then duplicate tab ids are removed (the first
  * occurrence wins, walking `dockbox` before the floating/maximized/windowed boxes so a duplicate
- * resolves in favor of the docked copy), tabs with no usable id, tabs not reachable through a
- * panel, and panels or boxes left empty by those removals. An emptied `dockbox` is kept (a layout
- * must have one); the other root boxes are removed entirely when emptied. A panel whose `activeId`
- * named one of the removed tabs is re-pointed at its first surviving tab, so no saved layout
- * carries an active-tab reference to a tab that is no longer in it.
+ * resolves in favor of the docked copy), along with tabs with no usable id, tabs not reachable
+ * through a panel, and panels or boxes left empty by those removals. An emptied `dockbox` is kept
+ * (a layout must have one); the other root boxes are removed entirely when emptied. A panel whose
+ * `activeId` named one of the removed tabs is re-pointed at its first surviving tab, so no saved
+ * layout carries an active-tab reference to a tab that is no longer in it.
  *
  * A layout with none of those problems round-trips unchanged. The input is never mutated.
  */
 export function reconcileSavedLayout(layout: LayoutInfo): LayoutInfo {
-  const result: LayoutInfo = { ...layout };
+  const result = moveHiddenTabGroupsIntoDockbox(layout);
   const seenTabIds = new Set<string>();
   ROOT_BOX_KEYS.forEach((key) => {
     if (!(key in result)) return;
