@@ -119,9 +119,14 @@ function renderDock(layout: LayoutData): DockLayout {
 }
 
 /** Opens a new tab the way a web view open does: added to the dock and brought to the front */
-function openPanel(dockLayout: DockLayout, tabId: string, layout: Layout): void {
+function openPanel(
+  dockLayout: DockLayout,
+  tabId: string,
+  layout: Layout,
+  shouldBringToFront = true,
+): void {
   act(() => {
-    addTabToDock({ id: tabId, tabType: TAB_TYPE_BUTTONS }, layout, true, dockLayout);
+    addTabToDock({ id: tabId, tabType: TAB_TYPE_BUTTONS }, layout, shouldBringToFront, dockLayout);
   });
 }
 
@@ -295,6 +300,28 @@ describe('opening a tab as a panel beside a docked tab group', () => {
     });
     expect(tabGroupOf(dockLayout, 'find').id).toBe('right-group');
     expect(tabGroupOf(dockLayout, 'find').activeId).toBe('find');
+  });
+
+  it('keeps the active tab of the tab group it joins when the new tab is not brought to front', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [tabGroup('target-group', ['project-a']), tabGroup('right-group', ['notes'])],
+      },
+    });
+
+    openPanel(
+      dockLayout,
+      'find',
+      { type: 'panel', direction: 'right', targetTabId: 'project-a' },
+      false,
+    );
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['project-a'], ['notes', 'find']],
+    });
+    expect(tabGroupOf(dockLayout, 'find').activeId).toBe('notes');
   });
 
   it('adds a new tab group on that side when the target is already at that edge', () => {

@@ -984,8 +984,9 @@ function findTabGroupById(
 
 /**
  * Whether a tab group is in the docked area (rc-dock's dock box) rather than floating, in its own
- * window, or maximized. rc-dock's root boxes are told apart by mode: only the dock box, and the
- * boxes inside it, are laid out `horizontal` or `vertical`.
+ * window, or maximized. Of rc-dock's root boxes, only the dock box is laid out `horizontal` or
+ * `vertical`; boxes nested in the other root boxes can be either, so the check walks up to the root
+ * and reads its mode.
  *
  * @param tabGroup The tab group to check
  * @returns `true` if the tab group is in the docked area, `false` otherwise
@@ -1076,8 +1077,10 @@ function findAdjacentTabGroup(
 /**
  * Mirrors `left` and `right` in a right-to-left UI. rc-dock lays the dock out left to right
  * whatever the UI direction, so a caller asking for a panel on the `right` (the reading-end side)
- * means rc-dock's left in a right-to-left UI. `top`, `bottom` and the non-side directions pass
- * through.
+ * means rc-dock's left in a right-to-left UI. That holds only while nothing sets `dir` or
+ * `direction: rtl` on the dock's ancestors: rc-dock's `.dock-hbox` is a plain flex row and would
+ * mirror under them, which would make this swap flip twice. If the dock is ever mirrored by CSS,
+ * remove the swap. `top`, `bottom` and the non-side directions pass through.
  *
  * @param direction The side a caller asked for, in reading order
  * @returns The side to hand rc-dock
@@ -1100,8 +1103,9 @@ function resolvePanelDirection(direction: PanelDirection): PanelDirection {
  *   the tab groups directly inside them, so both groups would disappear while their tabs stayed
  *   open.
  * - A docked target whose `direction` side already holds a tab group (see
- *   {@link findAdjacentTabGroup}) gets the new tab added to that group as its active tab, rather
- *   than a new group squeezed in between.
+ *   {@link findAdjacentTabGroup}) gets the new tab added to that group, rather than a new group
+ *   squeezed in between. The new tab is that group's active tab when `shouldBringToFront` is true;
+ *   otherwise the group keeps the tab it was showing.
  * - `left` and `right` are mirrored in a right-to-left UI (see {@link resolvePanelDirection}).
  *
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
@@ -1110,12 +1114,15 @@ function resolvePanelDirection(direction: PanelDirection): PanelDirection {
  * @param targetTab The tab to place the new tab beside. If it is not a tab in a tab group, the new
  *   tab is placed against the docked area as a whole
  * @param direction The side of the target's tab group to place the new tab on, in reading order
+ * @param shouldBringToFront Whether the new tab should become the active tab of the tab group it
+ *   joins. Has no effect when the new tab gets a tab group of its own
  */
 function addTabAsPanel(
   dockLayout: DockLayout,
   tab: RCDockTabInfo,
   targetTab: PanelData | TabData | BoxData | undefined,
   direction: PanelDirection,
+  shouldBringToFront: boolean,
 ): void {
   const resolvedDirection = resolvePanelDirection(direction);
   const targetTabGroup =
@@ -1149,7 +1156,15 @@ function addTabAsPanel(
       adjacentTabGroup.tabs.length > 0 &&
       adjacentTabGroup.group === tab.group
     ) {
+      const previousActiveTabId = adjacentTabGroup.activeId;
       dockLayout.dockMove(tab, adjacentTabGroup, 'middle');
+      // rc-dock always makes the added tab the active one. A null tab asks `updateTab` to only
+      // activate the tab with the given id.
+      if (!shouldBringToFront && previousActiveTabId !== undefined) {
+        // Null required by the external API
+        // eslint-disable-next-line no-null/no-null
+        dockLayout.updateTab(previousActiveTabId, null, true);
+      }
       return;
     }
   }
@@ -1295,6 +1310,7 @@ export function addTabToDock(
         // Defaults are added in `layoutDefaults`.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         updatedLayout.direction!,
+        shouldBringToFront,
       );
       break;
 
