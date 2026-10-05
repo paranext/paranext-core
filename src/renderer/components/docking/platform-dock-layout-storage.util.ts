@@ -27,6 +27,7 @@ import {
 } from '@shared/models/docking-framework.model';
 import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
 import { getErrorMessage } from 'platform-bible-utils';
+import { readDirection } from 'platform-bible-react/experimental';
 
 import { DIALOGS } from '@renderer/components/dialogs';
 import {
@@ -1073,24 +1074,42 @@ function findAdjacentTabGroup(
 }
 
 /**
+ * Mirrors `left` and `right` in a right-to-left UI. rc-dock lays the dock out left to right
+ * whatever the UI direction, so a caller asking for a panel on the `right` (the reading-end side)
+ * means rc-dock's left in a right-to-left UI. `top`, `bottom` and the non-side directions pass
+ * through.
+ *
+ * @param direction The side a caller asked for, in reading order
+ * @returns The side to hand rc-dock
+ */
+function resolvePanelDirection(direction: PanelDirection): PanelDirection {
+  if (readDirection() !== 'rtl') return direction;
+  if (direction === 'right') return 'left';
+  if (direction === 'left') return 'right';
+  return direction;
+}
+
+/**
  * Adds a new tab beside the tab group holding `targetTab`: into the tab group already on that side
  * if there is one it can join, otherwise as a tab group of its own.
  *
  * - A target tab group that is not in the docked area (it floats, sits in its own window, or is
- *   maximized) gets the new tab group at the right edge of the docked area instead, whichever side
- *   was asked for. rc-dock would otherwise wrap both groups in a new box inside the floating,
- *   windowed or maximized layer. Those layers draw only the tab groups directly inside them, so
- *   both groups would disappear while their tabs stayed open.
+ *   maximized) gets the new tab group at the reading-end edge of the docked area instead (right, or
+ *   left in a right-to-left UI), whichever side was asked for. rc-dock would otherwise wrap both
+ *   groups in a new box inside the floating, windowed or maximized layer. Those layers draw only
+ *   the tab groups directly inside them, so both groups would disappear while their tabs stayed
+ *   open.
  * - A docked target whose `direction` side already holds a tab group (see
  *   {@link findAdjacentTabGroup}) gets the new tab added to that group as its active tab, rather
  *   than a new group squeezed in between.
+ * - `left` and `right` are mirrored in a right-to-left UI (see {@link resolvePanelDirection}).
  *
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
  * @param tab The new tab to add
  * @param targetTab The tab to place the new tab beside. If it is not a tab in a tab group, the new
  *   tab is placed against the docked area as a whole
- * @param direction The side of the target's tab group to place the new tab on
+ * @param direction The side of the target's tab group to place the new tab on, in reading order
  */
 function addTabAsPanel(
   dockLayout: DockLayout,
@@ -1098,6 +1117,7 @@ function addTabAsPanel(
   targetTab: PanelData | TabData | BoxData | undefined,
   direction: PanelDirection,
 ): void {
+  const resolvedDirection = resolvePanelDirection(direction);
   const targetTabGroup =
     isTab(targetTab) && isPanel(targetTab.parent) ? targetTab.parent : undefined;
 
@@ -1109,18 +1129,18 @@ function addTabAsPanel(
         // Null required by the external API
         // eslint-disable-next-line no-null/no-null
         null,
-      direction,
+      resolvedDirection,
     );
     return;
   }
 
   if (!isInDockedArea(targetTabGroup)) {
-    dockLayout.dockMove(tab, dockLayout.getLayout().dockbox, 'right');
+    dockLayout.dockMove(tab, dockLayout.getLayout().dockbox, resolvePanelDirection('right'));
     return;
   }
 
-  if (isPanelSideDirection(direction)) {
-    const adjacentTabGroup = findAdjacentTabGroup(targetTabGroup, direction);
+  if (isPanelSideDirection(resolvedDirection)) {
+    const adjacentTabGroup = findAdjacentTabGroup(targetTabGroup, resolvedDirection);
     // A tab group with no tabs is the stand-in rc-dock keeps where a maximized group will be
     // restored, which would drop a tab added to it. A tab group of another rc-dock group cannot
     // hold this tab: rc-dock refuses that drop too.
@@ -1134,7 +1154,7 @@ function addTabAsPanel(
     }
   }
 
-  dockLayout.dockMove(tab, targetTabGroup, direction);
+  dockLayout.dockMove(tab, targetTabGroup, resolvedDirection);
 }
 
 /**

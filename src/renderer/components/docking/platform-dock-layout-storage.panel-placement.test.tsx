@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
+import { persistDirection } from 'platform-bible-react/experimental';
 import { createRef } from 'react';
 import DockLayout, { BoxData, LayoutData, PanelData } from 'rc-dock';
 import type { Layout, PanelDirection, SavedTabInfo } from '@shared/models/docking-framework.model';
@@ -453,6 +454,95 @@ describe('opening a tab as a panel beside a docked tab group', () => {
     expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
       mode: 'horizontal',
       children: [['project-a'], ['find'], ['notes']],
+    });
+  });
+});
+
+describe('opening a tab as a panel in a right-to-left UI', () => {
+  beforeEach(() => {
+    persistDirection('rtl');
+  });
+
+  afterEach(() => {
+    persistDirection('ltr');
+  });
+
+  it.each<PanelDirection>(['right', 'left', 'top', 'bottom'])(
+    'docks a tab opened beside a floating tab group at the left edge (%s)',
+    (direction) => {
+      const dockLayout = renderDock(dockedAndFloatingLayout());
+
+      openPanel(dockLayout, 'find', { type: 'panel', direction, targetTabId: 'project-f' });
+
+      expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+        mode: 'horizontal',
+        children: [['find'], ['project-a']],
+      });
+      expect(shapeOf(rootBox(dockLayout, 'floatbox'))).toEqual({
+        mode: 'float',
+        children: [['project-f']],
+      });
+    },
+  );
+
+  it('joins the tab group on the left when asked for the right', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [tabGroup('left-group', ['notes']), tabGroup('target-group', ['project-a'])],
+      },
+    });
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'right', targetTabId: 'project-a' });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['notes', 'find'], ['project-a']],
+    });
+  });
+
+  it('adds a new tab group on the left when asked for the right and nothing is there', () => {
+    const dockLayout = renderDock({
+      dockbox: { mode: 'horizontal', children: [tabGroup('only-group', ['project-a'])] },
+    });
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'right', targetTabId: 'project-a' });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['find'], ['project-a']],
+    });
+  });
+
+  it('joins the tab group on the right when asked for the left', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [tabGroup('target-group', ['project-a']), tabGroup('right-group', ['notes'])],
+      },
+    });
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'left', targetTabId: 'project-a' });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['project-a'], ['notes', 'find']],
+    });
+  });
+
+  it('leaves top and bottom as they are', () => {
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'vertical',
+        children: [tabGroup('upper-group', ['project-a']), tabGroup('lower-group', ['notes'])],
+      },
+    });
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'bottom', targetTabId: 'project-a' });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'vertical',
+      children: [['project-a'], ['notes', 'find']],
     });
   });
 });
