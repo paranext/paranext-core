@@ -13,7 +13,8 @@ is a **proposed work-item breakdown** mapped to the PRD's non-negotiables and ni
    (`NTH-1…`), no-gos, the PRD's claims about PT9 behavior (`PC-1…`), and the
    port-PT9 / net-new breakdown.
 2. Investigate: map + read PT9 source for ported parts (verifying the PRD's PT9 claims); always
-   sweep the PT10 repos for what already exists, in every product mode.
+   sweep the PT10 repos for what already exists, in every product mode, and the `PT` Jira
+   project for tickets that already cover it.
 3. Run a completeness check over the findings, then answer what can be answered and route the
    rest: engineering questions to the user running the command, product questions to the brief.
 4. Write the brief: what the PRD asks for, what already exists, what would be new in Paratext 10,
@@ -172,7 +173,8 @@ Dispatch one lightweight critic agent with the collected landscape and behavior 
 
 > Name related existing behavior this investigation missed. Check: other product modes
 > (Simple / Power), app lifecycle hooks (startup/shutdown tasks), extension contributions
-> (menus, settings, toolbars), notifications, sibling-PRD in-flight PRs, recently merged work.
+> (menus, settings, toolbars), notifications, sibling-PRD in-flight PRs, recently merged work,
+> existing `PT` Jira tickets (open or done) for this feature.
 > Return specific misses with evidence, or "clean".
 
 If it names something real, run at most **one** targeted follow-up dispatch to cover it; note
@@ -220,6 +222,10 @@ No-gos: {list}
 - **Paratext 9:** {where the feature lives (file:line) and the behaviors that matter}
 - **Paratext 10:** {what already works today, in which product mode, and where}
 - **Reusable as-is:** {…}  **Needs building:** {…}
+- **Jira:** {the scout's existing `PT` tickets that matter — key, status and resolution, the NN-n
+  it touches, and its relation to the work items in §4 (duplicate / overlap / related / prior
+  work), which you decide once §4 is drafted; or `None found.` with the phrases searched; or
+  `Not searched — no Atlassian tools.`}
 
 ## 3. New in Paratext 10 — confirm these are intentional
 *(for: product owner)*
@@ -232,7 +238,7 @@ feature or a clean port.
 ## 4. Proposed work items
 *(for: epic lead + engineers)*
 | # | Work item | Repo | Complexity | Depends on | Covers |
-| WI-1 | {implementation-shaped title} | {repo} | Simple/Moderate/Complex | — | NN-1, NTH-2 |
+| WI-1 | {<Area>: what changes, in plain words} | {repo} | Simple/Moderate/Complex | — | NN-1, NTH-2 |
 
 **WI-1 — {title}.** {What it does. What it produces and which sibling item consumes it. Files it
 likely touches. What it deliberately leaves to other items. Any spike to run before its design.}
@@ -260,11 +266,23 @@ settled.
   the write path, presentational components from data wiring, and end with an integration item
   that consumes the others. A requirement may need several items; one item may serve several
   requirements.
-- **Each item ≈ one PR on one branch.** Titles in implementation terms naming the layer
-  ("Update C# comments data provider to expose …", "Create {x} card"), not user-story phrasing.
+- **Each item ≈ one PR on one branch.** Titles become the Jira ticket titles, so write them the
+  way the `jira-creation` skill's
+  [title rule](../skills/jira-creation/SKILL.md#writing-tickets-people-can-read) asks:
+  `<Area>: <what changes, in plain words>` ("Comments panel: show the number of merge conflicts
+  and open them with one click"), with no file names, PR numbers or requirement IDs. The layer and
+  files it touches go in the item's paragraph, not the title.
 - **Coverage is the contract:** every NN maps to at least one work item (a gap here means the
   breakdown is wrong or the PRD needs renegotiating — say which); every NTH is either inside an
   item or explicitly "cut first".
+- **An existing ticket is not a new work item.** The scout reports tickets by the requirement
+  they touch; once the work items exist, compare each open ticket against them. One that already
+  owns a work item's scope (a duplicate) or part of it (an overlap) is named in that item's
+  paragraph — `Existing ticket: PT-XXXX (duplicate|overlap)` — so `/prd-to-jira` proposes moving
+  or linking it instead of creating a twin. A ticket resolved `Done` shrinks the breakdown only
+  once the code confirms the work exists (the scout re-grounded it in a `file:line`): say so in
+  §5's Notes. A closed ticket resolved `Duplicate`, `Won't Do` or `Cannot Reproduce`, or closed
+  with no resolution at all, never shrinks it on its own.
 - **Complexity** comes from the scout's per-unit tiers (Simple / Moderate / Complex).
   **Never emit time estimates** — no hours, days, or weeks, anywhere.
 - Findings that contradict the PRD (feature mostly built already, appetite clearly mis-sized,
