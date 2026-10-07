@@ -13,7 +13,8 @@ is a **proposed work-item breakdown** mapped to the PRD's non-negotiables and ni
    (`NTH-1…`), no-gos, the PRD's claims about PT9 behavior (`PC-1…`), and the
    port-PT9 / net-new breakdown.
 2. Investigate: map + read PT9 source for ported parts (verifying the PRD's PT9 claims); always
-   sweep the PT10 repos for what already exists, in every product mode.
+   sweep the PT10 repos for what already exists, in every product mode, and the `PT` Jira
+   project for tickets that already cover it.
 3. Run a completeness check over the findings, then answer what can be answered and route the
    rest: engineering questions to the user running the command, product questions to the brief.
 4. Write the brief: what the PRD asks for, what already exists, what would be new in Paratext 10,
@@ -172,7 +173,8 @@ Dispatch one lightweight critic agent with the collected landscape and behavior 
 
 > Name related existing behavior this investigation missed. Check: other product modes
 > (Simple / Power), app lifecycle hooks (startup/shutdown tasks), extension contributions
-> (menus, settings, toolbars), notifications, sibling-PRD in-flight PRs, recently merged work.
+> (menus, settings, toolbars), notifications, sibling-PRD in-flight PRs, recently merged work,
+> existing `PT` Jira tickets (open or done) for this feature.
 > Return specific misses with evidence, or "clean".
 
 If it names something real, run at most **one** targeted follow-up dispatch to cover it; note
@@ -220,6 +222,9 @@ No-gos: {list}
 - **Paratext 9:** {where the feature lives (file:line) and the behaviors that matter}
 - **Paratext 10:** {what already works today, in which product mode, and where}
 - **Reusable as-is:** {…}  **Needs building:** {…}
+- **Jira:** {the scout's existing `PT` tickets that matter — key, status, relation (duplicate /
+  overlap / related / prior work), the NN-n or WI-n it touches; or `None found.` with the phrases
+  searched; or `Not searched — no Atlassian tools.`}
 
 ## 3. New in Paratext 10 — confirm these are intentional
 *(for: product owner)*
@@ -265,6 +270,11 @@ settled.
 - **Coverage is the contract:** every NN maps to at least one work item (a gap here means the
   breakdown is wrong or the PRD needs renegotiating — say which); every NTH is either inside an
   item or explicitly "cut first".
+- **An existing ticket is not a new work item.** When the scout found an open ticket that already
+  owns a work item's scope (a duplicate) or part of it (an overlap), name it in that item's
+  paragraph — `Existing ticket: PT-XXXX (duplicate|overlap)` — so `/prd-to-jira` proposes reusing
+  or referencing it instead of creating a twin. A Done ticket that already ships part of an NN
+  shrinks the breakdown: say so in §5's Notes.
 - **Complexity** comes from the scout's per-unit tiers (Simple / Moderate / Complex).
   **Never emit time estimates** — no hours, days, or weeks, anywhere.
 - Findings that contradict the PRD (feature mostly built already, appetite clearly mis-sized,

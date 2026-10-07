@@ -5,7 +5,8 @@ description: Create the Jira epic + work items from an approved /investigate-prd
 # PRD to Jira
 
 Turn the approved investigation brief at **$ARGUMENTS** into a Jira parent issue with one child
-work item per proposed work item. **Creating** issues requires the Atlassian MCP server (Jira
+work item per proposed work item — unless a ticket for that work already exists, which step 2
+finds. **Creating** issues and the existing-ticket check require the Atlassian MCP server (Jira
 tools); **drafting** doesn't — if Jira isn't connected, say so and follow step 1's offline path
 (full drafts, stopping at the dry-run gate, which applies either way).
 
@@ -44,15 +45,35 @@ tools); **drafting** doesn't — if Jira isn't connected, say so and follow step
 1. **Resolve the target.** Site `paratextstudio.atlassian.net`, project `PT`. Verify the issue
    types with the issue-type metadata tool — expect **Combined** (parent) and **Sub-task**
    (child). If the names differ from this, show the user what exists and ask before proceeding.
-   If Jira is unreachable (no Atlassian tools in this session), skip this verification, note that
-   in the drafts, and continue — the dry-run gate below still applies, and the check runs at
-   creation time.
-2. **Draft everything locally first**: the parent summary + description and every child
-   summary + description. Fill the descriptions from the brief and the investigation findings —
-   don't thin them out; the PT-4025…PT-4030 tickets are the level of detail to match.
-3. **Dry-run gate (required — never skip).** Show the user the complete drafts and get explicit
-   approval before creating anything. These are posted to the team's Jira under the user's name.
-4. **Create, then populate each description in a second pass.** Creating an issue in `PT` replaces
+   If Jira is unreachable (no Atlassian tools in this session), skip this verification and step 2,
+   note both in the drafts, and continue — the dry-run gate below still applies, and both checks
+   run at creation time, before the first create call.
+2. **Find existing tickets for the same work.** Start from the brief's §2 **Jira** line and any
+   `Existing ticket:` notes on its work items, but re-run the search — the brief may be days old
+   and was searched by investigation phrases, not ticket titles. Follow the
+   [Searching for existing work](../skills/jira-creation/SKILL.md#searching-for-existing-work)
+   recipe in the `jira-creation` skill: phrases from the feature name for the parent, and from
+   each work item's title and requirement wording for its child. Propose one action per hit:
+   - **duplicate** of a work item → **reuse**: don't create that child; record the existing key in
+     its place (NN table, brief).
+   - **overlap** → **create and reference**: create the child, name the existing ticket under its
+     **Dependencies** and say which part it already owns.
+   - **related** or **prior work** → **reference** it in the closest section (Dependencies or
+     Implementation Ideas), or drop it if it adds nothing.
+   - An open Combined or Epic that already **is** this feature → stop and ask whether the new
+     children go under it instead of a new parent.
+3. **Draft everything locally first**: the parent summary + description and every child
+   summary + description, with the step 2 references folded in. Fill the descriptions from the
+   brief and the investigation findings — don't thin them out; the PT-4025…PT-4030 tickets are
+   the level of detail to match.
+4. **Dry-run gate (required — never skip).** Show the user the complete drafts **and** the step 2
+   table — `Draft item | Existing ticket | Status | Relation | Proposed action` (or "no existing
+   tickets found", with the phrases searched, or "existing-ticket check not run — Jira
+   unreachable") — and get explicit approval of both before creating anything. These are posted
+   to the team's Jira under the user's name. Reusing an existing ticket never extends to editing,
+   re-parenting, transitioning, linking or commenting on it; if the user wants any of that, it is
+   a separate action they approve on its own.
+5. **Create, then populate each description in a second pass.** Creating an issue in `PT` replaces
    your description with the work-item type's default template, so use the **`jira-creation`
    skill** ([`.claude/skills/jira-creation/SKILL.md`](../skills/jira-creation/SKILL.md)) — create
    → read the live template off the created issue → fit your content into its sections → push the
@@ -63,10 +84,13 @@ tools); **drafting** doesn't — if Jira isn't connected, say so and follow step
    whatever headings each issue actually shows, carrying any extras
    (e.g. **Dependencies**) under the closest section. For the parent, place the problem statement /
    PRD link / non-negotiables table under the closest headings rather than dropping the scaffold.
-5. **Back-fill the mapping**: update the parent's description so each non-negotiable row lists
-   the created ticket URL(s) in its "Jira Ticket(s)" cell.
-6. **Report and sync the brief**: list the parent + child keys, and offer to update the brief's
-   work-item table with the ticket keys (WI-n → PT-xxxx). The user commits the brief as usual.
+   Skip every child the gate approved as **reuse**.
+6. **Back-fill the mapping**: update the parent's description so each non-negotiable row lists
+   the ticket URL(s) in its "Jira Ticket(s)" cell — created and reused alike, marking reused ones
+   "(existing)".
+7. **Report and sync the brief**: list the parent + child keys, created and reused separately,
+   and offer to update the brief's work-item table with the ticket keys (WI-n → PT-xxxx). The user
+   commits the brief as usual.
 
 ## Failure handling
 
