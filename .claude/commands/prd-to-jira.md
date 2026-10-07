@@ -24,21 +24,31 @@ tools); **drafting** doesn't — if Jira isn't connected, say so and follow step
 
 ## Target shape (mirrors epic PT-4024)
 
+Every ticket follows the `jira-creation` skill's
+[Writing tickets people can read](../skills/jira-creation/SKILL.md#writing-tickets-people-can-read)
+rules — a plain title, a `**Summary** —` paragraph on top, then the complete detail. The
+readable top is in addition to the detail below, never a replacement for it.
+
 - **One parent issue** — project `PT`, issue type **Combined** (the shared UX+Dev work-item
-  type), summary = the feature name. Description: the PRD's problem statement (quoted), a link
-  to the PRD, and the non-negotiables table:
+  type), summary = the feature name in the team's persona style (e.g. `Donna zooms in and out on
+  the pane she's working in`). Description: the summary, the PRD's problem statement (quoted), a
+  link to the PRD, and the non-negotiables table:
   `# | Requirement | Jira Ticket(s) | Related Nice-To-Haves`.
-- **One Sub-task child per work item**, parented to the new Combined issue, summary = the work
-  item's title. Description sections, in order:
-  - **User Story** — persona-framed, citing the NN/NTH IDs it serves.
+- **One Sub-task child per work item**, parented to the new Combined issue, summary =
+  `<Area>: <what changes, in plain words>` (the brief's work-item title, rewritten to that rule if
+  it isn't already). Description: the summary, then these sections in order:
+  - **User Story** — persona-framed, naming in words the requirements it serves, with their IDs
+    in brackets: `…so the zoom level she set survives a restart (NN-3)`.
   - **Description** — what it does and which half of which contract it owns.
-  - **Implementation Ideas** — the concrete pointers from the brief/investigation (`file:line`,
-    existing components/services to reuse, what already exists vs. what's new).
+  - **Implementation Ideas** — the concrete pointers from the brief/investigation (file and
+    function or symbol, not line numbers; existing components/services to reuse; what already
+    exists vs. what's new).
   - **Testing Ideas** — concrete cases, from the investigation's behaviors/edge cases.
   - **Definition of Done** — the item's "done when", specific enough to evaluate.
-  - **Dependencies** — blocks / depends on / can run in parallel with, in sibling-ticket terms,
-    plus "Serves NN-n / NTH-n".
-- **Never include time estimates.** No assignee, no status transitions — leave Jira defaults.
+  - **Dependencies** — blocks / depends on / can run in parallel with, naming sibling tickets by
+    title, plus the requirements it serves, written out.
+- **Never include time estimates.** No assignee, no status transitions — leave Jira defaults. The
+  only exception is closing a duplicate the user explicitly approved for recreation (step 2).
 
 ## Steps
 
@@ -53,27 +63,40 @@ tools); **drafting** doesn't — if Jira isn't connected, say so and follow step
    and was searched by investigation phrases, not ticket titles. Follow the
    [Searching for existing work](../skills/jira-creation/SKILL.md#searching-for-existing-work)
    recipe in the `jira-creation` skill: phrases from the feature name for the parent, and from
-   each work item's title and requirement wording for its child. Propose one action per hit:
-   - **duplicate** of a work item → **reuse**: don't create that child; record the existing key in
-     its place (NN table, brief).
-   - **overlap** → **create and reference**: create the child, name the existing ticket under its
-     **Dependencies** and say which part it already owns.
-   - **related** or **prior work** → **reference** it in the closest section (Dependencies or
-     Implementation Ideas), or drop it if it adds nothing.
+   each work item's title and requirement wording for its child. Propose one action per hit, as
+   the skill's [Acting on what the search found](../skills/jira-creation/SKILL.md#acting-on-what-the-search-found)
+   table sets out:
+   - **related**, **overlap** or **prior work** → create the child and **link** the existing
+     ticket (`Relates`, or `Blocks` when one has to land first), naming it in the child's
+     Dependencies with what it already owns.
+   - **duplicate**, To Do and unassigned, already a Sub-task → **move** it: re-parent it under the
+     new Combined instead of creating that child.
+   - **duplicate**, To Do and unassigned, a standard issue (Combined, Dev Task, Bug, …) →
+     **recreate** it: a new Sub-task carrying all its content, a `Duplicate` link, and the old
+     ticket closed — the API can't turn a standard issue into a Sub-task.
+   - **duplicate** in progress or assigned to someone → **link** only, flagged for the user.
    - An open Combined or Epic that already **is** this feature → stop and ask whether the new
      children go under it instead of a new parent.
-3. **Draft everything locally first**: the parent summary + description and every child
-   summary + description, with the step 2 references folded in. Fill the descriptions from the
-   brief and the investigation findings — don't thin them out; the PT-4025…PT-4030 tickets are
-   the level of detail to match.
-4. **Dry-run gate (required — never skip).** Show the user the complete drafts **and** the step 2
-   table — `Draft item | Existing ticket | Status | Relation | Proposed action` (or "no existing
-   tickets found", with the phrases searched, or "existing-ticket check not run — Jira
-   unreachable") — and get explicit approval of both before creating anything. These are posted
-   to the team's Jira under the user's name. Reusing an existing ticket never extends to editing,
-   re-parenting, transitioning, linking or commenting on it; if the user wants any of that, it is
-   a separate action they approve on its own.
-5. **Create, then populate each description in a second pass.** Creating an issue in `PT` replaces
+3. **Draft everything locally first**: the parent and every child, titles and full descriptions,
+   per the target shape above, with the step 2 links and references folded in. Fill the
+   descriptions from the brief and the investigation findings — don't thin them out; the
+   PT-4025…PT-4030 tickets are the level of detail to match.
+4. **Cold-read the drafts.** Run the skill's
+   [cold-read check](../skills/jira-creation/SKILL.md#cold-read-check) over all the drafts in one
+   agent, and fix what it finds before the gate.
+5. **Dry-run gate (required — never skip).** Show the user:
+   - the complete drafts and a one-line cold-read result;
+   - the step 2 table — `Draft item | Existing ticket | Status | Relation | Proposed action` —
+     or "no existing tickets found" with the phrases searched, or "existing-ticket check not run
+     — Jira unreachable";
+   - **separately, every ticket proposed for recreation**: its key and title, what the new
+     Sub-task will hold, and that the old ticket will be closed.
+
+   Get explicit approval before creating anything, and a separate explicit yes for each
+   recreation — a general go-ahead doesn't cover closing someone's ticket. These are posted to
+   the team's Jira under the user's name. Beyond the approved moves, links and recreations, never
+   edit, transition or comment on an existing ticket.
+6. **Create, then populate each description in a second pass.** Creating an issue in `PT` replaces
    your description with the work-item type's default template, so use the **`jira-creation`
    skill** ([`.claude/skills/jira-creation/SKILL.md`](../skills/jira-creation/SKILL.md)) — create
    → read the live template off the created issue → fit your content into its sections → push the
@@ -84,13 +107,15 @@ tools); **drafting** doesn't — if Jira isn't connected, say so and follow step
    whatever headings each issue actually shows, carrying any extras
    (e.g. **Dependencies**) under the closest section. For the parent, place the problem statement /
    PRD link / non-negotiables table under the closest headings rather than dropping the scaffold.
-   Skip every child the gate approved as **reuse**.
-6. **Back-fill the mapping**: update the parent's description so each non-negotiable row lists
-   the ticket URL(s) in its "Jira Ticket(s)" cell — created and reused alike, marking reused ones
+   Skip every child the gate approved as a **move**. After each issue is filled and verified,
+   carry out its approved links, moves and recreations as the skill's process describes, and
+   verify each.
+7. **Back-fill the mapping**: update the parent's description so each non-negotiable row lists
+   the ticket URL(s) in its "Jira Ticket(s)" cell — created and moved alike, marking moved ones
    "(existing)".
-7. **Report and sync the brief**: list the parent + child keys, created and reused separately,
-   and offer to update the brief's work-item table with the ticket keys (WI-n → PT-xxxx). The user
-   commits the brief as usual.
+8. **Report and sync the brief**: list the parent + child keys — created, moved and recreated
+   separately, plus the links made — and offer to update the brief's work-item table with the
+   ticket keys (WI-n → PT-xxxx). The user commits the brief as usual.
 
 ## Failure handling
 

@@ -265,8 +265,12 @@ settled.
   the write path, presentational components from data wiring, and end with an integration item
   that consumes the others. A requirement may need several items; one item may serve several
   requirements.
-- **Each item ≈ one PR on one branch.** Titles in implementation terms naming the layer
-  ("Update C# comments data provider to expose …", "Create {x} card"), not user-story phrasing.
+- **Each item ≈ one PR on one branch.** Titles become the Jira ticket titles, so write them the
+  way the `jira-creation` skill's
+  [title rule](../skills/jira-creation/SKILL.md#writing-tickets-people-can-read) asks:
+  `<Area>: <what changes, in plain words>` ("Comments panel: show the number of merge conflicts
+  and open them with one click"), with no file names, PR numbers or requirement IDs. The layer and
+  files it touches go in the item's paragraph, not the title.
 - **Coverage is the contract:** every NN maps to at least one work item (a gap here means the
   breakdown is wrong or the PRD needs renegotiating — say which); every NTH is either inside an
   item or explicitly "cut first".
