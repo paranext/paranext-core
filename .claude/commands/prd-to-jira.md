@@ -78,10 +78,13 @@ readable top is in addition to the detail below, never a replacement for it.
      child for that work item: link the old ticket to the new Combined with `Relates` instead.
    - **duplicate** in progress or assigned to someone → create no child for that work item: link
      the existing ticket to the new Combined with `Relates`, and flag it for the user.
-   - An open Combined or Epic that already **is** this feature → stop and ask whether the new
-     children go under it instead of a new parent. This takes precedence: a ticket that matches
-     the whole feature is never proposed for recreation — that applies only to a duplicate of a
-     single work item.
+   - An open ticket of **any** type that already **is** this feature → stop and ask whether the
+     new children go under it instead of a new parent. This takes precedence: a ticket that
+     matches the whole feature is never proposed for recreation — that applies only to a
+     duplicate of a single work item. If the user picks the existing ticket as the parent (it
+     must be able to hold Sub-tasks — not an Epic or a Sub-task; otherwise ask again), create no
+     new parent and don't edit the existing one: create only the children under it, and in step
+     7 give the user the requirements table as text to add there themselves.
 3. **Draft everything locally first**: the parent and every child, titles and full descriptions,
    per the target shape above, with the step 2 links and references folded in, and each
    recreation's old content merged into its child's draft. Fill the descriptions from the brief
@@ -124,7 +127,8 @@ readable top is in addition to the detail below, never a replacement for it.
    link / non-negotiables table under the closest headings rather than dropping the scaffold.
 7. **Back-fill the mapping**: update the parent's description so each non-negotiable row lists
    the ticket URL(s) in its "Jira Ticket(s)" cell — created and existing alike, marking existing
-   ones "(existing)" or "(existing, in progress)".
+   ones "(existing)" or "(existing, in progress)". If the parent is an existing ticket the user
+   chose in step 2, don't edit it: show the filled-in table as text instead.
 8. **Report and sync the brief**: list the parent + child keys — created, recreated (with the
    key each replaces), moved, and existing tickets linked in place — plus the links made, and
    offer to update the brief's work-item table with the ticket keys (WI-n → PT-xxxx). The user
