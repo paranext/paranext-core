@@ -137,10 +137,12 @@ In-flight sweeps below are scout-specific additions. PT10 may name things differ
   [Searching for existing work](../skills/jira-creation/SKILL.md#searching-for-existing-work)
   recipe in the `jira-creation` skill (read that section first;
   `cloudId: "paratextstudio.atlassian.net"`), using the feature name, the PRD's user-facing nouns,
-  each distinct PT9 form name, and distinctive NN wording as phrases. Classify each kept hit
-  (duplicate / overlap / related / prior work) and tag it with the aspect or `NN-n` / `NTH-n` it
-  touches. A Done ticket is a lead, not proof — re-ground it in a `file:line` before calling the
-  behavior shipped. If the Atlassian tools are not available in this session, don't guess: write
+  each distinct PT9 form name, and distinctive NN wording as phrases. Tag each kept hit with the
+  aspect or `NN-n` / `NTH-n` it touches and say in a few words what it covers. Don't label hits
+  duplicate or overlap — the work items they would duplicate don't exist yet; `/investigate-prd`
+  decides that when it drafts them. A ticket resolved `Done` is a lead, not proof — re-ground it
+  in a `file:line` before calling the behavior shipped; one resolved `Duplicate`, `Won't Do` or
+  `Cannot Reproduce` shipped nothing. If the Atlassian tools are not available in this session, don't guess: write
   `Not searched — no Atlassian tools in this session.` in the output section and add a Review
   Flag.
 
@@ -238,9 +240,9 @@ with confidence**. If none: `No items flagged.`
 ### Applicable patterns
 - {pattern} @ {file:line}
 ### Existing Jira work
-| Key | Summary | Status category | Type (parent) | Relation | Touches |
-{Relation = duplicate / overlap / related / prior work; Touches = aspect or NN-n / NTH-n.
-Or `None found.` plus the phrases searched, or `Not searched — no Atlassian tools in this session.`}
+| Key | Title | Status category | Resolution | Assignee | Type (parent) | Touches | What it covers |
+{Touches = aspect or NN-n / NTH-n. Or `None found.` plus the phrases searched, or
+`Not searched — no Atlassian tools in this session.`}
 ### Open questions
 {net-new research-needed items, or `None.`}
 ### Review Flags

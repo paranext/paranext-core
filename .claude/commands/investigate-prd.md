@@ -222,9 +222,10 @@ No-gos: {list}
 - **Paratext 9:** {where the feature lives (file:line) and the behaviors that matter}
 - **Paratext 10:** {what already works today, in which product mode, and where}
 - **Reusable as-is:** {…}  **Needs building:** {…}
-- **Jira:** {the scout's existing `PT` tickets that matter — key, status, relation (duplicate /
-  overlap / related / prior work), the NN-n or WI-n it touches; or `None found.` with the phrases
-  searched; or `Not searched — no Atlassian tools.`}
+- **Jira:** {the scout's existing `PT` tickets that matter — key, status and resolution, the NN-n
+  it touches, and its relation to the work items in §4 (duplicate / overlap / related / prior
+  work), which you decide once §4 is drafted; or `None found.` with the phrases searched; or
+  `Not searched — no Atlassian tools.`}
 
 ## 3. New in Paratext 10 — confirm these are intentional
 *(for: product owner)*
@@ -237,7 +238,7 @@ feature or a clean port.
 ## 4. Proposed work items
 *(for: epic lead + engineers)*
 | # | Work item | Repo | Complexity | Depends on | Covers |
-| WI-1 | {implementation-shaped title} | {repo} | Simple/Moderate/Complex | — | NN-1, NTH-2 |
+| WI-1 | {<Area>: what changes, in plain words} | {repo} | Simple/Moderate/Complex | — | NN-1, NTH-2 |
 
 **WI-1 — {title}.** {What it does. What it produces and which sibling item consumes it. Files it
 likely touches. What it deliberately leaves to other items. Any spike to run before its design.}
@@ -274,11 +275,13 @@ settled.
 - **Coverage is the contract:** every NN maps to at least one work item (a gap here means the
   breakdown is wrong or the PRD needs renegotiating — say which); every NTH is either inside an
   item or explicitly "cut first".
-- **An existing ticket is not a new work item.** When the scout found an open ticket that already
-  owns a work item's scope (a duplicate) or part of it (an overlap), name it in that item's
-  paragraph — `Existing ticket: PT-XXXX (duplicate|overlap)` — so `/prd-to-jira` proposes reusing
-  or referencing it instead of creating a twin. A Done ticket that already ships part of an NN
-  shrinks the breakdown: say so in §5's Notes.
+- **An existing ticket is not a new work item.** The scout reports tickets by the requirement
+  they touch; once the work items exist, compare each open ticket against them. One that already
+  owns a work item's scope (a duplicate) or part of it (an overlap) is named in that item's
+  paragraph — `Existing ticket: PT-XXXX (duplicate|overlap)` — so `/prd-to-jira` proposes moving
+  or linking it instead of creating a twin. A ticket resolved `Done` that already ships part of an
+  NN shrinks the breakdown: say so in §5's Notes. A closed ticket resolved `Duplicate`,
+  `Won't Do` or `Cannot Reproduce` shipped nothing and never shrinks it.
 - **Complexity** comes from the scout's per-unit tiers (Simple / Moderate / Complex).
   **Never emit time estimates** — no hours, days, or weeks, anywhere.
 - Findings that contradict the PRD (feature mostly built already, appetite clearly mis-sized,
