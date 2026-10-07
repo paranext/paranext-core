@@ -142,7 +142,8 @@ In-flight sweeps below are scout-specific additions. PT10 may name things differ
   duplicate or overlap — the work items they would duplicate don't exist yet; `/investigate-prd`
   decides that when it drafts them. A ticket resolved `Done` is a lead, not proof — re-ground it
   in a `file:line` before calling the behavior shipped; one resolved `Duplicate`, `Won't Do` or
-  `Cannot Reproduce` shipped nothing. If the Atlassian tools are not available in this session, don't guess: write
+  `Cannot Reproduce` shipped nothing, and one closed with no resolution proves nothing — check the
+  code. If the Atlassian tools are not available in this session, don't guess: write
   `Not searched — no Atlassian tools in this session.` in the output section and add a Review
   Flag.
 

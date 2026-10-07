@@ -279,9 +279,10 @@ settled.
   they touch; once the work items exist, compare each open ticket against them. One that already
   owns a work item's scope (a duplicate) or part of it (an overlap) is named in that item's
   paragraph — `Existing ticket: PT-XXXX (duplicate|overlap)` — so `/prd-to-jira` proposes moving
-  or linking it instead of creating a twin. A ticket resolved `Done` that already ships part of an
-  NN shrinks the breakdown: say so in §5's Notes. A closed ticket resolved `Duplicate`,
-  `Won't Do` or `Cannot Reproduce` shipped nothing and never shrinks it.
+  or linking it instead of creating a twin. A ticket resolved `Done` shrinks the breakdown only
+  once the code confirms the work exists (the scout re-grounded it in a `file:line`): say so in
+  §5's Notes. A closed ticket resolved `Duplicate`, `Won't Do` or `Cannot Reproduce`, or closed
+  with no resolution at all, never shrinks it on its own.
 - **Complexity** comes from the scout's per-unit tiers (Simple / Moderate / Complex).
   **Never emit time estimates** — no hours, days, or weeks, anywhere.
 - Findings that contradict the PRD (feature mostly built already, appetite clearly mis-sized,

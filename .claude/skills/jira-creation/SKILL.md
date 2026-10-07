@@ -130,11 +130,12 @@ because it's there.
    never be reconstructed from memory or re-summarized.
 3. **Run the [cold-read check](#cold-read-check)** and fix the draft.
 4. **Get approval.** Show the user the title, issue type, parent, and complete description; the
-   cold-read line; and the existing-ticket table — `Existing ticket | Status | Relation | Proposed
-   action` — covering every link to create and every re-parent. List **every ticket proposed for
-   recreation separately** — its key and title, the complete draft of the ticket that replaces it,
-   and that the old one will be closed — and get an explicit yes for each one; a general go-ahead
-   doesn't cover a recreation. Wait for that go-ahead before any write: these post to the team's board under the
+   cold-read line; and the existing-ticket table — `Existing ticket | Status | Assignee | Current
+   parent (its status, assignee) | Relation | Proposed action` — covering every link to create and
+   every re-parent. List **every ticket proposed for recreation separately** — its key and title,
+   the complete draft of the ticket that replaces it, the links it has that will be recreated on
+   the replacement, and that the old one will be closed — and get an explicit yes for each one; a
+   general go-ahead doesn't cover a recreation. Wait for that go-ahead before any write: these post to the team's board under the
    user's name, and MCP cannot delete them.
 5. **Resolve the target and find the templated fields.** Pass
    `cloudId: "paratextstudio.atlassian.net"` (the hostname is accepted; don't hard-code a UUID).
@@ -145,8 +146,10 @@ because it's there.
    tell you which fields are templated (see Two templated fields above); step 8 does that.
 6. **Check for a stub from an earlier attempt** whenever this is a resume, a retry, or a
    batch that may have partly run: `searchJiraIssuesUsingJql` with
-   `project = PT AND summary ~ "\"<the title>\"" ORDER BY created DESC` (Jira's `summary` field
-   is the title; the escaped quotes match it as a phrase). A blank templated stub
+   `project = PT AND summary ~ "<the title>" ORDER BY created DESC` (Jira's `summary` field is the
+   title). Keep this a loose word match, not a phrase: it still finds a stub whose title was
+   reworded between attempts, and its false hits are harmless — only a freshly created, still-empty
+   ticket counts. A blank templated stub
    from an interrupted run is an issue to *fill*, not to recreate — nothing can delete the
    duplicate.
 7. **Create** with `createJiraIssue`: `projectKey: "PT"`, `issueTypeName`, `summary` (the title), `parent`
@@ -184,6 +187,12 @@ before starting the next; where a parent's key is needed first, create and fill 
 each child in turn. Report each key as it is created, so an interrupted run leaves an exact record
 of what exists — and resume through step 6, never by recreating.
 
+The record also covers **approved actions on existing tickets**: keep a running list of every
+approved link, re-parent and close, each marked done or still owed. If a run stops partway,
+report that list with the created keys. A resumed run finishes the owed actions first, under the
+original approval — otherwise the next search finds an old duplicate still open beside its
+replacement and treats it as new.
+
 ## Searching for existing work
 
 Before proposing or creating tickets for a feature, find the tickets that already cover it —
@@ -203,7 +212,9 @@ the same *work* under different wording. Read-only: `searchJiraIssuesUsingJql` a
 - **Done is not always shipped.** Every closed `PT` ticket sits in ✅ Done, whatever happened to
   it. Only a resolution of `Done` means the work was built; a resolution of `Duplicate`,
   `Won't Do` or `Cannot Reproduce` means nothing shipped — never count such a ticket as prior
-  work (a `Won't Do` still records a decision worth citing).
+  work (a `Won't Do` still records a decision worth citing). A closed ticket with **no
+  resolution** (common: the `Resolved` transition doesn't set one) proves nothing either way —
+  don't count it as shipped; check the code.
 - **Request few fields and expect a file anyway.** Pass
   `fields: ["summary", "status", "issuetype", "parent", "resolution", "assignee"]`,
   `responseContentFormat: "markdown"`, `maxResults: 50` (the tool accepts 50–100). Each issue
@@ -211,6 +222,10 @@ the same *work* under different wording. Read-only: `searchJiraIssuesUsingJql` a
   94k characters), so a broad phrase overflows the tool output and is saved to a file. Extract the
   rows with `jq` rather than reading the JSON:
   `jq -r '.issues.nodes[] | [.key, .fields.status.statusCategory.name, (.fields.resolution.name // "-"), (.fields.assignee.displayName // "unassigned"), .fields.issuetype.name, (.fields.parent.key // "-"), .fields.summary] | @tsv' <saved-file>`.
+- **Don't stop at the first page.** If the result's `pageInfo.hasNextPage` is true, there are more
+  matches than you were shown — an old, untouched duplicate is exactly what sorts to the end.
+  Narrow the phrase (e.g. to `summary ~`) or fetch the next page with `nextPageToken` before
+  concluding a ticket doesn't exist.
 - **Follow parents down.** A hit on a Combined or Epic makes its children candidates too:
   `project = PT AND parent = PT-XXXX`.
 - **Read before calling a duplicate.** `text ~` also matches a passing mention in a comment.
@@ -231,11 +246,16 @@ Each action is proposed at the approval step (Process step 4) and carried out on
 the user approved. Look up the link type names with `getIssueLinkTypes` — as of 2026-10-07 they
 include `Relates`, `Blocks`, `Duplicate` and `Cloners`.
 
+The duplicate rows below assume a **new parent** — the Combined that a batch like `/prd-to-jira`
+creates for a feature. A one-off ticket usually has none, or its parent is an Epic, which can't
+hold a Sub-task. So for a one-off ticket, a clear duplicate means: create nothing, show the user
+the existing ticket, and ask what they want.
+
 | What the search found | Action |
 | --- | --- |
 | Related, overlapping, or prior work | Link it — `Relates`, or `Blocks` when one has to land first — and also name it in the ticket text, under Dependencies or the closest heading, saying what it is. |
 | A duplicate in To Do, unassigned, that is already a Sub-task | Re-parent it under the new parent instead of creating a twin: `editJiraIssue` with `fields: { parent: { key: "PT-XXXX" } }`, then re-read with `fields: ["parent"]`. If Jira refuses or the parent didn't change, bring it back to the user as a recreation candidate — don't fall through on your own. |
-| A duplicate in To Do, unassigned, that is a standard issue (Combined, Dev Task, Bug, …) | The API can't turn a standard issue into a Sub-task, so propose **recreating** it. The replacement is not an extra ticket — it **is** the new ticket for that work: merge the old ticket's content (its description plus any still-relevant facts from its comments, rewritten to the writing rules with nothing dropped) into that work's draft, and show the merged draft in the recreation list at approval. On the user's explicit yes for that ticket: create and fill it like any other ticket (Process steps 7–11), link `Duplicate` (old duplicates new), close the old ticket, and mark it as a duplicate (both below). Nothing else on the old ticket changes. **If the user says no**, create no ticket for that work: link the old ticket to the new parent with `Relates`, and treat it as that work's ticket from then on. |
+| A duplicate in To Do, unassigned, that is a standard issue (Combined, Dev Task, Bug, …) | The API can't turn a standard issue into a Sub-task, so propose **recreating** it — but only if it has **no child tickets** (`project = PT AND parent = <its key>`); a replacement Sub-task can't hold them, and closing the old ticket would strand them under a closed parent. If it has children, show them to the user and ask. The replacement is not an extra ticket — it **is** the new ticket for that work. Read the old ticket in full first — `getJiraIssue` with `fields: ["*all", "comment"]`, because a Bug's body lives in `customfield_10116` and comments aren't in the default fields — then merge its content (body plus any still-relevant facts from its comments, rewritten to the writing rules with nothing dropped) into that work's draft, and show the merged draft, plus the old ticket's links, in the recreation list at approval. On the user's explicit yes for that ticket: create and fill it like any other ticket (Process steps 7–11), recreate the old ticket's links on it (pointing to the same tickets, same direction), link `Duplicate` (old duplicates new), close the old ticket, and mark it as a duplicate (both below). Nothing else on the old ticket changes. **If the user says no**, create no ticket for that work: link the old ticket to the new parent with `Relates`, and treat it as that work's ticket from then on. |
 | A duplicate that is in progress or assigned to someone | Never move or close work someone owns. Create no ticket for that work: link the existing ticket to the new parent with `Relates`, flag it in the approval table, and treat it as that work's ticket. The user may still choose to move it. |
 
 **Link direction is easy to get backwards.** `createIssueLink` records
@@ -251,9 +271,9 @@ close — 🔖 ToDo offers none (as of 2026-10-07) — so walk the shortest path
 the status after each step.
 
 **A closed duplicate must not read as finished work.** `PT` has no "superseded" status: every
-closing transition lands in **✅ Done**, and the `Resolved` transition takes no fields, so it sets
-the resolution to `Done` — on the ticket and in any resolution filter, the duplicate then looks
-like completed work. Right after closing, set the resolution the way the team marks its own
+closing transition lands in **✅ Done**, and the `Resolved` transition takes no fields and leaves
+the resolution empty — on the board the duplicate then looks like completed work. Right after
+closing, set the resolution the way the team marks its own
 duplicates: `editJiraIssue` with `fields: { resolution: { name: "Duplicate" } }`, then re-read with
 `fields: ["resolution"]` and confirm it says `Duplicate`. The allowed values (as of 2026-10-07:
 Done, Won't Do, Duplicate, Cannot Reproduce) are in `getJiraIssue`'s `editmeta`

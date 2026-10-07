@@ -32,7 +32,8 @@ readable top is in addition to the detail below, never a replacement for it.
 - **One parent issue** — project `PT`, issue type **Combined** (the shared UX+Dev work-item
   type). Title: the feature name in the team's persona style (e.g. `Donna zooms in and out on the
   pane she's working in`). Description: the Summary paragraph, the PRD's problem statement
-  (quoted), a link to the PRD, and the non-negotiables table:
+  (quoted), a link to the PRD that the team can open (if the PRD exists only on the user's
+  machine, ask them for a shared link — never post a local path), and the non-negotiables table:
   `# | Requirement | Jira Ticket(s) | Related Nice-To-Haves`.
 - **One Sub-task child per work item**, parented to the new Combined issue. Title:
   `<Area>: <what changes, in plain words>` (the brief's work-item title, rewritten to that rule if
@@ -68,16 +69,19 @@ readable top is in addition to the detail below, never a replacement for it.
      Dependencies with what it already owns.
    - **duplicate**, To Do and unassigned, already a Sub-task → **move** it: re-parent it under the
      new Combined instead of creating that child.
-   - **duplicate**, To Do and unassigned, a standard issue (Combined, Dev Task, Bug, …) →
-     **recreate** it: the child for that work item becomes its replacement — its draft merged
-     with all of the old ticket's content — and after creating it, link `Duplicate` and close
-     the old ticket with resolution `Duplicate` (the API can't turn a standard issue into a
-     Sub-task). If the user declines, create no child for that work item: link the old ticket to
-     the new Combined with `Relates` instead.
+   - **duplicate** of one work item, To Do and unassigned, a standard issue (Combined, Dev Task,
+     Bug, …) with no child tickets of its own → **recreate** it: the child for that work item
+     becomes its replacement — its draft merged with all of the old ticket's content, and the old
+     ticket's links recreated on it — and after creating it, link `Duplicate` and close the old
+     ticket with resolution `Duplicate` (the API can't turn a standard issue into a Sub-task). If
+     the old ticket has children, show them to the user and ask. If the user declines, create no
+     child for that work item: link the old ticket to the new Combined with `Relates` instead.
    - **duplicate** in progress or assigned to someone → create no child for that work item: link
      the existing ticket to the new Combined with `Relates`, and flag it for the user.
    - An open Combined or Epic that already **is** this feature → stop and ask whether the new
-     children go under it instead of a new parent.
+     children go under it instead of a new parent. This takes precedence: a ticket that matches
+     the whole feature is never proposed for recreation — that applies only to a duplicate of a
+     single work item.
 3. **Draft everything locally first**: the parent and every child, titles and full descriptions,
    per the target shape above, with the step 2 links and references folded in, and each
    recreation's old content merged into its child's draft. Fill the descriptions from the brief
@@ -89,10 +93,12 @@ readable top is in addition to the detail below, never a replacement for it.
    agent, and fix what it finds before the gate.
 5. **Dry-run gate (required — never skip).** Show the user:
    - the complete drafts and a one-line cold-read result;
-   - the step 2 table — `Draft item | Existing ticket | Status | Assignee | Relation | Proposed
-     action` — or "no existing tickets found" with the phrases searched;
+   - the step 2 table — `Draft item | Existing ticket | Status | Assignee | Current parent (its
+     status, assignee) | Relation | Proposed action` — or "no existing tickets found" with the
+     phrases searched;
    - **separately, every ticket proposed for recreation**: its key and title, the complete merged
-     draft of the child that replaces it, and that the old ticket will be closed as a duplicate.
+     draft of the child that replaces it, the links that will be recreated on it, and that the old
+     ticket will be closed as a duplicate.
 
    Get explicit approval before creating anything, and a separate explicit yes for each
    recreation — a general go-ahead doesn't cover closing someone's ticket. These are posted to
@@ -106,8 +112,11 @@ readable top is in addition to the detail below, never a replacement for it.
    edit → verify → carry out that issue's approved links, moves and closes. Create the parent,
    then each child with the parent set — one at a time, filling and verifying each before moving
    on, and keeping the created keys. A recreation's child is created exactly once, like any other
-   child; closing the old ticket comes after it is filled and verified. Skip every work item the
-   gate settled with an existing ticket (moved, declined recreation, or in progress elsewhere).
+   child; closing the old ticket comes after it is filled and verified. Create no child for a work
+   item the gate settled with an existing ticket (moved, declined recreation, or in progress
+   elsewhere) — but **do** carry out its approved action: right after the parent is created,
+   filled and verified, make each approved re-parent and each `Relates` link to the parent, and
+   verify each by re-reading it.
    The child sections this command drafts (User Story, Description, Implementation Ideas, Testing
    Ideas, Definition of Done, Dependencies) are written to line up with a typical task template —
    map them onto whatever headings each issue actually shows, carrying any extras (e.g.
@@ -124,4 +133,6 @@ readable top is in addition to the detail below, never a replacement for it.
 ## Failure handling
 
 If a creation call fails midway, stop and report exactly which issues were created (keys) and
-which weren't. Resume only on user instruction, and never recreate ones that already exist.
+which weren't, **and** every approved action on an existing ticket — re-parent, link, close —
+marked done or still owed. Resume only on user instruction, and never recreate ones that already
+exist; a resumed run finishes the owed actions first, under the original approval.
