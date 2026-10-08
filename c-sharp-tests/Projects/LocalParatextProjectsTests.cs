@@ -64,6 +64,7 @@ public class LocalParatextProjectsTests
 
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.LEGACY_COMMENT));
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.BASE));
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.EXTENSION_DATA_ENUMERATION));
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.USFM_BOOK));
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.SCRIPTURE_EDIT_PERMISSIONS));
     }
@@ -75,6 +76,8 @@ public class LocalParatextProjectsTests
 
         Assert.That(interfaces, Does.Not.Contain(ProjectInterfaces.LEGACY_COMMENT));
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.BASE));
+        // Published projects are readable, so their extension data can be listed as well as read
+        Assert.That(interfaces, Does.Contain(ProjectInterfaces.EXTENSION_DATA_ENUMERATION));
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.USFM_BOOK));
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.USFM_CHAPTER));
         Assert.That(interfaces, Does.Contain(ProjectInterfaces.USFM_VERSE));

@@ -1,4 +1,4 @@
-using System.Text;
+using System.IO.Enumeration;
 
 namespace Paranext.DataProvider.Projects;
 
@@ -29,36 +29,88 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
             );
     }
 
-    public string[] GetExistingDataStreamNames() // TODO: This doesn't seem to be used
+    public string[] GetExistingDataStreamNames(string? underPath = null)
     {
-        var files = Directory.GetFiles(
-            _writableRootDir,
-            "*",
+        // Resolving through GetFileNameFromStreamName keeps the validation and separator handling
+        // identical to GetDataStream, so a name this returns is a name that can be read back.
+        var rootDir = string.IsNullOrEmpty(underPath)
+            ? _writableRootDir
+            : GetFileNameFromStreamName(underPath);
+
+        // An absent sub-path means "nothing written there yet" and answers empty; an absent project
+        // directory means the project itself is unreachable and must not be reported as "no data",
+        // since callers cannot tell an authoritative empty answer from a failure they should retry.
+        if (!Directory.Exists(_writableRootDir))
+            throw new DirectoryNotFoundException(
+                $"Project contents missing for {_projectDetails.Name} ({_projectDetails.Metadata.Id})"
+            );
+
+        // Enumerating a path that does not exist must not create it - callers use this to discover
+        // what exists without writing to the project
+        if (!Directory.Exists(rootDir))
+            return [];
+
+        // The listing must agree with GetDataStream, which opens a file by name with no attribute
+        // filter at all. So the rule is exactly: every regular file under rootDir is a stream,
+        // whatever its attributes; nothing else is; and the walk never leaves rootDir. Those are two
+        // separate decisions - what to INCLUDE and where to RECURSE - and Directory.GetFiles exposes
+        // only one knob (AttributesToSkip) that conflates them, which is why this is a
+        // FileSystemEnumerable with a predicate for each. Every simpler form below breaks the
+        // contract:
+        // - Directory.GetFiles with AttributesToSkip = ReparsePoint (the one-flag way to stop link
+        //   recursion) also skips FILES carrying ReparsePoint - which cloud-sync placeholders do
+        //   (OneDrive Files On-Demand, Dropbox online-only) while GetDataStream reads them fine.
+        // - Refusing to recurse into any directory carrying ReparsePoint (the obvious link test) also
+        //   refuses cloud-sync placeholder DIRECTORIES, which carry it here whatever the process's
+        //   placeholder mode - disguising hides it from DirectoryInfo.Attributes, not from this
+        //   enumeration - so in a OneDrive-synced project everything beneath one vanishes.
+        // - AttributesToSkip at its default (Hidden | System): .NET reports every dot-prefixed name
+        //   as Hidden on Unix, so `.foo.json` and everything under `.cache/` vanish on macOS and
+        //   Linux but not on Windows.
+        // - Following directory links (no ShouldRecursePredicate, or a MaxRecursionDepth in its
+        //   place) reports files from outside the project as this extension's own, under names with
+        //   no `..` for GetFileNameFromStreamName's guard to catch; a link to an ancestor recurses
+        //   until the path length overflows, and a depth cap only bounds that damage.
+        var streams = new FileSystemEnumerable<string>(
+            rootDir,
+            (ref FileSystemEntry entry) => entry.ToFullPath(),
             new EnumerationOptions
             {
                 MatchType = MatchType.Simple,
                 RecurseSubdirectories = true,
                 ReturnSpecialDirectories = false,
+                // Skip nothing by attribute; inclusion and recursion are decided by the predicates
+                AttributesToSkip = 0,
             }
-        );
-
-        DirectoryInfo projectDirectory = new(_writableRootDir);
-        List<string> retVal = new();
-        foreach (var file in files)
+        )
         {
-            FileInfo fileInfo = new(file);
-            StringBuilder streamName = new(fileInfo.Name);
-            DirectoryInfo? walkingUp = fileInfo.Directory;
-            while (walkingUp != null && walkingUp.FullName != projectDirectory.FullName)
-            {
-                streamName.Insert(0, Path.DirectorySeparatorChar);
-                streamName.Insert(0, walkingUp.Name);
-                walkingUp = walkingUp.Parent;
-            }
-            retVal.Add(streamName.ToString());
-        }
+            // Files are streams and directories are not. Without this predicate the enumeration
+            // yields directories too - it is not Directory.GetFiles.
+            ShouldIncludePredicate = (ref FileSystemEntry entry) => !entry.IsDirectory,
+            // Consulted only for directories: never descend into a symlink or junction. A FILE that
+            // is a link is still included above, because GetDataStream reads through it. LinkTarget
+            // is non-null only for a real link, not for a cloud placeholder (see above), and the
+            // attribute check keeps that lookup off ordinary directories. LinkTarget is also null
+            // when it cannot read a link's data at all, so such a link would be walked. Accepted
+            // rather than guarded: it opens the entry requesting no access rights, so that failure
+            // is all but impossible, and a guard would be a branch no test can reach.
+            ShouldRecursePredicate = (ref FileSystemEntry entry) =>
+                (entry.Attributes & FileAttributes.ReparsePoint) == 0
+                || new DirectoryInfo(entry.ToFullPath()).LinkTarget == null,
+        };
 
-        return retVal.ToArray();
+        return
+        [
+            .. streams
+                .Select(file =>
+                    Path.GetRelativePath(rootDir, file).Replace(Path.DirectorySeparatorChar, '/')
+                )
+                // A file whose name GetDataStream would refuse (".." anywhere) or resolve to a
+                // different file (a backslash, which it reads as a separator - possible only in a
+                // Unix file name) is not listed, since no caller can read it back
+                .Where(name => !name.Contains("..") && !name.Contains('\\'))
+                .Order(StringComparer.Ordinal),
+        ];
     }
 
     public Stream? GetDataStream(string streamName, bool createIfNotExists = false)
