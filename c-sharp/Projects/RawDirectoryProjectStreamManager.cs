@@ -56,25 +56,21 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
         // separate decisions - what to INCLUDE and where to RECURSE - and Directory.GetFiles exposes
         // only one knob (AttributesToSkip) that conflates them, which is why this is a
         // FileSystemEnumerable with a predicate for each. Every simpler form below breaks the
-        // contract, and the named test goes red:
+        // contract:
         // - Directory.GetFiles with AttributesToSkip = ReparsePoint (the one-flag way to stop link
         //   recursion) also skips FILES carrying ReparsePoint - which cloud-sync placeholders do
         //   (OneDrive Files On-Demand, Dropbox online-only) while GetDataStream reads them fine.
-        //   Caught by GetExistingDataStreamNames_FileThatIsASymbolicLink_IsListed and, on Windows,
-        //   GetExistingDataStreamNames_CloudPlaceholderDirectory_IsDescendedInto.
         // - Refusing to recurse into any directory carrying ReparsePoint (the obvious link test) also
         //   refuses cloud-sync placeholder DIRECTORIES, which carry it here whatever the process's
         //   placeholder mode - disguising hides it from DirectoryInfo.Attributes, not from this
         //   enumeration - so in a OneDrive-synced project everything beneath one vanishes.
-        //   Caught by GetExistingDataStreamNames_CloudPlaceholderDirectory_IsDescendedInto.
         // - AttributesToSkip at its default (Hidden | System): .NET reports every dot-prefixed name
         //   as Hidden on Unix, so `.foo.json` and everything under `.cache/` vanish on macOS and
-        //   Linux but not on Windows. Caught by GetExistingDataStreamNames_HiddenStreams_AreStillListed.
+        //   Linux but not on Windows.
         // - Following directory links (no ShouldRecursePredicate, or a MaxRecursionDepth in its
         //   place) reports files from outside the project as this extension's own, under names with
         //   no `..` for GetFileNameFromStreamName's guard to catch; a link to an ancestor recurses
         //   until the path length overflows, and a depth cap only bounds that damage.
-        //   Caught by GetExistingDataStreamNames_DirectoryThatIsASymbolicLink_IsNotDescendedInto.
         var streams = new FileSystemEnumerable<string>(
             rootDir,
             (ref FileSystemEntry entry) => entry.ToFullPath(),

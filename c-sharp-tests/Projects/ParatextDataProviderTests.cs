@@ -543,7 +543,7 @@ namespace TestParanextDataProvider.Projects
                 new(PdpName, Client, _projectDetails, ParatextProjects);
 
             // A name with a separator nests inside the extensions directory rather than escaping
-            // it, and the read and write paths have always accepted one. The listing must agree
+            // it, and the read and write paths accept one. The listing must agree
             // with them - and its escape check must never migrate into the shared path composition,
             // where it would reject this name for reads and writes too and strand whatever was
             // written under it

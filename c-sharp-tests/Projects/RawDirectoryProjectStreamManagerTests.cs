@@ -149,9 +149,8 @@ namespace TestParanextDataProvider.Projects
             // A cloud-sync placeholder (OneDrive Files On-Demand, Dropbox online-only) is a file
             // carrying the ReparsePoint attribute that File.Open reads fine. A file symlink has the
             // same shape and can be made on every platform, so this pins that the listing does not
-            // skip reparse-point files - the tempting one-flag way to stop link recursion. On
-            // Windows, GetExistingDataStreamNames_CloudPlaceholderDirectory_IsDescendedInto pins it
-            // with real placeholders
+            // skip reparse-point files - the tempting one-flag way to stop link recursion. A
+            // Windows test below covers real placeholders
             WriteStream($"{ExtensionPath}/real.json", "real");
             var extensionDirectory = Path.Join(
                 _projectFolder.Path,
