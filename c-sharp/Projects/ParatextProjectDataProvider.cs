@@ -540,18 +540,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// Reject an extension name that would root the listing at the shared extensions directory or
     /// above it — "." or "./" alone, or any ".." segment — because enumerating there hands back every
     /// extension's data instead of the one asked about. Nothing else is rejected: a nested name such
-    /// as "acme/tools" stays within its own subtree and is valid on every path, and Windows' trimming
-    /// of a trailing space or dot has always aliased such a name to the trimmed one and still
-    /// round-trips.
+    /// as "acme/tools" stays within its own subtree and is valid on every path, and Windows trims a
+    /// trailing space or dot, so such a name aliases the trimmed one and still round-trips.
     ///
     /// This check belongs to the listing alone and must not move into
     /// <see cref="GetExtensionDataRoot"/>, tempting as sharing it looks. An extension name is
     /// caller-supplied and lands directly in a path, but for <see cref="GetExtensionData"/> and
     /// <see cref="SetExtensionData"/> a bad name reaches nothing a caller could not reach by naming
     /// the other extension outright — so a shared check would close no access there, while rejecting
-    /// names those methods have always accepted and stranding whatever was written under them.
-    /// ExtensionData_NestedExtensionName_WritesListsAndReadsBack pins that; the
-    /// ListExtensionDataQualifiers_*_Throws cases pin the rejections.
+    /// names those methods accept would strand whatever was written under them.
     /// </summary>
     /// <exception cref="InvalidDataException">The name escapes its own directory.</exception>
     private static void EnsureExtensionNameStaysInItsOwnDirectory(string extensionName)
