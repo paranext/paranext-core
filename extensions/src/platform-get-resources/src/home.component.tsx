@@ -149,6 +149,12 @@ export type SortConfig = {
  */
 const SIDE_TOOLTIP_ARROW_CLASS = 'tw:translate-y-[calc(-50%-1px)]';
 
+/**
+ * Short name of the sample project the app installs on first run, which the getting-started prompt
+ * is about.
+ */
+const BUNDLED_SAMPLE_PROJECT_SHORT_NAME = 'WEB';
+
 const DEFAULT_SORT_CONFIG: SortConfig = { key: 'language', direction: 'ascending' };
 
 /**
@@ -354,7 +360,7 @@ export function Home({
   const paratextProjectReadOnlyText: string = getLocalizedString(
     '%resources_paratextProjectReadOnly_tooltip%',
   );
-  const resourceTypeText: string = getLocalizedString('%resources_resource_tooltip%');
+  const resourceText: string = getLocalizedString('%resources_resource_tooltip%');
   const noProjectsText: string = getLocalizedString('%resources_noProjects%');
   const noProjectsInstructionText: string = getLocalizedString('%resources_noProjectsInstruction%');
   const noProjectsInstructionWithoutResourcesText: string = getLocalizedString(
@@ -553,7 +559,7 @@ export function Home({
   // only item the type filter lists, and no search hides it.
   const isOnlyWebSampleListed =
     filteredAndSortedProjects.length === 1 &&
-    filteredAndSortedProjects[0].name === 'WEB' &&
+    filteredAndSortedProjects[0].name === BUNDLED_SAMPLE_PROJECT_SHORT_NAME &&
     !filteredAndSortedProjects[0].isPublished &&
     mergedProjectInfo.filter((project) =>
       isShownByProjectResourceFilter(projectResourceFilter, project.isPublished),
@@ -665,7 +671,7 @@ export function Home({
    * and the words that name it in the tooltip and to screen readers.
    */
   const getRowKind = (project: MergedProjectInfo) => {
-    if (project.isPublished) return { Icon: BookOpen, isReadOnly: false, label: resourceTypeText };
+    if (project.isPublished) return { Icon: BookOpen, isReadOnly: false, label: resourceText };
     if (project.isEditable === false)
       return { Icon: ScrollText, isReadOnly: true, label: paratextProjectReadOnlyText };
     return { Icon: ScrollText, isReadOnly: false, label: paratextProjectText };
@@ -793,8 +799,9 @@ export function Home({
       >
         <div className="tw:flex tw:flex-wrap tw:justify-between tw:gap-4">
           {/*
-           * Grows to fit the search box's placeholder with the filter button beside it, but wraps
-           * the Get Resources button below it at the same width as before that button was added.
+           * Grows, up to `max-w-sm`, to fit the search box's placeholder with the filter button
+           * beside it; the `basis-72` it starts from is the width at which the Get Resources button
+           * wraps below it.
            */}
           <div className="tw:flex tw:flex-col tw:gap-4 tw:grow tw:basis-72 tw:min-w-0 tw:max-w-sm">
             <div className="tw:flex tw:gap-4 tw:items-center tw:[@media(max-height:28rem)]:!hidden tw:max-[300px]:!hidden">

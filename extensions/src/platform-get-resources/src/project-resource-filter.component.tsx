@@ -6,6 +6,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
   Tooltip,
+  TOOLTIP_DELAY_MS,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
@@ -85,7 +86,7 @@ export function ProjectResourceFilter({
     // `modal={false}` because a modal Radix menu sets `pointer-events: none` on the page, and this one
     // sits beside the search box: the first click into it would only close the menu.
     <DropdownMenu modal={false}>
-      <TooltipProvider>
+      <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>

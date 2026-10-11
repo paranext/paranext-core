@@ -5,6 +5,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
 import { FAILED_PRECONDITION, isPlatformError } from 'platform-bible-utils';
+import localizedStringsContribution from '../contributions/localizedStrings.json';
 import {
   GetResources,
   newResourceActionDidNotTakeEffectError,
@@ -381,6 +382,10 @@ describe('GetResources search box', () => {
       'placeholder',
       '%resources_searchByNameOrLanguage%',
     );
+    // The wording itself, not just the key: it must not promise a search by type.
+    expect(
+      localizedStringsContribution.localizedStrings.en['%resources_searchByNameOrLanguage%'],
+    ).not.toMatch(/type/i);
   });
 });
 

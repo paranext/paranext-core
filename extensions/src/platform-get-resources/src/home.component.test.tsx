@@ -3,6 +3,7 @@
 import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { formatReplacementString } from 'platform-bible-utils';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import coreEnStrings from '../../../../assets/localization/en.json';
 import localizedStringsContribution from '../contributions/localizedStrings.json';
@@ -173,10 +174,10 @@ describe('Home localized string keys', () => {
     renderHomeList({ localProjectsInfo: [] });
 
     // The search matches name and language only; the type filter beside it is the control for type.
-    expect(screen.getByRole('textbox')).toHaveProperty(
-      'placeholder',
-      enString('%resources_searchByNameOrLanguage%'),
-    );
+    const placeholder = screen.getByRole('textbox').getAttribute('placeholder') ?? '';
+    expect(placeholder).toBe(enString('%resources_searchByNameOrLanguage%'));
+    // The wording itself, not just the key: it must not promise a search by type.
+    expect(placeholder).not.toMatch(/type/i);
   });
 });
 
@@ -927,13 +928,17 @@ describe('Home project/resource filter', () => {
       initialProjectResourceFilter: 'paratextProject',
     });
 
-    expect(screen.queryByText('1 of 2')).not.toBeNull();
+    expect(
+      screen.queryByText(
+        formatReplacementString(EN_STRINGS['%general_countOfTotal%'], { count: 1, total: 2 }),
+      ),
+    ).not.toBeNull();
   });
 
   it('counts just the items while nothing is filtered out', () => {
     renderHomeList({ localProjectsInfo: [RESOURCE, PROJECT] });
 
-    expect(screen.queryByText('2 items')).not.toBeNull();
+    expect(screen.queryByText(`2 ${enString('%resources_items%')}`)).not.toBeNull();
   });
 });
 
