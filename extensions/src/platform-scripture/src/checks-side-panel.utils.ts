@@ -19,6 +19,7 @@ export const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_checkingBadge_title%',
   '%webView_checksSidePanel_checkRequiresSetup%',
   '%webView_checksSidePanel_checkCouldNotRun%',
+  '%webView_checksSidePanel_checkCouldNotRun_detail%',
   '%webView_checksSidePanel_checksCouldNotRun_notice%',
   '%checkSetup_notApplicable_quotationMarksNotUsed%',
   '%checkSetup_notApplicable_quotationTypesNotEnabled%',

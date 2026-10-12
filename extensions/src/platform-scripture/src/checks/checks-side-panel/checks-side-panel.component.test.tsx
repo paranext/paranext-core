@@ -82,6 +82,10 @@ function stubLocalizedStrings(keys: readonly LocalizeKey[]): LanguageStrings {
       strings[key] = 'Couldn’t run: {checkNames}';
       return;
     }
+    if (key === '%webView_checksSidePanel_checkCouldNotRun_detail%') {
+      strings[key] = '{checkName}: {message}';
+      return;
+    }
     strings[key] =
       isProjectSelectorSharedKey(key) || PICKER_BOUND_CHECKS_SIDE_PANEL_KEYS.includes(key)
         ? localizedValueFor(key)
