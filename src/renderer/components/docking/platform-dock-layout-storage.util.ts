@@ -1189,7 +1189,8 @@ const RC_DOCK_EDGE_GROUP_SHARE = 0.3;
  * docked area beside the new group is narrower than it. Nothing moves when the floating group does
  * not cover the new one, when the dock has no size yet (it has not been laid out), when the
  * floating group has no position yet, or when the new group fills the whole docked area and leaves
- * nowhere to move to.
+ * nowhere to move to. The moved group is a copy of the original object, because rc-dock's
+ * `DockPanel` re-renders only for a new panel object (see the comment at the move).
  *
  * @param dockLayout The rc-dock dock layout React component ref
  * @param floatingTabGroupId Id of the floating tab group to move
@@ -1223,9 +1224,18 @@ function moveFloatingTabGroupClear(
   if (room <= 0) return;
   const width = Math.min(w, room);
   const left = isNewGroupAtLeftEdge ? newGroupRight : newGroupLeft - width;
+
+  // rc-dock moves a floating tab group by writing the new position into the same object, and it
+  // redraws a tab group only when it gets a different object, so the group would stay drawn where
+  // it was. Moving a copy that takes its place gives rc-dock a new object to draw; the copy keeps
+  // the id, so the group is updated in place rather than re-created.
+  const floatbox = floatingTabGroup.parent;
+  if (!floatbox) return;
+  const movedTabGroup: PanelData = { ...floatingTabGroup };
+  floatbox.children[floatbox.children.indexOf(floatingTabGroup)] = movedTabGroup;
   // Null required by the external API
   // eslint-disable-next-line no-null/no-null
-  dockLayout.dockMove(floatingTabGroup, null, 'float', { left, top: y, width, height: h });
+  dockLayout.dockMove(movedTabGroup, null, 'float', { left, top: y, width, height: h });
 }
 
 /**

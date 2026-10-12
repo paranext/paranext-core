@@ -184,6 +184,29 @@ function floatGeometry(dockLayout: DockLayout) {
   return { x, y, w, h, z };
 }
 
+/** The floating tab group `floating-group` as drawn; rc-dock positions it with inline styles */
+function drawnFloatingGroup(): HTMLElement {
+  const element = document.querySelector<HTMLElement>('.dock-fbox [data-dockid="floating-group"]');
+  if (!element) throw new Error('The floating tab group is not drawn');
+  return element;
+}
+
+/**
+ * Asserts the floating tab group is drawn where the layout puts it. rc-dock skips redrawing a tab
+ * group whose object did not change, so the layout alone can say a group moved while the screen
+ * still shows it where it was.
+ */
+function expectFloatDrawnAtItsPosition(dockLayout: DockLayout): void {
+  const { x, y, w, h } = floatGeometry(dockLayout);
+  const { left, top, width, height } = drawnFloatingGroup().style;
+  expect({ left, top, width, height }).toEqual({
+    left: `${x}px`,
+    top: `${y}px`,
+    width: `${w}px`,
+    height: `${h}px`,
+  });
+}
+
 /** A panel opened beside the floating target `project-f` */
 const BESIDE_FLOATING_TARGET: Layout = {
   type: 'panel',
@@ -458,6 +481,29 @@ describe('the tab group opened beside a tab group that is not docked', () => {
     );
   });
 
+  it('draws a floating target it moved aside at its new position, without re-creating it', () => {
+    const dockLayout = renderDock(
+      layoutWithFloatingTarget([tabGroup('docked-group', ['project-a'])], {
+        x: 1304,
+        y: 80,
+        w: 600,
+        h: 300,
+      }),
+    );
+    stubLayoutSize(dockLayout, 1904, 1000);
+    const floatingElement = drawnFloatingGroup();
+
+    openPanel(dockLayout, 'find', BESIDE_FLOATING_TARGET);
+
+    expect(floatGeometry(dockLayout).x).toBeCloseTo(352, 6);
+    expectFloatDrawnAtItsPosition(dockLayout);
+    // Updated in place, so a floating web view is not reloaded
+    expect(drawnFloatingGroup()).toBe(floatingElement);
+    const floatbox = rootBox(dockLayout, 'floatbox');
+    expect(floatbox.children).toHaveLength(1);
+    expect(tabGroupOf(dockLayout, 'project-f')).toBe(floatbox.children[0]);
+  });
+
   it('leaves a floating target that does not cover it where it is', () => {
     const dockLayout = renderDock(
       layoutWithFloatingTarget([tabGroup('docked-group', ['project-a'])]),
@@ -486,6 +532,7 @@ describe('the tab group opened beside a tab group that is not docked', () => {
     const { x, w } = floatGeometry(dockLayout);
     expect(x).toBeCloseTo(0, 6);
     expect(w).toBeCloseTo(952, 6);
+    expectFloatDrawnAtItsPosition(dockLayout);
   });
 
   it('leaves the floating target alone while the dock has no size yet', () => {
@@ -1047,6 +1094,7 @@ describe('opening a tab as a panel in a right-to-left UI', () => {
     const { x, w } = floatGeometry(dockLayout);
     expect(x).toBeCloseTo(952, 6);
     expect(w).toBe(400);
+    expectFloatDrawnAtItsPosition(dockLayout);
   });
 
   it('joins the tab group on the left when asked for the right', () => {
