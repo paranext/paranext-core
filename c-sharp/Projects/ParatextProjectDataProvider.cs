@@ -587,8 +587,34 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         ProjectDetails projectDetails
     ) =>
         scrText.IsResourceProject
-            ? new ResourceProjectStreamManager(scrText.FileManager, scrText.FullPath)
+            ? new ResourceProjectStreamManager(scrText.FileManager, GetResourceArchivePath(scrText))
             : new RawDirectoryProjectStreamManager(projectDetails);
+
+    /// <summary>
+    /// The archive a resource's <see cref="ScrText.FileManager"/> reads, or null if it cannot be
+    /// determined.
+    ///
+    /// Usually the resource's own <see cref="ScrText.FullPath"/>. A joined text is the exception:
+    /// when HEB and GRK (or LXX and GRK, or OHEB and OGRK) are both installed, the project list
+    /// holds one text standing for the pair, which has no path of its own but shares its
+    /// file manager with its Old Testament text, so the archive is that text's. The project list
+    /// can join a text that is already joined, so this unwraps until it reaches a text with a path.
+    ///
+    /// ParatextData derives the archive path differently only for a dictionary resource, and
+    /// <see cref="ParatextUtils.PlatformScrTextCollection"/> creates no resource as a dictionary.
+    /// </summary>
+    internal static string? GetResourceArchivePath(ScrText scrText)
+    {
+        var archiveOwner = scrText;
+        while (archiveOwner is JoinedScrText joined)
+            // Genesis is an Old Testament book, so this is the text whose file manager it shares
+            archiveOwner = joined.GetJoinedText(1);
+        // Should ParatextData ever change which text's file manager a joined text uses, report the
+        // archive as unknown rather than list a different archive than reads come from
+        return ReferenceEquals(archiveOwner.FileManager, scrText.FileManager)
+            ? archiveOwner.FullPath
+            : null;
+    }
 
     #endregion
 

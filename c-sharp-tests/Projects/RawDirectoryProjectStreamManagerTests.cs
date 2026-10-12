@@ -292,6 +292,86 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void GetDataStream_ReadOnlyFile_IsListedAndReadsBack()
+        {
+            WriteStream($"{ExtensionPath}/locked.json", "locked");
+            var lockedPath = Path.Join(
+                _projectFolder.Path,
+                ExtensionPath.Replace('/', Path.DirectorySeparatorChar),
+                "locked.json"
+            );
+            File.SetAttributes(lockedPath, FileAttributes.ReadOnly);
+
+            try
+            {
+                // A read that asked for write access would be refused here, though the listing
+                // names the file
+                Assert.Multiple(() =>
+                {
+                    Assert.That(
+                        _streamManager.GetExistingDataStreamNames(ExtensionPath),
+                        Is.EqualTo(new[] { "locked.json" })
+                    );
+                    Assert.That(ReadStream($"{ExtensionPath}/locked.json"), Is.EqualTo("locked"));
+                });
+            }
+            finally
+            {
+                // Windows will not delete a read-only file, so teardown needs it writable again
+                File.SetAttributes(lockedPath, FileAttributes.Normal);
+            }
+        }
+
+        [Test]
+        public void GetDataStream_TwoReadsOfOneStream_CanBeOpenAtOnce()
+        {
+            WriteStream($"{ExtensionPath}/shared.json", "shared");
+
+            using Stream first =
+                _streamManager.GetDataStream($"{ExtensionPath}/shared.json")
+                ?? throw new AssertionException("The stream was just written");
+
+            // Two web views on one project can read the same document at the same time
+            Assert.That(ReadStream($"{ExtensionPath}/shared.json"), Is.EqualTo("shared"));
+        }
+
+        [Test]
+        public void GetDataStream_OpenRead_DoesNotBlockAnotherProcessWritingOrReplacingIt()
+        {
+            WriteStream($"{ExtensionPath}/synced.json", "old");
+            var syncedPath = Path.Join(
+                _projectFolder.Path,
+                ExtensionPath.Replace('/', Path.DirectorySeparatorChar),
+                "synced.json"
+            );
+
+            using Stream reading =
+                _streamManager.GetDataStream($"{ExtensionPath}/synced.json")
+                ?? throw new AssertionException("The stream was just written");
+
+            // Send/Receive writes on its own schedule, so a read in progress must not make it fail.
+            // A replace moves the old file aside first, as Mercurial does on Windows
+            Assert.Multiple(() =>
+            {
+                Assert.DoesNotThrow(() =>
+                {
+                    using FileStream _ =
+                        new(
+                            syncedPath,
+                            FileMode.Open,
+                            FileAccess.Write,
+                            FileShare.ReadWrite | FileShare.Delete
+                        );
+                });
+                Assert.DoesNotThrow(() =>
+                {
+                    File.Move(syncedPath, $"{syncedPath}.old");
+                    File.WriteAllText(syncedPath, "new");
+                });
+            });
+        }
+
+        [Test]
         public void GetExistingDataStreamNames_ProjectStorageMissing_Throws()
         {
             WriteStream($"{ExtensionPath}/mine.json", "mine");

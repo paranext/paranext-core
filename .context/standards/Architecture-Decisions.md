@@ -4664,9 +4664,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   extension data against it gave every resource in `_Resources` one shared bucket (and those in
   `_resourcesById` a second), never read the archive, and let `setExtensionData` write loose files
   into that folder. `ResourceProjectStreamManager` now reads through the resource's own
-  `ScrText.FileManager` and lists the archive's entries, keeping only those that file manager will
-  read (an encrypted resource's unencrypted entries are refused on read, so they are not listed), and
-  `setExtensionData` refuses a resource before taking the write lock.
+  `ScrText.FileManager` and lists the entries of the archive that file manager reads (for a joined
+  text such as HEB+GRK, which has no path of its own, its Old Testament text's), keeping only those
+  that file manager will read (an encrypted resource's unencrypted entries are refused on read, so
+  they are not listed), and `setExtensionData` refuses a resource before taking the write lock.
 - **Alternatives:** *Optional on the engine, required on the consumer, inside `platform.base`* —
   the shape the PR first took, superseded before merge: a member optional to implement but required
   to call cannot be reasoned about from either side, and it is discovered by failure, because the

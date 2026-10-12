@@ -157,6 +157,22 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void GetExistingDataStreamNames_ArchiveNotLocated_Throws()
+        {
+            var fileManager = CreateFileManager(
+                [($"{ExtensionPath}/mine.json", "mine", false)],
+                passwordProtected: false
+            );
+            var streamManager = new ResourceProjectStreamManager(fileManager, archivePath: null);
+
+            // Reported as an unreachable resource, the same as a missing archive, rather than as a
+            // resource with no data
+            Assert.Throws<FileNotFoundException>(
+                () => streamManager.GetExistingDataStreamNames(ExtensionPath)
+            );
+        }
+
+        [Test]
         public void GetDataStream_Absent_IsNull()
         {
             var streamManager = CreateStreamManager([($"{ExtensionPath}/mine.json", "mine")]);

@@ -105,10 +105,10 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
                 .Select(file =>
                     Path.GetRelativePath(rootDir, file).Replace(Path.DirectorySeparatorChar, '/')
                 )
-                // A file whose name GetDataStream would refuse (".." anywhere) or resolve to a
-                // different file (a backslash, which it reads as a separator - possible only in a
-                // Unix file name) is not listed, since no caller can read it back
-                .Where(name => !name.Contains("..") && !name.Contains('\\'))
+                // A file whose name GetDataStream would refuse, or would resolve to a different file
+                // (a backslash, which it reads as a separator - possible only in a Unix file name),
+                // is not listed, since no caller can read it back
+                .Where(name => ProjectStreamNames.IsValid(name) && !name.Contains('\\'))
                 .Order(StringComparer.Ordinal),
         ];
     }
@@ -133,9 +133,20 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
                 return null;
         }
 
-        var fileMode = createIfNotExists ? FileMode.OpenOrCreate : FileMode.Open;
-        var retVal = File.Open(fileName, fileMode, FileAccess.ReadWrite);
-        return retVal;
+        // A stream that is not being created is only read, so it is opened for reading, and shared
+        // fully: a read-only file is readable, two reads of one file at once do not collide, and a
+        // read never blocks another process, such as Send/Receive, from writing, replacing or
+        // deleting the file. This process orders its own reads and writes, but not theirs. The cost
+        // is that a read overlapping another process's in-place write may see it half done; one
+        // that overlaps a replace keeps reading the file it opened.
+        return createIfNotExists
+            ? File.Open(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite)
+            : File.Open(
+                fileName,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete
+            );
     }
 
     public bool DeleteDataStream(string streamName) // TODO: This doesn't seem to be used
@@ -159,8 +170,7 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
 
     private string GetFileNameFromStreamName(string streamName)
     {
-        if (string.IsNullOrEmpty(streamName) || streamName.Contains(".."))
-            throw new ArgumentException("Invalid stream name", nameof(streamName));
+        ProjectStreamNames.EnsureValid(streamName);
 
         streamName = streamName.Replace('/', Path.DirectorySeparatorChar);
         streamName = streamName.Replace('\\', Path.DirectorySeparatorChar);

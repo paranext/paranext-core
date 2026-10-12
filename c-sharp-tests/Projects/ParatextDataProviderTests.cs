@@ -367,6 +367,72 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void GetResourceArchivePath_Resource_IsItsOwnPath()
+        {
+            using DummyResourceScrText resource = new();
+
+            Assert.That(
+                ParatextProjectDataProvider.GetResourceArchivePath(resource),
+                Is.EqualTo(resource.FullPath)
+            );
+        }
+
+        [Test]
+        public void GetResourceArchivePath_JoinedText_IsItsOldTestamentTextsPath()
+        {
+            using DummyResourceScrText oldTestament = new();
+            using DummyResourceScrText newTestament = new();
+            JoinedScrText joined = new(RegistrationInfo.DefaultUser, oldTestament, newTestament);
+
+            // A joined text has no path of its own but reads through its Old Testament text's
+            // file manager, so that text's archive is the one to list
+            Assert.Multiple(() =>
+            {
+                Assert.That(joined.FullPath, Is.Null);
+                Assert.That(
+                    ParatextProjectDataProvider.GetResourceArchivePath(joined),
+                    Is.EqualTo(oldTestament.FullPath)
+                );
+            });
+        }
+
+        [Test]
+        public void GetResourceArchivePath_JoinedTextWithinAJoinedText_IsTheInnermostPath()
+        {
+            using DummyResourceScrText oldTestament = new();
+            using DummyResourceScrText newTestament = new();
+            JoinedScrText inner = new(RegistrationInfo.DefaultUser, oldTestament, newTestament);
+            JoinedScrText outer = new(RegistrationInfo.DefaultUser, inner, newTestament);
+
+            Assert.That(
+                ParatextProjectDataProvider.GetResourceArchivePath(outer),
+                Is.EqualTo(oldTestament.FullPath)
+            );
+        }
+
+        [Test]
+        public void ExtensionData_NameStreamManagersRefuse_ThrowsArgumentException()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+            var scope = new ProjectDataScope
+            {
+                ProjectID = _projectDetails.Metadata.Id,
+                ExtensionName = "a..b",
+                DataQualifier = "data.json",
+            };
+
+            // ".." anywhere in a name is refused by every stream manager, which the listing's
+            // documentation promises get and set do identically
+            Assert.Multiple(() =>
+            {
+                Assert.Throws<ArgumentException>(() => provider.GetExtensionData(scope));
+                Assert.Throws<ArgumentException>(() => provider.SetExtensionData(scope, "data"));
+                Assert.Throws<ArgumentException>(() => provider.ListExtensionDataQualifiers(scope));
+            });
+        }
+
+        [Test]
         public void CreateDefaultStreamManager_EditableProject_ReadsItsDirectory()
         {
             Assert.That(

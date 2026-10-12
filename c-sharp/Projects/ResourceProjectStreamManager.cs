@@ -14,7 +14,7 @@ namespace Paranext.DataProvider.Projects;
 internal class ResourceProjectStreamManager : IProjectStreamManager
 {
     private readonly ProjectFileManager _fileManager;
-    private readonly string _archivePath;
+    private readonly string? _archivePath;
 
     /// <param name="fileManager">
     /// The resource's own file manager. Every read goes through it, so it applies the same
@@ -22,11 +22,12 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
     /// other read of the resource.
     /// </param>
     /// <param name="archivePath">
-    /// The archive <paramref name="fileManager"/> reads. Opened only to list entry names: the file
+    /// The archive <paramref name="fileManager"/> reads, or null when it cannot be determined, in
+    /// which case listing fails as for a missing archive. Opened only to list entry names: the file
     /// manager lists one directory at a time and finds a directory only through the files directly
     /// in it, so it cannot reach a file whose parent directories hold nothing else.
     /// </param>
-    public ResourceProjectStreamManager(ProjectFileManager fileManager, string archivePath)
+    public ResourceProjectStreamManager(ProjectFileManager fileManager, string? archivePath)
     {
         _fileManager = fileManager;
         _archivePath = archivePath;
@@ -34,7 +35,7 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
 
     public void Initialize()
     {
-        if (!File.Exists(_archivePath))
+        if (_archivePath == null || !File.Exists(_archivePath))
             throw new InvalidDataException($"Resource archive missing: {_archivePath}");
     }
 
@@ -44,8 +45,11 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
             ? ""
             : $"{GetEntryNameFromStreamName(underPath).TrimEnd('/')}/";
 
-        // Opening a missing archive throws FileNotFoundException, which is the answer wanted: the
-        // resource itself is unreachable, which is not the same as having no data
+        // A missing archive, or one that cannot be located, throws FileNotFoundException, which is
+        // the answer wanted: the resource itself is unreachable, which is not the same as having
+        // no data
+        if (_archivePath == null)
+            throw new FileNotFoundException("The resource's archive could not be located");
         List<string> entryNames;
         using (ZipFile archive = new(_archivePath))
             entryNames =
@@ -59,7 +63,7 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
                 // Case-insensitive because the file manager's lookups are, so this lists exactly
                 // the entries a read under the same prefix finds
                 .Where(name => name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                .Where(name => !name.Contains("..") && CanRead(name))
+                .Where(name => ProjectStreamNames.IsValid(name) && CanRead(name))
                 .Select(name => name[prefix.Length..])
                 .Order(StringComparer.Ordinal),
         ];
@@ -108,14 +112,9 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
         }
     }
 
-    /// <summary>
-    /// The same names <see cref="RawDirectoryProjectStreamManager"/> refuses are refused here, so a
-    /// stream name is valid or not regardless of which kind of project it is read from.
-    /// </summary>
     private static string GetEntryNameFromStreamName(string streamName)
     {
-        if (string.IsNullOrEmpty(streamName) || streamName.Contains(".."))
-            throw new ArgumentException("Invalid stream name", nameof(streamName));
+        ProjectStreamNames.EnsureValid(streamName);
 
         return streamName.Replace('\\', '/');
     }

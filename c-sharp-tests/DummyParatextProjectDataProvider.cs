@@ -57,6 +57,8 @@ namespace TestParanextDataProvider
             {
                 // Stream names are already '/'-joined here, so a plain prefix match gives the same
                 // recursive, relative, forward-slash names the file-based manager produces
+                if (!string.IsNullOrEmpty(underPath))
+                    ProjectStreamNames.EnsureValid(underPath);
                 var prefix = string.IsNullOrEmpty(underPath) ? "" : $"{underPath}/";
                 return
                 [
@@ -65,12 +67,15 @@ namespace TestParanextDataProvider
                             streamName.StartsWith(prefix, StringComparison.Ordinal)
                         )
                         .Select(streamName => streamName[prefix.Length..])
+                        .Where(ProjectStreamNames.IsValid)
                         .OrderBy(streamName => streamName, StringComparer.Ordinal),
                 ];
             }
 
             public Stream? GetDataStream(string streamName, bool createIfNotExists = false)
             {
+                // The rule every real stream manager applies, so provider tests see its rejections
+                ProjectStreamNames.EnsureValid(streamName);
                 if (_owner._inMemoryFiles.TryGetValue(streamName, out byte[]? existingFile))
                     return new InMemoryFile(_owner, streamName, existingFile);
 

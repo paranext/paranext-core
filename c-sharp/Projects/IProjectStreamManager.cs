@@ -38,11 +38,18 @@ internal interface IProjectStreamManager
     string[] GetExistingDataStreamNames(string? underPath = null);
 
     /// <summary>
-    /// Get a read/write data stream for project data providers to use
+    /// Get a data stream for project data providers to use: one to write when
+    /// <paramref name="createIfNotExists"/> is true, and one only to read otherwise.
     /// </summary>
-    /// <param name="streamName">Name associated with a data stream</param>
+    /// <param name="streamName">
+    /// Name associated with a data stream. Must be <see cref="ProjectStreamNames.IsValid">valid</see>.
+    /// </param>
     /// <param name="createIfNotExists">Determines whether to create the stream if it doesn't already exist</param>
-    /// <returns>Unique stream that is associated with the given stream name</returns>
+    /// <returns>
+    /// Unique stream that is associated with the given stream name, or null when it does not exist
+    /// and <paramref name="createIfNotExists"/> is false
+    /// </returns>
+    /// <exception cref="ArgumentException"><paramref name="streamName"/> is not valid.</exception>
     Stream? GetDataStream(string streamName, bool createIfNotExists = false);
 
     /// <summary>
