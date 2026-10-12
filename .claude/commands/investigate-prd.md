@@ -237,8 +237,11 @@ feature or a clean port.
 
 ## 4. Proposed work items
 *(for: epic lead + engineers)*
-| # | Work item | Repo | Complexity | Depends on | Covers |
-| WI-1 | {<Area>: what changes, in plain words} | {repo} | Simple/Moderate/Complex | — | NN-1, NTH-2 |
+| # | Work item | Repo | Complexity | Depends on | Covers | Ticket |
+| WI-1 | {<Area>: what changes, in plain words} | {repo} | Simple/Moderate/Complex | — | NN-1, NTH-2 | — |
+
+(`/prd-to-jira` fills the **Ticket** column, and adds a `Parent ticket: PT-xxxx` line directly
+above this table, as it creates the tickets. Leave both empty here.)
 
 **WI-1 — {title}.** {What it does. What it produces and which sibling item consumes it. Files it
 likely touches. What it deliberately leaves to other items. Any spike to run before its design.}

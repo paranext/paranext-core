@@ -108,8 +108,9 @@ readable top is in addition to the detail below, never a replacement for it.
    existing-parent mode, re-read the chosen ticket instead — see step 2). Then create each child
    with the parent set, one at a time, filling and verifying each before moving on. **As each key
    is created, write it into the brief** — the parent's key on a `Parent ticket: PT-xxxx` line
-   directly above the §4 work-item table, and each child's in that table (WI-n → PT-xxxx) — so a
-   later session can tell what this run already made. As soon as the parent is in place —
+   directly above the §4 work-item table, and each child's in that table's **Ticket** column
+   (add the column if an older brief lacks it) — so a later session can tell what this run
+   already made. As soon as the parent is in place —
    created, filled and verified, or re-read in existing-parent mode — carry out the approved
    actions for work items settled by an existing ticket: each move and `Relates` link, and each
    conversion — previewing it now if it was approved in principle, showing the preview, and

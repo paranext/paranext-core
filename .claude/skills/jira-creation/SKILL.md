@@ -196,7 +196,8 @@ holds text. Say which you chose.
 leaves a blank templated stub nobody can delete. So run steps 7–12 to completion on one issue
 before starting the next; where a parent's key is needed first, create and fill the parent, then
 each child in turn. A conversion that needs the new parent's key gets its preview and final yes
-as soon as the parent exists (see [Converting a duplicate](#converting-a-duplicate)).
+after the parent is filled and verified and before the first child is created — never between a
+child's create and its fill (see [Converting a duplicate](#converting-a-duplicate)).
 
 **Keep a record of the run.** Report each key as it is created, and keep a running list of every
 approved action on an existing ticket — link, re-parent, conversion, description edit — marked
@@ -301,7 +302,9 @@ Run `convertJiraIssueHierarchy` (found with `discover`; it runs through `execute
 2. **If the preview reports a blocker** — the ticket has child tickets of its own
    (`SOURCE_HAS_SUBTASKS`), the user lacks the permission (`MOVE_PERMISSION_REQUIRED`), or it is
    otherwise incompatible — show the user what it said and ask. Never fall back to recreating the
-   ticket.
+   ticket. If the user then chooses not to convert — including when the blocker only shows up
+   after the parent was created — apply the decline rule above: no new ticket for that work, and a
+   `Relates` link from the existing ticket to the parent.
 3. **Show the preview, then get that conversion's yes.** If the parent already exists (an
    existing ticket the user chose), the preview runs before the approval step and is shown there,
    in the separate conversions list. If the parent is created in this run, it has no key until
@@ -333,12 +336,13 @@ step before the user says yes.
 ## Content format
 
 `createJiraIssue` and `editJiraIssue` take `contentFormat`, and the read tools take
-`responseContentFormat`; take the allowed values from the tool's schema (v2 offers `"markdown"`
-and `"html"`). Pin the format explicitly on every call and **write back in the format the body was
-read in**: a read reports it as `appliedContentFormat`, and v2 returns HTML on its own for a body
-that Markdown can't represent — @mentions, images, panels. Writing such a body back as Markdown
-drops those parts, under the user's name. `"markdown"` is right for the text you draft; an edit of
-an existing ticket's body uses whatever format its read came back in.
+`responseContentFormat`; take the allowed values from the tool's schema. Pin the format
+explicitly on every call and **write back in the format the body was read in**: a read reports it
+as `appliedContentFormat`, and v2 returns HTML on its own for a body that Markdown can't
+represent — @mentions, images, panels (as of 2026-10-12, per the v2 tool descriptions). Writing
+such a body back as Markdown drops those parts, under the user's name. `"markdown"` is right for
+the text you draft; an edit of an existing ticket's body uses whatever format its read came back
+in, and if the edit tool doesn't accept that format, stop and ask rather than converting it.
 
 ## Worked example — filling, not replacing
 
