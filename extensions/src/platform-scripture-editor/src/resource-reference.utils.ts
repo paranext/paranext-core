@@ -78,6 +78,16 @@ export function getRefLabel(ref: ResourceReference, dblResourcesList: DblResourc
 }
 
 /**
+ * The row id of a project reference to the given project — see {@link getResourceReferenceRowId}.
+ *
+ * @param projectId The project's id
+ * @returns The namespaced row id
+ */
+export function getProjectRowId(projectId: string): string {
+  return `project:${projectId}`;
+}
+
+/**
  * A stable identity for a resource reference, for use as a React key, a radio-group value, or a
  * persisted selection. Namespaced by reference kind because a DBL entry UID and a project ID are
  * drawn from different spaces and could otherwise collide.
@@ -87,7 +97,7 @@ export function getRefLabel(ref: ResourceReference, dblResourcesList: DblResourc
  */
 export function getResourceReferenceRowId(reference: ResourceReference): string {
   if (isDblResourceReference(reference)) return `dbl:${reference.id}`;
-  if (isProjectReference(reference)) return `project:${reference.id}`;
+  if (isProjectReference(reference)) return getProjectRowId(reference.id);
   const name = 'name' in reference && reference.name ? reference.name : '';
   return `${reference.type}:${name}`;
 }

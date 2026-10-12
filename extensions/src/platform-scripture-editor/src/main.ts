@@ -63,8 +63,9 @@ import {
   showTextCollectionTab,
 } from './show-panel.util';
 import {
+  buildResourceTextPanelState,
   showResourceInReferencePanel,
-  takePendingResourceSelection,
+  type ResourceTextPanelOptions,
 } from './show-resource-in-panel.util';
 
 logger.debug('Scripture Editor is importing!');
@@ -1060,7 +1061,7 @@ function createResourceTextPanelProvider(
   return {
     async getWebView(
       savedWebView: SavedWebViewDefinition,
-      openWebViewOptions: ResourceViewerOptions,
+      openWebViewOptions: ResourceTextPanelOptions,
     ): Promise<WebViewDefinition | undefined> {
       if (savedWebView.webViewType !== webViewType)
         throw new Error(
@@ -1073,7 +1074,6 @@ function createResourceTextPanelProvider(
         ? currentResourceTextPanelProjectIds.get(webViewType)
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
       currentResourceTextPanelProjectIds.delete(webViewType);
-      const selectedResourceId = takePendingResourceSelection(webViewType);
       // Re-read every call so mode changes are picked up at open/replace/restore time.
       const interfaceMode = await papi.settings.get('platform.interfaceMode');
       // Intentionally does not force scrollGroupScrRef in simple mode. Bible texts and
@@ -1089,13 +1089,8 @@ function createResourceTextPanelProvider(
         // exactly as today, since it is text-labeled there (see resource-text-panel.web-view.tsx
         // for the live theme/selection-adaptive swap, which is likewise gated on Power mode).
         iconUrl: interfaceMode === 'simple' ? defaultIconUrl : savedWebView.iconUrl,
-        state: {
-          ...savedWebView.state,
-          resourceType,
-          // A resource opened elsewhere — from Home in Simple mode — to show here instead of the
-          // one this panel had selected.
-          ...(selectedResourceId !== undefined ? { selectedResourceId } : {}),
-        },
+        // Also selects a resource opened elsewhere — from Home in Simple mode — when one is passed.
+        state: buildResourceTextPanelState(savedWebView.state, resourceType, openWebViewOptions),
         // This webview only ever appears in the fixed 3-column simple-mode layout (Column 3) and
         // must always remain open there, so it's non-closable in simple mode.
         isClosable: interfaceMode === 'power',
@@ -1430,7 +1425,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     {
       method: {
         summary:
-          "Show a resource in the Bible texts or Commentaries tab and add it to the user's personal list",
+          "Show a resource in the Bible texts or Commentaries tab, adding it to the user's personal list unless the team's list has it",
         params: [
           {
             name: 'resourceProjectId',
@@ -1442,7 +1437,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         result: {
           name: 'return value',
           summary:
-            'The ID of the tab showing the resource, or undefined if no tab is showing a project. Throws if the tab could not be shown',
+            'The ID of the tab showing the resource, or undefined if it should be opened some other way (no tab is showing a project, or neither tab lists its kind). Throws if the tab could not be shown',
           schema: { type: 'string' },
         },
       },

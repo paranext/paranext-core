@@ -933,13 +933,14 @@ declare module 'papi-shared-types' {
     /**
      * Shows a locally-installed resource in the tab for its kind — Commentaries for commentaries,
      * Bible texts for Bible texts and for resources the catalog does not describe — and brings that
-     * tab to the front. Resources of other kinds are not shown in either tab. The resource is added
-     * to the current user's personal list for the project the tab shows, never to the team's list.
+     * tab to the front. Unless the team's list already has it, the resource is added to the current
+     * user's personal list for the project the tab shows; the team's list is never written.
      *
      * @param resourceProjectId The local project id of the resource to show
-     * @returns The tab's web view ID, or `undefined` if neither reference tab is showing a project
-     *   to add the resource to — the only case in which the caller should open it some other way
-     * @throws If the tab could not be shown. The user has already been told.
+     * @returns The tab's web view ID, or `undefined` if the resource should be opened some other
+     *   way: neither reference tab is showing a project to add it to, or it is of a kind neither
+     *   tab lists (source-language, enhanced or XML resources)
+     * @throws If the tab could not be shown. The user has been told.
      */
     'platformScriptureEditor.showResourceInReferencePanel': (
       resourceProjectId: string,

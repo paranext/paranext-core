@@ -18,10 +18,11 @@ async function isSimpleMode(): Promise<boolean> {
  * Opens a resource from Home.
  *
  * Simple mode's middle column only ever shows the project, so there a resource goes to its
- * reference tab instead — Bible texts or Commentaries — added to this user's own list for the
- * project that tab shows. Only with no project open, and so nothing in that column to replace, does
- * it open in the resource viewer. If the tab could not be shown, the user has been told and nothing
- * else is opened in its place.
+ * reference tab instead — Bible texts or Commentaries — and is added to this user's own list for
+ * the project that tab shows unless the team's list has it. It opens in the resource viewer only
+ * when no project is open, and so there is nothing in that column to replace, or when it is of a
+ * kind neither tab lists. If the tab could not be shown, nothing else is opened in its place; the
+ * user has been told, unless the command could not be reached at all.
  *
  * @param projectId The resource's local project id
  */
@@ -47,9 +48,9 @@ async function openResource(projectId: string): Promise<void> {
 /**
  * Opens a project in the Scripture editor and records it as recently opened.
  *
- * Recorded for editable projects only, matching what the title bar's picker lists. Home is the
- * title bar's route to a project that is not in that list yet, so a project opened here has to join
- * it — otherwise the escape hatch for finding a non-recent project never makes it recent.
+ * Recorded for projects only, not resources, matching what the title bar's picker lists. Home is
+ * the title bar's route to a project that is not in that list yet, so a project opened here has to
+ * join it — otherwise the escape hatch for finding a non-recent project never makes it recent.
  *
  * @param projectId The project's id
  */

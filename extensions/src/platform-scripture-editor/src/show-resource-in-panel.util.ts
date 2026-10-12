@@ -1,7 +1,7 @@
 import papi, { logger } from '@papi/backend';
-import type { SavedWebViewDefinition } from '@papi/core';
+import type { OpenWebViewOptions, SavedWebViewDefinition } from '@papi/core';
 import { doesCatalogRowCoverProject, getErrorMessage } from 'platform-bible-utils';
-import type { DblResourceData } from 'platform-bible-utils';
+import type { DblResourceData, ResourceType } from 'platform-bible-utils';
 import type { DblResourceReference, ProjectReference, ResourceReference } from 'platform-scripture';
 import {
   getResourceReferenceRowId,
@@ -16,22 +16,38 @@ import {
 } from './show-panel.util';
 
 /**
- * Row ids to select in a reference panel the next time its provider builds it, keyed by web view
- * type. Carries the selection through `reloadWebView`, which has no options for extra data.
+ * Options the Bible texts and Commentaries providers accept. `reloadWebView` types its options as
+ * `ReloadWebViewOptions`, but forwards the whole object to the provider, so a resource to select
+ * travels with the one build it was asked for.
  */
-const pendingResourceSelections = new Map<string, string>();
+export interface ResourceTextPanelOptions extends OpenWebViewOptions {
+  /** The container project whose texts the panel lists */
+  projectId?: string;
+  /** The row id of a resource to select in place of the one the panel had selected */
+  selectedResourceId?: string;
+}
 
 /**
- * Takes the selection {@link showResourceInReferencePanel} queued for a panel, if any. Called by the
- * panel's web view provider; the selection applies to one build only.
+ * The web view state a Bible texts or Commentaries panel is built with: its saved state, the kind
+ * of resource it lists, and — when one was asked for — the resource to select.
  *
- * @param webViewType The panel's web view type
- * @returns The row id to select, or `undefined` if none is queued
+ * @param savedState The panel's saved state
+ * @param resourceType The kind of resource the panel lists
+ * @param options The options the panel is being built with
+ * @returns The state to build the panel with
  */
-export function takePendingResourceSelection(webViewType: string): string | undefined {
-  const rowId = pendingResourceSelections.get(webViewType);
-  pendingResourceSelections.delete(webViewType);
-  return rowId;
+export function buildResourceTextPanelState(
+  savedState: Record<string, unknown> | undefined,
+  resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
+  options: ResourceTextPanelOptions,
+): Record<string, unknown> {
+  return {
+    ...savedState,
+    resourceType,
+    ...(options.selectedResourceId !== undefined
+      ? { selectedResourceId: options.selectedResourceId }
+      : {}),
+  };
 }
 
 /** What {@link findCatalogEntry} learned about a resource. */
@@ -40,12 +56,14 @@ type CatalogLookup = {
   entry: DblResourceData | undefined;
   /**
    * Whether the reference built from {@link entry} (or from its absence) can be trusted to be the
-   * one the resource is identified by. Not while the DBL catalog is unread or not loaded yet: the
-   * locally-installed list is then built without it, so every installed resource — DBL ones too —
-   * comes back as a non-DBL entry, identified by its project rather than its DBL entry. Saved, that
-   * would sit in the list as a second, differently-identified copy of the resource once it is added
-   * properly. With the catalog `notConfigured` — no DBL credentials in this build — every resource
-   * is identified by its project, and that is what is saved.
+   * one the resource is identified by, and so is safe to save. Not while the DBL catalog is unread
+   * or not loaded yet: the locally-installed list is then built without it, so every installed
+   * resource — DBL ones too — comes back as a non-DBL entry, identified by its project rather than
+   * its DBL entry. Saved, that would sit in the list as a second, differently-identified copy of
+   * the resource once it is added properly. Nor when the locally-installed list could not be read
+   * and the resource is not in the catalog: it may be a non-DBL commentary, guessed to be a Bible
+   * text. With the catalog `notConfigured` — no DBL credentials in this build — every resource is
+   * identified by its project, and that is what is saved.
    */
   isReferenceKindKnown: boolean;
 };
@@ -60,8 +78,8 @@ type CatalogLookup = {
  * @returns See {@link CatalogLookup}
  */
 async function findCatalogEntry(resourceProjectId: string): Promise<CatalogLookup> {
-  // Not bounded by a timeout: the local list below waits for the same sync regardless, and a catalog
-  // read before it finishes could miss a resource installed since and so mislabel it.
+  // Awaited in full, with no timeout: the local list below waits for the same sync anyway, and
+  // reading the catalog before it finishes could mislabel a just-installed resource.
   try {
     await papi.commands.sendCommand('platformGetResources.refreshResourceFlags', false);
   } catch (e) {
@@ -81,13 +99,15 @@ async function findCatalogEntry(resourceProjectId: string): Promise<CatalogLooku
   const catalog = dblResult.status === 'fulfilled' ? dblResult.value : undefined;
   const dblEntries = catalog?.status === 'available' ? catalog.resources : [];
   const localEntries = localResult.status === 'fulfilled' ? localResult.value : [];
+  const entry = [...dblEntries, ...localEntries].find((candidate) =>
+    doesCatalogRowCoverProject(candidate, resourceProjectId),
+  );
+  const isCatalogKnown =
+    catalog?.status === 'available' ||
+    (catalog?.status === 'unavailable' && catalog.reason === 'notConfigured');
   return {
-    entry: [...dblEntries, ...localEntries].find((entry) =>
-      doesCatalogRowCoverProject(entry, resourceProjectId),
-    ),
-    isReferenceKindKnown:
-      catalog?.status === 'available' ||
-      (catalog?.status === 'unavailable' && catalog.reason === 'notConfigured'),
+    entry,
+    isReferenceKindKnown: isCatalogKnown && (!!entry || localResult.status === 'fulfilled'),
   };
 }
 
@@ -115,16 +135,16 @@ async function toUncataloguedResourceReference(
  * The team's list of texts for a project — the shared list the Team layout dialog writes.
  *
  * @param projectId The project whose list to read
- * @returns The list's references, or none if it could not be read
+ * @returns The list's references, or `undefined` if it could not be read
  */
-async function getTeamReferences(projectId: string): Promise<ResourceReference[]> {
+async function getTeamReferences(projectId: string): Promise<ResourceReference[] | undefined> {
   try {
     const projectSettings = await papi.projectDataProviders.get('platform.base', projectId);
     const teamList = await projectSettings.getSetting(
       'platformScripture.referencedProjectsAndResources',
     );
     // Reaches this project through send/receive without being validated, so an item may be any
-    // shape; one without a string id is no use for matching, and would break it.
+    // shape; one whose `id` is not a string would throw when matched.
     return Array.isArray(teamList?.items)
       ? teamList.items.filter(
           (item) =>
@@ -133,7 +153,7 @@ async function getTeamReferences(projectId: string): Promise<ResourceReference[]
       : [];
   } catch (e) {
     logger.warn(`Could not read the team's texts for project ${projectId}: ${getErrorMessage(e)}`);
-    return [];
+    return undefined;
   }
 }
 
@@ -151,6 +171,9 @@ function getPanelWebViewType(entry: DblResourceData | undefined): string | undef
   return undefined;
 }
 
+/** A show that failed after the user was told so. */
+class ShowFailedError extends Error {}
+
 /**
  * Fails a show the user asked for: tells them, and rejects so the caller knows not to open the
  * resource some other way.
@@ -158,9 +181,9 @@ function getPanelWebViewType(entry: DblResourceData | undefined): string | undef
  * @param message What went wrong, for the log
  */
 async function failToShow(message: string): Promise<never> {
-  logger.warn(message);
+  logger.error(message);
   await warnTabCouldNotOpen();
-  throw new Error(message);
+  throw new ShowFailedError(message);
 }
 
 /** See {@link showResourceInReferencePanel}. */
@@ -184,8 +207,14 @@ async function showResourceNow(resourceProjectId: string): Promise<string | unde
 
   const { entry, isReferenceKindKnown } = await findCatalogEntry(resourceProjectId);
   const webViewType = getPanelWebViewType(entry);
-  if (!webViewType)
-    return failToShow(`No reference panel shows resource ${resourceProjectId} (${entry?.type})`);
+  // A source-language, enhanced or XML resource is listed in neither panel. It opens the way it
+  // always has, in its own viewer.
+  if (!webViewType) {
+    logger.info(
+      `No reference panel lists ${entry?.type} ${resourceProjectId}; not showing it there`,
+    );
+    return undefined;
+  }
   const panel = panels.find((definition) => definition.webViewType === webViewType);
   if (!panel?.projectId)
     return failToShow(`The ${webViewType} tab is not open on a project to show the resource in`);
@@ -197,16 +226,18 @@ async function showResourceNow(resourceProjectId: string): Promise<string | unde
   // Already on the team's list, the resource is available to this user too, and is selected under
   // the team's own reference — which may spell its DBL entry UID in other casing than the catalog,
   // or name the resource by its project rather than its DBL entry.
-  const teamReference = (await getTeamReferences(panel.projectId)).find(
+  const teamReferences = await getTeamReferences(panel.projectId);
+  const teamReference = teamReferences?.find(
     (item) =>
       isSameResource(item, reference) ||
       (isProjectReference(item) && item.id === resourceProjectId),
   );
   const selectedReference = teamReference ?? reference;
 
-  // A reference of uncertain kind is not saved (see `isReferenceKindKnown`). The panel still lists
-  // the resource among the downloaded ones, so it is shown either way.
-  if (!teamReference && isReferenceKindKnown) {
+  // Not saved when the team's list is unknown, as that could save a copy of the team's own
+  // reference, nor when the reference's kind is uncertain (see `isReferenceKindKnown`). The panel
+  // still lists the resource among the downloaded ones, so it is shown either way.
+  if (teamReferences && !teamReference && isReferenceKindKnown) {
     try {
       const textConnections = await papi.projectDataProviders.get(
         'platformScripture.textConnectionSettings',
@@ -224,20 +255,17 @@ async function showResourceNow(resourceProjectId: string): Promise<string | unde
     }
   }
 
-  const rowId = getResourceReferenceRowId(selectedReference);
-  pendingResourceSelections.set(webViewType, rowId);
+  // No `projectId`: the panel keeps whichever project it shows by the time the reload lands, which
+  // a project switch during this show may have changed.
+  const reloadOptions: ResourceTextPanelOptions = {
+    bringToFront: true,
+    selectedResourceId: getResourceReferenceRowId(selectedReference),
+  };
   let shownWebViewId: string | undefined;
   try {
-    shownWebViewId = await papi.webViews.reloadWebView(webViewType, panel.id, {
-      bringToFront: true,
-    });
+    shownWebViewId = await papi.webViews.reloadWebView(webViewType, panel.id, reloadOptions);
   } catch (e) {
     return failToShow(`Could not reload the ${webViewType} tab: ${getErrorMessage(e)}`);
-  } finally {
-    // The provider has taken it by now if the reload reached it; a leftover would select this
-    // resource on some later, unrelated rebuild.
-    if (pendingResourceSelections.get(webViewType) === rowId)
-      pendingResourceSelections.delete(webViewType);
   }
   // The tab went away between finding it and reloading it.
   if (!shownWebViewId) return failToShow(`The ${webViewType} tab closed before it could be shown`);
@@ -249,25 +277,36 @@ let previousShow: Promise<unknown> = Promise.resolve();
 
 /**
  * Shows a locally-installed resource in the reference panel for its kind — commentaries in the
- * Commentaries tab, Bible texts (and resources the catalog does not describe) in Bible texts — and
- * adds it to the current user's personal list for the project that panel shows. The shared (team)
- * list is not touched, so the resource is added for this user only.
+ * Commentaries tab, Bible texts (and resources the catalog does not describe) in Bible texts — and,
+ * unless the team's list already has it or its reference cannot be trusted yet, adds it to the
+ * current user's personal list for the project that panel shows. The shared (team) list is never
+ * written, so the resource is added for this user only.
  *
  * Simple mode's middle column only ever shows the project, so this is how a resource is opened
  * there rather than in a Scripture editor.
  *
- * Shows run one at a time: two at once would race over the same personal list and the same queued
- * selection, and the later one the user asked for could lose.
+ * Shows run one at a time: two at once would race over the same personal list, and the later one
+ * the user asked for could lose.
  *
  * @param resourceProjectId The resource's local project id
- * @returns The panel's web view id, or `undefined` if neither reference panel is showing a project
- *   to add the resource to — the only case in which the caller should open it some other way
- * @throws If the panel could not be shown. The user has already been told.
+ * @returns The panel's web view id, or `undefined` if the resource should be opened some other way:
+ *   neither reference panel is showing a project to add it to, or it is of a kind neither panel
+ *   lists
+ * @throws If the panel could not be shown. The user has been told.
  */
 export function showResourceInReferencePanel(
   resourceProjectId: string,
 ): Promise<string | undefined> {
-  const show = previousShow.then(() => showResourceNow(resourceProjectId));
+  const show = previousShow
+    .then(() => showResourceNow(resourceProjectId))
+    .catch(async (e) => {
+      // The expected failures have told the user already; this tells them about any other.
+      if (!(e instanceof ShowFailedError)) {
+        logger.error(`Could not show resource ${resourceProjectId}: ${getErrorMessage(e)}`);
+        await warnTabCouldNotOpen();
+      }
+      throw e;
+    });
   previousShow = show.catch(() => undefined);
   return show;
 }

@@ -1,4 +1,8 @@
-import { getResourceReferenceBareId, getResourceReferenceRowId } from './resource-reference.utils';
+import {
+  getProjectRowId,
+  getResourceReferenceBareId,
+  getResourceReferenceRowId,
+} from './resource-reference.utils';
 import type { PickerResource } from './downloaded-resources.utils';
 
 /** What the panel should do with its persisted selection on this render. */
@@ -61,7 +65,7 @@ export function findSelectedRow(
   return (
     rows.find((row) => matchesSelectedResourceId(row, selectedResourceId)) ??
     rows.find(
-      (row) => row.projectId !== undefined && selectedResourceId === `project:${row.projectId}`,
+      (row) => row.projectId !== undefined && selectedResourceId === getProjectRowId(row.projectId),
     )
   );
 }

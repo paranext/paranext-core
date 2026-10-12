@@ -15,10 +15,7 @@ import {
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.component';
-import {
-  isProjectResourceFilterValue,
-  type ProjectResourceFilterValue,
-} from './project-resource-filter.component';
+import { isProjectResourceFilterValue } from './project-resource-filter.component';
 import { useLocalProjects } from './use-local-projects.hook';
 import { openHomeItem } from './open-home-item';
 
@@ -34,8 +31,10 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   // The user's changes are written back so it survives window moves and reloads, and so `openHome`
   // can tell whether the filter on screen matches what a later caller asks for. See
   // `buildHomeWebViewState`.
-  const [savedProjectResourceFilter, setProjectResourceFilter] =
-    useWebViewState<ProjectResourceFilterValue>('projectResourceFilter', 'all');
+  const [savedProjectResourceFilter, setProjectResourceFilter] = useWebViewState<string>(
+    'projectResourceFilter',
+    'all',
+  );
   // Saved state is untyped at rest, and a layout from another build may carry a value this one does
   // not know. Filtering on it would hide items behind a trigger that reads "All".
   const projectResourceFilter = isProjectResourceFilterValue(savedProjectResourceFilter)

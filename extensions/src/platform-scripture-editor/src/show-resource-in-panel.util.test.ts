@@ -33,7 +33,8 @@ vi.mock('@papi/backend', () => ({
 // eslint-disable-next-line import/first
 import {
   showResourceInReferencePanel,
-  takePendingResourceSelection,
+  buildResourceTextPanelState,
+  type ResourceTextPanelOptions,
 } from './show-resource-in-panel.util';
 
 const BIBLE_TEXTS = 'platformScriptureEditor.bibleTexts';
@@ -69,7 +70,16 @@ function catalogHas(dblEntries: DblResourceData[], localEntries: DblResourceData
 }
 
 /** The selection the provider would apply when the reload asks it to build the panel. */
-let selectionSeenByProvider: string | undefined;
+let selectionSeenByProvider: unknown;
+
+/** The selection the panel is built with, given the reload's options and an earlier selection. */
+function providerSelection(options: ResourceTextPanelOptions): unknown {
+  return buildResourceTextPanelState(
+    { selectedResourceId: 'dbl:previous' },
+    'ScriptureResource',
+    options,
+  ).selectedResourceId;
+}
 
 describe('showResourceInReferencePanel', () => {
   let savedUserList: ResourceReferenceList | undefined;
@@ -95,10 +105,12 @@ describe('showResourceInReferencePanel', () => {
             setUserReferencedProjectsAndResources: mocks.setUserList,
           },
     );
-    mocks.reloadWebView.mockImplementation(async (webViewType: string, id: string) => {
-      selectionSeenByProvider = takePendingResourceSelection(webViewType);
-      return id;
-    });
+    mocks.reloadWebView.mockImplementation(
+      async (_webViewType: string, id: string, options: ResourceTextPanelOptions) => {
+        selectionSeenByProvider = providerSelection(options);
+        return id;
+      },
+    );
   });
 
   it("adds a Bible text to the user's own list and selects it in Bible texts", async () => {
@@ -109,10 +121,19 @@ describe('showResourceInReferencePanel', () => {
       'my-project',
     );
     expect(savedUserList?.items).toEqual([{ type: 'dblResource', name: 'BYZ', id: 'uid-byz' }]);
-    expect(mocks.reloadWebView).toHaveBeenCalledWith(BIBLE_TEXTS, 'bible-texts-tab', {
-      bringToFront: true,
-    });
+    expect(mocks.reloadWebView).toHaveBeenCalledWith(
+      BIBLE_TEXTS,
+      'bible-texts-tab',
+      expect.objectContaining({ bringToFront: true }),
+    );
     expect(selectionSeenByProvider).toBe('dbl:uid-byz');
+  });
+
+  it('leaves the tab on whichever project it shows when the reload lands', async () => {
+    // A project switch during the show reloads the tab onto the new project first.
+    await showResourceInReferencePanel('byz-project');
+
+    expect(mocks.reloadWebView.mock.calls[0][2]).not.toHaveProperty('projectId');
   });
 
   it('sends a commentary to the Commentaries tab', async () => {
@@ -120,9 +141,11 @@ describe('showResourceInReferencePanel', () => {
 
     await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('commentaries-tab');
 
-    expect(mocks.reloadWebView).toHaveBeenCalledWith(COMMENTARIES, 'commentaries-tab', {
-      bringToFront: true,
-    });
+    expect(mocks.reloadWebView).toHaveBeenCalledWith(
+      COMMENTARIES,
+      'commentaries-tab',
+      expect.objectContaining({ bringToFront: true }),
+    );
   });
 
   it('puts the resource first, without duplicating it, in a list that already has it', async () => {
@@ -199,6 +222,7 @@ describe('showResourceInReferencePanel', () => {
     await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('bible-texts-tab');
 
     expect(mocks.setUserList).not.toHaveBeenCalled();
+    expect(selectionSeenByProvider).toBe('project:byz-project');
   });
 
   it('saves a resource by its project in a build with no DBL catalog', async () => {
@@ -275,20 +299,6 @@ describe('showResourceInReferencePanel', () => {
     expect(savedUserList.items).toEqual([{ type: 'dblResource', name: 'BYZ', id: 'uid-byz' }]);
   });
 
-  it("saves to the user's list when the team's list cannot be read", async () => {
-    mocks.getPdp.mockImplementation(async (projectInterface: string) => {
-      if (projectInterface === 'platform.base') throw new Error('settings unavailable');
-      return {
-        getUserReferencedProjectsAndResources: mocks.getUserList,
-        setUserReferencedProjectsAndResources: mocks.setUserList,
-      };
-    });
-
-    await showResourceInReferencePanel('byz-project');
-
-    expect(savedUserList?.items).toEqual([{ type: 'dblResource', name: 'BYZ', id: 'uid-byz' }]);
-  });
-
   it('still shows the resource when the personal list cannot be saved', async () => {
     mocks.setUserList.mockRejectedValue(new Error('read-only settings'));
 
@@ -336,8 +346,6 @@ describe('showResourceInReferencePanel', () => {
     await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow();
 
     expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warning' }));
-    // Nor is the selection left behind for some later, unrelated rebuild of the tab.
-    expect(takePendingResourceSelection(BIBLE_TEXTS)).toBeUndefined();
   });
 
   it('tells the user and rejects when the open tabs cannot be listed', async () => {
@@ -349,12 +357,84 @@ describe('showResourceInReferencePanel', () => {
     expect(mocks.setUserList).not.toHaveBeenCalled();
   });
 
-  it('tells the user and rejects for a kind of resource neither tab lists', async () => {
-    catalogHas([catalogEntry({ type: 'XmlResource' })]);
+  it('leaves a kind of resource neither tab lists to be opened some other way', async () => {
+    // A source-language text, say: it opens in its own viewer, as it always has.
+    catalogHas([catalogEntry({ type: 'SourceLanguageResource' })]);
+
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toBeUndefined();
+
+    expect(mocks.notify).not.toHaveBeenCalled();
+    expect(mocks.setUserList).not.toHaveBeenCalled();
+    expect(mocks.reloadWebView).not.toHaveBeenCalled();
+  });
+
+  it('tells the user about an unexpected failure too', async () => {
+    mocks.getAllOpenWebViewDefinitions.mockResolvedValue(undefined);
 
     await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow();
 
-    expect(mocks.notify).toHaveBeenCalled();
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells the user only once for an expected failure', async () => {
+    mocks.reloadWebView.mockRejectedValue(new Error('reload failed'));
+
+    await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow();
+
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+  });
+
+  it('still shows resources after a show has failed', async () => {
+    mocks.reloadWebView.mockRejectedValueOnce(new Error('reload failed'));
+
+    await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow();
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('bible-texts-tab');
+
+    expect(selectionSeenByProvider).toBe('dbl:uid-byz');
+  });
+
+  it('still shows the resource when the installed flags cannot be refreshed', async () => {
+    mocks.sendCommand.mockImplementation(async (command: string) => {
+      if (command === 'platformGetResources.refreshResourceFlags') throw new Error('sync failed');
+      if (command === 'platformGetResources.getCachedResources')
+        return { status: 'available', resources: [catalogEntry({})] };
+      return [];
+    });
+
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('bible-texts-tab');
+
+    expect(selectionSeenByProvider).toBe('dbl:uid-byz');
+  });
+
+  it("shows but does not save a resource when the team's list cannot be read", async () => {
+    // Saved blind, it could be a second copy of the team's own reference to it.
+    mocks.getPdp.mockImplementation(async (projectInterface: string) => {
+      if (projectInterface === 'platform.base') throw new Error('settings unavailable');
+      return {
+        getUserReferencedProjectsAndResources: mocks.getUserList,
+        setUserReferencedProjectsAndResources: mocks.setUserList,
+      };
+    });
+
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('bible-texts-tab');
+
+    expect(mocks.setUserList).not.toHaveBeenCalled();
+    expect(selectionSeenByProvider).toBe('dbl:uid-byz');
+  });
+
+  it('shows but does not save an uncatalogued resource when the local list cannot be read', async () => {
+    // It may be a non-DBL commentary, guessed here to be a Bible text.
+    mocks.sendCommand.mockImplementation(async (command: string) => {
+      if (command === 'platformGetResources.getCachedResources')
+        return { status: 'available', resources: [] };
+      if (command === 'platformGetResources.getLocalNonDblResources')
+        throw new Error('local list unavailable');
+      return undefined;
+    });
+    mocks.getMetadataForProject.mockResolvedValue({ id: 'local-1', name: 'LOCAL' });
+
+    await expect(showResourceInReferencePanel('local-1')).resolves.toBe('bible-texts-tab');
+
     expect(mocks.setUserList).not.toHaveBeenCalled();
   });
 
@@ -363,15 +443,17 @@ describe('showResourceInReferencePanel', () => {
       catalogEntry({}),
       catalogEntry({ dblEntryUid: 'uid-web', displayName: 'WEBBE', projectId: 'web-project' }),
     ]);
-    const selections: (string | undefined)[] = [];
-    mocks.reloadWebView.mockImplementation(async (webViewType: string, id: string) => {
-      // Let the other open run as far as it can before this build takes its selection.
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
-      selections.push(takePendingResourceSelection(webViewType));
-      return id;
-    });
+    const selections: unknown[] = [];
+    mocks.reloadWebView.mockImplementation(
+      async (_webViewType: string, id: string, options: ResourceTextPanelOptions) => {
+        // Let the other open run as far as it can before this build reads its selection.
+        await new Promise((resolve) => {
+          setTimeout(resolve, 0);
+        });
+        selections.push(providerSelection(options));
+        return id;
+      },
+    );
 
     await Promise.all([
       showResourceInReferencePanel('byz-project'),
@@ -386,8 +468,25 @@ describe('showResourceInReferencePanel', () => {
   });
 });
 
-describe('takePendingResourceSelection', () => {
-  it('has nothing for a panel no one asked to select a resource in', () => {
-    expect(takePendingResourceSelection(BIBLE_TEXTS)).toBeUndefined();
+describe('buildResourceTextPanelState', () => {
+  it('selects the resource a reload asks for, keeping the rest of the saved state', () => {
+    expect(
+      buildResourceTextPanelState(
+        { selectedResourceId: 'dbl:previous', other: 'kept' },
+        'CommentaryResource',
+        { selectedResourceId: 'dbl:uid-byz' },
+      ),
+    ).toEqual({
+      selectedResourceId: 'dbl:uid-byz',
+      other: 'kept',
+      resourceType: 'CommentaryResource',
+    });
+  });
+
+  it('keeps the saved selection when the build asks for none', () => {
+    // An ordinary rebuild — a project switch, a layout restore — must not lose the user's pick.
+    expect(
+      buildResourceTextPanelState({ selectedResourceId: 'dbl:previous' }, 'ScriptureResource', {}),
+    ).toEqual({ selectedResourceId: 'dbl:previous', resourceType: 'ScriptureResource' });
   });
 });

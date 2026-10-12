@@ -98,6 +98,17 @@ describe('the selection queued for a resource is a row its panel lists', () => {
     expect(selectedProjectId(local, [], 'ScriptureResource')).toBe('VULGP83');
   });
 
+  it('for a downloaded resource the catalog does not have', () => {
+    // The command names it by its project, as the panel lists a download with no catalog row.
+    const rows = buildPickerResources(
+      [],
+      [OTHER, { projectId: 'local-1', name: 'LOCAL', language: 'en' }],
+      [],
+    ).filter((row) => row.type === 'ScriptureResource');
+    const queued = getResourceReferenceRowId({ type: 'project', name: 'LOCAL', id: 'local-1' });
+    expect(findSelectedRow(rows, queued)?.projectId).toBe('local-1');
+  });
+
   it('for a commentary, in the Commentaries panel', () => {
     const commentary = { ...ENTRY, type: 'CommentaryResource' as const };
     expect(selectedProjectId(commentary, [], 'CommentaryResource')).toBe('byz-project');

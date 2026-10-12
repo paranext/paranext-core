@@ -31,7 +31,7 @@ export function buildHomeWebViewState(
   savedWebView: SavedWebViewDefinition,
   options: HomeWebViewOptions,
 ): WebViewDefinition['state'] {
-  // Destructured only to leave the dead key out of the rest; `_` is the discard name for it.
+  // Drops the dead key (see above); `_` is never read.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { shouldShowProjectsOnly: _, ...savedState } = savedWebView.state ?? {};
   return options.initialProjectResourceFilter
