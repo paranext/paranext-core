@@ -115,10 +115,11 @@ readable top is in addition to the detail below, never a replacement for it.
    action still owed — `PT-xxxx (existing, conversion owed)`, `(existing, move owed)` or
    `(existing, link owed)` — and shorten it to `PT-xxxx (existing)` once that action is done and
    verified; a conversion that falls back to a link (declined at its final yes, or blocked)
-   becomes `(existing, link owed)`. Approved actions on tickets that don't settle a work item — a
-   `Relates` link to a related ticket, a description edit — go on an `Owed:` line directly above
-   the same table (`Owed: link PT-xxxx (related) to the parent; edit PT-yyyy's description`), and
-   each comes off it once done and verified. As soon as the parent is in place — created, filled
+   becomes `(existing, link owed)`. Before that same first write, also put every approved action
+   on a ticket that doesn't settle a work item (a `Relates` link to a related ticket, a
+   description edit) on an `Owed:` line directly above the same table —
+   `Owed: link PT-xxxx (related) to the parent; edit PT-yyyy's description` — and take each off it
+   once done and verified. As soon as the parent is in place — created, filled
    and verified, or re-read in existing-parent mode — carry out the owed actions: each move and
    `Relates` link, and each conversion — previewing it now if it was approved in principle,
    showing the preview, and converting only after that conversion's final yes (see the skill's
