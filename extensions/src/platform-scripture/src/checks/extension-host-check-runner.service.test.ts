@@ -46,10 +46,11 @@ const RANGE = {
   start: { book: 'GEN', chapterNum: 1, verseNum: 1 },
 };
 
-function makeCheck(getCheckResults: Check['getCheckResults']): CheckCreatorFunction {
+function makeCheck(name: string, getCheckResults: Check['getCheckResults']): CheckCreatorFunction {
   return async () => ({
     initialize: async () => [],
     dispose: async () => true,
+    getCheckDetails: () => ({ checkName: name, checkDescription: name }),
     getCheckResults,
   });
 }
@@ -81,13 +82,13 @@ describe('extension-host check runner', () => {
     const runner = await checkHostingService.getCheckRunner();
     const failing = await register(
       'fails',
-      makeCheck(async () => {
+      makeCheck('fails', async () => {
         throw new Error('boom');
       }),
     );
     const healthy = await register(
       'works',
-      makeCheck(async () => [
+      makeCheck('works', async () => [
         {
           projectId: 'P1',
           checkResultType: 't',
