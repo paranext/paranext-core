@@ -28,10 +28,17 @@ internal sealed class CheckCache
     private readonly List<string> _allCheckIds;
     private readonly PapiClient _papiClient;
 
-    public CheckCache(List<string> allCheckIds, PapiClient papiClient)
+    private readonly Func<string, ChecksDataSource, ScriptureCheckBase> _createCheck;
+
+    public CheckCache(
+        List<string> allCheckIds,
+        PapiClient papiClient,
+        Func<string, ChecksDataSource, ScriptureCheckBase>? createCheck = null
+    )
     {
         _allCheckIds = allCheckIds;
         _papiClient = papiClient;
+        _createCheck = createCheck ?? CheckFactory.CreateCheck;
 
         // When inventory data is changed, there is no way from the ScrText or Settings objects
         // to be notified of the change. So we have to listen for file changes in the project
@@ -87,11 +94,7 @@ internal sealed class CheckCache
             _ =>
             {
                 var dataSource = GetChecksDataSource(projectId);
-                return new CheckForProject(
-                    CheckFactory.CreateCheck(checkId, dataSource),
-                    checkId,
-                    projectId
-                );
+                return new CheckForProject(_createCheck(checkId, dataSource), checkId, projectId);
             }
         );
     }
