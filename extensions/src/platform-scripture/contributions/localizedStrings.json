@@ -224,6 +224,8 @@
   },
   "localizedStrings": {
     "en": {
+      "%checkSetup_notApplicable_quotationMarksNotUsed%": "Not used in this project",
+      "%checkSetup_notApplicable_quotationTypesNotEnabled%": "Not enabled in Quotation rules",
       "%inventoryName_Character%": "Characters inventory",
       "%inventoryName_Marker%": "Markers inventory",
       "%inventoryName_MatchedPairs%": "Unmatched pairs of punctuation",
