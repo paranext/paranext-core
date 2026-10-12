@@ -460,6 +460,23 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
     expect(layout).toEqual(snapshot);
   });
 
+  test('keeps the size of a tab group moved into an empty dock box laid out left to right', () => {
+    const layout: LayoutInfo = {
+      dockbox: { mode: 'horizontal', children: [] },
+      floatbox: {
+        mode: 'float',
+        children: [{ mode: 'horizontal', children: [{ tabs: [tab('find')], size: 25 }] }],
+      },
+    };
+    const snapshot = structuredClone(layout);
+
+    expect(reconcileSavedLayout(layout).dockbox).toEqual({
+      mode: 'horizontal',
+      children: [{ tabs: [tab('find')], size: 25 }],
+    });
+    expect(layout).toEqual(snapshot);
+  });
+
   test('counts a size rc-dock would default to 200 when it averages the groups in a dock box laid out left to right', () => {
     const layout: LayoutInfo = {
       dockbox: {
