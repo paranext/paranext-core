@@ -1822,6 +1822,20 @@ describe('loadLayout restores this window’s layout from the main process', () 
     expect(floatbox?.children ?? []).toEqual([]);
   });
 
+  test.each(['null', 'false', '0', '""'])(
+    'a legacy window falls back to the default layout when the stored legacy layout is %s',
+    async (storedValue) => {
+      localStorage.setItem('dock-saved-layout', storedValue);
+      respondToGetLayout({ kind: 'legacy' });
+
+      const loaded = await loadLayoutInWindow(layoutWithAnchor());
+
+      expect(tabIdsIn(loaded)).not.toContain('anchor-tab');
+      expect(tabIdsIn(loaded).length).toBeGreaterThan(0);
+      expect(loaded.dockbox).toBeTruthy();
+    },
+  );
+
   test('a legacy window prefers a window-prefixed legacy key over the stale unprefixed one', async () => {
     // Builds that scoped localStorage per window (before layouts moved into the main process's
     // structure) wrote the dock layout only under prefixed keys, so when one exists the unprefixed

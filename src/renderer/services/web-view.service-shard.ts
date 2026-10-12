@@ -1224,8 +1224,10 @@ function getLegacySavedLayout(defaultLayout: LayoutInfo): {
     lowestPrefixedWindowId !== undefined
       ? localStorage.getItem(`${lowestPrefixedWindowId}_${DOCK_LAYOUT_KEY}`)
       : localStorage.getItem(DOCK_LAYOUT_KEY);
-  const savedLayout: LayoutInfo | undefined = saved
-    ? reconcileSavedLayout(deserialize(saved))
+  // A stored `null`, `false`, `0` or `""` parses to a falsy value: no layout to heal
+  const parsedLayout: LayoutInfo | undefined = saved ? deserialize(saved) : undefined;
+  const savedLayout: LayoutInfo | undefined = parsedLayout
+    ? reconcileSavedLayout(parsedLayout)
     : undefined;
   return savedLayout
     ? { layout: savedLayout, isBakedDefault: false }
