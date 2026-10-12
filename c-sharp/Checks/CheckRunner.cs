@@ -287,9 +287,23 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                 if (checkIdsToRun.Count == 0)
                     continue;
 
-                _checkCache.RunChecksForProject(range, checkIdsToRun, denials);
+                var failedCheckIds = new HashSet<string>();
+                foreach (
+                    var failure in _checkCache.RunChecksForProject(range, checkIdsToRun, denials)
+                )
+                {
+                    job.AddCheckError(failure);
+                    failedCheckIds.Add(failure.CheckId);
+                }
+
                 foreach (var checkId in checkIdsToRun)
                 {
+                    if (failedCheckIds.Contains(checkId))
+                    {
+                        job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                        continue;
+                    }
+
                     var check = _checkCache.GetCheck(checkId, range.ProjectId);
                     check.AccessResults(
                         range.Start.BookNum,
