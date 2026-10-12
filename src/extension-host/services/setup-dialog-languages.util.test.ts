@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { LanguageInfo } from 'platform-bible-react';
 import { LanguageStrings } from 'platform-bible-utils';
+import { filterToOffered } from '@shared/data/interface-languages.data';
 import { computeSetupDialogLanguages } from './setup-dialog-languages.util';
 
 const loadedLocales: Record<string, LanguageInfo> = {
@@ -72,5 +73,14 @@ describe('computeSetupDialogLanguages', () => {
     expect(computeSetupDialogLanguages({}, () => ({}), loadedLocales)).toEqual({
       en: { autonym: 'English' },
     });
+  });
+  test('leaves out an offered language below the threshold, and every language not offered', () => {
+    // es is offered but has 50% of the keys; fr and de clear the threshold but are not offered.
+    const offered = computeSetupDialogLanguages(
+      englishData,
+      (tag) => langData[tag],
+      filterToOffered(loadedLocales),
+    );
+    expect(Object.keys(offered)).toEqual(['en']);
   });
 });
