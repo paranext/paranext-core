@@ -1,5 +1,11 @@
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { CheckJobError, CheckJobStatusReport, ScriptureRange } from 'platform-scripture';
+import {
+  CheckConfigurationProvider,
+  CheckJobError,
+  CheckJobStatusReport,
+  CheckSetupState,
+  ScriptureRange,
+} from 'platform-scripture';
 
 /* All these types and functions could live in `check-aggregator.service.ts`, but to get jest tests
  * to run properly, it was much easier to pull these standalone functions into a different file and
@@ -36,4 +42,26 @@ export function addCheckError(errors: CheckJobError[], checkError: CheckJobError
 export function mergeCheckErrors(reports: CheckJobStatusReport[]): CheckJobError[] | undefined {
   const merged = reports.flatMap((report) => report.checkErrors ?? []);
   return merged.length > 0 ? merged : undefined;
+}
+
+/**
+ * Asks a check runner for a check's setup status. A runner that predates `lookupCheckSetupStatus`
+ * rejects the call, so the answer is derived from its `isCheckSetupForProject` instead; when that
+ * also rejects, the original lookup error is rethrown.
+ */
+export async function lookupCheckSetupStatusWithFallback(
+  runner: Pick<CheckConfigurationProvider, 'lookupCheckSetupStatus' | 'isCheckSetupForProject'>,
+  checkId: string,
+  projectId: string,
+): Promise<CheckSetupState> {
+  try {
+    return await runner.lookupCheckSetupStatus(checkId, projectId);
+  } catch (lookupError) {
+    try {
+      const isSetUp = await runner.isCheckSetupForProject(checkId, projectId);
+      return { status: isSetUp ? 'ready' : 'setupRequired' };
+    } catch {
+      throw lookupError;
+    }
+  }
 }

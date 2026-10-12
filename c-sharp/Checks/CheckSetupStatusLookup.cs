@@ -43,7 +43,7 @@ internal static class CheckSetupStatusLookup
         if (!check.SetupComplete)
             return new(CheckSetupStatus.SetupRequired);
 
-        if (isQuotationTypes || checkId == s_quotationId)
+        if (CanBeNotApplicable(checkId))
         {
             try
             {

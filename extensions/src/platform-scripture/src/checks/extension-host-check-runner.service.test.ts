@@ -110,6 +110,14 @@ describe('extension-host check runner', () => {
     expect(report.checkErrors).toEqual([{ checkId: failing, message: 'boom' }]);
   });
 
+  it('reports every check as ready because extension-hosted checks have no setup', async () => {
+    const runner = await checkHostingService.getCheckRunner();
+
+    await expect(runner.lookupCheckSetupStatus('registered-any-any', 'P1')).resolves.toEqual({
+      status: 'ready',
+    });
+  });
+
   it('records an unregistered check as a check error and completes', async () => {
     const runner = await checkHostingService.getCheckRunner();
     const report = await runToEnd(runner, ['registered-gone-gone']);

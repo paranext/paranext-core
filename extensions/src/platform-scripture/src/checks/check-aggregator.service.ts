@@ -22,7 +22,7 @@ import {
   CHECK_STOP_DEFAULT_TIMEOUT_MS,
   LOOKUP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION,
 } from './check.model';
-import { mergeCheckErrors } from './check-aggregator.utils';
+import { lookupCheckSetupStatusWithFallback, mergeCheckErrors } from './check-aggregator.utils';
 
 /**
  * When a job is started, it may need to be split up and sent to multiple check runners depending on
@@ -269,7 +269,7 @@ class CheckAggregatorDataProviderEngine
   async lookupCheckSetupStatus(checkId: string, projectId: string): Promise<CheckSetupState> {
     const checkRunner = await this.findCheckRunnerForCheckId(checkId);
     if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);
-    return checkRunner.lookupCheckSetupStatus(checkId, projectId);
+    return lookupCheckSetupStatusWithFallback(checkRunner, checkId, projectId);
   }
 
   // #endregion

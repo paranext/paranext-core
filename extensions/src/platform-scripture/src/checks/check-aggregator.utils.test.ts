@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { CheckJobStatusReport } from 'platform-scripture';
-import { addCheckError, isWithinRange, mergeCheckErrors } from './check-aggregator.utils';
+import {
+  addCheckError,
+  isWithinRange,
+  lookupCheckSetupStatusWithFallback,
+  mergeCheckErrors,
+} from './check-aggregator.utils';
 
 describe('isWithinRange', () => {
   it('should return true for verse within range', () => {
@@ -111,6 +116,61 @@ describe('addCheckError', () => {
     const errors = [{ checkId: 'Quotation', message: 'bad rules' }];
     addCheckError(errors, { checkId: 'Quotation', message: 'other' });
     expect(errors).toHaveLength(2);
+  });
+});
+
+describe('lookupCheckSetupStatusWithFallback', () => {
+  it('returns the runner’s own answer when the lookup succeeds', async () => {
+    const runner = {
+      lookupCheckSetupStatus: vi.fn(async () => ({
+        status: 'notApplicable' as const,
+        reason: '%reason%' as const,
+      })),
+      isCheckSetupForProject: vi.fn(async () => false),
+    };
+    await expect(lookupCheckSetupStatusWithFallback(runner, 'Quotation', 'P1')).resolves.toEqual({
+      status: 'notApplicable',
+      reason: '%reason%',
+    });
+    expect(runner.isCheckSetupForProject).not.toHaveBeenCalled();
+  });
+
+  it('falls back to ready when the lookup rejects and the check is set up', async () => {
+    const runner = {
+      lookupCheckSetupStatus: vi.fn(async () => {
+        throw new Error('not implemented');
+      }),
+      isCheckSetupForProject: vi.fn(async () => true),
+    };
+    await expect(lookupCheckSetupStatusWithFallback(runner, 'c', 'P1')).resolves.toEqual({
+      status: 'ready',
+    });
+    expect(runner.isCheckSetupForProject).toHaveBeenCalledWith('c', 'P1');
+  });
+
+  it('falls back to setupRequired when the lookup rejects and the check is not set up', async () => {
+    const runner = {
+      lookupCheckSetupStatus: vi.fn(async () => {
+        throw new Error('not implemented');
+      }),
+      isCheckSetupForProject: vi.fn(async () => false),
+    };
+    await expect(lookupCheckSetupStatusWithFallback(runner, 'c', 'P1')).resolves.toEqual({
+      status: 'setupRequired',
+    });
+  });
+
+  it('rethrows the original lookup error when the fallback also rejects', async () => {
+    const original = new Error('lookup failed');
+    const runner = {
+      lookupCheckSetupStatus: vi.fn(async () => {
+        throw original;
+      }),
+      isCheckSetupForProject: vi.fn(async () => {
+        throw new Error('fallback failed');
+      }),
+    };
+    await expect(lookupCheckSetupStatusWithFallback(runner, 'c', 'P1')).rejects.toBe(original);
   });
 });
 
