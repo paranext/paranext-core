@@ -1822,7 +1822,7 @@ describe('loadLayout restores this window’s layout from the main process', () 
     expect(floatbox?.children ?? []).toEqual([]);
   });
 
-  test.each(['null', 'false', '0', '""'])(
+  test.each(['null', 'false', '0', '""', 'true', '1', '"abc"', '[]'])(
     'a legacy window falls back to the default layout when the stored legacy layout is %s',
     async (storedValue) => {
       localStorage.setItem('dock-saved-layout', storedValue);
