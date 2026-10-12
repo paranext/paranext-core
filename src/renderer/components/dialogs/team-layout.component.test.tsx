@@ -11,7 +11,11 @@ import {
   Z_INDEX_NESTED_MODAL_BACKDROP,
 } from 'platform-bible-react';
 import { BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS } from 'platform-bible-react/experimental';
-import { TeamLayoutDialogContent } from './team-layout.component';
+import {
+  TEAM_LAYOUT_PANEL_ENGLISH_FALLBACKS,
+  TEAM_LAYOUT_PANEL_STRING_KEYS,
+  TeamLayoutDialogContent,
+} from './team-layout.component';
 
 // jsdom does not implement ResizeObserver; platform-bible-react's Tooltip wires ResizeObservers.
 beforeAll(() => {
@@ -200,9 +204,16 @@ describe('TeamLayoutDialogContent', () => {
   // column does not tower over the other two.
   describe('Base or Model text explanation', () => {
     const LABEL = '%shareLayoutDialog_baseOrModelText_label%';
-    const SUMMARY = '%webView_modelTextPanel_emptyState_baseOrModel_summary%';
-    const MORE_INFO = '%webView_modelTextPanel_emptyState_moreInfo%';
-    const LESS_INFO = '%webView_modelTextPanel_emptyState_lessInfo%';
+    // Borrowed from the Model Text panel, so with no strings passed they show their English
+    // fallbacks rather than raw keys.
+    const SUMMARY =
+      TEAM_LAYOUT_PANEL_ENGLISH_FALLBACKS[
+        '%webView_modelTextPanel_emptyState_baseOrModel_summary%'
+      ];
+    const MORE_INFO =
+      TEAM_LAYOUT_PANEL_ENGLISH_FALLBACKS['%webView_modelTextPanel_emptyState_moreInfo%'];
+    const LESS_INFO =
+      TEAM_LAYOUT_PANEL_ENGLISH_FALLBACKS['%webView_modelTextPanel_emptyState_lessInfo%'];
     // The explanation body is platform-bible-react's `BaseOrModelTextExplanation`, which shows English
     // fallbacks for unresolved keys, so these tests pass it real (short) strings to look for.
     const label = (key: string) =>
@@ -216,6 +227,21 @@ describe('TeamLayoutDialogContent', () => {
       renderContent();
 
       expect(screen.getByText(SUMMARY)).toBeVisible();
+    });
+
+    // `useLocalizedStrings` maps each key to itself until strings arrive (and for good if the
+    // extension that ships them is missing). None of the panel strings may reach the user that way.
+    it('never shows a raw key for the strings it borrows from the Model Text panel', () => {
+      renderContent({
+        localizedStrings: Object.fromEntries(
+          TEAM_LAYOUT_PANEL_STRING_KEYS.map((key) => [key, key]),
+        ),
+      });
+      fireEvent.click(screen.getByRole('button', { name: MORE_INFO }));
+
+      const column = screen.getByText(SUMMARY).closest('div')?.parentElement;
+      expect(column).not.toHaveTextContent('%webView_');
+      expect(screen.getByRole('button', { name: LESS_INFO })).toBeInTheDocument();
     });
 
     // The trigger's own text is only the current selection ("None selected"), which says nothing

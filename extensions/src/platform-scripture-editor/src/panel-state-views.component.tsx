@@ -50,7 +50,8 @@ export function LoadingView({ label }: { label: ReactNode }) {
  * want.
  *
  * @param message Already-localized failure message (callers vary it per failure and for offline).
- * @param retryLabel Already-localized label for the retry button. Required alongside `onRetry`.
+ * @param retryLabel Already-localized label for the retry button. Passed with `onRetry` or not at
+ *   all.
  * @param onRetry Re-attempts whatever failed — the install, or the catalog fetch.
  * @param icon Overrides the default warning glyph so distinct failures stay distinguishable.
  */
@@ -61,10 +62,12 @@ export function PanelRetryableErrorView({
   icon,
 }: {
   message: ReactNode;
-  retryLabel?: ReactNode;
-  onRetry?: () => void;
   icon?: ReactNode;
-}) {
+} & (
+  | { retryLabel: ReactNode; onRetry: () => void }
+  // No retry: both left out, so a retry button can never render without its label.
+  | { retryLabel?: undefined; onRetry?: undefined }
+)) {
   return (
     <RetryableErrorView
       className={PANEL_FILL_CLASSES}

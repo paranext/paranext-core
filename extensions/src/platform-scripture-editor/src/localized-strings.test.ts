@@ -283,7 +283,7 @@ describe('retired model-text-only empty state strings', () => {
   });
 
   it.each(retiredKeys)('%s carries a deprecation notice', (key) => {
-    expect(metadata?.[key]?.deprecationInfo).toBeDefined();
+    expect(metadata?.[key]?.deprecationInfo?.message).toMatch(/\S/);
   });
 
   it('keeps the shipped English and Spanish values', () => {

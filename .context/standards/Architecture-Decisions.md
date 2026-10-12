@@ -1568,14 +1568,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   explanation. **Read the extension's keys but hand-render the markup in each surface, kept in step
   by tests** — tried first, rejected: every structural change had to be made twice, and the tests
   that guarded it kept missing ways the copies could differ. **Move the strings into `en.json` and
-  have the extension read them** — not taken: the panel is the explanation's home and the dialog its
-  second surface; the library guide allows extension-owned keys for library components.
+  have the extension read them** — not taken, although the localization guide prefers the shell's
+  `en.json` for new library keys: the panel is the explanation's home and the dialog its second
+  surface, and the guide still allows an extension as a library string's English source.
 - **Consequences:** Rewording a paragraph changes both surfaces; a change to the paragraphs'
   structure is one edit in the library (plus a `dist/` rebuild). The library's tests keep its English
-  fallbacks equal to the extension's shipped English. The dialog shows English fallbacks if the
-  extension is absent, which cannot happen today because the extension's button is the dialog's only
-  opener.
-- **Source:** PT-4811 (paranext-core#2879), review rounds 3–5.
+  fallbacks equal to the extension's shipped English. The dialog gives the three panel strings it
+  renders itself (the summary and the More info / Less info toggle) English fallbacks too, so while
+  the panel's strings are unresolved, or if the extension were absent, the whole column shows
+  English rather than raw `%key%` text. The extension's button is the dialog's only opener today.
+- **Source:** PT-4811 (paranext-core#2879).
 
 ## adr-core-does-not-distribute-a-binary: `paranext-core` builds installers but publishes none
 

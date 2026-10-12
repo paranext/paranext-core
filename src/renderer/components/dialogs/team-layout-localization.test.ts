@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  TEAM_LAYOUT_PANEL_ENGLISH_FALLBACKS,
   TEAM_LAYOUT_PANEL_STRING_KEYS,
   TEAM_LAYOUT_DIALOG_STRING_KEYS,
 } from './team-layout.component';
@@ -83,14 +84,14 @@ describe('Team layout dialog localization keys', () => {
     );
   });
 
-  // The column holds a Base or Model text, so its label says so. The old key shipped and means
-  // something narrower, so it keeps its values and is retired instead.
+  // The column holds a Base or Model text, so its label says so. `%shareLayoutDialog_modelText_label%`
+  // shipped and means something narrower, so it keeps its values and is retired instead.
   it('labels the left column as a Base or Model text, retiring the model-text-only label', () => {
     expect(TEAM_LAYOUT_DIALOG_STRING_KEYS).not.toContain('%shareLayoutDialog_modelText_label%');
     expect(english['%shareLayoutDialog_baseOrModelText_label%']).toBe('Base or Model text');
     expect(english['%shareLayoutDialog_modelText_label%']).toBe('Model text');
     expect(spanish['%shareLayoutDialog_modelText_label%']).toBe('Texto modelo');
-    expect(metadata['%shareLayoutDialog_modelText_label%']?.deprecationInfo).toBeDefined();
+    expect(metadata['%shareLayoutDialog_modelText_label%']?.deprecationInfo?.message).toMatch(/\S/);
   });
 
   // The resource tabs and the default-tab select happen to read alike, so one key could serve both
@@ -172,8 +173,9 @@ describe('Team layout dialog Base/Model explanation', () => {
   );
 
   // A paragraph added to the panel's explanation must reach the dialog too, and a retired one must
-  // leave it. Everything under the panel's `_baseOrModel_` prefix is explanation except the empty
-  // state's own prompt; retired keys keep their values in the file but carry a deprecation notice.
+  // leave it. Everything under the panel's `_baseOrModel_` prefix except the empty state's own
+  // prompt is something the dialog shows (the summary and the explanation paragraphs); retired keys
+  // keep their values in the file but carry a deprecation notice.
   it("requests exactly the live paragraphs of the panel's explanation", () => {
     const livePanelParagraphKeys = Object.keys(panelEnglish).filter(
       (key) =>
@@ -197,4 +199,13 @@ describe('Team layout dialog Base/Model explanation', () => {
   ])('builds the %s empty-state prompt from the shared summary', (_, panel) => {
     expect(panel['%webView_modelTextPanel_emptyState_baseOrModel_prompt%']).toContain('{summary}');
   });
+
+  // The dialog renders these three itself, with English fallbacks for when the panel's strings are
+  // unresolved; the fallbacks must say what the extension ships.
+  it.each(Object.entries(TEAM_LAYOUT_PANEL_ENGLISH_FALLBACKS))(
+    'falls back to the shipped English for %s',
+    (key, fallback) => {
+      expect(fallback).toBe(panelEnglish[key]);
+    },
+  );
 });
