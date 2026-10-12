@@ -4372,7 +4372,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   positioned. Placement relies on rc-dock 3.3.2 internals — `size` as flex weights, its 30%/70% edge
   split, its halving split across an axis, and its collapse of single-child boxes — so revisit when
   rc-dock is upgraded. Minimum widths and dividers are ignored, so a neighbour close to the threshold
-  may be split from slightly early; a sliver is never joined.
+  may be split from slightly early; a neighbour narrower than the group a split would create is
+  never joined.
 - **Source:** PT-3138 (PR #2881 and its review).
 
 ## adr-panel-readiness-from-sources: Panel readiness is derived from whether data sources arrived, never from a filtered result
@@ -6809,9 +6810,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `platform.isPublished`, not `isEditable`, so an `Editable=F` translation project is followed).
   Power keeps the panel beside the editor, and deliberately does not probe either, so each click
   still opens another panel there: layout is free-form in Power, and extra panels are the user's to
-  close. *(Superseded by `adr-panel-open-joins-the-group-beside-it`: in Power a click now adds the
-  tab to the group on the editor's right when one is there and wide enough, otherwise opens a new
-  group.)* Reference: `open-checks-side-panel.utils.ts`.
+  close. *(Superseded by `adr-panel-open-joins-the-group-beside-it`: in Power, a docked editor's
+  click adds the tab to the group on its reading-end side (right, left in a right-to-left UI) when
+  that group can take it, otherwise opens a new group there; a floating or maximized editor gets a
+  new group at the dock's reading-end edge.)* Reference: `open-checks-side-panel.utils.ts`.
 - **Alternatives:** A static tab in `simple-layout.data.ts` or a `default-layout-supplement.json`
   entry — rejected: both change what every Simple user sees at startup for a tool few open. A
   `panel` layout targeting a third-column tab — rejected: it splits the third column instead. A

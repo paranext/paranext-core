@@ -203,15 +203,16 @@ function moveHiddenTabGroupsIntoDockbox(layout: LayoutInfo): LayoutInfo {
  * Returns a copy of a saved layout with phantom content removed, and with content rc-dock would
  * never draw moved to where it is drawn.
  *
- * First, every tab group inside a box nested in `floatbox`, `windowbox` or `maxbox` (whose children
- * rc-dock draws only when they are tab groups) is moved into `dockbox` as a tab group of its own at
- * its right edge, without its floating position. Then duplicate tab ids are removed (the first
- * occurrence wins, walking `dockbox` before the floating/maximized/windowed boxes so a duplicate
- * resolves in favor of the docked copy), along with tabs with no usable id, tabs not reachable
- * through a panel, and panels or boxes left empty by those removals. An emptied `dockbox` is kept
- * (a layout must have one); the other root boxes are removed entirely when emptied. A panel whose
- * `activeId` named one of the removed tabs is re-pointed at its first surviving tab, so no saved
- * layout carries an active-tab reference to a tab that is no longer in it.
+ * First, every tab group inside a box nested in `floatbox`, `windowbox` or `maxbox` (`floatbox` and
+ * `windowbox` draw only the children that are tab groups; `maxbox` draws only its first child, as a
+ * tab group) is moved into `dockbox` as a tab group of its own at its right edge, without its
+ * floating position. Then duplicate tab ids are removed (the first occurrence wins, walking
+ * `dockbox` before the floating/maximized/windowed boxes so a duplicate resolves in favor of the
+ * docked copy), along with tabs with no usable id, tabs not reachable through a panel, and panels
+ * or boxes left empty by those removals. An emptied `dockbox` is kept (a layout must have one); the
+ * other root boxes are removed entirely when emptied. A panel whose `activeId` named one of the
+ * removed tabs is re-pointed at its first surviving tab, so no saved layout carries an active-tab
+ * reference to a tab that is no longer in it.
  *
  * A layout with none of those problems round-trips unchanged. The input is never mutated.
  */

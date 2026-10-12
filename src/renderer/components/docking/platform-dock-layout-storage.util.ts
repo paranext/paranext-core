@@ -1234,10 +1234,11 @@ function moveFloatingTabGroupClear(
  *
  * - The new tab group is as wide as the average tab group at the top level of a horizontal dock box.
  *   rc-dock sizes it as a share of the dock box's own `size` (see {@link RC_DOCK_EDGE_GROUP_SHARE}),
- *   which nothing on screen follows: rc-dock never renders it and divider drags never update it, so
- *   the group could arrive as a sliver, and each further open would add a narrower one. Setting it
- *   just before the move is the same kind of write rc-dock makes to it during the move. A dock box
- *   laid out top to bottom needs nothing: rc-dock puts it beside the new group at 70% and 30%.
+ *   which nothing on screen follows: it has no effect on what is drawn and divider drags never
+ *   update it, so the group could arrive as a sliver, and each further open would add a narrower
+ *   one. Setting it just before the move is the same kind of write rc-dock makes to it during the
+ *   move. A dock box laid out top to bottom needs nothing: rc-dock puts it beside the new group at
+ *   70% and 30%.
  * - A floating target that covers the new group is moved aside (see
  *   {@link moveFloatingTabGroupClear}). A maximized target needs nothing: bringing the new tab to
  *   the front un-maximizes it.

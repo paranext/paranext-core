@@ -323,8 +323,9 @@ describe('opening a tab as a panel beside a tab group that is not docked', () =>
 
   it('makes the new tab group the only docked one when every tab group floats', () => {
     // rc-dock keeps an empty stand-in tab group in an otherwise empty dock box; it must not linger
-    // beside the new group. No target and no direction: the defaults pick the most recently added
-    // tab (here the only one, floating) and the right side
+    // beside the new group. No target and no direction: the target defaults to the previously added
+    // tab when this dock holds it and otherwise to the first tab found (here the only one,
+    // floating), and the side defaults to the right
     const dockLayout = renderDock({
       dockbox: { mode: 'horizontal', children: [] },
       floatbox: {
@@ -938,6 +939,27 @@ describe('opening a tab as a panel beside a docked tab group', () => {
     openPanel(dockLayout, 'find', { type: 'panel', direction: 'right', targetTabId: 'project-a' });
 
     expect(tabGroupOf(dockLayout, 'find').id).toBe('d-group');
+  });
+
+  it('adds a new tab group rather than joining an unlocked, wide neighbour of another rc-dock group', () => {
+    // The neighbour has tabs, is not locked and is as wide as the target, so only its rc-dock group
+    // (the new tab is of the default group) keeps the tab out of it
+    const dockLayout = renderDock({
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          tabGroup('target-group', ['project-a'], { size: 1 }),
+          tabGroup('right-group', ['headless-notes'], { group: HEADLESS_GROUP, size: 1 }),
+        ],
+      },
+    });
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'right', targetTabId: 'project-a' });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['project-a'], ['find'], ['headless-notes']],
+    });
   });
 
   it('adds a new tab group rather than joining the stand-in for a maximized tab group', () => {
