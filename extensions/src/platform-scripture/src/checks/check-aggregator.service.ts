@@ -14,12 +14,14 @@ import {
   ICheckAggregatorService,
   ICheckRunner,
   CheckConfigurationProvider,
+  CheckSetupState,
 } from 'platform-scripture';
 import {
   CHECK_RESULTS_INVALIDATED_EVENT,
   CHECK_RUNNER_NETWORK_OBJECT_TYPE,
   CHECK_STOP_DEFAULT_TIMEOUT_MS,
 } from './check.model';
+import { mergeCheckErrors } from './check-aggregator.utils';
 
 /**
  * When a job is started, it may need to be split up and sent to multiple check runners depending on
@@ -197,6 +199,7 @@ class CheckAggregatorDataProviderEngine
         .map((r) => r.error)
         .filter((m) => m && m.length > 0)
         .join('; '),
+      checkErrors: mergeCheckErrors(jobReports),
       totalExecutionTimeMs: jobReports.reduce(
         (acc, report) => acc + (report.totalExecutionTimeMs ?? 0),
         0,
@@ -205,6 +208,7 @@ class CheckAggregatorDataProviderEngine
 
     if (combinedReport.nextResults?.length === 0) delete combinedReport.nextResults;
     if (combinedReport.error?.length === 0) delete combinedReport.error;
+    if (!combinedReport.checkErrors) delete combinedReport.checkErrors;
     return combinedReport;
   }
 
@@ -259,6 +263,12 @@ class CheckAggregatorDataProviderEngine
     const checkRunner = await this.findCheckRunnerForCheckId(checkId);
     if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);
     return checkRunner.isCheckSetupForProject(checkId, projectId);
+  }
+
+  async lookupCheckSetupStatus(checkId: string, projectId: string): Promise<CheckSetupState> {
+    const checkRunner = await this.findCheckRunnerForCheckId(checkId);
+    if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);
+    return checkRunner.lookupCheckSetupStatus(checkId, projectId);
   }
 
   // #endregion
@@ -416,6 +426,33 @@ async function initialize(): Promise<void> {
           dataProvider = await papi.dataProviders.registerEngine(
             checkAggregatorServiceProviderName,
             new CheckAggregatorDataProviderEngine(),
+            undefined,
+            undefined,
+            {
+              methods: [
+                {
+                  name: 'lookupCheckSetupStatus',
+                  'x-experimental': true,
+                  summary:
+                    'Whether a check is ready to run on a project, needs setup first, or does not apply to it',
+                  params: [
+                    {
+                      name: 'checkId',
+                      required: true,
+                      summary: 'ID of the check',
+                      schema: { type: 'string' },
+                    },
+                    {
+                      name: 'projectId',
+                      required: true,
+                      summary: 'ID of the project',
+                      schema: { type: 'string' },
+                    },
+                  ],
+                  result: { name: 'checkSetupState', schema: { type: 'object' } },
+                },
+              ],
+            },
           );
           resolve();
         } catch (error) {

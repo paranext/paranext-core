@@ -2103,10 +2103,32 @@ declare module 'platform-scripture' {
    * - `queued`: The job is waiting to run
    * - `running`: The job is currently running
    * - `stopped`: The job was stopped by the user
-   * - `errored`: The job encountered an error and is no longer running
+   * - `errored`: The job itself failed and is no longer running. A check that could not run does not
+   *   make the job errored; see {@link CheckJobStatusReport.checkErrors}.
    * - `completed`: The job completed successfully
    */
   export type CheckJobStatus = 'queued' | 'running' | 'stopped' | 'errored' | 'completed';
+
+  /**
+   * A check that could not run during a check job, with the message it gave. The other checks in
+   * the job still ran and reported their results.
+   *
+   * @experimental
+   */
+  export type CheckJobError = {
+    /**
+     * ID of the check that could not run
+     *
+     * @experimental
+     */
+    checkId: string;
+    /**
+     * Message from the check explaining why it could not run. Not localized.
+     *
+     * @experimental
+     */
+    message: string;
+  };
 
   /**
    * Represents the current status of a potentially running check job, including the results found
@@ -2127,6 +2149,13 @@ declare module 'platform-scripture' {
     nextResults?: CheckRunResult[];
     /** If the job encountered an error, this will contain the error message */
     error?: string;
+    /**
+     * Checks that could not run, each listed once. A job whose checks partly or wholly failed still
+     * ends `completed`; the results of the other checks are in `nextResults` as usual.
+     *
+     * @experimental
+     */
+    checkErrors?: CheckJobError[];
     /**
      * Total time in milliseconds that the check operation has taken to run. This is the total time
      * from when the job started until now if the job is still running. If the job is no longer
@@ -2230,10 +2259,53 @@ declare module 'platform-scripture' {
     ) => Promise<boolean>;
   };
 
+  /**
+   * Whether a check is ready to run on a project:
+   *
+   * - `ready`: the check can run
+   * - `setupRequired`: the check's settings or inventory are incomplete; its results may be
+   *   unreliable
+   * - `notApplicable`: the project has chosen not to use what the check checks (for example, it uses
+   *   no quotation marks). The check returns no results and reports no error.
+   *
+   * @experimental
+   */
+  export type CheckSetupStatus = 'ready' | 'setupRequired' | 'notApplicable';
+
+  /**
+   * Setup status of one check for one project
+   *
+   * @experimental
+   */
+  export type CheckSetupState = {
+    /**
+     * Whether the check is ready to run on the project
+     *
+     * @experimental
+     */
+    status: CheckSetupStatus;
+    /**
+     * Only when `status` is `notApplicable`: why the check does not apply to the project
+     *
+     * @experimental
+     */
+    reason?: LocalizeKey;
+  };
+
   /** Functions that provide configuration data for a specific check */
   export type CheckConfigurationProvider = {
-    /** Returns if setup/configuration for the check has been completed */
+    /**
+     * Returns if setup/configuration for the check has been completed. A check that does not apply
+     * to the project counts as set up.
+     */
     isCheckSetupForProject: (checkId: string, projectId: string) => Promise<boolean>;
+    /**
+     * Returns whether the check is ready to run on the project, needs setup first, or does not
+     * apply to it
+     *
+     * @experimental
+     */
+    lookupCheckSetupStatus: (checkId: string, projectId: string) => Promise<CheckSetupState>;
   };
 
   /**
