@@ -275,6 +275,45 @@ function caretAtStartOf({ indexes, textOffset }: Placement): SelectionRange {
   return caretAtRemovalBoundary(indexes.slice(0, -1), indexes[indexes.length - 1]);
 }
 
+/** The editor's address of the text in a top-level text item: its line's one text node. */
+const TOP_LEVEL_TEXT_CARET_PATH_REGEX = /^\$\.content\[(\d+)\]\.content\[0\]$/;
+
+/**
+ * Where the caret goes when it was in a line of top-level text the repair moved: the same character
+ * of that text, wherever the text now is. That line is what is left of a chapter line whose bytes
+ * stopped being a chapter marker (`\ 2` once the `c` is deleted), or text typed ahead of the
+ * marker; the restored marker goes above it, and the user is still typing in it.
+ *
+ * The editor addresses a top-level text item as a line holding one text node, so both the caret
+ * read from it and the target given back to it go one level deeper than the USJ item.
+ *
+ * @param caret The editor's caret when the save was made, if it had one.
+ * @param content The document's top-level content, in the coordinates `caret` addresses.
+ * @param placements Where each item of `content` ended up in the repaired document.
+ */
+function caretInMovedText(
+  caret: SelectionRange | undefined,
+  content: MarkerContent[],
+  placements: Map<number, Placement>,
+): SelectionRange | undefined {
+  if (!caret || (caret.end && !deepEqualAcrossIframes(caret.end, caret.start))) return undefined;
+  const match = TOP_LEVEL_TEXT_CARET_PATH_REGEX.exec(caret.start.jsonPath);
+  if (!match) return undefined;
+  const index = Number(match[1]);
+  const text = content[index];
+  const placement = placements.get(index);
+  if (typeof text !== 'string' || !placement || placement.textOffset !== undefined)
+    return undefined;
+  const [newIndex, ...deeper] = placement.indexes;
+  if (deeper.length > 0 || newIndex === index) return undefined;
+  return {
+    start: {
+      jsonPath: usjJsonPathFromIndexes([newIndex, 0]),
+      offset: Math.min('offset' in caret.start ? (caret.start.offset ?? 0) : 0, text.length),
+    },
+  };
+}
+
 /**
  * A result carrying `repairedContent`, reporting a repair only when that content actually differs
  * from what the document already holds.
@@ -308,10 +347,12 @@ function toRepairResult(
  *
  * @param usj The chapter document as the editor holds it.
  * @param expectedChapterNum The chapter that document is supposed to be.
+ * @param caret The editor's caret, if it has one; see {@link caretInMovedText}.
  */
 export function repairChapterMarkers(
   usj: Usj,
   expectedChapterNum: number,
+  caret?: SelectionRange,
 ): ChapterMarkerRepairResult {
   // Without a real chapter number there is nothing to repair the document toward.
   if (expectedChapterNum < 1) return { usj, didRepair: false, caretTarget: undefined };
@@ -435,8 +476,12 @@ export function repairChapterMarkers(
     repairedChapterObject.marker ?? CHAPTER_MARKER,
     expected,
   );
+  // A line the user is typing in that the repair only moved keeps their caret, ahead of all these.
+  const movedTextCaret = caretInMovedText(caret, strippedContent, placements);
   let caretTarget: ChapterMarkerCaretTarget | undefined;
-  if (!anchor) {
+  if (movedTextCaret) {
+    caretTarget = movedTextCaret;
+  } else if (!anchor) {
     caretTarget = CARET_AT_DOCUMENT_END;
   } else if (anchor.chapterObject.number !== expected) {
     caretTarget = caretAtChapterNumber;
@@ -501,11 +546,13 @@ function isStoredChapterWithoutItsMarker(usjFromEditor: Usj, usjFromPdp: Usj | u
  * @param usjFromEditor The editor's settled document.
  * @param usjFromPdp What the PDP currently holds for this chapter, if anything.
  * @param expectedChapterNum The chapter the editor is editing.
+ * @param caret The editor's caret, if it has one, so a line of text the repair moves keeps it.
  */
 export function prepareUsjForChapterSave(
   usjFromEditor: Usj,
   usjFromPdp: Usj | undefined,
   expectedChapterNum: number,
+  caret?: SelectionRange,
 ): ChapterSavePreparation {
   const editorUsjToSave = resolveUsjToSaveToPdp(usjFromEditor, usjFromPdp);
   if (!editorUsjToSave)
@@ -515,7 +562,7 @@ export function prepareUsjForChapterSave(
     usj: repaired,
     didRepair,
     caretTarget,
-  } = repairChapterMarkers(usjFromEditor, expectedChapterNum);
+  } = repairChapterMarkers(usjFromEditor, expectedChapterNum, caret);
   // A restored marker always goes at the start (chapter 1, which may lack one, is never restored).
   const restoredMarkerCaret = caretAfterChapterNumber(
     [0],

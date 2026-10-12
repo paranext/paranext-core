@@ -860,6 +860,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `extensions/src/platform-scripture-editor/src/debounced-pdp-save.util.ts`, fed the editor's
   document by `useEditorPdpSync`). The C# backstop has no such view of where its content came from,
   and does not need one for editor traffic, which is guarded before it leaves the renderer.
+  The repair can only act on what the editor saves, so the editor saves a chapter line's bytes as
+  what they are once they stop being a chapter marker (`\ 2` after the `c` is deleted, another
+  marker typed over the `\c`, text typed ahead of it): its chapter settle replaces the chapter with
+  what those bytes tokenize to (scripture-editors `$rebuildChapter` and `chapterFragmentContent`).
+  The repair then puts the marker back above them, as Paratext 9 saves the bytes it holds and
+  restores the marker at the top of a later chapter; chapter 1 is left without one, as Paratext 9
+  leaves it. Text typed ahead of a later chapter's marker is the placement rule's case above,
+  reachable by typing, and `chapter-line-left-as-text.spec.ts` pins it end to end. The caret the
+  user had in such a line stays at the same character of it (`caretInMovedText` in
+  `chapter-marker-repair.util.ts`).
   **Revisit** if the editor ever gains a way to reject a marker edit at the source, or if Paratext
   relaxes the "text before chapter marker" rule.
 - **Source:** PT-4608; Paratext 9 `UsfmEditorTextLoader.FixChapterNumbers` and its test table.

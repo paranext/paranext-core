@@ -341,6 +341,73 @@ describe('prepareUsjForChapterSave', () => {
     });
   });
 
+  // What the editor saves when the chapter line's bytes stop being a chapter marker: the bytes, as
+  // a line of text. Paratext 9 saves the same bytes with a marker put back above them, so they stay,
+  // and so does the caret the user had in them.
+  describe('a chapter line left as text', () => {
+    const stored = usjOf(chapter('2', { sid: 'GEN 2' }), para('p', 'body'));
+    const caretInLine = (offset: number): SelectionRange => ({
+      start: { jsonPath: '$.content[0].content[0]', offset },
+    });
+
+    it('keeps what a deletion left, under a restored marker, with the caret where it was', () => {
+      const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
+        usjOf('\\ 2', para('p', 'body')),
+        stored,
+        2,
+        caretInLine(1),
+      );
+      expect(repairedUsj?.content).toEqual([chapter('2'), '\\ 2', para('p', 'body')]);
+      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 1 } });
+    });
+
+    it('moves text typed ahead of the marker below it, with the caret', () => {
+      const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
+        usjOf('X', chapter('2', { sid: 'GEN 2' }), para('p', 'body')),
+        stored,
+        2,
+        caretInLine(1),
+      );
+      expect(repairedUsj?.content).toEqual([
+        chapter('2', { sid: 'GEN 2' }),
+        'X',
+        para('p', 'body'),
+      ]);
+      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 1 } });
+    });
+
+    it('keeps the caret within the text when the line was longer on screen', () => {
+      const { caretTarget } = prepareUsjForChapterSave(
+        usjOf('\\ 2', para('p', 'body')),
+        stored,
+        2,
+        caretInLine(4),
+      );
+      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 3 } });
+    });
+
+    it('leaves chapter 1 without a marker, as Paratext 9 does', () => {
+      const { repairedUsj, usjToSave } = prepareUsjForChapterSave(
+        usjOf(ID_GEN, '\\ 1', para('p', 'body')),
+        usjOf(ID_GEN, chapter('1'), para('p', 'body')),
+        1,
+        caretInLine(1),
+      );
+      expect(repairedUsj).toBeUndefined();
+      expect(usjToSave?.content).toEqual([ID_GEN, '\\ 1', para('p', 'body')]);
+    });
+
+    it('uses the usual caret when the caret was not in the moved text', () => {
+      const { caretTarget } = prepareUsjForChapterSave(
+        usjOf('\\ 2', para('p', 'body')),
+        stored,
+        2,
+        { start: { jsonPath: '$.content[1].content[0]', offset: 2 } },
+      );
+      expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
+    });
+  });
+
   it('keeps saving a SECOND edit made after a repair — the dead-save-loop regression', () => {
     const fromPdp = usjOf(chapter('3'), para('p', 'body'));
     const firstPass = prepareUsjForChapterSave(

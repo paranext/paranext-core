@@ -3000,6 +3000,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           correctEditorUsjVersion(usjFromEditor),
           usjFromPdp,
           savedChapterSelector.chapterNum,
+          // Only acted on when the repair is pushed back, which happens only while this editor
+          // still shows the chapter being saved, so the caret addresses the same document.
+          editorRef.current?.getSelection(),
         ),
         savedChapterKey,
         // Read live rather than captured, so a save that fires after a chapter switch compares the
