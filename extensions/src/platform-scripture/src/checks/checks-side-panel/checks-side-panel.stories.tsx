@@ -30,9 +30,16 @@ const seedProjects: ChecksSidePanelProject[] = [
 ];
 
 const seedChecksInfo: CheckInfo[] = [
-  { checkId: 'capitalization', checkName: 'Capitalization', isSetup: true },
-  { checkId: 'punctuation', checkName: 'Punctuation', isSetup: true },
-  { checkId: 'characters', checkName: 'Characters', isSetup: false },
+  { checkId: 'capitalization', checkName: 'Capitalization', isSetup: true, setupStatus: 'ready' },
+  { checkId: 'punctuation', checkName: 'Punctuation', isSetup: true, setupStatus: 'ready' },
+  { checkId: 'characters', checkName: 'Characters', isSetup: false, setupStatus: 'setupRequired' },
+  {
+    checkId: 'quotation',
+    checkName: 'Quotation',
+    isSetup: true,
+    setupStatus: 'notApplicable',
+    notApplicableReason: '%checkSetup_notApplicable_quotationMarksNotUsed%',
+  },
 ];
 
 /** Build a check result with sensible defaults so seed data stays terse. */
@@ -128,6 +135,20 @@ const completedJobReport: CheckJobStatusReport = {
   totalResultsCount: seedResults.length,
   nextResults: [],
   totalExecutionTimeMs: 1200,
+};
+
+/** A completed job in which the Quotation check could not run; the other checks' results remain. */
+const checksCouldNotRunJobReport: CheckJobStatusReport = {
+  ...completedJobReport,
+  // The three seed results in the current chapter (GEN 1) that belong to the checks that ran
+  totalResultsCount: 3,
+  checkErrors: [
+    {
+      checkId: 'quotation',
+      message:
+        'Quotes settings are invalid for project zzz6.\n\nYou can edit the settings on Project > Project settings > Quotation rules.',
+    },
+  ],
 };
 
 const runningJobReport: CheckJobStatusReport = {
@@ -286,6 +307,20 @@ function createDecorator(config: HarnessConfig) {
  */
 export const Populated: Story = {
   decorators: [createDecorator({})],
+};
+
+/**
+ * The job finished but one check could not run. The check filter labels it "Couldn't run" and the
+ * status bar names it, with its message on hover; the other checks' results still show.
+ */
+export const CompletedWithChecksThatCouldNotRun: Story = {
+  decorators: [
+    createDecorator({
+      jobStatusReport: checksCouldNotRunJobReport,
+      hasActiveJob: true,
+      initialSelectedCheckTypeIds: ['capitalization', 'punctuation', 'quotation'],
+    }),
+  ],
 };
 
 /** A check job is still running — the progress bar and Cancel button show. */

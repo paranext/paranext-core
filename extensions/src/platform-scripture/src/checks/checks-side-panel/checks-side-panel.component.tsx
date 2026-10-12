@@ -9,6 +9,10 @@ import {
   SelectTrigger,
   SelectValue,
   Spinner,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from 'platform-bible-react';
 import {
   ProjectSelector,
@@ -32,6 +36,7 @@ import {
   CHECK_SCOPE_FILTER_STRINGS,
   CheckInfo,
   CheckScopes,
+  getCheckTypeSecondaryLabel,
   isValidCheckScope,
   LOCALIZED_STRINGS,
   ProjectOption,
@@ -270,12 +275,14 @@ export function ChecksSidePanel({
       checksInfo.map((check) => ({
         value: check.checkId,
         label: check.checkName,
-        secondaryLabel: check.isSetup
-          ? undefined
-          : localizedStrings['%webView_checksSidePanel_checkRequiresSetup%'],
+        secondaryLabel: getCheckTypeSecondaryLabel(
+          check,
+          jobStatusReport.checkErrors,
+          localizedStrings,
+        ),
         starred: false,
       })),
-    [checksInfo, localizedStrings],
+    [checksInfo, jobStatusReport.checkErrors, localizedStrings],
   );
 
   const selectedChecksCountLabel = useMemo(
@@ -287,6 +294,15 @@ export function ChecksSidePanel({
         },
       ),
     [localizedStrings, selectedCheckTypeIds],
+  );
+
+  const checkErrors = jobStatusReport.checkErrors ?? [];
+  const couldNotRunNames = useMemo(
+    () =>
+      (jobStatusReport.checkErrors ?? [])
+        .map((checkError) => getLocalizedCheckDescription(checkError.checkId) || checkError.checkId)
+        .join(', '),
+    [jobStatusReport.checkErrors, getLocalizedCheckDescription],
   );
 
   if (isLoading) {
@@ -432,6 +448,37 @@ export function ChecksSidePanel({
                   : localizedStrings['%webView_find_noResultsFound%']}
               </p>
             )}
+          {/* Some checks could not run; the other checks' results are shown as usual */}
+          {checkErrors.length > 0 && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <p
+                    data-testid="checks-could-not-run-notice"
+                    className="tw:font-light tw:text-muted-foreground"
+                    // Focusable so keyboard users can reach the messages in the tooltip
+                    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+                    tabIndex={0}
+                  >
+                    {formatReplacementString(
+                      localizedStrings['%webView_checksSidePanel_checksCouldNotRun_notice%'],
+                      { checkNames: couldNotRunNames },
+                    )}
+                  </p>
+                </TooltipTrigger>
+                <TooltipContent className="tw:max-w-sm">
+                  {checkErrors.map((checkError) => (
+                    <p
+                      key={`${checkError.checkId}-${checkError.message}`}
+                      className="tw:font-light"
+                    >
+                      {checkError.message}
+                    </p>
+                  ))}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           {/* The job encountered an error while running */}
           {jobStatusReport.status === 'errored' && jobStatusReport.error && (
             <p className="tw:font-light"> {jobStatusReport.error}</p>
