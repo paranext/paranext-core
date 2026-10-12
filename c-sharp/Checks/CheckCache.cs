@@ -104,7 +104,10 @@ internal sealed class CheckCache
         return checkIds.Select((id) => GetCheck(id, projectId));
     }
 
-    public void RunChecksForProject(
+    /// <returns>
+    /// The checks that threw, each with its message. The other checks still ran and have results.
+    /// </returns>
+    public List<CheckJobError> RunChecksForProject(
         InputRange range,
         IEnumerable<string> checkIds,
         ErrorMessageDenials denials
@@ -124,17 +127,28 @@ internal sealed class CheckCache
         var dataSource = GetChecksDataSource(projectId);
         dataSource.GetText(bookNum, 0, neededDataFormat);
 
+        var failures = new List<CheckJobError>();
         foreach (var checkId in checkIds)
         {
             var check = GetCheck(checkId, projectId);
-            if (check.SettingsChanged)
+            // A check that throws must not cost the other checks their results. Its recorder is left
+            // not ready, so the next job runs it again.
+            try
             {
-                check.SettingsChanged = false;
-                check.Check.Initialize(dataSource);
-                check.ClearResults();
+                if (check.SettingsChanged)
+                {
+                    check.Check.Initialize(dataSource);
+                    check.ClearResults();
+                    check.SettingsChanged = false;
+                }
+                check.Run(dataSource, bookNum, denials);
             }
-            check.Run(dataSource, bookNum, denials);
+            catch (Exception ex)
+            {
+                failures.Add(new CheckJobError(checkId, ex.Message));
+            }
         }
+        return failures;
     }
 
     private ChecksDataSource GetChecksDataSource(string projectId)
