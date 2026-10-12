@@ -34,7 +34,11 @@ import {
   CheckSetupState,
 } from 'platform-scripture';
 import { addCheckError } from './check-aggregator.utils';
-import { CHECK_RUNNER_NETWORK_OBJECT_TYPE, CHECK_STOP_DEFAULT_TIMEOUT_MS } from './check.model';
+import {
+  CHECK_RUNNER_NETWORK_OBJECT_TYPE,
+  CHECK_STOP_DEFAULT_TIMEOUT_MS,
+  LOOKUP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION,
+} from './check.model';
 import { PersistedCheckRunResults } from './persisted-check-run-result.model';
 
 /** Details about a check that include a way to create the check */
@@ -448,6 +452,8 @@ async function initialize(): Promise<void> {
             'platformScripture.extensionHostCheckRunner',
             checkRunnerEngine,
             CHECK_RUNNER_NETWORK_OBJECT_TYPE,
+            undefined,
+            { methods: [LOOKUP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION] },
           );
           unsubscribers.add(dataProvider.dispose);
           unsubscribers.add(
