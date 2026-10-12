@@ -99,11 +99,6 @@ internal sealed class CheckCache
         );
     }
 
-    public IEnumerable<CheckForProject> GetChecks(IEnumerable<string> checkIds, string projectId)
-    {
-        return checkIds.Select((id) => GetCheck(id, projectId));
-    }
-
     /// <returns>
     /// The checks that threw, each with its exception. The other checks still ran and have results.
     /// </returns>
