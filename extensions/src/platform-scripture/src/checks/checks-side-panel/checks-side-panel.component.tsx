@@ -297,11 +297,16 @@ export function ChecksSidePanel({
   );
 
   const checkErrors = jobStatusReport.checkErrors ?? [];
+  // A check that failed with several different messages is named once
   const couldNotRunNames = useMemo(
     () =>
-      (jobStatusReport.checkErrors ?? [])
-        .map((checkError) => getLocalizedCheckDescription(checkError.checkId) || checkError.checkId)
-        .join(', '),
+      [
+        ...new Set(
+          (jobStatusReport.checkErrors ?? []).map(
+            (checkError) => getLocalizedCheckDescription(checkError.checkId) || checkError.checkId,
+          ),
+        ),
+      ].join(', '),
     [jobStatusReport.checkErrors, getLocalizedCheckDescription],
   );
 
@@ -470,8 +475,9 @@ export function ChecksSidePanel({
                   {checkErrors.map((checkError) => (
                     <p
                       key={`${checkError.checkId}-${checkError.message}`}
-                      className="tw:font-light"
+                      className="tw:font-light tw:whitespace-pre-line"
                     >
+                      {getLocalizedCheckDescription(checkError.checkId) || checkError.checkId}:{' '}
                       {checkError.message}
                     </p>
                   ))}

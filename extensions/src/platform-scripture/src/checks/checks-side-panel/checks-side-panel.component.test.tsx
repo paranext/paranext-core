@@ -308,8 +308,30 @@ describe('checks that could not run', () => {
     await user.hover(screen.getByTestId('checks-could-not-run-notice'));
 
     expect(
-      (await screen.findAllByText(/Quotes settings are invalid for project zzz6\./)).length,
+      (await screen.findAllByText(/Quotation: Quotes settings are invalid for project zzz6\./))
+        .length,
     ).toBeGreaterThan(0);
+  });
+
+  it('names a check once when it failed with different messages', () => {
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: {
+            ...JOB_STATUS_REPORT,
+            checkErrors: [
+              { checkId: 'Quotation', message: 'First failure' },
+              { checkId: 'Quotation', message: 'Second failure' },
+            ],
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId('checks-could-not-run-notice')).toHaveTextContent(
+      /^Couldn’t run: Quotation$/,
+    );
   });
 
   it('shows no notice when every check ran', () => {

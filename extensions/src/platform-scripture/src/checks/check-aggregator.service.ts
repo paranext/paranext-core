@@ -20,6 +20,7 @@ import {
   CHECK_RESULTS_INVALIDATED_EVENT,
   CHECK_RUNNER_NETWORK_OBJECT_TYPE,
   CHECK_STOP_DEFAULT_TIMEOUT_MS,
+  LOOKUP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION,
 } from './check.model';
 import { mergeCheckErrors } from './check-aggregator.utils';
 
@@ -428,31 +429,7 @@ async function initialize(): Promise<void> {
             new CheckAggregatorDataProviderEngine(),
             undefined,
             undefined,
-            {
-              methods: [
-                {
-                  name: 'lookupCheckSetupStatus',
-                  'x-experimental': true,
-                  summary:
-                    'Whether a check is ready to run on a project, needs setup first, or does not apply to it',
-                  params: [
-                    {
-                      name: 'checkId',
-                      required: true,
-                      summary: 'ID of the check',
-                      schema: { type: 'string' },
-                    },
-                    {
-                      name: 'projectId',
-                      required: true,
-                      summary: 'ID of the project',
-                      schema: { type: 'string' },
-                    },
-                  ],
-                  result: { name: 'checkSetupState', schema: { type: 'object' } },
-                },
-              ],
-            },
+            { methods: [LOOKUP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION] },
           );
           resolve();
         } catch (error) {
