@@ -36,7 +36,8 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   // The disclosure's body: platform-bible-react's `BaseOrModelTextExplanation`, which the Team
   // layout dialog renders too, reads these. Listed here rather than spread from its
   // `BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS` so this node-safe module imports nothing from
-  // platform-bible-react; `model-text-panel.component.test.tsx` checks the two lists agree.
+  // platform-bible-react; `model-text-panel.component.test.tsx` checks this list includes every key
+  // in it.
   '%webView_modelTextPanel_emptyState_baseOrModel_intro%',
   '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%',
   '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%',
