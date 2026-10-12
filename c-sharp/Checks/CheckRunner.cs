@@ -46,6 +46,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
     private readonly ConcurrentDictionary<string, CheckJobStatus> _activeCheckJobsByJobId = new();
     private readonly ConcurrentQueue<string> _queuedCheckJobs = new();
     private readonly CheckCache _checkCache;
+    private readonly Func<string, ChecksDataSource, ScriptureCheckBase> _createCheck;
     private readonly object _runChecksLock = new();
 
     #endregion
@@ -53,11 +54,22 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
     #region Constructor
 
     public CheckRunner(PapiClient papiClient, InventoryDataProvider inventoryDataProvider)
+        : this(papiClient, inventoryDataProvider, CheckFactory.CreateCheck) { }
+
+    /// <param name="createCheck">
+    /// Creates and initializes the check for a check ID. Tests substitute checks that misbehave.
+    /// </param>
+    internal CheckRunner(
+        PapiClient papiClient,
+        InventoryDataProvider inventoryDataProvider,
+        Func<string, ChecksDataSource, ScriptureCheckBase> createCheck
+    )
         : base("dotNetCheckRunner", papiClient, NetworkObjectType.CHECK_RUNNER)
     {
+        _createCheck = createCheck;
         _allCheckIds = _checkDetailsByCheckId.Keys.ToList();
         _allCheckDetails = _checkDetailsByCheckId.Values.ToList();
-        _checkCache = new CheckCache(_allCheckIds, papiClient);
+        _checkCache = new CheckCache(_allCheckIds, papiClient, createCheck);
     }
 
     #endregion
@@ -147,7 +159,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         ArgumentException.ThrowIfNullOrEmpty(projectId);
 
         var dataSource = new ChecksDataSource(LocalParatextProjects.GetParatextProject(projectId));
-        var check = CheckFactory.CreateCheck(checkId, dataSource);
+        var check = _createCheck(checkId, dataSource);
         return check.SetupComplete;
     }
 
