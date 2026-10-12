@@ -119,4 +119,15 @@ internal class CheckSetupStatusLookupTests : PapiTestBase
             Is.EqualTo(CheckSetupStatus.QuotationMarksNotUsedReason)
         );
     }
+
+    [Test]
+    public void CanBeNotApplicable_OnlyForQuotationChecks()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(CheckSetupStatusLookup.CanBeNotApplicable(s_quotationId), Is.True);
+            Assert.That(CheckSetupStatusLookup.CanBeNotApplicable(s_quotationTypesId), Is.True);
+            Assert.That(CheckSetupStatusLookup.CanBeNotApplicable(s_repeatedWordId), Is.False);
+        });
+    }
 }
