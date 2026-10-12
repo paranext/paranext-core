@@ -279,8 +279,8 @@ settled.
   they touch; once the work items exist, compare each open ticket against them. One that already
   owns a work item's scope (a duplicate) or part of it (an overlap) is named in that item's
   paragraph — `Existing ticket: PT-XXXX (duplicate|overlap)` — so `/prd-to-jira` proposes moving,
-  converting or linking it instead of creating a twin. A closed ticket follows the `jira-creation`
-  skill's
+  converting or linking it instead of creating a twin. A closed ticket follows the
+  `jira-creation` skill's
   [Done is not proof the work shipped](../skills/jira-creation/SKILL.md#searching-for-existing-work)
   rule, so it shrinks the breakdown only once the scout has confirmed the work in the code (a
   `file:line`): say so in §5's Notes.

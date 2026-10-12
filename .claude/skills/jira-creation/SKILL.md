@@ -157,12 +157,12 @@ holds text. Say which you chose.
    time with `getJiraIssueTypeMetaWithFields` — both through `discover` → `executeRead`.
 6. **Find this run's own tickets** whenever this is a resume, a retry, or a batch that may have
    partly run: start from the keys already recorded for the run (see below), then search
-   `project = PT AND reporter = currentUser() AND created >= "<the day the run started>" ORDER BY
-   created DESC`, plus `parent = <new parent>` once the parent exists. If you don't know when the
-   run started, ask the user rather than guessing a window. Match them to the drafts by reading
-   them, not by title search — titles can come out differently on a rerun. A match whose body is still a skeleton is yours to fill
-   (continue at step 8); a match that is already filled is done. Never create a second one —
-   nothing can delete the duplicate.
+   `project = PT AND reporter = currentUser() AND created >= "<the day the run started>"
+   ORDER BY created DESC`, plus `parent = <new parent>` once the parent exists. If you don't know
+   when the run started, ask the user rather than guessing a window. Match them to the drafts by
+   reading them, not by title search — titles can come out differently on a rerun. A match whose
+   body is still a skeleton is yours to fill (continue at step 8); a match that is already filled
+   is done. Never create a second one — nothing can delete the duplicate.
 7. **Create** with `createJiraIssue`: project `PT`, the issue type, the title (Jira's `summary`),
    the parent, and any custom fields — using the parameter names the tool's schema shows. **Don't
    pass the drafted body text here** — the template discards it every time. Send it in step 10.
