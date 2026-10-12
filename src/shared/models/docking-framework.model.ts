@@ -235,13 +235,21 @@ export type PanelDirection =
   | 'update';
 
 /**
- * Information about a panel: a tab opened beside the tab group holding `targetTabId`.
+ * Information about a panel: a tab opened beside the tab group holding `targetTabId`, or beside the
+ * tab group of the most recently added tab when no `targetTabId` is given.
  *
- * When a tab group already exists on the `direction` side of the target's tab group, the tab is
- * added to that group (becoming its active tab when the open brings it to front) instead of a new
- * group being created. When the target's tab group is floating, maximized or in its own window, the
- * tab opens as a new group at the edge of the dock area. `left` and `right` are mirrored in a
- * right-to-left UI.
+ * When the target's tab group is docked, the tab is added, as its active tab, to the tab group
+ * directly on the `direction` side instead of a new group being created, if that group can take it:
+ * it sits beside the target's group (a group touching it only at a corner does not count), holds
+ * the same kind of tab, is not one of Simple mode's fixed columns, and is at least as wide (as tall
+ * for `top` and `bottom`) as a new group beside the target would be. Otherwise the tab opens as a
+ * new group beside the target's group.
+ *
+ * When the target's tab group is floating or maximized, the tab opens as a new group at the
+ * reading-end edge of the dock area (the right, or the left in a right-to-left UI), whichever
+ * `direction` was asked for, and a floating target that would cover that group is moved aside.
+ * `left` and `right` are mirrored in a right-to-left UI. A target in another application window is
+ * placed by these same rules in the window that holds it.
  */
 interface PanelLayout {
   type: 'panel';
