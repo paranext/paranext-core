@@ -94,9 +94,10 @@ readable top is in addition to the detail below, never a replacement for it.
 6. **Create, then populate each description in a second pass**, with the **`jira-creation`
    skill** ([`.claude/skills/jira-creation/SKILL.md`](../skills/jira-creation/SKILL.md)). Enter
    its Process at step 5 (resolve the target): its steps 1–4 — search, draft, cold read, approval
-   — are this command's steps 2–5 and already ran once for the whole batch. Create the parent,
-   then each child with the parent set — one at a time, filling and verifying each before moving
-   on. **As each key is created, write it into the brief's work-item table** (WI-n → PT-xxxx), so
+   — are this command's steps 2–5 and already ran once for the whole batch. Create the parent —
+   unless the user chose an existing ticket as the parent in step 2, in which case use it as it
+   is — then each child with the parent set — one at a time, filling and verifying each before
+   moving on. **As each key is created, write it into the brief's work-item table** (WI-n → PT-xxxx), so
    a later session can tell what this run already made. Right after the parent is created, filled
    and verified, carry out the approved actions for work items settled by an existing ticket —
    each move, conversion and `Relates` link to the parent — and verify each.
