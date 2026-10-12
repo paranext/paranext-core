@@ -566,6 +566,7 @@
       "%webView_checksSidePanel_checkTypeFilter_searchPlaceholder%": "Search check types…",
       "%webView_checksSidePanel_checkingBadge_title%": "Checking...",
       "%webView_checksSidePanel_checkCouldNotRun%": "Couldn't run",
+      "%webView_checksSidePanel_checkCouldNotRun_detail%": "{checkName}: {message}",
       "%webView_checksSidePanel_checkRequiresSetup%": "Setup required",
       "%webView_checksSidePanel_checkRequiresSetup_tooltip%": "For reliable results, complete the inventory or settings for this check",
       "%webView_checksSidePanel_checksCouldNotRun_notice%": "Couldn't run: {checkNames}",
