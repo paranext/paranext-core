@@ -207,7 +207,8 @@ through step 6, and before carrying out any owed action it re-reads that ticket'
 status category, assignee, parent, links. An action that already holds is skipped; a ticket whose
 state changed since the approval (no longer To Do, now assigned, already moved) goes back to the
 user. Outside `/prd-to-jira` the list lives only in the session; `/prd-to-jira` also writes each
-key, and each approved action still owed, into the brief as it goes, which survives the session.
+key, and each approved action still owed, into the brief (its Ticket column and `Owed:` line) as
+it goes, which survives the session.
 
 ## Searching for existing work
 

@@ -110,16 +110,18 @@ readable top is in addition to the detail below, never a replacement for it.
    is created, write it into the brief** — the parent's key on a `Parent ticket: PT-xxxx` line
    directly above the §4 work-item table, and each child's in that table's **Ticket** column
    (add the column if an older brief lacks it) — so a later session can tell what this run
-   already made. Before the first create, write each work item settled by an existing ticket into
-   the column too, with the approved action still owed — `PT-xxxx (existing, conversion owed)`,
-   `(existing, move owed)` or `(existing, link owed)` — and shorten it to `PT-xxxx (existing)` once
-   that action is done and verified. Every other approved action on an existing ticket — a
-   `Relates` link, a description edit — goes on an `Owed:` line directly above the same table
-   (`Owed: link PT-xxxx to the parent; edit PT-yyyy's description`), and each comes off it once
-   done and verified. As soon as the parent is in place — created, filled and verified, or
-   re-read in existing-parent mode — carry out the owed actions: each move and `Relates` link, and
-   each conversion — previewing it now if it was approved in principle, showing the preview, and
-   converting only after that conversion's final yes (see the skill's
+   already made. Before the first Jira write of any kind — create, move, link, conversion or edit
+   — write each work item settled by an existing ticket into the column too, with the approved
+   action still owed — `PT-xxxx (existing, conversion owed)`, `(existing, move owed)` or
+   `(existing, link owed)` — and shorten it to `PT-xxxx (existing)` once that action is done and
+   verified; a conversion that falls back to a link (declined at its final yes, or blocked)
+   becomes `(existing, link owed)`. Approved actions on tickets that don't settle a work item — a
+   `Relates` link to a related ticket, a description edit — go on an `Owed:` line directly above
+   the same table (`Owed: link PT-xxxx (related) to the parent; edit PT-yyyy's description`), and
+   each comes off it once done and verified. As soon as the parent is in place — created, filled
+   and verified, or re-read in existing-parent mode — carry out the owed actions: each move and
+   `Relates` link, and each conversion — previewing it now if it was approved in principle,
+   showing the preview, and converting only after that conversion's final yes (see the skill's
    [Converting a duplicate](../skills/jira-creation/SKILL.md#converting-a-duplicate)). Verify each,
    and run any approved description edit as the skill's Process step 12 says.
 
@@ -142,5 +144,7 @@ If a call fails midway, stop and report exactly which issues were created (keys)
 weren't, **and** every approved action on an existing ticket — move, conversion, link,
 description edit — marked done or still owed. Resume only on user instruction, through the
 skill's Process step 6 and its "Keep a record of the run": find this run's own tickets rather than
-creating them again, take the owed actions from the brief's Ticket column, and re-check each one
-against the ticket's live state before carrying it out.
+creating them again, take the owed actions from the brief's Ticket column and `Owed:` line, and
+re-check each one against the ticket's live state before carrying it out. The brief records only
+that a description edit is owed, not its text: re-draft that edit and get the user's yes on it
+again.
