@@ -286,6 +286,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
         double itemsToComplete = job.JobScope.InputRanges.Length * job.JobScope.CheckIds.Length;
         var completedItems = 0;
+        void AdvanceProgress() => job.PercentComplete = 100 * ++completedItems / itemsToComplete;
 
         // Computed once per job and check: cheap, and settings changes apply from the next job on
         var setupStatesByCheckAndProject = new Dictionary<(string, string), CheckSetupState?>();
@@ -324,7 +325,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                             == CheckSetupStatus.NotApplicable
                     )
                     {
-                        job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                        AdvanceProgress();
                         continue;
                     }
 
@@ -337,7 +338,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                     {
                         // A check that cannot be created must not end the job
                         RecordCheckFailure(job, checkId, range.ProjectId, ex);
-                        job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                        AdvanceProgress();
                         continue;
                     }
 
@@ -353,7 +354,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                             if (areResultsCached)
                             {
                                 job.AllResults.AddRange(recorder.GetResultsInRange(range));
-                                job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                                AdvanceProgress();
                             }
                         }
                     );
@@ -384,7 +385,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                 {
                     if (failedCheckIds.Contains(checkId))
                     {
-                        job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                        AdvanceProgress();
                         continue;
                     }
 
@@ -398,7 +399,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                                     $"Check {checkId} did not complete running properly."
                                 );
                             job.AllResults.AddRange(recorder.GetResultsInRange(range));
-                            job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                            AdvanceProgress();
                         }
                     );
                 }

@@ -9,10 +9,6 @@ import {
   SelectTrigger,
   SelectValue,
   Spinner,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
 } from 'platform-bible-react';
 import {
   ProjectSelector,
@@ -28,14 +24,16 @@ import {
 import {
   formatReplacementString,
   LanguageStrings,
+  LocalizeKey,
   makeProjectSelectorCustomData,
 } from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import {
   CHECK_SCOPE_FILTER_STRINGS,
   CheckInfo,
   CheckScopes,
+  getCheckDisplayName,
   getCheckTypeSecondaryLabel,
   isValidCheckScope,
   LOCALIZED_STRINGS,
@@ -194,6 +192,8 @@ export function ChecksSidePanel({
 }: ChecksSidePanelProps) {
   const [selectedCheckId, setSelectedCheckId] = useState<string>('');
   const [isCheckTypesOpen, setIsCheckTypesOpen] = useState(false);
+  const [areErrorDetailsShown, setAreErrorDetailsShown] = useState(false);
+  const errorDetailsId = useId();
 
   /**
    * Creates a unique identifier for a CheckRunResult, used to provide a unique key to the UI and to
@@ -296,19 +296,38 @@ export function ChecksSidePanel({
     [localizedStrings, selectedCheckTypeIds],
   );
 
-  const checkErrors = jobStatusReport.checkErrors ?? [];
+  const checkErrors = useMemo(
+    () => jobStatusReport.checkErrors ?? [],
+    [jobStatusReport.checkErrors],
+  );
   // A check that failed with several different messages is named once
   const couldNotRunNames = useMemo(
     () =>
       [
         ...new Set(
-          (jobStatusReport.checkErrors ?? []).map(
-            (checkError) => getLocalizedCheckDescription(checkError.checkId) || checkError.checkId,
+          checkErrors.map((checkError) =>
+            getCheckDisplayName(checkError.checkId, getLocalizedCheckDescription),
           ),
         ),
       ].join(', '),
-    [jobStatusReport.checkErrors, getLocalizedCheckDescription],
+    [checkErrors, getLocalizedCheckDescription],
   );
+  // With nothing to show, the reason is that the checks failed, not that they found nothing
+  const allSelectedChecksCouldNotRun = useMemo(
+    () =>
+      checkResults.length === 0 &&
+      selectedCheckTypeIds.length > 0 &&
+      selectedCheckTypeIds.every((checkTypeId) =>
+        checkErrors.some((checkError) => checkError.checkId === checkTypeId),
+      ),
+    [checkResults.length, selectedCheckTypeIds, checkErrors],
+  );
+
+  let emptyResultsKey: LocalizeKey = '%webView_checksSidePanel_noCheckResults%';
+  if (selectedCheckTypeIds.length === 0)
+    emptyResultsKey = '%webView_checksSidePanel_noChecksSelected%';
+  else if (allSelectedChecksCouldNotRun)
+    emptyResultsKey = '%webView_checksSidePanel_selectedChecksCouldNotRun%';
 
   if (isLoading) {
     return (
@@ -382,11 +401,7 @@ export function ChecksSidePanel({
       {/* Check results */}
       {checkResults.length === 0 ? (
         <div className="tw:min-h-48 tw:flex-1 tw:flex tw:flex-col tw:items-center tw:justify-center tw:w-full">
-          <div className="tw:mb-2">
-            {selectedCheckTypeIds.length === 0
-              ? localizedStrings['%webView_checksSidePanel_noChecksSelected%']
-              : localizedStrings['%webView_checksSidePanel_noCheckResults%']}
-          </div>
+          <div className="tw:mb-2">{localizedStrings[emptyResultsKey]}</div>
           <Button onClick={() => setIsCheckTypesOpen(true)}>
             {localizedStrings['%webView_checksSidePanel_selectChecks%']}
           </Button>
@@ -446,7 +461,9 @@ export function ChecksSidePanel({
             )}
           {/* The job has finished and all results are loaded into the UI */}
           {(jobStatusReport.status === 'completed' || jobStatusReport.status === 'stopped') &&
-            checkResults.length === jobStatusReport.totalResultsCount && (
+            checkResults.length === jobStatusReport.totalResultsCount &&
+            // The "could not run" notice below says why there are no results
+            !allSelectedChecksCouldNotRun && (
               <p className="tw:font-light">
                 {checkResults.length > 0
                   ? checkResults.length.toString()
@@ -455,23 +472,28 @@ export function ChecksSidePanel({
             )}
           {/* Some checks could not run; the other checks' results are shown as usual */}
           {checkErrors.length > 0 && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <p
-                    data-testid="checks-could-not-run-notice"
-                    className="tw:font-light tw:text-muted-foreground"
-                    // Focusable so keyboard users can reach the messages in the tooltip
-                    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-                    tabIndex={0}
-                  >
-                    {formatReplacementString(
-                      localizedStrings['%webView_checksSidePanel_checksCouldNotRun_notice%'],
-                      { checkNames: couldNotRunNames },
-                    )}
-                  </p>
-                </TooltipTrigger>
-                <TooltipContent className="tw:max-w-sm">
+            <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
+              <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-center tw:gap-2">
+                <p data-testid="checks-could-not-run-notice" className="tw:font-light">
+                  {formatReplacementString(
+                    localizedStrings['%webView_checksSidePanel_checksCouldNotRun_notice%'],
+                    { checkNames: couldNotRunNames },
+                  )}
+                </p>
+                <Button
+                  variant="link"
+                  size="sm"
+                  aria-expanded={areErrorDetailsShown}
+                  aria-controls={errorDetailsId}
+                  onClick={() => setAreErrorDetailsShown((wereShown) => !wereShown)}
+                >
+                  {areErrorDetailsShown
+                    ? localizedStrings['%webView_checksSidePanel_checkCouldNotRun_hideDetails%']
+                    : localizedStrings['%webView_checksSidePanel_checkCouldNotRun_showDetails%']}
+                </Button>
+              </div>
+              {areErrorDetailsShown && (
+                <div id={errorDetailsId} className="tw:flex tw:flex-col tw:gap-1">
                   {checkErrors.map((checkError) => (
                     <p
                       key={`${checkError.checkId}-${checkError.message}`}
@@ -480,16 +502,21 @@ export function ChecksSidePanel({
                       {formatReplacementString(
                         localizedStrings['%webView_checksSidePanel_checkCouldNotRun_detail%'],
                         {
-                          checkName:
-                            getLocalizedCheckDescription(checkError.checkId) || checkError.checkId,
+                          checkName: getCheckDisplayName(
+                            checkError.checkId,
+                            getLocalizedCheckDescription,
+                          ),
                           message: checkError.message,
                         },
                       )}
                     </p>
                   ))}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                  <p className="tw:font-light">
+                    {localizedStrings['%webView_checksSidePanel_checkCouldNotRun_paratext9Hint%']}
+                  </p>
+                </div>
+              )}
+            </div>
           )}
           {/* The job encountered an error while running */}
           {jobStatusReport.status === 'errored' && jobStatusReport.error && (

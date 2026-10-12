@@ -252,7 +252,7 @@
   "localizedStrings": {
     "en": {
       "%checkSetup_notApplicable_quotationMarksNotUsed%": "Not used in this project",
-      "%checkSetup_notApplicable_quotationTypesNotEnabled%": "Not enabled in Quotation rules",
+      "%checkSetup_notApplicable_quotationTypesNotEnabled%": "Not enabled for this project",
       "%inventoryName_Character%": "Characters inventory",
       "%inventoryName_Marker%": "Markers inventory",
       "%inventoryName_MatchedPairs%": "Unmatched pairs of punctuation",
@@ -567,6 +567,9 @@
       "%webView_checksSidePanel_checkingBadge_title%": "Checking...",
       "%webView_checksSidePanel_checkCouldNotRun%": "Couldn't run",
       "%webView_checksSidePanel_checkCouldNotRun_detail%": "{checkName}: {message}",
+      "%webView_checksSidePanel_checkCouldNotRun_hideDetails%": "Hide details",
+      "%webView_checksSidePanel_checkCouldNotRun_paratext9Hint%": "These settings can currently be changed in Paratext 9.",
+      "%webView_checksSidePanel_checkCouldNotRun_showDetails%": "Show details",
       "%webView_checksSidePanel_checkRequiresSetup%": "Setup required",
       "%webView_checksSidePanel_checkRequiresSetup_tooltip%": "For reliable results, complete the inventory or settings for this check",
       "%webView_checksSidePanel_checksCouldNotRun_notice%": "Couldn't run: {checkNames}",
@@ -586,6 +589,7 @@
       "%webView_checksSidePanel_scopeFilter_chapter%": "Chapter",
       "%webView_checksSidePanel_scopeFilter_label%": "Scope",
       "%webView_checksSidePanel_selectChecks%": "Select checks",
+      "%webView_checksSidePanel_selectedChecksCouldNotRun%": "No results — the selected checks couldn't run",
       "%webView_checksSidePanel_title%": "Checks",
       "%webView_checksSidePanel_unspecifiedCheckDescription%": "Unspecified check description",
       "%webView_checksSidePanel_unspecifiedCheckId%": "Unspecified check ID",

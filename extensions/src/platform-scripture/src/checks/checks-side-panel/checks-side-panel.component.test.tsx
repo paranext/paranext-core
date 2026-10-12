@@ -107,6 +107,10 @@ const LANGUAGE_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_lan
 const TYPE_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_type_label%');
 const LAST_USED_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_lastUsed_label%');
 
+const SHOW_DETAILS_LABEL = '%webView_checksSidePanel_checkCouldNotRun_showDetails%';
+const HIDE_DETAILS_LABEL = '%webView_checksSidePanel_checkCouldNotRun_hideDetails%';
+const PARATEXT_9_HINT_LABEL = '%webView_checksSidePanel_checkCouldNotRun_paratext9Hint%';
+
 const JOB_STATUS_REPORT: CheckJobStatusReport = {
   jobId: '',
   status: 'completed',
@@ -301,20 +305,46 @@ describe('checks that could not run', () => {
     );
   });
 
-  it('shows each check’s message on hover', async () => {
-    const user = setupUser();
+  it('hides the error details until asked', () => {
     render(
       <ChecksSidePanel
         {...buildProps({ hasActiveJob: true, jobStatusReport: REPORT_WITH_ERRORS })}
       />,
     );
 
-    await user.hover(screen.getByTestId('checks-could-not-run-notice'));
+    const toggle = screen.getByRole('button', { name: SHOW_DETAILS_LABEL });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText(/Quotes settings are invalid for project zzz6\./)).toBeNull();
+    expect(screen.queryByText(PARATEXT_9_HINT_LABEL)).toBeNull();
+  });
+
+  it('shows each check’s message and the Paratext 9 hint after clicking Show details', async () => {
+    const user = setupUser();
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: REPORT_WITH_ERRORS,
+          getLocalizedCheckDescription: (checkId) => (checkId === 'Quotation' ? 'Quotations' : ''),
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
 
     expect(
-      (await screen.findAllByText(/Quotation: Quotes settings are invalid for project zzz6\./))
-        .length,
-    ).toBeGreaterThan(0);
+      screen.getByText('Quotations: Quotes settings are invalid for project zzz6.'),
+    ).toBeInTheDocument();
+    const unregisteredLine = screen.getByText('registered-gone: Check is not registered');
+    expect(screen.getAllByText(PARATEXT_9_HINT_LABEL)).toHaveLength(1);
+    const hideToggle = screen.getByRole('button', { name: HIDE_DETAILS_LABEL });
+    expect(hideToggle).toHaveAttribute('aria-expanded', 'true');
+    const detailsId = hideToggle.getAttribute('aria-controls');
+    expect(detailsId).toBeTruthy();
+    expect(document.getElementById(detailsId ?? '')).toContainElement(unregisteredLine);
+
+    await user.click(hideToggle);
+    expect(screen.queryByText('registered-gone: Check is not registered')).toBeNull();
   });
 
   it('names a check once when it failed with different messages', () => {
@@ -341,5 +371,52 @@ describe('checks that could not run', () => {
   it('shows no notice when every check ran', () => {
     render(<ChecksSidePanel {...buildProps({ hasActiveJob: true })} />);
     expect(screen.queryByTestId('checks-could-not-run-notice')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: SHOW_DETAILS_LABEL })).toBeNull();
+  });
+
+  describe('when every selected check could not run', () => {
+    const ALL_FAILED_REPORT: CheckJobStatusReport = {
+      ...JOB_STATUS_REPORT,
+      checkErrors: [
+        { checkId: 'Quotation', message: 'First failure' },
+        { checkId: 'RepeatedWord', message: 'Second failure' },
+      ],
+    };
+
+    it('says the selected checks could not run instead of "No check results"', () => {
+      render(
+        <ChecksSidePanel
+          {...buildProps({
+            hasActiveJob: true,
+            selectedCheckTypeIds: ['Quotation', 'RepeatedWord'],
+            jobStatusReport: ALL_FAILED_REPORT,
+          })}
+        />,
+      );
+
+      expect(
+        screen.getByText('%webView_checksSidePanel_selectedChecksCouldNotRun%'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('%webView_checksSidePanel_noCheckResults%')).toBeNull();
+      // The notice stands in for the status bar's "No results found" line
+      expect(screen.queryByText('%webView_find_noResultsFound%')).toBeNull();
+      expect(screen.getByTestId('checks-could-not-run-notice')).toBeInTheDocument();
+    });
+
+    it('keeps "No check results" when only some of the selected checks failed', () => {
+      render(
+        <ChecksSidePanel
+          {...buildProps({
+            hasActiveJob: true,
+            selectedCheckTypeIds: ['Quotation', 'RepeatedWord', 'Other'],
+            jobStatusReport: ALL_FAILED_REPORT,
+          })}
+        />,
+      );
+
+      expect(screen.getByText('%webView_checksSidePanel_noCheckResults%')).toBeInTheDocument();
+      expect(screen.queryByText('%webView_checksSidePanel_selectedChecksCouldNotRun%')).toBeNull();
+      expect(screen.getByText('%webView_find_noResultsFound%')).toBeInTheDocument();
+    });
   });
 });

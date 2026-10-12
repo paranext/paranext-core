@@ -14,6 +14,11 @@ internal sealed class ThrowingCheck : ScriptureCheckBase
 {
     public const string Message = "The test check failed on purpose.";
 
+    public const string InitializeMessage = "The test check failed to initialize on purpose.";
+
+    /// <summary>Whether <see cref="Initialize"/> throws; off by default.</summary>
+    public bool ThrowInInitialize { get; set; }
+
     /// <summary>Books to throw for; empty means every book.</summary>
     public HashSet<int> BooksToThrowFor { get; } = [];
 
@@ -23,7 +28,11 @@ internal sealed class ThrowingCheck : ScriptureCheckBase
     public override bool SetupComplete => true;
     public override string LocalizedSetupCommand => "";
 
-    public override void Initialize(ChecksDataSource source) { }
+    public override void Initialize(ChecksDataSource source)
+    {
+        if (ThrowInInitialize)
+            throw new InvalidOperationException(InitializeMessage);
+    }
 
     public override void Run(int bookNum, ChecksDataSource source, IRecordCheckError recordError)
     {

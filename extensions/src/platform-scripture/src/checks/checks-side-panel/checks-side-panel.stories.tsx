@@ -311,7 +311,8 @@ export const Populated: Story = {
 
 /**
  * The job finished but one check could not run. The check filter labels it "Couldn't run" and the
- * status bar names it, with its message on hover; the other checks' results still show.
+ * status bar names it, with its message under "Show details"; the other checks' results still
+ * show.
  */
 export const CompletedWithChecksThatCouldNotRun: Story = {
   decorators: [

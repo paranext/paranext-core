@@ -2105,7 +2105,8 @@ declare module 'platform-scripture' {
    * - `stopped`: The job was stopped by the user
    * - `errored`: The job itself failed and is no longer running. A check that could not run does not
    *   make the job errored; see {@link CheckJobStatusReport.checkErrors}.
-   * - `completed`: The job completed successfully
+   * - `completed`: The job finished. Checks that could not run are listed in
+   *   {@link CheckJobStatusReport.checkErrors}
    */
   export type CheckJobStatus = 'queued' | 'running' | 'stopped' | 'errored' | 'completed';
 
@@ -2150,8 +2151,10 @@ declare module 'platform-scripture' {
     /** If the job encountered an error, this will contain the error message */
     error?: string;
     /**
-     * Checks that could not run, each listed once. A job whose checks partly or wholly failed still
-     * ends `completed`; the results of the other checks are in `nextResults` as usual.
+     * Checks that could not run. Each distinct check and message pair is listed once, so a check
+     * that failed in different ways can appear more than once. A job whose checks partly or wholly
+     * failed still ends `completed`; the results of the other checks are in `nextResults` as
+     * usual.
      *
      * @experimental
      */
@@ -2285,7 +2288,10 @@ declare module 'platform-scripture' {
      */
     status: CheckSetupStatus;
     /**
-     * Only when `status` is `notApplicable`: why the check does not apply to the project
+     * Only when `status` is `notApplicable`: why the check does not apply to the project. A
+     * localize key. Consumers localize it themselves; the keys platform-scripture defines are
+     * `%checkSetup_notApplicable_quotationMarksNotUsed%` and
+     * `%checkSetup_notApplicable_quotationTypesNotEnabled%`.
      *
      * @experimental
      */
@@ -2296,7 +2302,8 @@ declare module 'platform-scripture' {
   export type CheckConfigurationProvider = {
     /**
      * Returns if setup/configuration for the check has been completed. A check that does not apply
-     * to the project counts as set up.
+     * to the project counts as set up. Invalid quotation rules count as not set up. See
+     * {@link CheckConfigurationProvider.lookupCheckSetupStatus} for the reason.
      */
     isCheckSetupForProject: (checkId: string, projectId: string) => Promise<boolean>;
     /**
