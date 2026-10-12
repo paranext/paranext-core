@@ -477,8 +477,14 @@ export function ChecksSidePanel({
                       key={`${checkError.checkId}-${checkError.message}`}
                       className="tw:font-light tw:whitespace-pre-line"
                     >
-                      {getLocalizedCheckDescription(checkError.checkId) || checkError.checkId}:{' '}
-                      {checkError.message}
+                      {formatReplacementString(
+                        localizedStrings['%webView_checksSidePanel_checkCouldNotRun_detail%'],
+                        {
+                          checkName:
+                            getLocalizedCheckDescription(checkError.checkId) || checkError.checkId,
+                          message: checkError.message,
+                        },
+                      )}
                     </p>
                   ))}
                 </TooltipContent>
