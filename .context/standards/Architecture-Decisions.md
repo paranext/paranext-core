@@ -4333,7 +4333,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** `addTabAsPanel` (`platform-dock-layout-storage.util.ts`):
   - **Docked target:** the new tab joins the tab group on the `direction` side, as its active tab,
     when that group (`canJoinAdjacentTabGroup`) has tabs, is of the new tab's rc-dock group, is not
-    locked in place (`panelLock`, which only Simple mode's fixed columns carry), and is at least as
+    locked in place (`panelLock`, which Simple mode's fixed columns carry, as do rc-dock's tab-less
+    stand-in groups, which the has-tabs check already excludes), and is at least as
     wide (as tall for `top`/`bottom`) as the tab group rc-dock's own split would create beside the
     target. The group on that side is the one whose span across the direction overlaps the
     target's most (`findAdjacentTabGroup`); a group touching it only at a corner never counts.
@@ -4341,9 +4342,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     (`dock-layout-geometry.util.ts`), not measured in the DOM. Otherwise the open splits beside the
     target.
   - **Target not docked** (its root box is not the dock box): the new tab gets a tab group of its own
-    at the reading-end edge of the dock area, as wide as the average top-level docked group
-    (`dockAtReadingEndEdge`); a floating target that would cover it is slid sideways, and narrowed
-    only when there is no room (`moveFloatingTabGroupClear`).
+    at the reading-end edge of the dock area. In a horizontal dock box it is as wide as the average
+    top-level docked group; in a vertical one rc-dock's own 30% share stands (`dockAtReadingEndEdge`).
+    A floating target that would cover it is slid sideways, narrowed when the room beside the new
+    group is narrower than the float, and left alone when there is no room at all
+    (`moveFloatingTabGroupClear`).
   - `direction` is in reading order: core swaps `left` and `right` in a right-to-left UI
     (`resolvePanelDirection`), since rc-dock lays the dock out left to right whatever the UI
     direction.
@@ -6787,7 +6790,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-simple-column-3-tools-open-on-demand: An on-demand tool joins Simple's third column as one pinned tab, reused on every later open
 
 - **Date:** 2026-09-24
-- **Status:** Accepted
+- **Status:** Accepted; the Power-mode sentence is superseded by
+  `adr-panel-open-joins-the-group-beside-it`.
 - **Context:** Simple's three columns are fixed. Checks, opened from Simple's Quality checks menu
   section, was opened as `{ type: 'panel', direction: 'right' }` beside the editor, which split the
   editor's column into a new pane on every click. Checks is not part of Simple's starting layout,

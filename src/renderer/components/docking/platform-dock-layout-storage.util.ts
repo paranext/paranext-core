@@ -1129,9 +1129,9 @@ function findAdjacentTabGroup(
  * - The group has tabs. A tab group with none is the stand-in rc-dock keeps where a maximized group
  *   will be restored, which would drop a tab added to it.
  * - It is of the new tab's rc-dock group. rc-dock refuses to drop a tab into a group of another one.
- * - It is not locked in place (`panelLock`). Only Simple mode's fixed columns are, and a tab added to
- *   one would become its active tab and hide the tab the column is there to show; in the model-text
- *   and editor columns, whose tab bar is hidden, that tab could not even be reached again.
+ * - It is not locked in place (`panelLock`). Simple mode's fixed columns are, and a tab added to one
+ *   would become its active tab and hide the tab the column is there to show; in the model-text and
+ *   editor columns, whose tab bar is hidden, that tab could not even be reached again.
  * - It is at least as wide (as tall for `top` and `bottom`) as the tab group rc-dock would create
  *   beside the target, so joining never leaves the new tab less room than a group of its own.
  *

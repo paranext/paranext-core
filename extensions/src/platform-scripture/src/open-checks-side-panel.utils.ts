@@ -32,8 +32,10 @@ function isChecksSidePanelCurrent(
 /**
  * Opens the Checks side panel for an editor, placed according to `platform.interfaceMode`.
  *
- * - Power mode: a new Checks tab beside the editor tab, on every call: in the tab group on its right
- *   when one is there and wide enough, otherwise in a new group there.
+ * - Power mode: a new Checks tab on every call. When the editor is docked, it goes beside the editor
+ *   on its reading-end side (right; left in a right-to-left UI): into the tab group there when it
+ *   can take it, otherwise into a new group. When the editor is floating or maximized, it gets a
+ *   new group at the reading-end edge of the dock.
  * - Simple mode: one Checks tab in Column 3, alongside the other Resources & Tools tabs. Simple's
  *   three columns are fixed, and a panel opened beside the editor never joins one of them, so it
  *   would split the editor's column, and a new one per call would keep splitting it. Naming Column

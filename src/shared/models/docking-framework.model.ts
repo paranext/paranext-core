@@ -235,15 +235,16 @@ export type PanelDirection =
   | 'update';
 
 /**
- * Information about a panel: a tab opened beside the tab group holding `targetTabId`, or beside the
- * tab group of the most recently added tab when no `targetTabId` is given.
+ * Information about a panel: a tab opened beside the tab group holding `targetTabId`. When no
+ * `targetTabId` is given (or it is not in this window), the tab opens beside the tab group of the
+ * tab most recently opened as a `'tab'` or re-opened in this window, else of the first tab in it.
  *
  * When the target's tab group is docked, the tab is added, as its active tab, to the tab group
  * directly on the `direction` side instead of a new group being created, if that group can take it:
- * it sits beside the target's group (a group touching it only at a corner does not count), holds
- * the same kind of tab, is not one of Simple mode's fixed columns, and is at least as wide (as tall
- * for `top` and `bottom`) as a new group beside the target would be. Otherwise the tab opens as a
- * new group beside the target's group.
+ * it sits beside the target's group (a group touching it only at a corner does not count), has at
+ * least one tab, holds the same kind of tab, is not one of Simple mode's fixed columns, and is at
+ * least as wide (as tall for `top` and `bottom`) as a new group beside the target would be.
+ * Otherwise the tab opens as a new group beside the target's group.
  *
  * When the target's tab group is floating or maximized, the tab opens as a new group at the
  * reading-end edge of the dock area (the right, or the left in a right-to-left UI), whichever
@@ -258,7 +259,10 @@ interface PanelLayout {
    * side, which is the left in a right-to-left UI
    */
   direction?: PanelDirection;
-  /** If undefined, it will add in the `direction` relative to the previously added tab. */
+  /**
+   * If undefined (or not in this window), the panel is placed relative to the tab most recently
+   * opened as a `'tab'` or re-opened in this window, else the first tab in it.
+   */
   targetTabId?: string;
 }
 

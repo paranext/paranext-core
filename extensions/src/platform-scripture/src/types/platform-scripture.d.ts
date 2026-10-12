@@ -3112,8 +3112,10 @@ declare module 'papi-shared-types' {
     /**
      * Open the checks side panel for a scripture editor.
      *
-     * In Power mode each call opens a Checks tab beside the editor tab: in the tab group on its
-     * right when one is there and wide enough, otherwise in a new group there. In Simple mode there
+     * In Power mode each call opens a Checks tab. When the editor is docked, the tab goes beside it
+     * on its reading-end side (the right, or the left in a right-to-left UI): into the tab group
+     * there when it can take it, otherwise into a new group. When the editor is floating or
+     * maximized, the tab gets a new group at the reading-end edge of the dock. In Simple mode there
      * is one Checks tab, in the third (Resources & Tools) column: the first call adds it, and later
      * calls bring it to the front, re-pointing it first if it shows a different project or editor.
      *
