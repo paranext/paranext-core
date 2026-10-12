@@ -119,14 +119,9 @@ function renderDock(layout: LayoutData): DockLayout {
 }
 
 /** Opens a new tab the way a web view open does: added to the dock and brought to the front */
-function openPanel(
-  dockLayout: DockLayout,
-  tabId: string,
-  layout: Layout,
-  shouldBringToFront = true,
-): void {
+function openPanel(dockLayout: DockLayout, tabId: string, layout: Layout): void {
   act(() => {
-    addTabToDock({ id: tabId, tabType: TAB_TYPE_BUTTONS }, layout, shouldBringToFront, dockLayout);
+    addTabToDock({ id: tabId, tabType: TAB_TYPE_BUTTONS }, layout, true, dockLayout);
   });
 }
 
@@ -302,28 +297,6 @@ describe('opening a tab as a panel beside a docked tab group', () => {
     expect(tabGroupOf(dockLayout, 'find').activeId).toBe('find');
   });
 
-  it('keeps the active tab of the tab group it joins when the new tab is not brought to front', () => {
-    const dockLayout = renderDock({
-      dockbox: {
-        mode: 'horizontal',
-        children: [tabGroup('target-group', ['project-a']), tabGroup('right-group', ['notes'])],
-      },
-    });
-
-    openPanel(
-      dockLayout,
-      'find',
-      { type: 'panel', direction: 'right', targetTabId: 'project-a' },
-      false,
-    );
-
-    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
-      mode: 'horizontal',
-      children: [['project-a'], ['notes', 'find']],
-    });
-    expect(tabGroupOf(dockLayout, 'find').activeId).toBe('notes');
-  });
-
   it('adds a new tab group on that side when the target is already at that edge', () => {
     const dockLayout = renderDock({
       dockbox: { mode: 'horizontal', children: [tabGroup('only-group', ['project-a'])] },
@@ -334,6 +307,29 @@ describe('opening a tab as a panel beside a docked tab group', () => {
     expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
       mode: 'horizontal',
       children: [['project-a'], ['find']],
+    });
+  });
+
+  it('treats a tab group in a dock box saved without a mode as docked', () => {
+    // rc-dock never sets the dock box's mode and draws a box without one as a row. A layout read
+    // from disk may lack it, and that must not make every docked target look floating.
+    const layout: LayoutData = {
+      dockbox: {
+        mode: 'horizontal',
+        children: [tabGroup('target-group', ['project-a']), tabGroup('right-group', ['notes'])],
+      },
+    };
+    // rc-dock's type requires `mode`, so it is removed after the layout is built
+    Reflect.deleteProperty(layout.dockbox, 'mode');
+    const dockLayout = renderDock(layout);
+
+    openPanel(dockLayout, 'find', { type: 'panel', direction: 'right', targetTabId: 'project-a' });
+
+    // rc-dock splits beside a group in a box without a mode by wrapping the two in a new row; what
+    // matters is that the tab lands beside its target rather than at the far edge of the dock
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: undefined,
+      children: [{ mode: 'horizontal', children: [['project-a'], ['find']] }, ['notes']],
     });
   });
 

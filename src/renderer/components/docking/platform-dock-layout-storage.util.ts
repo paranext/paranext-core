@@ -983,18 +983,28 @@ function findTabGroupById(
 }
 
 /**
- * Whether a tab group is in the docked area (rc-dock's dock box) rather than floating, in its own
- * window, or maximized. Of rc-dock's root boxes, only the dock box is laid out `horizontal` or
- * `vertical`; boxes nested in the other root boxes can be either, so the check walks up to the root
- * and reads its mode.
+ * The root box a tab group sits in: rc-dock's dock box, or its floating, window or maximized layer
  *
- * @param tabGroup The tab group to check
- * @returns `true` if the tab group is in the docked area, `false` otherwise
+ * @param tabGroup The tab group to look from
+ * @returns The root box, or `undefined` if the tab group is not in a layout
  */
-function isInDockedArea(tabGroup: PanelData): boolean {
+function getRootBox(tabGroup: PanelData): BoxData | undefined {
   let rootBox = tabGroup.parent;
   while (rootBox?.parent) rootBox = rootBox.parent;
-  return rootBox?.mode === 'horizontal' || rootBox?.mode === 'vertical';
+  return rootBox;
+}
+
+/**
+ * Whether a tab group is in the docked area: whether its root box is the layout's dock box rather
+ * than rc-dock's floating, window or maximized layer. Decided by identity, not by the root's
+ * `mode`, since rc-dock never sets the dock box's mode and a saved layout may lack it.
+ *
+ * @param tabGroup The tab group to check
+ * @param dockbox The dock box of the layout holding the tab group
+ * @returns `true` if the tab group is in the docked area, `false` otherwise
+ */
+function isInDockedArea(tabGroup: PanelData, dockbox: BoxData): boolean {
+  return getRootBox(tabGroup) === dockbox;
 }
 
 /** A panel direction that places a tab group against one side of another */
@@ -1103,9 +1113,8 @@ function resolvePanelDirection(direction: PanelDirection): PanelDirection {
  *   the tab groups directly inside them, so both groups would disappear while their tabs stayed
  *   open.
  * - A docked target whose `direction` side already holds a tab group (see
- *   {@link findAdjacentTabGroup}) gets the new tab added to that group, rather than a new group
- *   squeezed in between. The new tab is that group's active tab when `shouldBringToFront` is true;
- *   otherwise the group keeps the tab it was showing.
+ *   {@link findAdjacentTabGroup}) gets the new tab added to that group as its active tab, rather
+ *   than a new group squeezed in between.
  * - `left` and `right` are mirrored in a right-to-left UI (see {@link resolvePanelDirection}).
  *
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
@@ -1114,35 +1123,25 @@ function resolvePanelDirection(direction: PanelDirection): PanelDirection {
  * @param targetTab The tab to place the new tab beside. If it is not a tab in a tab group, the new
  *   tab is placed against the docked area as a whole
  * @param direction The side of the target's tab group to place the new tab on, in reading order
- * @param shouldBringToFront Whether the new tab should become the active tab of the tab group it
- *   joins. Has no effect when the new tab gets a tab group of its own
  */
 function addTabAsPanel(
   dockLayout: DockLayout,
   tab: RCDockTabInfo,
   targetTab: PanelData | TabData | BoxData | undefined,
   direction: PanelDirection,
-  shouldBringToFront: boolean,
 ): void {
+  const { dockbox } = dockLayout.getLayout();
   const resolvedDirection = resolvePanelDirection(direction);
   const targetTabGroup =
     isTab(targetTab) && isPanel(targetTab.parent) ? targetTab.parent : undefined;
 
   if (!targetTabGroup) {
-    dockLayout.dockMove(
-      tab,
-      // Find the first thing (the dock box) and add the tab to it
-      dockLayout.find(() => true) ??
-        // Null required by the external API
-        // eslint-disable-next-line no-null/no-null
-        null,
-      resolvedDirection,
-    );
+    dockLayout.dockMove(tab, dockbox, resolvedDirection);
     return;
   }
 
-  if (!isInDockedArea(targetTabGroup)) {
-    dockLayout.dockMove(tab, dockLayout.getLayout().dockbox, resolvePanelDirection('right'));
+  if (!isInDockedArea(targetTabGroup, dockbox)) {
+    dockLayout.dockMove(tab, dockbox, resolvePanelDirection('right'));
     return;
   }
 
@@ -1156,15 +1155,7 @@ function addTabAsPanel(
       adjacentTabGroup.tabs.length > 0 &&
       adjacentTabGroup.group === tab.group
     ) {
-      const previousActiveTabId = adjacentTabGroup.activeId;
       dockLayout.dockMove(tab, adjacentTabGroup, 'middle');
-      // rc-dock always makes the added tab the active one. A null tab asks `updateTab` to only
-      // activate the tab with the given id.
-      if (!shouldBringToFront && previousActiveTabId !== undefined) {
-        // Null required by the external API
-        // eslint-disable-next-line no-null/no-null
-        dockLayout.updateTab(previousActiveTabId, null, true);
-      }
       return;
     }
   }
@@ -1310,7 +1301,6 @@ export function addTabToDock(
         // Defaults are added in `layoutDefaults`.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         updatedLayout.direction!,
-        shouldBringToFront,
       );
       break;
 
