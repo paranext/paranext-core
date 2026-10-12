@@ -297,11 +297,11 @@ existing ticket to the new parent with `Relates`, and treat it as that work's ti
 Run `convertJiraIssueHierarchy` (found with `discover`; it runs through `executeWrite`) with
 `targetIssueType: "Sub-task"` and `parentIssueKey` set to the new parent's key:
 
-1. **Preview it once the parent exists** — for an existing parent, before the approval step; for
-   a parent created in this run, once it is filled and verified: run it with
-   `mode: "preview_step1"`, then `"preview_step2"`. Both only report — they never change the ticket. They say whether the
-   conversion is possible, what the new parent will be, and which fields would be dropped or
-   remapped.
+1. **Preview it once the parent exists.** For an existing parent that is before the approval
+   step; for a parent created in this run, once it is filled and verified. Run it with
+   `mode: "preview_step1"`, then `"preview_step2"`. Both only report — they never change the
+   ticket. They say whether the conversion is possible, what the new parent will be, and which
+   fields would be dropped or remapped.
 2. **If the preview reports a blocker** — the ticket has child tickets of its own
    (`SOURCE_HAS_SUBTASKS`), the user lacks the permission (`MOVE_PERMISSION_REQUIRED`), or it is
    otherwise incompatible — show the user what it said and ask. Never fall back to recreating the
