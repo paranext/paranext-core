@@ -49,6 +49,8 @@ readable top is in addition to the detail below, never a replacement for it.
   - **Dependencies** — blocks / depends on / can run in parallel with, naming sibling tickets by
     title, plus the requirements it serves, written out.
 - **Never include time estimates.** No assignee, no status transitions — leave Jira defaults.
+  (The only status change the flow can cause is the one a user-approved conversion makes, which the
+  skill lists at the approval step.)
 
 ## Steps
 
@@ -65,14 +67,16 @@ readable top is in addition to the detail below, never a replacement for it.
    tickets this run already created — the keys in the brief's work-item table (step 6) and the
    skill's Process step 6. Propose one action per hit exactly as the skill's
    [Acting on what the search found](../skills/jira-creation/SKILL.md#acting-on-what-the-search-found)
-   section says — link, move, convert, or link an existing ticket in place. Two rules are specific
-   to a batch:
+   section says — link a related ticket, move or convert a duplicate, or leave an in-progress
+   duplicate where it is and link it to the parent. Two rules are specific to a batch:
    - **An open ticket of any type that already *is* this whole feature** → stop and ask whether
      the new children go under it instead of a new parent. This comes first: a ticket that matches
      the whole feature is never moved or converted — those apply only to a duplicate of a single
-     work item. If the user picks the existing ticket as the parent (it must be able to hold
-     Sub-tasks — not an Epic or a Sub-task; otherwise ask again), create no new parent and don't
-     edit the existing one: create only the children under it, and in step 7 give the user the
+     work item. If the user picks the existing ticket as the parent, the run is in
+     **existing-parent mode**: the ticket must be able to hold Sub-tasks (not an Epic or a
+     Sub-task — otherwise ask again); the step 5 gate shows its type, status and assignee; no
+     parent is created and the existing one is never edited; step 6 re-reads it before attaching
+     the first child and stops if it can no longer hold Sub-tasks; and step 7 hands the user the
      requirements table as text to add there themselves.
    - **A work item settled by an existing ticket** — moved, converted, or linked in place because
      someone is working on it — gets no new child. That ticket counts as the work item's ticket in
@@ -94,13 +98,14 @@ readable top is in addition to the detail below, never a replacement for it.
 6. **Create, then populate each description in a second pass**, with the **`jira-creation`
    skill** ([`.claude/skills/jira-creation/SKILL.md`](../skills/jira-creation/SKILL.md)). Enter
    its Process at step 5 (resolve the target): its steps 1–4 — search, draft, cold read, approval
-   — are this command's steps 2–5 and already ran once for the whole batch. Create the parent —
-   unless the user chose an existing ticket as the parent in step 2, in which case use it as it
-   is — then each child with the parent set — one at a time, filling and verifying each before
-   moving on. **As each key is created, write it into the brief's work-item table** (WI-n → PT-xxxx), so
-   a later session can tell what this run already made. Right after the parent is created, filled
-   and verified, carry out the approved actions for work items settled by an existing ticket —
-   each move, conversion and `Relates` link to the parent — and verify each.
+   — are this command's steps 2–5 and already ran once for the whole batch. Create the parent (in
+   existing-parent mode, re-read the chosen ticket instead — see step 2). Then create each child
+   with the parent set, one at a time, filling and verifying each before moving on. **As each key
+   is created, write it into the brief's work-item table** (WI-n → PT-xxxx), so a later session
+   can tell what this run already made. As soon as the parent is in place — created, filled and
+   verified, or re-read in existing-parent mode — carry out the approved actions for work items
+   settled by an existing ticket: each move, conversion and `Relates` link to the parent, verifying
+   each.
 
    The child sections this command drafts (User Story, Description, Implementation Ideas, Testing
    Ideas, Definition of Done, Dependencies) are written to line up with a typical task template —
@@ -109,8 +114,8 @@ readable top is in addition to the detail below, never a replacement for it.
    link / non-negotiables table under the closest headings rather than dropping the scaffold.
 7. **Back-fill the mapping**: update the parent's description so each non-negotiable row lists
    the ticket URL(s) in its "Jira Ticket(s)" cell — created and existing alike, marking existing
-   ones "(existing)" or "(existing, in progress)". If the parent is an existing ticket the user
-   chose in step 2, don't edit it: show the filled-in table as text instead.
+   ones "(existing)" or "(existing, in progress)". In existing-parent mode, don't edit the parent:
+   show the filled-in table as text instead.
 8. **Report**: list the parent + child keys — created, moved, converted, and existing tickets
    linked in place — plus the links made. The brief's work-item table already holds the keys; the
    user commits the brief as usual.

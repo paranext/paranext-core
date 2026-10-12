@@ -122,9 +122,10 @@ absent from Sub-task's create screen yet appears populated on Sub-task issues. U
 which fields you may set at create time — and not for this.
 
 The only reliable discovery is **reading the created issue back** with both body fields named and
-seeing which came back as heading-plus-`...` skeletons. When both are skeletons, fill
-`description` and leave `customfield_10116` alone; when only `customfield_10116` is, fill that.
-Say which you chose.
+seeing which came back as heading-plus-`...` skeletons. Fill `description` when it is a skeleton
+— alone or alongside `customfield_10116`, which you then leave alone; fill `customfield_10116`
+when only it is. If neither is a skeleton, stop and report: never overwrite a field that already
+holds text. Say which you chose.
 
 ## Process
 
@@ -155,10 +156,11 @@ Say which you chose.
    `listJiraProjectIssueTypesMetadata` for project `PT`, and the fields you may set at create
    time with `getJiraIssueTypeMetaWithFields` — both through `discover` → `executeRead`.
 6. **Find this run's own tickets** whenever this is a resume, a retry, or a batch that may have
-   partly run: `project = PT AND reporter = currentUser() AND created >= -2d ORDER BY created
-   DESC`, plus `parent = <new parent>` once the parent exists, and the keys already recorded for
-   the run (see below). Match them to the drafts by reading them, not by title search — titles can
-   come out differently on a rerun. A match whose body is still a skeleton is yours to fill
+   partly run: start from the keys already recorded for the run (see below), then search
+   `project = PT AND reporter = currentUser() AND created >= "<the day the run started>" ORDER BY
+   created DESC`, plus `parent = <new parent>` once the parent exists. If you don't know when the
+   run started, ask the user rather than guessing a window. Match them to the drafts by reading
+   them, not by title search — titles can come out differently on a rerun. A match whose body is still a skeleton is yours to fill
    (continue at step 8); a match that is already filled is done. Never create a second one —
    nothing can delete the duplicate.
 7. **Create** with `createJiraIssue`: project `PT`, the issue type, the title (Jira's `summary`),
@@ -308,6 +310,9 @@ round. Web links to a page or URL are a different operation, `createJiraIssueRem
 
 **No comments, no status changes.** Never comment on a found ticket, and never change its status
 or resolution, as part of this. Comments appear under the user's name and need their own approval.
+The one exception is a status change that an approved conversion makes on its own — when the
+preview says the conversion runs through Jira's Move wizard — and it is listed at the approval
+step before the user says yes.
 
 ## Content format
 

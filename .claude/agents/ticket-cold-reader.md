@@ -1,6 +1,6 @@
 ---
 name: ticket-cold-reader
-description: "Read-only agent for the jira-creation skill's cold-read check. Reads draft Jira tickets as a developer seeing them for the first time and reports, per ticket, what it asks for, every term it could not understand, what it would still need to ask before implementing, and whether the title alone says what the ticket is about. Input: the draft tickets (title, Summary paragraph, body). Never touches Jira or files."
+description: "Read-only agent for the jira-creation skill's cold-read check. Reads draft Jira tickets as a developer seeing them for the first time and reports, per ticket, what it asks for, every term it could not understand, what it would still need to ask before implementing, and whether the title alone says what the ticket is about. Input: the draft tickets (title, Summary paragraph, body). Never changes anything and has no Jira access; reads the repository only to confirm that files and symbols the tickets name exist."
 tools: Read, Grep, Glob
 ---
 
