@@ -260,7 +260,19 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                     if (job.StopRequested)
                         break;
 
-                    var check = _checkCache.GetCheck(checkId, range.ProjectId);
+                    CheckForProject check;
+                    try
+                    {
+                        check = _checkCache.GetCheck(checkId, range.ProjectId);
+                    }
+                    catch (Exception ex)
+                    {
+                        // A check that cannot be created must not end the job
+                        job.AddCheckError(CheckCache.LogFailure(checkId, range.ProjectId, ex));
+                        job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                        continue;
+                    }
+
                     if (check.SettingsChanged)
                         check.ClearResults();
 
