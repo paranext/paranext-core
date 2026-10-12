@@ -3981,12 +3981,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const menuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
       // The Edit flyout acts on this editor, and the clipboard needs the click's user activation,
-      // so it runs here rather than as a PAPI command
+      // so it runs here rather than as a PAPI command. Its actions drive the editor directly, past
+      // the events `usePauseEditing` holds off, so a chapter still loading blocks them here instead.
       if (isEditMenuCommand(projectMenuCommand.command)) {
         handleEditMenuCommand(
           projectMenuCommand.command,
           editorRef.current ?? undefined,
-          { isReadOnly: isReadOnlyEffective, isDurablyReadOnly, isSyncBlocked },
+          {
+            isReadOnly: isReadOnlyEffective || isUsjFromPdpLoading,
+            isDurablyReadOnly,
+            isSyncBlocked,
+          },
           {
             notifyActionBlocked: () => notifyEditMenuActionBlocked(localizedStrings),
             notifySyncEditBlocked,
@@ -4031,6 +4036,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       isDurablyReadOnly,
       isReadOnlyEffective,
       isSyncBlocked,
+      isUsjFromPdpLoading,
       localizedStrings,
       notifySyncEditBlocked,
       webViewId,
@@ -4299,8 +4305,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               <>
                 <UndoRedoButtons
                   className="tw:h-8"
-                  onUndoClick={() => editorRef.current?.undo()}
-                  onRedoClick={() => editorRef.current?.redo()}
+                  // Held off while a chapter loads, as Ctrl+Z and Ctrl+Y are (`usePauseEditing`)
+                  onUndoClick={() => {
+                    if (!isUsjFromPdpLoading) editorRef.current?.undo();
+                  }}
+                  onRedoClick={() => {
+                    if (!isUsjFromPdpLoading) editorRef.current?.redo();
+                  }}
                   canUndo={canUndo}
                   canRedo={canRedo}
                   localizedStrings={localizedStrings}
