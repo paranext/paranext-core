@@ -56,6 +56,8 @@ internal class CheckRunnerJobTests : PapiTestBase
     {
         _scrText.Settings.Quotes = new QuoteMarks("“", "”");
         _scrText.Settings.InnerQuotes = new QuoteMarks("‘", "’");
+        // The dummy project continues quotes by default, which requires somewhere to continue them
+        _scrText.Settings.ContinueAt = "p";
     }
 
     internal CheckRunner CreateRunner(
