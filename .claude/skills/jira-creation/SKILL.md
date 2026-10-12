@@ -145,8 +145,9 @@ holds text. Say which you chose.
      parent (its status, assignee) | Relation | Proposed action` — with every link and re-parent
      it proposes. Fill the parent column by reading each distinct parent with `getJiraIssue`;
    - **separately, every proposed conversion**: the ticket's key and title, what the conversion
-     preview reported (new type, new parent, any field it drops, any status change), and any
-     proposed edit of its description in full.
+     preview reported (new type, new parent, any field it drops, any status change) — or, when the
+     new parent is created in this run and the preview can only run afterwards, that its preview
+     and a final yes will follow — and any proposed edit of its description in full.
 
    Get an explicit yes before any write, and a separate yes for each conversion and each edit of
    someone else's ticket — a general go-ahead covers neither. These post to the team's board under
@@ -174,22 +175,28 @@ holds text. Say which you chose.
    content that doesn't map cleanly under the closest heading. Do not delete a heading; do not
    substitute a different structure. Populate the template — don't replace it. The one addition
    is the `**Summary** —` paragraph, which goes above the first heading.
-10. **Edit** with `editJiraIssue`, `contentFormat: "markdown"`, setting the field step 8 chose
-    (see Two templated fields) to the complete filled-in text, in the shape the tool's schema
-    shows. A post-create edit sticks; the template default only fires on create.
+10. **Edit** with `editJiraIssue`, setting the field step 8 chose (see Two templated fields) to
+    the complete filled-in text, in the shape the tool's schema shows and in the format of
+    [Content format](#content-format). `contentFormat` applies to `description`; a value for
+    `customfield_10116` goes in whatever form the schema asks for, and step 11's read-back is what
+    proves it landed as text rather than raw markup. A post-create edit sticks; the template
+    default only fires on create.
 11. **Verify against a specific string.** Re-read the field you just edited and confirm a
     distinctive phrase from the draft — pick one before editing, e.g. the first sentence under
     the second heading — is actually present in the returned text. "It looks right" is not a
     check. If the sections are still empty, the edit didn't take: stop and report rather than
     leaving a blank stub on the board.
-12. **Carry out the approved existing-ticket actions** for this issue — links, re-parents and
-    conversions — per [Acting on what the search found](#acting-on-what-the-search-found),
-    verifying each.
+12. **Carry out the approved existing-ticket actions** for this issue — links, moves,
+    conversions, and approved description edits of existing tickets — per
+    [Acting on what the search found](#acting-on-what-the-search-found), verifying each. A
+    description edit re-sends the whole body, in the format the ticket was read in, and is
+    verified as in step 11.
 
 **Several issues at once.** Every gap between create and fill is a window where a dead session
 leaves a blank templated stub nobody can delete. So run steps 7–12 to completion on one issue
 before starting the next; where a parent's key is needed first, create and fill the parent, then
-each child in turn.
+each child in turn. A conversion that needs the new parent's key gets its preview and final yes
+as soon as the parent exists (see [Converting a duplicate](#converting-a-duplicate)).
 
 **Keep a record of the run.** Report each key as it is created, and keep a running list of every
 approved action on an existing ticket — link, re-parent, conversion, description edit — marked
@@ -279,23 +286,32 @@ the existing ticket, and ask what they want.
 | An open duplicate in the To Do category, unassigned, that is a standard issue (Combined, Dev Task, Bug, …) | **Convert** it into a Sub-task under the new parent — see [Converting a duplicate](#converting-a-duplicate). It keeps its key, text, comments, history, watchers and links, and becomes that work item's ticket. |
 | An open duplicate that is in progress or assigned to someone | Never move work someone owns. Create no ticket for that work: link the existing ticket to the new parent with `Relates`, flag it in the approval table, and treat it as that work's ticket. The user may still choose to move it. |
 
-**Converting a duplicate.** Run `convertJiraIssueHierarchy` (found with `discover`; it runs
-through `executeWrite`) with `targetIssueType: "Sub-task"` and `parentIssueKey` set to the new
-parent's key:
+**If the user declines a move or a conversion**, create no ticket for that work either: link the
+existing ticket to the new parent with `Relates`, and treat it as that work's ticket.
 
-1. **Before the approval step**, run it with `mode: "preview_step1"`, then `"preview_step2"`. Both
-   only report — they never change the ticket. They say whether the conversion is possible, what
-   the new parent will be, and which fields would be dropped or remapped.
+### Converting a duplicate
+
+Run `convertJiraIssueHierarchy` (found with `discover`; it runs through `executeWrite`) with
+`targetIssueType: "Sub-task"` and `parentIssueKey` set to the new parent's key:
+
+1. **Preview it as soon as the parent's key exists**: run it with `mode: "preview_step1"`, then
+   `"preview_step2"`. Both only report — they never change the ticket. They say whether the
+   conversion is possible, what the new parent will be, and which fields would be dropped or
+   remapped.
 2. **If the preview reports a blocker** — the ticket has child tickets of its own
    (`SOURCE_HAS_SUBTASKS`), the user lacks the permission (`MOVE_PERMISSION_REQUIRED`), or it is
    otherwise incompatible — show the user what it said and ask. Never fall back to recreating the
    ticket.
-3. **Show the preview at the approval step**, in the separate conversions list. If it says the
-   conversion runs through Jira's Move wizard, list the status change and the dropped fields it
-   names.
-4. **On the user's yes for that ticket**, run it with `mode: "confirm"` (with
-   `acknowledgeMove: true` only when the preview called for it and the user accepted it), then
-   re-read the ticket and confirm its type is Sub-task and its parent is the new parent.
+3. **Show the preview, then get that conversion's yes.** If the parent already exists (an
+   existing ticket the user chose), the preview runs before the approval step and is shown there,
+   in the separate conversions list. If the parent is created in this run, it has no key until
+   after the approval step: there the user approves the conversion in principle, and right after
+   the parent is created and verified you run the preview, show it, and ask for that
+   conversion's final yes. Either way, if the preview says the conversion runs through Jira's
+   Move wizard, list the status change and the dropped fields it names.
+4. **On that yes**, run it with `mode: "confirm"` (with `acknowledgeMove: true` only when the
+   preview called for it and the user accepted it), then re-read the ticket and confirm its type
+   is Sub-task and its parent is the new parent.
 
 The converted ticket keeps its own text. If the draft for that work item has facts the ticket
 lacks, propose an edit of its description at the approval step: the complete new text, written to
@@ -316,11 +332,13 @@ step before the user says yes.
 
 ## Content format
 
-`createJiraIssue` and `editJiraIssue` take `contentFormat` (`"markdown"` or `"adf"`), and the read
-tools take `responseContentFormat`. The default varies by tool when omitted, so pin it explicitly
-on every call and **read and write in the same format**. Reading a template as ADF and writing it
-back as Markdown (or the reverse) is the fastest way to turn the team's headings into literal text
-or an unreadable blob. `"markdown"` is the right choice for ordinary descriptions.
+`createJiraIssue` and `editJiraIssue` take `contentFormat`, and the read tools take
+`responseContentFormat`; take the allowed values from the tool's schema (v2 offers `"markdown"`
+and `"html"`). Pin the format explicitly on every call and **write back in the format the body was
+read in**: a read reports it as `appliedContentFormat`, and v2 returns HTML on its own for a body
+that Markdown can't represent — @mentions, images, panels. Writing such a body back as Markdown
+drops those parts, under the user's name. `"markdown"` is right for the text you draft; an edit of
+an existing ticket's body uses whatever format its read came back in.
 
 ## Worked example — filling, not replacing
 
@@ -392,7 +410,7 @@ is a different case: do what was asked.
 | Assuming which field holds a Bug's body | Content lands in a field the ticket doesn't show | Name both `description` and `customfield_10116` and fill the one with the skeleton |
 | Replacing the template with your own structure | Breaks the shape the team scans for | Fill the template's sections |
 | Sending only the changed section in an edit | The rest of the description is wiped | Send the whole description every time |
-| Mixing `markdown` and `adf` between read and write | Headings render as literal text | Pin both formats to `markdown` |
+| Writing a body back in a different format than it was read in | Headings turn into literal text, or mentions and images are dropped | Write back in the `appliedContentFormat` the read reported |
 | Creating first, asking after | Un-deletable clutter on the team board | Approval gate before the first create call |
 | Creating again after a failed run | A second un-deletable ticket | Find the run's own tickets (step 6) and fill or skip them |
 | Summarizing the draft to avoid re-typing it | Ticket ends up thinner than what was approved | Re-send the approved text verbatim |

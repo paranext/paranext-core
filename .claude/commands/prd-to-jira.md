@@ -63,9 +63,11 @@ readable top is in addition to the detail below, never a replacement for it.
    and was searched by investigation phrases, not ticket titles. Follow the
    [Searching for existing work](../skills/jira-creation/SKILL.md#searching-for-existing-work)
    recipe in the `jira-creation` skill: phrases from the feature name for the parent, and from
-   each work item's title and requirement wording for its child. On a resumed run, leave out the
-   tickets this run already created — the keys in the brief's work-item table (step 6) and the
-   skill's Process step 6. Propose one action per hit exactly as the skill's
+   each work item's title and requirement wording for its child. **Every time, first** run the
+   skill's Process step 6 to find tickets an earlier run of this command already created — the
+   parent key and work-item keys recorded in the brief (step 6), and your own recent tickets — and
+   leave them out of the results: a run can die before the brief shows it ever ran. Propose one
+   action per hit exactly as the skill's
    [Acting on what the search found](../skills/jira-creation/SKILL.md#acting-on-what-the-search-found)
    section says — link a related ticket, move or convert a duplicate, or leave an in-progress
    duplicate where it is and link it to the parent. Two rules are specific to a batch:
@@ -78,8 +80,9 @@ readable top is in addition to the detail below, never a replacement for it.
      parent is created and the existing one is never edited; step 6 re-reads it before attaching
      the first child and stops if it can no longer hold Sub-tasks; and step 7 hands the user the
      requirements table as text to add there themselves.
-   - **A work item settled by an existing ticket** — moved, converted, or linked in place because
-     someone is working on it — gets no new child. That ticket counts as the work item's ticket in
+   - **A work item settled by an existing ticket** — moved, converted, linked in place because
+     someone is working on it, or linked because the user declined its move or conversion — gets
+     no new child. That ticket counts as the work item's ticket in
      the requirements table and in the report.
 3. **Draft everything locally first**: the parent and every child, titles and full descriptions,
    per the target shape above, with the step 2 links and references folded in. Fill the
@@ -91,21 +94,28 @@ readable top is in addition to the detail below, never a replacement for it.
    go, and fix what it finds before the gate.
 5. **Dry-run gate (required — never skip).** Show the user what the skill's Process step 4
    requires — the drafts, the cold-read result, the existing-ticket table (here with a leading
-   `Draft item` column) and, separately, every proposed conversion with its preview and any
-   proposed description edit — or "no existing tickets found" with the phrases searched. Get
-   explicit approval before creating anything, and a separate yes for each conversion and each
-   edit of someone else's ticket. These are posted to the team's Jira under the user's name.
+   `Draft item` column) and, separately, every proposed conversion and any proposed description
+   edit — or "no existing tickets found" with the phrases searched. A conversion needs the new
+   parent's key for its preview, so unless the run is in existing-parent mode, the user approves
+   each conversion here in principle and gives it a final yes in step 6, once its preview has
+   run. Get explicit approval before creating anything, and a separate yes for each conversion
+   and each edit of someone else's ticket. These are posted to the team's Jira under the user's
+   name.
 6. **Create, then populate each description in a second pass**, with the **`jira-creation`
    skill** ([`.claude/skills/jira-creation/SKILL.md`](../skills/jira-creation/SKILL.md)). Enter
    its Process at step 5 (resolve the target): its steps 1–4 — search, draft, cold read, approval
    — are this command's steps 2–5 and already ran once for the whole batch. Create the parent (in
    existing-parent mode, re-read the chosen ticket instead — see step 2). Then create each child
    with the parent set, one at a time, filling and verifying each before moving on. **As each key
-   is created, write it into the brief's work-item table** (WI-n → PT-xxxx), so a later session
-   can tell what this run already made. As soon as the parent is in place — created, filled and
-   verified, or re-read in existing-parent mode — carry out the approved actions for work items
-   settled by an existing ticket: each move, conversion and `Relates` link to the parent, verifying
-   each.
+   is created, write it into the brief** — the parent's key on a `Parent ticket: PT-xxxx` line
+   directly above the §4 work-item table, and each child's in that table (WI-n → PT-xxxx) — so a
+   later session can tell what this run already made. As soon as the parent is in place —
+   created, filled and verified, or re-read in existing-parent mode — carry out the approved
+   actions for work items settled by an existing ticket: each move and `Relates` link, and each
+   conversion — previewing it now if it was approved in principle, showing the preview, and
+   converting only after that conversion's final yes (see the skill's
+   [Converting a duplicate](../skills/jira-creation/SKILL.md#converting-a-duplicate)). Verify each,
+   and run any approved description edit as the skill's Process step 12 says.
 
    The child sections this command drafts (User Story, Description, Implementation Ideas, Testing
    Ideas, Definition of Done, Dependencies) are written to line up with a typical task template —
