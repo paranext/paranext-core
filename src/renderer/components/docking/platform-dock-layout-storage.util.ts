@@ -61,6 +61,15 @@ import { RCDockTabInfo, TabType, isPanel, isTab } from './docking-framework-inte
 import { ErrorTabData, TAB_TYPE_ERROR, createErrorTab, saveErrorTab } from './error-tab.component';
 import { getFloatPosition, layoutDefaults } from './platform-dock-layout-positioning.util';
 import { createRCDockTabFromTabInfo } from './platform-dock-tab.component';
+import {
+  DOCK_SPAN_TOLERANCE,
+  DockAxis,
+  DockSpan,
+  getExtentInDock,
+  getNewGroupExtent,
+  getSpanInDock,
+  getSpanOverlap,
+} from './dock-layout-geometry.util';
 
 /** Regex on the tab id for tab header elements made by rc-dock */
 const TAB_HEADER_ID_REGEX = /rc-tabs-\d+-tab-(.+)/;
@@ -1021,34 +1030,61 @@ function isPanelSideDirection(direction: PanelDirection): direction is PanelSide
 }
 
 /** The rc-dock box mode that lays tab groups out along `direction`'s axis */
-function getModeAlong(direction: PanelSideDirection): 'horizontal' | 'vertical' {
+function getModeAlong(direction: PanelSideDirection): DockAxis {
   return direction === 'left' || direction === 'right' ? 'horizontal' : 'vertical';
+}
+
+/** The axis across `direction`, along which two tab groups facing each other share an edge */
+function getAxisAcross(direction: PanelSideDirection): DockAxis {
+  return direction === 'left' || direction === 'right' ? 'vertical' : 'horizontal';
 }
 
 /**
  * The tab group in `branch` that touches the edge `branch` shares with whatever lies before it in
- * `direction`, which is the group a new tab group arriving from that side would sit against.
+ * `direction`, beside the source tab group: the group a new tab group arriving from that side would
+ * sit against.
  *
  * In a box laid out along `direction`'s axis only the nearest child touches that edge. In a box
- * laid out across it every child does, and the first one is used, since rc-dock's layout data
- * carries no geometry to choose a better-aligned one.
+ * laid out across it every child does, and the one whose span across `direction` overlaps
+ * `sourceSpan` most is used (the first one on a tie). A child that meets the source only at a
+ * corner overlaps it by nothing, so it is never picked.
  *
- * @param branch The tab group or box lying in `direction` from the starting tab group
- * @param direction The direction travelled from the starting tab group to reach `branch`
- * @returns The tab group touching that edge, or `undefined` if `branch` holds no tab group
+ * @param branch The tab group or box lying in `direction` from the source tab group
+ * @param direction The direction travelled from the source tab group to reach `branch`
+ * @param sourceSpan The source tab group's span on the axis across `direction` (see
+ *   {@link getSpanInDock})
+ * @returns The tab group touching that edge beside the source, or `undefined` if `branch` holds
+ *   none
  */
 function getTabGroupFacing(
   branch: PanelData | BoxData,
   direction: PanelSideDirection,
+  sourceSpan: DockSpan,
 ): PanelData | undefined {
   if (isPanel(branch)) return branch;
   if (branch.children.length === 0) return undefined;
-  const isNearestChildLast =
-    branch.mode === getModeAlong(direction) && (direction === 'left' || direction === 'top');
-  return getTabGroupFacing(
-    branch.children[isNearestChildLast ? branch.children.length - 1 : 0],
-    direction,
+  if (branch.mode === getModeAlong(direction)) {
+    const isNearestChildLast = direction === 'left' || direction === 'top';
+    return getTabGroupFacing(
+      branch.children[isNearestChildLast ? branch.children.length - 1 : 0],
+      direction,
+      sourceSpan,
+    );
+  }
+  const axisAcross = getAxisAcross(direction);
+  const { child: mostOverlappingChild } = branch.children.reduce<{
+    child: PanelData | BoxData | undefined;
+    overlap: number;
+  }>(
+    (best, child) => {
+      const overlap = getSpanOverlap(getSpanInDock(child, axisAcross), sourceSpan);
+      return overlap > best.overlap + DOCK_SPAN_TOLERANCE ? { child, overlap } : best;
+    },
+    { child: undefined, overlap: 0 },
   );
+  return mostOverlappingChild
+    ? getTabGroupFacing(mostOverlappingChild, direction, sourceSpan)
+    : undefined;
 }
 
 /**
@@ -1058,7 +1094,7 @@ function getTabGroupFacing(
  * Walks up from `tabGroup` to the nearest box laid out along `direction`'s axis in which the branch
  * holding `tabGroup` has a sibling on that side. Boxes laid out across the axis, and boxes in which
  * that branch is already the last one on that side, are passed through. Within the sibling,
- * {@link getTabGroupFacing} picks the group touching the shared edge.
+ * {@link getTabGroupFacing} picks the group touching the shared edge beside `tabGroup`.
  *
  * @param tabGroup The docked tab group to look from
  * @param direction The side to look on
@@ -1070,18 +1106,54 @@ function findAdjacentTabGroup(
 ): PanelData | undefined {
   const mode = getModeAlong(direction);
   const step = direction === 'right' || direction === 'bottom' ? 1 : -1;
+  const sourceSpan = getSpanInDock(tabGroup, getAxisAcross(direction));
   let branch: PanelData | BoxData = tabGroup;
   let box = tabGroup.parent;
   while (box) {
     const branchIndex = box.children.indexOf(branch);
     if (box.mode === mode && branchIndex >= 0) {
       const sibling = box.children[branchIndex + step];
-      if (sibling) return getTabGroupFacing(sibling, direction);
+      if (sibling) return getTabGroupFacing(sibling, direction, sourceSpan);
     }
     branch = box;
     box = box.parent;
   }
   return undefined;
+}
+
+/**
+ * Whether a new tab should be added to `adjacentTabGroup`, the tab group on the `direction` side of
+ * `targetTabGroup`, rather than get a tab group of its own beside the target. All of these must
+ * hold:
+ *
+ * - The group has tabs. A tab group with none is the stand-in rc-dock keeps where a maximized group
+ *   will be restored, which would drop a tab added to it.
+ * - It is of the new tab's rc-dock group. rc-dock refuses to drop a tab into a group of another one.
+ * - It is not locked in place (`panelLock`). Only Simple mode's fixed columns are, and a tab added to
+ *   one would become its active tab and hide the tab the column is there to show; in the model-text
+ *   and editor columns, whose tab bar is hidden, that tab could not even be reached again.
+ * - It is at least as wide (as tall for `top` and `bottom`) as the tab group rc-dock would create
+ *   beside the target, so joining never leaves the new tab less room than a group of its own.
+ *
+ * @param adjacentTabGroup The tab group found on the `direction` side of the target's tab group
+ * @param targetTabGroup The docked tab group the new tab is opened beside
+ * @param tab The new tab
+ * @param direction The side of the target's tab group, as rc-dock lays it out
+ * @returns `true` to add the tab to `adjacentTabGroup`, `false` to give it a group of its own
+ */
+function canJoinAdjacentTabGroup(
+  adjacentTabGroup: PanelData,
+  targetTabGroup: PanelData,
+  tab: RCDockTabInfo,
+  direction: PanelSideDirection,
+): boolean {
+  if (adjacentTabGroup.tabs.length === 0 || adjacentTabGroup.group !== tab.group) return false;
+  if (adjacentTabGroup.panelLock) return false;
+  const axis = getModeAlong(direction);
+  return (
+    getExtentInDock(adjacentTabGroup, axis) >=
+    getNewGroupExtent(targetTabGroup, axis) - DOCK_SPAN_TOLERANCE
+  );
 }
 
 /**
@@ -1112,9 +1184,10 @@ function resolvePanelDirection(direction: PanelDirection): PanelDirection {
  *   groups in a new box inside the floating, windowed or maximized layer. Those layers draw only
  *   the tab groups directly inside them, so both groups would disappear while their tabs stayed
  *   open.
- * - A docked target whose `direction` side already holds a tab group (see
- *   {@link findAdjacentTabGroup}) gets the new tab added to that group as its active tab, rather
- *   than a new group squeezed in between.
+ * - A docked target whose `direction` side holds a tab group that can take the tab (see
+ *   {@link findAdjacentTabGroup} and {@link canJoinAdjacentTabGroup}) gets the new tab added to that
+ *   group as its active tab, rather than a new group squeezed in between. Otherwise the new tab
+ *   gets a tab group of its own beside the target's.
  * - `left` and `right` are mirrored in a right-to-left UI (see {@link resolvePanelDirection}).
  *
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
@@ -1147,13 +1220,9 @@ function addTabAsPanel(
 
   if (isPanelSideDirection(resolvedDirection)) {
     const adjacentTabGroup = findAdjacentTabGroup(targetTabGroup, resolvedDirection);
-    // A tab group with no tabs is the stand-in rc-dock keeps where a maximized group will be
-    // restored, which would drop a tab added to it. A tab group of another rc-dock group cannot
-    // hold this tab: rc-dock refuses that drop too.
     if (
       adjacentTabGroup &&
-      adjacentTabGroup.tabs.length > 0 &&
-      adjacentTabGroup.group === tab.group
+      canJoinAdjacentTabGroup(adjacentTabGroup, targetTabGroup, tab, resolvedDirection)
     ) {
       dockLayout.dockMove(tab, adjacentTabGroup, 'middle');
       return;
