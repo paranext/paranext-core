@@ -1175,15 +1175,108 @@ function resolvePanelDirection(direction: PanelDirection): PanelDirection {
 }
 
 /**
+ * The share of the dock box's own `size` that rc-dock gives a tab group it docks at the left or
+ * right edge of a horizontal dock box (`dockPanelToBox`), shrinking that `size` to the rest
+ */
+const RC_DOCK_EDGE_GROUP_SHARE = 0.3;
+
+/**
+ * Moves a floating tab group sideways until it no longer covers the tab group holding `tabId`, just
+ * docked at the `edge` side of the docked area. rc-dock draws its floating layer over the docked
+ * area, so otherwise the new tab could open, and take focus, hidden under the floating group.
+ *
+ * The floating group keeps its id, tabs, active tab, top and height; it is narrowed only when the
+ * docked area beside the new group is narrower than it. Nothing moves when the floating group does
+ * not cover the new one, when the dock has no size yet (it has not been laid out), when the
+ * floating group has no position yet, or when the new group fills the whole docked area and leaves
+ * nowhere to move to.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref
+ * @param floatingTabGroupId Id of the floating tab group to move
+ * @param tabId Id of the new tab, in the tab group just docked at the edge
+ * @param edge The side of the docked area the new tab group was docked at, as rc-dock lays it out
+ */
+function moveFloatingTabGroupClear(
+  dockLayout: DockLayout,
+  floatingTabGroupId: string,
+  tabId: string,
+  edge: PanelDirection,
+): void {
+  const { width: layoutWidth, height: layoutHeight } = dockLayout.getLayoutSize();
+  if (layoutWidth <= 0 || layoutHeight <= 0) return;
+  const floatingTabGroup = dockLayout.find(floatingTabGroupId);
+  const newTab = dockLayout.find(tabId);
+  if (!isPanel(floatingTabGroup) || !isTab(newTab) || !newTab.parent) return;
+  const { x, y, w, h } = floatingTabGroup;
+  if (x === undefined || y === undefined || w === undefined || h === undefined) return;
+
+  // The new tab group is a column of the dock box itself, so it spans the dock's full height.
+  // Floating positions are pixels in the same space as `getLayoutSize`.
+  const [start, end] = getSpanInDock(newTab.parent, 'horizontal');
+  const newGroupLeft = start * layoutWidth;
+  const newGroupRight = end * layoutWidth;
+  const isCovering = x < newGroupRight && x + w > newGroupLeft && y < layoutHeight && y + h > 0;
+  if (!isCovering) return;
+
+  const isNewGroupAtLeftEdge = edge === 'left';
+  const room = isNewGroupAtLeftEdge ? layoutWidth - newGroupRight : newGroupLeft;
+  if (room <= 0) return;
+  const width = Math.min(w, room);
+  const left = isNewGroupAtLeftEdge ? newGroupRight : newGroupLeft - width;
+  // Null required by the external API
+  // eslint-disable-next-line no-null/no-null
+  dockLayout.dockMove(floatingTabGroup, null, 'float', { left, top: y, width, height: h });
+}
+
+/**
+ * Docks a new tab as a tab group of its own at the reading-end edge of the docked area (right, or
+ * left in a right-to-left UI), for a target tab group that is not docked.
+ *
+ * - The new tab group is as wide as the average tab group at the top level of a horizontal dock box.
+ *   rc-dock sizes it as a share of the dock box's own `size` (see {@link RC_DOCK_EDGE_GROUP_SHARE}),
+ *   which nothing on screen follows: rc-dock never renders it and divider drags never update it, so
+ *   the group could arrive as a sliver, and each further open would add a narrower one. Setting it
+ *   just before the move is the same kind of write rc-dock makes to it during the move. A dock box
+ *   laid out top to bottom needs nothing: rc-dock puts it beside the new group at 70% and 30%.
+ * - A floating target that covers the new group is moved aside (see
+ *   {@link moveFloatingTabGroupClear}). A maximized target needs nothing: bringing the new tab to
+ *   the front un-maximizes it.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref
+ * @param tab The new tab
+ * @param dockbox The layout's dock box
+ * @param targetTabGroup The tab group the tab was asked to open beside, which is not docked
+ */
+function dockAtReadingEndEdge(
+  dockLayout: DockLayout,
+  tab: RCDockTabInfo,
+  dockbox: BoxData,
+  targetTabGroup: PanelData,
+): void {
+  const edge = resolvePanelDirection('right');
+  const floatingTabGroupId =
+    getRootBox(targetTabGroup) === dockLayout.getLayout().floatbox ? targetTabGroup.id : undefined;
+
+  if (dockbox.mode === 'horizontal' && dockbox.children.length > 0) {
+    const totalSize = dockbox.children.reduce((total, child) => total + (child.size ?? 0), 0);
+    if (totalSize > 0)
+      dockbox.size = totalSize / dockbox.children.length / RC_DOCK_EDGE_GROUP_SHARE;
+  }
+  dockLayout.dockMove(tab, dockbox, edge);
+
+  if (floatingTabGroupId !== undefined)
+    moveFloatingTabGroupClear(dockLayout, floatingTabGroupId, tab.id, edge);
+}
+
+/**
  * Adds a new tab beside the tab group holding `targetTab`: into the tab group already on that side
  * if there is one it can join, otherwise as a tab group of its own.
  *
- * - A target tab group that is not in the docked area (it floats, sits in its own window, or is
- *   maximized) gets the new tab group at the reading-end edge of the docked area instead (right, or
- *   left in a right-to-left UI), whichever side was asked for. rc-dock would otherwise wrap both
- *   groups in a new box inside the floating, windowed or maximized layer. Those layers draw only
- *   the tab groups directly inside them, so both groups would disappear while their tabs stayed
- *   open.
+ * - A target tab group that is not in the docked area (it is in rc-dock's floating, maximized or
+ *   window layer) gets the new tab as a tab group of its own at the reading-end edge of the docked
+ *   area instead, whichever side was asked for (see {@link dockAtReadingEndEdge}). rc-dock would
+ *   otherwise wrap both groups in a new box inside that layer. Those layers draw only the tab
+ *   groups directly inside them, so both groups would disappear while their tabs stayed open.
  * - A docked target whose `direction` side holds a tab group that can take the tab (see
  *   {@link findAdjacentTabGroup} and {@link canJoinAdjacentTabGroup}) gets the new tab added to that
  *   group as its active tab, rather than a new group squeezed in between. Otherwise the new tab
@@ -1214,7 +1307,7 @@ function addTabAsPanel(
   }
 
   if (!isInDockedArea(targetTabGroup, dockbox)) {
-    dockLayout.dockMove(tab, dockbox, resolvePanelDirection('right'));
+    dockAtReadingEndEdge(dockLayout, tab, dockbox, targetTabGroup);
     return;
   }
 

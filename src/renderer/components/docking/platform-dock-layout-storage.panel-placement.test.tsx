@@ -15,7 +15,7 @@ import { resetActivationLatchForTesting } from '@renderer/services/window-activa
 import { isPanel, isTab } from './docking-framework-internal.model';
 import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './dock-tab-group.util';
 import { SIMPLE_COLUMN_MIN_WIDTH_PX } from './simple-layout.data';
-import { getExtentInDock } from './dock-layout-geometry.util';
+import { DOCK_SPAN_TOLERANCE, getExtentInDock, getSpanInDock } from './dock-layout-geometry.util';
 import { addTabToDock, loadTab } from './platform-dock-layout-storage.util';
 
 // Rendering a real dock renders the app's own tab titles, whose hooks and services reach PAPI. These
@@ -154,6 +154,42 @@ function simpleShapedLayout(resourcesColumnSize = 1): LayoutData {
     },
   };
 }
+
+/**
+ * Docked tab groups laid out in `dockMode`, plus one floating tab group `floating-group` holding
+ * `project-f` at `floatPosition`
+ */
+function layoutWithFloatingTarget(
+  docked: (PanelData | BoxData)[],
+  floatPosition: Partial<Pick<PanelData, 'x' | 'y' | 'w' | 'h'>> = FLOAT_POSITION,
+  dockMode: 'horizontal' | 'vertical' = 'horizontal',
+): LayoutData {
+  return {
+    dockbox: { mode: dockMode, children: docked },
+    floatbox: {
+      mode: 'float',
+      children: [tabGroup('floating-group', ['project-f'], floatPosition)],
+    },
+  };
+}
+
+/** Gives the dock the pixel size jsdom cannot lay out */
+function stubLayoutSize(dockLayout: DockLayout, width: number, height: number): void {
+  vi.spyOn(dockLayout, 'getLayoutSize').mockReturnValue({ width, height });
+}
+
+/** The floating tab group's position and stacking order */
+function floatGeometry(dockLayout: DockLayout) {
+  const { x, y, w, h, z } = tabGroupOf(dockLayout, 'project-f');
+  return { x, y, w, h, z };
+}
+
+/** A panel opened beside the floating target `project-f` */
+const BESIDE_FLOATING_TARGET: Layout = {
+  type: 'panel',
+  direction: 'right',
+  targetTabId: 'project-f',
+};
 
 /** Renders a real rc-dock dock holding `layout`, loading its tabs through the app's own loader */
 function renderDock(layout: LayoutData): DockLayout {
@@ -327,6 +363,174 @@ describe('opening a tab as a panel beside a tab group that is not docked', () =>
       mode: 'horizontal',
       children: [{ mode: 'vertical', children: [['project-a'], ['notes']] }, ['find']],
     });
+  });
+});
+
+describe('the tab group opened beside a tab group that is not docked', () => {
+  it('is as wide as the average tab group already docked, even after a divider drag', () => {
+    // A divider drag rewrites the groups' sizes but never the dock box's own
+    const dockLayout = renderDock(
+      layoutWithFloatingTarget([
+        tabGroup('left-group', ['project-a'], { size: 900 }),
+        tabGroup('right-group', ['notes'], { size: 492 }),
+      ]),
+    );
+
+    openPanel(dockLayout, 'find', BESIDE_FLOATING_TARGET);
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['project-a'], ['notes'], ['find']],
+    });
+    expect(getExtentInDock(tabGroupOf(dockLayout, 'find'), 'horizontal')).toBeCloseTo(1 / 3, 6);
+  });
+
+  it('gives each further open an equal share instead of a narrower sliver', () => {
+    const dockLayout = renderDock(
+      layoutWithFloatingTarget([
+        tabGroup('left-group', ['project-a'], { size: 900 }),
+        tabGroup('right-group', ['notes'], { size: 492 }),
+      ]),
+    );
+    const findIds = ['find-1', 'find-2', 'find-3', 'find-4'];
+
+    findIds.forEach((findId, index) => {
+      openPanel(dockLayout, findId, BESIDE_FLOATING_TARGET);
+      // Before this open the dock held 2 + index top-level tab groups
+      expect(getExtentInDock(tabGroupOf(dockLayout, findId), 'horizontal')).toBeCloseTo(
+        1 / (3 + index),
+        6,
+      );
+    });
+    const firstSize = tabGroupOf(dockLayout, 'find-1').size ?? 0;
+    findIds.forEach((findId) =>
+      expect(tabGroupOf(dockLayout, findId).size).toBeCloseTo(firstSize, 6),
+    );
+  });
+
+  it('takes rc-dock’s 30% beside a dock box laid out top to bottom, then an average share', () => {
+    const dockLayout = renderDock(
+      layoutWithFloatingTarget(
+        [tabGroup('upper-group', ['project-a']), tabGroup('lower-group', ['notes'])],
+        FLOAT_POSITION,
+        'vertical',
+      ),
+    );
+
+    openPanel(dockLayout, 'find-1', BESIDE_FLOATING_TARGET);
+    expect(getExtentInDock(tabGroupOf(dockLayout, 'find-1'), 'horizontal')).toBeCloseTo(0.3, 6);
+
+    openPanel(dockLayout, 'find-2', BESIDE_FLOATING_TARGET);
+    expect(getExtentInDock(tabGroupOf(dockLayout, 'find-2'), 'horizontal')).toBeCloseTo(1 / 3, 6);
+  });
+
+  it('moves a floating target that covers it aside, keeping its tabs, top and height', () => {
+    // A 1904px dock with the float parked over the right edge: the new group takes the right half
+    const dockLayout = renderDock(
+      layoutWithFloatingTarget([tabGroup('docked-group', ['project-a'])], {
+        x: 1304,
+        y: 80,
+        w: 600,
+        h: 300,
+      }),
+    );
+    stubLayoutSize(dockLayout, 1904, 1000);
+
+    openPanel(dockLayout, 'find', BESIDE_FLOATING_TARGET);
+
+    const floatingGroup = tabGroupOf(dockLayout, 'project-f');
+    expect(floatingGroup.id).toBe('floating-group');
+    expect(floatingGroup.tabs.map((tab) => tab.id)).toEqual(['project-f']);
+    expect(floatingGroup.activeId).toBe('project-f');
+    expect(shapeOf(rootBox(dockLayout, 'floatbox'))).toEqual({
+      mode: 'float',
+      children: [['project-f']],
+    });
+    expect(floatingGroup.x).toBeCloseTo(352, 6);
+    expect(floatingGroup.w).toBe(600);
+    expect(floatingGroup.y).toBe(80);
+    expect(floatingGroup.h).toBe(300);
+    // The float's rectangle no longer meets the new group's, which spans the full dock height
+    const [newGroupStart] = getSpanInDock(tabGroupOf(dockLayout, 'find'), 'horizontal');
+    expect((floatingGroup.x ?? 0) + (floatingGroup.w ?? 0)).toBeLessThanOrEqual(
+      newGroupStart * 1904 + DOCK_SPAN_TOLERANCE,
+    );
+  });
+
+  it('leaves a floating target that does not cover it where it is', () => {
+    const dockLayout = renderDock(
+      layoutWithFloatingTarget([tabGroup('docked-group', ['project-a'])]),
+    );
+    stubLayoutSize(dockLayout, 1904, 1000);
+    const before = floatGeometry(dockLayout);
+
+    openPanel(dockLayout, 'find', BESIDE_FLOATING_TARGET);
+
+    expect(floatGeometry(dockLayout)).toEqual(before);
+  });
+
+  it('narrows a floating target too wide to fit beside it', () => {
+    const dockLayout = renderDock(
+      layoutWithFloatingTarget([tabGroup('docked-group', ['project-a'])], {
+        x: 0,
+        y: 80,
+        w: 1904,
+        h: 300,
+      }),
+    );
+    stubLayoutSize(dockLayout, 1904, 1000);
+
+    openPanel(dockLayout, 'find', BESIDE_FLOATING_TARGET);
+
+    const { x, w } = floatGeometry(dockLayout);
+    expect(x).toBeCloseTo(0, 6);
+    expect(w).toBeCloseTo(952, 6);
+  });
+
+  it('leaves the floating target alone while the dock has no size yet', () => {
+    const dockLayout = renderDock(
+      layoutWithFloatingTarget([tabGroup('docked-group', ['project-a'])], {
+        x: 1304,
+        y: 80,
+        w: 600,
+        h: 300,
+      }),
+    );
+    const before = floatGeometry(dockLayout);
+
+    openPanel(dockLayout, 'find', BESIDE_FLOATING_TARGET);
+
+    expect(floatGeometry(dockLayout)).toEqual(before);
+  });
+
+  it('leaves a covering float alone when the new tab group fills the docked area', () => {
+    // Every tab group floats, so there is nowhere beside the new group to move the float to
+    const dockLayout = renderDock(layoutWithFloatingTarget([], { x: 1304, y: 80, w: 600, h: 300 }));
+    stubLayoutSize(dockLayout, 1904, 1000);
+    const before = floatGeometry(dockLayout);
+
+    openPanel(dockLayout, 'find', BESIDE_FLOATING_TARGET);
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['find']],
+    });
+    expect(floatGeometry(dockLayout)).toEqual(before);
+  });
+
+  it('docks at the edge and leaves a floating target that has no position yet', () => {
+    const dockLayout = renderDock(
+      layoutWithFloatingTarget([tabGroup('docked-group', ['project-a'])], {}),
+    );
+    stubLayoutSize(dockLayout, 1904, 1000);
+
+    openPanel(dockLayout, 'find', BESIDE_FLOATING_TARGET);
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['project-a'], ['find']],
+    });
+    expect(floatGeometry(dockLayout).x).toBeUndefined();
   });
 });
 
@@ -805,6 +1009,23 @@ describe('opening a tab as a panel in a right-to-left UI', () => {
       });
     },
   );
+
+  it('moves a covering floating target to the right of the new tab group at the left edge', () => {
+    const dockLayout = renderDock(
+      layoutWithFloatingTarget([tabGroup('docked-group', ['project-a'])]),
+    );
+    stubLayoutSize(dockLayout, 1904, 1000);
+
+    openPanel(dockLayout, 'find', BESIDE_FLOATING_TARGET);
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['find'], ['project-a']],
+    });
+    const { x, w } = floatGeometry(dockLayout);
+    expect(x).toBeCloseTo(952, 6);
+    expect(w).toBe(400);
+  });
 
   it('joins the tab group on the left when asked for the right', () => {
     const dockLayout = renderDock({
