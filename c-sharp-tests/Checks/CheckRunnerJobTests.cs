@@ -319,8 +319,11 @@ internal class CheckRunnerJobTests : PapiTestBase
     public void QuotesChangedToNone_NextJobSkipsQuotationCheck()
     {
         SetValidQuotationRules();
+        PutBook(1, "He said “hello and never closed it.");
         var runner = CreateRunner();
-        RunJob(runner, [s_quotationCheckId], 1);
+        var (_, firstResults) = RunJob(runner, [s_quotationCheckId], 1);
+        // Positive control: the first run caches a quotation result that the second must not serve
+        Assert.That(firstResults, Is.Not.Empty);
 
         _scrText.Settings.Quotes = new QuoteMarks("");
         var (second, results) = RunJob(runner, [s_quotationCheckId], 1);

@@ -47,7 +47,10 @@ internal class CheckSetupStatusLookupTests : PapiTestBase
 
     [Test]
     public void OrdinaryCheck_IsReady() =>
-        Assert.That(Lookup(s_repeatedWordId), Is.EqualTo(new CheckSetupState(CheckSetupStatus.Ready)));
+        Assert.That(
+            Lookup(s_repeatedWordId),
+            Is.EqualTo(new CheckSetupState(CheckSetupStatus.Ready))
+        );
 
     [Test]
     public void Quotation_EmptyQuotes_IsSetupRequired() =>

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Paranext.DataProvider.NetworkObjects;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Checks;
@@ -88,9 +89,42 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             ("getAvailableChecks", GetAvailableChecks),
             ("retrieveCheckJobUpdate", RetrieveCheckJobUpdate),
             ("isCheckSetupForProject", IsCheckSetupForProject),
+            ("lookupCheckSetupStatus", LookupCheckSetupStatus),
             ("stopCheckJob", StopCheckJob),
         ];
     }
+
+    /// <summary>
+    /// Marks only <c>lookupCheckSetupStatus</c> experimental (<c>x-experimental: true</c>); the rest
+    /// of the check runner contract is stable. Mirrors the <c>@experimental</c> tag on
+    /// <c>CheckConfigurationProvider.lookupCheckSetupStatus</c> in <c>platform-scripture.d.ts</c>.
+    /// </summary>
+    protected override NetworkObjectDocumentation GetNetworkObjectDocumentation() =>
+        new()
+        {
+            Methods = new Dictionary<string, OpenRpcSingleMethodDocumentation>
+            {
+                ["lookupCheckSetupStatus"] = ExperimentalMethodDocumentation.Create(
+                    "Whether a check is ready to run on a project, needs setup first, or does not apply to it.",
+                    [
+                        ExperimentalMethodDocumentation.Param(
+                            "checkId",
+                            "ID of the check.",
+                            "string"
+                        ),
+                        ExperimentalMethodDocumentation.Param(
+                            "projectId",
+                            "ID of the project.",
+                            "string"
+                        ),
+                    ],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "object",
+                        "CheckSetupState: { status, reason? }"
+                    )
+                ),
+            },
+        };
 
     protected override Task StartDataProviderAsync()
     {
@@ -153,18 +187,19 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         return job.GenerateStatusReport(maxResultsToInclude);
     }
 
-    private CheckSetupState LookupCheckSetupStatus(string checkId, string projectId) =>
-        new(CheckSetupStatus.Ready);
-
-    private bool IsCheckSetupForProject(string checkId, string projectId)
+    private CheckSetupState LookupCheckSetupStatus(string checkId, string projectId)
     {
         ArgumentException.ThrowIfNullOrEmpty(checkId);
         ArgumentException.ThrowIfNullOrEmpty(projectId);
 
-        var dataSource = new ChecksDataSource(LocalParatextProjects.GetParatextProject(projectId));
-        var check = _createCheck(checkId, dataSource);
-        return check.SetupComplete;
+        var scrText = LocalParatextProjects.GetParatextProject(projectId);
+        var check = _createCheck(checkId, new ChecksDataSource(scrText));
+        return CheckSetupStatusLookup.Lookup(checkId, check, scrText);
     }
+
+    // A check that does not apply to the project counts as set up: the project has made its choice.
+    private bool IsCheckSetupForProject(string checkId, string projectId) =>
+        LookupCheckSetupStatus(checkId, projectId).Status != CheckSetupStatus.SetupRequired;
 
     private bool DenyCheckResult(
         string checkId,
@@ -252,6 +287,26 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         double itemsToComplete = job.JobScope.InputRanges.Length * job.JobScope.CheckIds.Length;
         var completedItems = 0;
 
+        // Computed once per job and check: cheap, and settings changes apply from the next job on
+        var setupStatesByCheckAndProject = new Dictionary<(string, string), CheckSetupState?>();
+        CheckSetupState? SetupStateFor(string checkId, string projectId)
+        {
+            if (!setupStatesByCheckAndProject.TryGetValue((checkId, projectId), out var state))
+            {
+                try
+                {
+                    state = LookupCheckSetupStatus(checkId, projectId);
+                }
+                catch (Exception)
+                {
+                    // Not known to be not applicable: the creation path below records the failure
+                    state = null;
+                }
+                setupStatesByCheckAndProject[(checkId, projectId)] = state;
+            }
+            return state;
+        }
+
         try
         {
             var checkIdsToRun = new List<string>();
@@ -262,6 +317,15 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                 {
                     if (job.StopRequested)
                         break;
+
+                    if (
+                        SetupStateFor(checkId, range.ProjectId)?.Status
+                        == CheckSetupStatus.NotApplicable
+                    )
+                    {
+                        job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                        continue;
+                    }
 
                     CheckForProject check;
                     try
