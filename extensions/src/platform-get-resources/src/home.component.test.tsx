@@ -1086,4 +1086,61 @@ describe('Home row type and details', () => {
     expect(within(tooltip).queryByText(enString('%resources_activity_tooltip%'))).not.toBeNull();
     expect(within(tooltip).queryByText('August 16, 2026 at 2:30 PM')).not.toBeNull();
   });
+
+  /**
+   * Lays out only a row's tooltip triggers, so ←/→ walks just those. The table's ←/→ handling skips
+   * controls with no client rects as hidden, and jsdom gives every element none.
+   */
+  const layOutTooltipTriggers = (row: HTMLElement) => {
+    row.querySelectorAll('[data-slot="tooltip-trigger"]').forEach((trigger) =>
+      Object.defineProperty(trigger, 'getClientRects', {
+        value: () => [new DOMRect(0, 0, 10, 10)],
+        configurable: true,
+      }),
+    );
+  };
+
+  /*
+   * At narrow widths the row tooltip is the only place a row's full name and language appear, and
+   * the exact sync time is only ever in its tooltip. The table is a keyboard composite: ↓/↑ move
+   * between rows and ←/→ between the controls in a row, so the tooltips' triggers have to be among
+   * those controls for a keyboard user to reach them.
+   */
+  it("opens a row's details tooltip from the keyboard", async () => {
+    renderHomeList({ localProjectsInfo: [PROJECT] });
+    const user = userEvent.setup();
+    const [row] = screen.getAllByRole('row').slice(1);
+
+    layOutTooltipTriggers(row);
+    row.focus();
+    await user.keyboard('{ArrowRight}');
+
+    expect(document.activeElement?.textContent).toBe('PRJ');
+    const tooltip = await screen.findByRole('tooltip');
+    expect(within(tooltip).queryByText('A Project')).not.toBeNull();
+    expect(within(tooltip).queryByText('en')).not.toBeNull();
+  });
+
+  it('opens the exact sync time tooltip from the keyboard', async () => {
+    render(
+      <Home
+        headerContent={undefined}
+        sharedProjectsInfo={SHARED_PROJECTS}
+        remoteProjectsState="loaded"
+        uiLocales={['en-US']}
+        localizedStringsWithLoadingState={[EN_STRINGS, false]}
+      />,
+    );
+    const user = userEvent.setup();
+    const [row] = screen.getAllByRole('row').slice(1);
+
+    // The name comes first among the row's controls, then the activity time.
+    layOutTooltipTriggers(row);
+    row.focus();
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+
+    expect(document.activeElement?.textContent).toMatch(/ ago$/);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(within(tooltip).queryByText(enString('%resources_activity_tooltip%'))).not.toBeNull();
+  });
 });

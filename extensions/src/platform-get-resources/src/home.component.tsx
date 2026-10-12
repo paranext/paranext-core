@@ -150,6 +150,13 @@ export type SortConfig = {
 const SIDE_TOOLTIP_ARROW_CLASS = 'tw:translate-y-[calc(-50%-1px)]';
 
 /**
+ * A tooltip trigger that is a button only so the keyboard can reach it: it looks like the text it
+ * wraps, and shows the standard focus ring when focused from the keyboard.
+ */
+const TOOLTIP_TRIGGER_BUTTON_CLASS =
+  'tw:cursor-default tw:rounded-sm tw:text-start tw:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring';
+
+/**
  * Short name of the sample project the app installs on first run, which the getting-started prompt
  * is about.
  */
@@ -680,24 +687,29 @@ export function Home({
   /**
    * The row's icon and short name, with its full name, language and kind in a tooltip. The icon is
    * named by its kind too, so the kind does not depend on seeing the icon or hovering the row.
+   *
+   * The trigger is a button so the keyboard reaches it: the table is a composite widget where ←/→
+   * move between the controls in a row, and at narrow widths this tooltip is the only place the
+   * full name and language appear. It has no action of its own; the row's double-click still
+   * opens.
    */
   const renderNameWithDetails = (project: MergedProjectInfo) => {
     const { Icon, isReadOnly, label } = getRowKind(project);
     return (
       <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="tw:flex tw:flex-row tw:items-center tw:gap-4">
-            <div className="tw:flex tw:flex-row tw:items-center tw:gap-2">
+        <TooltipTrigger className={TOOLTIP_TRIGGER_BUTTON_CLASS}>
+          <span className="tw:flex tw:flex-row tw:items-center tw:gap-4">
+            <span className="tw:flex tw:flex-row tw:items-center tw:gap-2">
               {project.editedStatus === 'edited' && (
-                <div className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]" />
+                <span className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]" />
               )}
               <span role="img" aria-label={label} className="tw:flex tw:items-center">
                 <Icon className="tw:pr-0" size={18} aria-hidden />
                 {isReadOnly && <Lock className="tw:size-3 tw:-ms-1 tw:self-end" aria-hidden />}
               </span>
-            </div>
-            <div className="tw:whitespace-nowrap tw:cursor-default">{project.name}</div>
-          </div>
+            </span>
+            <span className="tw:whitespace-nowrap">{project.name}</span>
+          </span>
         </TooltipTrigger>
         {/* Capped to the room beside the trigger, so a long full name wraps rather than clipping. */}
         <TooltipContent
@@ -729,8 +741,9 @@ export function Home({
     if (time === undefined) return undefined;
     return (
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span>{formatTimeSpan(relativeTimeFormatter, new Date(time))}</span>
+        {/* A button for the same reason as the row name's: the exact time is only in this tooltip. */}
+        <TooltipTrigger className={TOOLTIP_TRIGGER_BUTTON_CLASS}>
+          {formatTimeSpan(relativeTimeFormatter, new Date(time))}
         </TooltipTrigger>
         <TooltipContent side="left" arrowClassName={SIDE_TOOLTIP_ARROW_CLASS}>
           <div className="tw:flex tw:flex-col tw:gap-0.5">
