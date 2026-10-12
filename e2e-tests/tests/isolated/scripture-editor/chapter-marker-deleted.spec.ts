@@ -42,6 +42,8 @@ test.use({
 
 const WEBSOCKET_PORT = 8876;
 const PDP_REQUEST_TIMEOUT_MS = 30_000;
+/** The editor's save debounce (`PDP_SAVE_DEBOUNCE_MS` in the scripture editor's web view). */
+const SAVE_DEBOUNCE_MS = 700;
 
 const RUTH_2 = { book: 'RUT', chapterNum: 2, verseNum: 1 };
 
@@ -130,15 +132,22 @@ test.describe('scripture editor chapter-marker deletion', () => {
 
     await test.step('the whole marker is backspaced away', async () => {
       // Every byte of `\c 2 ` — five keys, faster than the save debounce — so the chapter is gone
-      // before anything is saved. Keys go to the editor itself (see chapter-marker-repair.spec.ts
-      // for why focusing the glyph's own span drops the caret).
+      // before anything is saved. The click leaves the focus in the editor, so the keys go through
+      // `mainPage.keyboard`: `locator.press` focuses its target first and can take over a second a
+      // key on a cold launch, which lets a save repair the marker partway through and leaves the
+      // last keys deleting the repaired one down to a `\` the editor no longer reads as a chapter.
       await chapterMarker.locator('span').first().click();
-      await editorInput.press('End');
+      await mainPage.keyboard.press('End');
+      const startedAt = Date.now();
       for (let press = 0; press < 5; press += 1) {
         // Sequential on purpose: each Backspace acts on what the previous one left.
         // eslint-disable-next-line no-await-in-loop
-        await editorInput.press('Backspace');
+        await mainPage.keyboard.press('Backspace');
       }
+      expect(
+        Date.now() - startedAt,
+        'the five Backspaces must all land inside the save debounce',
+      ).toBeLessThan(SAVE_DEBOUNCE_MS);
     });
 
     await test.step('the marker is restored and the user is told', async () => {
