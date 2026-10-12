@@ -422,8 +422,9 @@ describe('showResourceInReferencePanel', () => {
     expect(selectionSeenByProvider).toBe('dbl:uid-byz');
   });
 
-  it('shows but does not save an uncatalogued resource when the local list cannot be read', async () => {
-    // It may be a non-DBL commentary, guessed here to be a Bible text.
+  it("tells the user and opens nothing when an uncatalogued resource's kind cannot be told", async () => {
+    // It may be a non-DBL commentary: guessed to be a Bible text, the Bible texts tab could not list
+    // it and would show an unrelated text in its place.
     mocks.sendCommand.mockImplementation(async (command: string) => {
       if (command === 'platformGetResources.getCachedResources')
         return { status: 'available', resources: [] };
@@ -433,8 +434,10 @@ describe('showResourceInReferencePanel', () => {
     });
     mocks.getMetadataForProject.mockResolvedValue({ id: 'local-1', name: 'LOCAL' });
 
-    await expect(showResourceInReferencePanel('local-1')).resolves.toBe('bible-texts-tab');
+    await expect(showResourceInReferencePanel('local-1')).rejects.toThrow();
 
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+    expect(mocks.reloadWebView).not.toHaveBeenCalled();
     expect(mocks.setUserList).not.toHaveBeenCalled();
   });
 

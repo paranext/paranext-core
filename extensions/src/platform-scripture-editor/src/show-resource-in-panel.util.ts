@@ -55,15 +55,20 @@ type CatalogLookup = {
   /** The resource's catalog entry, if either list has one */
   entry: DblResourceData | undefined;
   /**
+   * Whether the resource's kind — Bible text or commentary — is known. Not when it is in neither
+   * list and the locally-installed list could not be read: it may be a non-DBL commentary, and
+   * guessed to be a Bible text it would be asked of a panel that cannot list it.
+   */
+  isKindKnown: boolean;
+  /**
    * Whether the reference built from {@link entry} (or from its absence) can be trusted to be the
    * one the resource is identified by, and so is safe to save. Not while the DBL catalog is unread
    * or not loaded yet: the locally-installed list is then built without it, so every installed
    * resource — DBL ones too — comes back as a non-DBL entry, identified by its project rather than
    * its DBL entry. Saved, that would sit in the list as a second, differently-identified copy of
-   * the resource once it is added properly. Nor when the locally-installed list could not be read
-   * and the resource is not in the catalog: it may be a non-DBL commentary, guessed to be a Bible
-   * text. With the catalog `notConfigured` — no DBL credentials in this build — every resource is
-   * identified by its project, and that is what is saved.
+   * the resource once it is added properly. Never when {@link isKindKnown} is not. With the catalog
+   * `notConfigured` — no DBL credentials in this build — every resource is identified by its
+   * project, and that is what is saved.
    */
   isReferenceKindKnown: boolean;
 };
@@ -105,9 +110,11 @@ async function findCatalogEntry(resourceProjectId: string): Promise<CatalogLooku
   const isCatalogKnown =
     catalog?.status === 'available' ||
     (catalog?.status === 'unavailable' && catalog.reason === 'notConfigured');
+  const isKindKnown = !!entry || localResult.status === 'fulfilled';
   return {
     entry,
-    isReferenceKindKnown: isCatalogKnown && (!!entry || localResult.status === 'fulfilled'),
+    isKindKnown,
+    isReferenceKindKnown: isCatalogKnown && isKindKnown,
   };
 }
 
@@ -205,7 +212,10 @@ async function showResourceNow(resourceProjectId: string): Promise<string | unde
   // the catalog, which can be slow to read, since the answer does not depend on it.
   if (!panels.some((definition) => definition.projectId)) return undefined;
 
-  const { entry, isReferenceKindKnown } = await findCatalogEntry(resourceProjectId);
+  const { entry, isKindKnown, isReferenceKindKnown } = await findCatalogEntry(resourceProjectId);
+  // Not guessed: a panel asked for a resource it cannot list shows another one in its place.
+  if (!isKindKnown)
+    return failToShow(`Could not tell which reference panel lists resource ${resourceProjectId}`);
   const webViewType = getPanelWebViewType(entry);
   // A source-language, enhanced or XML resource is listed in neither panel. It opens the way it
   // always has, in its own viewer.
@@ -253,6 +263,14 @@ async function showResourceNow(resourceProjectId: string): Promise<string | unde
         `Could not add resource ${resourceProjectId} to the personal list of project ${panel.projectId}: ${getErrorMessage(e)}`,
       );
     }
+  } else if (!teamReference) {
+    logger.info(
+      `Not adding resource ${resourceProjectId} to the personal list of project ${panel.projectId}: ${
+        teamReferences
+          ? 'its catalog entry could not be confirmed'
+          : "the team's list could not be read"
+      }`,
+    );
   }
 
   // No `projectId`: the panel keeps whichever project it shows by the time the reload lands, which
@@ -278,8 +296,9 @@ let previousShow: Promise<unknown> = Promise.resolve();
 /**
  * Shows a locally-installed resource in the reference panel for its kind — commentaries in the
  * Commentaries tab, Bible texts (and resources the catalog does not describe) in Bible texts — and,
- * unless the team's list already has it or its reference cannot be trusted yet, adds it to the
- * current user's personal list for the project that panel shows. The shared (team) list is never
+ * unless the team's list already has it, adds it to the current user's personal list for the
+ * project that panel shows. It is shown but not added when that cannot be settled safely: the
+ * team's list or the resource's catalog entry cannot be read yet. The shared (team) list is never
  * written, so the resource is added for this user only.
  *
  * Simple mode's middle column only ever shows the project, so this is how a resource is opened

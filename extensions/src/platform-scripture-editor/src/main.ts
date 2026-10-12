@@ -1032,7 +1032,9 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
  * type. A Map entry present (even with value `undefined`) means a reload is in progress and the
  * pending value should be used. Absence means no pending value.
  *
- * Used to pass a new projectId through reloadWebView, which has no options for extra data.
+ * Used to pass a new projectId through reloadWebView. It predates passing extra data in the reload
+ * options themselves, which `reloadWebView` forwards to the provider (see
+ * `ResourceTextPanelOptions`); prefer options for new data.
  */
 const currentResourceTextPanelProjectIds = new Map<string, string | undefined>();
 
