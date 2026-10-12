@@ -77,6 +77,11 @@ const PICKER_BOUND_CHECKS_SIDE_PANEL_KEYS: readonly LocalizeKey[] = [
 function stubLocalizedStrings(keys: readonly LocalizeKey[]): LanguageStrings {
   const strings: LanguageStrings = {};
   keys.forEach((key) => {
+    // The notice needs a real format string so its `{checkNames}` placeholder gets filled
+    if (key === '%webView_checksSidePanel_checksCouldNotRun_notice%') {
+      strings[key] = 'Couldn’t run: {checkNames}';
+      return;
+    }
     strings[key] =
       isProjectSelectorSharedKey(key) || PICKER_BOUND_CHECKS_SIDE_PANEL_KEYS.includes(key)
         ? localizedValueFor(key)
@@ -243,5 +248,72 @@ describe('Checks side panel project selector — groupings', () => {
     expect(
       screen.queryByRole('menuitemradio', { name: TYPE_GROUPING_LABEL }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('checks that could not run', () => {
+  const REPORT_WITH_ERRORS: CheckJobStatusReport = {
+    ...JOB_STATUS_REPORT,
+    checkErrors: [
+      { checkId: 'Quotation', message: 'Quotes settings are invalid for project zzz6.' },
+      { checkId: 'registered-gone', message: 'Check is not registered' },
+    ],
+  };
+
+  it('names every check that could not run, keeping the result count', () => {
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: REPORT_WITH_ERRORS,
+          getLocalizedCheckDescription: (checkId) => (checkId === 'Quotation' ? 'Quotations' : ''),
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId('checks-could-not-run-notice')).toHaveTextContent(
+      'Couldn’t run: Quotations, registered-gone',
+    );
+    // The no-results line still shows alongside the notice
+    expect(screen.getByText('%webView_find_noResultsFound%')).toBeInTheDocument();
+  });
+
+  it('notice names an unknown check by its id', () => {
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: {
+            ...JOB_STATUS_REPORT,
+            checkErrors: [{ checkId: 'registered-gone', message: 'Check is not registered' }],
+          },
+          getLocalizedCheckDescription: () => '',
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId('checks-could-not-run-notice')).toHaveTextContent(
+      'Couldn’t run: registered-gone',
+    );
+  });
+
+  it('shows each check’s message on hover', async () => {
+    const user = setupUser();
+    render(
+      <ChecksSidePanel
+        {...buildProps({ hasActiveJob: true, jobStatusReport: REPORT_WITH_ERRORS })}
+      />,
+    );
+
+    await user.hover(screen.getByTestId('checks-could-not-run-notice'));
+
+    expect(
+      (await screen.findAllByText(/Quotes settings are invalid for project zzz6\./)).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('shows no notice when every check ran', () => {
+    render(<ChecksSidePanel {...buildProps({ hasActiveJob: true })} />);
+    expect(screen.queryByTestId('checks-could-not-run-notice')).not.toBeInTheDocument();
   });
 });
