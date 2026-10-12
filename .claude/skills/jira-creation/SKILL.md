@@ -26,8 +26,9 @@ from `discover` or from the tool's own schema — never from memory or from this
 parameter names differ between server versions.
 
 **Permissions.** Only read tools are pre-approved for this skill. Every create, edit, link,
-re-parent and conversion goes through Claude Code's permission prompt as well as the approval
-step below.
+re-parent and conversion goes through Claude Code's normal permission check — whatever the
+user's own settings and permission mode decide — as well as the approval step below, which
+applies regardless.
 
 ## Writing tickets people can read
 
@@ -205,7 +206,8 @@ done or still owed. If a run stops partway, report both. A resumed run finds its
 through step 6, and before carrying out any owed action it re-reads that ticket's live state —
 status category, assignee, parent, links. An action that already holds is skipped; a ticket whose
 state changed since the approval (no longer To Do, now assigned, already moved) goes back to the
-user. `/prd-to-jira` also writes each key into the brief as it goes, which survives the session.
+user. Outside `/prd-to-jira` the list lives only in the session; `/prd-to-jira` also writes each
+key, and each approved action still owed, into the brief as it goes, which survives the session.
 
 ## Searching for existing work
 
