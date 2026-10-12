@@ -294,4 +294,65 @@ internal class CheckRunnerJobTests : PapiTestBase
     }
 
     #endregion
+
+    #region Setup status
+
+    [Test]
+    public void NotApplicableCheck_IsSkippedWithoutErrorAndJobReaches100()
+    {
+        _scrText.Settings.Quotes = new QuoteMarks("");
+
+        var (final, results) = RunJob(
+            CreateRunner(),
+            [s_quotationCheckId, s_repeatedWordCheckId],
+            1
+        );
+
+        Assert.That(final.Status, Is.EqualTo(CheckJobStatus.Completed), final.Error);
+        Assert.That(final.CheckErrors, Is.Null);
+        Assert.That(results.Where(r => r.CheckId == s_quotationCheckId), Is.Empty);
+        Assert.That(results.Where(r => r.CheckId == s_repeatedWordCheckId), Is.Not.Empty);
+        Assert.That(final.PercentComplete, Is.EqualTo(100));
+    }
+
+    [Test]
+    public void QuotesChangedToNone_NextJobSkipsQuotationCheck()
+    {
+        SetValidQuotationRules();
+        var runner = CreateRunner();
+        RunJob(runner, [s_quotationCheckId], 1);
+
+        _scrText.Settings.Quotes = new QuoteMarks("");
+        var (second, results) = RunJob(runner, [s_quotationCheckId], 1);
+
+        Assert.That(second.Status, Is.EqualTo(CheckJobStatus.Completed), second.Error);
+        Assert.That(second.CheckErrors, Is.Null);
+        Assert.That(results, Is.Empty);
+    }
+
+    [Test]
+    public void LookupCheckSetupStatus_IsExposedAndIsCheckSetupFollowsIt()
+    {
+        _scrText.Settings.Quotes = new QuoteMarks("");
+        var runner = CreateRunner();
+
+        var state = Invoke<CheckSetupState>(
+            runner,
+            "LookupCheckSetupStatus",
+            s_quotationCheckId,
+            _projectId
+        );
+        var isSetup = Invoke<bool>(
+            runner,
+            "IsCheckSetupForProject",
+            s_quotationCheckId,
+            _projectId
+        );
+
+        Assert.That(state.Status, Is.EqualTo(CheckSetupStatus.NotApplicable));
+        // A check that doesn't apply counts as set up
+        Assert.That(isSetup, Is.True);
+    }
+
+    #endregion
 }
