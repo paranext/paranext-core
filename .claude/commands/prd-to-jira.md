@@ -19,8 +19,8 @@ connect the Atlassian tools and rerun" — and stop.
 - Find the brief's **Questions for the product owner** section — match by **title**, not
   number (it's §6 in the current template, but older briefs number it differently, e.g. §5).
   If it still contains a question whose answer would change the **work-item boundaries** (not
-  just wording), point at it and confirm the user really wants to create tickets now. Questions that only affect details inside an item are fine — carry them
-  into that item's description.
+  just wording), point at it and confirm the user really wants to create tickets now. Questions
+  that only affect details inside an item are fine — carry them into that item's description.
 
 ## Target shape (mirrors epic PT-4024)
 
@@ -48,78 +48,59 @@ readable top is in addition to the detail below, never a replacement for it.
   - **Definition of Done** — the item's "done when", specific enough to evaluate.
   - **Dependencies** — blocks / depends on / can run in parallel with, naming sibling tickets by
     title, plus the requirements it serves, written out.
-- **Never include time estimates.** No assignee, no status transitions — leave Jira defaults. The
-  only exception is closing a duplicate the user explicitly approved for recreation (step 2).
+- **Never include time estimates.** No assignee, no status transitions — leave Jira defaults.
 
 ## Steps
 
 1. **Resolve the target.** Site `paratextstudio.atlassian.net`, project `PT`. Verify the issue
-   types with the issue-type metadata tool — expect **Combined** (parent) and **Sub-task**
-   (child). If the names differ from this, show the user what exists and ask before proceeding.
+   types with the issue-type metadata operation (see the skill's Process step 5) — expect
+   **Combined** (parent) and **Sub-task** (child). If the names differ from this, show the user
+   what exists and ask before proceeding.
 2. **Find existing tickets for the same work.** Start from the brief's §2 **Jira** line and any
    `Existing ticket:` notes on its work items, but re-run the search — the brief may be days old
    and was searched by investigation phrases, not ticket titles. Follow the
    [Searching for existing work](../skills/jira-creation/SKILL.md#searching-for-existing-work)
    recipe in the `jira-creation` skill: phrases from the feature name for the parent, and from
-   each work item's title and requirement wording for its child. Propose one action per hit, as
-   the skill's [Acting on what the search found](../skills/jira-creation/SKILL.md#acting-on-what-the-search-found)
-   table sets out:
-   - **related**, **overlap** or **prior work** → create the child and **link** the existing
-     ticket (`Relates`, or `Blocks` when one has to land first), naming it in the child's
-     Dependencies with what it already owns.
-   - **duplicate**, To Do and unassigned, already a Sub-task → **move** it: re-parent it under the
-     new Combined instead of creating that child.
-   - **duplicate** of one work item, To Do and unassigned, a standard issue (Combined, Dev Task,
-     Bug, …) with no child tickets of its own → **recreate** it: the child for that work item
-     becomes its replacement — its draft merged with all of the old ticket's content, and the old
-     ticket's links recreated on it — and after creating it, link `Duplicate` and close the old
-     ticket with resolution `Duplicate` (the API can't turn a standard issue into a Sub-task). If
-     the old ticket has children, show them to the user and ask. If the user declines, create no
-     child for that work item: link the old ticket to the new Combined with `Relates` instead.
-   - **duplicate** in progress or assigned to someone → create no child for that work item: link
-     the existing ticket to the new Combined with `Relates`, and flag it for the user.
-   - An open ticket of **any** type that already **is** this feature → stop and ask whether the
-     new children go under it instead of a new parent. This takes precedence: a ticket that
-     matches the whole feature is never proposed for recreation — that applies only to a
-     duplicate of a single work item. If the user picks the existing ticket as the parent (it
-     must be able to hold Sub-tasks — not an Epic or a Sub-task; otherwise ask again), create no
-     new parent and don't edit the existing one: create only the children under it, and in step
-     7 give the user the requirements table as text to add there themselves.
+   each work item's title and requirement wording for its child. On a resumed run, leave out the
+   tickets this run already created — the keys in the brief's work-item table (step 6) and the
+   skill's Process step 6. Propose one action per hit exactly as the skill's
+   [Acting on what the search found](../skills/jira-creation/SKILL.md#acting-on-what-the-search-found)
+   section says — link, move, convert, or link an existing ticket in place. Two rules are specific
+   to a batch:
+   - **An open ticket of any type that already *is* this whole feature** → stop and ask whether
+     the new children go under it instead of a new parent. This comes first: a ticket that matches
+     the whole feature is never moved or converted — those apply only to a duplicate of a single
+     work item. If the user picks the existing ticket as the parent (it must be able to hold
+     Sub-tasks — not an Epic or a Sub-task; otherwise ask again), create no new parent and don't
+     edit the existing one: create only the children under it, and in step 7 give the user the
+     requirements table as text to add there themselves.
+   - **A work item settled by an existing ticket** — moved, converted, or linked in place because
+     someone is working on it — gets no new child. That ticket counts as the work item's ticket in
+     the requirements table and in the report.
 3. **Draft everything locally first**: the parent and every child, titles and full descriptions,
-   per the target shape above, with the step 2 links and references folded in, and each
-   recreation's old content merged into its child's draft. Fill the descriptions from the brief
-   and the investigation findings — don't thin them out; the PT-4025…PT-4030 tickets show the
-   level of detail to match, but not the title style (their titles predate the plain-title
-   rule).
+   per the target shape above, with the step 2 links and references folded in. Fill the
+   descriptions from the brief and the investigation findings — don't thin them out; the
+   PT-4025…PT-4030 tickets show the level of detail to match, but not the title style (their
+   titles predate the plain-title rule).
 4. **Cold-read the drafts.** Run the skill's
    [cold-read check](../skills/jira-creation/SKILL.md#cold-read-check) over all the drafts in one
-   agent, and fix what it finds before the gate.
-5. **Dry-run gate (required — never skip).** Show the user:
-   - the complete drafts and a one-line cold-read result;
-   - the step 2 table — `Draft item | Existing ticket | Status | Assignee | Current parent (its
-     status, assignee) | Relation | Proposed action` — or "no existing tickets found" with the
-     phrases searched;
-   - **separately, every ticket proposed for recreation**: its key and title, the complete merged
-     draft of the child that replaces it, the links that will be recreated on it, and that the old
-     ticket will be closed as a duplicate.
-
-   Get explicit approval before creating anything, and a separate explicit yes for each
-   recreation — a general go-ahead doesn't cover closing someone's ticket. These are posted to
-   the team's Jira under the user's name. Beyond the approved moves, links and recreations, never
-   edit, transition or comment on an existing ticket.
+   go, and fix what it finds before the gate.
+5. **Dry-run gate (required — never skip).** Show the user what the skill's Process step 4
+   requires — the drafts, the cold-read result, the existing-ticket table (here with a leading
+   `Draft item` column) and, separately, every proposed conversion with its preview and any
+   proposed description edit — or "no existing tickets found" with the phrases searched. Get
+   explicit approval before creating anything, and a separate yes for each conversion and each
+   edit of someone else's ticket. These are posted to the team's Jira under the user's name.
 6. **Create, then populate each description in a second pass**, with the **`jira-creation`
    skill** ([`.claude/skills/jira-creation/SKILL.md`](../skills/jira-creation/SKILL.md)). Enter
    its Process at step 5 (resolve the target): its steps 1–4 — search, draft, cold read, approval
-   — are this command's steps 2–5 and already ran once for the whole batch. From there: create →
-   read the live template off the created issue → fit your content into its sections → push the
-   edit → verify → carry out that issue's approved links, moves and closes. Create the parent,
+   — are this command's steps 2–5 and already ran once for the whole batch. Create the parent,
    then each child with the parent set — one at a time, filling and verifying each before moving
-   on, and keeping the created keys. A recreation's child is created exactly once, like any other
-   child; closing the old ticket comes after it is filled and verified. Create no child for a work
-   item the gate settled with an existing ticket (moved, declined recreation, or in progress
-   elsewhere) — but **do** carry out its approved action: right after the parent is created,
-   filled and verified, make each approved re-parent and each `Relates` link to the parent, and
-   verify each by re-reading it.
+   on. **As each key is created, write it into the brief's work-item table** (WI-n → PT-xxxx), so
+   a later session can tell what this run already made. Right after the parent is created, filled
+   and verified, carry out the approved actions for work items settled by an existing ticket —
+   each move, conversion and `Relates` link to the parent — and verify each.
+
    The child sections this command drafts (User Story, Description, Implementation Ideas, Testing
    Ideas, Definition of Done, Dependencies) are written to line up with a typical task template —
    map them onto whatever headings each issue actually shows, carrying any extras (e.g.
@@ -129,14 +110,15 @@ readable top is in addition to the detail below, never a replacement for it.
    the ticket URL(s) in its "Jira Ticket(s)" cell — created and existing alike, marking existing
    ones "(existing)" or "(existing, in progress)". If the parent is an existing ticket the user
    chose in step 2, don't edit it: show the filled-in table as text instead.
-8. **Report and sync the brief**: list the parent + child keys — created, recreated (with the
-   key each replaces), moved, and existing tickets linked in place — plus the links made, and
-   offer to update the brief's work-item table with the ticket keys (WI-n → PT-xxxx). The user
-   commits the brief as usual.
+8. **Report**: list the parent + child keys — created, moved, converted, and existing tickets
+   linked in place — plus the links made. The brief's work-item table already holds the keys; the
+   user commits the brief as usual.
 
 ## Failure handling
 
-If a creation call fails midway, stop and report exactly which issues were created (keys) and
-which weren't, **and** every approved action on an existing ticket — re-parent, link, close —
-marked done or still owed. Resume only on user instruction, and never recreate ones that already
-exist; a resumed run finishes the owed actions first, under the original approval.
+If a call fails midway, stop and report exactly which issues were created (keys) and which
+weren't, **and** every approved action on an existing ticket — move, conversion, link,
+description edit — marked done or still owed. Resume only on user instruction, through the
+skill's Process step 6 and its "Keep a record of the run": find this run's own tickets rather than
+creating them again, and re-check each owed action against the ticket's live state before
+carrying it out.

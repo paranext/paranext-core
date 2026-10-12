@@ -1,7 +1,7 @@
 ---
 name: pt10-reuse-scout
 description: "Read-only agent for /investigate-prd. Sweeps the Paratext 10 repo constellation (paranext-core, paratext-10-studio, paratext-bible-extensions, paratext-bible-internal-extensions) for existing related code, searches the PT Jira project for tickets that already cover the feature, decides where a feature should live, and classifies what to reuse vs build. Always runs; primary investigation for net-new aspects. Input: the PRD summary + aspect breakdown."
-tools: Task, Bash, Read, Grep, Glob, mcp__atlassian__searchJiraIssuesUsingJql, mcp__atlassian__getJiraIssue
+tools: Task, Bash, Read, Grep, Glob, mcp__atlassian__searchJiraIssuesUsingJql, mcp__atlassian__getJiraIssue, mcp__atlassian__discover, mcp__atlassian__executeRead
 ---
 
 # PT10 Reuse Scout
@@ -140,10 +140,10 @@ In-flight sweeps below are scout-specific additions. PT10 may name things differ
   each distinct PT9 form name, and distinctive NN wording as phrases. Tag each kept hit with the
   aspect or `NN-n` / `NTH-n` it touches and say in a few words what it covers. Don't label hits
   duplicate or overlap — the work items they would duplicate don't exist yet; `/investigate-prd`
-  decides that when it drafts them. A ticket resolved `Done` is a lead, not proof — re-ground it
-  in a `file:line` before calling the behavior shipped; one resolved `Duplicate`, `Won't Do` or
-  `Cannot Reproduce` shipped nothing, and one closed with no resolution proves nothing — check the
-  code. If the Atlassian tools are not available in this session, don't guess: write
+  decides that when it drafts them. A closed ticket follows the skill's
+  [Done is not proof the work shipped](../skills/jira-creation/SKILL.md#searching-for-existing-work)
+  rule: call behavior shipped only once you have re-grounded it in a `file:line`. If the Atlassian
+  tools are not available in this session, don't guess: write
   `Not searched — no Atlassian tools in this session.` in the output section and add a Review
   Flag.
 
