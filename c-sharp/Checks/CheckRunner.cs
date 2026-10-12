@@ -153,6 +153,9 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         return job.GenerateStatusReport(maxResultsToInclude);
     }
 
+    private CheckSetupState LookupCheckSetupStatus(string checkId, string projectId) =>
+        new(CheckSetupStatus.Ready);
+
     private bool IsCheckSetupForProject(string checkId, string projectId)
     {
         ArgumentException.ThrowIfNullOrEmpty(checkId);
