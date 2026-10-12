@@ -116,23 +116,33 @@ internal sealed class CheckCache
         var projectId = range.ProjectId;
         var bookNum = range.Start.BookNum;
 
-        // Text has to be tokenized for the checks before the checks can run
-        var enabledChecksForProject = GetChecks(checkIds, projectId);
+        // A check that cannot be created or that throws must not cost the other checks their
+        // results. Its recorder is left not ready, so the next job runs it again.
+        var failures = new List<CheckJobError>();
+        var checksToRun = new List<(string checkId, CheckForProject check)>();
         CheckDataFormat neededDataFormat = 0;
-        foreach (var check in enabledChecksForProject)
-            neededDataFormat |= check.Check.NeededFormat;
+        foreach (var checkId in checkIds)
+        {
+            try
+            {
+                var check = GetCheck(checkId, projectId);
+                neededDataFormat |= check.Check.NeededFormat;
+                checksToRun.Add((checkId, check));
+            }
+            catch (Exception ex)
+            {
+                failures.Add(LogFailure(checkId, projectId, ex));
+            }
+        }
 
+        // Text has to be tokenized for the checks before the checks can run.
         // "GetText" will tokenize the text for checks to use
         // "0" chapter number means all chapters
         var dataSource = GetChecksDataSource(projectId);
         dataSource.GetText(bookNum, 0, neededDataFormat);
 
-        var failures = new List<CheckJobError>();
-        foreach (var checkId in checkIds)
+        foreach (var (checkId, check) in checksToRun)
         {
-            var check = GetCheck(checkId, projectId);
-            // A check that throws must not cost the other checks their results. Its recorder is left
-            // not ready, so the next job runs it again.
             try
             {
                 if (check.SettingsChanged)
@@ -145,10 +155,19 @@ internal sealed class CheckCache
             }
             catch (Exception ex)
             {
-                failures.Add(new CheckJobError(checkId, ex.Message));
+                failures.Add(LogFailure(checkId, projectId, ex));
             }
         }
         return failures;
+    }
+
+    /// <summary>
+    /// Logs the full exception and returns the failure reported to the UI (message only).
+    /// </summary>
+    internal static CheckJobError LogFailure(string checkId, string projectId, Exception ex)
+    {
+        Console.WriteLine($"Check {checkId} could not run on project {projectId}: {ex}");
+        return new CheckJobError(checkId, ex.Message);
     }
 
     private ChecksDataSource GetChecksDataSource(string projectId)
