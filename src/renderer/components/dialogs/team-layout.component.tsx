@@ -37,6 +37,7 @@ import {
   BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
   BaseOrModelTextExplanation,
   focusResourcePickerOnOpen,
+  resolveLocalizedString,
   ResourcePickerDialog,
 } from 'platform-bible-react/experimental';
 import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react/experimental';
@@ -240,6 +241,26 @@ function localizeString(
   return strings[key] ?? key;
 }
 
+/**
+ * English for the panel strings the dialog itself renders (the explanation body has its own, in
+ * `BaseOrModelTextExplanation`). These keys come from the platform-scripture-editor extension, not
+ * en.json, so an unresolved one shows English, like the body beside it, rather than a raw `%key%`.
+ * Kept equal to the extension's shipped English by `team-layout-localization.test.ts`.
+ */
+export const TEAM_LAYOUT_PANEL_ENGLISH_FALLBACKS = Object.freeze({
+  '%webView_modelTextPanel_emptyState_baseOrModel_summary%':
+    'Pick a text to display as a reference translation for your project.',
+  '%webView_modelTextPanel_emptyState_moreInfo%': 'More info',
+  '%webView_modelTextPanel_emptyState_lessInfo%': 'Less info',
+});
+
+function localizePanelString(
+  strings: TeamLayoutDialogLocalizedStrings,
+  key: keyof typeof TEAM_LAYOUT_PANEL_ENGLISH_FALLBACKS,
+) {
+  return resolveLocalizedString(strings[key], TEAM_LAYOUT_PANEL_ENGLISH_FALLBACKS[key]);
+}
+
 function referenceKey(reference: ResourceReference): string {
   if (hasStringId(reference)) return `${reference.type}:${reference.id}`;
   return `${reference.type}:${referenceName(reference)}`;
@@ -368,8 +389,6 @@ function BaseOrModelTextInfo({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const bodyId = useId();
-  const text = (key: keyof TeamLayoutDialogLocalizedStrings) => localizeString(strings, key);
-
   return (
     <div className="tw:flex tw:flex-col tw:items-start tw:gap-1">
       <Button
@@ -380,7 +399,8 @@ function BaseOrModelTextInfo({
         aria-describedby={columnLabelId}
         onClick={() => setIsOpen((prev) => !prev)}
       >
-        {text(
+        {localizePanelString(
+          strings,
           isOpen
             ? '%webView_modelTextPanel_emptyState_lessInfo%'
             : '%webView_modelTextPanel_emptyState_moreInfo%',
@@ -914,7 +934,7 @@ export function TeamLayoutDialogContent({
                   {localizeString(strings, '%shareLayoutDialog_baseOrModelText_label%')}
                 </span>
                 <span className="tw:text-xs tw:text-muted-foreground" id={modelTextSummaryId}>
-                  {localizeString(
+                  {localizePanelString(
                     strings,
                     '%webView_modelTextPanel_emptyState_baseOrModel_summary%',
                   )}

@@ -481,21 +481,25 @@ export function ModelTextPanel({
     [getUserModelTexts, setUserModelTexts, installResource, clearInstallFailure, markInstallFailed],
   );
 
-  // One pick at a time. The Pick buttons stay enabled while a pick runs, and a second one would
-  // either replace the open picker (the dialog service rejects the first with an error that reaches
-  // us without its code) or, if it starts while the first one's resource is still installing, race
-  // it and let the older pick's write land last.
+  // One pick at a time. The Pick button stays enabled while the picker is open and while a picked
+  // resource installs, and a second pick would either replace the open picker (the dialog service
+  // rejects the first with an error that reaches us without its code) or race a pick whose resource
+  // is still installing and let the older pick's write land last.
   const isPickingRef = useRef(false);
 
-  // Called from click handlers, which nothing awaits, so a failure is caught here or nowhere.
+  // Called from click handlers, which nothing awaits, so a failure is caught here or nowhere. The
+  // log names the resource once one was picked, so a failed settings read or write (which has no UI
+  // of its own, unlike a failed install) can be told apart from a picker that failed to open.
   const handlePickModelText = useCallback(async () => {
     if (isPickingRef.current) return;
     isPickingRef.current = true;
+    let resource: DblResourceData | undefined;
     try {
-      const resource = await showResourcePicker(currentModelTextIds);
+      resource = await showResourcePicker(currentModelTextIds);
       if (resource) await handleResourceSelect(resource);
     } catch (e) {
-      logger?.error(`Model text selection failed: ${getErrorMessage(e)}`);
+      const stage = resource ? `selecting ${resource.dblEntryUid}` : 'opening the picker';
+      logger?.error(`Model text selection failed while ${stage}: ${getErrorMessage(e)}`);
     } finally {
       isPickingRef.current = false;
     }

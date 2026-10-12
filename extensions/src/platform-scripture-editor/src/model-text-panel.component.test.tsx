@@ -440,12 +440,13 @@ describe('ModelTextPanel', () => {
   // state, so a pick that left the panel stuck selecting would show here.
   it('logs a failed pick and returns to where the user was', async () => {
     const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
+    const showResourcePicker = vi.fn(async () => INSTALLED_RESOURCE);
     renderPanel({
       modelTextsState: readyState({
         dataVersion: '1.0.0',
         items: [{ type: 'project', id: 'missing-project', name: 'Missing', source: 'admin' }],
       }),
-      showResourcePicker: vi.fn(async () => INSTALLED_RESOURCE),
+      showResourcePicker,
       getUserModelTexts: async () => {
         throw new Error('settings unreadable');
       },
@@ -455,16 +456,42 @@ describe('ModelTextPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
 
     await waitFor(() =>
-      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('settings unreadable')),
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringMatching(/while selecting uid-web: settings unreadable/),
+      ),
     );
     expect(
       await screen.findByText('The selected model text could not be found.'),
     ).toBeInTheDocument();
     expect(screen.queryByText('Selecting resource…')).not.toBeInTheDocument();
+
+    // And the failure released the one-pick guard: without that, one error would leave every Pick
+    // button doing nothing, with nothing on screen to say why.
+    fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
+    expect(showResourcePicker).toHaveBeenCalledTimes(2);
+  });
+
+  // The picker itself can reject (the dialog service rejects an overlay a newer request replaced).
+  it('logs a rejected picker and stays usable', async () => {
+    const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
+    const showResourcePicker = vi.fn(async (): Promise<DblResourceData | undefined> => {
+      throw new Error('Overlay was replaced by a new request');
+    });
+    renderPanel({ showResourcePicker, logger });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
+
+    await waitFor(() =>
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringMatching(/while opening the picker: Overlay was replaced/),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
+    expect(showResourcePicker).toHaveBeenCalledTimes(2);
   });
 
   // A second click would replace the open picker, or race a pick whose resource is still
-  // installing. Both Pick buttons stay enabled during a pick, so the panel itself must ignore it.
+  // installing. The Pick button stays enabled through both, so the panel itself must ignore it.
   it('ignores a second pick until the first one finishes', async () => {
     let closePicker: (resource: DblResourceData | undefined) => void = () => {};
     const showResourcePicker = vi.fn(
@@ -482,6 +509,28 @@ describe('ModelTextPanel', () => {
     await act(async () => closePicker(undefined));
     fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
     expect(showResourcePicker).toHaveBeenCalledTimes(2);
+  });
+
+  // The empty state keeps its Pick button on screen while a picked resource installs, so this is
+  // the race the guard exists for: a second pick finishing first, then the first one's write
+  // landing last and replacing it.
+  it('ignores a second pick while the first pick’s resource is still installing', async () => {
+    let finishInstall: () => void = () => {};
+    const installResource = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishInstall = resolve;
+        }),
+    );
+    const showResourcePicker = vi.fn(async () => UNINSTALLED_RESOURCE);
+    renderPanel({ showResourcePicker, installResource });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
+    await waitFor(() => expect(installResource).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a text…' }));
+    expect(showResourcePicker).toHaveBeenCalledTimes(1);
+
+    await act(async () => finishInstall());
   });
 
   it('loads a configured ProjectReference model text directly by project ID', async () => {
@@ -873,7 +922,7 @@ describe('ModelTextPanel', () => {
 
   // The disclosure's expand/collapse behaviour is covered directly in
   // panel-state-views.component.test.tsx. What this panel owns is that it supplies one at all,
-  // with its own Base/Model copy.
+  // with the shared Base/Model explanation inside.
   it('renders the More info disclosure with the Base/Model explanation, terms in bold', () => {
     render(<ModelTextPanel {...makeProps()} />);
     const toggle = screen.getByRole('button', { name: 'More info' });

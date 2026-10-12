@@ -31,22 +31,23 @@ export type BaseOrModelTextExplanationLocalizedStrings = {
  * English shown while a key is unresolved. Kept equal to the extension's shipped English values by
  * this component's tests.
  */
-export const BASE_OR_MODEL_TEXT_EXPLANATION_ENGLISH_FALLBACKS: Required<BaseOrModelTextExplanationLocalizedStrings> =
-  {
-    '%webView_modelTextPanel_emptyState_baseOrModel_intro%':
-      'If you are not translating from the Hebrew and Greek, the Base and Model texts are the texts you are translating from:',
-    '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%': 'Base:',
-    '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%':
-      'A literal translation which expresses the wording of the Hebrew or Greek text (a word-for-word "formal equivalent," like RSV).',
-    '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%': 'Model:',
-    '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%':
-      'An idiomatic translation which expresses the meaning of the Hebrew or Greek text (a contextualized "functional equivalent," like GNB).',
-    '%webView_modelTextPanel_emptyState_baseOrModel_admin%':
-      'If you are not the project admin, you can choose a text to display as a Base or Model temporarily. When your admin makes a choice, your selection will be replaced. If you will be the only person on this project, you will need to make a selection.',
-    '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%': 'Note:',
-    '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%':
-      'Some copyright holders require that their texts are not used as a Base or Model text. These texts will display a clear warning.',
-  };
+export const BASE_OR_MODEL_TEXT_EXPLANATION_ENGLISH_FALLBACKS: Readonly<
+  Required<BaseOrModelTextExplanationLocalizedStrings>
+> = Object.freeze({
+  '%webView_modelTextPanel_emptyState_baseOrModel_intro%':
+    'If you are not translating from the Hebrew and Greek, the Base and Model texts are the texts you are translating from:',
+  '%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%': 'Base:',
+  '%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%':
+    'A literal translation which expresses the wording of the Hebrew or Greek text (a word-for-word "formal equivalent," like RSV).',
+  '%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%': 'Model:',
+  '%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%':
+    'An idiomatic translation which expresses the meaning of the Hebrew or Greek text (a contextualized "functional equivalent," like GNB).',
+  '%webView_modelTextPanel_emptyState_baseOrModel_admin%':
+    'If you are not the project admin, you can choose a text to display as a Base or Model temporarily. When your admin makes a choice, your selection will be replaced. If you will be the only person on this project, you will need to make a selection.',
+  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%': 'Note:',
+  '%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%':
+    'Some copyright holders require that their texts are not used as a Base or Model text. These texts will display a clear warning.',
+});
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export type BaseOrModelTextExplanationProps = {
