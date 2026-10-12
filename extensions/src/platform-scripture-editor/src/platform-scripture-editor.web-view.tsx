@@ -904,6 +904,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+  /**
+   * Whether another chapter has been selected and its content has not arrived yet: the editor still
+   * shows the chapter being left, and an edit made to it now is dropped rather than saved. The
+   * entry points that change the editor through `editorRef` rather than through keys and input
+   * events, which `usePauseEditing` holds off, check this before they do. Kept in a ref because
+   * some of them run after an await, by when a render may have started the load.
+   */
+  const isChapterLoadingRef = useRef(false);
 
   /**
    * Ends the open marker-palette session the way the keydown table's Escape branch does — clear the
@@ -1657,6 +1665,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * every entry point.
    */
   const insertFootnoteAtCurrentSelection = useCallback(async () => {
+    if (isChapterLoadingRef.current) return;
     // Commits a snapshot of the project to the version history. Best-effort: see
     // `commitVersionHistorySnapshot`, which owns the ERROR_UNIMPLEMENTED handling shared with
     // the cross-reference and character-marker-removal paths.
@@ -1666,7 +1675,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       'inserting footnote',
     );
 
-    editorRef.current?.insertMarker('f');
+    if (!isChapterLoadingRef.current) editorRef.current?.insertMarker('f');
   }, [projectId, localizedStrings]);
 
   /**
@@ -1676,6 +1685,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * `webViewMessageListener` effect below).
    */
   const insertCrossReferenceAtCurrentSelection = useCallback(async () => {
+    if (isChapterLoadingRef.current) return;
     // Commits a snapshot of the project to the version history — see the footnote helper above.
     await commitVersionHistorySnapshot(
       projectId,
@@ -1683,7 +1693,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       'inserting cross-reference',
     );
 
-    editorRef.current?.insertMarker('x');
+    if (!isChapterLoadingRef.current) editorRef.current?.insertMarker('x');
   }, [projectId, localizedStrings]);
 
   const options = useMemo<EditorOptions>(
@@ -2138,13 +2148,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         restoreSelectionIfLost: () =>
           restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current),
         focusEditor: () => editorRef.current?.focus(),
-        applyItem: (selected) =>
+        applyItem: (selected) => {
+          if (isChapterLoadingRef.current) return;
           editorRef.current?.applyMarkerMenuSelection(selected, {
             trigger: 'backslash',
             // ACTIVE palette: the trigger was claimed and never landed, so there is never a
             // literal prefix for the apply to clean up.
             literalPrefixLanded: false,
-          }),
+          });
+        },
         onShowError: (error) => warnUnlessReplaced('marker palette', error),
       });
     },
@@ -2185,8 +2197,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         update: (update) => papi.overlays.updateCommandPalette(webViewId, update),
         commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
         dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
-        commitTyped: (typed) => editorRef.current?.commitTypedMarker(typed),
+        commitTyped: (typed) => {
+          if (!isChapterLoadingRef.current) editorRef.current?.commitTypedMarker(typed);
+        },
         commitTypedAndReopen: (typed) => {
+          if (isChapterLoadingRef.current) return;
           // The `\` commit: same materialization as Space with NO terminating space, then a
           // fresh palette for the backslash just pressed. Showing a new palette replaces the
           // current overlay (the old show promise rejects ABORTED, already handled), so there is
@@ -2194,10 +2209,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           editorRef.current?.commitTypedMarker(typed, { trailingSpace: false });
           openMarkerPaletteAtCaret();
         },
-        commitTypedCloser: (typed) => editorRef.current?.commitTypedCloser(typed),
+        commitTypedCloser: (typed) => {
+          if (!isChapterLoadingRef.current) editorRef.current?.commitTypedCloser(typed);
+        },
         commitItem: (marker) => {
           const selected = session.items.find((item) => item.marker === marker);
-          if (!selected) return;
+          if (!selected || isChapterLoadingRef.current) return;
           editorRef.current?.applyMarkerMenuSelection(selected, {
             trigger: 'backslash',
             literalPrefixLanded: false,
@@ -2246,7 +2263,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // makes the split land at the document end (focus() cannot restore it). Put the caret
           // back from the focus-out capture before splitting, same as the `\` palette above.
           restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
-          if (id !== undefined) editorRef.current?.splitParagraphWithMarker(id);
+          if (id !== undefined && !isChapterLoadingRef.current)
+            editorRef.current?.splitParagraphWithMarker(id);
           editorRef.current?.focus();
           return undefined;
         })
@@ -2625,6 +2643,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // off for that stretch, with the editor left focused and editable.
   const getEditorRoot = useCallback(() => editorRef.current?.getElementByKey('root'), []);
   usePauseEditing(getEditorRoot, isUsjFromPdpLoading);
+  isChapterLoadingRef.current = isUsjFromPdpLoading;
   // What the failure in hand IS, independent of what is on screen. Parsed once per failure, and
   // deliberately not keyed on the reference: the same held error is re-read on every navigation, and
   // re-parsing (and re-logging) it each time is pure waste.
