@@ -30,7 +30,10 @@ import {
   ICheckHostingService,
   ICheckRunner,
   CheckConfigurationProvider,
+  CheckJobError,
+  CheckSetupState,
 } from 'platform-scripture';
+import { addCheckError } from './check-aggregator.utils';
 import { CHECK_RUNNER_NETWORK_OBJECT_TYPE, CHECK_STOP_DEFAULT_TIMEOUT_MS } from './check.model';
 import { PersistedCheckRunResults } from './persisted-check-run-result.model';
 
@@ -61,6 +64,7 @@ type CheckJob = Omit<CheckJobStatusReport, 'nextResults' | 'totalExecutionTimeMs
   startTime: number;
   endTime?: number;
   stopRequested: boolean;
+  checkErrors: CheckJobError[];
 };
 
 class CheckRunnerEngine
@@ -178,6 +182,21 @@ class CheckRunnerEngine
         Did you mean to call the checkAggregator?`);
   }
 
+  // lookupCheckSetupStatus doesn't use instance state but cannot be static because it implements
+  // the CheckConfigurationProvider interface
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async lookupCheckSetupStatus(
+    // Parameters are required by the interface but unused since the method always throws.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _checkId: string,
+    // Second parameter also required by the interface but unused since the method always throws.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _projectId: string,
+  ): Promise<CheckSetupState> {
+    throw new Error(`lookupCheckSetupStatus is not implemented for the extensionHostCheckRunner.
+        Did you mean to call the checkAggregator?`);
+  }
+
   // #endregion
 
   // #region Jobs
@@ -195,6 +214,7 @@ class CheckRunnerEngine
       results: [],
       totalResultsCount: 0,
       stopRequested: false,
+      checkErrors: [],
       startTime: performance.now(),
       promise: Promise.resolve(),
     };
@@ -249,6 +269,7 @@ class CheckRunnerEngine
       totalResultsCount: job.totalResultsCount,
       nextResults: job.results.splice(0, maxResultsToInclude),
       error: job.error,
+      checkErrors: job.checkErrors.length > 0 ? [...job.checkErrors] : undefined,
       totalExecutionTimeMs: (job.endTime ?? performance.now()) - job.startTime,
     };
   }
@@ -274,10 +295,14 @@ class CheckRunnerEngine
 
         const checkDetails = registeredChecksById.get(checkId);
         if (!checkDetails) {
-          job.error = `Check with ID ${checkId} is not registered and cannot be run`;
-          job.status = 'errored';
-          job.endTime = performance.now();
-          return;
+          addCheckError(job.checkErrors, {
+            checkId,
+            message: `Check with ID ${checkId} is not registered and cannot be run`,
+          });
+          stepsCompleted += job.jobScope.inputRanges.length;
+          // Skipping to the next check keeps the loop flat; wrapping the rest in an else would nest it
+          // eslint-disable-next-line no-continue
+          continue;
         }
 
         // Get mutex for this check so that only one job can run it at a time
@@ -326,6 +351,9 @@ class CheckRunnerEngine
               });
               job.results.push(...results);
               job.totalResultsCount += results.length;
+              incrementStepsCompleted();
+            } catch (error) {
+              addCheckError(job.checkErrors, { checkId, message: getErrorMessage(error) });
               incrementStepsCompleted();
             } finally {
               if (check) await check.dispose();
