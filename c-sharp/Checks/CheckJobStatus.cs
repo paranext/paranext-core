@@ -30,12 +30,15 @@ internal sealed class CheckJobStatus(CheckJobScope jobScope) : CheckJobStatusRep
     /// Records that a check could not run. A check that fails the same way in several books is
     /// recorded once.
     /// </summary>
-    public void AddCheckError(CheckJobError checkError)
+    /// <returns>True if the error was new to this job; false if it was already recorded</returns>
+    public bool AddCheckError(CheckJobError checkError)
     {
         lock (_checkErrorsLock)
         {
-            if (!_checkErrors.Contains(checkError))
-                _checkErrors.Add(checkError);
+            if (_checkErrors.Contains(checkError))
+                return false;
+            _checkErrors.Add(checkError);
+            return true;
         }
     }
 

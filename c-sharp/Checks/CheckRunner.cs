@@ -319,8 +319,9 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                         break;
 
                     if (
-                        SetupStateFor(checkId, range.ProjectId)?.Status
-                        == CheckSetupStatus.NotApplicable
+                        CheckSetupStatusLookup.CanBeNotApplicable(checkId)
+                        && SetupStateFor(checkId, range.ProjectId)?.Status
+                            == CheckSetupStatus.NotApplicable
                     )
                     {
                         job.PercentComplete = 100 * ++completedItems / itemsToComplete;
@@ -335,7 +336,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                     catch (Exception ex)
                     {
                         // A check that cannot be created must not end the job
-                        job.AddCheckError(CheckCache.LogFailure(checkId, range.ProjectId, ex));
+                        RecordCheckFailure(job, checkId, range.ProjectId, ex);
                         job.PercentComplete = 100 * ++completedItems / itemsToComplete;
                         continue;
                     }
@@ -368,11 +369,15 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
                 var failedCheckIds = new HashSet<string>();
                 foreach (
-                    var failure in _checkCache.RunChecksForProject(range, checkIdsToRun, denials)
+                    var (failedCheckId, exception) in _checkCache.RunChecksForProject(
+                        range,
+                        checkIdsToRun,
+                        denials
+                    )
                 )
                 {
-                    job.AddCheckError(failure);
-                    failedCheckIds.Add(failure.CheckId);
+                    RecordCheckFailure(job, failedCheckId, range.ProjectId, exception);
+                    failedCheckIds.Add(failedCheckId);
                 }
 
                 foreach (var checkId in checkIdsToRun)
@@ -412,6 +417,21 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             // Avoid problems with floating point precision
             job.PercentComplete = Math.Round(job.PercentComplete, 0);
         }
+    }
+
+    /// <summary>
+    /// Reports a check failure on the job. The full exception is logged only the first time the
+    /// job sees this failure, since a check that fails in one book usually fails in every book.
+    /// </summary>
+    private static void RecordCheckFailure(
+        CheckJobStatus job,
+        string checkId,
+        string projectId,
+        Exception ex
+    )
+    {
+        if (job.AddCheckError(new CheckJobError(checkId, ex.Message)))
+            Console.WriteLine($"Check {checkId} could not run on project {projectId}: {ex}");
     }
 
     private ErrorMessageDenials GetOrCreateDenials(string projectId)
