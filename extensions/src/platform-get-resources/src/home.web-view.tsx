@@ -20,6 +20,7 @@ import {
   type ProjectResourceFilterValue,
 } from './project-resource-filter.component';
 import { useLocalProjects } from './use-local-projects.hook';
+import { openHomeItem } from './open-home-item';
 
 const defaultInterfaceLanguages: string[] = ['en'];
 
@@ -87,31 +88,6 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
   const openGetResources = useCallback(() => {
     papi.commands.sendCommand('platformGetResources.openGetResources');
   }, []);
-
-  const openProject = async (projectId: string, isPublished: boolean) => {
-    await papi.commands.sendCommand(
-      isPublished
-        ? 'platformScriptureEditor.openResourceViewer'
-        : 'platformScriptureEditor.openScriptureEditor',
-      projectId,
-    );
-
-    // Recorded for editable projects only, matching what the title bar's picker lists. Home is the
-    // title bar's route to a project that is not in that list yet, so a project opened here has to
-    // join it — otherwise the escape hatch for finding a non-recent project never makes it recent.
-    if (isPublished) return;
-    try {
-      const recentlyOpenedProjects = await papi.dataProviders.get(
-        'platformScripture.recentlyOpenedProjects',
-      );
-      await recentlyOpenedProjects?.recordProjectOpened(projectId);
-    } catch (e) {
-      // The project did open; failing to remember it is not worth reporting to the user.
-      logger.warn(
-        `Home web view could not record project ${projectId} as recently opened: ${getErrorMessage(e)}`,
-      );
-    }
-  };
 
   const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
     undefined,
@@ -396,7 +372,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
       uiLocales={uiLocales}
       onOpenGetResources={openGetResources}
-      onOpenProject={openProject}
+      onOpenProject={openHomeItem}
       onSendReceiveProject={sendReceiveProject}
       onGetStarted={getStarted}
       showGetResourcesButton={showGetResourcesButton}

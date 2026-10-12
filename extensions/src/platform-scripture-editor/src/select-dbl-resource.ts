@@ -4,12 +4,45 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { DblResourceData } from 'platform-bible-utils';
-import {
-  isDblResourceReference,
-  isNonDblResource,
-  isProjectReference,
-} from './resource-reference.utils';
+import { isNonDblResource, isSameResource } from './resource-reference.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
+
+/**
+ * The reference a resource is stored under in a reference list: a `ProjectReference` for a
+ * locally-installed non-DBL resource, a `DblResourceReference` otherwise.
+ *
+ * @param resource The resource's catalog entry
+ * @returns The reference to store for `resource`
+ */
+export function toResourceReference(
+  resource: DblResourceData,
+): DblResourceReference | ProjectReference {
+  return isNonDblResource(resource)
+    ? { type: 'project', name: resource.displayName, id: resource.projectId }
+    : { type: 'dblResource', name: resource.displayName, id: resource.dblEntryUid };
+}
+
+/**
+ * Puts a reference first in the current user's personal text connections, removing any earlier copy
+ * of it however its DBL entry UID is cased (see `isSameResource`). The project-level (shared)
+ * settings are never written here — only the Team layout dialog writes those.
+ *
+ * @param reference The reference to add
+ * @param getUserTextConnections Function to retrieve the local user's text connections
+ * @param setUserTextConnections Function to set the local user's text connections
+ */
+export async function addToUserTextConnections(
+  reference: DblResourceReference | ProjectReference,
+  getUserTextConnections: () => Promise<ResourceReferenceList | undefined>,
+  setUserTextConnections: (list: ResourceReferenceList) => Promise<unknown>,
+): Promise<void> {
+  const rawUserList = await getUserTextConnections();
+  const rawUserItems = rawUserList?.items ?? [];
+  await setUserTextConnections({
+    dataVersion: rawUserList?.dataVersion ?? DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion,
+    items: [reference, ...rawUserItems.filter((item) => !isSameResource(item, reference))],
+  });
+}
 
 /**
  * Adds a DBL resource to the current user's personal text connections.
@@ -42,24 +75,8 @@ export async function selectTextConnection(
     }
   }
 
-  const isLocalOnly = isNonDblResource(resource);
-  const newRef: DblResourceReference | ProjectReference = isLocalOnly
-    ? { type: 'project', name: resource.displayName, id: resource.projectId }
-    : { type: 'dblResource', name: resource.displayName, id: resource.dblEntryUid };
-
-  const rawUserList = await getUserTextConnections();
-  const rawUserItems = rawUserList?.items ?? [];
-  await setUserTextConnections({
-    dataVersion: rawUserList?.dataVersion ?? DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion,
-    items: [
-      newRef,
-      ...rawUserItems.filter((item) =>
-        isLocalOnly
-          ? !isProjectReference(item) || item.id !== resource.projectId
-          : !isDblResourceReference(item) || item.id !== resource.dblEntryUid,
-      ),
-    ],
-  });
+  const newRef = toResourceReference(resource);
+  await addToUserTextConnections(newRef, getUserTextConnections, setUserTextConnections);
 
   onSelect?.(newRef);
 }

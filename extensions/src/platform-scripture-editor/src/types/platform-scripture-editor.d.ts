@@ -931,6 +931,20 @@ declare module 'papi-shared-types' {
       projectId?: string,
     ) => Promise<string | undefined>;
     /**
+     * Shows a locally-installed resource in the tab for its kind — Commentaries for commentaries,
+     * Bible texts for Bible texts and for resources the catalog does not describe — and brings that
+     * tab to the front. Resources of other kinds are not shown in either tab. The resource is added
+     * to the current user's personal list for the project the tab shows, never to the team's list.
+     *
+     * @param resourceProjectId The local project id of the resource to show
+     * @returns The tab's web view ID, or `undefined` if neither reference tab is showing a project
+     *   to add the resource to — the only case in which the caller should open it some other way
+     * @throws If the tab could not be shown. The user has already been told.
+     */
+    'platformScriptureEditor.showResourceInReferencePanel': (
+      resourceProjectId: string,
+    ) => Promise<string | undefined>;
+    /**
      * Brings the Bible texts tab to the front. If it isn't open, opens it for the editor's project.
      * An open tab is raised, never reloaded, so it keeps its state.
      *

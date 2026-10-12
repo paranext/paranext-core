@@ -104,3 +104,20 @@ export function getResourceReferenceBareId(reference: ResourceReference): string
   if (isDblResourceReference(reference) || isProjectReference(reference)) return reference.id;
   return undefined;
 }
+
+/**
+ * Whether two references name the same resource. A DBL entry UID is compared case-insensitively:
+ * its casing differs by source (the catalog whitelist stores it upper-case, the commentary
+ * whitelist lower-case), so a team list and the catalog can spell the same entry differently.
+ *
+ * @param a A reference
+ * @param b Another reference
+ * @returns `true` if both are DBL references to the same entry, or project references to the same
+ *   project
+ */
+export function isSameResource(a: ResourceReference, b: ResourceReference): boolean {
+  if (isDblResourceReference(a) && isDblResourceReference(b))
+    return a.id.toLowerCase() === b.id.toLowerCase();
+  if (isProjectReference(a) && isProjectReference(b)) return a.id === b.id;
+  return false;
+}

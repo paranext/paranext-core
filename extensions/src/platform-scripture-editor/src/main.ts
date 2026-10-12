@@ -62,6 +62,10 @@ import {
   showCommentariesTab,
   showTextCollectionTab,
 } from './show-panel.util';
+import {
+  showResourceInReferencePanel,
+  takePendingResourceSelection,
+} from './show-resource-in-panel.util';
 
 logger.debug('Scripture Editor is importing!');
 
@@ -1069,6 +1073,7 @@ function createResourceTextPanelProvider(
         ? currentResourceTextPanelProjectIds.get(webViewType)
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
       currentResourceTextPanelProjectIds.delete(webViewType);
+      const selectedResourceId = takePendingResourceSelection(webViewType);
       // Re-read every call so mode changes are picked up at open/replace/restore time.
       const interfaceMode = await papi.settings.get('platform.interfaceMode');
       // Intentionally does not force scrollGroupScrRef in simple mode. Bible texts and
@@ -1087,6 +1092,9 @@ function createResourceTextPanelProvider(
         state: {
           ...savedWebView.state,
           resourceType,
+          // A resource opened elsewhere — from Home in Simple mode — to show here instead of the
+          // one this panel had selected.
+          ...(selectedResourceId !== undefined ? { selectedResourceId } : {}),
         },
         // This webview only ever appears in the fixed 3-column simple-mode layout (Column 3) and
         // must always remain open there, so it's non-closable in simple mode.
@@ -1416,6 +1424,31 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const showResourceInReferencePanelPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.showResourceInReferencePanel',
+    showResourceInReferencePanel,
+    {
+      method: {
+        summary:
+          "Show a resource in the Bible texts or Commentaries tab and add it to the user's personal list",
+        params: [
+          {
+            name: 'resourceProjectId',
+            required: true,
+            summary: 'The local project id of the resource to show',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary:
+            'The ID of the tab showing the resource, or undefined if no tab is showing a project. Throws if the tab could not be shown',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   const showBibleTextsPanelPromise = papi.commands.registerCommand(
     'platformScriptureEditor.showBibleTextsPanel',
     showBibleTextsTab,
@@ -1620,6 +1653,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await commentariesPanelWebViewProviderPromise,
     ...(scriptureTextGridRegistration ? [scriptureTextGridRegistration] : []),
     await openResourceTextPromise,
+    await showResourceInReferencePanelPromise,
     await showBibleTextsPanelPromise,
     await showCommentariesPanelPromise,
     await showTextCollectionPanelPromise,
