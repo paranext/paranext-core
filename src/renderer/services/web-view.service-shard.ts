@@ -1224,7 +1224,9 @@ function getLegacySavedLayout(defaultLayout: LayoutInfo): {
     lowestPrefixedWindowId !== undefined
       ? localStorage.getItem(`${lowestPrefixedWindowId}_${DOCK_LAYOUT_KEY}`)
       : localStorage.getItem(DOCK_LAYOUT_KEY);
-  const savedLayout: LayoutInfo | undefined = saved ? deserialize(saved) : undefined;
+  const savedLayout: LayoutInfo | undefined = saved
+    ? reconcileSavedLayout(deserialize(saved))
+    : undefined;
   return savedLayout
     ? { layout: savedLayout, isBakedDefault: false }
     : { layout: defaultLayout, isBakedDefault: true };

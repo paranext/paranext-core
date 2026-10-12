@@ -88,14 +88,47 @@ function emptiedBox(value: unknown): LayoutNode {
 }
 
 /**
- * The root boxes whose children rc-dock draws only when they are tab groups: `FloatBox`,
- * `WindowBox` and `MaxBox` each render a child only if it carries `tabs`, so a box among their
- * children (and every tab inside it) is never shown
+ * The root boxes that never show a box among their children as the tabs it holds: `FloatBox` and
+ * `WindowBox` draw only the children that are tab groups, and `MaxBox` draws only its first child,
+ * and draws it as a tab group. A box among their children (and every tab inside it) is therefore
+ * never shown
  */
 const TAB_GROUP_ONLY_ROOT_BOX_KEYS = ['floatbox', 'windowbox', 'maxbox'] as const;
 
 /** Position fields a tab group uses only while it floats or sits in its own window */
 const FLOATING_POSITION_KEYS = ['x', 'y', 'z', 'w', 'h'] as const;
+
+/**
+ * The weights rc-dock gives a dock box laid out other than left to right, and the tab group it
+ * docks at that box's left or right edge, when it puts the two side by side in a new horizontal
+ * dock box (`dockPanelToBox`): 70% and 30%
+ */
+const EDGE_SPLIT_DOCK_BOX_SIZE = 280;
+const EDGE_SPLIT_MOVED_SIZE = 120;
+
+/**
+ * An id no box or tab group in `layout` has, which rc-dock will not give to another node either.
+ * rc-dock gives ids `+1`, `+2`, … from a counter that it raises past every `+<number>` id it loads,
+ * but it hands them out while it walks the layout, so a box loaded without an id can be given a
+ * number a node further on already has. One past the highest such id in the layout avoids both.
+ *
+ * @param layout The saved layout the new box goes into
+ * @returns The id for the new box
+ */
+function getUnusedRcDockId(layout: LayoutInfo): string {
+  let highestIdNumber = 0;
+  const visit = (value: unknown): void => {
+    const node = asLayoutNode(value);
+    if (!node) return;
+    if (typeof node.id === 'string' && node.id.startsWith('+')) {
+      const idNumber = Number(node.id);
+      if (Number.isFinite(idNumber) && idNumber > highestIdNumber) highestIdNumber = idNumber;
+    }
+    if (Array.isArray(node.children)) node.children.forEach(visit);
+  };
+  ROOT_BOX_KEYS.forEach((key) => visit(layout[key]));
+  return `+${highestIdNumber + 1}`;
+}
 
 /** Whether a node is a box (it has `children`) rather than a tab group (it has `tabs`) */
 function isBoxNode(value: unknown): boolean {
@@ -125,8 +158,10 @@ function collectTabGroups(value: unknown): LayoutNode[] {
  * inside a box among the children of `floatbox`, `windowbox` or `maxbox`) has been moved into
  * `dockbox` as a tab group of its own at its end (right) edge, so the tabs in it can be reached
  * again. The emptied boxes are removed from those root boxes. A `dockbox` laid out other than
- * `horizontal` is placed beside the moved tab groups in a new horizontal `dockbox`, the way rc-dock
- * itself docks a tab group at the edge of a vertical dock box. The input is never mutated.
+ * `horizontal` is placed beside the moved tab groups in a new horizontal `dockbox`, at 70% to their
+ * 30% as rc-dock itself sizes a tab group docked at the edge of a vertical dock box; the new
+ * `dockbox` gets an id no other node in the layout has (see {@link getUnusedRcDockId}). The input is
+ * never mutated.
  */
 function moveHiddenTabGroupsIntoDockbox(layout: LayoutInfo): LayoutInfo {
   const result: LayoutInfo = { ...layout };
@@ -148,8 +183,17 @@ function moveHiddenTabGroupsIntoDockbox(layout: LayoutInfo): LayoutInfo {
     result.dockbox = { ...dockbox, children: [...dockbox.children, ...movedTabGroups] };
   } else {
     result.dockbox = {
+      id: getUnusedRcDockId(layout),
       mode: 'horizontal',
-      children: dockbox ? [dockbox, ...movedTabGroups] : movedTabGroups,
+      children: dockbox
+        ? [
+            { ...dockbox, size: EDGE_SPLIT_DOCK_BOX_SIZE },
+            ...movedTabGroups.map((tabGroup) => ({
+              ...tabGroup,
+              size: EDGE_SPLIT_MOVED_SIZE / movedTabGroups.length,
+            })),
+          ]
+        : movedTabGroups,
     };
   }
   return result;

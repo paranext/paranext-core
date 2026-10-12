@@ -1787,6 +1787,41 @@ describe('loadLayout restores this window’s layout from the main process', () 
     expect(tabIdsIn(loaded)).toEqual(['legacy-tab']);
   });
 
+  test('a legacy window heals a legacy layout that holds tab groups rc-dock would not draw', async () => {
+    // Saved by a build that docked a panel beside a floating tab group: rc-dock wrapped both groups
+    // in a box inside the floating layer, which draws only the tab groups directly inside it
+    const webViewTab = (tabId: string) => ({
+      id: tabId,
+      tabType: TAB_TYPE_WEBVIEW,
+      data: { id: tabId, webViewType: 'test.type', state: {} },
+    });
+    localStorage.setItem(
+      'dock-saved-layout',
+      serialize({
+        dockbox: { mode: 'horizontal', children: [{ tabs: [webViewTab('legacy-docked')] }] },
+        floatbox: {
+          mode: 'float',
+          children: [
+            {
+              mode: 'horizontal',
+              children: [
+                { tabs: [webViewTab('legacy-floating')], x: 10, y: 20, w: 400, h: 300 },
+                { tabs: [webViewTab('legacy-find')] },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    respondToGetLayout({ kind: 'legacy' });
+
+    const loaded = await loadLayoutInWindow(layoutWithAnchor());
+
+    expect(tabIdsIn(loaded)).toEqual(['legacy-docked', 'legacy-floating', 'legacy-find']);
+    const floatbox = loaded.floatbox as { children?: unknown[] } | undefined;
+    expect(floatbox?.children ?? []).toEqual([]);
+  });
+
   test('a legacy window prefers a window-prefixed legacy key over the stale unprefixed one', async () => {
     // Builds that scoped localStorage per window (before layouts moved into the main process's
     // structure) wrote the dock layout only under prefixed keys, so when one exists the unprefixed

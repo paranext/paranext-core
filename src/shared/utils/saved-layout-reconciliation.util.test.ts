@@ -232,7 +232,15 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
             size: 200,
             mode: 'horizontal',
             children: [
-              savedTabGroup('floating-group', ['project-f']),
+              // A floating group rc-dock wrapped keeps the position it had while floating
+              {
+                ...savedTabGroup('floating-group', ['project-f']),
+                x: 10,
+                y: 20,
+                z: 3,
+                w: 400,
+                h: 300,
+              },
               savedTabGroup('+6', ['find']),
             ],
           },
@@ -275,6 +283,7 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
         ],
       },
     };
+    const snapshot = structuredClone(layout);
 
     expect(reconcileSavedLayout(layout)).toEqual({
       dockbox: {
@@ -290,6 +299,7 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
         children: [{ tabs: [tab('notes')], x: 5, y: 6, z: 2, w: 300, h: 200 }],
       },
     });
+    expect(layout).toEqual(snapshot);
   });
 
   test('moves tab groups from boxes nested at any depth, in layout order', () => {
@@ -325,7 +335,19 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
     });
   });
 
-  test('puts a dock box laid out top to bottom beside the moved tab groups', () => {
+  /** The id of every box and tab group in a layout's root boxes, in layout order */
+  function nodeIdsIn(layout: LayoutInfo): string[] {
+    const ids: string[] = [];
+    const visit = (value: unknown): void => {
+      if (!value || typeof value !== 'object') return;
+      if ('id' in value && typeof value.id === 'string') ids.push(value.id);
+      if ('children' in value && Array.isArray(value.children)) value.children.forEach(visit);
+    };
+    ['dockbox', 'floatbox', 'windowbox', 'maxbox'].forEach((key) => visit(layout[key]));
+    return ids;
+  }
+
+  test('puts a dock box laid out top to bottom beside the moved tab groups, 70% to 30%', () => {
     const layout: LayoutInfo = {
       dockbox: {
         mode: 'vertical',
@@ -344,14 +366,99 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
 
     expect(reconcileSavedLayout(layout)).toEqual({
       dockbox: {
+        id: '+1',
         mode: 'horizontal',
         children: [
-          { mode: 'vertical', children: [{ tabs: [tab('upper')] }, { tabs: [tab('lower')] }] },
-          { tabs: [tab('project-f')] },
-          { tabs: [tab('find')] },
+          {
+            mode: 'vertical',
+            size: 280,
+            children: [{ tabs: [tab('upper')] }, { tabs: [tab('lower')] }],
+          },
+          { tabs: [tab('project-f')], size: 60 },
+          { tabs: [tab('find')], size: 60 },
         ],
       },
     });
+  });
+
+  test('gives one moved tab group the whole 30% beside a dock box laid out top to bottom', () => {
+    const layout: LayoutInfo = {
+      dockbox: { mode: 'vertical', size: 200, children: [{ tabs: [tab('upper')], size: 200 }] },
+      floatbox: {
+        mode: 'float',
+        children: [{ mode: 'horizontal', children: [{ tabs: [tab('find')], size: 200 }] }],
+      },
+    };
+
+    expect(reconcileSavedLayout(layout).dockbox).toEqual({
+      id: '+1',
+      mode: 'horizontal',
+      children: [
+        { mode: 'vertical', size: 280, children: [{ tabs: [tab('upper')], size: 200 }] },
+        { tabs: [tab('find')], size: 120 },
+      ],
+    });
+  });
+
+  test('gives the new dock box an id one past the highest id in the layout, so none repeats', () => {
+    // A profile that re-rooted its dock box: rc-dock kept the old root `+5` as a child of the new
+    // vertical root `+13`. rc-dock gives a box loaded without an id the next id from its counter
+    // before it has read the ids further on, which here would be `+5` again.
+    const layout: LayoutInfo = {
+      dockbox: {
+        id: '+13',
+        size: 200,
+        mode: 'vertical',
+        children: [
+          {
+            id: '+5',
+            size: 200,
+            mode: 'horizontal',
+            children: [
+              { id: '+6', size: 200, tabs: [tab('home')] },
+              { id: '+7', size: 200, tabs: [tab('editor-a')] },
+            ],
+          },
+          { id: '+14', size: 200, tabs: [tab('bottom-panel')] },
+        ],
+      },
+      floatbox: {
+        id: '+2',
+        size: 1,
+        mode: 'float',
+        children: [
+          {
+            id: '+9',
+            size: 200,
+            mode: 'horizontal',
+            children: [
+              { id: '+10', size: 200, tabs: [tab('editor-b')], x: 10, y: 20, z: 3, w: 400, h: 300 },
+              { id: '+11', size: 200, tabs: [tab('find')] },
+            ],
+          },
+        ],
+      },
+      windowbox: { id: '+3', size: 1, mode: 'window', children: [] },
+      maxbox: { id: '+4', size: 1, mode: 'maximize', children: [] },
+    };
+
+    const reconciled = reconcileSavedLayout(layout);
+
+    expect(reconciled.dockbox).toMatchObject({ id: '+15', mode: 'horizontal' });
+    const ids = nodeIdsIn(reconciled);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  test('ignores ids that start with + but are not numbers when it picks the new dock box’s id', () => {
+    const layout: LayoutInfo = {
+      dockbox: { id: '+abc', mode: 'vertical', children: [{ id: '+3', tabs: [tab('upper')] }] },
+      floatbox: {
+        mode: 'float',
+        children: [{ mode: 'horizontal', children: [{ tabs: [tab('find')] }] }],
+      },
+    };
+
+    expect(reconcileSavedLayout(layout).dockbox).toMatchObject({ id: '+4', mode: 'horizontal' });
   });
 
   test.each([
@@ -407,50 +514,52 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
 
   test('is idempotent and does not mutate its input', () => {
     const layout = layoutWithBoxInFloatbox();
-    const original = JSON.parse(JSON.stringify(layout));
+    const snapshot = structuredClone(layout);
 
     const once = reconcileSavedLayout(layout);
 
     expect(reconcileSavedLayout(once)).toEqual(once);
-    expect(layout).toEqual(original);
+    expect(layout).toEqual(snapshot);
   });
 
   describe('with malformed nodes beside a box in the floating layer', () => {
-    const dockedGroup = { tabs: [tab('docked')] };
-    const rescuedGroup = { tabs: [tab('rescued')] };
-    const boxWithRescuedGroup = { mode: 'horizontal', children: [rescuedGroup] };
+    // Fresh objects on every call, so an input changed in place cannot change the expected value
+    // along with it
+    const dockedGroup = () => ({ tabs: [tab('docked')] });
+    const rescuedGroup = () => ({ tabs: [tab('rescued')] });
+    const boxWithRescuedGroup = () => ({ mode: 'horizontal', children: [rescuedGroup()] });
 
     test.each<[string, LayoutInfo, LayoutInfo]>([
       [
         'no dockbox',
-        { floatbox: { mode: 'float', children: [boxWithRescuedGroup] } },
-        { dockbox: { mode: 'horizontal', children: [rescuedGroup] } },
+        { floatbox: { mode: 'float', children: [boxWithRescuedGroup()] } },
+        { dockbox: { id: '+1', mode: 'horizontal', children: [rescuedGroup()] } },
       ],
       [
         'a null and a primitive child',
         {
-          dockbox: { mode: 'horizontal', children: [dockedGroup] },
+          dockbox: { mode: 'horizontal', children: [dockedGroup()] },
           // A null child is part of the malformed input under test
           // eslint-disable-next-line no-null/no-null
-          floatbox: { mode: 'float', children: [null, 5, boxWithRescuedGroup] },
+          floatbox: { mode: 'float', children: [null, 5, boxWithRescuedGroup()] },
         },
-        { dockbox: { mode: 'horizontal', children: [dockedGroup, rescuedGroup] } },
+        { dockbox: { mode: 'horizontal', children: [dockedGroup(), rescuedGroup()] } },
       ],
       [
         'a box child whose children is not an array',
         {
-          dockbox: { mode: 'horizontal', children: [dockedGroup] },
+          dockbox: { mode: 'horizontal', children: [dockedGroup()] },
           floatbox: {
             mode: 'float',
             children: [
               { mode: 'horizontal', children: 'not an array' },
-              boxWithRescuedGroup,
+              boxWithRescuedGroup(),
               { tabs: [tab('floating')], x: 1, y: 2, w: 300, h: 200 },
             ],
           },
         },
         {
-          dockbox: { mode: 'horizontal', children: [dockedGroup, rescuedGroup] },
+          dockbox: { mode: 'horizontal', children: [dockedGroup(), rescuedGroup()] },
           floatbox: {
             mode: 'float',
             children: [{ tabs: [tab('floating')], x: 1, y: 2, w: 300, h: 200 }],
@@ -460,14 +569,17 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
       [
         'a dockbox that is an array',
         {
-          dockbox: [dockedGroup],
-          floatbox: { mode: 'float', children: [boxWithRescuedGroup] },
+          dockbox: [dockedGroup()],
+          floatbox: { mode: 'float', children: [boxWithRescuedGroup()] },
         },
         // The array is neither a panel nor a box, so it is dropped from the new horizontal dock box
-        { dockbox: { mode: 'horizontal', children: [rescuedGroup] } },
+        { dockbox: { id: '+1', mode: 'horizontal', children: [{ ...rescuedGroup(), size: 120 }] } },
       ],
     ])('does not throw and returns a usable layout for %s', (_name, layout, expected) => {
+      const snapshot = structuredClone(layout);
+
       expect(reconcileSavedLayout(layout)).toEqual(expected);
+      expect(layout).toEqual(snapshot);
     });
   });
 
