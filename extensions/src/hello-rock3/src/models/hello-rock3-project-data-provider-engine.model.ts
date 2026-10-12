@@ -31,9 +31,33 @@ export type HelloRock3ProjectData = {
   extensionData: { [key: string]: string | undefined };
 };
 
-/** What every one of an extension's extension-data keys starts with */
+/**
+ * What every one of an extension's extension-data keys starts with. Rejects a missing or blank
+ * extension name, as the Paratext PDP does for get, set and list alike.
+ */
 function getExtensionKeyPrefix(extensionName: string): string {
-  return `${extensionName}/`;
+  // Checked at runtime because the scope arrives over the network, whatever its declared type
+  const name: unknown = extensionName;
+  if (typeof name !== 'string' || name.trim() === '')
+    throw new Error('Must provide an extension name');
+  return `${name}/`;
+}
+
+/**
+ * Rejects an extension name that would list every extension's data rather than its own: "." alone,
+ * or any ".." segment, as the Paratext PDP does. Keys here are flat strings, so no name reaches
+ * another extension's data; the check keeps the sample answering as the real PDP does.
+ */
+function assertListableExtensionName(extensionName: string): void {
+  // Native, like the Paratext PDP's String.Split, so the two agree on what a segment is
+  const segments = extensionName
+    .split(/[/\\]/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment !== '');
+  if (segments.every((segment) => segment === '.') || segments.includes('..'))
+    throw new Error(
+      `Extension name '${extensionName}' must stay within its own extension-data directory`,
+    );
 }
 
 function getExtensionDataKey(scope: ExtensionDataScope): string {
@@ -130,6 +154,7 @@ export class HelloRock3ProjectDataProviderEngine
     // vanishes from the listing. The repo's string rule records this carve-out and names this
     // method as its example: .claude/rules/code-quality/native-string-vs-grapheme-helpers.md
     const keyPrefix = getExtensionKeyPrefix(scope.extensionName);
+    assertListableExtensionName(scope.extensionName);
     return Object.keys(this.projectData.extensionData)
       .filter((key) => key.startsWith(keyPrefix))
       .map((key) => key.slice(keyPrefix.length))
