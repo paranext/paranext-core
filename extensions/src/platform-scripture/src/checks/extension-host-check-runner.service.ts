@@ -186,19 +186,19 @@ class CheckRunnerEngine
         Did you mean to call the checkAggregator?`);
   }
 
-  // lookupCheckSetupStatus doesn't use instance state but cannot be static because it implements
-  // the CheckConfigurationProvider interface
+  // Checks hosted in the extension host have no setup concept, so every one is ready. This doesn't
+  // use instance state but cannot be static because it implements the CheckConfigurationProvider
+  // interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async lookupCheckSetupStatus(
-    // Parameters are required by the interface but unused since the method always throws.
+    // Parameters are required by the interface but unused since every check is ready.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _checkId: string,
-    // Second parameter also required by the interface but unused since the method always throws.
+    // Second parameter also required by the interface but unused since every check is ready.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _projectId: string,
   ): Promise<CheckSetupState> {
-    throw new Error(`lookupCheckSetupStatus is not implemented for the extensionHostCheckRunner.
-        Did you mean to call the checkAggregator?`);
+    return { status: 'ready' };
   }
 
   // #endregion
@@ -319,7 +319,8 @@ class CheckRunnerEngine
           for (let onRange = 0; onRange < job.jobScope.inputRanges.length; onRange++) {
             const range = job.jobScope.inputRanges[onRange];
 
-            // Ensure we have the pdps we need for the project
+            // Ensure we have the pdps we need for the project. A project whose data cannot be read
+            // fails the whole job on purpose: every check on it would fail the same way.
             if (!this.#subscribedProjects.has(range.projectId)) {
               const usfmBookPdp = await papi.projectDataProviders.get(
                 'platformScripture.USFM_Book',

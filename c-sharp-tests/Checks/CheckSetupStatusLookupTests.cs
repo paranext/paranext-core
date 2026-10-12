@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using Paranext.DataProvider.Checks;
 using Paratext.Checks;
 using Paratext.Data.Checking;
@@ -37,14 +38,6 @@ internal class CheckSetupStatusLookupTests : PapiTestBase
             _scrText
         );
 
-    private void SetValidQuotes()
-    {
-        _scrText.Settings.Quotes = new QuoteMarks("“", "”");
-        _scrText.Settings.InnerQuotes = new QuoteMarks("‘", "’");
-        // The dummy project continues quotes by default, which requires somewhere to continue them
-        _scrText.Settings.ContinueAt = "p";
-    }
-
     [Test]
     public void OrdinaryCheck_IsReady() =>
         Assert.That(
@@ -82,7 +75,7 @@ internal class CheckSetupStatusLookupTests : PapiTestBase
     [Test]
     public void Quotation_ValidQuotes_IsReady()
     {
-        SetValidQuotes();
+        QuotationRulesTestHelper.SetValidQuotationRules(_scrText);
         Assert.That(Lookup(s_quotationId).Status, Is.EqualTo(CheckSetupStatus.Ready));
     }
 
@@ -104,7 +97,7 @@ internal class CheckSetupStatusLookupTests : PapiTestBase
     [Test]
     public void QuotationTypes_SwitchOn_ValidQuotes_IsReady()
     {
-        SetValidQuotes();
+        QuotationRulesTestHelper.SetValidQuotationRules(_scrText);
         _scrText.Settings.QuoteTypesCheckEnabled = true;
         Assert.That(Lookup(s_quotationTypesId).Status, Is.EqualTo(CheckSetupStatus.Ready));
     }
@@ -118,6 +111,33 @@ internal class CheckSetupStatusLookupTests : PapiTestBase
             Lookup(s_quotationTypesId).Reason,
             Is.EqualTo(CheckSetupStatus.QuotationMarksNotUsedReason)
         );
+    }
+
+    [Test]
+    public void SerializedState_OmitsReasonWhenThereIsNone()
+    {
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                JsonSerializer.Serialize(new CheckSetupState(CheckSetupStatus.Ready), options),
+                Is.EqualTo("{\"status\":\"ready\"}")
+            );
+            Assert.That(
+                JsonSerializer.Serialize(
+                    new CheckSetupState(
+                        CheckSetupStatus.NotApplicable,
+                        CheckSetupStatus.QuotationMarksNotUsedReason
+                    ),
+                    options
+                ),
+                Does.Contain("\"reason\":")
+            );
+        });
     }
 
     [Test]

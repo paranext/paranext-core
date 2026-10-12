@@ -52,14 +52,6 @@ internal class CheckRunnerJobTests : PapiTestBase
         );
     }
 
-    internal void SetValidQuotationRules()
-    {
-        _scrText.Settings.Quotes = new QuoteMarks("“", "”");
-        _scrText.Settings.InnerQuotes = new QuoteMarks("‘", "’");
-        // The dummy project continues quotes by default, which requires somewhere to continue them
-        _scrText.Settings.ContinueAt = "p";
-    }
-
     internal CheckRunner CreateRunner(
         Func<string, ChecksDataSource, ScriptureCheckBase>? createCheck = null
     ) =>
@@ -177,7 +169,7 @@ internal class CheckRunnerJobTests : PapiTestBase
     [Test]
     public void InvalidQuotationRules_OtherChecksStillReportAndQuotationIsListed()
     {
-        // 'Quotes in Quotes' incomplete: passes P9's SetupComplete, throws in Run
+        // 'Quotes in Quotes' incomplete: passes Paratext 9's SetupComplete, throws in Run
         _scrText.Settings.Quotes = new QuoteMarks("“", "”");
         _scrText.Settings.InnerQuotes = new QuoteMarks("‘", "");
 
@@ -238,6 +230,32 @@ internal class CheckRunnerJobTests : PapiTestBase
     }
 
     [Test]
+    public void SetupLookupThatThrows_FallsThroughToCreationAndOtherChecksStillReport()
+    {
+        const string failureMessage = "The quotation check could not be created.";
+        PutBook(2, "Out of of Egypt");
+        // Fails in the setup lookup and again when the job creates the check
+        ScriptureCheckBase Create(string checkId, ChecksDataSource dataSource) =>
+            checkId == s_quotationCheckId
+                ? throw new InvalidOperationException(failureMessage)
+                : CheckFactory.CreateCheck(checkId, dataSource);
+
+        var (final, results) = RunJob(
+            CreateRunner(Create),
+            [s_quotationCheckId, s_repeatedWordCheckId],
+            1,
+            2
+        );
+
+        Assert.That(final.Status, Is.EqualTo(CheckJobStatus.Completed), final.Error);
+        Assert.That(results.Where(r => r.CheckId == s_repeatedWordCheckId), Is.Not.Empty);
+        Assert.That(
+            final.CheckErrors,
+            Is.EqualTo(new[] { new CheckJobError(s_quotationCheckId, failureMessage) })
+        );
+    }
+
+    [Test]
     public void CheckFailingInEveryBook_IsListedOnce()
     {
         PutBook(2, "Out of of Egypt");
@@ -286,7 +304,7 @@ internal class CheckRunnerJobTests : PapiTestBase
         var (first, _) = RunJob(runner, [s_quotationCheckId], 1);
         Assert.That(first.CheckErrors, Has.Count.EqualTo(1));
 
-        SetValidQuotationRules();
+        QuotationRulesTestHelper.SetValidQuotationRules(_scrText);
         var (second, _) = RunJob(runner, [s_quotationCheckId], 1);
 
         Assert.That(second.Status, Is.EqualTo(CheckJobStatus.Completed), second.Error);
@@ -318,7 +336,7 @@ internal class CheckRunnerJobTests : PapiTestBase
     [Test]
     public void QuotesChangedToNone_NextJobSkipsQuotationCheck()
     {
-        SetValidQuotationRules();
+        QuotationRulesTestHelper.SetValidQuotationRules(_scrText);
         PutBook(1, "He said “hello and never closed it.");
         var runner = CreateRunner();
         var (_, firstResults) = RunJob(runner, [s_quotationCheckId], 1);
