@@ -290,8 +290,8 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
         mode: 'horizontal',
         children: [
           { tabs: [tab('project-a')] },
-          { tabs: [tab('project-f')] },
-          { tabs: [tab('find')] },
+          { tabs: [tab('project-f')], size: 200 },
+          { tabs: [tab('find')], size: 200 },
         ],
       },
       floatbox: {
@@ -327,9 +327,9 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
         mode: 'horizontal',
         children: [
           { tabs: [tab('project-a')] },
-          { tabs: [tab('first')] },
-          { tabs: [tab('second')] },
-          { tabs: [tab('third')] },
+          { tabs: [tab('first')], size: 200 },
+          { tabs: [tab('second')], size: 200 },
+          { tabs: [tab('third')], size: 200 },
         ],
       },
     });
@@ -397,6 +397,111 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
         { mode: 'vertical', size: 280, children: [{ tabs: [tab('upper')], size: 200 }] },
         { tabs: [tab('find')], size: 120 },
       ],
+    });
+  });
+
+  test('gives a tab group moved into a dock box laid out left to right the average size of the groups there', () => {
+    const layout: LayoutInfo = {
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          { tabs: [tab('project-a')], size: 900 },
+          { tabs: [tab('project-b')], size: 300 },
+        ],
+      },
+      floatbox: {
+        mode: 'float',
+        children: [{ mode: 'horizontal', children: [{ tabs: [tab('find')], size: 25 }] }],
+      },
+    };
+    const snapshot = structuredClone(layout);
+
+    expect(reconcileSavedLayout(layout).dockbox).toEqual({
+      mode: 'horizontal',
+      children: [
+        { tabs: [tab('project-a')], size: 900 },
+        { tabs: [tab('project-b')], size: 300 },
+        { tabs: [tab('find')], size: 600 },
+      ],
+    });
+    expect(layout).toEqual(snapshot);
+  });
+
+  test('gives every tab group moved into a dock box laid out left to right the same average size', () => {
+    const layout: LayoutInfo = {
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          { tabs: [tab('project-a')], size: 900 },
+          { tabs: [tab('project-b')], size: 300 },
+        ],
+      },
+      floatbox: {
+        mode: 'float',
+        children: [
+          {
+            mode: 'horizontal',
+            children: [{ tabs: [tab('find')], size: 25 }, { tabs: [tab('notes')] }],
+          },
+        ],
+      },
+    };
+    const snapshot = structuredClone(layout);
+
+    expect(reconcileSavedLayout(layout).dockbox).toEqual({
+      mode: 'horizontal',
+      children: [
+        { tabs: [tab('project-a')], size: 900 },
+        { tabs: [tab('project-b')], size: 300 },
+        { tabs: [tab('find')], size: 600 },
+        { tabs: [tab('notes')], size: 600 },
+      ],
+    });
+    expect(layout).toEqual(snapshot);
+  });
+
+  test('counts a size rc-dock would default to 200 when it averages the groups in a dock box laid out left to right', () => {
+    const layout: LayoutInfo = {
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          { tabs: [tab('project-a')], size: 600 },
+          { tabs: [tab('project-b')] },
+          { tabs: [tab('project-c')], size: -5 },
+          { tabs: [tab('project-d')], size: 'wide' },
+        ],
+      },
+      floatbox: {
+        mode: 'float',
+        children: [{ mode: 'horizontal', children: [{ tabs: [tab('find')], size: 25 }] }],
+      },
+    };
+    const snapshot = structuredClone(layout);
+
+    // (600 + 200 + 200 + 200) / 4
+    expect(reconcileSavedLayout(layout).dockbox).toMatchObject({
+      children: [{}, {}, {}, {}, { tabs: [tab('find')], size: 300 }],
+    });
+    expect(layout).toEqual(snapshot);
+  });
+
+  test('gives a tab group moved into a dock box laid out left to right the average size of the groups there, even a dock box among them', () => {
+    const layout: LayoutInfo = {
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          { mode: 'vertical', size: 400, children: [{ tabs: [tab('upper')] }] },
+          { tabs: [tab('project-a')], size: 200 },
+        ],
+      },
+      floatbox: {
+        mode: 'float',
+        children: [{ mode: 'horizontal', children: [{ tabs: [tab('find')] }] }],
+      },
+    };
+
+    expect(reconcileSavedLayout(layout).dockbox).toMatchObject({
+      children: [{}, {}, { tabs: [tab('find')], size: 300 }],
     });
   });
 
@@ -483,8 +588,8 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
         mode: 'horizontal',
         children: [
           { tabs: [tab('project-a')] },
-          { tabs: [tab('project-f')] },
-          { tabs: [tab('find')] },
+          { tabs: [tab('project-f')], size: 200 },
+          { tabs: [tab('find')], size: 200 },
         ],
       },
     });
@@ -507,7 +612,10 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
     expect(reconcileSavedLayout(layout)).toEqual({
       dockbox: {
         mode: 'horizontal',
-        children: [{ tabs: [tab('project-a'), tab('find')] }, { tabs: [tab('project-f')] }],
+        children: [
+          { tabs: [tab('project-a'), tab('find')] },
+          { tabs: [tab('project-f')], size: 200 },
+        ],
       },
     });
   });
@@ -543,7 +651,12 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
           // eslint-disable-next-line no-null/no-null
           floatbox: { mode: 'float', children: [null, 5, boxWithRescuedGroup()] },
         },
-        { dockbox: { mode: 'horizontal', children: [dockedGroup(), rescuedGroup()] } },
+        {
+          dockbox: {
+            mode: 'horizontal',
+            children: [dockedGroup(), { ...rescuedGroup(), size: 200 }],
+          },
+        },
       ],
       [
         'a box child whose children is not an array',
@@ -559,7 +672,10 @@ describe('reconcileSavedLayout with tab groups rc-dock does not render', () => {
           },
         },
         {
-          dockbox: { mode: 'horizontal', children: [dockedGroup(), rescuedGroup()] },
+          dockbox: {
+            mode: 'horizontal',
+            children: [dockedGroup(), { ...rescuedGroup(), size: 200 }],
+          },
           floatbox: {
             mode: 'float',
             children: [{ tabs: [tab('floating')], x: 1, y: 2, w: 300, h: 200 }],

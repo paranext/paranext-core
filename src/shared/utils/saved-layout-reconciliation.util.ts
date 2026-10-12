@@ -107,6 +107,19 @@ const EDGE_SPLIT_DOCK_BOX_SIZE = 280;
 const EDGE_SPLIT_MOVED_SIZE = 120;
 
 /**
+ * The size rc-dock gives a box or tab group whose saved `size` is not a number of at least 0
+ * (`fixPanelOrBox`). This mirrors rc-dock's default, so a sibling with no usable size counts for
+ * what rc-dock will lay it out at.
+ */
+const RC_DOCK_DEFAULT_SIZE = 200;
+
+/** The size rc-dock lays a saved box or tab group out at: its own if it is usable, else the default */
+function getEffectiveSize(value: unknown): number {
+  const size = asLayoutNode(value)?.size;
+  return typeof size === 'number' && size >= 0 ? size : RC_DOCK_DEFAULT_SIZE;
+}
+
+/**
  * An id no box or tab group in `layout` has, which rc-dock will not give to another node either.
  * rc-dock gives ids `+1`, `+2`, … from a counter that it raises past every `+<number>` id it loads,
  * but it hands them out while it walks the layout, so a box loaded without an id can be given a
@@ -160,8 +173,9 @@ function collectTabGroups(value: unknown): LayoutNode[] {
  * again. The emptied boxes are removed from those root boxes. A `dockbox` laid out other than
  * `horizontal` is placed beside the moved tab groups in a new horizontal `dockbox`, at 70% to their
  * 30% as rc-dock itself sizes a tab group docked at the edge of a vertical dock box; the new
- * `dockbox` gets an id no other node in the layout has (see {@link getUnusedRcDockId}). The input is
- * never mutated.
+ * `dockbox` gets an id no other node in the layout has (see {@link getUnusedRcDockId}). In a
+ * `horizontal` `dockbox`, the moved tab groups each get the average size of the nodes already
+ * there, so every group ends up with an equal share. The input is never mutated.
  */
 function moveHiddenTabGroupsIntoDockbox(layout: LayoutInfo): LayoutInfo {
   const result: LayoutInfo = { ...layout };
@@ -180,7 +194,20 @@ function moveHiddenTabGroupsIntoDockbox(layout: LayoutInfo): LayoutInfo {
 
   const dockbox = asLayoutNode(result.dockbox);
   if (dockbox?.mode === 'horizontal' && Array.isArray(dockbox.children)) {
-    result.dockbox = { ...dockbox, children: [...dockbox.children, ...movedTabGroups] };
+    const existingSizes = dockbox.children.map(getEffectiveSize);
+    const averageSize =
+      existingSizes.length > 0
+        ? existingSizes.reduce((sum, size) => sum + size, 0) / existingSizes.length
+        : undefined;
+    result.dockbox = {
+      ...dockbox,
+      children: [
+        ...dockbox.children,
+        ...movedTabGroups.map((tabGroup) =>
+          averageSize === undefined ? tabGroup : { ...tabGroup, size: averageSize },
+        ),
+      ],
+    };
   } else {
     result.dockbox = {
       id: getUnusedRcDockId(layout),
