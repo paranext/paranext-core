@@ -212,6 +212,32 @@ internal class CheckRunnerJobTests : PapiTestBase
     }
 
     [Test]
+    public void CheckThatFailsToBeCreated_OtherChecksStillReport()
+    {
+        const string failingCheckId = "TestUncreatableCheck";
+        const string failureMessage = "The test check could not be created.";
+        PutBook(2, "Out of of Egypt");
+        ScriptureCheckBase Create(string checkId, ChecksDataSource dataSource) =>
+            checkId == failingCheckId
+                ? throw new InvalidOperationException(failureMessage)
+                : CheckFactory.CreateCheck(checkId, dataSource);
+
+        var (final, results) = RunJob(
+            CreateRunner(Create),
+            [failingCheckId, s_repeatedWordCheckId],
+            1,
+            2
+        );
+
+        Assert.That(final.Status, Is.EqualTo(CheckJobStatus.Completed), final.Error);
+        Assert.That(results.Where(r => r.CheckId == s_repeatedWordCheckId), Is.Not.Empty);
+        Assert.That(
+            final.CheckErrors,
+            Is.EqualTo(new[] { new CheckJobError(failingCheckId, failureMessage) })
+        );
+    }
+
+    [Test]
     public void CheckFailingInEveryBook_IsListedOnce()
     {
         PutBook(2, "Out of of Egypt");
