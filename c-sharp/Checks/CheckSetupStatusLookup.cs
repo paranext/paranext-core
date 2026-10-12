@@ -21,6 +21,13 @@ internal static class CheckSetupStatusLookup
     private static readonly string s_quotationId = CheckType.Quotation.InternalValue;
     private static readonly string s_quotationTypesId = CheckType.QuotationTypes.InternalValue;
 
+    /// <summary>
+    /// Only the quotation checks can be not applicable, so callers that only need to skip such
+    /// checks can avoid the cost of a lookup for every other check.
+    /// </summary>
+    public static bool CanBeNotApplicable(string checkId) =>
+        checkId == s_quotationId || checkId == s_quotationTypesId;
+
     public static CheckSetupState Lookup(string checkId, ScriptureCheckBase check, ScrText scrText)
     {
         var isQuotationTypes = checkId == s_quotationTypesId;

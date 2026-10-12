@@ -105,9 +105,9 @@ internal sealed class CheckCache
     }
 
     /// <returns>
-    /// The checks that threw, each with its message. The other checks still ran and have results.
+    /// The checks that threw, each with its exception. The other checks still ran and have results.
     /// </returns>
-    public List<CheckJobError> RunChecksForProject(
+    public List<(string CheckId, Exception Exception)> RunChecksForProject(
         InputRange range,
         IEnumerable<string> checkIds,
         ErrorMessageDenials denials
@@ -118,7 +118,7 @@ internal sealed class CheckCache
 
         // A check that cannot be created or that throws must not cost the other checks their
         // results. Its recorder is left not ready, so the next job runs it again.
-        var failures = new List<CheckJobError>();
+        var failures = new List<(string CheckId, Exception Exception)>();
         var checksToRun = new List<(string checkId, CheckForProject check)>();
         CheckDataFormat neededDataFormat = 0;
         foreach (var checkId in checkIds)
@@ -131,7 +131,7 @@ internal sealed class CheckCache
             }
             catch (Exception ex)
             {
-                failures.Add(LogFailure(checkId, projectId, ex));
+                failures.Add((checkId, ex));
             }
         }
 
@@ -147,27 +147,28 @@ internal sealed class CheckCache
             {
                 if (check.SettingsChanged)
                 {
-                    check.Check.Initialize(dataSource);
-                    check.ClearResults();
+                    // Cleared before Initialize so a settings change that lands during Initialize
+                    // is not lost. A failed Initialize leaves the flag set so the next job retries.
                     check.SettingsChanged = false;
+                    try
+                    {
+                        check.Check.Initialize(dataSource);
+                        check.ClearResults();
+                    }
+                    catch
+                    {
+                        check.SettingsChanged = true;
+                        throw;
+                    }
                 }
                 check.Run(dataSource, bookNum, denials);
             }
             catch (Exception ex)
             {
-                failures.Add(LogFailure(checkId, projectId, ex));
+                failures.Add((checkId, ex));
             }
         }
         return failures;
-    }
-
-    /// <summary>
-    /// Logs the full exception and returns the failure reported to the UI (message only).
-    /// </summary>
-    internal static CheckJobError LogFailure(string checkId, string projectId, Exception ex)
-    {
-        Console.WriteLine($"Check {checkId} could not run on project {projectId}: {ex}");
-        return new CheckJobError(checkId, ex.Message);
     }
 
     private ChecksDataSource GetChecksDataSource(string projectId)
