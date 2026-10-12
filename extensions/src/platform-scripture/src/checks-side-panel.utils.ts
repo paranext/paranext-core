@@ -20,6 +20,9 @@ export const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_checkRequiresSetup%',
   '%webView_checksSidePanel_checkCouldNotRun%',
   '%webView_checksSidePanel_checkCouldNotRun_detail%',
+  '%webView_checksSidePanel_checkCouldNotRun_hideDetails%',
+  '%webView_checksSidePanel_checkCouldNotRun_paratext9Hint%',
+  '%webView_checksSidePanel_checkCouldNotRun_showDetails%',
   '%webView_checksSidePanel_checksCouldNotRun_notice%',
   '%checkSetup_notApplicable_quotationMarksNotUsed%',
   '%checkSetup_notApplicable_quotationTypesNotEnabled%',
@@ -28,6 +31,7 @@ export const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_noCheckResults%',
   '%webView_checksSidePanel_noChecksSelected%',
   '%webView_checksSidePanel_selectChecks%',
+  '%webView_checksSidePanel_selectedChecksCouldNotRun%',
   // Project filter strings
   '%webView_checksSidePanel_projectFilter_noProjectSelected%',
   '%webView_checksSidePanel_projectFilter_noProjectsFound%',
@@ -93,6 +97,14 @@ export async function buildChecksInfo(
       };
     }),
   );
+}
+
+/** The name to show for a check: its localized description, or its id when it has none */
+export function getCheckDisplayName(
+  checkId: string,
+  getLocalizedCheckDescription: (checkId: string) => string,
+): string {
+  return getLocalizedCheckDescription(checkId) || checkId;
 }
 
 /** The label shown beside a check in the check type filter, most important first */
