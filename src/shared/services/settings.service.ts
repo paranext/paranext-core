@@ -1,9 +1,4 @@
 import * as networkService from '@shared/services/network.service';
-import {
-  createSyncProxyForAsyncObject,
-  isPlatformError,
-  PlatformError,
-} from 'platform-bible-utils';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -11,7 +6,12 @@ import {
   settingsServiceDataProviderName,
   settingsServiceObjectToProxy,
 } from '@shared/services/settings.service-model';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
+import {
+  createCachedInitializer,
+  createSyncProxyForAsyncObject,
+  isPlatformError,
+  PlatformError,
+} from 'platform-bible-utils';
 
 let dataProvider: ISettingsService;
 const initialize = createCachedInitializer(async () => {

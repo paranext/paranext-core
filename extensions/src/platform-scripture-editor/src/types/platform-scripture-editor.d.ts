@@ -55,23 +55,17 @@ declare module 'platform-scripture-editor' {
     method: 'toggleFootnotesPaneVisibility';
   };
 
-  /**
-   * Tell the editor to toggle the footnotes-pane auto-show/hide setting (which diverges from PT9)
-   * in standard view (default off; when on, the pane auto-shows/hides based on whether the current
-   * chapter has notes, unless the user has manually overridden it for that chapter)
-   */
-  export type EditorMessageToggleFootnotesAutoShow = {
-    method: 'toggleFootnotesAutoShow';
-  };
-
   /** Tell the editor to change (toggle between bottom and side) footnotes pane location */
   export type EditorMessageChangeFootnotesPaneLocation = {
     method: 'changeFootnotesPaneLocation';
   };
 
-  /** Tell the editor to insert a textual note (footnote or cross-reference) */
+  /** Tell the editor to insert a textual note (footnote, endnote, or cross-reference) */
   export type EditorMessageInsertTextualNoteAtSelection = {
-    method: 'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection';
+    method:
+      | 'insertFootnoteAtSelection'
+      | 'insertCrossReferenceAtSelection'
+      | 'insertEndnoteAtSelection';
   };
 
   /** Tell the editor to open the comment editor for inserting a new comment at the current verse */
@@ -152,7 +146,6 @@ declare module 'platform-scripture-editor' {
     | EditorMessageUpdateDecorations
     | EditorMessageChangeScriptureView
     | EditorMessageToggleFootnotesPaneVisibility
-    | EditorMessageToggleFootnotesAutoShow
     | EditorMessageChangeFootnotesPaneLocation
     | EditorMessageInsertTextualNoteAtSelection
     | EditorMessageInsertCommentAtSelection
@@ -384,11 +377,6 @@ declare module 'platform-scripture-editor' {
     changeScriptureView(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     toggleFootnotesPaneVisibility(): Promise<void>;
-    /**
-     * Toggle the footnotes-pane auto-show/hide setting (which diverges from PT9) in standard view
-     * (default off)
-     */
-    toggleFootnotesAutoShow(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     changeFootnotesPaneLocation(): Promise<'bottom' | 'trailing'>;
     /**
@@ -406,6 +394,8 @@ declare module 'platform-scripture-editor' {
     insertFootnoteAtSelection(): Promise<void>;
     /** Function to insert a cross-reference in the editor at the current selection */
     insertCrossReferenceAtSelection(): Promise<void>;
+    /** Function to insert an endnote in the editor at the current selection */
+    insertEndnoteAtSelection(): Promise<void>;
     /**
      * Function to open the comment editor for inserting a new project comment at the current verse.
      * Checks permissions and fetches assignable users before opening the editor.
@@ -837,17 +827,6 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
 
     /**
-     * Toggles the footnotes-pane auto-show/hide setting (which diverges from PT9; default off) for
-     * the given the WebView ID. When on, the footnotes pane automatically shows/hides in standard
-     * view based on whether the current chapter has notes, unless manually overridden.
-     *
-     * @param webViewId The WebView ID of the scripture editor or resource viewer.
-     */
-    'platformScriptureEditor.toggleFootnotesAutoShow': (
-      webViewId: string | undefined,
-    ) => Promise<void>;
-
-    /**
      * Changes the location of the footnotes pane (if visible) for the given the WebView ID,
      * toggling between showing it at the bottom or side-by-side.
      *
@@ -860,6 +839,12 @@ declare module 'papi-shared-types' {
     /**
      * Command to insert a footnote into a given editor web view.
      *
+     * `editorWebViewId` is optional in the type but required in practice: with no id, or an id that
+     * no longer names an open Scripture editor, the command no-ops silently rather than inserting
+     * anywhere. A resolved promise means the request was DELIVERED to the web view, not that a note
+     * was inserted — the web view can still refuse the insert (e.g. read-only, no selection), and a
+     * refusal is not reported to the caller.
+     *
      * @param editorWebViewId The ID of the web view to insert the footnote for
      */
     'platformScriptureEditor.insertFootnoteAtSelection': (
@@ -867,17 +852,35 @@ declare module 'papi-shared-types' {
     ) => Promise<void>;
 
     /**
-     * Command to insert a cross-reference into a given editor web view.
+     * Command to insert a cross-reference into a given editor web view. See the
+     * `platformScriptureEditor.insertFootnoteAtSelection` command's TSDoc above for the
+     * `editorWebViewId` and resolution caveats, which apply identically here.
      *
-     * @param editorWebViewId The ID of the web view to insert the footnote for
+     * @param editorWebViewId The ID of the web view to insert the cross-reference for
      */
     'platformScriptureEditor.insertCrossReferenceAtSelection': (
       editorWebViewId?: string | undefined,
     ) => Promise<void>;
 
     /**
+     * Command to insert an endnote into a given editor web view. See the
+     * `platformScriptureEditor.insertFootnoteAtSelection` command's TSDoc above for the
+     * `editorWebViewId` and resolution caveats, which apply identically here.
+     *
+     * @param editorWebViewId The ID of the web view to insert the endnote for
+     */
+    'platformScriptureEditor.insertEndnoteAtSelection': (
+      editorWebViewId?: string | undefined,
+    ) => Promise<void>;
+
+    /**
      * Command to insert a project comment at the current verse in a given editor web view. Opens a
      * comment editor popover for drafting the comment content and optionally assigning to a user.
+     * See the `platformScriptureEditor.insertFootnoteAtSelection` command's TSDoc above for the
+     * `editorWebViewId` caveat, which applies here too — but resolution does NOT behave
+     * identically: this command's controller rethrows when the user lacks permission to create
+     * comments, so the returned promise CAN reject, and a sync-blocked comment shows the user a
+     * notice rather than failing silently.
      *
      * @param editorWebViewId The ID of the web view to insert the comment for
      */

@@ -369,8 +369,12 @@ export function OverlayCommandPalettePresentational({
   // eslint-disable-next-line no-null/no-null
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus the search input on mount. Skipped entirely in passive mode, which renders no
-  // search input and must never steal focus from the requesting WebView.
+  // Auto-focus the search input on mount. Passive and key-forwarding palettes never focus their
+  // input and return immediately below: passive renders no search input and must never steal
+  // focus from the requesting WebView, and a key-forwarding palette's session owns focus and
+  // forwards keystrokes through `keyForwarding` instead — stealing it would break that routing,
+  // including for an anchored palette whose own input portal has not mounted yet. Every other
+  // palette retries until its input mounts and takes focus.
   //
   // A single synchronous focus() reliably LOSES the focus
   // fight when the palette opens while an editor webview iframe holds focus — the iframe's own
@@ -378,14 +382,25 @@ export function OverlayCommandPalettePresentational({
   // typing went to the document (replacing the selection), arrows never reached cmdk, and the
   // palette's Escape handler never fired. Retry across animation frames until the focus sticks
   // (bounded, and cancelled if the palette unmounts first).
+  //
+  // The input may not exist yet on the first attempts: an anchored palette renders it inside a
+  // Radix Popover portal, which mounts its content on a render AFTER this effect has run. Keyed on
+  // whether forwarding is set, not on the object, so a new `keyForwarding` identity cannot re-run
+  // this effect after the portal mounts and steal focus after all.
+  const forwardsKeys = !!keyForwarding;
   useEffect(() => {
-    if (passive) return () => {};
+    if (passive || forwardsKeys) return () => {};
     let rafId: number | undefined;
     let attempts = 0;
     const MAX_FOCUS_ATTEMPTS = 20;
     const tryFocus = () => {
       const input = inputRef.current;
-      if (!input) return;
+      if (!input) {
+        if (attempts >= MAX_FOCUS_ATTEMPTS) return;
+        attempts += 1;
+        rafId = requestAnimationFrame(tryFocus);
+        return;
+      }
       input.focus();
       if (document.activeElement === input || attempts >= MAX_FOCUS_ATTEMPTS) return;
       attempts += 1;
@@ -395,7 +410,7 @@ export function OverlayCommandPalettePresentational({
     return () => {
       if (rafId !== undefined) cancelAnimationFrame(rafId);
     };
-  }, [passive]);
+  }, [passive, forwardsKeys]);
 
   // Active-mode search text: locally typed AND externally driven. When the cross-frame focus
   // fight loses (the editor iframe re-grabs focus on every Lexical commit), the extension

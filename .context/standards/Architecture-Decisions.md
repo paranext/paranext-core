@@ -2882,6 +2882,103 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   in a backgrounded window was not measured by the probe above.
 - **Source:** PT-4465; probe run 2026-09-09 on native Windows.
 
+## adr-footnote-editing-surface-per-view: Footnote editing surface is resolved per view/mode, and the editor exposes note addressing instead of the host emulating it
+
+- **Date:** 2026-09-10
+- **Status:** Accepted
+- **Context:** Paratext 9 edits footnotes in place in the footnotes pane — clicking a caller opens
+  the pane and turns that note's row into an editor; nothing is edited in a popover. Standard view
+  (USJ/USFM markers shown as editable text, available in Power mode only) had only the popover
+  editing surface, carried over unchanged from the formatted view. A read-only resource needs
+  caller-click navigation (scroll to the note, highlight the caller) with no editing surface at
+  all, and Simple mode and the formatted view were never in scope for the pane. Reconciling these
+  needed one decision point rather than a scatter of view/mode checks at each call site. Separately,
+  the pane's note list (rendered from the last-saved USJ) and the editor's own note addressing
+  (rendered from live content) could disagree inside the save-debounce window unless both read the
+  same document.
+- **Decision:** A pure helper, `resolveNoteEditingSurface({ viewType, isReadOnly }) → 'pane' |
+  'popover' | 'none'`, is the single place the surface rule lives: Standard view in Power mode with
+  an editable resource resolves to `'pane'`; every other view/mode combination resolves to
+  `'popover'`; a read-only resource resolves to `'none'` (in Standard view a caller click still
+  navigates with no editor; `decideNoteCallerClickAction` keeps it inert in every other view). The editor engine (`scripture-editors`) gains two additive `EditorRef` members —
+  `getNoteIndex(noteKey)` / `getNoteKey(index)` for translating between the pane's addressing and
+  the document's, and `highlightNote(keyOrIndex | undefined)` for applying PT9's
+  `caller_highlight` border — rather than the host emulating either with DOM class hacks; the
+  highlight is presentational only and never dirties the document. Which note carries that border
+  follows PT9's `CallerHighlightSynchronizer`, not the pane's selection: a second pure helper,
+  `resolveCallerHighlight({ isStandardView, paneHasFocus, selectedIndex })`, turns it on only while
+  the pane holds a selected row AND owns DOM focus, so clicking back into the Scripture text takes
+  the border off a row that stays selected. The pane reports its focus boundary with
+  `onPaneFocusChange` (its container's bubbled focus events, ignoring moves that stay inside it or
+  its portalled overlays) and where focus lands outside it with `onPaneFocusLeft` (a document
+  `focusin` listener, which also sees a return to the text after focus first left the document -
+  a move no pane blur reports), and a caller click moves focus into the pane — onto the row editor where one opens,
+  onto the selected row in a read-only Standard view — so the border comes on for a click in the
+  text too. The footnotes pane renders from
+  the editor's live USJ (falling back to the last-saved USJ before the editor has produced one)
+  rather than only the last-saved USJ, so the pane and `getNoteIndex` always index the same
+  document. The typing-path publish (`publishLiveEditorUsjIfNotesChanged`, from
+  `handleEditorialUsjChange`) is gated on the pane being rendered and on the notes having changed,
+  and a chapter load (`setEditorUsj`) on the pane being rendered, so a view with no pane showing
+  pays for neither; a hidden pane holds no document, and the pane becoming shown (including a
+  caller click that reveals it) fetches the editor's current one. The pane's `listId` changes only
+  when the note count changes, so a content edit keeps the same row's inline editor mounted across
+  re-renders; reordering with an unchanged count is a known, accepted gap in that identity.
+- **Alternatives:**
+  - **Host-side DOM class toggling**, re-applying the caller highlight after every `onUsjChange`.
+    Rejected: fragile against the editor's own DOM re-creation (collapse toggle, embed re-keying),
+    and duplicates state the editor already has — the editor exposing `highlightNote` directly is
+    one source of truth instead of two racing to stay in sync.
+  - **Keep the popover alongside the pane in Standard view.** Rejected: Paratext 9 has exactly one
+    footnote-editing surface at a time; offering both would make the port choose between two
+    surfaces the source product never asked a user to choose between.
+  - **Address pane notes by identity or content fingerprint instead of document-order index.**
+    Rejected in favor of one shared document: once the pane and the editor read the same live USJ,
+    the document-order index the editor already exposes is sufficient, and a fingerprint scheme
+    would be new machinery solving a problem the shared source removes.
+- **Consequences:** The editor-engine change (`scripture-editors`) and the host wiring
+  (`paranext-core`) ship as paired PRs; core's CI needs the editor change available on the
+  `platform-yalc` branch (or a published editor version) before its typecheck passes. The inline
+  footnote editor in the pane has no Save/Cancel — edits apply live (debounced), and ending the
+  session flushes whatever is still pending, matching PT9's own pane editing, so an inserted note is
+  never discarded when an editing session ends. The popover keeps its Save/Cancel: it applies on
+  Save or when the book or chapter changes, both through `closeAndSave`. Gating the typing and
+  load publishes on the pane being rendered means the cost of keeping the pane in sync is paid only while
+  the pane is showing, in whatever view. The "Auto-show footnote pane" toggle and its persisted
+  setting are removed: PT9 has no auto-hide, so the pane hides only when the user hides it (its
+  close control, or the Show footnotes menu command), and a caller click reveals a hidden pane only
+  in Power mode.
+  The pane's chrome is a close (X) button in its top-right corner and no title header — the earlier
+  title header was removed by team decision, and PT9's own pane likewise closes via a corner button
+  rather than a toggle in a title bar.
+- **Source:** PT-4189, PT-4478.
+
+## adr-footnote-unclosed-note-edited-in-place: In Standard view an unclosed note is edited in place in the text, and in the footnotes pane too
+
+- **Date:** 2026-09-28
+- **Status:** Accepted
+- **Context:** Standard view shows a note's content in the Scripture text only while the note is
+  unclosed (`\f + \ft a` with no `\f*`), which PT9 renders as `span.opennote` and edits inline as
+  plain text. Everywhere else Standard view edits notes in the footnotes pane
+  (`adr-footnote-editing-surface-per-view`). The first keystroke inside such a note was reported by
+  the editor as a note insertion, so the host opened the pane's row editor on it with the caret at
+  the END of the note, pulling the user away from where they were typing.
+- **Decision:** Match PT9: an unclosed note is edited in place in the text, with its marker and
+  caller as ordinary text, and it is also listed in the pane, whose row editor edits it with its
+  usual limits (the marker and caller are set through the note-type and caller controls, not by
+  typing). Each surface shows the other's edits; the caret never moves from one to the other on
+  its own. The editor reports `insertedNodeKey` only for a node the previous editor state did not
+  have, so an edit inside an existing note is not taken for a new one in any view, and the host
+  does not open the row editor on an unclosed note typed or pasted into the text
+  (`isUnclosedNoteOp`), where the user goes on typing.
+- **Alternatives:**
+  - **Move a caret that enters an unclosed note into the row editor.** Tried and rejected after hand
+    QA: it departs from PT9 and takes the arrow keys' ability to step through the note in the text.
+- **Consequences:** An unclosed note's caller and marker can be deleted or retyped in the text, as
+  in PT9, while the row editor still protects them. Arrow keys step through an unclosed note in the
+  text like any other text.
+- **Source:** PT-4189.
+
 ## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
 
 - **Formerly:** ADR-0008
@@ -4408,6 +4505,51 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   emits module manifests, which is what lets `externalExtensions` become `itemized: true`; PT-4560
   is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
+
+## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit allowlist, not a coverage rule
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** Locale files ship for languages at very different stages. As of 2026-09-24, `es`
+  covered ~97% of the core strings (~75% app-wide, counting bundled extensions), `fr`/`zh-*` ~6%,
+  and `km` 0%. The first-run setup-dialog threshold (`setup-dialog-languages.util.ts`
+  `computeSetupDialogLanguages`) only measures the `%firstRun_` namespace, so a French or Chinese
+  OS was auto-switched into a mostly-English UI. Product decided to offer only English and Spanish
+  for the Nov 2026 release (PT-4751).
+- **Decision:** `OFFERED_INTERFACE_LANGUAGES` (`src/shared/data/interface-languages.data.ts`)
+  filters `getAvailableInterfaceLanguages` and `getSetupDialogLanguages`, so every picker and the
+  OS-locale default see only offered languages. Locale files, string resolution and the
+  setup-dialog threshold are unchanged. The `platform.interfaceLanguage` validator accepts any
+  loaded locale (`getAllLoadedInterfaceLanguages`), so a hidden language that is already set is
+  honored, never reset:
+  - Each picker keeps the current language listed (`includeCurrentLanguages`): Settings lists every
+    stored tag, since it shows the fallbacks too; the popover and the first-run step list only the
+    primary.
+  - Picking a language writes one value in all three pickers (`switchInterfaceLanguage`): the
+    chosen language first, then the other current languages that are offered. A hidden language is
+    dropped when the user switches away from it, since no picker can remove a fallback.
+  - The first-run OS-locale default writes only while the setting is still unset, empty or `['en']`.
+  - Some UI keeps the old language until restart (the main menu bar, PT-4503; the Settings labels),
+    so Settings and the popover offer a restart after a change of primary language, and withdraw
+    the offer when the user switches back to the language the window started with. The first-run
+    step does not offer one.
+- **Alternatives:** Filtering in each renderer surface (several places to keep in sync; PAPI
+  consumers would still see hidden languages). Excluding hidden locale files from the build (removes
+  the only way to test those translations; re-enabling means restoring assets). A coverage threshold
+  (the only existing one measures the setup dialog, which is what caused the bad auto-pick).
+  Resetting a hidden language to English on startup (overrides deliberate testers and translators
+  every launch). Keeping hidden languages as fallbacks after a switch (they could not be removed
+  again in any picker). Keeping `getAvailableInterfaceLanguages` unchanged and adding a separate
+  offered-languages data type or an `isOffered` flag (additive for extensions, but every core picker
+  would move to the new type, and nothing outside core was found using the getter).
+- **Consequences:** Offering a language is a one-line code change (plus the tests that pin the
+  list); `src/node/data/offered-interface-languages.test.ts` fails if an offered tag has no locale
+  file or misses the setup-dialog threshold. A value stored before this change keeps its
+  not-offered fallbacks until the user next picks a different language (e.g. `["es","fr"]` still
+  falls back to French). The public `getAvailableInterfaceLanguages` now means "offered", not "every
+  locale file"; PAPI has no way to list hidden languages. PT-4457 (offer languages by translation
+  coverage) is expected to supersede the list; its rule must measure app-wide coverage, not only
+  `%firstRun_`. Revisit when French is ready.
 
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
@@ -6956,6 +7098,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   is the intended trade: the blast radius of a component-library visual change stays with the team
   that asked for it. Revisit when design rules on the fade as a general affordance; the change then
   is a default flip, not a rewrite.
+
+## adr-shared-utils-live-in-platform-bible-utils: A utility that extensions need lives in `platform-bible-utils`, not in `src/shared/utils`
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** `createCachedInitializer` runs an async initializer at most once and caches the promise, so concurrent callers share one attempt and a failure is retried rather than pinned. Eighteen core services use it. Extensions need exactly this to wait on a network object owned by a process that is still starting up, but could not import it. Hand-rolled, the easy mistake is to cache only the resolved value: that cache stays empty until the look-up settles, so every caller that arrives while the owning process is still starting begins a look-up (and a wait) of its own.
+- **Decision:** Move it to `lib/platform-bible-utils/src/promises/`, alongside `AsyncVariable`, `Mutex` and `PromiseChainingMap`, and export it from `platform-bible-utils`. Core imports it from the package like any other consumer.
+- **Alternatives:** **Re-export from `platform-bible-utils`, source left in `src/shared/utils/`** — not available: the package is standalone and cannot import from core's `src/`. **Export through `@papi/core`** — that surface is types-only (an empty default object plus `export type` lines); a runtime function does not belong there. **Leave it core-internal and let each extension hand-roll it** — the zero-diff option, and it hands every extension the same promise-versus-value caching bug.
+- **Consequences:** Such a utility is now held to the `lib/platform-bible-utils/` API-surface TSDoc bar rather than core-internal expectations. Each further move costs a repoint of every core import plus a `papi.d.ts` regeneration, so batch them. A utility needing both extension reach and a core-only dependency cannot follow: nothing in `platform-bible-utils` can import from `src/`.
 
 ## adr-shrink-step-override-context: The shrink-step test seam is a context, not a prop on every toolbar
 

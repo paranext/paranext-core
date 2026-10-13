@@ -2617,10 +2617,9 @@ below, paired with no copyright notice — there was no package to read one from
 | Apache-2.0 | 5 |
 | ISC | 5 |
 | BSD-3-Clause (reviewed exception) | 3 |
-| (Apache-2.0 AND MIT) (reviewed exception) | 1 |
+| (Apache-2.0 AND MIT) (reviewed exception) | 2 |
 | (BSD-3-Clause AND Apache-2.0) (reviewed exception) | 1 |
 | (ISC AND MIT) (reviewed exception) | 1 |
-| (MIT AND Apache-2.0) (reviewed exception) | 1 |
 | (MIT AND Zlib) (reviewed exception) | 1 |
 | 0BSD | 1 |
 | Apache-2.0 (elected from (MPL-2.0 OR Apache-2.0)) | 1 |
@@ -2679,7 +2678,7 @@ identifiers": `fsevents@2.3.3`.
 | `@lexical/text` | 0.43.0 | MIT |
 | `@lexical/utils` | 0.43.0 | MIT |
 | `@lexical/yjs` | 0.43.0 | MIT |
-| `@posthog/core` | 1.55.2 | (MIT AND Apache-2.0) (reviewed exception) |
+| `@posthog/core` | 1.55.2 | (Apache-2.0 AND MIT) (reviewed exception) |
 | `@radix-ui/number` | 1.1.1 | MIT |
 | `@radix-ui/primitive` | 1.1.3 | MIT |
 | `@radix-ui/react-accessible-icon` | 1.1.7 | MIT |
@@ -8624,9 +8623,9 @@ rather than left blank.
 
 ### Apache-2.0 — canonical text, 6 packages
 
-- `@posthog/core@1.55.2` (npm) — Copyright 2021-2023 LiosK
-- `chroma-js@3.2.0` (npm) — Copyright (c) 2011-2025, Gregor Aisch All rights reserved.
-- `posthog-node@5.51.1` (npm) — Copyright 2020 Posthog / Hiberly, Inc. Copyright 2015 Mixpanel, Inc.
+- `@posthog/core@1.55.2` (npm) — Copyright 2020 Posthog / Hiberly, Inc.; Copyright 2015 Mixpanel, Inc.; Copyright 2021-2023 LiosK
+- `chroma-js@3.2.0` (npm) — Copyright (c) 2002 Cynthia Brewer, Mark Harrower, and The Pennsylvania State University.
+- `posthog-node@5.51.1` (npm) — Copyright 2020 Posthog / Hiberly, Inc.; Copyright 2015 Mixpanel, Inc.
 - `rc-new-window@0.1.13` (npm) — no copyright notice — an npm manifest has no field for one, and it bundles no license file to carry one
 - `CsvHelper@33.1.0` (NuGet) — Copyright © 2009-2024 Josh Close
 - `Microsoft.Extensions.ObjectPool@5.0.10` (NuGet) — © Microsoft Corporation. All rights reserved.
@@ -8760,7 +8759,7 @@ THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH REGARD TO
 
 - `@eten-tech-foundation/platform-editor@0.8.16` (npm) — Copyright © 2023-2025 ETEN Tech Foundation
 - `@eten-tech-foundation/scripture-utilities@0.1.6` (npm) — Copyright © 2023-2025 ETEN Tech Foundation
-- `@posthog/core@1.55.2` (npm) — Copyright (c) 2022 PostHog (part of Hiberly Inc); Copyright (c) 2013 Onur Can Cakmak onur.cakmak@gmail.com and all TraceKit contributors.; Copyright (c) 2012 Functional Software, Inc. dba Sentry
+- `@posthog/core@1.55.2` (npm) — Copyright (c) 2022 PostHog (part of Hiberly Inc); Copyright (c) 2013 Onur Can Cakmak onur.cakmak@gmail.com and all TraceKit contributors.; Copyright (c) 2012 Functional Software, Inc. dba Sentry; Copyright (c) 2017 Sentry; Copyright (c) Meta Platforms, Inc. and affiliates.; Copyright (c) 2015-present 650 Industries, Inc. (aka Expo); Copyright (c) 2025 AgentCat, Inc. (formerly MCPcat)
 - `@radix-ui/number@1.1.1` (npm) — Copyright (c) 2022 WorkOS
 - `@radix-ui/react-compose-refs@1.1.2` (npm) — Copyright (c) 2022 WorkOS
 - `@radix-ui/react-context@1.1.2` (npm) — Copyright (c) 2022 WorkOS
@@ -8774,7 +8773,7 @@ THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH REGARD TO
 - `fsevents@2.3.3` (npm) — Copyright (C) 2010-2020 by Philipp Dunkel, Ben Noordhuis, Elan Shankar, Paul Miller
 - `imurmurhash@0.1.4` (npm) — Copyright (c) 2013 Gary Court, Jens Taylor
 - `isarray@1.0.0` (npm) — Copyright (c) 2013 Julian Gruber \<julian@juliangruber.com\>
-- `lucide-react@1.8.0` (npm) — Copyright (c) 2026 Lucide Icons and Contributors
+- `lucide-react@1.8.0` (npm) — Copyright (c) 2013-present Cole Bemis
 - `pako@1.0.11` (npm) — Copyright (C) 2014-2017 by Vitaly Puzrin and Andrei Tuputcyn
 - `posthog-node@5.51.1` (npm) — Copyright (c) 2012 Functional Software, Inc. dba Sentry; Copyright (c) 2017 Sentry; Copyright (c) Meta Platforms, Inc. and affiliates.; Copyright (c) 2015-present 650 Industries, Inc. (aka Expo); Copyright (c) 2025 AgentCat, Inc. (formerly MCPcat)
 - `react-remove-scroll-bar@2.3.8` (npm) — Copyright (c) 2025 Anton Korzunov \<thekashey@gmail.com\>
@@ -8897,7 +8896,7 @@ Except as contained in this notice, the name of a copyright holder shall not be 
 
 ### Zlib — canonical text, 2 packages
 
-- `pako@1.0.11` (npm) — Copyright (C) 2014-2017 by Vitaly Puzrin and Andrei Tuputcyn
+- `pako@1.0.11` (npm) — (C) 1995-2013 Jean-loup Gailly and Mark Adler; (C) 2014-2017 Vitaly Puzrin and Andrey Tupitsin
 - `Spart@1.0.0` (NuGet) — Copyright © Jonathan de Halleux 2003, portions Copyright © 2018 SIL International
 
 ```text

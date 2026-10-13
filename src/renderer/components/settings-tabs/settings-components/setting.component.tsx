@@ -1,4 +1,10 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { includeCurrentLanguages } from '@renderer/services/include-current-languages';
+import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
+import {
+  getOfferedLanguageDefaults,
+  switchInterfaceLanguage,
+} from '@shared/data/interface-languages.data';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { DEFAULT_ZOOM_FACTOR } from '@shared/models/content-zoom.model';
 import { localizationService } from '@shared/services/localization.service';
@@ -15,7 +21,6 @@ import {
   ErrorPopover,
   Input,
   Label,
-  LanguageInfo,
   Switch,
   Tooltip,
   TooltipContent,
@@ -33,6 +38,9 @@ import {
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { ZoomStepper, type ZoomStepperProps } from './zoom-stepper.component';
 import './settings.component.scss';
+
+/** What the language selector offers while the offered languages load, or if they cannot be read. */
+const OFFERED_LANGUAGE_DEFAULTS = getOfferedLanguageDefaults();
 
 /** Props shared between the user and project setting components */
 type BaseSettingProps<TSettingKey, TSettingValue> = {
@@ -226,34 +234,22 @@ export function Setting({
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
-  // Although the full set of languages is likely to load more-or-less instantaneously, if there is
-  // a delay, we want to be sure to include at least any language(s) currently selected, so the user
-  // can't get into the weird state of dropping down the list and not seeing the current selection
-  // in the list.
-  const defaultLanguages = useMemo(() => {
-    const languages: Record<string, LanguageInfo> = {
-      en: { autonym: 'English', uiNames: { es: 'inglés' } },
-    };
+  const [offeredLanguagesPossiblyError] = useData(
+    localizationService.dataProviderName,
+  ).AvailableInterfaceLanguages(undefined, OFFERED_LANGUAGE_DEFAULTS);
 
-    if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
-      // Add hardcoded languages
-      languages.es = { autonym: 'Español', uiNames: { en: 'Spanish', fr: 'espagnol' } };
-      languages.fr = { autonym: 'Français', uiNames: { en: 'French', es: 'francés' } };
-
-      // Add dynamic languages from setting
-      setting.forEach((lang) => {
-        if (!languages[lang]) {
-          languages[lang] = { autonym: lang }; // Autonym is required, but we don't know it.
-        }
-      });
-    }
-
-    return languages;
-  }, [setting, settingKey]);
-
-  const [languages] = useData(localizationService.dataProviderName).AvailableInterfaceLanguages(
-    undefined,
-    defaultLanguages,
+  // List the user's current languages even when not offered, so the selection is never blank.
+  const knownUiLanguages = useMemo(
+    () =>
+      includeCurrentLanguages(
+        isPlatformError(offeredLanguagesPossiblyError)
+          ? OFFERED_LANGUAGE_DEFAULTS
+          : offeredLanguagesPossiblyError,
+        Array.isArray(setting) && settingKey === 'platform.interfaceLanguage'
+          ? setting.filter((tag): tag is string => typeof tag === 'string')
+          : [],
+      ),
+    [offeredLanguagesPossiblyError, setting, settingKey],
   );
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
@@ -287,8 +283,15 @@ export function Setting({
         // nothing to parse out of a target.
         newValue = event;
       } else if (Array.isArray(event)) {
-        // This event came from a `UiLanguageSelector` component
-        newValue = event;
+        // This event came from a `UiLanguageSelector` component, which reports the chosen language
+        // first. The pickers share one rule for what the rest of the list becomes.
+        newValue =
+          event.length > 0 && Array.isArray(setting)
+            ? switchInterfaceLanguage(
+                setting.filter((tag): tag is string => typeof tag === 'string'),
+                event[0],
+              )
+            : event;
       } else {
         // This event came from an `Input` component
         const { value } = event.target;
@@ -324,6 +327,12 @@ export function Setting({
           await setSetting(newValue);
           // Only a completed write earns a clear screen.
           setErrorMessage(undefined);
+          if (
+            settingKey === 'platform.interfaceLanguage' &&
+            Array.isArray(setting) &&
+            Array.isArray(newValue)
+          )
+            await offerRestartAfterInterfaceLanguageChange(setting, newValue);
         } else {
           setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
         }
@@ -413,7 +422,7 @@ export function Setting({
           <UiLanguageSelector
             className="language-selector"
             key={settingKey}
-            knownUiLanguages={isPlatformError(languages) ? defaultLanguages : languages}
+            knownUiLanguages={knownUiLanguages}
             primaryLanguage={setting[0]}
             fallbackLanguages={setting.slice(1)}
             onLanguagesChange={debouncedHandleChange}
@@ -456,8 +465,7 @@ export function Setting({
     debouncedHandleChange,
     debouncedHandleStepperChange,
     errorMessage,
-    languages,
-    defaultLanguages,
+    knownUiLanguages,
     disabled,
     setSetting,
   ]);

@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { newPlatformError, type PlatformError } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { sendCommand } from '@shared/services/command.service';
 import {
@@ -8,7 +9,12 @@ import {
   refreshRegistrationValidity,
   resetRegistrationValidityStore,
 } from '@renderer/services/registration-validity-store';
+import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
 import { UserProfilePopover } from './user-profile-popover.component';
+
+vi.mock('@renderer/services/interface-language-restart-prompt', () => ({
+  offerRestartAfterInterfaceLanguageChange: vi.fn(async () => {}),
+}));
 
 // Radix Popover/Tooltip use ResizeObserver internally; jsdom doesn't provide it, so we stub a
 // no-op implementation. The methods intentionally don't use `this` since they're empty stubs.
@@ -35,7 +41,8 @@ type MockState = {
   setInterfaceMode: ReturnType<typeof vi.fn> | undefined;
   interfaceLanguage: string[];
   setInterfaceLanguage: ReturnType<typeof vi.fn> | undefined;
-  availableLanguages: Record<string, { autonym: string }>;
+  /** Undefined means "still loading": the hook hands back the component's own default list. */
+  availableLanguages: Record<string, { autonym: string }> | PlatformError | undefined;
   themeType: 'light' | 'dark';
   setTheme: ReturnType<typeof vi.fn> | undefined;
   shouldMatchSystem: boolean;
@@ -117,7 +124,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       mockState.setTheme,
     ]),
     ShouldMatchSystem: vi.fn(() => [mockState.shouldMatchSystem, mockState.setShouldMatchSystem]),
-    AvailableInterfaceLanguages: vi.fn(() => [mockState.availableLanguages]),
+    AvailableInterfaceLanguages: vi.fn((_selector: undefined, defaultValue: unknown) => [
+      mockState.availableLanguages ?? defaultValue,
+    ]),
   })),
   useDataProvider: vi.fn(() => undefined),
 }));
@@ -172,6 +181,7 @@ beforeEach(() => {
   setMockSetting('setShouldMatchSystem', mockSetter());
   vi.mocked(sendCommand).mockClear();
   vi.mocked(logger.warn).mockClear();
+  vi.mocked(offerRestartAfterInterfaceLanguageChange).mockClear();
   resetRegistrationValidityStore();
   vi.mocked(refreshRegistrationValidity).mockClear();
 });
@@ -322,6 +332,37 @@ describe('UserProfilePopover language picker', () => {
     expect(mockState.setInterfaceLanguage).toHaveBeenCalledWith(['es', 'en']);
   });
 
+  test('offers a restart once the new language has been written', async () => {
+    setMockSetting('interfaceLanguage', ['en', 'es']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-es'));
+    await waitFor(() =>
+      expect(offerRestartAfterInterfaceLanguageChange).toHaveBeenCalledWith(
+        ['en', 'es'],
+        ['es', 'en'],
+      ),
+    );
+  });
+
+  test('does not offer a restart when writing the new language fails', async () => {
+    setMockSetting('interfaceLanguage', ['en', 'es']);
+    setMockSetting(
+      'setInterfaceLanguage',
+      vi.fn(async () => {
+        throw new Error('write rejected');
+      }),
+    );
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-es'));
+    // Positive control: the failed write was reported.
+    await waitFor(() =>
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('write rejected')),
+    );
+    expect(offerRestartAfterInterfaceLanguageChange).not.toHaveBeenCalled();
+  });
+
   test('clicking a language while the setting setter is dropped warns instead of doing nothing', async () => {
     setMockSetting('interfaceLanguage', ['en', 'es']);
     setMockSetting('setInterfaceLanguage', undefined);
@@ -358,6 +399,55 @@ describe('UserProfilePopover language picker', () => {
       'user-profile-language-es',
       'user-profile-language-fr',
     ]);
+  });
+
+  test('offers exactly English and Español while the languages load', async () => {
+    setMockSetting('availableLanguages', undefined);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-language-en');
+    const pills = Array.from(
+      document.querySelectorAll('[data-testid^="user-profile-language-"]'),
+    ).map((el) => el.getAttribute('data-testid'));
+    expect(pills).toEqual(['user-profile-language-en', 'user-profile-language-es']);
+  });
+
+  test('shows a hidden current language as the pressed pill next to the offered ones', async () => {
+    setMockSetting('availableLanguages', {
+      en: { autonym: 'English' },
+      es: { autonym: 'Español' },
+    });
+    setMockSetting('interfaceLanguage', ['fr']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const frenchPill = await screen.findByTestId('user-profile-language-fr');
+    expect(frenchPill).toHaveAttribute('data-state', 'on');
+    expect(frenchPill).toHaveAttribute('aria-label', 'Français');
+    expect(screen.getByTestId('user-profile-language-en')).toHaveAttribute('data-state', 'off');
+    expect(screen.getByTestId('user-profile-language-es')).toHaveAttribute('data-state', 'off');
+  });
+
+  test('switching away from a hidden language drops it and keeps the other offered languages', async () => {
+    setMockSetting('availableLanguages', {
+      en: { autonym: 'English' },
+      es: { autonym: 'Español' },
+    });
+    setMockSetting('interfaceLanguage', ['fr', 'es']);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-en'));
+    expect(mockState.setInterfaceLanguage).toHaveBeenCalledWith(['en', 'es']);
+  });
+
+  test('offers exactly English and Español when the offered languages cannot be read', async () => {
+    setMockSetting('availableLanguages', newPlatformError('Localization service unavailable'));
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-language-en');
+    const pills = Array.from(
+      document.querySelectorAll('[data-testid^="user-profile-language-"]'),
+    ).map((el) => el.getAttribute('data-testid'));
+    expect(pills).toEqual(['user-profile-language-en', 'user-profile-language-es']);
   });
 });
 
