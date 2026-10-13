@@ -344,7 +344,7 @@ internal static class SendReceiveWriteLock
 
     private static InvalidOperationException EditBlocked(string projectId) =>
         new(
-            $"Cannot write to project '{projectId}' while an automatic Send/Receive is in "
+            $"Cannot write to project '{projectId}' while an automatic sync is in "
                 + $"progress. {EditBlockedSentinel}"
         );
 

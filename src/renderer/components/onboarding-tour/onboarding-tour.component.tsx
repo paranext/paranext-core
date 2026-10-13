@@ -44,7 +44,7 @@ const STEP_LOCALIZE_KEYS: LocalizeKey[] = [
   // rather than shipping a third "Sync" for translators alongside %toolbar_sync% and
   // %firstRun_button_sync%.
   '%toolbar_sync%',
-  '%onboardingTour_step_sendReceive_description%',
+  '%onboardingTour_step_sendReceive_description_2%',
   '%onboardingTour_step_profile_title%',
   '%onboardingTour_step_profile_description%',
 ];
@@ -120,7 +120,7 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
         // expected there, not a defect. Nothing here changes between the two builds.
         target: '[data-testid="toolbar-sync-area"]',
         title: strings['%toolbar_sync%'] ?? '',
-        description: strings['%onboardingTour_step_sendReceive_description%'] ?? '',
+        description: strings['%onboardingTour_step_sendReceive_description_2%'] ?? '',
         side: 'bottom',
       },
       {

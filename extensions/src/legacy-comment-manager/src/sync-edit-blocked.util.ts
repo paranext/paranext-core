@@ -19,7 +19,8 @@ export const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
  * this extension's comment mutations is rejected by the write-gate. Contributed in this extension's
  * `contributions/localizedStrings.json`.
  */
-export const SYNC_EDIT_BLOCKED_MESSAGE_KEY = '%webView_legacyCommentManager_error_syncEditBlocked%';
+export const SYNC_EDIT_BLOCKED_MESSAGE_KEY =
+  '%webView_legacyCommentManager_error_syncEditBlocked_2%';
 
 /**
  * Whether `error` was thrown by the write-gate because an automatic Send/Receive is in progress

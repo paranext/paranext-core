@@ -16,8 +16,8 @@ const COMMENTARIES_TAB_TITLE_KEY = '%webView_resourcePanel_commentaries_title%';
 // "editing paused" notice and the "your change was not saved" error toast. Both must stay defined in
 // every shipped language so a future edit that drops one language fails here.
 const SYNC_BLOCKED_KEYS = [
-  '%webView_legacyCommentManager_syncEditBlocked_notice%',
-  '%webView_legacyCommentManager_error_syncEditBlocked%',
+  '%webView_legacyCommentManager_syncEditBlocked_notice_2%',
+  '%webView_legacyCommentManager_error_syncEditBlocked_2%',
 ];
 
 // The comment-filter strings the panel actually requests, derived from the panel's own key list

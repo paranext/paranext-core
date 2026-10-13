@@ -29,6 +29,24 @@
     },
     "%webView_legacyCommentManager_commentListPanel_title%": {
       "fallbackKey": "%Paratext.ProjectComments.CommentListForm.CommentListForm_11CommentListForm_ShortTitle%"
+    },
+    "%webView_legacyCommentManager_error_syncEditBlocked_2%": {
+      "fallbackKey": "%webView_legacyCommentManager_error_syncEditBlocked%"
+    },
+    "%webView_legacyCommentManager_error_syncEditBlocked%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_legacyCommentManager_error_syncEditBlocked_2%."
+      }
+    },
+    "%webView_legacyCommentManager_syncEditBlocked_notice_2%": {
+      "fallbackKey": "%webView_legacyCommentManager_syncEditBlocked_notice%"
+    },
+    "%webView_legacyCommentManager_syncEditBlocked_notice%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_legacyCommentManager_syncEditBlocked_notice_2%."
+      }
     }
   },
   "localizedStrings": {
@@ -95,7 +113,9 @@
       "%webView_legacyCommentManager_commentList_title%": "Comments",
       "%webView_legacyCommentManager_commentListPanel_title%": "Comments",
       "%webView_legacyCommentManager_error_syncEditBlocked%": "Editing is paused while an automatic Send/Receive is in progress. Your change was not saved.",
+      "%webView_legacyCommentManager_error_syncEditBlocked_2%": "Editing is paused while an automatic sync is in progress. Your change was not saved.",
       "%webView_legacyCommentManager_syncEditBlocked_notice%": "Editing paused — Send/Receive in progress",
+      "%webView_legacyCommentManager_syncEditBlocked_notice_2%": "Editing paused — sync in progress",
       "%webView_legacyCommentManager_openComments%": "Open Comments"
     },
     "es": {
@@ -161,7 +181,9 @@
       "%webView_legacyCommentManager_commentList_title%": "Comentarios",
       "%webView_legacyCommentManager_commentListPanel_title%": "Comentarios de proyecto",
       "%webView_legacyCommentManager_error_syncEditBlocked%": "La edición está pausada mientras se realiza un Enviar/Recibir automático. Su cambio no se guardó.",
+      "%webView_legacyCommentManager_error_syncEditBlocked_2%": "La edición está pausada mientras se realiza una sincronización automática. Su cambio no se guardó.",
       "%webView_legacyCommentManager_syncEditBlocked_notice%": "Edición pausada — Enviar/Recibir en curso",
+      "%webView_legacyCommentManager_syncEditBlocked_notice_2%": "Edición pausada — sincronización en curso",
       "%webView_legacyCommentManager_openComments%": "Abrir Comentarios"
     }
   }
