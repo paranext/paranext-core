@@ -57,9 +57,12 @@ repo's half for the facts each side holds alone.
 
 ## 3. Marker palette key semantics
 
-`lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts` is the single key
-table for BOTH the scripture editor web view and the footnote-editor popover. The per-consumer
-copies drifted once already; there is one table now.
+`lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts` is the single
+forwarding table for all three consumers: the scripture editor web view, the footnote editor
+component (any host that runs it in editable marker mode), and the footnotes pane's inline row
+editor (Standard view — see `resolveNoteEditingSurface` in
+`extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`). The
+per-consumer copies drifted once already; there is one table now.
 
 **All three session kinds obey the same rules.** Two palettes that look alike must not behave
 differently — a user should not have to know which one is open to predict what a key does. Paratext
@@ -242,7 +245,7 @@ Lexical's blur processing can NULL the editor-state selection; `focus()` then fa
 selecting the document END. So dismissals restore the caret from the focus-out capture exactly as
 commits do, before focusing. It is a no-op when the selection survived.
 
-## 4. The footnote editor popover
+## 4. The footnote editor
 
 `lib/platform-bible-react/src/components/advanced/footnote-editor/`.
 
@@ -259,7 +262,9 @@ commits do, before focusing. It is a no-op when the selection survived.
   passes `isNoteShellEditable: false`, which renders `\f + ` in Lexical's `token` mode — necessary,
   but on its own that still lets a caret land among those characters, where a keystroke replaces the
   whole node: a lost caller, or a destroyed note. The editor's `NoteShellCaretGuardPlugin` is what
-  keeps the caret out; the `scripture-editors` invariants carry the full rule. A `\cat` category run
+  keeps the caret out, and it narrows a selection that reaches into the shell (a double-click on
+  the caller, select-all) to the note's content, so typing over it cannot remove the shell either;
+  the `scripture-editors` invariants carry the full rule. A `\cat` category run
   typed just after the caller belongs to the note's CONTENT, which is where the guard puts the caret.
 - **The caller is ONE choice, applied in one call.** The applied caller is a function of both the
   type and the custom character (a type of `custom` means nothing without one), and the dropdown's
@@ -291,6 +296,25 @@ commits do, before focusing. It is a no-op when the selection survived.
   onto the note as an attribute, so anything rendering a footnote from `content` alone drops it
   silently. `footnote-item.component.tsx` reads the field and renders the run after the caller, in
   the file's own order.
+- **A click on a pane row lands the row editor's caret on the same character — markers included.**
+  `getCaretPositionFromClick` and `EditorRef.selectNoteTextOffset` walk the same sequence: content
+  text counted as an offset, and a run's marker glyphs (`\ft`, `\ft*`, `\+nd`, unmatched markers,
+  and `\cat`/`\cat*` in the category field) addressed by their order among the glyphs at that
+  offset. Both skip the note's own marker, caller and closing marker, every NBSP separator, and
+  attribute text. A change to what `FootnoteItem` renders as a `.marker` (or to what the editor
+  renders as a glyph) has to change the other side too, or clicks land off by the difference.
+- **In Standard view, the same component runs `inline` inside the footnotes pane — there is no
+  popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply unchanged. Its
+  live-apply re-keys the note in the parent editor, so the host must re-sync its session key from
+  `onUsjChange`'s `insertedNodeKey`, and must not hand the mounted editor a new `noteOps` identity
+  for its own live-apply — that reloads the editor mid-typing. An unclosed note (the one kind the text
+  shows the content of) is edited in place in the text as well, as PT9 does, and the row editor is
+  not opened on one typed or pasted there; see `adr-footnote-unclosed-note-edited-in-place`.
+- **The caller and note-type changes rebuild the note from `getNoteOps`, which reads the live tree
+  unsettled.** Both must settle pending marker edits (`commitPendingMarkerEdits`, skipped while a
+  marker-palette session is open) before reading — the same rule `closeAndSave` and
+  `flushPendingEdits` follow, for the same reason: a mid-rename marker still under the caret would
+  otherwise be read and saved as its stale pre-rename literal.
 
 ---
 

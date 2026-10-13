@@ -15,9 +15,9 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
 
 // NOTE: `height: 100%` / `overflow-y: auto` below are currently inert. Wrapper divs between the
 // web view's sized flex column and this element (EditorKeyboardShortcuts, the paragraph-marker
-// tooltip overlay) leave it auto-height, so it grows to its content and the web view's outer
-// `tw:overflow-auto` wrapper is what actually scrolls. Scroll code must not assume this element
-// scrolls — editor-dom.util.ts discovers the scroll container dynamically (findScrollContainer).
+// tooltip overlay) leave it auto-height, so it grows to its content and the Scripture text's panel
+// in `FootnotesLayout` is what actually scrolls. Scroll code must not assume this element scrolls —
+// editor-dom.util.ts discovers the scroll container dynamically (findScrollContainer).
 .editor-container {
   height: 100%;
   max-width: none;
@@ -74,9 +74,13 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
   outline-offset: 2px;
   --tw-ring-offset-width: 2px;
   --tw-ring-color: var(--ring);
-  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width)
+  // The empty fallback in `var(--tw-ring-inset,)` is load-bearing: Tailwind 4 registers
+  // `--tw-ring-inset` with no initial value, so a bare `var()` of it is invalid, both shadows
+  // fall back to transparent, and no focus ring renders at all. Tailwind's own ring utilities
+  // use the same empty fallback.
+  --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width)
     var(--tw-ring-offset-color);
-  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width))
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width))
     var(--tw-ring-color);
   --tw-ring-offset-color: var(--background);
   box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);

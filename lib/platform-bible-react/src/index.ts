@@ -109,12 +109,16 @@ export type { VersionHistoryType } from './components/advanced/extension-marketp
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
 export { default as Filter } from './components/advanced/filter.component';
 export type {
+  FootnoteCaretPosition,
   FootnoteItemProps,
   FootnoteLayout,
   FootnoteListProps,
 } from './components/advanced/footnotes/footnotes.types';
+export { getCaretPositionFromClick } from './components/advanced/footnotes/footnote-caret.utils';
 export {
   default as FootnoteEditor,
+  INLINE_APPLY_DEBOUNCE_MS,
+  type FootnoteEditorHandle,
   type FootnoteEditorProps,
   type FootnoteEditorMarkerPalette,
   markerMenuItemToPaletteItem,
@@ -126,6 +130,7 @@ export {
   type FootnoteEditorLocalizedStrings,
   type FootnoteCallerType,
 } from './components/advanced/footnote-editor/footnote-editor.types';
+export { isUnclosedNoteOp } from './components/advanced/footnote-editor/footnote-editor.utils';
 export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';
 export { default as FootnoteList } from './components/advanced/footnotes/footnote-list.component';
 export {
