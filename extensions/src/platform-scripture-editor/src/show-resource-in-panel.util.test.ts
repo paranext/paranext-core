@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getUserList: vi.fn(),
   setUserList: vi.fn(),
   warn: vi.fn(),
+  error: vi.fn(),
   notify: vi.fn(async () => 'notification-1'),
 }));
 vi.mock('@papi/backend', () => ({
@@ -25,7 +26,7 @@ vi.mock('@papi/backend', () => ({
     notifications: { send: mocks.notify },
     localization: { getLocalizedString: vi.fn(async () => "That tab couldn't be opened.") },
   },
-  logger: { warn: mocks.warn, debug: vi.fn(), info: vi.fn(), error: vi.fn() },
+  logger: { warn: mocks.warn, debug: vi.fn(), info: vi.fn(), error: mocks.error },
 }));
 
 // vi.mock must appear before the imports it mocks so Vitest can hoist it; eslint's import/first
@@ -555,6 +556,105 @@ describe('showResourceInReferencePanel', () => {
 
       await expect(show).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
       expect(mocks.notify).not.toHaveBeenCalled();
+    });
+
+    it('lets a retry run without waiting for the show that ran out of time', async () => {
+      // The user is told to try again; the retry must not be held behind the stuck show.
+      const first = showResourceInReferencePanel('byz-project');
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
+      await expect(first).resolves.toEqual(NOT_SHOWN);
+
+      const catalogAnswer = mocks.sendCommand.getMockImplementation();
+      mocks.sendCommand.mockImplementation(async (command: string, ...args: unknown[]) =>
+        command === 'platformGetResources.refreshResourceFlags'
+          ? undefined
+          : catalogAnswer?.(command, ...args),
+      );
+      const retry = showResourceInReferencePanel('byz-project');
+      await vi.advanceTimersByTimeAsync(0);
+
+      // The first show is still held, and the retry has shown the resource regardless.
+      expect(held.length).toBeGreaterThan(0);
+      await expect(retry).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
+      expect(mocks.notify).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips a show whose time ran out while it waited its turn', async () => {
+      mocks.setUserList.mockImplementation(() => holdUntilReleased(true));
+      const first = showResourceInReferencePanel('byz-project');
+      await vi.advanceTimersByTimeAsync(0);
+      held.splice(0).forEach((release) => release());
+      await vi.advanceTimersByTimeAsync(0);
+      // The first show is saving, so the second waits behind it until its own time runs out.
+      const second = showResourceInReferencePanel('byz-project');
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
+      await expect(second).resolves.toEqual(NOT_SHOWN);
+
+      await releaseHeld();
+      await expect(first).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
+      expect(mocks.reloadWebView).toHaveBeenCalledTimes(1);
+      expect(mocks.notify).toHaveBeenCalledTimes(1);
+      // Not even started: only the first show looked for the tabs.
+      expect(mocks.getAllOpenWebViewDefinitions).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not warn later about a show that already ended', async () => {
+      mocks.getAllOpenWebViewDefinitions.mockResolvedValue([
+        { id: 'bible-texts-tab', webViewType: BIBLE_TEXTS, projectId: undefined },
+      ]);
+      await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(OPEN_ELSEWHERE);
+
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS * 2);
+
+      expect(mocks.notify).not.toHaveBeenCalled();
+    });
+
+    it('warns once, not again at the deadline, about a show that already failed', async () => {
+      mocks.getAllOpenWebViewDefinitions.mockRejectedValue(new Error('window unreachable'));
+      await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(NOT_SHOWN);
+
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS * 2);
+
+      expect(mocks.notify).toHaveBeenCalledTimes(1);
+    });
+
+    it('stays quiet when a show it gave up on fails later', async () => {
+      // Released after the deadline, the kind can't be told: the show fails, but the user has been
+      // told already.
+      mocks.sendCommand.mockImplementation(async (command: string) => {
+        if (command === 'platformGetResources.refreshResourceFlags')
+          return holdUntilReleased(undefined);
+        if (command === 'platformGetResources.getCachedResources')
+          return { status: 'available', resources: [] };
+        throw new Error('local list unavailable');
+      });
+      const show = showResourceInReferencePanel('local-1');
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
+      await expect(show).resolves.toEqual(NOT_SHOWN);
+
+      await releaseHeld();
+
+      expect(mocks.notify).toHaveBeenCalledTimes(1);
+      expect(mocks.reloadWebView).not.toHaveBeenCalled();
+    });
+
+    it('logs, without warning again, an unexpected error in a show it gave up on', async () => {
+      mocks.sendCommand.mockImplementation(async (command: string) => {
+        if (command === 'platformGetResources.refreshResourceFlags')
+          return holdUntilReleased(undefined);
+        // Malformed: reading it throws a TypeError, a bug rather than an expected failure.
+        if (command === 'platformGetResources.getCachedResources')
+          return { status: 'available', resources: undefined };
+        return [];
+      });
+      const show = showResourceInReferencePanel('byz-project');
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
+      await expect(show).resolves.toEqual(NOT_SHOWN);
+
+      await releaseHeld();
+
+      expect(mocks.error).toHaveBeenCalledWith(expect.stringContaining('byz-project'));
+      expect(mocks.notify).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -77,11 +77,28 @@ export async function openHomeItem(projectId: string, isPublished: boolean): Pro
     if (isPublished) await openResource(projectId);
     else await openProject(projectId);
   } catch (e) {
-    logger.warn(`Home could not open ${projectId}: ${getErrorMessage(e)}`);
-    try {
-      await papi.notifications.send({ severity: 'warning', message: '%resources_couldNotOpen%' });
-    } catch (notifyError) {
-      logger.warn(`Home could not say ${projectId} did not open: ${getErrorMessage(notifyError)}`);
-    }
+    await reportCouldNotOpen('Home', projectId, e);
+  }
+}
+
+/**
+ * Logs that an item a user asked to open did not open, and tells them so.
+ *
+ * @param where Which view the item was opened from, for the log
+ * @param projectId The item's project id
+ * @param error Why it did not open
+ */
+export async function reportCouldNotOpen(
+  where: string,
+  projectId: string,
+  error: unknown,
+): Promise<void> {
+  logger.warn(`${where} could not open ${projectId}: ${getErrorMessage(error)}`);
+  try {
+    await papi.notifications.send({ severity: 'warning', message: '%resources_couldNotOpen%' });
+  } catch (notifyError) {
+    logger.warn(
+      `${where} could not say ${projectId} did not open: ${getErrorMessage(notifyError)}`,
+    );
   }
 }

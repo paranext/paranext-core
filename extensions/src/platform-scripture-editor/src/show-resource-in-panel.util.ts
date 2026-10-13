@@ -190,13 +190,20 @@ export const SHOW_DEADLINE_MS = 20_000;
 
 /**
  * One show's progress against its deadline. Once `commit` succeeds, the show will save and change
- * the tab; once the deadline has passed first, it never will.
+ * the tab; once the deadline has passed first, it never will. Whichever of the show and the
+ * deadline settles it first is the one that tells the user how it ended, so they are told once.
  */
 type ShowProgress = {
   /** Whether the deadline passed, and the user was told, before the show committed */
   isAbandoned: () => boolean;
   /** Claims the show for saving and showing, unless it has been abandoned. @returns Whether it may */
   commit: () => boolean;
+  /**
+   * Marks the show as ended, so the deadline no longer acts on it.
+   *
+   * @returns Whether the show may still tell the user how it ended — `false` once it was abandoned
+   */
+  settle: () => boolean;
 };
 
 /** A show that failed, or was abandoned, after the user was told so. */
@@ -211,7 +218,9 @@ class ShowFailedError extends Error {}
  */
 async function failToShow(progress: ShowProgress, message: string): Promise<never> {
   logger.error(message);
-  if (!progress.isAbandoned()) await warnTabCouldNotOpen();
+  // Settled before the warning is sent, or the deadline could pass while it is in flight and warn
+  // again.
+  if (progress.settle()) await warnTabCouldNotOpen();
   throw new ShowFailedError(message);
 }
 
@@ -329,7 +338,12 @@ async function showResourceNow(
   return shownWebViewId;
 }
 
-/** The show in progress, which the next one waits for. */
+/**
+ * When the show in progress stops holding up the next one: when it ends, or when it is abandoned.
+ * An abandoned show may go on reading, but never saves or changes a tab, so the next one need not
+ * wait for it — and a retry the user was just invited to make is not held behind the very show that
+ * ran out of time.
+ */
 let previousShow: Promise<unknown> = Promise.resolve();
 
 const NOT_SHOWN: ShowResourceInReferencePanelResult = { status: 'notShown' };
@@ -348,7 +362,7 @@ const NOT_SHOWN: ShowResourceInReferencePanelResult = { status: 'notShown' };
  * Shows run one at a time: two at once would race over the same personal list, and the later one
  * the user asked for could lose. Each has {@link SHOW_DEADLINE_MS} from the request, time spent
  * waiting behind another included, to get as far as saving; past it, the user is told the tab could
- * not be opened and the show is dropped.
+ * not be opened, the show is dropped, and the next one may start.
  *
  * @param resourceProjectId The resource's local project id
  * @returns How the show ended; see {@link ShowResourceInReferencePanelResult}. Never rejects.
@@ -356,7 +370,7 @@ const NOT_SHOWN: ShowResourceInReferencePanelResult = { status: 'notShown' };
 export function showResourceInReferencePanel(
   resourceProjectId: string,
 ): Promise<ShowResourceInReferencePanelResult> {
-  let state: 'pending' | 'committed' | 'abandoned' = 'pending';
+  let state: 'pending' | 'committed' | 'settled' | 'abandoned' = 'pending';
   const progress: ShowProgress = {
     isAbandoned: () => state === 'abandoned',
     commit: () => {
@@ -364,28 +378,39 @@ export function showResourceInReferencePanel(
       state = 'committed';
       return true;
     },
+    settle: () => {
+      if (state === 'abandoned') return false;
+      state = 'settled';
+      return true;
+    },
   };
 
   const show = previousShow
-    .then(() => showResourceNow(resourceProjectId, progress))
-    .then(
-      (webViewId): ShowResourceInReferencePanelResult =>
-        webViewId ? { status: 'shown', webViewId } : { status: 'openElsewhere' },
-    )
+    .then(() => {
+      // Its time ran out while it waited: the user has been told, so there is nothing left to do.
+      if (progress.isAbandoned())
+        throw new ShowFailedError(`Gave up showing resource ${resourceProjectId}: out of time`);
+      return showResourceNow(resourceProjectId, progress);
+    })
+    .then((webViewId): ShowResourceInReferencePanelResult => {
+      progress.settle();
+      return webViewId ? { status: 'shown', webViewId } : { status: 'openElsewhere' };
+    })
     .catch(async (e): Promise<ShowResourceInReferencePanelResult> => {
-      // The expected failures have told the user already; this tells them about any other.
-      if (!(e instanceof ShowFailedError) && !progress.isAbandoned()) {
+      // The expected failures have told the user already; this tells them about any other. Logged
+      // even past the deadline, which has told the user only that the show ran out of time.
+      if (!(e instanceof ShowFailedError)) {
         logger.error(`Could not show resource ${resourceProjectId}: ${getErrorMessage(e)}`);
-        await warnTabCouldNotOpen();
+        if (progress.settle()) await warnTabCouldNotOpen();
       }
       return NOT_SHOWN;
     });
-  previousShow = show;
 
   let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<ShowResourceInReferencePanelResult>((resolve) => {
     deadlineTimer = setTimeout(async () => {
-      // A committed show is saving or reloading by now, and answers when it is done.
+      // A committed show is saving or reloading by now, and a settled one has ended; each answers
+      // for itself.
       if (state !== 'pending') return;
       state = 'abandoned';
       logger.warn(`Gave up showing resource ${resourceProjectId}: not ready in time`);
@@ -393,5 +418,8 @@ export function showResourceInReferencePanel(
       resolve(NOT_SHOWN);
     }, SHOW_DEADLINE_MS);
   });
-  return Promise.race([show, deadline]).finally(() => clearTimeout(deadlineTimer));
+  // The deadline only ever resolves for a show it abandoned, so this waits out a committed show.
+  const answered = Promise.race([show, deadline]);
+  previousShow = answered;
+  return answered.finally(() => clearTimeout(deadlineTimer));
 }
