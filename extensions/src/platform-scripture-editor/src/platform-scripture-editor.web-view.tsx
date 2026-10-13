@@ -83,7 +83,6 @@ import {
 } from 'platform-bible-react';
 import {
   captureEditorContentSnapshot,
-  clearPaletteSessionIfCurrent,
   hasEditorChanged,
   type EditorContentSnapshot,
   type MarkerPaletteKeyEvent,
@@ -94,6 +93,7 @@ import {
   routeMarkerPaletteKey,
   useMarkerPaletteCompositionClose,
   useMarkerPaletteFocusOutCapture,
+  useMarkerPaletteSessionWriters,
   type FootnoteEditorMarkerPalette,
 } from 'platform-bible-react/experimental';
 import {
@@ -991,21 +991,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * session: nothing can land in it while the palette holds focus, and making it non-editable
    * instead blurred it, which put the user's keys on the page body and lost the caret.
    */
-  const setPaletteSession = useCallback(
-    (session: MarkerPaletteOpenSession<MarkerMenuItem> | undefined) => {
-      paletteSession.current = session;
-      // A baseline outlives nothing: it describes the editor as THIS session's palette took focus,
-      // so carrying it into the next one would compare against a document two edits old and refuse
-      // a commit the user did choose.
-      paletteBaselineSnapshotRef.current = undefined;
-    },
-    [],
-  );
-  /** Clears {@link paletteSession} only if it still holds the session `token` identifies. */
-  const clearPaletteSession = useCallback((token: number) => {
-    clearPaletteSessionIfCurrent(paletteSession, token);
-    if (!paletteSession.current) paletteBaselineSnapshotRef.current = undefined;
-  }, []);
+  /**
+   * The ONLY writers of {@link paletteSession}, and the only place marker settling is suspended and
+   * resumed. The editor stays fully editable for the life of a session: nothing can land in it
+   * while the palette holds focus, and making it non-editable instead blurred it, which put the
+   * user's keys on the page body and lost the caret.
+   */
+  const { setSession: setPaletteSession, clearSessionIfCurrent: clearPaletteSession } =
+    useMarkerPaletteSessionWriters({
+      sessionRef: paletteSession,
+      editorRef,
+      baselineRef: paletteBaselineSnapshotRef,
+    });
 
   /**
    * Ends the open marker-palette session the way the keydown table's Escape branch does — clear the

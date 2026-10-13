@@ -20,7 +20,6 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import { Copy } from 'lucide-react';
 import {
-  clearPaletteSessionIfCurrent,
   isImeCompositionKeyEvent,
   type MarkerPaletteKeyEvent,
 } from '@/components/advanced/marker-palette-keydown.util';
@@ -36,6 +35,7 @@ import {
 import { routeMarkerPaletteKey } from '@/components/advanced/marker-palette-keys.util';
 import { useMarkerPaletteCompositionClose } from '@/components/advanced/use-marker-palette-composition-close.hook';
 import { useMarkerPaletteFocusOutCapture } from '@/components/advanced/use-marker-palette-focus-out-capture.hook';
+import { useMarkerPaletteSessionWriters } from '@/components/advanced/use-marker-palette-session-writers.hook';
 import { isNoteMarker } from '@/components/advanced/marker-palette-filter.util';
 import {
   useCallback,
@@ -633,6 +633,13 @@ export default function FootnoteEditor({
    * point the caret is readable before Lexical's blur processing nulls it.
    */
   const paletteBaselineSnapshotRef = useRef<EditorContentSnapshot | undefined>(undefined);
+
+  const { setSession: setPaletteSession, clearSessionIfCurrent: clearPaletteSession } =
+    useMarkerPaletteSessionWriters({
+      sessionRef: paletteSession,
+      editorRef,
+      baselineRef: paletteBaselineSnapshotRef,
+    });
 
   /**
    * Restores the caret when the editor's selection has been lost, leaving a live one alone.
@@ -1279,16 +1286,8 @@ export default function FootnoteEditor({
         // stylesheet rather than from the offered items for exactly that reason.
         isNoteMarker: (marker) => isNoteMarker(options.styleInfo, marker),
         sessionCounterRef: paletteSessionCounter,
-        setSession: (session) => {
-          paletteSession.current = session;
-          // A baseline describes the editor as THIS session's palette took focus; carrying one
-          // into the next session would compare against a stale document and refuse a good commit.
-          paletteBaselineSnapshotRef.current = undefined;
-        },
-        clearSessionIfCurrent: (token) => {
-          clearPaletteSessionIfCurrent(paletteSession, token);
-          if (!paletteSession.current) paletteBaselineSnapshotRef.current = undefined;
-        },
+        setSession: setPaletteSession,
+        clearSessionIfCurrent: clearPaletteSession,
         // Through the ref so the palette always runs the CURRENT handler — the callback is
         // captured once, at show time, while the session it drives is replaced on every reopen.
         runSessionKey: (event) => runPaletteSessionKeyRef.current(event),
@@ -1330,7 +1329,13 @@ export default function FootnoteEditor({
         },
       });
     },
-    [markerPalette, restoreSelectionIfLost, options.styleInfo],
+    [
+      markerPalette,
+      restoreSelectionIfLost,
+      options.styleInfo,
+      setPaletteSession,
+      clearPaletteSession,
+    ],
   );
 
   /**

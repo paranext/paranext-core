@@ -206,6 +206,7 @@ function renderFootnoteEditor(
     commitTypedMarker: vi.fn(),
     commitTypedCloser: vi.fn(),
     commitPendingMarkerEdits: vi.fn(),
+    setMarkerSettleSuspended: vi.fn(),
     insertNote: vi.fn(),
     getNoteOps: vi.fn(() => []),
     getOpsAfterNote: vi.fn(() => []),

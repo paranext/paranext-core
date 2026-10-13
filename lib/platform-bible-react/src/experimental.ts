@@ -123,6 +123,10 @@ export {
   type UseMarkerPaletteCompositionCloseOptions,
 } from './components/advanced/use-marker-palette-composition-close.hook';
 export {
+  useMarkerPaletteSessionWriters,
+  type UseMarkerPaletteSessionWritersOptions,
+} from './components/advanced/use-marker-palette-session-writers.hook';
+export {
   useMarkerPaletteFocusOutCapture,
   type UseMarkerPaletteFocusOutCaptureOptions,
 } from './components/advanced/use-marker-palette-focus-out-capture.hook';
