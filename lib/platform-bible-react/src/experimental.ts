@@ -81,7 +81,8 @@ export { Z_INDEX_TOOLTIP } from './components/z-index';
 export { ALL_BOOK_IDS } from './components/shared/book.utils';
 export { readDirection, persistDirection, type Direction } from './utils/dir-helper.util';
 // The standard-view marker-palette machinery: the shared keydown forwarding table, the shared
-// open-session orchestration, the shared input lock, and the shared filter/ranking — one API family, kept together.
+// open-session orchestration, the shared editor-side key routing, and the shared filter/ranking —
+// one API family, kept together.
 export {
   clearPaletteSessionIfCurrent,
   getMarkerPaletteClaimedKeys,

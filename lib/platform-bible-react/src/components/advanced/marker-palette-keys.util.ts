@@ -49,8 +49,13 @@ export interface RouteMarkerPaletteKeyOptions<TItem extends MarkerMenuItem> {
    * Opens a fresh palette at the current caret, for the `\` commit's second half. The consumer
    * performs it through its own open path so the reopened session gets the same ranking, search bar
    * and zero-match rules as any other.
+   *
+   * Returns false when it could not open one — no marker context at the new caret, or nothing
+   * offered there. The old palette is normally retired by the replacement REPLACING it, so a
+   * refusal leaves it mounted and holding focus over a session the table has already ended; this
+   * dismisses it instead, rather than spending the user's next keystroke on the orphan.
    */
-  reopenAtCaret: () => void;
+  reopenAtCaret: () => boolean;
   /**
    * The consumer's change-guard baseline, cleared here once no session remains. A baseline
    * describes the editor as THIS session's palette took focus; carrying one into the next session
@@ -90,7 +95,7 @@ export function routeMarkerPaletteKey<TItem extends MarkerMenuItem>(
       // explicit dismiss to sequence against the commit.
       restoreCaret();
       editorRef.current?.commitTypedMarker(typed, { trailingSpace: false });
-      reopenAtCaret();
+      if (!reopenAtCaret()) palette.dismiss();
     },
     commitTypedCloser: (typed) => {
       restoreCaret();

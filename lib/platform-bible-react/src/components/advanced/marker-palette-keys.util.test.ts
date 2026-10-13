@@ -34,7 +34,7 @@ function setUp(sessionOverrides: Partial<MarkerPaletteOpenSession<MarkerMenuItem
   const editorRef = { current: editor } as unknown as RefObject<EditorRef | null>;
   const palette = { update: vi.fn(), commit: vi.fn(), dismiss: vi.fn() };
   const restoreCaret = vi.fn();
-  const reopenAtCaret = vi.fn();
+  const reopenAtCaret = vi.fn(() => true);
   const baselineRef: MutableRefObject<EditorContentSnapshot | undefined> = {
     // Only its presence matters here — this module clears the baseline, never reads inside it
     // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -83,6 +83,7 @@ describe('routeMarkerPaletteKey', () => {
     const { options, sessionRef, reopenAtCaret, editor } = setUp();
     reopenAtCaret.mockImplementation(() => {
       sessionRef.current = { kind: 'backslash', token: 2, filter: '', items: [] };
+      return true;
     });
 
     expect(routeMarkerPaletteKey(makeEvent('\\'), options)).toBe('routed');
@@ -105,10 +106,23 @@ describe('routeMarkerPaletteKey', () => {
     const { options, sessionRef, baselineRef, reopenAtCaret } = setUp();
     reopenAtCaret.mockImplementation(() => {
       sessionRef.current = { kind: 'backslash', token: 2, filter: '', items: [] };
+      return true;
     });
 
     routeMarkerPaletteKey(makeEvent('\\'), options);
 
     expect(baselineRef.current).toBeDefined();
+  });
+
+  it('dismisses the old palette when the `\\` commit cannot open a replacement', () => {
+    // Without this the old palette is never retired — the replacement retires it by replacing it —
+    // so it stays mounted holding focus over a session the table has already ended, and the user's
+    // next keystroke is spent on the orphan. Unlikely (the `\\` list is essentially never empty
+    // right after a commit) but one line to rule out.
+    const { options, palette, reopenAtCaret } = setUp();
+    reopenAtCaret.mockReturnValue(false);
+
+    expect(routeMarkerPaletteKey(makeEvent('\\'), options)).toBe('routed');
+    expect(palette.dismiss).toHaveBeenCalledOnce();
   });
 });

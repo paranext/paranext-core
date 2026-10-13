@@ -20,6 +20,7 @@ import {
   PaletteSearchField,
 } from '@renderer/services/overlays/overlay.service-model';
 import {
+  isHostDrivenPalette,
   filterPaletteItems,
   getPaletteFilterMode,
 } from '@renderer/services/overlays/overlay-palette-filter.util';
@@ -378,15 +379,19 @@ export function OverlayCommandPalettePresentational({
   // The REQUESTER owns the query and the highlight in both of these modes, so both render the
   // plain-element list over a host-supplied `filterText` rather than cmdk's input-driven one.
   // They differ only in who holds focus: a passive palette leaves it in the requesting WebView,
-  // while list mode takes it here and forwards every key back.
-  const isHostDriven = passive || isListFocused;
+  // while list mode takes it here and forwards every key back. Derived through the shared helper
+  // rather than re-stated here, which is the whole reason that helper exists: this component's
+  // display and the host's commit resolution must not be able to drift apart.
+  const isHostDriven = isHostDrivenPalette({ passive, focusTarget });
 
   // Fuzzy matching runs INSIDE cmdk, which owns filtering and highlight for the palettes where
   // that is safe: an ordinary focused palette, whose commits go through cmdk's own selection
   // (click/Enter/Space on the highlighted DOM item), so nothing host-side ever needs to agree
-  // with the rendered list. Passive and key-forwarded palettes resolve commits and forwarded
-  // keys from the HOST's filterPaletteItems list, so they always use containment — cmdk's
-  // scorer is not reimplemented host-side, and the two lists must not disagree.
+  // with the rendered list. Passive, list-focused and key-forwarded palettes resolve commits and
+  // forwarded keys from the HOST's filterPaletteItems list, so matching moves host-side — cmdk's
+  // scorer is not reimplemented there, and the two lists must not disagree. Which host-side rule
+  // they get differs: passive and list-focused palettes match by label PREFIX (PT9's marker
+  // dropdown), a forwarding palette that is not list-focused by containment.
   const cmdkFuzzyEnabled = !isHostDriven && !keyForwarding && !disableFuzzyMatching;
   // React's useRef requires null as the initial value for DOM refs
   // eslint-disable-next-line no-null/no-null
@@ -576,13 +581,13 @@ export function OverlayCommandPalettePresentational({
   // ONE search input for both modes: the palette must look and read the same however it was
   // opened, so the user always sees the query they are typing. The modes differ only in who owns
   // that query. Active mode: the input is focused and edited directly, and mirrors its value out.
-  // Passive mode: focus never leaves the requesting WebView — the session owner there claims the
-  // keystrokes and feeds them back through `filterText` — so the input is a read-only display of
-  // that query and is kept out of the tab order. Making it editable would break the palette: a
-  // focused input here takes the keystrokes out of the requesting WebView's document, and both
-  // session owners (the web view and the footnote editor) route keys into the session only from
-  // their own editor or page — the input lock blurs the editor while a session is open, so its keys
-  // land on the page — so every ratified Space/Enter/Escape semantic would stop running.
+  // Host-driven modes (passive, and list-focused): the session owner owns the query and feeds it
+  // back through `filterText`, so the input is a read-only display of it and is kept out of the tab
+  // order. They differ in where focus sits — passive leaves it in the requesting WebView, while
+  // list mode takes focus HERE, onto the list, and forwards every key back. Making the input
+  // editable would break both: a focused text box takes the keystrokes, so every ratified
+  // Space/Enter/Escape semantic would stop running — and it is also what keeps composed input out,
+  // since an IME or a dead key composes in any focused input whatever a handler cancels.
   const searchInput = (
     <CommandInput
       ref={isHostDriven ? undefined : inputRef}

@@ -288,9 +288,12 @@ export function resolveFilterCharacter(event: MarkerPaletteKeyEvent): string | u
 /**
  * Control keys the table has a branch for, in every session kind. HAND-KEPT in step with
  * {@link handleMarkerPaletteSessionKeyDown} below: adding a branch below requires adding its key
- * here, or a focused palette consumes the key itself instead of forwarding it back to the session.
- * The reverse direction — a stale entry left behind after its branch is removed — is pinned by the
- * claimed-keys sweep in this module's test suite.
+ * here, or a forwarding palette that is not list-focused consumes the key itself instead of
+ * forwarding it back to the session. The reverse direction — a stale entry left behind after its
+ * branch is removed — is pinned by the claimed-keys sweep in this module's test suite.
+ *
+ * No marker palette depends on this today: every one of them focuses its LIST, which forwards every
+ * key regardless. See {@link getMarkerPaletteClaimedKeys} for why it is kept.
  */
 const CONTROL_KEYS: readonly string[] = [
   ' ',
@@ -332,8 +335,16 @@ const FILTER_CHAR_ALPHABET: readonly string[] = [
  * pins the reverse direction, failing on a listed key the handler no longer acts on. Pure modifiers
  * are excluded: the table only passes them through, and claiming them would break `+` chords.
  *
- * Every kind currently claims the SAME set — the per-kind parameter is deliberate room for the key
- * sets to diverge later, not a difference today.
+ * CURRENTLY INERT, and deliberately kept anyway. A LIST-FOCUSED palette forwards every key and
+ * never reads `keyForwarding.keys`, and every marker palette is list-focused today — so nothing
+ * reads this list at all. It still describes the contract for a forwarding palette that is NOT
+ * list-focused, which `PaletteKeyForwarding` still supports and which this table would drive
+ * unchanged; the declaration stays honest for that case rather than being rebuilt from memory if
+ * one appears. Read this before concluding the hand-kept sync below is load-bearing: it is
+ * insurance, not routing.
+ *
+ * Every kind claims the SAME set. The per-kind parameter this once took is gone; the function now
+ * takes none.
  */
 export function getMarkerPaletteClaimedKeys(): string[] {
   return [...CONTROL_KEYS, ...FILTER_CHAR_ALPHABET.filter((char) => FILTER_CHAR_REGEX.test(char))];

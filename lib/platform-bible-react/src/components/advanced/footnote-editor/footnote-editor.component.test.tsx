@@ -855,7 +855,7 @@ describe('FootnoteEditor marker palette wiring', () => {
 
   describe('editable marker mode with markerPalette, an open session forwarding table', () => {
     /** Opens a passive `\` palette session in the popover and returns the rendered parts. */
-    function openPassiveSession() {
+    function openListFocusedSession() {
       mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
       const markerPalette = makeMarkerPalette(
         vi.fn(() => new Promise<string | undefined>(() => {})),
@@ -884,7 +884,7 @@ describe('FootnoteEditor marker palette wiring', () => {
       // Making it non-editable instead blurred it, which put the user's keys on the page body and
       // lost the caret — the fallout this design removes. Nothing can land in the editor anyway
       // while the palette holds focus.
-      const { editorInput, markerPalette } = openPassiveSession();
+      const { editorInput, markerPalette } = openListFocusedSession();
       const editableBefore = editorInput.getAttribute('contenteditable');
       expect(markerPalette.show).toHaveBeenCalled();
       // Never disabled while the session is open — the lock used to set this to 'false' here.
@@ -902,7 +902,7 @@ describe('FootnoteEditor marker palette wiring', () => {
     it('routes session keys typed in the editor during the window before the palette has focus', () => {
       // The session is created synchronously in the trigger's keydown, while the editor still has
       // focus. Keys typed in those few frames would otherwise land in the note.
-      const { editorInput, markerPalette } = openPassiveSession();
+      const { editorInput, markerPalette } = openListFocusedSession();
 
       editorInput.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }),
@@ -915,7 +915,7 @@ describe('FootnoteEditor marker palette wiring', () => {
       // Keys belong to whatever holds focus. A comment box or any other input in this document
       // keeps its own, and claiming them would feed the palette's filter — or commit a marker —
       // while the user is typing somewhere else entirely.
-      const { markerPalette } = openPassiveSession();
+      const { markerPalette } = openListFocusedSession();
       const otherInput = document.createElement('textarea');
       document.body.appendChild(otherInput);
       otherInput.focus();
@@ -934,7 +934,7 @@ describe('FootnoteEditor marker palette wiring', () => {
       // the palette, not the editor, so there is nothing to block; a paste that does reach the
       // editor (only possible before the palette has focus) is handled by closing the palette
       // rather than by disabling the editor.
-      const { editorInput } = openPassiveSession();
+      const { editorInput } = openListFocusedSession();
       const paste = new Event('paste', { bubbles: true, cancelable: true });
 
       editorInput.dispatchEvent(paste);

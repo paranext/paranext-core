@@ -1225,8 +1225,16 @@ export declare function resolveFilterCharacter(event: MarkerPaletteKeyEvent): st
  * pins the reverse direction, failing on a listed key the handler no longer acts on. Pure modifiers
  * are excluded: the table only passes them through, and claiming them would break `+` chords.
  *
- * Every kind currently claims the SAME set — the per-kind parameter is deliberate room for the key
- * sets to diverge later, not a difference today.
+ * CURRENTLY INERT, and deliberately kept anyway. A LIST-FOCUSED palette forwards every key and
+ * never reads `keyForwarding.keys`, and every marker palette is list-focused today — so nothing
+ * reads this list at all. It still describes the contract for a forwarding palette that is NOT
+ * list-focused, which `PaletteKeyForwarding` still supports and which this table would drive
+ * unchanged; the declaration stays honest for that case rather than being rebuilt from memory if
+ * one appears. Read this before concluding the hand-kept sync below is load-bearing: it is
+ * insurance, not routing.
+ *
+ * Every kind claims the SAME set. The per-kind parameter this once took is gone; the function now
+ * takes none.
  */
 export declare function getMarkerPaletteClaimedKeys(): string[];
 /**
@@ -1327,9 +1335,13 @@ export interface RunMarkerPaletteSessionOptions<TItem extends {
 	 */
 	items: readonly TItem[];
 	/**
-	 * The session's kind (see `MarkerPaletteSessionKind`). `'selection'` is the one FOCUSED palette;
-	 * the others are shown in the overlay's non-focus-stealing (passive) display, and the consumer's
-	 * `show` must display them that way.
+	 * The session's kind (see `MarkerPaletteSessionKind`). It decides how a commit APPLIES — wrap the
+	 * selected text, split the paragraph, or land at the caret — and nothing about focus or display:
+	 * EVERY kind is shown list-focused now, and the consumer's `show` must display them that way.
+	 *
+	 * A consumer that passes `passive: true` instead, as an older version of this doc implied, loses
+	 * key forwarding and brings composed input back: a passive palette leaves focus in the editor,
+	 * where an IME or a dead key composes into the verse.
 	 */
 	kind: MarkerPaletteSessionKind;
 	/**
@@ -1480,8 +1492,13 @@ export interface RouteMarkerPaletteKeyOptions<TItem extends MarkerMenuItem> {
 	 * Opens a fresh palette at the current caret, for the `\` commit's second half. The consumer
 	 * performs it through its own open path so the reopened session gets the same ranking, search bar
 	 * and zero-match rules as any other.
+	 *
+	 * Returns false when it could not open one — no marker context at the new caret, or nothing
+	 * offered there. The old palette is normally retired by the replacement REPLACING it, so a
+	 * refusal leaves it mounted and holding focus over a session the table has already ended; this
+	 * dismisses it instead, rather than spending the user's next keystroke on the orphan.
 	 */
-	reopenAtCaret: () => void;
+	reopenAtCaret: () => boolean;
 	/**
 	 * The consumer's change-guard baseline, cleared here once no session remains. A baseline
 	 * describes the editor as THIS session's palette took focus; carrying one into the next session

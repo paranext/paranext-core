@@ -56,9 +56,13 @@ export interface RunMarkerPaletteSessionOptions<TItem extends { marker: string }
    */
   items: readonly TItem[];
   /**
-   * The session's kind (see `MarkerPaletteSessionKind`). `'selection'` is the one FOCUSED palette;
-   * the others are shown in the overlay's non-focus-stealing (passive) display, and the consumer's
-   * `show` must display them that way.
+   * The session's kind (see `MarkerPaletteSessionKind`). It decides how a commit APPLIES — wrap the
+   * selected text, split the paragraph, or land at the caret — and nothing about focus or display:
+   * EVERY kind is shown list-focused now, and the consumer's `show` must display them that way.
+   *
+   * A consumer that passes `passive: true` instead, as an older version of this doc implied, loses
+   * key forwarding and brings composed input back: a passive palette leaves focus in the editor,
+   * where an IME or a dead key composes into the verse.
    */
   kind: MarkerPaletteSessionKind;
   /**
@@ -195,9 +199,9 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
   show({
     // The session owns these keys wherever focus ends up — without this, a palette that wins the
     // focus race takes the session's keys with it and none of the ratified commit semantics run.
-    // Declared for the passive palette too: it never takes focus, so this is inert there, but one
-    // code path means a palette that unexpectedly receives a key routes it to the session rather
-    // than acting on it.
+    // Inert for a LIST-FOCUSED palette, which every marker palette is: it forwards every key and
+    // never reads this list. Declared anyway so the declaration stays honest for a forwarding
+    // palette that is not list-focused — see `getMarkerPaletteClaimedKeys`.
     keys: getMarkerPaletteClaimedKeys(),
     onKey: (event) => runSessionKey(event),
   })
