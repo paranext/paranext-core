@@ -181,6 +181,17 @@ namespace TestParanextDataProvider
         }
 
         /// <summary>
+        /// Test-only accessor for the delegate a request type was registered with, so a test can
+        /// inspect its signature or bind it to a real <c>JsonRpc</c> instance.
+        /// </summary>
+        public Delegate GetRequestHandler(string requestType) =>
+            _localMethods.TryGetValue(requestType, out var handler)
+                ? handler
+                : throw new InvalidOperationException(
+                    $"No handler registered for request type \"{requestType}\""
+                );
+
+        /// <summary>
         /// Records the handler instead of adding a JSON-RPC local method (the base client's
         /// <c>_jsonRpc</c> does not exist here), and — importantly — reproduces StreamJsonRpc's
         /// duplicate-name rejection.
