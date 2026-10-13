@@ -297,10 +297,9 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     // wrong criterion. getComputedStyle still works under display:none, so discovery stays valid.
     //
     // Resolved ONCE and never re-resolved, which assumes the editor's scrolling ancestor cannot
-    // change. The footnotes reverse-portal does re-parent the editor subtree, so that assumption is
-    // load-bearing rather than trivially true — it holds only because the footnotes
-    // `ResizablePanel` is `overflow: hidden`, so discovery lands on the same outer container from
-    // either parent. A scrollable panel there would need this re-resolved on re-parent.
+    // change. It is the Scripture text's panel in `FootnotesLayout`, which stays the same element
+    // whether or not the footnotes pane is shown (pinned by that component's tests). A layout that
+    // re-parents the editor under a different scroller would need this re-resolved on re-parent.
     scrollContainerRef.current =
       findScrollContainer(positionAnchor, { requireOverflow: false }) ?? positionAnchor;
 
