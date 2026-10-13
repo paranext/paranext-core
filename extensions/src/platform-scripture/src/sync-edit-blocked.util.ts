@@ -3,8 +3,8 @@ import { getErrorMessage } from 'platform-bible-utils';
 
 /**
  * Sentinel that paranext-core's C# write-gate (`SendReceiveWriteLock`) appends to the message of
- * any project write it rejects because an automatic sync is syncing that project. Backend mutations
- * across ManageBooks (create/delete/copy/import), the Inventory setters
+ * any project write it rejects because an automatic sync is running on that project. Backend
+ * mutations across ManageBooks (create/delete/copy/import), the Inventory setters
  * (`SetInventoryItemStatus`/`SetInventoryOptionValues`), and the Checks allow/deny path
  * (`CheckRunner.AllowCheckResult`/`DenyCheckResult`) all reject with a message ending in this
  * sentinel.

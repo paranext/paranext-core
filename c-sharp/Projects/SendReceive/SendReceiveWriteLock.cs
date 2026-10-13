@@ -501,7 +501,7 @@ internal static class SendReceiveWriteLock
                 // "nothing armed on this bracket's behalf, writes flow again, no cleanup owed".
                 Clear(token);
                 throw new TimeoutException(
-                    $"{drainFailure}; the Send/Receive arm was rolled back and the sync must "
+                    $"{drainFailure}; the sync arm was rolled back and the sync must "
                         + "not proceed."
                 );
             }
@@ -509,7 +509,7 @@ internal static class SendReceiveWriteLock
             // Degraded: proceed rather than deadlock the sync. The armed flag keeps rejecting
             // new writes; only the already-stuck write(s) we couldn't drain may still overlap.
             Console.Error.WriteLine(
-                $"[SendReceiveWriteLock] Warning: {drainFailure}; proceeding with Send/Receive "
+                $"[SendReceiveWriteLock] Warning: {drainFailure}; proceeding with the sync "
                     + "anyway (new writes stay rejected while the sync is armed)."
             );
         }
