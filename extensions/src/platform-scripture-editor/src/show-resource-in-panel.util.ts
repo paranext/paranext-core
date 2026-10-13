@@ -206,8 +206,29 @@ type ShowProgress = {
   settle: () => boolean;
 };
 
-/** A show that failed, or was abandoned, after the user was told so. */
-class ShowFailedError extends Error {}
+/** Errors from shows that failed, or were abandoned, after the user was told so. */
+const showFailedErrors = new WeakSet<Error>();
+
+/**
+ * An error for a show that failed, or was abandoned, after the user was told so.
+ *
+ * Not a subclass of `Error`: the extension build compiles `extends Error` to a helper that calls
+ * `Function.toString`, and the extension host deletes `Function`, so the module would throw on
+ * load.
+ *
+ * @param message What went wrong, for the log
+ * @returns The error, recognized by {@link isShowFailedError}
+ */
+function showFailedError(message: string): Error {
+  const error = new Error(message);
+  showFailedErrors.add(error);
+  return error;
+}
+
+/** Whether `e` came from {@link showFailedError}. */
+function isShowFailedError(e: unknown): boolean {
+  return e instanceof Error && showFailedErrors.has(e);
+}
 
 /**
  * Fails a show the user asked for: tells them (unless an abandoned show already has), and throws so
@@ -221,7 +242,7 @@ async function failToShow(progress: ShowProgress, message: string): Promise<neve
   // Settled before the warning is sent, or the deadline could pass while it is in flight and warn
   // again.
   if (progress.settle()) await warnTabCouldNotOpen();
-  throw new ShowFailedError(message);
+  throw showFailedError(message);
 }
 
 /** See {@link showResourceInReferencePanel}. */
@@ -289,7 +310,7 @@ async function showResourceNow(
   // Everything above only reads. Past this point the show saves and changes the tab, which it must
   // not do once its caller has been told it failed.
   if (!progress.commit())
-    throw new ShowFailedError(`Gave up showing resource ${resourceProjectId}: out of time`);
+    throw showFailedError(`Gave up showing resource ${resourceProjectId}: out of time`);
 
   // Not saved when the team's list is unknown, as that could save a copy of the team's own
   // reference, nor when the reference's kind is uncertain (see `isReferenceKindKnown`). The panel
@@ -389,7 +410,7 @@ export function showResourceInReferencePanel(
     .then(() => {
       // Its time ran out while it waited: the user has been told, so there is nothing left to do.
       if (progress.isAbandoned())
-        throw new ShowFailedError(`Gave up showing resource ${resourceProjectId}: out of time`);
+        throw showFailedError(`Gave up showing resource ${resourceProjectId}: out of time`);
       return showResourceNow(resourceProjectId, progress);
     })
     .then((webViewId): ShowResourceInReferencePanelResult => {
@@ -399,7 +420,7 @@ export function showResourceInReferencePanel(
     .catch(async (e): Promise<ShowResourceInReferencePanelResult> => {
       // The expected failures have told the user already; this tells them about any other. Logged
       // even past the deadline, which has told the user only that the show ran out of time.
-      if (!(e instanceof ShowFailedError)) {
+      if (!isShowFailedError(e)) {
         logger.error(`Could not show resource ${resourceProjectId}: ${getErrorMessage(e)}`);
         if (progress.settle()) await warnTabCouldNotOpen();
       }
