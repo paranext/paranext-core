@@ -33,9 +33,9 @@ type Props = {
 
 /**
  * Slim, non-covering banner shown across the top of the Scripture editor pane while an automatic
- * (scheduled) Send/Receive is syncing this project. It states that editing is paused, shows live
- * sync progress, and offers a single-shot Cancel that requests the Send/Receive extension to cancel
- * the running sync (the bottom-right progress toast has its own Cancel too).
+ * (scheduled) sync is running on this project. It states that editing is paused, shows live sync
+ * progress, and offers a single-shot Cancel that requests the Send/Receive extension to cancel the
+ * running sync (the bottom-right progress toast has its own Cancel too).
  *
  * This mounts only while blocking (the editor renders it conditionally), so its progress
  * subscription and single-shot Cancel state reset cleanly for each blocking episode — no explicit
