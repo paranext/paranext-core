@@ -692,32 +692,44 @@ test.describe('scripture editor settled positions', () => {
         )
         .toEqual([{ text: '2', verseNumber: '25' }]);
 
-      // The previous step left the caret at the end of the chapter; scroll back to its top.
-      const lastVerseGlyph = editorInput
-        .locator(`span[data-marker="v"][data-number="${LAST_VERSE_REF.verseNum}"]`)
-        .first();
-      await editorInput.evaluate((root) => {
-        let element: Element | null = root;
-        while (element) {
-          const { overflowY } = getComputedStyle(element);
-          if (
-            (overflowY === 'auto' || overflowY === 'scroll') &&
-            element.scrollHeight > element.clientHeight
-          ) {
-            element.scrollTo({ top: 0, behavior: 'instant' });
-            return;
+      // The step needs the chapter taller than its view, and at a wide window all of John 2 fits:
+      // hold the text's own scroller to a short height for the step, and let it go afterwards.
+      const setTextHeightLimit = (maxHeight: string) =>
+        editorInput.evaluate((root, limit) => {
+          const container = root.closest('.editor-container');
+          if (container instanceof HTMLElement) container.style.maxHeight = limit;
+        }, maxHeight);
+      await setTextHeightLimit('200px');
+      try {
+        // The previous step left the caret at the end of the chapter; scroll back to its top.
+        const lastVerseGlyph = editorInput
+          .locator(`span[data-marker="v"][data-number="${LAST_VERSE_REF.verseNum}"]`)
+          .first();
+        await editorInput.evaluate((root) => {
+          let element: Element | null = root;
+          while (element) {
+            const { overflowY } = getComputedStyle(element);
+            if (
+              (overflowY === 'auto' || overflowY === 'scroll') &&
+              element.scrollHeight > element.clientHeight
+            ) {
+              element.scrollTo({ top: 0, behavior: 'instant' });
+              return;
+            }
+            element = element.parentElement;
           }
-          element = element.parentElement;
-        }
-      });
-      await expect(lastVerseGlyph).not.toBeInViewport({ timeout: 10_000 });
+        });
+        await expect(lastVerseGlyph).not.toBeInViewport({ timeout: 10_000 });
 
-      await sendToEditorController(editorId, 'runAnnotationAction', [
-        CLICKED_ANNOTATION_ID,
-        'clicked',
-      ]);
+        await sendToEditorController(editorId, 'runAnnotationAction', [
+          CLICKED_ANNOTATION_ID,
+          'clicked',
+        ]);
 
-      await expect(lastVerseGlyph).toBeInViewport({ timeout: 15_000 });
+        await expect(lastVerseGlyph).toBeInViewport({ timeout: 15_000 });
+      } finally {
+        await setTextHeightLimit('');
+      }
     });
 
     await test.step("a collapsed selectRange at a verse text's offset 0 reports that text", async () => {
