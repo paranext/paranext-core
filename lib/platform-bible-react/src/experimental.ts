@@ -114,6 +114,14 @@ export {
   routeMarkerPaletteKey,
   type RouteMarkerPaletteKeyOptions,
 } from './components/advanced/marker-palette-keys.util';
+export {
+  type FootnoteEditorMarkerPalette,
+  markerMenuItemToPaletteItem,
+} from './components/advanced/footnote-editor/footnote-editor.component';
+export {
+  useMarkerPaletteCompositionClose,
+  type UseMarkerPaletteCompositionCloseOptions,
+} from './components/advanced/use-marker-palette-composition-close.hook';
 export { isEditorContextMenuOpenFor } from './components/advanced/editor-context-menu.util';
 export {
   default as NavigationHistoryButtons,

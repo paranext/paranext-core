@@ -73,7 +73,7 @@ text.
 
 | Key                                                              | Behaviour                                                                                                                                       |
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `a`–`z`, `A`–`Z`, `0`–`9`, `+`, `-`                              | narrows the filter. Letters and digits come from the PHYSICAL key (§3.1)                                                                         |
+| `a`–`z`, `A`–`Z`, `0`–`9`, `+`, `-`                              | narrows the filter. The TYPED character wins; the physical key is the fallback when it cannot name a marker (§3.1)                               |
 | Backspace                                                        | widens the filter; with nothing typed, CLOSES the palette                                                                                       |
 | ArrowUp / ArrowDown                                              | moves the highlight                                                                                                                             |
 | Enter / Tab, unmodified or with Shift                            | commits the highlighted item; with 0 matches, a claimed no-op and the palette stays open (P9 parity)                                             |
@@ -81,26 +81,24 @@ text.
 | `*`                                                              | commits the typed marker's CLOSING form, no terminating space. Over a selection: replaces it — except with nothing typed, where it closes and leaves the selection intact |
 | `\`                                                              | commits what was typed with no terminating space, then reopens a fresh palette, so `\qt-s\qt-e` is one flow; with nothing typed, ignored. Not a commit key over a selection — the wrap consumes it |
 | Escape                                                           | closes the palette, document untouched                                                                                                          |
-| Ctrl/Cmd/Alt chord (never AltGr)                                 | CLOSES the palette and does its normal job. Chord+Enter is still claimed on the way out, or the list would act on it too                         |
+| Ctrl/Cmd/Alt chord (never AltGr)                                 | CLOSES the palette. The table does not claim it, but with focus in the palette it does not reach the editor either — Ctrl+Z/B do nothing there. Chord+Enter IS claimed on the way out, or the list would act on it |
 | modifier and lock keys (Shift, CapsLock, …)                      | passed through: they are how a marker gets typed                                                                                                |
 | everything else — punctuation, accented Latin, non-Latin scripts, `Dead`, Delete, Left/Right/Home/End/PageUp/PageDown | IGNORED: claimed, so nothing reaches the text, and the palette stays open (P9's `IsMarkerCharacter`) |
 
 `\f` specifically commits like Enter on Space, emergently: `\f ` tokenizes to the full note. An
 unknown marker settles as typed at a caret, and cannot be committed from the list.
 
-### 3.1 Letters and digits come from the physical key
+### 3.1 Letters and digits come from the typed character, with the physical key as fallback
 
 USFM marker names are always basic Latin; the translator's keyboard may not be. So the character the
 layout produced wins whenever it can name a marker, and the PHYSICAL key is the fallback only when
 it cannot: on a Cyrillic or Greek layout the `q` key produces `й` or `;`, and `keyCode` 65–90 turns
 that back into `q`.
 
-Reading `keyCode` first does not work. It is not portable — Chromium takes it from the native
-virtual key, which Windows assigns per layout but macOS and Linux map through a US-layout table, so
-the same French AZERTY `a` reported 65 on Windows and 81 on macOS and the key filtered differently
-per OS. And several layouts put marker characters where `keyCode` says otherwise: AZERTY keeps
-VK_0–VK_9 on the number row while producing `&é"'(-è_çà` unshifted, so its `-` key reports 54 and
-every milestone marker (`qt-s`, `ts-s`) became `qt6`; Czech QWERTZ puts `+` unshifted on Digit1.
+Reading `keyCode` first does not work, because several layouts put marker characters on keys whose
+`keyCode` says otherwise: AZERTY keeps VK_0–VK_9 on the number row while producing `&é"'(-è_çà`
+unshifted, so its `-` key reports 54 and every milestone marker (`qt-s`, `ts-s`) became `qt6`; Czech
+QWERTZ puts `+` unshifted on Digit1, which became `1` and made the `\+w` nesting prefix untypeable.
 
 Digits need no fallback — every layout that reaches a digit produces the digit character, numpad and
 shifted number row included. Packet-key input (Keyman, `keyCode` 231) is covered for free: such a key
@@ -232,10 +230,12 @@ cannot see would break the ordinary commit path, which is worse than not guardin
 is against actual content and the actual caret, never Lexical's dirty-node markers: the root is
 marked dirty on every commit, so those report a change for every palette that applies anything.
 
-It acts twice. The editor's change callback closes the palette at the moment of the change, because
-a palette floating over text it no longer describes is confusing and refusing later just looks like
-nothing happening. The shared spine then refuses the apply as a backstop, which is what covers a
-change arriving between the user's choice and the commit. This is also what covers `paste`, `cut`
+It acts twice in the MAIN editor. That editor's change callback closes the palette at the moment of
+the change, because a palette floating over text it no longer describes is confusing and refusing
+later just looks like nothing happening. The shared spine then refuses the apply as a backstop,
+which is what covers a change arriving between the user's choice and the commit. The footnote
+popover has only the second half today: nothing there closes its palette when the note changes, so
+it refuses at commit time instead of closing at change time. This is also what covers `paste`, `cut`
 and `drop`: they are no longer blocked, so instead the content change they cause closes the palette.
 
 ### 3.4 Every way a session ends restores the caret

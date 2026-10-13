@@ -227,16 +227,11 @@ const FILTER_CHAR_REGEX = /^[a-z0-9+-]$/i;
  *
  * Why the character has to win, rather than reading `keyCode` first:
  *
- * - `keyCode` does not mean the same thing on every platform. Chromium derives it from the native
- *   virtual key, which Windows assigns per layout but macOS and Linux map through a US-layout
- *   table. Reading it first made a French AZERTY `a` filter `a` on Windows and `q` on macOS, so the
- *   same keyboard behaved differently per OS and a French or German translator on a Mac could not
- *   type a marker at all.
  * - Several layouts put marker characters on keys whose `keyCode` says otherwise. AZERTY keeps
  *   VK_0–VK_9 on the number row while producing `&é"'(-è_çà` unshifted, so the `-` key reports
- *   `keyCode` 54 — reading that first turned every milestone marker (`qt-s`, `ts-s`, `zpa-xb`) into
- *   `qt6`. Czech QWERTZ puts `+` unshifted on Digit1, which became `1`, making the `\+w` nesting
- *   prefix untypeable.
+ *   `keyCode` 54 — reading that first makes every milestone marker (`qt-s`, `ts-s`, `zpa-xb`) come
+ *   out as `qt6`. Czech QWERTZ puts `+` unshifted on Digit1, which would read as `1`, making the
+ *   `\+w` nesting prefix untypeable.
  *
  * The fallback covers letters only. Digits need none: every layout that reaches a digit produces
  * the digit character, including the numpad and AZERTY's shifted number row. It also covers packet
@@ -250,8 +245,8 @@ export function resolveFilterCharacter(event: MarkerPaletteKeyEvent): string | u
   // modifier there: `Option+e` begins `é`, `Option+a` types `å`, `Option+c` types `ç`. None of
   // those can name a marker, and — this is the part that bites — the PHYSICAL key underneath is
   // still a plain letter, so both paths below would otherwise turn `Option+e` into a filtered `e`.
-  // Live-reported: `Option+e` then `e` filtered `ee` where it should filter `e`, the dead key
-  // contributing nothing. Off macOS this cannot be reached for a plain Alt chord (the chord branch
+  // Without this, `Option+e` then `e` filters `ee` where it should filter `e` — the dead key must
+  // contribute nothing. Off macOS this cannot be reached for a plain Alt chord (the chord branch
   // closes the palette first) and must NOT apply to AltGr, which composes real marker characters
   // on European layouts.
   if (event.altKey && isMacOs()) return undefined;

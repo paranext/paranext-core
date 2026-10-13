@@ -163,16 +163,12 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
    * selecting the document END — so a commit would land there instead of at the caret the user last
    * saw. Restoring first re-establishes that caret; `focus()` then re-asserts it.
    *
-   * Every way a session ends runs this, for every kind. A dismissal that merely focused left the
-   * caret wherever the blur had put it, so the user's next keystroke went somewhere they did not
-   * choose — the same defect as a mis-landed commit, just quieter. It is a no-op when the selection
-   * is still intact.
-   *
-   * The `\` palette used to be excluded, on the reasoning that it is dismissed mid-typing and the
-   * overlay host's own focus restore would cover it. That held only while that palette was passive
-   * and never took focus. Now every palette takes focus, so the `\` one is the case that needs this
-   * MOST — and the host's restore cannot stand in for it: it refocuses the web view's iframe, not
-   * `.editor-input`, and it cannot rebuild a selection Lexical has nulled.
+   * Every way a session ends runs this, for every kind, including the `\` palette — which needs it
+   * MOST, since it takes focus like the rest and is dismissed mid-typing. The overlay host's own
+   * focus restore cannot stand in: it refocuses the web view's iframe, not `.editor-input`, and it
+   * cannot rebuild a selection Lexical has nulled. A dismissal that merely focused would leave the
+   * caret wherever the blur put it, sending the user's next keystroke somewhere they did not choose
+   * — the same defect as a mis-landed commit, just quieter. A no-op when the selection is intact.
    */
   const restoreEditorSelection = () => {
     restoreSelectionIfLost();

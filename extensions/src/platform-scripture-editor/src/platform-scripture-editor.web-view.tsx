@@ -61,7 +61,6 @@ import {
   type FootnoteCaretPosition,
   FootnoteEditor,
   type FootnoteEditorHandle,
-  type FootnoteEditorMarkerPalette,
   leftEdgeRect,
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
@@ -93,6 +92,8 @@ import {
   runMarkerPaletteSession,
   isNoteMarker,
   routeMarkerPaletteKey,
+  useMarkerPaletteCompositionClose,
+  type FootnoteEditorMarkerPalette,
 } from 'platform-bible-react/experimental';
 import {
   ABORTED,
@@ -2526,6 +2527,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * `dismiss()` right after each, resolving the show promise `undefined` — which
    * openMarkerPalette's `.then` treats as a dismissal, so nothing double-applies.
    */
+  useMarkerPaletteCompositionClose({
+    isSessionOpen: useCallback(() => !!paletteSession.current, []),
+    dismiss: dismissPaletteSessionIfOpen,
+    target: window,
+  });
+
   const runPaletteSessionKey = useCallback(
     (event: MarkerPaletteKeyEvent) => {
       // A read-only editor cannot take a commit: every commit method throws in read-only mode.
@@ -2849,29 +2856,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       }
     };
 
-    // A composition that starts in the EDITOR while a palette is open closes the palette and lets
-    // the composed text land as ordinary typing.
-    //
-    // This is the one gap the design accepts. The palette focuses its list, where no composition
-    // can start — but the session is created synchronously in the trigger's keydown, and for the
-    // ~100ms before the palette actually has focus the editor still does. A composition begun in
-    // that window cannot be forwarded (it is not a sequence of keydowns the table can read) and
-    // cannot be cancelled either: `beforeinput` for `insertCompositionText` is not cancelable, and
-    // `compositionstart` accepts `preventDefault` and composes anyway. The only honest options are
-    // to let it land with the palette gone, or to make the editor non-editable — which is the lock
-    // this design removed, with all its fallout. So: close, and let the user see their character.
-    const handleCompositionStart = () => {
-      if (paletteSession.current) dismissPaletteSessionIfOpen();
-    };
-
     window.addEventListener('keydown', handleStandardViewTriggers, { capture: true });
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('compositionstart', handleCompositionStart, { capture: true });
 
     return () => {
       window.removeEventListener('keydown', handleStandardViewTriggers, { capture: true });
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('compositionstart', handleCompositionStart, { capture: true });
     };
   }, [
     insertCommentAtCurrentSelection,

@@ -366,8 +366,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // drives throughout now that it focuses its list instead of an input, so an Enter-Enter cannot
     // reach the document. Shift+Enter and Shift+Tab commit too: Shift is how an uppercase custom
     // marker is typed, and a soft line break has no USFM representation. A Ctrl/Cmd/Alt chord is
-    // not a commit — it closes the menu and does its normal job (the Enter is still claimed on the
-    // way out, or the menu's own list would act on it). Over a zero-match filter both keys are
+    // not a commit — it closes the menu. The table does not claim it, though with focus in the
+    // palette it does not reach the editor either (Ctrl+Z/B do nothing there). Chord+Enter IS
+    // claimed on the way out, or the menu's own list would act on it. Over a zero-match filter both keys are
     // claimed no-ops and the menu stays open (PT9 parity).
     keys: { macOS: '⏎ / ⇥', windows: 'Enter / Tab', linux: 'Enter / Tab' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
@@ -425,7 +426,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Close the inline markers menu',
     category: 'Editing',
     context: 'Scripture editor web view',
-    // A Ctrl/Cmd/Alt chord closes it too, and then does its normal job — the menu is no longer
+    // A Ctrl/Cmd/Alt chord closes it too; the table leaves the key unclaimed — the menu is no longer
     // relevant to what the user asked for. Two exclusions, both because the modifier is being used
     // to TYPE rather than to command: AltGr on Windows and Linux, and Option on macOS, where
     // `Option+e` begins `é` and `Option+n` begins `ñ`. Ctrl+Option and Cmd+Option are still chords,

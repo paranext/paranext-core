@@ -120,11 +120,11 @@ export {
   INLINE_APPLY_DEBOUNCE_MS,
   type FootnoteEditorHandle,
   type FootnoteEditorProps,
-  type FootnoteEditorMarkerPalette,
-  markerMenuItemToPaletteItem,
 } from './components/advanced/footnote-editor/footnote-editor.component';
 // The marker-palette session/keydown/filter utilities are exported from `./experimental.ts` —
-// they are new, still-moving API surface.
+// they are new, still-moving API surface. `FootnoteEditorMarkerPalette` and
+// `markerMenuItemToPaletteItem` are there for the same reason: they arrived with the Standard View
+// port and are still moving, so they do not belong in this stable entry point.
 export {
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteEditorLocalizedStrings,

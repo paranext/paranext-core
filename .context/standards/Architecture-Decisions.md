@@ -3447,7 +3447,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   requester. All three marker-palette kinds use it; no other PAPI consumer does. The editor stays
   fully editable and keeps its caret for the life of a session, and key routing in both consumers is
   simply "the editor has focus". One key table — Paratext 9's rules — serves every kind; letters and
-  digits are read from `keyCode` so a non-Latin layout still types a Latin marker name.
+  digits come from the TYPED character, falling back to the physical key (`keyCode`) only when that
+  character cannot name a marker, so a non-Latin layout still types a Latin marker name.
 - **Alternatives:**
   - _The `contenteditable="false"` lock._ Stops composed input, but blurs the editor and every
     consumer inherits the fallout above. Rejected once focus in the palette proved workable.

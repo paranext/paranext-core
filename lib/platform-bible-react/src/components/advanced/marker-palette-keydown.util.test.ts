@@ -176,7 +176,7 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     const state = session('backslash', 'w');
     const event = makeEvent('j', { ctrlKey: true, altKey: true });
     expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
-    expect(event.defaultPrevented).toBe(false); // the chord must still do its normal job
+    expect(event.defaultPrevented).toBe(false); // the table does not claim a chord
     expect(state.filter).toBe('w'); // not ingested
     expect(driver.dismiss).toHaveBeenCalledOnce();
     expect(driver.update).not.toHaveBeenCalled();
@@ -1181,13 +1181,12 @@ describe('resolveFilterCharacter — the typed character, with the physical key 
   });
 
   it('keeps a LATIN character the layout produced, whatever keyCode claims', () => {
-    // `keyCode` is not portable: Chromium takes it from the native virtual key, which Windows
-    // assigns per layout but macOS and Linux map through a US-layout table. The same French AZERTY
-    // `a` key therefore reports keyCode 65 on Windows and 81 on macOS. Reading keyCode first made
-    // that key filter `a` on one OS and `q` on the other, so a French or German translator on a Mac
-    // could not type a marker at all. The character the user actually typed is the same on both.
-    expect(resolveFilterCharacter(ev('a', { keyCode: 65 }))).toBe('a'); // AZERTY on Windows
-    expect(resolveFilterCharacter(ev('a', { keyCode: 81 }))).toBe('a'); // the SAME key on macOS
+    // Whatever `keyCode` a layout reports for a key, the Latin character the user actually typed
+    // can name a marker, so it wins. This pins that the typed character survives a `keyCode` that
+    // disagrees with it, in either direction — the two values below are the same AZERTY key as
+    // different engines have been observed to report it.
+    expect(resolveFilterCharacter(ev('a', { keyCode: 65 }))).toBe('a');
+    expect(resolveFilterCharacter(ev('a', { keyCode: 81 }))).toBe('a');
     expect(resolveFilterCharacter(ev('z', { keyCode: 87 }))).toBe('z'); // QWERTZ `z`/`w` swap
   });
 

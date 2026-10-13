@@ -34,6 +34,7 @@ import {
   type MarkerPaletteOpenSession,
 } from '@/components/advanced/marker-palette-session.util';
 import { routeMarkerPaletteKey } from '@/components/advanced/marker-palette-keys.util';
+import { useMarkerPaletteCompositionClose } from '@/components/advanced/use-marker-palette-composition-close.hook';
 import { isNoteMarker } from '@/components/advanced/marker-palette-filter.util';
 import {
   useCallback,
@@ -1350,6 +1351,11 @@ export default function FootnoteEditor({
    * this popover's capture-phase listener (used while the editor holds focus) and the keys the
    * palette forwards back (used while the palette holds focus). Two entry points, one semantics.
    */
+  useMarkerPaletteCompositionClose({
+    isSessionOpen: useCallback(() => !!paletteSession.current, []),
+    dismiss: useCallback(() => markerPalette?.dismiss(), [markerPalette]),
+  });
+
   const runPaletteSessionKey = useCallback(
     (event: MarkerPaletteKeyEvent) => {
       if (!markerPalette) return;
@@ -1541,30 +1547,12 @@ export default function FootnoteEditor({
         editorRef.current?.focus();
       };
 
-      // A composition that starts in THIS editor while a palette is open closes the palette and
-      // lets the composed text land as ordinary typing — the same accepted gap the main editor
-      // has, and it needs its own handler because this popover owns its own session.
-      //
-      // The palette focuses its list, where no composition can start. But the session is created
-      // synchronously in the trigger's keydown, and for the short window before the palette has
-      // focus this editor still does. A composition begun there cannot be forwarded — it is not a
-      // sequence of keydowns the table can read — and cannot be cancelled either: `beforeinput`
-      // for `insertCompositionText` is not cancelable and `compositionstart` composes regardless
-      // of `preventDefault`. So: close, and let the user see their character.
-      const handleCompositionStart = () => {
-        if (paletteSession.current) markerPalette?.dismiss();
-      };
-
       document.addEventListener('keydown', handleKeyDown, { capture: true });
       document.addEventListener('paste', handlePaste, { capture: true });
-      document.addEventListener('compositionstart', handleCompositionStart, { capture: true });
 
       return () => {
         document.removeEventListener('keydown', handleKeyDown, { capture: true });
         document.removeEventListener('paste', handlePaste, { capture: true });
-        document.removeEventListener('compositionstart', handleCompositionStart, {
-          capture: true,
-        });
       };
     }
 

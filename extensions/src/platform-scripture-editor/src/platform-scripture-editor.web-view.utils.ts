@@ -33,12 +33,11 @@ import type {
   MarkerMenuItem as EditorMarkerMenuItem,
   SelectionRange,
 } from '@eten-tech-foundation/platform-editor';
+import { type FootnoteEditorHandle, type MarkerMenuItem } from 'platform-bible-react';
 import {
+  isEditorContextMenuOpenFor,
   markerMenuItemToPaletteItem,
-  type FootnoteEditorHandle,
-  type MarkerMenuItem,
-} from 'platform-bible-react';
-import { isEditorContextMenuOpenFor } from 'platform-bible-react/experimental';
+} from 'platform-bible-react/experimental';
 import type { FlushableDebouncer } from './flushable-debouncer.util';
 import type { NoteSessionUpdateDecision } from './platform-scripture-editor.utils';
 import { EDITOR_OWNERSHIP_WINDOW_MS } from './use-editor-pdp-sync.hook';
