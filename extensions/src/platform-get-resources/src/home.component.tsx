@@ -240,14 +240,15 @@ export type HomeProps = {
   /** Callback function to open the Get Resources dialog. */
   onOpenGetResources?: () => void;
   /**
-   * Callback function to open a project.
+   * Callback function to open a project or resource. While a returned promise is pending, the
+   * item's Open button shows a spinner and further opens of it are ignored. The caller reports its
+   * own failures; a rejection only ends the pending state.
    *
    * @param projectId - The ID of the project to open.
-   * @param isPublished - Whether the project is a published resource (read-only reference). Pass
-   *   this through to the open command so the caller can dispatch to the Resource Viewer for
-   *   published projects and the Scripture Editor for non-published projects.
+   * @param isPublished - Whether the project is a published resource (read-only reference), so the
+   *   caller can decide how to open it.
    */
-  onOpenProject?: (projectId: string, isPublished: boolean) => void;
+  onOpenProject?: (projectId: string, isPublished: boolean) => void | Promise<unknown>;
   /**
    * Callback function to send/receive a project. May be async; if it rejects, the component shows
    * the error message in a destructive alert.
@@ -417,6 +418,27 @@ export function Home({
       await onSendReceiveProject(projectId);
     } catch (e) {
       setActionError(getErrorMessage(e));
+    }
+  };
+
+  // Items whose open is in flight. An open can take a while (in Simple mode a resource waits for the
+  // catalog), so its Open button shows a spinner, and repeat opens are ignored rather than queued.
+  // The ref guards against a double-click whose second click lands before the state re-renders.
+  const [openingProjectIds, setOpeningProjectIds] = useState<string[]>([]);
+  const openingProjectIdsRef = useRef(new Set<string>());
+
+  const handleOpenProject = async (project: MergedProjectInfo) => {
+    const { projectId } = project;
+    if (openingProjectIdsRef.current.has(projectId)) return;
+    openingProjectIdsRef.current.add(projectId);
+    setOpeningProjectIds((ids) => [...ids, projectId]);
+    try {
+      await onOpenProject(projectId, project.isPublished);
+    } catch {
+      // The caller reports its own failures; this only makes sure the item can be opened again.
+    } finally {
+      openingProjectIdsRef.current.delete(projectId);
+      setOpeningProjectIds((ids) => ids.filter((id) => id !== projectId));
     }
   };
 
@@ -789,15 +811,22 @@ export function Home({
   };
 
   const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    const isOpening = openingProjectIds.includes(project.projectId);
     if (isMenuItem)
       return (
-        <DropdownMenuItem onClick={() => onOpenProject(project.projectId, project.isPublished)}>
+        <DropdownMenuItem disabled={isOpening} onClick={() => handleOpenProject(project)}>
           <span>{openText}</span>
         </DropdownMenuItem>
       );
     return (
-      <Button onClick={() => onOpenProject(project.projectId, project.isPublished)}>
-        {openText}
+      <Button
+        disabled={isOpening}
+        aria-busy={isOpening}
+        // The spinner has no text, so the button keeps its name while it shows.
+        aria-label={openText}
+        onClick={() => handleOpenProject(project)}
+      >
+        {isOpening ? <Spinner className="tw:h-5 tw:py-[1px]" /> : openText}
       </Button>
     );
   };
@@ -966,8 +995,7 @@ export function Home({
                             }}
                             onDoubleClick={(e) => {
                               if (!isEventInside(e)) return;
-                              if (project.isLocallyAvailable)
-                                onOpenProject(project.projectId, project.isPublished);
+                              if (project.isLocallyAvailable) handleOpenProject(project);
                               else if (!isSendReceiveInProgress)
                                 handleSendReceiveProject(project.projectId);
                             }}

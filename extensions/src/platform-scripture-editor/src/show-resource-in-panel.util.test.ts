@@ -394,6 +394,16 @@ describe('showResourceInReferencePanel', () => {
     expect(mocks.notify).toHaveBeenCalledTimes(1);
   });
 
+  it('marks every failure as one the user has been told about', async () => {
+    // Home reads the marker so it does not warn a second time. Without it, Home would assume the
+    // command was never reached.
+    mocks.reloadWebView.mockRejectedValueOnce(new Error('reload failed'));
+    await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow('(USER_WARNED)');
+
+    mocks.getAllOpenWebViewDefinitions.mockResolvedValueOnce(undefined);
+    await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow('(USER_WARNED)');
+  });
+
   it('still shows resources after a show has failed', async () => {
     mocks.reloadWebView.mockRejectedValueOnce(new Error('reload failed'));
 

@@ -2,6 +2,13 @@ import papi, { logger } from '@papi/frontend';
 import { getErrorMessage } from 'platform-bible-utils';
 
 /**
+ * Marks a failure of `platformScriptureEditor.showResourceInReferencePanel` that the command has
+ * already told the user about. Must match `USER_WARNED_MARKER` in platform-scripture-editor's
+ * `show-resource-in-panel.util.ts`; extensions cannot share runtime code.
+ */
+const USER_WARNED_REGEX = /\(USER_WARNED\)/;
+
+/**
  * Whether the app is in Simple mode, read when it is needed so a mode switch is never missed. An
  * unreadable setting counts as Power mode, which opens the resource the way Home always has.
  */
@@ -21,10 +28,10 @@ async function isSimpleMode(): Promise<boolean> {
  * reference tab instead — Bible texts or Commentaries — and is added to this user's own list for
  * the project that tab shows unless the team's list has it. It opens in the resource viewer only
  * when no project is open, and so there is nothing in that column to replace, or when it is of a
- * kind neither tab lists. If the tab could not be shown, nothing else is opened in its place; the
- * user has been told, unless the command could not be reached at all.
+ * kind neither tab lists. If the tab could not be shown, nothing else is opened in its place.
  *
  * @param projectId The resource's local project id
+ * @throws If the resource could not be opened and the user has not been told
  */
 async function openResource(projectId: string): Promise<void> {
   if (await isSimpleMode()) {
@@ -35,10 +42,14 @@ async function openResource(projectId: string): Promise<void> {
         projectId,
       );
     } catch (e) {
-      logger.warn(
-        `Home could not show resource ${projectId} in its reference tab: ${getErrorMessage(e)}`,
-      );
-      return;
+      const message = getErrorMessage(e);
+      if (USER_WARNED_REGEX.test(message)) {
+        logger.warn(`Home could not show resource ${projectId} in its reference tab: ${message}`);
+        return;
+      }
+      // Not reached at all (a timeout, or the editor extension not loaded yet). The resource viewer
+      // belongs to the same extension, so it is no fallback.
+      throw new Error(`Could not reach the reference tabs: ${message}`);
     }
     if (shownWebViewId) return;
   }
@@ -70,8 +81,8 @@ async function openProject(projectId: string): Promise<void> {
 }
 
 /**
- * Opens a row of Home's list: a resource (`isPublished`) or a project. Never rejects: Home does not
- * await it, and a failure has already been logged by the time this resolves.
+ * Opens a row of Home's list: a resource (`isPublished`) or a project. Never rejects: a failure has
+ * been logged, and the user told, by the time this resolves.
  *
  * @param projectId The row's project id
  * @param isPublished Whether the row is a resource
@@ -82,5 +93,10 @@ export async function openHomeItem(projectId: string, isPublished: boolean): Pro
     else await openProject(projectId);
   } catch (e) {
     logger.warn(`Home could not open ${projectId}: ${getErrorMessage(e)}`);
+    try {
+      await papi.notifications.send({ severity: 'warning', message: '%resources_couldNotOpen%' });
+    } catch (notifyError) {
+      logger.warn(`Home could not say ${projectId} did not open: ${getErrorMessage(notifyError)}`);
+    }
   }
 }

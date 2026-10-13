@@ -4,12 +4,14 @@ const mocks = vi.hoisted(() => ({
   sendCommand: vi.fn(async (): Promise<unknown> => undefined),
   getSetting: vi.fn(async (): Promise<unknown> => 'power'),
   recordProjectOpened: vi.fn(async () => undefined),
+  notify: vi.fn(async () => 'notification-1'),
 }));
 
 vi.mock('@papi/frontend', () => ({
   default: {
     commands: { sendCommand: mocks.sendCommand },
     settings: { get: mocks.getSetting },
+    notifications: { send: mocks.notify },
     dataProviders: {
       get: vi.fn(async () => ({ recordProjectOpened: mocks.recordProjectOpened })),
     },
@@ -60,19 +62,60 @@ describe('openHomeItem', () => {
     ]);
   });
 
-  it('opens nothing else when the reference tab could not be shown', async () => {
+  it('opens nothing else, and adds no warning, when the reference tab could not be shown', async () => {
     // The command has told the user; replacing their project would be the one thing worse.
     mocks.getSetting.mockImplementation(async () => 'simple');
     mocks.sendCommand.mockImplementationOnce(async () => {
-      throw new Error('That tab could not be opened');
+      throw new Error('(USER_WARNED) Could not reload the tab');
     });
 
     await openHomeItem('resource-1', true);
 
     expect(commandsSent()).toEqual(['platformScriptureEditor.showResourceInReferencePanel']);
+    expect(mocks.notify).not.toHaveBeenCalled();
   });
 
-  it('never rejects, since Home does not await it', async () => {
+  it('warns the user when the reference tab command cannot be reached', async () => {
+    // A timeout, or the editor extension not loaded yet: the command never told the user.
+    mocks.getSetting.mockImplementation(async () => 'simple');
+    mocks.sendCommand.mockImplementationOnce(async () => {
+      throw new Error('Request timed out');
+    });
+
+    await openHomeItem('resource-1', true);
+
+    expect(mocks.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ severity: 'warning', message: '%resources_couldNotOpen%' }),
+    );
+    // The resource viewer is the same extension's, so it could not be reached either.
+    expect(commandsSent()).toEqual(['platformScriptureEditor.showResourceInReferencePanel']);
+  });
+
+  it('warns the user when a project cannot be opened', async () => {
+    mocks.sendCommand.mockImplementation(async () => {
+      throw new Error('editor unavailable');
+    });
+
+    await openHomeItem('project-1', false);
+
+    expect(mocks.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ severity: 'warning', message: '%resources_couldNotOpen%' }),
+    );
+  });
+
+  it('warns the user when the resource viewer cannot be opened', async () => {
+    mocks.sendCommand.mockImplementation(async () => {
+      throw new Error('viewer unavailable');
+    });
+
+    await openHomeItem('resource-1', true);
+
+    expect(mocks.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ severity: 'warning', message: '%resources_couldNotOpen%' }),
+    );
+  });
+
+  it('never rejects: it reports its own failures', async () => {
     mocks.sendCommand.mockImplementation(async () => {
       throw new Error('editor unavailable');
     });

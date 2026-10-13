@@ -1144,3 +1144,69 @@ describe('Home row type and details', () => {
     expect(within(tooltip).queryByText(enString('%resources_activity_tooltip%'))).not.toBeNull();
   });
 });
+
+describe('Home opening an item', () => {
+  const OPEN = enString('%resources_open%');
+  const PROJECT: LocalProjectInfo = {
+    projectId: 'project1',
+    isPublished: false,
+    fullName: 'A Project',
+    name: 'PRJ',
+    language: 'en',
+  };
+
+  function renderWithOpen(onOpenProject: HomeProps['onOpenProject']) {
+    render(
+      <Home
+        headerContent={undefined}
+        localProjectsInfo={[PROJECT]}
+        remoteProjectsState="loaded"
+        onOpenProject={onOpenProject}
+        localizedStringsWithLoadingState={[EN_STRINGS, false]}
+      />,
+    );
+    return screen.getByRole<HTMLButtonElement>('button', { name: OPEN });
+  }
+
+  it('shows an open is in progress, and ignores repeat opens until it finishes', async () => {
+    // An open can wait a while: in Simple mode a resource waits for the catalog first.
+    let finishOpen: () => void = () => {};
+    const onOpenProject = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishOpen = resolve;
+        }),
+    );
+    const openButton = renderWithOpen(onOpenProject);
+
+    fireEvent.click(openButton);
+    await waitFor(() => expect(openButton.disabled).toBe(true));
+    expect(openButton.getAttribute('aria-busy')).toBe('true');
+    expect(openButton.textContent).not.toContain(OPEN);
+
+    fireEvent.click(openButton);
+    fireEvent.doubleClick(screen.getByText('PRJ'));
+    expect(onOpenProject).toHaveBeenCalledTimes(1);
+
+    finishOpen();
+    await waitFor(() => expect(openButton.disabled).toBe(false));
+    expect(openButton.textContent).toContain(OPEN);
+    // Positive control: once it has finished, the item opens again.
+    fireEvent.doubleClick(screen.getByText('PRJ'));
+    expect(onOpenProject).toHaveBeenCalledTimes(2);
+  });
+
+  it('lets the item be opened again after an open fails', async () => {
+    const onOpenProject = vi.fn(async () => {
+      throw new Error('open failed');
+    });
+    const openButton = renderWithOpen(onOpenProject);
+
+    fireEvent.click(openButton);
+
+    await waitFor(() => expect(onOpenProject).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(openButton.disabled).toBe(false));
+    fireEvent.click(openButton);
+    expect(onOpenProject).toHaveBeenCalledTimes(2);
+  });
+});

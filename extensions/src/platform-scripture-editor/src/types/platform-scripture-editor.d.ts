@@ -942,7 +942,8 @@ declare module 'papi-shared-types' {
      * @returns The tab's web view ID, or `undefined` if the resource should be opened some other
      *   way: neither reference tab is showing a project to add it to, or it is of a kind neither
      *   tab lists (source-language, enhanced or XML resources)
-     * @throws If the tab could not be shown. The user has been told.
+     * @throws If the tab could not be shown. The user has been told, and the error message starts
+     *   with `(USER_WARNED)`; any other rejection means the command was not reached.
      */
     'platformScriptureEditor.showResourceInReferencePanel': (
       resourceProjectId: string,

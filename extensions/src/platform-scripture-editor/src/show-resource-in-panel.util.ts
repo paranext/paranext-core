@@ -182,6 +182,13 @@ function getPanelWebViewType(entry: DblResourceData | undefined): string | undef
 class ShowFailedError extends Error {}
 
 /**
+ * Starts the message of every rejection of {@link showResourceInReferencePanel}, all of which the
+ * user has been told about, so a caller can tell them apart from a failure to reach the command.
+ * Must match `USER_WARNED_REGEX` in platform-get-resources' `open-home-item.ts`.
+ */
+export const USER_WARNED_MARKER = '(USER_WARNED)';
+
+/**
  * Fails a show the user asked for: tells them, and rejects so the caller knows not to open the
  * resource some other way.
  *
@@ -313,7 +320,8 @@ let previousShow: Promise<unknown> = Promise.resolve();
  * @returns The panel's web view id, or `undefined` if the resource should be opened some other way:
  *   neither reference panel is showing a project to add it to, or it is of a kind neither panel
  *   lists
- * @throws If the panel could not be shown. The user has been told.
+ * @throws If the panel could not be shown. The user has been told, and the message starts with
+ *   {@link USER_WARNED_MARKER}.
  */
 export function showResourceInReferencePanel(
   resourceProjectId: string,
@@ -326,7 +334,7 @@ export function showResourceInReferencePanel(
         logger.error(`Could not show resource ${resourceProjectId}: ${getErrorMessage(e)}`);
         await warnTabCouldNotOpen();
       }
-      throw e;
+      throw new Error(`${USER_WARNED_MARKER} ${getErrorMessage(e)}`);
     });
   previousShow = show.catch(() => undefined);
   return show;
