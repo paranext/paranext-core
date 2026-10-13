@@ -76,14 +76,13 @@ describe('PanelReadinessView', () => {
     expect(panelState).not.toHaveClass('tw:justify-center');
   });
 
-  // An expanded explanation can be several paragraphs. Placed above the button, it would push the
-  // panel's only action below the fold the moment the user asks for more information.
-  it('places the pick action before the more-info disclosure', () => {
+  // The UX placement settled in PT-4262: the link at the end of the text, above the action button.
+  it('places the more-info disclosure above the pick action', () => {
     renderView('empty', { moreInfo: <p>Explanation.</p> });
 
     const pick = screen.getByRole('button', { name: 'Pick Bible text…' });
     // Document order rather than sibling indices, so a wrapper around either one doesn't matter.
-    expect(pick.compareDocumentPosition(screen.getByText('Explanation.'))).toBe(
+    expect(screen.getByText('Explanation.').compareDocumentPosition(pick)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
   });

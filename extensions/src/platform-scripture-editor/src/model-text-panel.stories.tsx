@@ -279,7 +279,7 @@ export const Active: Story = {
 
 /**
  * No model text configured. Click "Pick a text…" to open the REAL resource picker; choosing the
- * uninstalled ASV installs it and then renders it — fully interactive. "More info", below the
+ * uninstalled ASV installs it and then renders it — fully interactive. "More info", above the
  * button, expands the Base/Model explanation ("Less info" collapses it). The empty-state strings
  * (the prompt, the button, `_moreInfo%`, `_lessInfo%` and the `_baseOrModel_*%` explanation)
  * resolve from this extension's `localizedStrings.json` via `MODEL_TEXT_PANEL_STRING_KEYS`, so it
