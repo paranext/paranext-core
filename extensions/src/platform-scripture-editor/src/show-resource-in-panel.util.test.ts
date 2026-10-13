@@ -186,6 +186,16 @@ describe('showResourceInReferencePanel', () => {
     expect(selectionSeenByProvider).toBe('project:local-1');
   });
 
+  it('tells the user and saves nothing for an id no local project has', async () => {
+    mocks.getMetadataForProject.mockRejectedValue(new Error('no project with id not-a-project'));
+
+    await expect(showResourceInReferencePanel('not-a-project')).rejects.toThrow('not-a-project');
+
+    expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warning' }));
+    expect(mocks.setUserList).not.toHaveBeenCalled();
+    expect(mocks.reloadWebView).not.toHaveBeenCalled();
+  });
+
   /** The catalog as it answers before it has loaded, or in a build with no DBL access at all. */
   function catalogUnavailable(
     reason: 'notReady' | 'notConfigured',

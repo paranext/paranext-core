@@ -123,19 +123,19 @@ async function findCatalogEntry(resourceProjectId: string): Promise<CatalogLooku
  * panels list it among the downloaded resources.
  *
  * @param resourceProjectId The resource's local project id
- * @returns A project reference named after the resource
+ * @returns A project reference named after the resource, or `undefined` if no local project has
+ *   this id — and so there is no resource to show or save
  */
 async function toUncataloguedResourceReference(
   resourceProjectId: string,
-): Promise<ProjectReference> {
-  let name = resourceProjectId;
+): Promise<ProjectReference | undefined> {
   try {
     const metadata = await papi.projectLookup.getMetadataForProject(resourceProjectId);
-    name = metadata.name ?? resourceProjectId;
+    return { type: 'project', name: metadata.name ?? resourceProjectId, id: resourceProjectId };
   } catch (e) {
-    logger.warn(`Could not read the name of resource ${resourceProjectId}: ${getErrorMessage(e)}`);
+    logger.warn(`Could not find resource ${resourceProjectId}: ${getErrorMessage(e)}`);
+    return undefined;
   }
-  return { type: 'project', name, id: resourceProjectId };
 }
 
 /**
@@ -229,9 +229,11 @@ async function showResourceNow(resourceProjectId: string): Promise<string | unde
   if (!panel?.projectId)
     return failToShow(`The ${webViewType} tab is not open on a project to show the resource in`);
 
-  const reference: DblResourceReference | ProjectReference = entry
+  const reference: DblResourceReference | ProjectReference | undefined = entry
     ? toResourceReference(entry)
     : await toUncataloguedResourceReference(resourceProjectId);
+  // The command takes any id, so one that names no local project must not reach the user's list.
+  if (!reference) return failToShow(`No local resource has id ${resourceProjectId}`);
 
   // Already on the team's list, the resource is available to this user too, and is selected under
   // the team's own reference — which may spell its DBL entry UID in other casing than the catalog,
