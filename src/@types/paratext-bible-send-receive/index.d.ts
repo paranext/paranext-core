@@ -8,6 +8,8 @@
 // When the Send/Receive contract changes, re-sync the parts declared here from that file.
 // NOTE: Preserve any types that exist here but not in the upstream file (structural refinements
 // added in core before the upstream adopts them). Do not replace the module block wholesale.
+// `syncProjects`' `suppressProgressNotification` parameter is one such addition: declared here
+// first, ahead of the upstream file.
 // Likewise for declarations that exist in BOTH copies: a re-sync must not downgrade a richer
 // declaration here (extra doc detail or type refinements) to a poorer upstream one — merge the
 // two, and upstream the improvement instead.
@@ -290,7 +292,8 @@ declare module 'paratext-bible-send-receive' {
    * Two core paths are on the invisible side today, both worth knowing before relying on this for a
    * startup status:
    *
-   * - **Simple mode startup sync** (`main/startup-tasks.ts`) calls `syncProjects` directly.
+   * - **Simple mode startup sync** (`main/startup-tasks.ts`) calls `syncProjects` directly, with its
+   *   progress toast suppressed — `onSyncActivityChanged` is its surface.
    * - **The picker's per-project sync** (`syncOnProjectSwitch` in `platform-scripture-editor`) calls
    *   `syncProjects`/`sendReceiveProjects` directly.
    *
@@ -562,13 +565,33 @@ declare module 'papi-shared-types' {
      *       every shared project in the account, trading completeness for performance.
      *   - An empty array is a no-op.
      *
+     * @param suppressProgressNotification When `true`, the dotnet process does not show its
+     *   persistent in-progress toast (the one carrying Cancel) for this sync. Failure, role-change
+     *   and watchdog toasts still show: a caller that passes this may raise no Send/Receive claim,
+     *   so those toasts are its only failure surface. Narrower than `sendReceiveProjects`'
+     *   `suppressNotification`, which also hides them. Defaults to `false`.
+     *
+     *   Pass it only when the caller knows the interface mode is `'simple'`: the toolbar sync
+     *   indicator is then the sync's persistent surface, and the toast as well would give one sync
+     *   two cancellable surfaces. Do not pass it in Power mode (the toast is that mode's only
+     *   persistent surface), when the mode is unknown or its read failed (the indicator may not be
+     *   mounted, and two surfaces beat none), or while something covers the indicator.
+     *
+     *   Callers: `main/startup-tasks.ts` passes `true` (it only calls this in Simple mode);
+     *   `syncOnProjectSwitch` in `platform-scripture-editor` passes `true` only for a known
+     *   `'simple'` mode; the first-run sync-consent step passes `false` because the wizard covers
+     *   the indicator. The Send/Receive extension's `syncOpenProjects` and auto-sync engine do not
+     *   pass it yet.
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10)
      * @throws When another Send/Receive is already in progress — rejects fail-fast rather than
      *   queuing behind it — and for ordinary failure conditions such as an unregistered user or a
      *   lost server connection.
      */
-    'paratextBibleSendReceive.syncProjects': (projectIds?: string[]) => Promise<void>;
+    'paratextBibleSendReceive.syncProjects': (
+      projectIds?: string[],
+      suppressProgressNotification?: boolean,
+    ) => Promise<void>;
     /**
      * Runs the Send/Receive sync scheduled for a session boundary ("On startup/shutdown") for the
      * projects the user scheduled for that boundary. The extension owns the schedule, running the

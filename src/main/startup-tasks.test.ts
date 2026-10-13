@@ -122,12 +122,13 @@ describe('performStartupTasks', () => {
     expect(mockSendCommand).not.toHaveBeenCalled();
   });
 
-  it('fires syncProjects with no project IDs when interface mode is simple', async () => {
+  it('fires syncProjects with no project IDs and the progress toast suppressed when interface mode is simple', async () => {
     stubSettings({ mode: 'simple', firstRunComplete: true });
     await performStartupTasks();
     expect(mockSendCommand).toHaveBeenCalledWith(
       'paratextBibleSendReceive.syncProjects',
       undefined,
+      true,
     );
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
   });
@@ -158,6 +159,7 @@ describe('performStartupTasks', () => {
     expect(mockSendCommand).toHaveBeenCalledWith(
       'paratextBibleSendReceive.syncProjects',
       undefined,
+      true,
     );
   });
 
@@ -184,6 +186,7 @@ describe('performStartupTasks', () => {
     expect(mockSendCommand).toHaveBeenCalledWith(
       'paratextBibleSendReceive.syncProjects',
       undefined,
+      true,
     );
     expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('platform.syncOnStartup'));
   });
@@ -405,6 +408,7 @@ describe('performStartupTasks', () => {
       expect(mockSendCommand).toHaveBeenCalledWith(
         'paratextBibleSendReceive.syncProjects',
         undefined,
+        true,
       );
     });
 
@@ -422,6 +426,7 @@ describe('performStartupTasks', () => {
       expect(mockSendCommand).toHaveBeenCalledWith(
         'paratextBibleSendReceive.syncProjects',
         undefined,
+        true,
       );
       expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('did not become ready'));
     });
@@ -526,6 +531,7 @@ describe('performStartupTasks', () => {
       expect(mockSendCommand).toHaveBeenCalledWith(
         'paratextBibleSendReceive.syncProjects',
         undefined,
+        true,
       );
     });
 
@@ -592,6 +598,7 @@ describe('performStartupTasks', () => {
       expect(mockSendCommand).toHaveBeenCalledWith(
         'paratextBibleSendReceive.syncProjects',
         undefined,
+        true,
       );
     });
 
