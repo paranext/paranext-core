@@ -15,10 +15,12 @@ const KEYS: LocalizeKey[] = [
 
 // Demo/UX mode: resolve immediately without touching the real S/R backend so the wizard
 // is fully click-through-able end-to-end (see first-run-store.ts isDemoMode).
+// Otherwise the progress toast is kept (`false`): this whole sync runs inside the first-run wizard,
+// which covers the toolbar sync indicator, so the toast is its only visible progress.
 const defaultSyncFn = (): Promise<void> =>
   isDemoMode()
     ? Promise.resolve()
-    : sendCommand('paratextBibleSendReceive.syncProjects', undefined);
+    : sendCommand('paratextBibleSendReceive.syncProjects', undefined, false);
 
 /**
  * Sync consent wizard step. Presents "Sync" as the primary action; skip is surfaced by the shell
