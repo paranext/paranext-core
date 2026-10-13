@@ -10,11 +10,11 @@ import {
 const localizedStrings = {
   '%paratextRegistration_description_internetUse_option_Enabled_2%': 'Unrestricted',
   '%paratextRegistration_description_internetUse_option_Enabled_details_2%':
-    'Allows Paratext to use the internet for all services: Registry, Send/Receive, and resource downloads.',
+    'Allows Paratext to use the internet for all services: Registry, sync, and resource downloads.',
   '%paratextRegistration_description_internetUse_option_VpnRequired_2%':
     'Disable access to some Bible translation services',
   '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%':
-    'Disables access to Registry, Send/Receive, and the Digital Bible Library within the Paratext app. Other internet features and other applications are not affected.',
+    'Disables access to Registry, sync, and the Digital Bible Library within the Paratext app. Other internet features and other applications are not affected.',
   '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable ALL internet access',
   '%paratextRegistration_description_internetUse_option_Disabled_details%':
     'Blocks all internet access within the Paratext app. Other applications on your computer are not affected.',
