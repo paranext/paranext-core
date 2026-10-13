@@ -1113,7 +1113,7 @@ describe('getMarkerPaletteClaimedKeys', () => {
   });
 });
 
-describe('resolveFilterCharacter — the physical key, not the character the layout produced', () => {
+describe('resolveFilterCharacter — the typed character, with the physical key as fallback', () => {
   const ev = (key: string, init: KeyboardEventInit & { keyCode?: number } = {}) =>
     makeEvent(key, init);
 
@@ -1188,6 +1188,16 @@ describe('resolveFilterCharacter — the physical key, not the character the lay
     expect(resolveFilterCharacter(ev('Dead', { keyCode: 0 }))).toBeUndefined();
     expect(resolveFilterCharacter(ev('e', { keyCode: 69 }))).toBe('e');
     expect(isImeCompositionKeyEvent(ev('Dead', { keyCode: 229 }))).toBe(true);
+
+    // A dead key does NOT always report keyCode 0, and is not always Option-modified: several
+    // Windows layouts reach one through AltGr, and some carry one on an unmodified position.
+    // Those report the PHYSICAL letter underneath, which the keyCode fallback would otherwise
+    // filter — and the macOS Option rule cannot catch them, since AltGr must keep composing real
+    // marker characters off macOS.
+    expect(
+      resolveFilterCharacter(ev('Dead', { keyCode: 69, ctrlKey: true, altKey: true })),
+    ).toBeUndefined();
+    expect(resolveFilterCharacter(ev('Dead', { keyCode: 69 }))).toBeUndefined();
   });
 
   it('preserves case — from the typed character, in either script', () => {

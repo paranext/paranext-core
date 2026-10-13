@@ -94,6 +94,40 @@ describe('runMarkerPaletteSession — the editor-change guard', () => {
     expect(applyItem).toHaveBeenCalledWith({ marker: 'p' });
   });
 
+  it('consults the guard BEFORE restoring the caret', async () => {
+    // The restore writes a selection back into the editor, so a guard asked afterwards compares
+    // against that write rather than against what the user left. Any normalization in the round
+    // trip would then read as a move and silently refuse a good commit.
+    const order: string[] = [];
+    let resolveShow: (id: string | undefined) => void = () => {};
+    const showPromise = new Promise<string | undefined>((resolve) => {
+      resolveShow = resolve;
+    });
+    const applyItem = vi.fn();
+    runMarkerPaletteSession<Item>({
+      items: [{ marker: 'q1' }],
+      kind: 'enter',
+      sessionCounterRef: { current: 0 },
+      setSession: () => {},
+      clearSessionIfCurrent: () => {},
+      runSessionKey: () => {},
+      show: () => showPromise,
+      restoreSelectionIfLost: () => order.push('restore'),
+      hasEditorChangedSinceFocus: () => {
+        order.push('guard');
+        return false;
+      },
+      focusEditor: () => {},
+      applyItem,
+      onShowError: () => {},
+    });
+    resolveShow('q1');
+    await settle(showPromise);
+
+    expect(order).toEqual(['guard', 'restore']);
+    expect(applyItem).toHaveBeenCalled();
+  });
+
   it('does not consult the guard on a DISMISSAL, which applies nothing anyway', async () => {
     const hasEditorChangedSinceFocus = vi.fn(() => true);
     const { showPromise, applyItem } = setUp({
@@ -105,5 +139,47 @@ describe('runMarkerPaletteSession — the editor-change guard', () => {
 
     expect(applyItem).not.toHaveBeenCalled();
     expect(hasEditorChangedSinceFocus).not.toHaveBeenCalled();
+  });
+});
+
+describe('runMarkerPaletteSession — the Space note-marker exception', () => {
+  /** Captures the session the spine builds, which is what the forwarding table reads. */
+  function sessionFor(kind: 'backslash' | 'enter' | 'selection') {
+    let built: { shouldSpaceCommit?: (filter: string) => boolean } | undefined;
+    const shouldSpaceCommit = (filter: string) => filter === 'f';
+    runMarkerPaletteSession<Item>({
+      items: [{ marker: 'q1' }],
+      kind,
+      shouldSpaceCommit,
+      sessionCounterRef: { current: 0 },
+      setSession: (session) => {
+        built = session;
+      },
+      clearSessionIfCurrent: () => {},
+      runSessionKey: () => {},
+      show: () => new Promise<string | undefined>(() => {}),
+      restoreSelectionIfLost: () => {},
+      focusEditor: () => {},
+      applyItem: () => {},
+      onShowError: () => {},
+    });
+    return built;
+  }
+
+  it('is carried by an ENTER session, not only a backslash one', () => {
+    // A materialized `\f ` literal does the same harm wherever it lands, and the Enter palette is
+    // one of the places it used to land: its source is paragraph markers, so it never offers a
+    // note, and the exception was previously attached to `'backslash'` sessions only.
+    expect(sessionFor('enter')?.shouldSpaceCommit?.('f')).toBe(true);
+  });
+
+  it('is carried by a backslash session', () => {
+    expect(sessionFor('backslash')?.shouldSpaceCommit?.('f')).toBe(true);
+  });
+
+  it('is carried by a selection session too, where the table simply never consults it', () => {
+    // Space over a selection is the wrap commit, with no typed-literal route to except. The gate
+    // lives in the forwarding table rather than here, so the spine stays a plain carrier.
+    expect(sessionFor('selection')?.shouldSpaceCommit?.('f')).toBe(true);
   });
 });

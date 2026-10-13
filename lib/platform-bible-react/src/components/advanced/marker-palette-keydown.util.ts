@@ -256,6 +256,13 @@ export function resolveFilterCharacter(event: MarkerPaletteKeyEvent): string | u
   // on European layouts.
   if (event.altKey && isMacOs()) return undefined;
 
+  // A dead key composes the NEXT character and contributes none of its own, so it is not marker
+  // input on any platform. The macOS guard above catches the Option-based ones, but a dead key is
+  // not always Option-modified: several Windows layouts reach one through AltGr, and some have a
+  // dead key on an unmodified position. Those report a plain letter `keyCode` — the physical key
+  // underneath — so without this the fallback below would filter that letter.
+  if (key === 'Dead') return undefined;
+
   // What the user actually typed, when it can name a marker. Case comes along with it, which is
   // what custom markers need: `event.key` already folds Shift and CapsLock together, including
   // their cancelling each other out.

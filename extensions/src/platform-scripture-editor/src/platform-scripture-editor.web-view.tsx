@@ -84,6 +84,7 @@ import {
   type MarkerPaletteOpenSession,
   type MarkerPaletteSessionKind,
   runMarkerPaletteSession,
+  shouldSpaceCommitNoteMarker,
 } from 'platform-bible-react/experimental';
 import {
   ABORTED,
@@ -203,7 +204,6 @@ import {
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
-  shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
 import { useGuardedProjectSetting } from './use-guarded-project-setting.hook';
@@ -2106,11 +2106,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       runMarkerPaletteSession({
         items,
         kind,
-        // Space COMMITS (like Enter) when the typed filter exactly names a NOTE marker:
-        // materializing the typed `\f ` literal instead would hand it to the Tier-2
-        // tokenizer, which mid-text absorbs the following word into the new footnote as its
-        // caller. Committing inserts an empty footnote exactly like `\f` + Enter.
-        shouldSpaceCommit: (filter) => shouldSpaceCommitNoteMarker(items, filter),
+        // Space COMMITS (like Enter) when the typed filter names a NOTE marker in the project's
+        // stylesheet: materializing the typed `\f ` literal instead would hand it to the Tier-2
+        // tokenizer, which absorbs the word that follows into the new footnote as its caller.
+        // Committing inserts an empty footnote exactly like `\f` + Enter. Read from the
+        // stylesheet rather than from `items`, which is this palette's own offer: the Enter
+        // palette's source is paragraph markers and a `\` palette at some carets offers no notes
+        // either, so an items-based test declined in exactly the places the literal does harm.
+        shouldSpaceCommit: (filter) => shouldSpaceCommitNoteMarker(styleInfo, filter),
         sessionCounterRef: paletteSessionCounter,
         setSession: setPaletteSession,
         clearSessionIfCurrent: clearPaletteSession,
@@ -2183,7 +2186,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           warnUnlessReplaced(isEnter ? 'Enter palette' : 'marker palette', error),
       });
     },
-    [webViewId, localizedStrings, setPaletteSession, clearPaletteSession, restoreEditorSelection],
+    [
+      webViewId,
+      localizedStrings,
+      setPaletteSession,
+      clearPaletteSession,
+      restoreEditorSelection,
+      styleInfo,
+    ],
   );
 
   /**

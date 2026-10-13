@@ -16,7 +16,7 @@
  * - HOW a lost caret is restored (`restoreSelectionIfLost`): each editor restores from its own
  *   focus-out capture, and only the popover has a meaningful last-resort target (the end of its
  *   single note).
- * - The `'backslash'` Space exception (`shouldSpaceCommit`), the failure logging (`onShowError`), and
+ * - The Space note-marker exception (`shouldSpaceCommit`), the failure logging (`onShowError`), and
  *   the editor-side `focusEditor`/`applyItem` handles (the Enter-split palette's apply splits the
  *   paragraph).
  */
@@ -62,8 +62,10 @@ export interface RunMarkerPaletteSessionOptions<TItem extends { marker: string }
    */
   kind: MarkerPaletteSessionKind;
   /**
-   * See {@link MarkerPaletteSessionState.shouldSpaceCommit}. Attached to `'backslash'` sessions only
-   * — Space over a selection is the wrap commit, which has no typed-literal route to except.
+   * See {@link MarkerPaletteSessionState.shouldSpaceCommit}. Attached whatever the kind: a note
+   * literal misbehaves wherever it materializes, so the Enter palette needs the exception as much
+   * as the `'backslash'` one. The forwarding table consults it only outside `'selection'`, where
+   * Space is the wrap commit and there is no typed-literal route to except.
    */
   shouldSpaceCommit?: (filter: string) => boolean;
   /**
@@ -187,7 +189,7 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
    */
   const isStillCurrentSession = () => sessionCounterRef.current === token;
   const session: MarkerPaletteOpenSession<TItem> = { kind, token, filter: '', items };
-  if (kind === 'backslash' && shouldSpaceCommit) session.shouldSpaceCommit = shouldSpaceCommit;
+  if (shouldSpaceCommit) session.shouldSpaceCommit = shouldSpaceCommit;
   setSession(session);
 
   show({
@@ -202,13 +204,19 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
     .then((id) => {
       clearSessionIfCurrent(token);
       if (id !== undefined) {
+        // Ask the guard BEFORE restoring, not after: the restore writes a selection back into the
+        // editor, so a guard consulted afterwards compares against that write instead of against
+        // what the user left behind. Any normalization in the round trip — an element offset, a
+        // glyph boundary — would then read as a move and refuse a perfectly good commit, with
+        // nothing on screen to say why. Read here, the comparison is content-only against a null
+        // selection, which is exactly what the guard is written for: a caret nulled on blur is
+        // deliberately NOT a move, since that is the normal state while a palette holds focus.
+        const editorChanged = hasEditorChangedSinceFocus?.() ?? false;
         restoreEditorSelection();
         // The editor moved under the open palette, so the caret this commit would apply at is no
         // longer the one the user chose. Focus and the caret still go back; the marker does not
         // land, and the user reopens the palette where they actually want it.
-        const selected = hasEditorChangedSinceFocus?.()
-          ? undefined
-          : items.find((item) => item.marker === id);
+        const selected = editorChanged ? undefined : items.find((item) => item.marker === id);
         if (selected) applyItem(selected);
       } else if (isStillCurrentSession()) {
         restoreEditorSelection();

@@ -13,7 +13,11 @@
  * outrank — or bury — the exact label match.
  */
 
-import { filterAndRankItems, type Item } from '@eten-tech-foundation/platform-editor';
+import {
+  filterAndRankItems,
+  type Item,
+  type StyleInfo,
+} from '@eten-tech-foundation/platform-editor';
 
 /**
  * How {@link filterAndRankPaletteItems} matches filter text against item labels — one mode per
@@ -46,6 +50,35 @@ type RankableItem = Item & { label: string };
  */
 export function stripMarkerNestingPrefix(markerText: string): string {
   return markerText.replace(/^\+/, '');
+}
+
+/**
+ * Whether a palette's Space key should COMMIT the selection (like Enter) instead of materializing
+ * the typed literal: true when the typed filter names a NOTE marker in the project's stylesheet.
+ *
+ * A materialized note literal (`\f `) misbehaves wherever it lands — the Tier-2 tokenizer absorbs
+ * the word that follows into the new note as its caller — so note markers route through the overlay
+ * commit, which inserts an empty note exactly like `\f` + Enter.
+ *
+ * Decided from the STYLESHEET, not from the items the palette happens to offer, which is Paratext
+ * 9's own rule: `f` names a note whether or not this palette's list includes notes. An items-based
+ * test silently declined in every palette whose list has no notes in it — the Enter palette, whose
+ * source is paragraph markers; a `\` palette at a caret where notes are not valid; and the footnote
+ * popover, which offers note-INTERNAL markers — and a raw `\f ` landed in the text in all three.
+ *
+ * Normalization matches the visible list's: case-folded, with the `+` nesting prefix stripped from
+ * both sides, so `\F` and `\+f` hit the same `f` entry the palette shows them matching.
+ */
+export function shouldSpaceCommitNoteMarker(
+  styleInfo: StyleInfo | undefined,
+  filter: string,
+): boolean {
+  if (!styleInfo || filter === '') return false;
+  const typed = stripMarkerNestingPrefix(filter).toLowerCase();
+  return Object.values(styleInfo.markers).some(
+    (style) =>
+      style.styleType === 'note' && stripMarkerNestingPrefix(style.marker).toLowerCase() === typed,
+  );
 }
 
 /**

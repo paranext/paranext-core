@@ -33,10 +33,7 @@ import type {
   SelectionRange,
 } from '@eten-tech-foundation/platform-editor';
 import { markerMenuItemToPaletteItem, type MarkerMenuItem } from 'platform-bible-react';
-import {
-  isEditorContextMenuOpenFor,
-  stripMarkerNestingPrefix,
-} from 'platform-bible-react/experimental';
+import { isEditorContextMenuOpenFor } from 'platform-bible-react/experimental';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
 /**
@@ -329,28 +326,6 @@ export function resolvePaletteItemStrings(
     description: item.description === undefined ? undefined : resolve(item.description),
     badge: item.badge === undefined ? undefined : resolve(item.badge),
   }));
-}
-
-/**
- * Whether the `\` palette's Space key should COMMIT the palette selection (like Enter) instead of
- * materializing the typed literal: true when the typed filter names a NOTE marker among the offered
- * items. A materialized note literal (`\f `) misbehaves mid-text — the Tier-2 tokenizer absorbs the
- * following word into the new footnote as its caller — so note markers route through the overlay
- * commit, which inserts an empty footnote exactly like `\f` + Enter (see
- * `MarkerPaletteSessionState.shouldSpaceCommit`).
- *
- * The comparison uses the shared marker normalization (case-fold, `+` nesting prefix stripped —
- * `stripMarkerNestingPrefix`), the same way the visible list matches: `\F` must hit the same `f`
- * entry the palette shows it matching.
- */
-export function shouldSpaceCommitNoteMarker(
-  items: readonly Pick<EditorMarkerMenuItem, 'kind' | 'marker'>[],
-  filter: string,
-): boolean {
-  const typed = stripMarkerNestingPrefix(filter).toLowerCase();
-  return items.some(
-    (item) => item.kind === 'note' && stripMarkerNestingPrefix(item.marker).toLowerCase() === typed,
-  );
 }
 
 /**

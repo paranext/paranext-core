@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { filterAndRankPaletteItems } from './marker-palette-filter.util';
+import type { StyleInfo } from '@eten-tech-foundation/platform-editor';
+import {
+  filterAndRankPaletteItems,
+  shouldSpaceCommitNoteMarker,
+} from './marker-palette-filter.util';
 
 // Fixtures mirror the library's real context-ordered offers (basic markers first), where the
 // exact match is deliberately NOT first — the shape that produced the wrong-marker commits
@@ -126,5 +130,48 @@ describe('filterAndRankPaletteItems', () => {
         '+wj*',
       ]);
     });
+  });
+});
+
+describe('shouldSpaceCommitNoteMarker', () => {
+  /** A stylesheet with one note marker, one nested note, and a character marker. */
+  const styleInfo: StyleInfo = {
+    markers: {
+      f: { marker: 'f', styleType: 'note' },
+      fe: { marker: 'fe', styleType: 'note' },
+      nd: { marker: 'nd', styleType: 'character' },
+      p: { marker: 'p', styleType: 'paragraph' },
+    },
+  };
+
+  it('is true when the typed filter names a note marker in the stylesheet', () => {
+    expect(shouldSpaceCommitNoteMarker(styleInfo, 'f')).toBe(true);
+    expect(shouldSpaceCommitNoteMarker(styleInfo, 'fe')).toBe(true);
+  });
+
+  it('does not depend on what the palette offers', () => {
+    // The point of reading the stylesheet: the Enter palette's source is paragraph markers and a
+    // `\\` palette at some carets offers no notes, and a materialized `\\f ` does harm in both.
+    expect(shouldSpaceCommitNoteMarker(styleInfo, 'f')).toBe(true);
+  });
+
+  it('matches case-insensitively — `\\F` + Space must hit the same exception `\\f` does', () => {
+    expect(shouldSpaceCommitNoteMarker(styleInfo, 'F')).toBe(true);
+  });
+
+  it('strips the `+` nesting prefix from the typed filter, like every other matching site', () => {
+    expect(shouldSpaceCommitNoteMarker(styleInfo, '+f')).toBe(true);
+  });
+
+  it('is false for non-note markers, and for a filter that only PREFIXES a note marker', () => {
+    expect(shouldSpaceCommitNoteMarker(styleInfo, 'nd')).toBe(false);
+    expect(shouldSpaceCommitNoteMarker(styleInfo, 'p')).toBe(false);
+    // `fe` is a note, but `f` must match the `f` entry exactly rather than prefix-matching it.
+    expect(shouldSpaceCommitNoteMarker({ markers: { fe: styleInfo.markers.fe } }, 'f')).toBe(false);
+  });
+
+  it('is false with no filter, and with no stylesheet to consult', () => {
+    expect(shouldSpaceCommitNoteMarker(styleInfo, '')).toBe(false);
+    expect(shouldSpaceCommitNoteMarker(undefined, 'f')).toBe(false);
   });
 });

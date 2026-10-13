@@ -33,6 +33,7 @@ import {
   runMarkerPaletteSession,
   type MarkerPaletteOpenSession,
 } from '@/components/advanced/marker-palette-session.util';
+import { shouldSpaceCommitNoteMarker } from '@/components/advanced/marker-palette-filter.util';
 import {
   useCallback,
   useEffect,
@@ -800,10 +801,12 @@ export default function FootnoteEditor({
         // The kind decides how a commit APPLIES — wrap the selected text, or land at the caret.
         // It no longer decides anything about focus: every marker palette focuses its list.
         kind: hasTextSelection ? 'selection' : 'backslash',
-        // No `shouldSpaceCommit`, deliberately: the Space note-marker exception exists for
-        // Standard-view BODY text, where a materialized `\f ` literal absorbs the following word
-        // as the new footnote's caller. This palette offers note-INTERNAL markers for content
-        // already inside a note, so Space keeps its plain typed-literal commit here.
+        // Space COMMITS (like Enter) when the typed filter names a NOTE marker in the stylesheet.
+        // This palette's own list offers note-INTERNAL markers, but the filter is whatever the user
+        // typed: `\f` here materializes a NESTED `\f ` literal, and the Tier-2 tokenizer absorbs
+        // the following word into it as a caller just as it does in body text. Decided from the
+        // stylesheet rather than from the offered items for exactly that reason.
+        shouldSpaceCommit: (filter) => shouldSpaceCommitNoteMarker(options.styleInfo, filter),
         sessionCounterRef: paletteSessionCounter,
         setSession: (session) => {
           paletteSession.current = session;
@@ -856,7 +859,7 @@ export default function FootnoteEditor({
         },
       });
     },
-    [markerPalette, restoreSelectionIfLost],
+    [markerPalette, restoreSelectionIfLost, options.styleInfo],
   );
 
   /**

@@ -105,6 +105,7 @@ export {
 } from './components/advanced/marker-palette-session.util';
 export {
   filterAndRankPaletteItems,
+  shouldSpaceCommitNoteMarker,
   stripMarkerNestingPrefix,
   type PaletteFilterMode,
 } from './components/advanced/marker-palette-filter.util';
