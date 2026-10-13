@@ -53,28 +53,21 @@ export function stripMarkerNestingPrefix(markerText: string): string {
 }
 
 /**
- * Whether a palette's Space key should COMMIT the selection (like Enter) instead of materializing
- * the typed literal: true when the typed filter names a NOTE marker in the project's stylesheet.
+ * Whether `marker` names a NOTE style in the project's stylesheet.
  *
- * A materialized note literal (`\f `) misbehaves wherever it lands — the Tier-2 tokenizer absorbs
- * the word that follows into the new note as its caller — so note markers route through the overlay
- * commit, which inserts an empty note exactly like `\f` + Enter.
- *
- * Decided from the STYLESHEET, not from the items the palette happens to offer, which is Paratext
- * 9's own rule: `f` names a note whether or not this palette's list includes notes. An items-based
- * test silently declined in every palette whose list has no notes in it — the Enter palette, whose
- * source is paragraph markers; a `\` palette at a caret where notes are not valid; and the footnote
- * popover, which offers note-INTERNAL markers — and a raw `\f ` landed in the text in all three.
+ * What every marker palette hands the forwarding table as
+ * {@link MarkerPaletteSessionState.isNoteMarker}, so its Space branch can apply PT9's note rule. The
+ * table cannot answer this from its own `items`: a note marker a palette does not offer is missing
+ * from that list precisely in the cases the rule exists for — the Enter palette, whose source is
+ * paragraph markers; a `\` palette at a caret where notes are not valid; and the footnote popover,
+ * which offers note-INTERNAL markers. The stylesheet knows `f` is a note either way.
  *
  * Normalization matches the visible list's: case-folded, with the `+` nesting prefix stripped from
- * both sides, so `\F` and `\+f` hit the same `f` entry the palette shows them matching.
+ * both sides, so `\F` and `\+f` resolve to the same `f` entry the palette shows them matching.
  */
-export function shouldSpaceCommitNoteMarker(
-  styleInfo: StyleInfo | undefined,
-  filter: string,
-): boolean {
-  if (!styleInfo || filter === '') return false;
-  const typed = stripMarkerNestingPrefix(filter).toLowerCase();
+export function isNoteMarker(styleInfo: StyleInfo | undefined, marker: string): boolean {
+  if (!styleInfo || marker === '') return false;
+  const typed = stripMarkerNestingPrefix(marker).toLowerCase();
   return Object.values(styleInfo.markers).some(
     (style) =>
       style.styleType === 'note' && stripMarkerNestingPrefix(style.marker).toLowerCase() === typed,

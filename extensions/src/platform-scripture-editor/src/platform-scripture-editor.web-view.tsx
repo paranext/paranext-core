@@ -92,7 +92,7 @@ import {
   type MarkerPaletteOpenSession,
   type MarkerPaletteSessionKind,
   runMarkerPaletteSession,
-  shouldSpaceCommitNoteMarker,
+  isNoteMarker,
 } from 'platform-bible-react/experimental';
 import {
   ABORTED,
@@ -2410,14 +2410,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       runMarkerPaletteSession({
         items,
         kind,
-        // Space COMMITS (like Enter) when the typed filter names a NOTE marker in the project's
-        // stylesheet: materializing the typed `\f ` literal instead would hand it to the Tier-2
-        // tokenizer, which absorbs the word that follows into the new footnote as its caller.
-        // Committing inserts an empty footnote exactly like `\f` + Enter. Read from the
-        // stylesheet rather than from `items`, which is this palette's own offer: the Enter
-        // palette's source is paragraph markers and a `\` palette at some carets offers no notes
-        // either, so an items-based test declined in exactly the places the literal does harm.
-        shouldSpaceCommit: (filter) => shouldSpaceCommitNoteMarker(styleInfo, filter),
+        // The stylesheet half of the Space note rule (PT9's `MarkerDropdownControl`): the table
+        // pairs this with its own `items` to decide between inserting an empty footnote and
+        // inserting nothing. Read from the stylesheet rather than from `items`, because a note
+        // marker this palette does not offer is absent from that list exactly when the rule
+        // matters — the Enter palette's source is paragraph markers, and a `\` palette at some
+        // carets offers no notes either.
+        isNoteMarker: (marker) => isNoteMarker(styleInfo, marker),
         sessionCounterRef: paletteSessionCounter,
         setSession: setPaletteSession,
         clearSessionIfCurrent: clearPaletteSession,

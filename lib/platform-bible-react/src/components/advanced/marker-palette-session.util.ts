@@ -16,7 +16,7 @@
  * - HOW a lost caret is restored (`restoreSelectionIfLost`): each editor restores from its own
  *   focus-out capture, and only the popover has a meaningful last-resort target (the end of its
  *   single note).
- * - The Space note-marker exception (`shouldSpaceCommit`), the failure logging (`onShowError`), and
+ * - The Space note rule's stylesheet check (`isNoteMarker`), the failure logging (`onShowError`), and
  *   the editor-side `focusEditor`/`applyItem` handles (the Enter-split palette's apply splits the
  *   paragraph).
  */
@@ -62,12 +62,12 @@ export interface RunMarkerPaletteSessionOptions<TItem extends { marker: string }
    */
   kind: MarkerPaletteSessionKind;
   /**
-   * See {@link MarkerPaletteSessionState.shouldSpaceCommit}. Attached whatever the kind: a note
-   * literal misbehaves wherever it materializes, so the Enter palette needs the exception as much
-   * as the `'backslash'` one. The forwarding table consults it only outside `'selection'`, where
-   * Space is the wrap commit and there is no typed-literal route to except.
+   * See {@link MarkerPaletteSessionState.isNoteMarker}. Attached whatever the kind: PT9 applies one
+   * note rule to every dropdown, and a note literal misbehaves wherever it materializes, so the
+   * Enter palette needs it as much as the `'backslash'` one. The forwarding table consults it only
+   * outside `'selection'`, where Space is the wrap commit and there is no typed literal to except.
    */
-  shouldSpaceCommit?: (filter: string) => boolean;
+  isNoteMarker?: (marker: string) => boolean;
   /**
    * The consumer's monotonic token allocator. Caller-owned (not module state) so ALL of a
    * consumer's palette opens draw from ONE sequence and stale-settlement cleanup stays totally
@@ -137,7 +137,7 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
   const {
     items,
     kind,
-    shouldSpaceCommit,
+    isNoteMarker,
     sessionCounterRef,
     setSession,
     clearSessionIfCurrent,
@@ -189,7 +189,7 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
    */
   const isStillCurrentSession = () => sessionCounterRef.current === token;
   const session: MarkerPaletteOpenSession<TItem> = { kind, token, filter: '', items };
-  if (shouldSpaceCommit) session.shouldSpaceCommit = shouldSpaceCommit;
+  if (isNoteMarker) session.isNoteMarker = isNoteMarker;
   setSession(session);
 
   show({

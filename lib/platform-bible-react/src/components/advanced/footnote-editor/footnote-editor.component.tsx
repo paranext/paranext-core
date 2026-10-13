@@ -34,7 +34,7 @@ import {
   runMarkerPaletteSession,
   type MarkerPaletteOpenSession,
 } from '@/components/advanced/marker-palette-session.util';
-import { shouldSpaceCommitNoteMarker } from '@/components/advanced/marker-palette-filter.util';
+import { isNoteMarker } from '@/components/advanced/marker-palette-filter.util';
 import {
   useCallback,
   useEffect,
@@ -1275,7 +1275,7 @@ export default function FootnoteEditor({
         // typed: `\f` here materializes a NESTED `\f ` literal, and the Tier-2 tokenizer absorbs
         // the following word into it as a caller just as it does in body text. Decided from the
         // stylesheet rather than from the offered items for exactly that reason.
-        shouldSpaceCommit: (filter) => shouldSpaceCommitNoteMarker(options.styleInfo, filter),
+        isNoteMarker: (marker) => isNoteMarker(options.styleInfo, marker),
         sessionCounterRef: paletteSessionCounter,
         setSession: (session) => {
           paletteSession.current = session;

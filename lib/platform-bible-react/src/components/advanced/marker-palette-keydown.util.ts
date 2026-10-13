@@ -22,9 +22,10 @@
  * - **Backspace** removes the last filter character; with an empty filter it CLOSES the palette.
  * - **Space** with an empty filter closes and inserts nothing; otherwise it commits what was TYPED
  *   ({@link MarkerPaletteSessionDriver.commitTyped}), even if that text is not highlighted or not in
- *   the list — except that a typed NOTE marker commits like Enter
- *   ({@link MarkerPaletteSessionState.shouldSpaceCommit}), and a `'selection'` session wraps the
- *   selected text in the item its filter names exactly, refusing visibly when no item matches.
+ *   the list — except for a typed NOTE marker ({@link MarkerPaletteSessionState.isNoteMarker}),
+ *   which commits like Enter when this list offers it and otherwise inserts nothing, and a
+ *   `'selection'` session, which wraps the selected text in the item its filter names exactly,
+ *   refusing visibly when no item matches.
  * - **`*`** commits the typed text as a CLOSING marker
  *   ({@link MarkerPaletteSessionDriver.commitTypedCloser}); a `'selection'` session with an empty
  *   filter refuses instead, leaving the selection intact.
@@ -123,19 +124,18 @@ export interface MarkerPaletteSessionState {
    */
   items: readonly { marker: string }[];
   /**
-   * When set on a `'backslash'` session and it returns true for the current filter, Space COMMITS
-   * the palette selection through the overlay (claimed, like Enter) instead of committing the typed
-   * literal. Consumers use this for markers where the materialized `\marker ` literal would
-   * misbehave — e.g. `\f ` in Standard view: mid-text the Tier-2 tokenizer absorbs the following
-   * word into the new footnote as its caller, whereas committing the palette item inserts an empty
-   * footnote exactly like `\f` + Enter.
+   * Whether `marker` names a NOTE style in the project's stylesheet. Supplied by the consumer
+   * because the table cannot tell from `items` alone: a note marker that this palette does not
+   * offer is absent from the list precisely when it matters.
    *
-   * Implementations must compare the filter with the shared marker normalization (case-fold, `+`
-   * nesting prefix stripped — `stripMarkerNestingPrefix`), the same way the visible list matches: a
-   * raw compare lets `\F` + Space slip past the exception and materialize the very literal the
-   * exception exists to avoid.
+   * Drives the Space branch's note rule (PT9's `MarkerDropdownControl`, one rule for every
+   * dropdown): a note marker is never written as text, and the empty note is inserted only when
+   * this session's own list offers it. See the Space branch for the three cases.
+   *
+   * Called with the marker already normalized the way the visible list matches — case-folded with
+   * the `+` nesting prefix stripped — so implementations compare plainly.
    */
-  shouldSpaceCommit?: (filter: string) => boolean;
+  isNoteMarker?: (marker: string) => boolean;
 }
 
 /**
@@ -457,10 +457,24 @@ export function handleMarkerPaletteSessionKeyDown(
         driver.dismiss();
         return 'ended';
       }
-      if (session.shouldSpaceCommit?.(session.filter)) {
-        // Note markers commit like Enter through the overlay (exact-first resolution) — see
-        // MarkerPaletteSessionState.shouldSpaceCommit for why the typed-literal route misbehaves.
-        driver.commit();
+      // PT9's note rule, the same in every dropdown (`MarkerDropdownControl.cs`): a note marker is
+      // never written as text — `InternalClose` returns early for a note style (`:243`) — and the
+      // empty note is inserted only when the dropdown's own list offers that marker
+      // (`allMarkerItems.Any(x => x.Marker == markerText)`, `:315`). So `\` + `f` + Space inserts
+      // a footnote, while Enter + `f` + Space, or `\f` anywhere notes are not offered, closes and
+      // inserts nothing.
+      const typedMarker = stripMarkerNestingPrefix(session.filter).toLowerCase();
+      if (session.isNoteMarker?.(typedMarker)) {
+        const isOffered = session.items.some(
+          (item) => stripMarkerNestingPrefix(item.marker).toLowerCase() === typedMarker,
+        );
+        // Offered: commit the palette selection, inserting an empty note exactly like `\f` + Enter.
+        // Not offered: insert NOTHING. Materializing the literal would hand the Tier-2 tokenizer a
+        // raw `\f ` that absorbs the following word as the new note's caller, and committing would
+        // apply whatever happens to be HIGHLIGHTED — never what the user typed, since the marker
+        // they typed is by definition absent from this list.
+        if (isOffered) driver.commit();
+        else driver.dismiss();
         return 'ended';
       }
       driver.commitTyped(session.filter);
@@ -509,9 +523,9 @@ export function handleMarkerPaletteSessionKeyDown(
     // lands in its place, which is what typing `\nd*` with text selected has always done. That is a
     // different gesture from Space's selection WRAP, so the two keys are not interchangeable there.
     //
-    // No `shouldSpaceCommit` exception here, unlike Space. That exception exists because a
-    // materialized `\f ` OPENING literal absorbs the text after the caret as the note's caller; a
-    // closing marker materializes no note and absorbs nothing, so every marker takes this route.
+    // No note-marker exception here, unlike Space. That exception exists because a materialized
+    // `\f ` OPENING literal absorbs the text after the caret as the note's caller; a closing marker
+    // materializes no note and absorbs nothing, so every marker takes this route.
     // Zero matches take it too — what the user typed is what commits, and an unmatched closer
     // lands literally for the engine to flag rather than silently doing nothing.
     claim(event);

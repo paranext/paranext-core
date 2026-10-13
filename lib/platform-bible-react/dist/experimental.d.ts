@@ -1115,19 +1115,18 @@ export interface MarkerPaletteSessionState {
 		marker: string;
 	}[];
 	/**
-	 * When set on a `'backslash'` session and it returns true for the current filter, Space COMMITS
-	 * the palette selection through the overlay (claimed, like Enter) instead of committing the typed
-	 * literal. Consumers use this for markers where the materialized `\marker ` literal would
-	 * misbehave — e.g. `\f ` in Standard view: mid-text the Tier-2 tokenizer absorbs the following
-	 * word into the new footnote as its caller, whereas committing the palette item inserts an empty
-	 * footnote exactly like `\f` + Enter.
+	 * Whether `marker` names a NOTE style in the project's stylesheet. Supplied by the consumer
+	 * because the table cannot tell from `items` alone: a note marker that this palette does not
+	 * offer is absent from the list precisely when it matters.
 	 *
-	 * Implementations must compare the filter with the shared marker normalization (case-fold, `+`
-	 * nesting prefix stripped — `stripMarkerNestingPrefix`), the same way the visible list matches: a
-	 * raw compare lets `\F` + Space slip past the exception and materialize the very literal the
-	 * exception exists to avoid.
+	 * Drives the Space branch's note rule (PT9's `MarkerDropdownControl`, one rule for every
+	 * dropdown): a note marker is never written as text, and the empty note is inserted only when
+	 * this session's own list offers it. See the Space branch for the three cases.
+	 *
+	 * Called with the marker already normalized the way the visible list matches — case-folded with
+	 * the `+` nesting prefix stripped — so implementations compare plainly.
 	 */
-	shouldSpaceCommit?: (filter: string) => boolean;
+	isNoteMarker?: (marker: string) => boolean;
 }
 /**
  * The palette operations the forwarding table drives. `update`/`commit`/`dismiss` are the shared
@@ -1334,12 +1333,12 @@ export interface RunMarkerPaletteSessionOptions<TItem extends {
 	 */
 	kind: MarkerPaletteSessionKind;
 	/**
-	 * See {@link MarkerPaletteSessionState.shouldSpaceCommit}. Attached whatever the kind: a note
-	 * literal misbehaves wherever it materializes, so the Enter palette needs the exception as much
-	 * as the `'backslash'` one. The forwarding table consults it only outside `'selection'`, where
-	 * Space is the wrap commit and there is no typed-literal route to except.
+	 * See {@link MarkerPaletteSessionState.isNoteMarker}. Attached whatever the kind: PT9 applies one
+	 * note rule to every dropdown, and a note literal misbehaves wherever it materializes, so the
+	 * Enter palette needs it as much as the `'backslash'` one. The forwarding table consults it only
+	 * outside `'selection'`, where Space is the wrap commit and there is no typed literal to except.
 	 */
-	shouldSpaceCommit?: (filter: string) => boolean;
+	isNoteMarker?: (marker: string) => boolean;
 	/**
 	 * The consumer's monotonic token allocator. Caller-owned (not module state) so ALL of a
 	 * consumer's palette opens draw from ONE sequence and stale-settlement cleanup stays totally
@@ -1432,23 +1431,19 @@ export type PaletteFilterMode = "active" | "passive";
  */
 export declare function stripMarkerNestingPrefix(markerText: string): string;
 /**
- * Whether a palette's Space key should COMMIT the selection (like Enter) instead of materializing
- * the typed literal: true when the typed filter names a NOTE marker in the project's stylesheet.
+ * Whether `marker` names a NOTE style in the project's stylesheet.
  *
- * A materialized note literal (`\f `) misbehaves wherever it lands — the Tier-2 tokenizer absorbs
- * the word that follows into the new note as its caller — so note markers route through the overlay
- * commit, which inserts an empty note exactly like `\f` + Enter.
- *
- * Decided from the STYLESHEET, not from the items the palette happens to offer, which is Paratext
- * 9's own rule: `f` names a note whether or not this palette's list includes notes. An items-based
- * test silently declined in every palette whose list has no notes in it — the Enter palette, whose
- * source is paragraph markers; a `\` palette at a caret where notes are not valid; and the footnote
- * popover, which offers note-INTERNAL markers — and a raw `\f ` landed in the text in all three.
+ * What every marker palette hands the forwarding table as
+ * {@link MarkerPaletteSessionState.isNoteMarker}, so its Space branch can apply PT9's note rule. The
+ * table cannot answer this from its own `items`: a note marker a palette does not offer is missing
+ * from that list precisely in the cases the rule exists for — the Enter palette, whose source is
+ * paragraph markers; a `\` palette at a caret where notes are not valid; and the footnote popover,
+ * which offers note-INTERNAL markers. The stylesheet knows `f` is a note either way.
  *
  * Normalization matches the visible list's: case-folded, with the `+` nesting prefix stripped from
- * both sides, so `\F` and `\+f` hit the same `f` entry the palette shows them matching.
+ * both sides, so `\F` and `\+f` resolve to the same `f` entry the palette shows them matching.
  */
-export declare function shouldSpaceCommitNoteMarker(styleInfo: StyleInfo | undefined, filter: string): boolean;
+export declare function isNoteMarker(styleInfo: StyleInfo | undefined, marker: string): boolean;
 /**
  * Filters `items` by matching `filterText` against each item's `label` and ranks the matches
  * exact-first (exact > prefix > containment, ties keeping their original order — the editor

@@ -377,13 +377,13 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
   });
 
   it('backslash session: a note marker does NOT reroute `*` through the overlay commit', () => {
-    // `shouldSpaceCommit` exists because a materialized `\f ` OPENING literal absorbs the text
-    // after the caret as the note's caller. A closing marker materializes no note and absorbs
-    // nothing, so that exception does not apply to `*`.
+    // The note rule exists because a materialized `\f ` OPENING literal absorbs the text after
+    // the caret as the note's caller. A closing marker materializes no note and absorbs nothing,
+    // so that rule does not apply to `*`.
     const driver = makeDriver();
     const state: MarkerPaletteSessionState = {
       ...session('backslash', 'f'),
-      shouldSpaceCommit: (filter) => filter === 'f',
+      isNoteMarker: (marker) => marker === 'f',
     };
     const event = makeEvent('*');
     expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
@@ -492,36 +492,89 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.commitTyped).not.toHaveBeenCalled();
   });
 
-  it('backslash session: Space COMMITS (claimed, like Enter) when shouldSpaceCommit approves the filter', () => {
-    // Typing `\f` then Space must insert an empty footnote exactly like `\f` + Enter — letting
-    // the literal ` ` land would hand `\f ` to the Tier-2 tokenizer, which absorbs the rest of
-    // the paragraph into the new footnote.
+  // Paratext 9's note rule, one rule for every dropdown (`MarkerDropdownControl.cs`): a note
+  // marker is never written as text (`InternalClose` returns early for a note style, `:243`), and
+  // the empty note is inserted only when the dropdown's own list offers that marker (`:315`). The
+  // three cases below are the whole rule.
+
+  it('Space on a note marker THIS LIST OFFERS commits it, inserting an empty note', () => {
+    // `\` + `f` + Space inserts a footnote, exactly like `\f` + Enter. Letting the literal land
+    // instead would hand `\f ` to the Tier-2 tokenizer, which absorbs the rest of the paragraph
+    // into the new footnote as its caller.
     const driver = makeDriver();
     const state: MarkerPaletteSessionState = {
       ...session('backslash', 'f'),
-      shouldSpaceCommit: (filter) => filter === 'f',
+      isNoteMarker: (marker) => marker === 'f',
     };
     const event = makeEvent(' ');
     expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
     expect(event.defaultPrevented).toBe(true); // claimed: no literal space lands
     expect(driver.commit).toHaveBeenCalledOnce();
+    expect(driver.commitTyped).not.toHaveBeenCalled();
     expect(driver.dismiss).not.toHaveBeenCalled();
   });
 
-  it('backslash session: Space commits TYPED when shouldSpaceCommit declines — claimed, never lands', () => {
-    // The passive palette let the space land and Tier-2 complete the literal; under the active
-    // palette nothing ever landed, so the commit materializes the typed literal instead
-    // (commitTyped), byte-identical end state.
+  it('Space on a note marker this list does NOT offer closes and inserts NOTHING', () => {
+    // The Enter palette (paragraph source) and the footnote popover (note-INTERNAL markers) both
+    // reach this: the user typed a real note marker, and this palette has no entry for it.
+    // Committing would apply whatever is HIGHLIGHTED — never what they typed, since the marker
+    // they typed is by definition absent from the list — and materializing would land the raw
+    // `\f ` the rule exists to prevent. PT9 closes and inserts nothing.
+    const paragraphItems = [{ marker: 'p' }, { marker: 'q1' }, { marker: 'ip' }];
+    const driver = makeDriver();
+    const state: MarkerPaletteSessionState = {
+      ...session('enter', 'f', paragraphItems),
+      isNoteMarker: (marker) => marker === 'f',
+    };
+    const event = makeEvent(' ');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(event.defaultPrevented).toBe(true); // claimed: no literal space lands
+    expect(driver.dismiss).toHaveBeenCalledOnce();
+    expect(driver.commit).not.toHaveBeenCalled();
+    expect(driver.commitTyped).not.toHaveBeenCalled();
+  });
+
+  it('Space on a note marker not offered INSIDE A NOTE also inserts nothing', () => {
+    // The footnote popover offers note-internal markers, so `\f` there would otherwise write a
+    // NESTED `\f ` literal.
+    const noteInternalItems = [{ marker: 'fr' }, { marker: 'ft' }, { marker: 'fk' }];
+    const driver = makeDriver();
+    const state: MarkerPaletteSessionState = {
+      ...session('backslash', 'f', noteInternalItems),
+      isNoteMarker: (marker) => marker === 'f',
+    };
+    const event = makeEvent(' ');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(driver.dismiss).toHaveBeenCalledOnce();
+    expect(driver.commit).not.toHaveBeenCalled();
+    expect(driver.commitTyped).not.toHaveBeenCalled();
+  });
+
+  it('Space on a NON-note marker commits the typed literal — claimed, never lands', () => {
+    // Unchanged by the note rule: what the user typed is what commits, materialized by the
+    // consumer rather than landing as a keystroke.
     const driver = makeDriver();
     const state: MarkerPaletteSessionState = {
       ...session('backslash', 'wj'),
-      shouldSpaceCommit: (filter) => filter === 'f', // 'wj' is not a note marker
+      isNoteMarker: (marker) => marker === 'f', // 'wj' is not a note marker
     };
     const event = makeEvent(' ');
     expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
     expect(event.defaultPrevented).toBe(true); // claimed: no literal space lands
     expect(driver.commitTyped).toHaveBeenCalledExactlyOnceWith('wj');
     expect(driver.commit).not.toHaveBeenCalled();
+  });
+
+  it('Space normalizes the typed marker before the note check, like the visible list', () => {
+    // `\F` and `\+f` must hit the same `f` entry the palette shows them matching, or the rule is
+    // bypassed by a capital letter.
+    const driver = makeDriver();
+    const state: MarkerPaletteSessionState = {
+      ...session('backslash', '+F'),
+      isNoteMarker: (marker) => marker === 'f',
+    };
+    expect(handleMarkerPaletteSessionKeyDown(makeEvent(' '), state, driver)).toBe('ended');
+    expect(driver.commit).toHaveBeenCalledOnce();
   });
 
   it('Backspace on an empty filter is CLAIMED and closes the backslash and selection palettes', () => {
