@@ -11979,11 +11979,16 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      *
      * Set this when an exact, predictable match list matters more than forgiving lookup — marker
      * palettes do, because the rendered list participates in commit semantics (typing a marker and
-     * pressing Space must agree byte-for-byte with what is displayed). Palettes with
-     * {@link CommandPaletteRequest.keyForwarding} and passive palettes always match by containment
-     * regardless of this option: their filtered list is resolved by the HOST (commits and forwarded
-     * keys are answered from it), and the host's filter must agree exactly with what is on screen —
-     * cmdk's scorer is not reimplemented host-side.
+     * pressing Space must agree byte-for-byte with what is displayed).
+     *
+     * Some palettes match host-side regardless of this option, because their filtered list is
+     * resolved by the HOST — commits and forwarded keys are answered from it, so the host's filter
+     * must agree exactly with what is on screen, and cmdk's scorer is not reimplemented host-side.
+     * Which rule they get depends on the palette:
+     *
+     * - `passive`, or {@link CommandPaletteRequest.focusTarget} `'list'` — label PREFIX match, mirroring
+     *   PT9's marker dropdown.
+     * - {@link CommandPaletteRequest.keyForwarding} WITHOUT `'list'` focus — containment.
      */
     disableFuzzyMatching?: boolean;
     /**
@@ -12031,6 +12036,11 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * {@link CommandPaletteRequest.passive} does. The requester keeps ownership of every key semantic:
      * EVERY keydown the palette receives is handed to {@link PaletteKeyForwarding.onKey}, not only the
      * keys named in {@link PaletteKeyForwarding.keys}, so one table decides what each key means.
+     *
+     * It also changes how the list MATCHES, for the same reason `passive` does: the host resolves the
+     * filtered list, so matching moves host-side and becomes a label PREFIX match rather than cmdk's
+     * fuzzy scoring or containment. A consumer adopting `'list'` for the focus behavior alone gets
+     * that change too.
      *
      * @remarks
      * Focusing something that cannot be edited is what keeps composed input out: an IME or a dead key
