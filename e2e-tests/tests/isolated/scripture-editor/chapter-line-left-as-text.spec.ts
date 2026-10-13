@@ -79,7 +79,7 @@ test.describe('scripture editor chapter line left as text', () => {
     /**
      * The chapter line and the line after it, as the web view's own document shows them, with the
      * separator's no-break space read as a plain one — and whether the caret is in that next line,
-     * and where.
+     * and what of that line comes before it.
      */
     const editorEvalFrame = await findScriptureEditorFrame(mainPage);
     const readLines = async () =>
@@ -88,11 +88,21 @@ test.describe('scripture editor chapter line left as text', () => {
         const nextLine = chapterLine?.nextElementSibling;
         const selection = document.getSelection();
         const caretNode = selection?.anchorNode;
+        const caretInNextLine = !!caretNode && !!nextLine?.contains(caretNode);
+        // What of the line comes before the caret, so the check does not depend on whether the
+        // browser spells the position as a text offset or as an offset among the line's children.
+        let textBeforeCaret = '';
+        if (caretInNextLine && nextLine && caretNode && selection) {
+          const range = document.createRange();
+          range.setStart(nextLine, 0);
+          range.setEnd(caretNode, selection.anchorOffset);
+          textBeforeCaret = range.toString().replace(/\s/g, ' ');
+        }
         return {
           chapterLine: (chapterLine?.textContent ?? '').replace(/\s/g, ' '),
           nextLine: (nextLine?.textContent ?? '').replace(/\s/g, ' '),
-          caretInNextLine: !!caretNode && !!nextLine?.contains(caretNode),
-          caretOffset: selection?.anchorOffset ?? -1,
+          caretInNextLine,
+          textBeforeCaret,
         };
       });
 
@@ -122,11 +132,13 @@ test.describe('scripture editor chapter line left as text', () => {
       await expect
         .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
         .toEqual(expect.arrayContaining([expect.stringContaining(correctionMessage(2))]));
+      // `\\ 2` is a paragraph with no marker name, as ParatextData reads it. Its `\\ ` holds no
+      // caret, so the caret that was between the `\\` and the space is at the start of its text.
       await expect.poll(readLines, { timeout: 20_000 }).toEqual({
         chapterLine: '\\c 2 ',
         nextLine: '\\ 2',
         caretInNextLine: true,
-        caretOffset: 1,
+        textBeforeCaret: '\\ ',
       });
       await expect.poll(() => getRuthUsfm(2), { timeout: 30_000 }).toMatch(/^\\c 2\s+\\ 2\s+\\p/);
     });
@@ -143,10 +155,24 @@ test.describe('scripture editor chapter line left as text', () => {
       await expect
         .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
         .toEqual(expect.arrayContaining([expect.stringContaining(correctionMessage(3))]));
-      await expect
-        .poll(readLines, { timeout: 20_000 })
-        .toEqual({ chapterLine: '\\c 3 ', nextLine: 'X', caretInNextLine: true, caretOffset: 1 });
+      await expect.poll(readLines, { timeout: 20_000 }).toEqual({
+        chapterLine: '\\c 3 ',
+        nextLine: 'X',
+        caretInNextLine: true,
+        textBeforeCaret: 'X',
+      });
       await expect.poll(() => getRuthUsfm(3), { timeout: 30_000 }).toMatch(/^\\c 3\s+X\s+\\p/);
+    });
+
+    await test.step('\\ 2 loads back as itself and saves as itself', async () => {
+      await navigateToolbarBcv(mainPage, 'Ruth 2:1');
+      await expect(chapterMarker).toHaveAttribute('data-number', '2', { timeout: 60_000 });
+      await expect.poll(async () => (await readLines()).nextLine, { timeout: 20_000 }).toBe('\\ 2');
+      // An edit to the line makes the chapter save again, from what was loaded.
+      await editorFrame.locator('p.chapter[data-marker="c"] + *').click();
+      await mainPage.keyboard.press('End');
+      await mainPage.keyboard.type('9');
+      await expect.poll(() => getRuthUsfm(2), { timeout: 30_000 }).toMatch(/^\\c 2\s+\\ 29\s+\\p/);
     });
   });
 });

@@ -275,17 +275,25 @@ function caretAtStartOf({ indexes, textOffset }: Placement): SelectionRange {
   return caretAtRemovalBoundary(indexes.slice(0, -1), indexes[indexes.length - 1]);
 }
 
-/** The editor's address of the text in a top-level text item: its line's one text node. */
+/** The editor's address of the text in a top-level line: its first text node. */
 const TOP_LEVEL_TEXT_CARET_PATH_REGEX = /^\$\.content\[(\d+)\]\.content\[0\]$/;
 
 /**
- * Where the caret goes when it was in a line of top-level text the repair moved: the same character
- * of that text, wherever the text now is. That line is what is left of a chapter line whose bytes
- * stopped being a chapter marker (`\ 2` once the `c` is deleted), or text typed ahead of the
- * marker; the restored marker goes above it, and the user is still typing in it.
+ * How many characters a nameless marker shows ahead of its text: the backslash and its separator.
+ * The editor gives no caret position inside them.
+ */
+const NAMELESS_MARKER_LENGTH = 2;
+
+/**
+ * Where the caret goes when it was in a top-level line the repair moved: the same character of that
+ * line, wherever the line now is. That line is what is left of a chapter line whose bytes stopped
+ * being a chapter marker (`c 2`, or `\ 2` once the `c` is deleted, which is a paragraph with no
+ * marker name), or text typed ahead of the marker; the restored marker goes above it, and the user
+ * is still typing in it.
  *
- * The editor addresses a top-level text item as a line holding one text node, so both the caret
- * read from it and the target given back to it go one level deeper than the USJ item.
+ * The editor addresses a top-level line's text one level deeper than the USJ item, in both the
+ * caret read from it and the target given back to it. A nameless marker's own `\ ` holds no caret,
+ * so a caret that was inside it goes to the start of the text after it.
  *
  * @param caret The editor's caret when the save was made, if it had one.
  * @param content The document's top-level content, in the coordinates `caret` addresses.
@@ -300,16 +308,31 @@ function caretInMovedText(
   const match = TOP_LEVEL_TEXT_CARET_PATH_REGEX.exec(caret.start.jsonPath);
   if (!match) return undefined;
   const index = Number(match[1]);
-  const text = content[index];
+  const item = content[index];
   const placement = placements.get(index);
-  if (typeof text !== 'string' || !placement || placement.textOffset !== undefined)
-    return undefined;
+  if (!placement || placement.textOffset !== undefined) return undefined;
   const [newIndex, ...deeper] = placement.indexes;
   if (deeper.length > 0 || newIndex === index) return undefined;
+
+  const caretOffset = 'offset' in caret.start ? (caret.start.offset ?? 0) : 0;
+  let text: string;
+  let offset: number;
+  if (typeof item === 'string') {
+    text = item;
+    offset = caretOffset;
+  } else if (isParaObject(item) && item.marker === '') {
+    const [lead] = item.content ?? [];
+    if (typeof lead !== 'string')
+      return { start: { jsonPath: usjJsonPathFromIndexes([newIndex]), offset: 0 } };
+    text = lead;
+    offset = caretOffset - NAMELESS_MARKER_LENGTH;
+  } else {
+    return undefined;
+  }
   return {
     start: {
       jsonPath: usjJsonPathFromIndexes([newIndex, 0]),
-      offset: Math.min('offset' in caret.start ? (caret.start.offset ?? 0) : 0, text.length),
+      offset: Math.max(0, Math.min(offset, text.length)),
     },
   };
 }

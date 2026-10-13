@@ -352,13 +352,51 @@ describe('prepareUsjForChapterSave', () => {
 
     it('keeps what a deletion left, under a restored marker, with the caret where it was', () => {
       const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
-        usjOf('\\ 2', para('p', 'body')),
+        usjOf('c 2', para('p', 'body')),
+        stored,
+        2,
+        caretInLine(0),
+      );
+      expect(repairedUsj?.content).toEqual([chapter('2'), 'c 2', para('p', 'body')]);
+      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 0 } });
+    });
+
+    // `\ 2` once the `c` is deleted: a paragraph with no marker name, as ParatextData reads it.
+    const nameless = (text?: string): MarkerContent => ({
+      type: 'para',
+      marker: '',
+      ...(text === undefined ? {} : { content: [text] }),
+    });
+
+    it('keeps a nameless paragraph, with the caret at the same character of its text', () => {
+      const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
+        usjOf(nameless('2 more'), para('p', 'body')),
+        stored,
+        2,
+        caretInLine(4),
+      );
+      expect(repairedUsj?.content).toEqual([chapter('2'), nameless('2 more'), para('p', 'body')]);
+      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 2 } });
+    });
+
+    it("puts a caret that was inside a nameless marker's backslash at the start of its text", () => {
+      const { caretTarget } = prepareUsjForChapterSave(
+        usjOf(nameless('2'), para('p', 'body')),
         stored,
         2,
         caretInLine(1),
       );
-      expect(repairedUsj?.content).toEqual([chapter('2'), '\\ 2', para('p', 'body')]);
-      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 1 } });
+      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 0 } });
+    });
+
+    it('puts the caret in a nameless paragraph with no text', () => {
+      const { caretTarget } = prepareUsjForChapterSave(
+        usjOf(nameless(), para('p', 'body')),
+        stored,
+        2,
+        caretInLine(1),
+      );
+      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1]', offset: 0 } });
     });
 
     it('moves text typed ahead of the marker below it, with the caret', () => {
@@ -378,7 +416,7 @@ describe('prepareUsjForChapterSave', () => {
 
     it('keeps the caret within the text when the line was longer on screen', () => {
       const { caretTarget } = prepareUsjForChapterSave(
-        usjOf('\\ 2', para('p', 'body')),
+        usjOf('c 2', para('p', 'body')),
         stored,
         2,
         caretInLine(4),
@@ -388,22 +426,19 @@ describe('prepareUsjForChapterSave', () => {
 
     it('leaves chapter 1 without a marker, as Paratext 9 does', () => {
       const { repairedUsj, usjToSave } = prepareUsjForChapterSave(
-        usjOf(ID_GEN, '\\ 1', para('p', 'body')),
+        usjOf(ID_GEN, nameless('1'), para('p', 'body')),
         usjOf(ID_GEN, chapter('1'), para('p', 'body')),
         1,
         caretInLine(1),
       );
       expect(repairedUsj).toBeUndefined();
-      expect(usjToSave?.content).toEqual([ID_GEN, '\\ 1', para('p', 'body')]);
+      expect(usjToSave?.content).toEqual([ID_GEN, nameless('1'), para('p', 'body')]);
     });
 
     it('uses the usual caret when the caret was not in the moved text', () => {
-      const { caretTarget } = prepareUsjForChapterSave(
-        usjOf('\\ 2', para('p', 'body')),
-        stored,
-        2,
-        { start: { jsonPath: '$.content[1].content[0]', offset: 2 } },
-      );
+      const { caretTarget } = prepareUsjForChapterSave(usjOf('c 2', para('p', 'body')), stored, 2, {
+        start: { jsonPath: '$.content[1].content[0]', offset: 2 },
+      });
       expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
     });
   });
