@@ -3,9 +3,9 @@ import { getErrorMessage } from 'platform-bible-utils';
 
 /**
  * Sentinel that paranext-core's C# write-gate (`SendReceiveWriteLock`) appends to the message of
- * any project write it rejects because an automatic sync is syncing that project. Comment mutations
- * (add/reply, edit, delete, resolve-conflict) that reach `ParatextData` while a sync holds the gate
- * reject with a message ending in this sentinel.
+ * any project write it rejects because an automatic sync is running on that project. Comment
+ * mutations (add/reply, edit, delete, resolve-conflict) that reach `ParatextData` while a sync
+ * holds the gate reject with a message ending in this sentinel.
  *
  * Duplicated per extension — mirrors `platform-scripture/src/sync-edit-blocked.util.ts` (and the
  * scripture editor's own `SYNC_EDIT_BLOCKED_REGEX`) — so each extension's handling stays
