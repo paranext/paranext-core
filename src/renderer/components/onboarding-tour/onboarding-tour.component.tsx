@@ -68,8 +68,8 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
     setFinishedThisSession(true);
   }, []);
 
-  // Stop order is deliberately semantic — project, then model text, then resources, then the two
-  // toolbar controls — and is NOT mirrored for RTL. The sequence follows what a new user needs to
+  // Stop order is deliberately semantic — project, then Base or Model text, then resources, then the
+  // two toolbar controls — and is NOT mirrored for RTL. The sequence follows what a new user needs to
   // understand in order, not where the columns sit on screen; only each card's *placement* is
   // direction-aware (Tour resolves the logical `start`/`end` sides below).
   const steps: TourStep[] = useMemo(

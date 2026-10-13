@@ -162,8 +162,9 @@ export const TEAM_LAYOUT_PANEL_STRING_KEYS = Object.freeze([
 
 /**
  * Every key the dialog renders: its own (`TEAM_LAYOUT_DIALOG_STRING_KEYS`, defined in en.json) and
- * the Model Text panel's Base/Model explanation. Request this list, not either half, or the half
- * left out renders as raw `%key%` text.
+ * the Model Text panel's Base/Model explanation. Request this list, not either half: leave out the
+ * dialog's own half and it renders as raw `%key%` text; leave out the panel half and it silently
+ * shows English in every language.
  */
 export const TEAM_LAYOUT_DIALOG_ALL_STRING_KEYS = Object.freeze([
   ...TEAM_LAYOUT_DIALOG_STRING_KEYS,
