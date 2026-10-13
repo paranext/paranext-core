@@ -21,7 +21,6 @@ import {
 import { Copy } from 'lucide-react';
 import {
   clearPaletteSessionIfCurrent,
-  handleMarkerPaletteSessionKeyDown,
   isImeCompositionKeyEvent,
   type MarkerPaletteKeyEvent,
 } from '@/components/advanced/marker-palette-keydown.util';
@@ -34,6 +33,7 @@ import {
   runMarkerPaletteSession,
   type MarkerPaletteOpenSession,
 } from '@/components/advanced/marker-palette-session.util';
+import { routeMarkerPaletteKey } from '@/components/advanced/marker-palette-keys.util';
 import { isNoteMarker } from '@/components/advanced/marker-palette-filter.util';
 import {
   useCallback,
@@ -1352,61 +1352,19 @@ export default function FootnoteEditor({
    */
   const runPaletteSessionKey = useCallback(
     (event: MarkerPaletteKeyEvent) => {
-      const session = paletteSession.current;
       if (!markerPalette) return;
-      if (!session) {
-        // The palette outlived its session: it holds real focus and forwards EVERY key here, so
-        // returning would swallow them all — Escape included — leaving a box the keyboard cannot
-        // get out of. Close it instead.
-        markerPalette.dismiss();
-        return;
-      }
-      const outcome = handleMarkerPaletteSessionKeyDown(event, session, {
-        // Overlay ops delegate to the host-supplied driver; the commit ops are EDITOR-side
-        // applies this popover owns (it holds the editor ref). The table calls `dismiss()` right
-        // after each, resolving the show promise `undefined` — which the openMarkerPalette
-        // `.then` treats as a dismissal, so nothing double-applies.
-        update: (update) => markerPalette.update(update),
-        commit: () => markerPalette.commit(),
-        dismiss: () => markerPalette.dismiss(),
-        // Each editor-side commit restores the caret FIRST, the way the shared spine does before
-        // its own apply. This palette takes focus now, so `.editor-input` is blurred while these
-        // run and Lexical's blur processing can null the editor-state selection:
-        // `commitTypedMarker`/`commitTypedCloser` then refuse and return false — which nothing
-        // here reads — and `applyMarkerMenuSelection` lands at the document end. Without this the
-        // user gets no marker, no error, and a caret somewhere else.
-        commitTyped: (typed) => {
-          restoreSelectionIfLost();
-          editorRef.current?.commitTypedMarker(typed);
-        },
-        commitTypedAndReopen: (typed) => {
-          // The `\` commit: same materialization as Space with NO terminating space, then a
-          // fresh palette for the backslash just pressed. Showing a new palette replaces the
-          // current overlay (the old show promise rejects ABORTED, handled below), so there is
-          // no explicit dismiss to sequence against the commit.
-          restoreSelectionIfLost();
-          editorRef.current?.commitTypedMarker(typed, { trailingSpace: false });
-          openMarkerPaletteAtCaret();
-        },
-        commitTypedCloser: (typed) => {
-          restoreSelectionIfLost();
-          editorRef.current?.commitTypedCloser(typed);
-        },
-        commitItem: (marker) => {
-          const selected = session.items.find((item) => item.marker === marker);
-          if (!selected) return;
-          restoreSelectionIfLost();
-          editorRef.current?.applyMarkerMenuSelection(selected, {
-            trigger: 'backslash',
-            literalPrefixLanded: false,
-          });
-        },
+      const routed = routeMarkerPaletteKey(event, {
+        sessionRef: paletteSession,
+        editorRef,
+        palette: markerPalette,
+        restoreCaret: restoreSelectionIfLost,
+        reopenAtCaret: openMarkerPaletteAtCaret,
+        baselineRef: paletteBaselineSnapshotRef,
       });
-      // Clear only if this session is still the current one: a `\` commit opens a REPLACEMENT
-      // session synchronously inside the table call, and an unconditional clear would kill it.
-      if (outcome === 'ended') {
-        clearPaletteSessionIfCurrent(paletteSession, session.token);
-      }
+      // The palette outlived its session: it holds real focus and forwards EVERY key here, so
+      // returning would swallow them all — Escape included — leaving a box the keyboard cannot
+      // get out of. Close it instead.
+      if (routed === 'no-session') markerPalette.dismiss();
     },
     [markerPalette, openMarkerPaletteAtCaret, restoreSelectionIfLost],
   );

@@ -85,7 +85,6 @@ import {
 import {
   captureEditorContentSnapshot,
   clearPaletteSessionIfCurrent,
-  handleMarkerPaletteSessionKeyDown,
   hasEditorChanged,
   type EditorContentSnapshot,
   type MarkerPaletteKeyEvent,
@@ -93,6 +92,7 @@ import {
   type MarkerPaletteSessionKind,
   runMarkerPaletteSession,
   isNoteMarker,
+  routeMarkerPaletteKey,
 } from 'platform-bible-react/experimental';
 import {
   ABORTED,
@@ -2527,73 +2527,42 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const runPaletteSessionKey = useCallback(
     (event: MarkerPaletteKeyEvent) => {
-      const session = paletteSession.current;
-      if (!session) {
-        // The palette outlived its session: it holds real focus and forwards EVERY key here, so
-        // returning would swallow them all — Escape included — leaving a box the keyboard cannot
-        // get out of. Reachable because a chapter change or a read-only flip clears the session
-        // ref eagerly (it has to: `dismissCommandPalette` no-ops while the show request is still
-        // in flight), after which the palette can still mount and take focus. Close it.
-        papi.overlays.dismissCommandPalette(webViewId).catch((error) => {
-          logger.warn(`Error dismissing orphaned marker palette: ${getErrorMessage(error)}`);
-        });
-        return;
-      }
-      // A read-only editor cannot take a commit: every commit method below throws in read-only
-      // mode. `isReadOnlyEffective` folds in `isSyncBlocked`, which a scheduled Send/Receive flips
-      // with no user gesture, and the effect that ends the session on that flip is a React effect
-      // plus an async round trip — so there is a window where keys still arrive. They arrive HERE,
-      // forwarded from the focused palette, which is why the capture-path gate alone is not enough.
-      // End the session instead of routing the key.
-      if (isReadOnlyEffective) {
+      // A read-only editor cannot take a commit: every commit method throws in read-only mode.
+      // `isReadOnlyEffective` folds in `isSyncBlocked`, which a scheduled Send/Receive flips with
+      // no user gesture, and the effect that ends the session on that flip is a React effect plus
+      // an async round trip — so there is a window where keys still arrive. They arrive HERE,
+      // forwarded from the focused palette, which is why the capture-path gate alone is not
+      // enough. End the session instead of routing the key.
+      if (isReadOnlyEffective && paletteSession.current) {
         dismissPaletteSessionIfOpen();
         return;
       }
-      const outcome = handleMarkerPaletteSessionKeyDown(event, session, {
-        update: (update) => papi.overlays.updateCommandPalette(webViewId, update),
-        commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
-        dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
-        // Each editor-side commit restores the caret first, the way the shared spine does before
-        // its own apply. A palette mouse click blurs the editor (the overlay renders outside this
-        // document) and Lexical's blur processing can NULL the editor-state selection.
-        // `commitTypedMarker`/`commitTypedCloser` refuse without a range selection (returning false,
-        // which nothing here reads), and `applyMarkerMenuSelection` would land at the document end
-        // — so without this the user gets no marker, no error, and a caret somewhere else.
-        commitTyped: (typed) => {
-          restoreEditorSelection();
-          editorRef.current?.commitTypedMarker(typed);
+      const routed = routeMarkerPaletteKey(event, {
+        sessionRef: paletteSession,
+        editorRef,
+        palette: {
+          update: (update: { filterText?: string; moveSelection?: number }) =>
+            papi.overlays.updateCommandPalette(webViewId, update),
+          commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
+          dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
         },
-        commitTypedAndReopen: (typed) => {
-          // The `\` commit: same materialization as Space with NO terminating space, then a
-          // fresh palette for the backslash just pressed. Showing a new palette replaces the
-          // current overlay (the old show promise rejects ABORTED, already handled), so there is
-          // no explicit dismiss to sequence against the commit.
-          restoreEditorSelection();
-          editorRef.current?.commitTypedMarker(typed, { trailingSpace: false });
-          openMarkerPaletteAtCaret();
-        },
-        commitTypedCloser: (typed) => {
-          restoreEditorSelection();
-          editorRef.current?.commitTypedCloser(typed);
-        },
-        commitItem: (marker) => {
-          const selected = session.items.find((item) => item.marker === marker);
-          if (!selected) return;
-          restoreEditorSelection();
-          editorRef.current?.applyMarkerMenuSelection(selected, {
-            trigger: 'backslash',
-            literalPrefixLanded: false,
-          });
-        },
+        restoreCaret: restoreEditorSelection,
+        reopenAtCaret: openMarkerPaletteAtCaret,
+        baselineRef: paletteBaselineSnapshotRef,
       });
-      // Clear only if this session is still the current one: a `\` commit opens a REPLACEMENT
-      // session synchronously inside the table call, and an unconditional clear would kill it.
-      if (outcome === 'ended') clearPaletteSession(session.token);
+      // The palette outlived its session: it holds real focus and forwards EVERY key here, so
+      // returning would swallow them all — Escape included — leaving a box the keyboard cannot get
+      // out of. Reachable because a chapter change or a read-only flip clears the session ref
+      // eagerly (it has to: `dismissCommandPalette` no-ops while the show request is still in
+      // flight), after which the palette can still mount and take focus. Close it.
+      if (routed === 'no-session')
+        papi.overlays.dismissCommandPalette(webViewId).catch((error) => {
+          logger.warn(`Error dismissing orphaned marker palette: ${getErrorMessage(error)}`);
+        });
     },
     [
       webViewId,
       openMarkerPaletteAtCaret,
-      clearPaletteSession,
       restoreEditorSelection,
       isReadOnlyEffective,
       dismissPaletteSessionIfOpen,
