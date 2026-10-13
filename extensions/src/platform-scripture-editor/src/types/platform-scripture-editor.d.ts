@@ -954,9 +954,9 @@ declare module 'papi-shared-types' {
      * cannot be settled safely (the team's list or the resource's catalog entry cannot be read
      * yet). The team's list is never written.
      *
-     * Answers within 20 seconds of the request, waiting behind another show included, so before
-     * PAPI's request timeout: a show that has not got as far as saving by then is dropped, and the
-     * user told.
+     * Decides within 20 seconds of the request, waiting behind another show included, whether to go
+     * ahead: a show that has not got as far as saving by then is dropped, and the user told. One
+     * that has started saving runs to completion, however long the save and the tab's reload take.
      *
      * @param resourceProjectId The local project id of the resource to show
      * @returns How the show ended. Never rejects, so a rejection means the command was not reached.

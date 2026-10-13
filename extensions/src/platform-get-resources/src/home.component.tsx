@@ -820,7 +820,9 @@ export function Home({
       );
     return (
       <Button
-        disabled={isOpening}
+        // Not `disabled`, which would drop the focus of a keyboard user who pressed it; a repeat
+        // press is ignored by `handleOpenProject`.
+        aria-disabled={isOpening}
         aria-busy={isOpening}
         // The spinner has no text, so the button keeps its name while it shows.
         aria-label={openText}

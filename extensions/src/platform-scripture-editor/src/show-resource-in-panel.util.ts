@@ -182,7 +182,9 @@ function getPanelWebViewType(entry: DblResourceData | undefined): string | undef
 /**
  * How long a show has, from the request, to reach the point where it saves or changes a tab.
  * Shorter than PAPI's 30-second request timeout, so the caller hears how the show ended rather than
- * timing out while it may still go on to happen.
+ * timing out while it may still go on to happen — unless the save and reload themselves are slow,
+ * which nothing bounds. The command's declaration in `platform-scripture-editor.d.ts` states this
+ * value; keep the two in step.
  */
 export const SHOW_DEADLINE_MS = 20_000;
 

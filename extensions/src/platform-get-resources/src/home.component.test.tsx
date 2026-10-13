@@ -1180,16 +1180,18 @@ describe('Home opening an item', () => {
     const openButton = renderWithOpen(onOpenProject);
 
     fireEvent.click(openButton);
-    await waitFor(() => expect(openButton.disabled).toBe(true));
+    await waitFor(() => expect(openButton.getAttribute('aria-disabled')).toBe('true'));
     expect(openButton.getAttribute('aria-busy')).toBe('true');
     expect(openButton.textContent).not.toContain(OPEN);
+    // Not natively disabled: that would drop the focus of a keyboard user who pressed it to <body>.
+    expect(openButton.disabled).toBe(false);
 
     fireEvent.click(openButton);
     fireEvent.doubleClick(screen.getByText('PRJ'));
     expect(onOpenProject).toHaveBeenCalledTimes(1);
 
     finishOpen();
-    await waitFor(() => expect(openButton.disabled).toBe(false));
+    await waitFor(() => expect(openButton.getAttribute('aria-disabled')).toBe('false'));
     expect(openButton.textContent).toContain(OPEN);
     // Positive control: once it has finished, the item opens again.
     fireEvent.doubleClick(screen.getByText('PRJ'));
@@ -1205,7 +1207,7 @@ describe('Home opening an item', () => {
     fireEvent.click(openButton);
 
     await waitFor(() => expect(onOpenProject).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(openButton.disabled).toBe(false));
+    await waitFor(() => expect(openButton.getAttribute('aria-disabled')).toBe('false'));
     fireEvent.click(openButton);
     expect(onOpenProject).toHaveBeenCalledTimes(2);
   });

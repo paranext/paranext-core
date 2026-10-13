@@ -478,20 +478,40 @@ describe('showResourceInReferencePanel', () => {
   describe('when a show takes too long', () => {
     // A caller waits at most PAPI's request timeout. Past the deadline it has been answered, so the
     // show must not then go on to save or change the tab behind the user's back.
-    let finishRefresh: () => void = () => {};
+
+    /** Releases for the steps these tests hold up. */
+    let held: (() => void)[] = [];
+    /** A step that waits until {@link releaseHeld} lets it finish. */
+    const holdUntilReleased = <T>(value: T) =>
+      new Promise<T>((resolve) => {
+        held.push(() => resolve(value));
+      });
+    /** Lets every held step finish, and lets the shows behind them run as far as they go. */
+    async function releaseHeld() {
+      while (held.length > 0) {
+        const releases = held;
+        held = [];
+        releases.forEach((release) => release());
+        // A released show may reach a step that is held in turn, as the next show in the queue does.
+        // eslint-disable-next-line no-await-in-loop
+        await vi.runAllTimersAsync();
+      }
+    }
 
     beforeEach(() => {
       vi.useFakeTimers();
+      held = [];
       const catalogAnswer = mocks.sendCommand.getMockImplementation();
       mocks.sendCommand.mockImplementation(async (command: string, ...args: unknown[]) => {
         if (command === 'platformGetResources.refreshResourceFlags')
-          return new Promise<void>((resolve) => {
-            finishRefresh = resolve;
-          });
+          return holdUntilReleased(undefined);
         return catalogAnswer?.(command, ...args);
       });
     });
-    afterEach(() => {
+    // The show queue is shared by every test in this file. Released here rather than in each test,
+    // so a test that fails before its own release cannot leave the next one queued behind it.
+    afterEach(async () => {
+      await releaseHeld();
       vi.useRealTimers();
     });
 
@@ -502,8 +522,7 @@ describe('showResourceInReferencePanel', () => {
       await expect(show).resolves.toEqual(NOT_SHOWN);
       expect(mocks.notify).toHaveBeenCalledTimes(1);
 
-      finishRefresh();
-      await vi.runAllTimersAsync();
+      await releaseHeld();
       expect(mocks.setUserList).not.toHaveBeenCalled();
       expect(mocks.reloadWebView).not.toHaveBeenCalled();
       expect(mocks.notify).toHaveBeenCalledTimes(1);
@@ -518,30 +537,21 @@ describe('showResourceInReferencePanel', () => {
 
       await expect(first).resolves.toEqual(NOT_SHOWN);
       await expect(second).resolves.toEqual(NOT_SHOWN);
-      // Let both run to the end, so the next test does not queue behind them.
-      finishRefresh();
-      await vi.advanceTimersByTimeAsync(0);
-      finishRefresh();
-      await vi.runAllTimersAsync();
+      await releaseHeld();
       expect(mocks.reloadWebView).not.toHaveBeenCalled();
     });
 
     it('finishes a show that had started saving when the deadline passed', async () => {
-      let finishSave: () => void = () => {};
-      mocks.setUserList.mockImplementation(
-        () =>
-          new Promise<boolean>((resolve) => {
-            finishSave = () => resolve(true);
-          }),
-      );
+      mocks.setUserList.mockImplementation(() => holdUntilReleased(true));
       const show = showResourceInReferencePanel('byz-project');
       await vi.advanceTimersByTimeAsync(0);
-      finishRefresh();
+      // Releases the refresh; the show then runs on until it is held saving.
+      held.splice(0).forEach((release) => release());
       await vi.advanceTimersByTimeAsync(0);
       expect(mocks.setUserList).toHaveBeenCalled();
 
       await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
-      finishSave();
+      await releaseHeld();
 
       await expect(show).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
       expect(mocks.notify).not.toHaveBeenCalled();
