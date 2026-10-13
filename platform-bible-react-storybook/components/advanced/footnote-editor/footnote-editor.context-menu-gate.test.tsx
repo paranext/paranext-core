@@ -154,15 +154,11 @@ function dispatchKey(editorInput: HTMLElement, key: string): void {
 }
 
 /**
- * Focuses the editor and selects its ENTIRE content via Lexical's `$selectAll` — landing a
- * non-collapsed selection whose anchor sits in the wrapper paragraph that hosts the note, not in
- * `span.note` itself (the wrapper is the document's first point). Mirrors what Ctrl+A leaves
- * behind, and is the precondition the menu-open guards must not mishandle.
+ * Focuses the editor and selects its ENTIRE content via Lexical's `$selectAll`, which is what
+ * Ctrl+A does. The popover's note shell is protected, so the shell guard narrows that range to the
+ * note's own editable text: a non-collapsed selection the menu-open guards must leave alone.
  */
-async function selectAllOutsideNote(
-  lexical: LexicalEditor,
-  editorInput: HTMLElement,
-): Promise<void> {
+async function selectAllInPopover(lexical: LexicalEditor, editorInput: HTMLElement): Promise<void> {
   await act(async () => {
     editorInput.focus();
     await new Promise((resolve) => {
@@ -175,13 +171,6 @@ async function selectAllOutsideNote(
     });
     await Promise.resolve();
   });
-}
-
-/** True when the DOM selection's anchor sits outside the popover's `span.note` element. */
-function domAnchorOutsideNote(editorInput: HTMLElement): boolean {
-  const note = editorInput.querySelector('span.note');
-  const anchorNode = document.getSelection()?.anchorNode;
-  return !!note && !!anchorNode && !note.contains(anchorNode);
 }
 
 /** Finds the (single) Lexical TextNode holding the `\ft` sentinel content, if it still exists. */
@@ -227,11 +216,9 @@ describe('FootnoteEditor context-menu gate (the popover claims `\\` while its ow
       markerPalette,
     });
 
-    // Ctrl+A-style selection: non-collapsed, anchored in the wrapper paragraph OUTSIDE
-    // `span.note` — the precondition the Enter/`\` caret-discipline guards below the menu gate
-    // would otherwise collapse via `selectNote(0)`/`focus()`.
-    await selectAllOutsideNote(lexical, editorInput);
-    expect(domAnchorOutsideNote(editorInput)).toBe(true);
+    // Ctrl+A-style selection: non-collapsed, which the Enter/`\` caret-discipline guards below the
+    // menu gate must not collapse via `selectNote(0)`/`focus()` while the menu is open.
+    await selectAllInPopover(lexical, editorInput);
     expect(document.getSelection()?.isCollapsed).toBe(false);
 
     await act(async () => {

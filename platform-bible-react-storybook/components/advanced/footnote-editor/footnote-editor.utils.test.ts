@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { EditorRef } from '@eten-tech-foundation/platform-editor';
+import { DeltaOpInsertNoteEmbed, EditorRef } from '@eten-tech-foundation/platform-editor';
 import { MutableRefObject } from 'react';
-import { generateInlineMarkerMenuListItems } from './footnote-editor.utils';
+import { generateInlineMarkerMenuListItems, isUnclosedNoteOp } from './footnote-editor.utils';
 
 // The editor is only reached through `insertMarker`, inside an `action` these tests never invoke —
 // stubbing the rest of `EditorRef` would add nothing to what is being asserted.
@@ -40,5 +40,24 @@ describe('generateInlineMarkerMenuListItems', () => {
 
   it('offers nothing when neither the caret’s marker nor the note defines children', () => {
     expect(markersOffered('ft', undefined)).toEqual([]);
+  });
+});
+
+describe('isUnclosedNoteOp', () => {
+  const noteOp = (extra: object): DeltaOpInsertNoteEmbed => ({
+    insert: { note: { style: 'f', caller: '+', ...extra } },
+  });
+
+  it('recognizes a note written with no closing marker', () => {
+    expect(isUnclosedNoteOp(noteOp({ closed: 'false' }))).toBe(true);
+  });
+
+  it('treats a note with no closed attribute as closed', () => {
+    expect(isUnclosedNoteOp(noteOp({}))).toBe(false);
+  });
+
+  it('is false for anything that is not a note embed', () => {
+    expect(isUnclosedNoteOp(undefined)).toBe(false);
+    expect(isUnclosedNoteOp({ insert: 'text' })).toBe(false);
   });
 });
