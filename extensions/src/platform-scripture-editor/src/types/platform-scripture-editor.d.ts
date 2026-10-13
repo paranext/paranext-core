@@ -90,6 +90,21 @@ declare module 'platform-scripture-editor' {
    */
   export type AnnotationAction = 'clicked' | TypedMarkRemovalCause;
 
+  /** How `platformScriptureEditor.showResourceInReferencePanel` ended. */
+  export type ShowResourceInReferencePanelResult =
+    /** The resource is shown, in the tab with this web view ID */
+    | { status: 'shown'; webViewId: string }
+    /**
+     * The tab could not be shown, or not in time. The user has been told, and the resource should
+     * not be opened some other way.
+     */
+    | { status: 'notShown' }
+    /**
+     * Neither reference tab is showing a project to add the resource to, or the resource is of a
+     * kind neither tab lists (source-language, enhanced or XML resources). Open it some other way.
+     */
+    | { status: 'openElsewhere' };
+
   /**
    * Handler function for annotation interactions. To handle annotation interactions, register a
    * command with this type and pass the command's name to the editor WebViewController with
@@ -719,6 +734,7 @@ declare module 'papi-shared-types' {
     OpenEditorOptions,
     PlatformScriptureEditorWebViewController,
     SelectionChangeEvent,
+    ShowResourceInReferencePanelResult,
   } from 'platform-scripture-editor';
   import type { ResourceType } from 'platform-bible-utils';
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
@@ -938,16 +954,16 @@ declare module 'papi-shared-types' {
      * cannot be settled safely (the team's list or the resource's catalog entry cannot be read
      * yet). The team's list is never written.
      *
+     * Answers within 20 seconds of the request, waiting behind another show included, so before
+     * PAPI's request timeout: a show that has not got as far as saving by then is dropped, and the
+     * user told.
+     *
      * @param resourceProjectId The local project id of the resource to show
-     * @returns The tab's web view ID, or `undefined` if the resource should be opened some other
-     *   way: neither reference tab is showing a project to add it to, or it is of a kind neither
-     *   tab lists (source-language, enhanced or XML resources)
-     * @throws If the tab could not be shown. The user has been told, and the error message starts
-     *   with `(USER_WARNED)`; any other rejection means the command was not reached.
+     * @returns How the show ended. Never rejects, so a rejection means the command was not reached.
      */
     'platformScriptureEditor.showResourceInReferencePanel': (
       resourceProjectId: string,
-    ) => Promise<string | undefined>;
+    ) => Promise<ShowResourceInReferencePanelResult>;
     /**
      * Brings the Bible texts tab to the front. If it isn't open, opens it for the editor's project.
      * An open tab is raised, never reloaded, so it keeps its state.

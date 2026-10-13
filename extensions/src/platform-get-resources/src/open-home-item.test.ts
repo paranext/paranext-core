@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  sendCommand: vi.fn(async (): Promise<unknown> => undefined),
+  sendCommand: vi.fn<(command: string, ...args: unknown[]) => Promise<unknown>>(
+    async () => undefined,
+  ),
   getSetting: vi.fn(async (): Promise<unknown> => 'power'),
   recordProjectOpened: vi.fn(async () => undefined),
   notify: vi.fn(async () => 'notification-1'),
@@ -34,13 +36,20 @@ const commandsSent = () => mocks.sendCommand.mock.calls.map((call: unknown[]) =>
 describe('openHomeItem', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.sendCommand.mockImplementation(async () => undefined);
+    mocks.sendCommand.mockImplementation(async (command) =>
+      command === 'platformScriptureEditor.showResourceInReferencePanel'
+        ? { status: 'openElsewhere' }
+        : undefined,
+    );
     mocks.getSetting.mockImplementation(async () => 'power');
   });
 
   it('shows a resource in its reference tab in Simple mode', async () => {
     mocks.getSetting.mockImplementation(async () => 'simple');
-    mocks.sendCommand.mockImplementation(async () => 'bible-texts-tab');
+    mocks.sendCommand.mockImplementation(async () => ({
+      status: 'shown',
+      webViewId: 'bible-texts-tab',
+    }));
 
     await openHomeItem('resource-1', true);
 
@@ -65,9 +74,7 @@ describe('openHomeItem', () => {
   it('opens nothing else, and adds no warning, when the reference tab could not be shown', async () => {
     // The command has told the user; replacing their project would be the one thing worse.
     mocks.getSetting.mockImplementation(async () => 'simple');
-    mocks.sendCommand.mockImplementationOnce(async () => {
-      throw new Error('(USER_WARNED) Could not reload the tab');
-    });
+    mocks.sendCommand.mockImplementationOnce(async () => ({ status: 'notShown' }));
 
     await openHomeItem('resource-1', true);
 
@@ -76,10 +83,10 @@ describe('openHomeItem', () => {
   });
 
   it('warns the user when the reference tab command cannot be reached', async () => {
-    // A timeout, or the editor extension not loaded yet: the command never told the user.
+    // The editor extension not loaded yet, say: the command never told the user.
     mocks.getSetting.mockImplementation(async () => 'simple');
     mocks.sendCommand.mockImplementationOnce(async () => {
-      throw new Error('Request timed out');
+      throw new Error('No handler for platformScriptureEditor.showResourceInReferencePanel');
     });
 
     await openHomeItem('resource-1', true);

@@ -3,6 +3,7 @@ import type { OpenWebViewOptions, SavedWebViewDefinition } from '@papi/core';
 import { doesCatalogRowCoverProject, getErrorMessage } from 'platform-bible-utils';
 import type { DblResourceData, ResourceType } from 'platform-bible-utils';
 import type { DblResourceReference, ProjectReference, ResourceReference } from 'platform-scripture';
+import type { ShowResourceInReferencePanelResult } from 'platform-scripture-editor';
 import {
   getResourceReferenceRowId,
   isProjectReference,
@@ -178,35 +179,50 @@ function getPanelWebViewType(entry: DblResourceData | undefined): string | undef
   return undefined;
 }
 
-/** A show that failed after the user was told so. */
+/**
+ * How long a show has, from the request, to reach the point where it saves or changes a tab.
+ * Shorter than PAPI's 30-second request timeout, so the caller hears how the show ended rather than
+ * timing out while it may still go on to happen.
+ */
+export const SHOW_DEADLINE_MS = 20_000;
+
+/**
+ * One show's progress against its deadline. Once `commit` succeeds, the show will save and change
+ * the tab; once the deadline has passed first, it never will.
+ */
+type ShowProgress = {
+  /** Whether the deadline passed, and the user was told, before the show committed */
+  isAbandoned: () => boolean;
+  /** Claims the show for saving and showing, unless it has been abandoned. @returns Whether it may */
+  commit: () => boolean;
+};
+
+/** A show that failed, or was abandoned, after the user was told so. */
 class ShowFailedError extends Error {}
 
 /**
- * Starts the message of every rejection of {@link showResourceInReferencePanel}, all of which the
- * user has been told about, so a caller can tell them apart from a failure to reach the command.
- * Must match `USER_WARNED_REGEX` in platform-get-resources' `open-home-item.ts`.
- */
-export const USER_WARNED_MARKER = '(USER_WARNED)';
-
-/**
- * Fails a show the user asked for: tells them, and rejects so the caller knows not to open the
- * resource some other way.
+ * Fails a show the user asked for: tells them (unless an abandoned show already has), and throws so
+ * the caller knows not to open the resource some other way.
  *
+ * @param progress The show's progress against its deadline
  * @param message What went wrong, for the log
  */
-async function failToShow(message: string): Promise<never> {
+async function failToShow(progress: ShowProgress, message: string): Promise<never> {
   logger.error(message);
-  await warnTabCouldNotOpen();
+  if (!progress.isAbandoned()) await warnTabCouldNotOpen();
   throw new ShowFailedError(message);
 }
 
 /** See {@link showResourceInReferencePanel}. */
-async function showResourceNow(resourceProjectId: string): Promise<string | undefined> {
+async function showResourceNow(
+  resourceProjectId: string,
+  progress: ShowProgress,
+): Promise<string | undefined> {
   let openDefinitions: SavedWebViewDefinition[];
   try {
     openDefinitions = await papi.webViews.getAllOpenWebViewDefinitions();
   } catch (e) {
-    return failToShow(`Could not find the reference tabs: ${getErrorMessage(e)}`);
+    return failToShow(progress, `Could not find the reference tabs: ${getErrorMessage(e)}`);
   }
   const panels = openDefinitions.filter(
     (definition) =>
@@ -222,7 +238,10 @@ async function showResourceNow(resourceProjectId: string): Promise<string | unde
   const { entry, isKindKnown, isReferenceKindKnown } = await findCatalogEntry(resourceProjectId);
   // Not guessed: a panel asked for a resource it cannot list shows another one in its place.
   if (!isKindKnown)
-    return failToShow(`Could not tell which reference panel lists resource ${resourceProjectId}`);
+    return failToShow(
+      progress,
+      `Could not tell which reference panel lists resource ${resourceProjectId}`,
+    );
   const webViewType = getPanelWebViewType(entry);
   // A source-language, enhanced or XML resource is listed in neither panel. It opens the way it
   // always has, in its own viewer.
@@ -234,13 +253,16 @@ async function showResourceNow(resourceProjectId: string): Promise<string | unde
   }
   const panel = panels.find((definition) => definition.webViewType === webViewType);
   if (!panel?.projectId)
-    return failToShow(`The ${webViewType} tab is not open on a project to show the resource in`);
+    return failToShow(
+      progress,
+      `The ${webViewType} tab is not open on a project to show the resource in`,
+    );
 
   const reference: DblResourceReference | ProjectReference | undefined = entry
     ? toResourceReference(entry)
     : await toUncataloguedResourceReference(resourceProjectId);
   // The command takes any id, so one that names no local project must not reach the user's list.
-  if (!reference) return failToShow(`No local resource has id ${resourceProjectId}`);
+  if (!reference) return failToShow(progress, `No local resource has id ${resourceProjectId}`);
 
   // Already on the team's list, the resource is available to this user too, and is selected under
   // the team's own reference — which may spell its DBL entry UID in other casing than the catalog,
@@ -252,6 +274,11 @@ async function showResourceNow(resourceProjectId: string): Promise<string | unde
       (isProjectReference(item) && item.id === resourceProjectId),
   );
   const selectedReference = teamReference ?? reference;
+
+  // Everything above only reads. Past this point the show saves and changes the tab, which it must
+  // not do once its caller has been told it failed.
+  if (!progress.commit())
+    throw new ShowFailedError(`Gave up showing resource ${resourceProjectId}: out of time`);
 
   // Not saved when the team's list is unknown, as that could save a copy of the team's own
   // reference, nor when the reference's kind is uncertain (see `isReferenceKindKnown`). The panel
@@ -292,15 +319,18 @@ async function showResourceNow(resourceProjectId: string): Promise<string | unde
   try {
     shownWebViewId = await papi.webViews.reloadWebView(webViewType, panel.id, reloadOptions);
   } catch (e) {
-    return failToShow(`Could not reload the ${webViewType} tab: ${getErrorMessage(e)}`);
+    return failToShow(progress, `Could not reload the ${webViewType} tab: ${getErrorMessage(e)}`);
   }
   // The tab went away between finding it and reloading it.
-  if (!shownWebViewId) return failToShow(`The ${webViewType} tab closed before it could be shown`);
+  if (!shownWebViewId)
+    return failToShow(progress, `The ${webViewType} tab closed before it could be shown`);
   return shownWebViewId;
 }
 
 /** The show in progress, which the next one waits for. */
 let previousShow: Promise<unknown> = Promise.resolve();
+
+const NOT_SHOWN: ShowResourceInReferencePanelResult = { status: 'notShown' };
 
 /**
  * Shows a locally-installed resource in the reference panel for its kind — commentaries in the
@@ -314,28 +344,52 @@ let previousShow: Promise<unknown> = Promise.resolve();
  * there rather than in a Scripture editor.
  *
  * Shows run one at a time: two at once would race over the same personal list, and the later one
- * the user asked for could lose.
+ * the user asked for could lose. Each has {@link SHOW_DEADLINE_MS} from the request, time spent
+ * waiting behind another included, to get as far as saving; past it, the user is told the tab could
+ * not be opened and the show is dropped.
  *
  * @param resourceProjectId The resource's local project id
- * @returns The panel's web view id, or `undefined` if the resource should be opened some other way:
- *   neither reference panel is showing a project to add it to, or it is of a kind neither panel
- *   lists
- * @throws If the panel could not be shown. The user has been told, and the message starts with
- *   {@link USER_WARNED_MARKER}.
+ * @returns How the show ended; see {@link ShowResourceInReferencePanelResult}. Never rejects.
  */
 export function showResourceInReferencePanel(
   resourceProjectId: string,
-): Promise<string | undefined> {
+): Promise<ShowResourceInReferencePanelResult> {
+  let state: 'pending' | 'committed' | 'abandoned' = 'pending';
+  const progress: ShowProgress = {
+    isAbandoned: () => state === 'abandoned',
+    commit: () => {
+      if (state === 'abandoned') return false;
+      state = 'committed';
+      return true;
+    },
+  };
+
   const show = previousShow
-    .then(() => showResourceNow(resourceProjectId))
-    .catch(async (e) => {
+    .then(() => showResourceNow(resourceProjectId, progress))
+    .then(
+      (webViewId): ShowResourceInReferencePanelResult =>
+        webViewId ? { status: 'shown', webViewId } : { status: 'openElsewhere' },
+    )
+    .catch(async (e): Promise<ShowResourceInReferencePanelResult> => {
       // The expected failures have told the user already; this tells them about any other.
-      if (!(e instanceof ShowFailedError)) {
+      if (!(e instanceof ShowFailedError) && !progress.isAbandoned()) {
         logger.error(`Could not show resource ${resourceProjectId}: ${getErrorMessage(e)}`);
         await warnTabCouldNotOpen();
       }
-      throw new Error(`${USER_WARNED_MARKER} ${getErrorMessage(e)}`);
+      return NOT_SHOWN;
     });
-  previousShow = show.catch(() => undefined);
-  return show;
+  previousShow = show;
+
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<ShowResourceInReferencePanelResult>((resolve) => {
+    deadlineTimer = setTimeout(async () => {
+      // A committed show is saving or reloading by now, and answers when it is done.
+      if (state !== 'pending') return;
+      state = 'abandoned';
+      logger.warn(`Gave up showing resource ${resourceProjectId}: not ready in time`);
+      await warnTabCouldNotOpen();
+      resolve(NOT_SHOWN);
+    }, SHOW_DEADLINE_MS);
+  });
+  return Promise.race([show, deadline]).finally(() => clearTimeout(deadlineTimer));
 }

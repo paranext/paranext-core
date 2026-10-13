@@ -1,6 +1,6 @@
 import type { ResourceReferenceList } from 'platform-scripture';
 import type { DblResourceData } from 'platform-bible-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   sendCommand: vi.fn(),
@@ -34,6 +34,7 @@ vi.mock('@papi/backend', () => ({
 import {
   showResourceInReferencePanel,
   buildResourceTextPanelState,
+  SHOW_DEADLINE_MS,
   type ResourceTextPanelOptions,
 } from './show-resource-in-panel.util';
 
@@ -52,6 +53,10 @@ const catalogEntry = (overrides: Partial<DblResourceData>): DblResourceData => (
   projectId: 'byz-project',
   ...overrides,
 });
+
+const SHOWN_IN_BIBLE_TEXTS = { status: 'shown', webViewId: 'bible-texts-tab' };
+const NOT_SHOWN = { status: 'notShown' };
+const OPEN_ELSEWHERE = { status: 'openElsewhere' };
 
 const OPEN_PANELS = [
   { id: 'bible-texts-tab', webViewType: BIBLE_TEXTS, projectId: 'my-project' },
@@ -114,7 +119,9 @@ describe('showResourceInReferencePanel', () => {
   });
 
   it("adds a Bible text to the user's own list and selects it in Bible texts", async () => {
-    await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('bible-texts-tab');
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
+      SHOWN_IN_BIBLE_TEXTS,
+    );
 
     expect(mocks.getPdp).toHaveBeenCalledWith(
       'platformScripture.textConnectionSettings',
@@ -139,7 +146,10 @@ describe('showResourceInReferencePanel', () => {
   it('sends a commentary to the Commentaries tab', async () => {
     catalogHas([catalogEntry({ type: 'CommentaryResource' })]);
 
-    await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('commentaries-tab');
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual({
+      status: 'shown',
+      webViewId: 'commentaries-tab',
+    });
 
     expect(mocks.reloadWebView).toHaveBeenCalledWith(
       COMMENTARIES,
@@ -180,7 +190,7 @@ describe('showResourceInReferencePanel', () => {
   it('lists a resource the catalog does not have as a project, named from its metadata', async () => {
     mocks.getMetadataForProject.mockResolvedValue({ id: 'local-1', name: 'LOCAL' });
 
-    await expect(showResourceInReferencePanel('local-1')).resolves.toBe('bible-texts-tab');
+    await expect(showResourceInReferencePanel('local-1')).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
 
     expect(savedUserList?.items).toEqual([{ type: 'project', name: 'LOCAL', id: 'local-1' }]);
     expect(selectionSeenByProvider).toBe('project:local-1');
@@ -189,7 +199,7 @@ describe('showResourceInReferencePanel', () => {
   it('tells the user and saves nothing for an id no local project has', async () => {
     mocks.getMetadataForProject.mockRejectedValue(new Error('no project with id not-a-project'));
 
-    await expect(showResourceInReferencePanel('not-a-project')).rejects.toThrow('not-a-project');
+    await expect(showResourceInReferencePanel('not-a-project')).resolves.toEqual(NOT_SHOWN);
 
     expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warning' }));
     expect(mocks.setUserList).not.toHaveBeenCalled();
@@ -216,7 +226,9 @@ describe('showResourceInReferencePanel', () => {
     // it would be listed twice.
     catalogUnavailable('notReady', [BYZ_AS_LOCAL]);
 
-    await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('bible-texts-tab');
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
+      SHOWN_IN_BIBLE_TEXTS,
+    );
 
     expect(mocks.setUserList).not.toHaveBeenCalled();
     expect(selectionSeenByProvider).toBe('project:byz-project');
@@ -229,7 +241,9 @@ describe('showResourceInReferencePanel', () => {
       return undefined;
     });
 
-    await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('bible-texts-tab');
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
+      SHOWN_IN_BIBLE_TEXTS,
+    );
 
     expect(mocks.setUserList).not.toHaveBeenCalled();
     expect(selectionSeenByProvider).toBe('project:byz-project');
@@ -262,7 +276,7 @@ describe('showResourceInReferencePanel', () => {
     expect(commands).not.toContain('platformGetResources.getCachedResources');
     finishRefresh();
 
-    await expect(show).resolves.toBe('bible-texts-tab');
+    await expect(show).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
   });
 
   it("selects the team's own copy, without saving another, when the team already has it", async () => {
@@ -293,7 +307,9 @@ describe('showResourceInReferencePanel', () => {
       '{ "dataVersion": "1", "items": [null, "text", { "type": "dblResource", "name": "Bad", "id": 7 }] }',
     );
 
-    await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('bible-texts-tab');
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
+      SHOWN_IN_BIBLE_TEXTS,
+    );
 
     expect(savedUserList?.items).toEqual([{ type: 'dblResource', name: 'BYZ', id: 'uid-byz' }]);
   });
@@ -312,7 +328,9 @@ describe('showResourceInReferencePanel', () => {
   it('still shows the resource when the personal list cannot be saved', async () => {
     mocks.setUserList.mockRejectedValue(new Error('read-only settings'));
 
-    await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('bible-texts-tab');
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
+      SHOWN_IN_BIBLE_TEXTS,
+    );
 
     expect(selectionSeenByProvider).toBe('dbl:uid-byz');
     expect(mocks.warn).toHaveBeenCalled();
@@ -323,17 +341,17 @@ describe('showResourceInReferencePanel', () => {
       { id: 'bible-texts-tab', webViewType: BIBLE_TEXTS, projectId: undefined },
     ]);
 
-    await expect(showResourceInReferencePanel('byz-project')).resolves.toBeUndefined();
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(OPEN_ELSEWHERE);
 
     expect(mocks.setUserList).not.toHaveBeenCalled();
     expect(mocks.reloadWebView).not.toHaveBeenCalled();
   });
 
-  it('tells the user and rejects when only the other reference tab shows a project', async () => {
+  it('tells the user when only the other reference tab shows a project', async () => {
     // Not the no-project case, so opening the resource some other way would replace the project.
     mocks.getAllOpenWebViewDefinitions.mockResolvedValue([OPEN_PANELS[1]]);
 
-    await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow();
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(NOT_SHOWN);
 
     expect(mocks.notify).toHaveBeenCalled();
     expect(mocks.reloadWebView).not.toHaveBeenCalled();
@@ -345,23 +363,23 @@ describe('showResourceInReferencePanel', () => {
       { id: 'commentaries-tab', webViewType: COMMENTARIES, projectId: undefined },
     ]);
 
-    await expect(showResourceInReferencePanel('byz-project')).resolves.toBeUndefined();
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(OPEN_ELSEWHERE);
 
     expect(mocks.sendCommand).not.toHaveBeenCalled();
   });
 
-  it('tells the user and rejects when the tab closes before it can be shown', async () => {
+  it('tells the user when the tab closes before it can be shown', async () => {
     mocks.reloadWebView.mockResolvedValue(undefined);
 
-    await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow();
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(NOT_SHOWN);
 
     expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warning' }));
   });
 
-  it('tells the user and rejects when the open tabs cannot be listed', async () => {
+  it('tells the user when the open tabs cannot be listed', async () => {
     mocks.getAllOpenWebViewDefinitions.mockRejectedValue(new Error('window unreachable'));
 
-    await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow();
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(NOT_SHOWN);
 
     expect(mocks.notify).toHaveBeenCalled();
     expect(mocks.setUserList).not.toHaveBeenCalled();
@@ -371,7 +389,7 @@ describe('showResourceInReferencePanel', () => {
     // A source-language text, say: it opens in its own viewer, as it always has.
     catalogHas([catalogEntry({ type: 'SourceLanguageResource' })]);
 
-    await expect(showResourceInReferencePanel('byz-project')).resolves.toBeUndefined();
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(OPEN_ELSEWHERE);
 
     expect(mocks.notify).not.toHaveBeenCalled();
     expect(mocks.setUserList).not.toHaveBeenCalled();
@@ -381,7 +399,7 @@ describe('showResourceInReferencePanel', () => {
   it('tells the user about an unexpected failure too', async () => {
     mocks.getAllOpenWebViewDefinitions.mockResolvedValue(undefined);
 
-    await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow();
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(NOT_SHOWN);
 
     expect(mocks.notify).toHaveBeenCalledTimes(1);
   });
@@ -389,26 +407,18 @@ describe('showResourceInReferencePanel', () => {
   it('tells the user only once for an expected failure', async () => {
     mocks.reloadWebView.mockRejectedValue(new Error('reload failed'));
 
-    await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow();
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(NOT_SHOWN);
 
     expect(mocks.notify).toHaveBeenCalledTimes(1);
-  });
-
-  it('marks every failure as one the user has been told about', async () => {
-    // Home reads the marker so it does not warn a second time. Without it, Home would assume the
-    // command was never reached.
-    mocks.reloadWebView.mockRejectedValueOnce(new Error('reload failed'));
-    await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow('(USER_WARNED)');
-
-    mocks.getAllOpenWebViewDefinitions.mockResolvedValueOnce(undefined);
-    await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow('(USER_WARNED)');
   });
 
   it('still shows resources after a show has failed', async () => {
     mocks.reloadWebView.mockRejectedValueOnce(new Error('reload failed'));
 
-    await expect(showResourceInReferencePanel('byz-project')).rejects.toThrow();
-    await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('bible-texts-tab');
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(NOT_SHOWN);
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
+      SHOWN_IN_BIBLE_TEXTS,
+    );
 
     expect(selectionSeenByProvider).toBe('dbl:uid-byz');
   });
@@ -421,7 +431,9 @@ describe('showResourceInReferencePanel', () => {
       return [];
     });
 
-    await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('bible-texts-tab');
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
+      SHOWN_IN_BIBLE_TEXTS,
+    );
 
     expect(selectionSeenByProvider).toBe('dbl:uid-byz');
   });
@@ -436,7 +448,9 @@ describe('showResourceInReferencePanel', () => {
       };
     });
 
-    await expect(showResourceInReferencePanel('byz-project')).resolves.toBe('bible-texts-tab');
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
+      SHOWN_IN_BIBLE_TEXTS,
+    );
 
     expect(mocks.setUserList).not.toHaveBeenCalled();
     expect(selectionSeenByProvider).toBe('dbl:uid-byz');
@@ -454,11 +468,84 @@ describe('showResourceInReferencePanel', () => {
     });
     mocks.getMetadataForProject.mockResolvedValue({ id: 'local-1', name: 'LOCAL' });
 
-    await expect(showResourceInReferencePanel('local-1')).rejects.toThrow();
+    await expect(showResourceInReferencePanel('local-1')).resolves.toEqual(NOT_SHOWN);
 
     expect(mocks.notify).toHaveBeenCalledTimes(1);
     expect(mocks.reloadWebView).not.toHaveBeenCalled();
     expect(mocks.setUserList).not.toHaveBeenCalled();
+  });
+
+  describe('when a show takes too long', () => {
+    // A caller waits at most PAPI's request timeout. Past the deadline it has been answered, so the
+    // show must not then go on to save or change the tab behind the user's back.
+    let finishRefresh: () => void = () => {};
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      const catalogAnswer = mocks.sendCommand.getMockImplementation();
+      mocks.sendCommand.mockImplementation(async (command: string, ...args: unknown[]) => {
+        if (command === 'platformGetResources.refreshResourceFlags')
+          return new Promise<void>((resolve) => {
+            finishRefresh = resolve;
+          });
+        return catalogAnswer?.(command, ...args);
+      });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('gives up, tells the user once, and then neither saves nor shows it', async () => {
+      const show = showResourceInReferencePanel('byz-project');
+
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
+      await expect(show).resolves.toEqual(NOT_SHOWN);
+      expect(mocks.notify).toHaveBeenCalledTimes(1);
+
+      finishRefresh();
+      await vi.runAllTimersAsync();
+      expect(mocks.setUserList).not.toHaveBeenCalled();
+      expect(mocks.reloadWebView).not.toHaveBeenCalled();
+      expect(mocks.notify).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts the time a show waits behind another one', async () => {
+      const first = showResourceInReferencePanel('byz-project');
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS / 2);
+      const second = showResourceInReferencePanel('byz-project');
+
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
+
+      await expect(first).resolves.toEqual(NOT_SHOWN);
+      await expect(second).resolves.toEqual(NOT_SHOWN);
+      // Let both run to the end, so the next test does not queue behind them.
+      finishRefresh();
+      await vi.advanceTimersByTimeAsync(0);
+      finishRefresh();
+      await vi.runAllTimersAsync();
+      expect(mocks.reloadWebView).not.toHaveBeenCalled();
+    });
+
+    it('finishes a show that had started saving when the deadline passed', async () => {
+      let finishSave: () => void = () => {};
+      mocks.setUserList.mockImplementation(
+        () =>
+          new Promise<boolean>((resolve) => {
+            finishSave = () => resolve(true);
+          }),
+      );
+      const show = showResourceInReferencePanel('byz-project');
+      await vi.advanceTimersByTimeAsync(0);
+      finishRefresh();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mocks.setUserList).toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
+      finishSave();
+
+      await expect(show).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
+      expect(mocks.notify).not.toHaveBeenCalled();
+    });
   });
 
   it('shows the later of two quick opens, and saves both', async () => {

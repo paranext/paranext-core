@@ -2,13 +2,6 @@ import papi, { logger } from '@papi/frontend';
 import { getErrorMessage } from 'platform-bible-utils';
 
 /**
- * Marks a failure of `platformScriptureEditor.showResourceInReferencePanel` that the command has
- * already told the user about. Must match `USER_WARNED_MARKER` in platform-scripture-editor's
- * `show-resource-in-panel.util.ts`; extensions cannot share runtime code.
- */
-const USER_WARNED_REGEX = /\(USER_WARNED\)/;
-
-/**
  * Whether the app is in Simple mode, read when it is needed so a mode switch is never missed. An
  * unreadable setting counts as Power mode, which opens the resource the way Home always has.
  */
@@ -35,23 +28,15 @@ async function isSimpleMode(): Promise<boolean> {
  */
 async function openResource(projectId: string): Promise<void> {
   if (await isSimpleMode()) {
-    let shownWebViewId: string | undefined;
-    try {
-      shownWebViewId = await papi.commands.sendCommand(
-        'platformScriptureEditor.showResourceInReferencePanel',
-        projectId,
-      );
-    } catch (e) {
-      const message = getErrorMessage(e);
-      if (USER_WARNED_REGEX.test(message)) {
-        logger.warn(`Home could not show resource ${projectId} in its reference tab: ${message}`);
-        return;
-      }
-      // Not reached at all (a timeout, or the editor extension not loaded yet). The resource viewer
-      // belongs to the same extension, so it is no fallback.
-      throw new Error(`Could not reach the reference tabs: ${message}`);
-    }
-    if (shownWebViewId) return;
+    // The command never rejects, so a rejection means it was not reached (the editor extension is
+    // not loaded yet, say); that propagates, and the user is told. The resource viewer belongs to
+    // the same extension, so it is no fallback.
+    const result = await papi.commands.sendCommand(
+      'platformScriptureEditor.showResourceInReferencePanel',
+      projectId,
+    );
+    // `notShown`: the command has told the user, and nothing else should open in the tab's place.
+    if (result.status !== 'openElsewhere') return;
   }
   await papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId);
 }

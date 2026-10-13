@@ -1439,8 +1439,15 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         result: {
           name: 'return value',
           summary:
-            'The ID of the tab showing the resource, or undefined if it should be opened some other way (no tab is showing a project, or neither tab lists its kind). Throws if the tab could not be shown',
-          schema: { type: 'string' },
+            "How the show ended: 'shown' (with the tab's webViewId), 'notShown' (the user has been told; open nothing else) or 'openElsewhere' (no tab is showing a project, or neither tab lists its kind). Never rejects",
+          schema: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', enum: ['shown', 'notShown', 'openElsewhere'] },
+              webViewId: { type: 'string' },
+            },
+            required: ['status'],
+          },
         },
       },
     },
