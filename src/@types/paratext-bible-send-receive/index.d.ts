@@ -456,8 +456,9 @@ declare module 'papi-shared-types' {
      * several.
      *
      * @param projectIds Ids of projects to send/receive
-     * @param suppressNotification When `true`, the dotnet process skips its own progress toast (the
-     *   caller — e.g. the open S/R dialog — shows its own progress + Cancel). Defaults to `false`.
+     * @param suppressNotification When `true`, the caller owns all sync feedback: the dotnet
+     *   process skips its progress toast and its failure and role-change toasts (e.g. the open S/R
+     *   dialog shows its own progress, Cancel and results). Defaults to `false`.
      * @returns S/R results
      */
     'paratextBibleSendReceive.sendReceiveProjects': (

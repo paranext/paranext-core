@@ -230,7 +230,10 @@ internal class ParatextProjectSendReceiveService(
     /// this may raise no Send/Receive claim, so those toasts are their only failure surface — which
     /// is what makes this narrower than <c>sendReceiveProjects</c>' <c>suppressNotification</c>.
     /// Defaults to <see langword="false"/>. Callers pass it only when they know the interface mode is
-    /// Simple, where the toolbar sync indicator is the sync's persistent surface instead.
+    /// Simple, where the toolbar sync indicator is the sync's persistent surface instead, and not
+    /// while something covers the toolbar indicator (e.g. the first-run wizard).
+    /// In-process C# callers must pass both arguments: <c>PapiClient</c>'s in-process dispatch
+    /// (<c>DynamicInvoke</c>) does not fill optional defaults, so only JSON-RPC callers may omit it.
     /// An implementation MUST NOT honor it unless it also raises <see cref="SyncActivityChanged"/>
     /// for the run: the toolbar indicator only sees a claimless sync through that signal, so honoring
     /// the flag without it leaves a Simple-mode sync with no progress surface at all.

@@ -190,8 +190,9 @@ export const PopoverSyncingUnknownProjects: Story = {
 
 /**
  * Popover during a sync the backend is reporting progress for: the current item and its percent.
- * This is what Simple mode loses if the indicator carries no progress, since it suppresses the
- * persistent C# toast in favour of this surface.
+ * This is what a Simple-mode sync loses if the indicator carries no progress: core's direct sync
+ * callers (the startup and project-switch syncs) suppress the persistent C# toast in favour of this
+ * surface, while syncs such as auto-sync and `syncOpenProjects` still show the toast.
  */
 export const PopoverSyncingWithProgress: Story = {
   decorators: [

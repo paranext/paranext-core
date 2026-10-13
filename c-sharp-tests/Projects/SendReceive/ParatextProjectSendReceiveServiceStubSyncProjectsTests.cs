@@ -48,9 +48,9 @@ namespace TestParanextDataProvider.Projects.SendReceive
             });
         }
 
-        // The arguments core's callers actually send: `syncProjects(undefined)` from older callers,
-        // `syncProjects(undefined, true)` from the startup sync (undefined serializes as null), and
-        // an explicit id list with `false`.
+        // The arguments core's callers actually send: `syncProjects(undefined)` from callers that do
+        // not pass the flag (e.g. the Send/Receive extension), `syncProjects(undefined, true)` from
+        // the startup sync (undefined serializes as null), and an explicit id list with `false`.
         private static readonly object?[][] s_wireArgumentShapes =
         [
             [null],
