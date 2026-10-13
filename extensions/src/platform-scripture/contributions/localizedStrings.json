@@ -220,6 +220,33 @@
     },
     "%webView_checksSidePanel_projectFilter_projectsAndResources%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
+    },
+    "%manageBooks_delete_confirmBodyAllShared_2%": {
+      "fallbackKey": "%manageBooks_delete_confirmBodyAllShared%"
+    },
+    "%manageBooks_delete_confirmBodyAllShared%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %manageBooks_delete_confirmBodyAllShared_2%."
+      }
+    },
+    "%manageBooks_delete_confirmBodySharedSendReceive_2%": {
+      "fallbackKey": "%manageBooks_delete_confirmBodySharedSendReceive%"
+    },
+    "%manageBooks_delete_confirmBodySharedSendReceive%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %manageBooks_delete_confirmBodySharedSendReceive_2%."
+      }
+    },
+    "%webView_platformScripture_error_syncEditBlocked_2%": {
+      "fallbackKey": "%webView_platformScripture_error_syncEditBlocked%"
+    },
+    "%webView_platformScripture_error_syncEditBlocked%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScripture_error_syncEditBlocked_2%."
+      }
     }
   },
   "localizedStrings": {
@@ -334,7 +361,9 @@
       "%manageBooks_delete_confirmBodyAll%": "All books will be deleted from {0}. The project itself will not be deleted. This cannot be undone.",
       "%manageBooks_delete_confirmBodyPartial%": "{0} book(s) will be deleted from {1}. This cannot be undone.",
       "%manageBooks_delete_confirmBodyAllShared%": "All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. The project itself will not be deleted. This cannot be undone.",
+      "%manageBooks_delete_confirmBodyAllShared_2%": "All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next sync. The project itself will not be deleted. This cannot be undone.",
       "%manageBooks_delete_confirmBodySharedSendReceive%": "{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. This cannot be undone.",
+      "%manageBooks_delete_confirmBodySharedSendReceive_2%": "{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next sync. This cannot be undone.",
       "%manageBooks_delete_confirmCancel%": "Cancel",
       "%manageBooks_delete_confirmTitle%": "Delete books from {0}?",
       "%manageBooks_delete_emptyState_noBooks%": "This project has no books to delete.",
@@ -686,6 +715,7 @@
       "%webView_inventory_unknown_marker%": "Unknown Marker",
       "%webView_markersInventory_title%": "Markers Inventory: {projectName}",
       "%webView_platformScripture_error_syncEditBlocked%": "Editing is paused while an automatic Send/Receive is in progress. Your change was not saved.",
+      "%webView_platformScripture_error_syncEditBlocked_2%": "Editing is paused while an automatic sync is in progress. Your change was not saved.",
       "%webView_platformScripture_showCheckResults%": "Show Check Results...",
       "%webView_platformScripture_tools%": "Tools",
       "%webView_punctuationInventory_title%": "Punctuation Inventory: {projectName}",
@@ -984,6 +1014,7 @@
       "%webView_inventory_unknown_marker%": "Marcador desconocido",
       "%webView_markersInventory_title%": "Inventario de marcadores: {projectName}",
       "%webView_platformScripture_error_syncEditBlocked%": "La edición está pausada mientras se realiza un Enviar/Recibir automático. Su cambio no se guardó.",
+      "%webView_platformScripture_error_syncEditBlocked_2%": "La edición está pausada mientras se realiza una sincronización automática. Su cambio no se guardó.",
       "%webView_platformScripture_showCheckResults%": "Mostrar resultados de verificación...",
       "%webView_platformScripture_tools%": "Herramientas",
       "%webView_repeatedWordsInventory_title%": "Inventario de palabras repetidas: {projectName}",

@@ -12,7 +12,7 @@ const STRINGS = {
   '%webView_platformScriptureEditor_bookNotAvailable_manageBooksButton%': 'Manage books',
   '%webView_platformScriptureEditor_bookNotAvailable_readOnlyTooltip%':
     'This project is read-only. Books cannot be added.',
-  '%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%':
+  '%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%':
     'Books cannot be added during Send/Receive.',
 };
 

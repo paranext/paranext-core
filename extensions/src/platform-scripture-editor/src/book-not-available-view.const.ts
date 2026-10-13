@@ -16,7 +16,7 @@ const MANAGE_BOOKS_BUTTON_KEY =
   '%webView_platformScriptureEditor_bookNotAvailable_manageBooksButton%';
 const READ_ONLY_TOOLTIP_KEY = '%webView_platformScriptureEditor_bookNotAvailable_readOnlyTooltip%';
 const SYNC_IN_PROGRESS_TOOLTIP_KEY =
-  '%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%';
+  '%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%';
 
 export const BOOK_NOT_AVAILABLE_VIEW_KEYS = {
   SIMPLE_MESSAGE_KEY,

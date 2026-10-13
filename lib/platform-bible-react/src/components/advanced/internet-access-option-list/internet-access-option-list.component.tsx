@@ -52,13 +52,13 @@ const OPTION_ROWS = [
   {
     value: 'Enabled',
     labelKey: '%paratextRegistration_description_internetUse_option_Enabled_2%',
-    descriptionKey: '%paratextRegistration_description_internetUse_option_Enabled_details%',
+    descriptionKey: '%paratextRegistration_description_internetUse_option_Enabled_details_2%',
     isEnabled: true,
   },
   {
     value: 'VpnRequired',
     labelKey: '%paratextRegistration_description_internetUse_option_VpnRequired_2%',
-    descriptionKey: '%paratextRegistration_description_internetUse_option_VpnRequired_details%',
+    descriptionKey: '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%',
     isEnabled: true,
   },
   {
