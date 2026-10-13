@@ -41,7 +41,7 @@ export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
   ...Object.values(scopeFilterToLabelKey),
   '%no_comments%',
   '%no_comments_match_filter%',
-  '%webView_legacyCommentManager_syncEditBlocked_notice%',
+  '%webView_legacyCommentManager_syncEditBlocked_notice_2%',
   '%comment_filter_current_user_unavailable%',
   '%comment_filter_retry_current_user%',
 ] as const;
@@ -50,7 +50,7 @@ export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
  * Slim "editing paused during Send/Receive" notice text shown while this project's sync blocks
  * edits.
  */
-const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice%';
+const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice_2%';
 
 /**
  * `id` of the sticky header (the editing-paused notice, when shown, plus the filter toolbar). The

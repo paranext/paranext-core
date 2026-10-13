@@ -24,7 +24,7 @@ import { getErrorMessage, LanguageStrings, LocalizeKey } from 'platform-bible-ut
  * {@link notifySyncEditBlocked} exists.
  */
 export const SYNC_EDIT_BLOCKED_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_error_syncEditBlocked%';
+  '%webView_platformScriptureEditor_error_syncEditBlocked_2%';
 
 /**
  * Send a warning notification, self-catching so a fire-and-forget caller (one that cannot `await`)

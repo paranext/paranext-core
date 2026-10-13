@@ -5,11 +5,11 @@ import { useCallback, useState } from 'react';
 
 /** Banner text plus the reused general Cancel label. */
 export const SYNC_BLOCKED_BANNER_STRING_KEYS: LocalizeKey[] = [
-  '%webView_platformScriptureEditor_syncEditBlocked_banner%',
+  '%webView_platformScriptureEditor_syncEditBlocked_banner_2%',
   '%general_cancel%',
 ];
 
-const BANNER_TEXT_KEY: LocalizeKey = '%webView_platformScriptureEditor_syncEditBlocked_banner%';
+const BANNER_TEXT_KEY: LocalizeKey = '%webView_platformScriptureEditor_syncEditBlocked_banner_2%';
 const CANCEL_KEY: LocalizeKey = '%general_cancel%';
 
 /**

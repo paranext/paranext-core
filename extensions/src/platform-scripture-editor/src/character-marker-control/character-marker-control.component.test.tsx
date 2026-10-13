@@ -44,7 +44,7 @@ const STRINGS = {
   '%webView_platformScriptureEditor_characterMarkerControl_label_format%':
     '{marker} - {description}',
   '%markerMenu_searchPlaceholder_character%': 'Search to change character style.',
-  '%webView_platformScriptureEditor_syncEditBlocked_banner%':
+  '%webView_platformScriptureEditor_syncEditBlocked_banner_2%':
     'Editing paused — Send/Receive in progress',
   '%markerMenu_searchPlaceholder%': 'Type a style or search.',
 };

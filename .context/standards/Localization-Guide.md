@@ -1,10 +1,10 @@
 ---
 title: Localization Guide
 description: Mandatory localization patterns for all user-facing text in paranext-core — UI web views (TS) and C# backend services.
-version: 1.7.0
+version: 1.8.0
 status: active
 created: 2026-03-04
-last_updated: 2026-07-28
+last_updated: 2026-10-13
 toc: true
 ---
 
@@ -431,6 +431,40 @@ If a string needs to be replaced with a different value:
 - New code uses the new key directly
 - No breaking changes to existing translations
 
+### Renaming Terminology Users See
+
+A product-wide wording change (for example "Send/Receive" becoming "sync") changes what the user reads, so it is a replacement, not a style fix — but the old key must stay intact: third-party extensions and translators may still reference it, and the old value is still correct for anyone who has not adopted the new term. The fallback therefore points the **other** way, from the new key to the old one:
+
+1. **Add the new key** with the new wording in every language this repo maintains (`en` and `es`). Leave the old key and all its values untouched.
+2. **Add `fallbackKey` on the NEW key**, pointing at the old key, so a language that has not translated the new key yet still shows its old translation instead of the English fallback.
+3. **Switch every consumer** in this repo to the new key — `t()` calls, menu contributions, English fallback literals in TSX and C#, `displayData.json`.
+4. **Verify the old key has no remaining consumer** in implementation code: search the repo for it and confirm the only hits are the strings file and the metadata. Record the search in the PR.
+5. Optionally add `deprecationInfo` (date + "the new key is …") to the old key's metadata entry. It only logs a warning; it does not redirect anything.
+
+```json
+{
+  "metadata": {
+    "%feature_label_2%": {
+      "fallbackKey": "%feature_label%"
+    },
+    "%feature_label%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %feature_label_2%."
+      }
+    }
+  },
+  "localizedStrings": {
+    "en": {
+      "%feature_label%": "Send/Receive this project",
+      "%feature_label_2%": "Sync this project"
+    }
+  }
+}
+```
+
+The lookup order in `localization.service-host.ts` makes this work: a key's own value in the current language wins, then its `fallbackKey` in the current language, then the key in the fallback languages, then the `fallbackKey` in the fallback languages.
+
 ### Exception: Fixing Errors or Applying a Revised Style Rule
 
 The immutability rule above protects a key's **meaning** — not the exact characters of its value. It's fine to correct a string's value in place, without a new key or `fallbackKey`, when the fix does not change what the string means:
@@ -690,6 +724,7 @@ This was learned the hard way: the markers-checklist port shipped two backend st
 
 | Version | Date       | Change          |
 | ------- | ---------- | --------------- |
+| 1.8.0   | 2026-10-13 | Added "Renaming Terminology Users See" under Existing Strings Are Immutable: a product-wide wording change (first case: "Send/Receive" → "sync", PT-4810) adds a new key with `fallbackKey` pointing at the OLD key, leaves the old key and values untouched, switches every consumer, and verifies the old key has no remaining consumer — the reverse of the retire-a-key redirect documented above it. Documented the lookup order that makes the forward fallback work. |
 | 1.7.0   | 2026-07-28 | Ported from the embedded profile (authored 2026-06-18, landed via #2438): Added "Testing Localized C# Backends" section: `DummyPapiClient.SendRequestAsync<T>` returns `default(T)` for unregistered services, so `GetLocalizedString` falls back to its `defaultValue` and wire integration tests still see English when a fallback is supplied — a green literal-asserting test does not prove resolution works. Added "Porting PT9 Features" section: don't inherit PT9's English-only surfaces (e.g. early-startup error dialogs shown before the localizer bootstraps) — the PT10 equivalent MUST be internationalized; catalogue PT9 `Localizer.Str` user-facing strings during discovery so all keys are known before backend TDD (markers-checklist shipped two strings as English literals because the gap was found late). Cross-referenced `pt9-archaeologist.md` and `test-runner/reference.md`. |
 | 1.6.0   | 2026-07-28 | Code-review pass on the 1.5.0 additions. Fixed TOC section order (Spanish now listed before Text Direction, matching the body). Added the source Google Doc link and a "Last synced" date to the Spanish section. Split out language-agnostic content into a new "Translation Style (All Languages)" subsection under Conventions (terminology priority, plain vocabulary, non-literal clarity, length, neutral error tone, sentence-case capitalization, classifying ambiguous UI text, placeholder-text categorization) so it's not scoped to Spanish only. Closed a gap in Spanish verb-mood rules for tooltips/placeholders/progress indicators/status-bar labels (gerund for in-progress, past participle for current-state, infinitive as the default fallback), with Spanish examples. Reworded the "Favor de + infinitive" guidance from "non-standard" to a regional-preference note, since it's a well-established Mexican/Latin American variant the team simply isn't adopting. Added a "Flag Unclear or Non-Standard English Source Text" step to the Localization Pattern. Documented `getLocalizeKeyForPhysicalKey`/`NameablePhysicalKey` (landed via [#2590](https://github.com/paranext/paranext-core/pull/2590), merged 2026-07-30) and the per-language policy for translating vs. preserving physical key names. Moved "Revising an Existing Localization Decision" under "Existing Strings Are Immutable" as a named, meaning-preservation-scoped exception (`Exception: Fixing Errors or Applying a Revised Style Rule`), and clarified the sync direction (Google Doc first, then this guide, then shipped strings). Fixed the `formatReplacementStringToArray` example's placeholder count to match its cited reference implementation and added the missing `.map`/`Fragment` key-wrapping it also uses. Documented a real correctness defect in the `interleavePlaceholders` duplicate helper (its `\w+` regex silently drops hyphenated placeholder names) and filed [PT-4269](https://paratextstudio.atlassian.net/browse/PT-4269) to track migrating it to the shared utility. |
 | 1.5.0   | 2026-07-27 | Added "Embedding JSX in Localized Text with formatReplacementStringToArray" section (mid-sentence JSX interpolation, e.g. links/`Kbd` elements, via the existing `formatReplacementStringToArray` utility — was previously undocumented and had already been reimplemented once as a local helper; also notes to use the shadcn `Kbd`/`KbdGroup` components and, once merged, `getLocalizeKeyForPhysicalKey` for key names rather than hardcoding them). Added "Spanish (es) Localization Decisions" section distilled from the team's "Localization decisions - Paratext 10 Studio" Google Doc (Spanish tab): regional-variant/priority guidance, formal `usted` register, error-message templates, capitalization rules, and verb-mood rules (infinitive for controls, conjugated imperative for messages/alerts). French tab exists but is not yet authoritative, so not captured. |

@@ -356,5 +356,14 @@
   "%yes%": {
     "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",
     "fallbackKey": "%confirm%"
+  },
+  "%onboardingTour_step_sendReceive_description_2%": {
+    "fallbackKey": "%onboardingTour_step_sendReceive_description%"
+  },
+  "%onboardingTour_step_sendReceive_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-13",
+      "message": "\"Send/Receive\" is now called \"sync\". The new key is %onboardingTour_step_sendReceive_description_2%."
+    }
   }
 }

@@ -20,7 +20,7 @@ export const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
  * `contributions/localizedStrings.json`. Deliberately not exported: every caller goes through
  * {@link notifySyncEditBlocked} so the severity/message pair cannot drift across call sites.
  */
-const SYNC_EDIT_BLOCKED_MESSAGE_KEY = '%webView_platformScripture_error_syncEditBlocked%';
+const SYNC_EDIT_BLOCKED_MESSAGE_KEY = '%webView_platformScripture_error_syncEditBlocked_2%';
 
 /**
  * Whether `error` was thrown by the write-gate because an automatic Send/Receive is in progress
