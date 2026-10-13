@@ -122,6 +122,10 @@ export {
   useMarkerPaletteCompositionClose,
   type UseMarkerPaletteCompositionCloseOptions,
 } from './components/advanced/use-marker-palette-composition-close.hook';
+export {
+  useMarkerPaletteFocusOutCapture,
+  type UseMarkerPaletteFocusOutCaptureOptions,
+} from './components/advanced/use-marker-palette-focus-out-capture.hook';
 export { isEditorContextMenuOpenFor } from './components/advanced/editor-context-menu.util';
 export {
   default as NavigationHistoryButtons,

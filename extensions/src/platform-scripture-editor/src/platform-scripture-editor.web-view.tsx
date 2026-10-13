@@ -93,6 +93,7 @@ import {
   isNoteMarker,
   routeMarkerPaletteKey,
   useMarkerPaletteCompositionClose,
+  useMarkerPaletteFocusOutCapture,
   type FootnoteEditorMarkerPalette,
 } from 'platform-bible-react/experimental';
 import {
@@ -2651,23 +2652,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // editor's own input inside editorContainerRef — the footnote popover's editor renders in a
   // portal outside it and keeps its own capture. Cleared on book/chapter change: the capture is
   // in content coordinates, so it must never be restored into different chapter content.
+  useMarkerPaletteFocusOutCapture({
+    containerRef: editorContainerRef,
+    editorRef,
+    selectionRef: lastFocusOutSelectionRef,
+    baselineRef: paletteBaselineSnapshotRef,
+    isSessionOpen: useCallback(() => !!paletteSession.current, []),
+    target: window,
+  });
+
+  // The capture is in CONTENT coordinates, so it must never be restored into a different chapter's
+  // content. Clearing it is this web view's own concern — the popover has no chapter of its own.
   useEffect(() => {
     lastFocusOutSelectionRef.current = undefined;
-    const handleFocusOut = (event: FocusEvent) => {
-      const editorInput = editorContainerRef.current?.querySelector('.editor-input');
-      if (!editorInput || event.target !== editorInput) return;
-      const selection = editorRef.current?.getSelection();
-      if (selection) lastFocusOutSelectionRef.current = selection;
-      // Baseline for the change guard, taken only when focus is leaving for a palette this web
-      // view has open. Same moment, same reason as the capture above.
-      if (paletteSession.current)
-        paletteBaselineSnapshotRef.current = captureEditorContentSnapshot(
-          () => editorRef.current?.getUsj(),
-          () => editorRef.current?.getSelection(),
-        );
-    };
-    window.addEventListener('focusout', handleFocusOut);
-    return () => window.removeEventListener('focusout', handleFocusOut);
   }, [scrRef.book, scrRef.chapterNum]);
 
   // #endregion Marker Palettes

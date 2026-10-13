@@ -35,6 +35,7 @@ import {
 } from '@/components/advanced/marker-palette-session.util';
 import { routeMarkerPaletteKey } from '@/components/advanced/marker-palette-keys.util';
 import { useMarkerPaletteCompositionClose } from '@/components/advanced/use-marker-palette-composition-close.hook';
+import { useMarkerPaletteFocusOutCapture } from '@/components/advanced/use-marker-palette-focus-out-capture.hook';
 import { isNoteMarker } from '@/components/advanced/marker-palette-filter.util';
 import {
   useCallback,
@@ -1388,22 +1389,13 @@ export default function FootnoteEditor({
   // last saw; the palette commit path in openMarkerPalette restores it when it finds the live
   // selection gone. Only overwrite when readable: if the selection is already gone at focusout,
   // the previous capture is the best remaining approximation.
-  useEffect(() => {
-    const handleFocusOut = (event: FocusEvent) => {
-      const editorInput = editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input');
-      if (!editorInput || event.target !== editorInput) return;
-      const selection = editorRef.current?.getSelection();
-      if (selection) lastFocusOutSelectionRef.current = selection;
-      // Baseline for the change guard, only while this popover has a palette open.
-      if (paletteSession.current)
-        paletteBaselineSnapshotRef.current = captureEditorContentSnapshot(
-          () => editorRef.current?.getUsj(),
-          () => editorRef.current?.getSelection(),
-        );
-    };
-    document.addEventListener('focusout', handleFocusOut);
-    return () => document.removeEventListener('focusout', handleFocusOut);
-  }, []);
+  useMarkerPaletteFocusOutCapture({
+    containerRef: editorParentRef,
+    editorRef,
+    selectionRef: lastFocusOutSelectionRef,
+    baselineRef: paletteBaselineSnapshotRef,
+    isSessionOpen: useCallback(() => !!paletteSession.current, []),
+  });
 
   // Need to add a window listener for click events that will close the markers menu when you click
   // outside. There is another `onClick` listener for the marker menu that prevents click events
