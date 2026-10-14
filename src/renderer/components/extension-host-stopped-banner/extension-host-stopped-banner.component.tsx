@@ -1,4 +1,5 @@
 import { Alert, AlertDescription, AlertTitle, Button } from 'platform-bible-react';
+import { resolveLocalizedString } from 'platform-bible-react/experimental';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react';
 import { FocusEvent, ReactElement, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
@@ -99,16 +100,6 @@ export const ENGLISH_FALLBACKS: { [K in ExtensionHostStoppedKey]: string } = {
  * Exported for the test.
  */
 export const RESTART_READY_FALLBACK_MS = 90_000;
-
-/** The string for `key`, or its English fallback when localization has not resolved it. */
-function localizedOrEnglish(
-  strings: Partial<Record<ExtensionHostStoppedKey, string>>,
-  key: ExtensionHostStoppedKey,
-) {
-  const value = strings[key];
-  if (!value || value === key) return ENGLISH_FALLBACKS[key];
-  return value;
-}
 
 const MESSAGE_KEY_BY_REASON: { [R in ExtensionHostStopReason]: ExtensionHostStoppedKey } = {
   'lost-connection': EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY,
@@ -213,8 +204,8 @@ export function ExtensionHostStoppedBannerPresentational({
 /**
  * The banner wired to the store. Mounted unconditionally from app startup and rendering nothing
  * until the extension host stops: `useLocalizedStrings` reads from the extension host, so it must
- * have resolved while it was alive. {@link localizedOrEnglish} backs that up for a stop before
- * localization has answered at all.
+ * have resolved while it was alive. {@link ENGLISH_FALLBACKS}, applied through
+ * `resolveLocalizedString`, backs that up for a stop before localization has answered at all.
  *
  * Always renders one persistent `role="status"` container, empty when there is nothing to show, so
  * screen readers announce the strip's arrival as a change inside an existing live region.
@@ -319,7 +310,8 @@ export function ExtensionHostStoppedBanner() {
     dismissExtensionHostNotice();
   }, []);
 
-  const text = (key: ExtensionHostStoppedKey) => localizedOrEnglish(localizedStrings, key);
+  const text = (key: ExtensionHostStoppedKey) =>
+    resolveLocalizedString(localizedStrings[key], ENGLISH_FALLBACKS[key]);
 
   let content: ReactElement | undefined;
   if (notice && !isConnectionLost) {

@@ -157,6 +157,24 @@ describe('ExtensionHostStoppedBanner', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('shows English for a value that is another unresolved key or only whitespace', () => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([
+      {
+        ...UNRESOLVED,
+        [EXTENSION_HOST_STOPPED_TITLE_KEY]: '%some_other_key%',
+        [EXTENSION_HOST_STOPPED_MESSAGE_CRASHED_KEY]: '   ',
+      },
+      false,
+    ]);
+    render(<ExtensionHostStoppedBanner />);
+    stop('crashed');
+
+    const banner = screen.getByRole('status');
+    expect(banner).toHaveTextContent(ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_TITLE_KEY]);
+    expect(banner).toHaveTextContent(ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_MESSAGE_CRASHED_KEY]);
+    expect(banner).not.toHaveTextContent('%some_other_key%');
+  });
+
   it('shows the crashed wording for a crash', () => {
     render(<ExtensionHostStoppedBanner />);
     stop('crashed');
