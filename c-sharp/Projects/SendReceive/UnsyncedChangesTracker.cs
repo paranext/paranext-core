@@ -10,7 +10,8 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// (<see cref="SendReceiveWriteLock.WriteScopeExited"/>, debounced per project so a burst of edits
 /// costs one check, and skipped while the project is already marked and no check of it is running),
 /// when a Send/Receive run ends (the projects it announced, or every project seen so far when it
-/// announced none; plus every marked project), and once for every project in the baseline scan. A check re-reads the repository through
+/// announced none; plus every marked project), and once for every project in the baseline scan. A
+/// check re-reads the repository through
 /// <see cref="ParatextProjectSendReceiveService.HasUnsyncedLocalChanges"/> rather than trusting the
 /// trigger, and never writes project data.
 /// </para>

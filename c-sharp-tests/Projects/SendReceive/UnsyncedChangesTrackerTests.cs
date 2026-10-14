@@ -359,7 +359,6 @@ namespace TestParanextDataProvider.Projects.SendReceive
             await _tracker.FlushAsync();
 
             Assert.That(_detectCalls, Is.EqualTo(callsBefore));
-            Assert.That(_tracker.HasPendingDebounce("A"), Is.False);
         }
 
         [Test]

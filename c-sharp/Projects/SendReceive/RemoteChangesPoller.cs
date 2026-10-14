@@ -27,7 +27,9 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <para>
 /// Concurrency: all state is guarded by one lock. The fetch, the sync and internet reads, and the
 /// subscribers all run outside it, so a signal raised by a source while it holds its own lock
-/// cannot deadlock against a poll. Raises are serialized by the single in-flight poll.
+/// cannot deadlock against a poll. Raises come from the poll and from the sync signal threads;
+/// <see cref="Changed"/> carries no payload and the notifier re-reads both sources, so concurrent
+/// raises are harmless.
 /// </para>
 /// <para>
 /// <see cref="RemoteChangesState.IsRechecking"/> is true from the start of a sync (either signal
@@ -111,9 +113,10 @@ internal sealed class RemoteChangesPoller : IDisposable
 
     /// <summary>
     /// Raised when the set of projects with changes to receive changes by value, or when
-    /// <see cref="RemoteChangesState.IsRechecking"/> flips; read it with <see cref="GetState"/>. Never raised under the poller's lock. After <see cref="Dispose"/>
-    /// the set no longer changes, so only a raise already under way can still arrive. A throwing
-    /// subscriber is logged and does not affect the others.
+    /// <see cref="RemoteChangesState.IsRechecking"/> flips; read it with <see cref="GetState"/>.
+    /// Never raised under the poller's lock. After <see cref="Dispose"/> the set no longer changes,
+    /// so only a raise already under way can still arrive. A throwing subscriber is logged and does
+    /// not affect the others.
     /// </summary>
     public event Action? Changed;
 
