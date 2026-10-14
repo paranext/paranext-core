@@ -229,9 +229,11 @@ internal class ParatextProjectSendReceiveService(
     /// The local Mercurial tip id recorded after this project's last successful Send/Receive, or
     /// <see langword="null"/> when unknown.
     /// <para>
-    /// Scaffolding: public Platform.Bible has no Send/Receive memento, so this is always unknown here.
-    /// The Paratext 10 patch replaces the body with the memento lookup (a local file read, no
-    /// network). Do not remove — removing it breaks the patch.
+    /// Scaffolding: public Platform.Bible runs no Send/Receive, so this is always unknown here. The
+    /// Paratext 10 patch replaces the body with a lookup in its own record of the local tip at each
+    /// project's last successful Send/Receive. Called on background threads while a sync may be
+    /// running; an implementation must be safe for that and must not contact the network or run
+    /// Mercurial. Do not remove — removing it breaks the patch.
     /// </para>
     /// </summary>
     protected internal virtual string? GetLastSyncedTipId(ScrText scrText) => null;
