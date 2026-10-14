@@ -6,7 +6,7 @@ export const heartbeatMessage = 'heartbeat';
  * reads it off the child process `exit` event to tell "lost its link" from any other unexpected
  * exit, which it reports as a crash.
  *
- * 12 is outside the codes Node itself uses (1–10 and 12 is "Invalid Debug Argument" only when
- * `--inspect` parsing fails at startup, which cannot happen once the process is running).
+ * 70 is in neither range main could otherwise see: Node's own exit codes are 1–13, and 128 and
+ * above report a signal.
  */
-export const EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE = 12;
+export const EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE = 70;

@@ -1,19 +1,35 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlatformEventEmitter } from 'platform-bible-utils';
 import { EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE } from '@node/models/interprocess-messages.model';
-import { exitExtensionHostOnLostConnection } from './exit-on-lost-connection';
+import {
+  exitExtensionHostOnLostConnection,
+  LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS,
+} from './exit-on-lost-connection';
+
+const mocks = vi.hoisted(() => ({
+  analyticsShutdown: vi.fn(),
+  extensionShutdown: vi.fn(),
+}));
 
 vi.mock('@shared/services/logger.service', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+// Only the tests that run the real graceful shutdown reach these.
+vi.mock('@extension-host/services/analytics.service', () => ({
+  shutdown: mocks.analyticsShutdown,
+}));
+vi.mock('@extension-host/services/extension.service', () => ({
+  shutdown: mocks.extensionShutdown,
+}));
 
-function setUp() {
+function setUp(
+  runGracefulShutdown: (exit: () => void) => Promise<void> = vi.fn(async (exit: () => void) => {
+    // Runs its exit callback at once, like the real one does in its `finally`
+    exit();
+  }),
+) {
   const lostConnection = new PlatformEventEmitter<void>();
   const exitProcess = vi.fn<(code: number) => void>();
-  // Runs its exit callback at once, like the real one does in its `finally`
-  const runGracefulShutdown = vi.fn(async (exit: () => void) => {
-    exit();
-  });
   const unsubscribe = exitExtensionHostOnLostConnection({
     onDidLoseConnection: lostConnection.event,
     runGracefulShutdown,
@@ -23,13 +39,21 @@ function setUp() {
 }
 
 describe('exitExtensionHostOnLostConnection', () => {
-  it('runs the graceful shutdown and exits with the lost-connection code when the link dies', async () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('runs the graceful shutdown and exits with the lost-connection code when the link dies', () => {
     const { lostConnection, exitProcess, runGracefulShutdown } = setUp();
 
     lostConnection.emit();
-    await vi.waitFor(() => expect(exitProcess).toHaveBeenCalledTimes(1));
 
     expect(runGracefulShutdown).toHaveBeenCalledTimes(1);
+    expect(exitProcess).toHaveBeenCalledTimes(1);
     expect(exitProcess).toHaveBeenCalledWith(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE);
   });
 
@@ -39,13 +63,13 @@ describe('exitExtensionHostOnLostConnection', () => {
     expect(exitProcess).not.toHaveBeenCalled();
   });
 
-  it('reacts to the first loss only', async () => {
-    const { lostConnection, exitProcess } = setUp();
+  it('reacts to the first loss only', () => {
+    const { lostConnection, exitProcess, runGracefulShutdown } = setUp();
 
     lostConnection.emit();
     lostConnection.emit();
-    await vi.waitFor(() => expect(exitProcess).toHaveBeenCalled());
 
+    expect(runGracefulShutdown).toHaveBeenCalledTimes(1);
     expect(exitProcess).toHaveBeenCalledTimes(1);
   });
 
@@ -56,5 +80,52 @@ describe('exitExtensionHostOnLostConnection', () => {
     lostConnection.emit();
 
     expect(exitProcess).not.toHaveBeenCalled();
+  });
+
+  // Nothing else bounds this shutdown: main is not waiting for it, so an extension whose
+  // `deactivate` never settles would otherwise leave a process no window is told about.
+  it('exits with the lost-connection code anyway when the graceful shutdown hangs', () => {
+    const { lostConnection, exitProcess } = setUp(() => new Promise<void>(() => {}));
+
+    lostConnection.emit();
+    vi.advanceTimersByTime(LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS - 1);
+    expect(exitProcess).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(exitProcess).toHaveBeenCalledTimes(1);
+    expect(exitProcess).toHaveBeenCalledWith(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE);
+  });
+
+  describe('with the real graceful shutdown', () => {
+    beforeEach(() => {
+      vi.resetModules();
+      mocks.analyticsShutdown.mockReset().mockResolvedValue(undefined);
+      mocks.extensionShutdown.mockReset();
+    });
+
+    // Main's graceful-shutdown message and the socket closing can both arrive during an app quit or
+    // a restart. A second shutdown run would end the process with the lost-connection code while
+    // the first is still deactivating extensions.
+    it('a loss during a shutdown already under way does not start a second one or exit with the lost-connection code', async () => {
+      const { runGracefulShutdown } = await import('./graceful-shutdown');
+      let finishDeactivating: () => void = () => {};
+      mocks.extensionShutdown.mockReturnValue(
+        new Promise<void>((resolve) => {
+          finishDeactivating = resolve;
+        }),
+      );
+      const exitAfterRequestedShutdown = vi.fn();
+      const requestedShutdown = runGracefulShutdown(exitAfterRequestedShutdown);
+      const { lostConnection, exitProcess } = setUp(runGracefulShutdown);
+      await vi.waitFor(() => expect(mocks.extensionShutdown).toHaveBeenCalledTimes(1));
+
+      lostConnection.emit();
+      finishDeactivating();
+      await requestedShutdown;
+
+      expect(mocks.extensionShutdown).toHaveBeenCalledTimes(1);
+      expect(exitAfterRequestedShutdown).toHaveBeenCalledTimes(1);
+      expect(exitProcess).not.toHaveBeenCalled();
+    });
   });
 });

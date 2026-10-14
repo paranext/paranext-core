@@ -2,6 +2,13 @@ import { EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE } from '@node/models/interproc
 import { logger } from '@shared/services/logger.service';
 import { PlatformEvent, Unsubscriber } from 'platform-bible-utils';
 
+/**
+ * How long the graceful shutdown may take on a lost connection before the process exits anyway.
+ * Nothing else bounds it on this path: main is not waiting for this exit, unlike a requested stop,
+ * where main hard-kills the process after its own budget.
+ */
+export const LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS = 5_000;
+
 type Dependencies = {
   /** The network service's connection-lost event */
   onDidLoseConnection: PlatformEvent<void>;
@@ -22,7 +29,9 @@ type Dependencies = {
  * knows how to start one (`platform.restartExtensionHost`). See
  * `adr-extension-host-exits-on-lost-connection`.
  *
- * Reacts to the first loss only: the shutdown is already under way after that.
+ * Reacts to the first loss only: the shutdown is already under way after that. Arms a watchdog
+ * before the graceful shutdown ({@link LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS}), so an extension whose
+ * `deactivate` never settles cannot keep the process alive with no window told about it.
  *
  * @returns Unsubscriber; the entry module never calls it, this runs for the process's lifetime
  */
@@ -38,7 +47,13 @@ export function exitExtensionHostOnLostConnection({
     logger.error(
       'Extension host lost its connection to main. Exiting so main can report it to the user.',
     );
-    // Not awaited: `runGracefulShutdown` never rejects and always ends with `exitProcess`.
+    // Unreferenced, so the watchdog alone never keeps the process alive.
+    setTimeout(
+      () => exitProcess(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE),
+      LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS,
+    ).unref();
+    // Not awaited: `runGracefulShutdown` never rejects and always ends with `exitProcess`. If a
+    // shutdown is already under way, this joins it and that shutdown's exit code stands.
     runGracefulShutdown(() => exitProcess(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE));
   });
   return unsubscribe;

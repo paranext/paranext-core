@@ -88,8 +88,18 @@ process.on('unhandledRejection', (reason) => {
     // — before anything else in this IIFE runs — guarantees app_launch is first in flush order.
     analyticsService.trackEvent('app_launch');
 
-    // The network service has to start first, and it uses the shared store after initialization
-    await networkService.initialize();
+    // The network service has to start first, and it uses the shared store after initialization.
+    // Without a connection this process can do nothing, and the lost-connection exit below is not
+    // subscribed yet, so exit now: main reports a non-zero exit it did not ask for as a crash, and
+    // every window shows the extensions-have-stopped banner instead of nothing answering.
+    try {
+      await networkService.initialize();
+    } catch (error) {
+      logger.error(
+        `Extension host could not connect to main; exiting so main can report it. ${getErrorMessage(error)}`,
+      );
+      process.exit(1);
+    }
     // Subscribed as soon as there is a connection to lose. Returns an unsubscriber we never call.
     exitExtensionHostOnLostConnection({
       onDidLoseConnection: networkService.onDidLoseConnection,
