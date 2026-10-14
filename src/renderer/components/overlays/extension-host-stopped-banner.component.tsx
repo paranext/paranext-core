@@ -43,6 +43,8 @@ export const EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY =
 export const EXTENSION_HOST_STOPPED_DISMISS_KEY =
   '%extensionHostStopped_dismiss%' satisfies LocalizeKey;
 
+const BANNER_TEST_ID = 'extension-host-stopped-banner';
+
 /** Every localization key this component requests. */
 export type ExtensionHostStoppedKey =
   | typeof EXTENSION_HOST_STOPPED_TITLE_KEY
@@ -136,8 +138,9 @@ type Props = {
  * so a banner that vanished could leave things quietly dead, which is the failure this notice
  * exists to end.
  *
- * `role="status"` with `aria-live="polite"`: an interruption the user did not ask for, but one they
- * can act on at their own pace.
+ * Carries no live-region role itself: {@link ExtensionHostStoppedBanner} renders it inside a
+ * persistent `role="status"` container, because a live region that is inserted together with its
+ * content is generally not announced.
  */
 export function ExtensionHostStoppedBannerPresentational({
   phase,
@@ -153,6 +156,8 @@ export function ExtensionHostStoppedBannerPresentational({
 }: Props) {
   const isAlarm = phase !== 'restarted';
   const isRestarting = phase === 'restarting';
+  // `diff-deleted` is the text-grade red that reaches 4.5:1 contrast where `destructive` does not;
+  // see `overlay-connection-lost.component.tsx`.
   const alarmClassName =
     'tw:rounded-none tw:border-x-0 tw:border-destructive/40 tw:bg-transparent tw:px-3 tw:text-diff-deleted tw:has-[>svg]:grid-cols-[auto_1fr_auto] tw:*:data-[slot=alert-description]:text-diff-deleted/90';
   const calmClassName =
@@ -170,14 +175,13 @@ export function ExtensionHostStoppedBannerPresentational({
   );
   return (
     <div
-      data-testid="extension-host-stopped-banner"
-      role="status"
-      aria-live="polite"
       className="pr-twp tw:fixed tw:inset-x-0 tw:bg-background"
       style={{ top: getToolbarHeight(isPowerMode), zIndex: Z_INDEX_ABOVE_DOCK }}
     >
       <Alert
         variant={isAlarm ? 'destructive' : 'default'}
+        // Alert's own role="alert" would nest an assertive region inside the polite one; see
+        // `overlay-connection-lost.component.tsx`.
         role={undefined}
         className={isAlarm ? alarmClassName : calmClassName}
       >
@@ -202,6 +206,9 @@ export function ExtensionHostStoppedBannerPresentational({
  * extension host, so they must have resolved while it was alive. {@link localizedOrEnglish} backs
  * that up for a stop before localization has answered at all.
  *
+ * Always renders a persistent `role="status"` container, empty when there is nothing to show, so
+ * screen readers announce the strip's arrival as a change inside an existing live region.
+ *
  * Stands down while the connection-lost state is shown: that overlay covers the whole window and
  * owns recovery then, and this window could not reach main to restart anything anyway.
  */
@@ -214,8 +221,7 @@ export function ExtensionHostStoppedBanner() {
 
   // The fallback for a start announcement that never comes: armed on entering `restarting`,
   // disarmed on leaving it (the normal exit is `extension-host-stopped-service.ts` hearing
-  // `platform.onDidStartExtensionHost`). `markExtensionHostRestarted` is a no-op outside
-  // `restarting`, so a late timer cannot undo a later state.
+  // `platform.onDidStartExtensionHost`), so a late timer cannot move a later state.
   useEffect(() => {
     if (phase !== 'restarting') return undefined;
     const timer = setTimeout(markExtensionHostRestarted, RESTART_READY_FALLBACK_MS);
@@ -245,7 +251,8 @@ export function ExtensionHostStoppedBanner() {
     dismissExtensionHostNotice();
   }, []);
 
-  if (!notice || isConnectionLost) return undefined;
+  if (!notice || isConnectionLost)
+    return <div data-testid={BANNER_TEST_ID} role="status" aria-live="polite" />;
 
   const text = (key: ExtensionHostStoppedKey) => localizedOrEnglish(localizedStrings, key);
 
@@ -263,18 +270,20 @@ export function ExtensionHostStoppedBanner() {
   }
 
   return (
-    <ExtensionHostStoppedBannerPresentational
-      phase={notice.phase}
-      title={title}
-      message={message}
-      restartExtensionsLabel={text(EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY)}
-      restartAppLabel={text(EXTENSION_HOST_STOPPED_RESTART_APP_KEY)}
-      dismissLabel={text(EXTENSION_HOST_STOPPED_DISMISS_KEY)}
-      isPowerMode={isPowerMode}
-      onRestartExtensions={handleRestartExtensions}
-      onRestartApp={handleRestartApp}
-      onDismiss={handleDismiss}
-    />
+    <div data-testid={BANNER_TEST_ID} role="status" aria-live="polite">
+      <ExtensionHostStoppedBannerPresentational
+        phase={notice.phase}
+        title={title}
+        message={message}
+        restartExtensionsLabel={text(EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY)}
+        restartAppLabel={text(EXTENSION_HOST_STOPPED_RESTART_APP_KEY)}
+        dismissLabel={text(EXTENSION_HOST_STOPPED_DISMISS_KEY)}
+        isPowerMode={isPowerMode}
+        onRestartExtensions={handleRestartExtensions}
+        onRestartApp={handleRestartApp}
+        onDismiss={handleDismiss}
+      />
+    </div>
   );
 }
 

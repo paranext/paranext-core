@@ -76,9 +76,14 @@ export function revertExtensionHostRestart(): void {
   notify();
 }
 
-/** Records that the restarted extension host is up. No-op unless `restarting`. */
+/**
+ * Records that an extension host is up again. Moves both `stopped` and `restarting` to `restarted`:
+ * a start announcement means the host is up regardless of which window restarted it (the
+ * `restarting` phase is per window, so another window's restart leaves this one `stopped`). No-op
+ * when there is no notice or it is already `restarted`.
+ */
 export function markExtensionHostRestarted(): void {
-  if (notice?.phase !== 'restarting') return;
+  if (!notice || notice.phase === 'restarted') return;
   notice = { phase: 'restarted' };
   notify();
 }

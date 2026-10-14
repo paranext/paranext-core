@@ -18,8 +18,8 @@ import {
  * app startup. Returns a cleanup function.
  *
  * - `platform.onDidStopExtensionHost` → the extension-host-stopped store, which the banner reads.
- * - `platform.onDidStartExtensionHost` → the same store's restarting → restarted transition, the
- *   readiness signal after a restart from the banner.
+ * - `platform.onDidStartExtensionHost` → the same store's stopped or restarting → restarted
+ *   transition, the readiness signal after a restart from any window.
  * - `platform.onWillShutDown` → the connection-lost store's shutdown latch, so this window's own
  *   connection dying a moment later reads as the quit it is. Closes the quit-time gap that the
  *   browser's unload events cannot: main destroys windows on a quit, and `destroy()` raises neither
@@ -36,8 +36,8 @@ export function initExtensionHostStoppedService(): () => void {
     reportExtensionHostStopped(event);
   });
   const unsubscribeStarted = getNetworkEvent(EVENT_NAME_ON_DID_START_EXTENSION_HOST)(() => {
-    // A no-op unless a restart from the banner is in flight; the first start and a dev-mode
-    // restart therefore change nothing here.
+    // A start announcement ends any outstanding stop notice, whichever window asked for the
+    // restart; with no notice showing (the first start, a dev-mode restart) it changes nothing.
     markExtensionHostRestarted();
   });
   const unsubscribeShutDown = getNetworkEvent(EVENT_NAME_ON_WILL_SHUT_DOWN)(() => {

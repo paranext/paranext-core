@@ -72,7 +72,7 @@ describe('extension-host-stopped service', () => {
     teardown();
   });
 
-  it('ignores a start announcement when no restart is in flight', () => {
+  it('a start announcement ends a stop notice, even without a restart from this window', () => {
     const teardown = initExtensionHostStoppedService();
 
     fire(EVENT_NAME_ON_DID_START_EXTENSION_HOST);
@@ -80,7 +80,7 @@ describe('extension-host-stopped service', () => {
 
     reportExtensionHostStopped({ reason: 'crashed' });
     fire(EVENT_NAME_ON_DID_START_EXTENSION_HOST);
-    expect(getExtensionHostNotice()).toEqual({ phase: 'stopped', reason: 'crashed' });
+    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted' });
     teardown();
   });
 

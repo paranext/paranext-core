@@ -65,17 +65,21 @@ describe('extension-host-stopped store', () => {
     expect(listener).toHaveBeenCalledTimes(3);
   });
 
-  it('restarted is reachable only from restarting', () => {
+  it('restarted is reachable from stopped or restarting, not from empty', () => {
     const listener = vi.fn();
     subscribeToExtensionHostNotice(listener);
 
     markExtensionHostRestarted();
     expect(getExtensionHostNotice()).toBeUndefined();
+    expect(listener).not.toHaveBeenCalled();
 
     reportExtensionHostStopped({ reason: 'crashed' });
     markExtensionHostRestarted();
-    expect(getExtensionHostNotice()).toEqual(STOPPED_CRASHED);
-    expect(listener).toHaveBeenCalledTimes(1);
+    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted' });
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    markExtensionHostRestarted();
+    expect(listener).toHaveBeenCalledTimes(2);
   });
 
   it('restarting is reachable only from stopped', () => {

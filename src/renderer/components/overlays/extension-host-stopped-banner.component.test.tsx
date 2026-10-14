@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
+import { logger } from '@shared/services/logger.service';
 import {
   getExtensionHostNotice,
   markExtensionHostRestarted,
@@ -32,6 +33,9 @@ import {
 vi.mock('@renderer/hooks/papi-hooks', () => ({ useLocalizedStrings: vi.fn() }));
 vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({ useIsPowerMode: vi.fn(() => true) }));
 vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
 
 /** What `useLocalizedStrings` returns while loading: the raw keys themselves. */
 const UNRESOLVED = Object.fromEntries(LOCALIZED_STRING_KEYS.map((key) => [key, key]));
@@ -68,6 +72,7 @@ describe('ExtensionHostStoppedBanner', () => {
     resetExtensionHostStopped();
     resetConnectionLost();
     vi.mocked(sendCommand).mockReset();
+    vi.mocked(logger.error).mockClear();
     vi.mocked(useLocalizedStrings).mockReturnValue([UNRESOLVED, false]);
   });
 
@@ -75,9 +80,10 @@ describe('ExtensionHostStoppedBanner', () => {
     vi.useRealTimers();
   });
 
-  it('renders nothing while the extension host is running', () => {
+  it('keeps an empty live region mounted while the extension host is running', () => {
     render(<ExtensionHostStoppedBanner />);
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 
   it('shows the lost-connection wording in English when localization has not resolved', () => {
@@ -92,6 +98,7 @@ describe('ExtensionHostStoppedBanner', () => {
     expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeInTheDocument();
     expect(screen.getByRole('button', RESTART_APP)).toBeInTheDocument();
     expect(screen.queryByRole('button', DISMISS)).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('shows the crashed wording for a crash', () => {
@@ -129,11 +136,13 @@ describe('ExtensionHostStoppedBanner', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTARTING_KEY],
     );
+    expect(screen.getAllByRole('button')).toHaveLength(2);
     screen.getAllByRole('button').forEach((button) => expect(button).toBeDisabled());
 
     // The command settles at fork time; the new process is not up yet, so nothing changes.
     await act(async () => restart.resolve());
     expect(getExtensionHostNotice()).toEqual({ phase: 'restarting', reason: 'lost-connection' });
+    expect(screen.getAllByRole('button')).toHaveLength(2);
     screen.getAllByRole('button').forEach((button) => expect(button).toBeDisabled());
   });
 
@@ -170,6 +179,27 @@ describe('ExtensionHostStoppedBanner', () => {
     expect(getExtensionHostNotice()).toEqual({ phase: 'restarted' });
   });
 
+  it('disarms the fallback timer when the phase leaves restarting', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const restart = deferredRestart();
+    render(<ExtensionHostStoppedBanner />);
+    stop('crashed');
+    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+    await act(async () => restart.reject(new Error('main did not answer')));
+    expect(getExtensionHostNotice()).toEqual({ phase: 'stopped', reason: 'crashed' });
+    await act(async () => {
+      vi.advanceTimersByTime(89_000);
+    });
+
+    vi.mocked(sendCommand).mockResolvedValue(undefined);
+    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+    });
+
+    expect(getExtensionHostNotice()).toEqual({ phase: 'restarting', reason: 'crashed' });
+  });
+
   it('dismiss clears the restarted state', async () => {
     vi.mocked(sendCommand).mockResolvedValue(undefined);
     render(<ExtensionHostStoppedBanner />);
@@ -180,7 +210,7 @@ describe('ExtensionHostStoppedBanner', () => {
 
     await userEvent.click(screen.getByRole('button', DISMISS));
 
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
     expect(getExtensionHostNotice()).toBeUndefined();
   });
 
@@ -208,9 +238,9 @@ describe('ExtensionHostStoppedBanner', () => {
 
     await act(async () => restart.reject(new Error('main did not answer')));
 
-    await waitFor(() =>
-      screen.getAllByRole('button').forEach((button) => expect(button).toBeEnabled()),
-    );
+    await waitFor(() => expect(screen.getAllByRole('button')).toHaveLength(2));
+    screen.getAllByRole('button').forEach((button) => expect(button).toBeEnabled());
+    expect(logger.error).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('status')).toHaveTextContent(
       ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY],
     );
@@ -227,11 +257,35 @@ describe('ExtensionHostStoppedBanner', () => {
     expect(sendCommand).toHaveBeenCalledWith('platform.restart');
   });
 
-  it('renders nothing while the connection is lost', () => {
+  it('logs and leaves the banner unchanged when restarting the app fails', async () => {
+    vi.mocked(sendCommand).mockRejectedValue(new Error('main did not answer'));
+    render(<ExtensionHostStoppedBanner />);
+    stop('crashed');
+
+    await userEvent.click(screen.getByRole('button', RESTART_APP));
+
+    await waitFor(() => expect(logger.error).toHaveBeenCalledTimes(1));
+    expect(getExtensionHostNotice()).toEqual({ phase: 'stopped', reason: 'crashed' });
+    expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeEnabled();
+  });
+
+  it('moves a stopped banner to restarted when another window restarts the extension host', () => {
+    render(<ExtensionHostStoppedBanner />);
+    stop('crashed');
+
+    extensionHostStarts();
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY],
+    );
+  });
+
+  it('keeps an empty live region mounted while the connection is lost', () => {
     render(<ExtensionHostStoppedBanner />);
     stop('crashed');
     act(() => reportConnectionLost());
 
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 });
