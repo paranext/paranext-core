@@ -136,9 +136,10 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
         // A stream that is not being created is only read, so it is opened for reading, and shared
         // fully: a read-only file is readable, two reads of one file at once do not collide, and a
         // read never blocks another process, such as Send/Receive, from writing, replacing or
-        // deleting the file. This process orders its own reads and writes, but not theirs. The cost
-        // is that a read overlapping another process's in-place write may see it half done; one
-        // that overlaps a replace keeps reading the file it opened.
+        // deleting the file. A read overlapping another process's in-place write may see it half
+        // done; one that overlaps a replace keeps reading the file it opened. Nothing orders a read
+        // against a write of the same document in this process, and a write opens without
+        // sharing, so if the two overlap, whichever opens second fails with a sharing violation.
         return createIfNotExists
             ? File.Open(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite)
             : File.Open(

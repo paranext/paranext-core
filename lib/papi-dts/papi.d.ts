@@ -4225,9 +4225,9 @@ declare module 'shared/models/project-data-provider.model' {
    *
    * This is its own `projectInterface`, not a member of `platform.base`: not every PDP can enumerate
    * its extension data (one over a remote store may not be able to), and a PDP method is never
-   * optional (`adr-pdp-methods-are-never-optional`). A PDP that can enumerate advertises this
-   * interface and one that cannot leaves it off, so a consumer learns which it is from the project's
-   * metadata `projectInterfaces` instead of by calling and failing.
+   * optional. A PDP that can enumerate advertises this interface and one that cannot leaves it off,
+   * so a consumer learns which it is from the project's metadata `projectInterfaces` instead of by
+   * calling and failing.
    */
   export const PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION =
     'platform.extensionDataEnumeration';
