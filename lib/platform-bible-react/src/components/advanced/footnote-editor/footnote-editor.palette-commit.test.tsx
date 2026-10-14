@@ -242,47 +242,53 @@ async function runCommitFlow({
     });
   });
 
-  if (stealFocus) {
-    // The mouse press on the palette item: focus leaves the editor FIRST (focusout fires
-    // synchronously at the moment of the steal), THEN Lexical's blur-path selection processing
-    // nulls the editor-state selection — the exact order of the live failure. Focus must really
-    // leave (`blur`, not a synthetic focusout): with the editor still the active element, jsdom's
-    // timer-queued `selectionchange` can reach the popover's stray-caret snap before the commit,
-    // and the snap re-selects the note end, so the commit sees a live selection and skips the
-    // restore.
-    await act(async () => {
-      editorInput.blur();
-      // Lexical's selection type is `BaseSelection | null` — null IS the "no selection" state
-      // this test must produce, and undefined does not typecheck for $setSelection.
-      // eslint-disable-next-line no-null/no-null
-      lexical.update(() => $setSelection(null));
-      await Promise.resolve();
-    });
-  }
+  // The palette is an overlay in ANOTHER document, so a click on it takes focus away from this
+  // whole document while the editor stays its active element: `hasFocus()` turns false and
+  // `activeElement` does not move. jsdom can't move focus between documents, so stub the former.
+  const hasFocusSpy = stealFocus
+    ? vi.spyOn(editorInput.ownerDocument, 'hasFocus').mockReturnValue(false)
+    : undefined;
+  try {
+    if (stealFocus) {
+      // The mouse press on the palette item: focus leaves the editor FIRST (focusout fires
+      // synchronously at the moment of the steal), THEN Lexical's blur-path selection processing
+      // nulls the editor-state selection — the exact order of the live failure.
+      await act(async () => {
+        editorInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+        // Lexical's selection type is `BaseSelection | null` — null IS the "no selection" state
+        // this test must produce, and undefined does not typecheck for $setSelection.
+        // eslint-disable-next-line no-null/no-null
+        lexical.update(() => $setSelection(null));
+        await Promise.resolve();
+      });
+    }
 
-  await act(async () => {
-    resolveShow(marker);
-    await Promise.resolve();
-    await Promise.resolve();
-    // Let the engine's post-commit async passes (caret snap, note-content re-tokenization)
-    // settle so the outcome read is the state the user would actually see. Waits for the tree to
-    // QUIESCE rather than sleeping a fixed span: a 50ms guess raced the re-tokenization under
-    // full-suite load and read a mid-flight tree (a `\fq` char still carrying an `unmatched`
-    // node, before the `\ft*` closer landed), which surfaced as an intermittent failure.
-    let previousTree = '';
-    let stableReads = 0;
-    await vi.waitFor(
-      () => {
-        const currentTree = readCommitOutcome(lexical, marker).tree;
-        stableReads = currentTree === previousTree ? stableReads + 1 : 0;
-        previousTree = currentTree;
-        // Several consecutive identical reads, not just two: the engine's passes are scheduled
-        // far enough apart that two samples can both land in the same mid-flight state.
-        if (stableReads < 4) throw new Error('editor state is still settling');
-      },
-      { timeout: 5_000, interval: 25 },
-    );
-  });
+    await act(async () => {
+      resolveShow(marker);
+      await Promise.resolve();
+      await Promise.resolve();
+      // Let the engine's post-commit async passes (caret snap, note-content re-tokenization)
+      // settle so the outcome read is the state the user would actually see. Waits for the tree to
+      // QUIESCE rather than sleeping a fixed span: a 50ms guess raced the re-tokenization under
+      // full-suite load and read a mid-flight tree (a `\fq` char still carrying an `unmatched`
+      // node, before the `\ft*` closer landed), which surfaced as an intermittent failure.
+      let previousTree = '';
+      let stableReads = 0;
+      await vi.waitFor(
+        () => {
+          const currentTree = readCommitOutcome(lexical, marker).tree;
+          stableReads = currentTree === previousTree ? stableReads + 1 : 0;
+          previousTree = currentTree;
+          // Several consecutive identical reads, not just two: the engine's passes are scheduled
+          // far enough apart that two samples can both land in the same mid-flight state.
+          if (stableReads < 4) throw new Error('editor state is still settling');
+        },
+        { timeout: 5_000, interval: 25 },
+      );
+    });
+  } finally {
+    hasFocusSpy?.mockRestore();
+  }
 
   const outcome = readCommitOutcome(lexical, marker);
   utils.unmount();
