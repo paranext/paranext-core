@@ -1,4 +1,7 @@
+import { sendCommand } from '@shared/services/command.service';
+import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
+import { getErrorMessage } from 'platform-bible-utils';
 import {
   EVENT_NAME_ON_DID_START_EXTENSION_HOST,
   EVENT_NAME_ON_DID_STOP_EXTENSION_HOST,
@@ -11,8 +14,8 @@ import {
 } from './extension-host-stopped-store';
 
 /**
- * Subscribes this window to main's two lifecycle events and drives the stores they feed. Call once
- * at app startup. Returns a cleanup function.
+ * Subscribes this window to main's lifecycle events and drives the stores they feed. Call once at
+ * app startup. Returns a cleanup function.
  *
  * - `platform.onDidStopExtensionHost` → the extension-host-stopped store, which the banner reads.
  * - `platform.onDidStartExtensionHost` → the same store's restarting → restarted transition, the
@@ -45,4 +48,23 @@ export function initExtensionHostStoppedService(): () => void {
     unsubscribeStarted();
     unsubscribeShutDown();
   };
+}
+
+/**
+ * Ask main whether the extension host is already stopped, and report it if so. For a window that
+ * was not listening when `platform.onDidStopExtensionHost` fired: one opened after the stop, or one
+ * whose renderer had not subscribed yet. Call once, after the network service has connected.
+ *
+ * Never rejects: a window that cannot ask is no worse off than before, and the event path still
+ * covers any later stop.
+ */
+export async function catchUpExtensionHostStoppedState(): Promise<void> {
+  try {
+    const stopped = await sendCommand('platform.getExtensionHostStoppedState');
+    if (stopped) reportExtensionHostStopped(stopped);
+  } catch (error) {
+    logger.warn(
+      `Could not ask main whether the extension host is stopped: ${getErrorMessage(error)}`,
+    );
+  }
 }

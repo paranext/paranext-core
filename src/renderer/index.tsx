@@ -12,7 +12,10 @@ import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocki
 import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
 import { initConnectionLostService } from '@renderer/services/connection-lost-service';
-import { initExtensionHostStoppedService } from '@renderer/services/extension-host-stopped-service';
+import {
+  catchUpExtensionHostStoppedState,
+  initExtensionHostStoppedService,
+} from '@renderer/services/extension-host-stopped-service';
 import { startBookChapterControlServiceShard } from '@renderer/services/book-chapter-control.service-shard';
 import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
 import { startNotificationServiceShard } from '@renderer/services/notification.service-shard';
@@ -135,6 +138,8 @@ initExtensionHostStoppedService();
     // The network service has to start first, and it uses the shared store after initialization
     await networkService.initialize();
     markStartup('papi-connected');
+    // Not awaited: nothing at startup needs the answer, and it never rejects.
+    catchUpExtensionHostStoppedState();
     await initializeSharedStoreService(networkService);
 
     // Read as early as possible, before anything can switch the language, so the restart prompt

@@ -38,6 +38,11 @@ let extensionHostWatcher: FSWatcher | undefined;
 let isStopRequested = false;
 /** Announces an exit main did not ask for. See {@link classifyExtensionHostExit}. */
 const unexpectedStopEmitter = new PlatformEventEmitter<ExtensionHostStoppedEvent>();
+/**
+ * The most recent unexpected stop, kept until the next process is forked, so a window that was not
+ * listening when it happened (opened later, or still starting) can ask for it.
+ */
+let lastUnexpectedStop: ExtensionHostStoppedEvent | undefined;
 
 function createNewProcessLifetimeVariable(): void {
   if (processLifetimeVariable)
@@ -193,6 +198,7 @@ function connectToExtensionHostProcess() {
     logger.error(
       `Extension host stopped unexpectedly (${unexpectedStop.reason}); telling the windows so the user can restart it`,
     );
+    lastUnexpectedStop = unexpectedStop;
     unexpectedStopEmitter.emit(unexpectedStop);
   });
 }
@@ -222,6 +228,7 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
 
   function startExtensionHostInternal() {
     isStopRequested = false;
+    lastUnexpectedStop = undefined;
     createNewProcessLifetimeVariable();
 
     const extensionHostEntryPath = app.isPackaged
@@ -314,6 +321,8 @@ export const extensionHostService = {
   restart: restartExtensionHost,
   /** Fires when the extension host exits without main asking it to. Not fired during app shutdown. */
   onDidStopUnexpectedly: unexpectedStopEmitter.event,
+  /** The most recent unexpected stop, or `undefined` once a new process has been forked since */
+  getLastUnexpectedStop: () => lastUnexpectedStop,
 };
 
 export default extensionHostService;

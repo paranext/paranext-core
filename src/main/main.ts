@@ -229,6 +229,7 @@ import { GET_METHODS, INTENTIONAL_CLOSE_CODE } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { WINDOW_MIN_WIDTH_PX } from '@shared/models/window-constraints.model';
 import * as commandService from '@shared/services/command.service';
+import { registerExtensionHostStoppedStateCommand } from '@main/extension-host-stopped-state.command';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
@@ -2565,6 +2566,8 @@ async function main() {
       },
     },
   });
+
+  registerExtensionHostStoppedStateCommand();
 
   commandService.registerCommand(
     'platform.getLogFileContent',

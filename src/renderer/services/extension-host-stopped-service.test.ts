@@ -9,6 +9,7 @@ type Listener = (payload: unknown) => void;
 const captured = new Map<string, Listener>();
 const unsubscribers = new Map<string, ReturnType<typeof vi.fn>>();
 
+vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: (eventName: string) => (listener: Listener) => {
     captured.set(eventName, listener);
@@ -20,7 +21,10 @@ vi.mock('@shared/services/network.service', () => ({
 
 // Imports follow the `vi.mock` call: the service reads the network service at import time.
 /* eslint-disable import/first */
-import { initExtensionHostStoppedService } from '@renderer/services/extension-host-stopped-service';
+import {
+  catchUpExtensionHostStoppedState,
+  initExtensionHostStoppedService,
+} from '@renderer/services/extension-host-stopped-service';
 import {
   getExtensionHostNotice,
   markExtensionHostRestarting,
@@ -32,6 +36,7 @@ import {
   reportConnectionLost,
   resetConnectionLost,
 } from '@renderer/services/connection-lost-store';
+import { sendCommand } from '@shared/services/command.service';
 /* eslint-enable import/first */
 
 function fire(eventName: string, payload?: unknown) {
@@ -42,6 +47,7 @@ describe('extension-host-stopped service', () => {
   beforeEach(() => {
     captured.clear();
     unsubscribers.clear();
+    vi.mocked(sendCommand).mockReset();
     resetExtensionHostStopped();
     resetConnectionLost();
   });
@@ -98,7 +104,31 @@ describe('extension-host-stopped service', () => {
     teardown();
   });
 
-  it('unsubscribes from both events when torn down', () => {
+  it('catch-up reports a stop main remembered before this window was listening', async () => {
+    vi.mocked(sendCommand).mockResolvedValue({ reason: 'crashed' });
+
+    await catchUpExtensionHostStoppedState();
+
+    expect(sendCommand).toHaveBeenCalledWith('platform.getExtensionHostStoppedState');
+    expect(getExtensionHostNotice()).toEqual({ phase: 'stopped', reason: 'crashed' });
+  });
+
+  it('catch-up leaves the store alone when main remembers nothing', async () => {
+    vi.mocked(sendCommand).mockResolvedValue(undefined);
+
+    await catchUpExtensionHostStoppedState();
+
+    expect(getExtensionHostNotice()).toBeUndefined();
+  });
+
+  it('catch-up swallows a failed request', async () => {
+    vi.mocked(sendCommand).mockRejectedValue(new Error('main did not answer'));
+
+    await expect(catchUpExtensionHostStoppedState()).resolves.toBeUndefined();
+    expect(getExtensionHostNotice()).toBeUndefined();
+  });
+
+  it('unsubscribes from all three events when torn down', () => {
     const teardown = initExtensionHostStoppedService();
 
     teardown();
