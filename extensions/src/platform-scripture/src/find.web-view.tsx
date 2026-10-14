@@ -1764,6 +1764,8 @@ global.webViewComponent = function FindWebView({
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
       if (!targetEditorWebViewId || !editorWebViewController) {
+        // Moved on without the editor: a late failure for an earlier request must not move back.
+        lastEditorSelectRequestRef.current = undefined;
         setVerseRefSetting(searchResult.start.verseRef);
         return;
       }
@@ -1814,8 +1816,10 @@ global.webViewComponent = function FindWebView({
       setFocusedResultIndex(index);
       // With an editor to ask, the editor moves the scroll group itself — see
       // `handleFocusedResultChange` for why this must not do it too.
-      if (!targetEditorWebViewId || !editorWebViewController)
+      if (!targetEditorWebViewId || !editorWebViewController) {
+        lastEditorSelectRequestRef.current = undefined;
         setVerseRefSetting(searchResult.start.verseRef);
+      }
       if (targetReferencePanelWebViewId && !targetEditorWebViewId) {
         // The scripture is showing in a read-only reference panel, which registers no web view
         // controller — so activating its tab IS the navigation. `setVerseRefSetting` above already

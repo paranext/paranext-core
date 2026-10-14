@@ -59,10 +59,10 @@ type RangeScrollRequest = {
   /** The chapter the editor was showing when the jump was asked for */
   chapterKeyAtRequest: string | undefined;
   /**
-   * The editor content's `scrollTop` the user was looking at when they asked for the jump: read at
-   * the request, or carried over from the request it replaces while that one is still pending,
-   * since the pending jump may already have moved the view. `undefined` when the view was hidden or
-   * nothing scrolled.
+   * The editor content's `scrollTop` the user was looking at when they asked for the jump: carried
+   * over from the request it replaces while that one is still pending and recorded one, since the
+   * pending jump may already have moved the view, and otherwise read at the request. `undefined`
+   * when the view was hidden or nothing scrolled.
    */
   scrollTopAtRequest: number | undefined;
 };
@@ -301,10 +301,10 @@ export function useScrollToRange({
       nextRequestIdRef.current += 1;
       // One gesture can ask twice (a click focuses its result, then clicks it), and by the second
       // ask the first may already have moved the view.
-      const pendingRequest = requestRef.current;
-      let scrollTopAtRequest: number | undefined;
-      if (pendingRequest) scrollTopAtRequest = pendingRequest.scrollTopAtRequest;
-      else if (isViewVisibleRef.current) scrollTopAtRequest = getEditorScrollTop();
+      // A pending request made while hidden recorded no view, so the one on screen now is it.
+      let scrollTopAtRequest = requestRef.current?.scrollTopAtRequest;
+      if (scrollTopAtRequest === undefined && isViewVisibleRef.current)
+        scrollTopAtRequest = getEditorScrollTop();
       wasHiddenRef.current = !isViewVisibleRef.current;
       targetVerseRef.current = verseRef;
       setRequest({

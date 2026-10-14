@@ -234,6 +234,25 @@ describe('useScrollToRange', () => {
     });
   });
 
+  it('reads the view the user is looking at when a request made while hidden is still pending', async () => {
+    const fake = createFakeEditor();
+    const { result, rerender } = renderScrollToRange(fake.editor, {
+      editorChapterKey: 'GEN 10',
+      isViewVisible: false,
+    });
+
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    rerender({ editorChapterKey: 'GEN 10', isViewVisible: true });
+    vi.mocked(getEditorScrollTop).mockReturnValue(stableGeometry().scrollTop + 442);
+    act(() => result.current.requestScrollToRange(MATCH, GEN_10_19));
+    await runFrames();
+
+    expect(scrollToRange).toHaveBeenCalledTimes(1);
+    expect(scrollToRange).toHaveBeenCalledWith(measuredRange, 'smooth', {
+      stayPutWhenInView: false,
+    });
+  });
+
   it('different chapter: waits until the engine has the target chapter before selecting or scrolling', async () => {
     const fake = createFakeEditor();
     const { result, rerender } = renderScrollToRange(fake.editor, {

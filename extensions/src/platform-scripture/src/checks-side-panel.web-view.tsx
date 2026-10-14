@@ -597,7 +597,9 @@ global.webViewComponent = function ChecksSidePanelWebView({
           },
         );
       } else {
-        // Could not get controller to set specific range, so at least set the verse ref
+        // Could not get controller to set specific range, so at least set the verse ref. A late
+        // failure for an earlier request must not move back from it.
+        lastSelectRequestIdRef.current = undefined;
         setScrRef(selectedResult.verseRef);
       }
     },
