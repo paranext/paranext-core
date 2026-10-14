@@ -8353,10 +8353,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
   The poller adds one server request per 5 minutes per installation plus one per sync, and ⬇️ can
   lag the server by up to the poll interval. In Studio the lookup goes through the Paratext
-  registry, which rewrites a project's license file (and, if its registry id changed, its settings)
-  outside the Send/Receive write gate when the registry's license for it has changed — the same as
-  the user-opened shared-project list. A routine check writes nothing, because the license text is
-  unchanged between checks. ⬇️ compares tip ids only, so a project restored from
+  registry, which rewrites a project's license file and reloads the project (and saves its settings
+  if its registry id changed) outside the Send/Receive write gate when the license the registry
+  returns differs from the one on disk, or the one on disk is revoked or cannot be verified — the
+  same as the user-opened shared-project list. A check for projects with current, valid licenses
+  writes nothing; a project whose license the registry keeps returning revoked can be rewritten and
+  reloaded on every check.
+  ⬇️ compares tip ids only, so a project restored from
   a backup that carries a stale last-synced tip reads as ⬇️ until its next sync, and a project
   with no last-synced tip at all is never ⬇️. Public core carries an always-empty `toReceive`, and
   the Studio patch must keep the exact `GetServerTipIds` signature so the seam keeps binding.
