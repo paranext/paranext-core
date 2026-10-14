@@ -457,21 +457,20 @@ export function ChecksSidePanel({
                 </div>
               ))}
           {/* The job has finished but not all results are loaded into the UI yet */}
-          {(jobStatusReport.status === 'completed' || jobStatusReport.status === 'stopped') &&
-            checkResults.length < jobStatusReport.totalResultsCount && (
-              <div className="tw:flex tw:items-center tw:gap-4">
-                <Progress
-                  value={(checkResults.length / jobStatusReport.totalResultsCount) * 100}
-                  className="tw:w-64"
-                />
-                {checkResults.length.toString()} / {jobStatusReport.totalResultsCount.toString()}
-                <Button onClick={onCancelOperation} disabled={isResultLoadingCancelled}>
-                  {localizedStrings['%general_cancel%']}
-                </Button>
-              </div>
-            )}
+          {hasJobFinished && checkResults.length < jobStatusReport.totalResultsCount && (
+            <div className="tw:flex tw:items-center tw:gap-4">
+              <Progress
+                value={(checkResults.length / jobStatusReport.totalResultsCount) * 100}
+                className="tw:w-64"
+              />
+              {checkResults.length.toString()} / {jobStatusReport.totalResultsCount.toString()}
+              <Button onClick={onCancelOperation} disabled={isResultLoadingCancelled}>
+                {localizedStrings['%general_cancel%']}
+              </Button>
+            </div>
+          )}
           {/* The job has finished and all results are loaded into the UI */}
-          {(jobStatusReport.status === 'completed' || jobStatusReport.status === 'stopped') &&
+          {hasJobFinished &&
             checkResults.length === jobStatusReport.totalResultsCount &&
             // The "could not run" notice below says why there are no results
             !allSelectedChecksCouldNotRun && (
@@ -503,11 +502,12 @@ export function ChecksSidePanel({
                     : localizedStrings['%webView_checksSidePanel_checkCouldNotRun_showDetails%']}
                 </Button>
               </div>
-              {/* Always rendered so the toggle's aria-controls resolves while collapsed */}
+              {/* Always rendered so the toggle's aria-controls resolves while collapsed. The class
+                  hides it too: a display utility would otherwise override the `hidden` attribute */}
               <div
                 id={errorDetailsId}
                 hidden={!areErrorDetailsShown}
-                className="tw:flex tw:flex-col tw:gap-1"
+                className={areErrorDetailsShown ? 'tw:flex tw:flex-col tw:gap-1' : 'tw:hidden'}
               >
                 {areErrorDetailsShown &&
                   checkErrors.map((checkError) => (

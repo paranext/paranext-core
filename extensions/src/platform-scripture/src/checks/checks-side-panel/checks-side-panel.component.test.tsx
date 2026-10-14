@@ -434,9 +434,15 @@ describe('checks that could not run', () => {
     const collapsed = document.getElementById(detailsId);
     expect(collapsed).not.toBeNull();
     expect(collapsed).not.toBeVisible();
+    // jsdom has no Tailwind, so `hidden` alone would pass here even where a display utility on the
+    // element overrides it in the app; the hiding class is what the app relies on
+    expect(collapsed).toHaveClass('tw:hidden');
+    expect(collapsed).not.toHaveClass('tw:flex');
 
     await user.click(showToggle);
-    expect(document.getElementById(detailsId)).toBeVisible();
+    const expanded = document.getElementById(detailsId);
+    expect(expanded).toBeVisible();
+    expect(expanded).not.toHaveClass('tw:hidden');
   });
 
   it('names a check once when it failed with different messages', () => {
