@@ -177,7 +177,12 @@ function connectToExtensionHostProcess() {
     extensionHost.stdout.on('data', logProcessInfo);
   }
 
-  extensionHost.once('exit', (code, signal) => {
+  const child = extensionHost;
+  child.once('exit', (code, signal) => {
+    // A child that is no longer the current one was given up on: hard-killed, or replaced by a
+    // newer fork. Its exit belongs to a stop main asked for, however late it arrives, and the
+    // flags below describe whichever process is current now, not this one.
+    const isCurrentChild = extensionHost === child;
     if (signal) {
       logger.info(`'exit' event: extension host process terminated with signal ${signal}`);
     } else {
@@ -188,6 +193,7 @@ function connectToExtensionHostProcess() {
     extensionHost = undefined;
     resolveProcessLifetimeVariable();
 
+    if (!isCurrentChild) return;
     const unexpectedStop = classifyExtensionHostExit({
       code,
       signal,
@@ -227,9 +233,11 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
   if (isRestarting) sharedArgs.push(commandLineArgumentsAliases[CommandLineArgs.DidRestart][0]);
 
   function startExtensionHostInternal() {
+    // Throws, and so forks nothing, while the previous process is not cleaned up; the flags below
+    // still describe that previous process until a new one is actually forked.
+    createNewProcessLifetimeVariable();
     isStopRequested = false;
     lastUnexpectedStop = undefined;
-    createNewProcessLifetimeVariable();
 
     const extensionHostEntryPath = app.isPackaged
       ? path.join(__dirname, '../extension-host/extension-host.js')

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as networkServiceTypes from '@shared/services/network.service';
 import {
   EVENT_NAME_ON_DID_STOP_EXTENSION_HOST,
@@ -38,6 +38,10 @@ async function loadFreshModule() {
 }
 
 describe('lifecycle events', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('registers both events as experimental notifications', async () => {
     const { startLifecycleEvents, networkService } = await loadFreshModule();
 
@@ -53,7 +57,7 @@ describe('lifecycle events', () => {
     });
   });
 
-  it('emits the reason, and only the reason, when the extension host stopped', async () => {
+  it('emits the stop reason when the extension host stopped', async () => {
     const { startLifecycleEvents, announceExtensionHostStopped, emits } = await loadFreshModule();
     await startLifecycleEvents();
 
@@ -71,6 +75,24 @@ describe('lifecycle events', () => {
     announceAppWillShutDown();
 
     expect(emits.get(EVENT_NAME_ON_WILL_SHUT_DOWN)).toHaveBeenCalledWith(undefined);
+  });
+
+  // `before-quit` fires again after `window-all-closed` re-issues `app.quit()`, by which time the
+  // network service has disposed the emitter.
+  it('announces the shutdown once per process: a second call emits nothing and logs nothing', async () => {
+    const { startLifecycleEvents, announceAppWillShutDown, emits, logger } =
+      await loadFreshModule();
+    await startLifecycleEvents();
+    const emit = emits.get(EVENT_NAME_ON_WILL_SHUT_DOWN);
+    announceAppWillShutDown();
+    emit?.mockImplementation(() => {
+      throw new Error('Emitter is disposed');
+    });
+
+    announceAppWillShutDown();
+
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it('warns and carries on when an emit throws', async () => {
@@ -91,11 +113,39 @@ describe('lifecycle events', () => {
     vi.mocked(networkService.createNetworkEventEmitterAsync).mockRejectedValue(
       new Error('rejected by the central registry'),
     );
+    const { logger } = await import('@shared/services/logger.service');
+    vi.mocked(logger.warn).mockClear();
     const { startLifecycleEvents, announceExtensionHostStopped, announceAppWillShutDown } =
       await import('./lifecycle-events.util');
 
     await expect(startLifecycleEvents()).resolves.toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(EVENT_NAME_ON_DID_STOP_EXTENSION_HOST),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(EVENT_NAME_ON_WILL_SHUT_DOWN));
     expect(() => announceExtensionHostStopped({ reason: 'crashed' })).not.toThrow();
     expect(() => announceAppWillShutDown()).not.toThrow();
+  });
+
+  it('still registers the second event when only the first registration rejects', async () => {
+    const { startLifecycleEvents, announceAppWillShutDown, emits, networkService, logger } =
+      await loadFreshModule();
+    const registerOne = vi.mocked(networkService.createNetworkEventEmitterAsync);
+    const registerNormally = registerOne.getMockImplementation();
+    registerOne.mockImplementation(async (eventName, documentation) => {
+      if (eventName === EVENT_NAME_ON_DID_STOP_EXTENSION_HOST)
+        throw new Error('rejected by the central registry');
+      if (!registerNormally) throw new Error('loadFreshModule installs an implementation');
+      return registerNormally(eventName, documentation);
+    });
+
+    await startLifecycleEvents();
+    announceAppWillShutDown();
+
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(EVENT_NAME_ON_DID_STOP_EXTENSION_HOST),
+    );
+    expect(emits.get(EVENT_NAME_ON_WILL_SHUT_DOWN)).toHaveBeenCalledWith(undefined);
   });
 });

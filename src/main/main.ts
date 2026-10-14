@@ -439,9 +439,7 @@ async function main() {
     await registerExtensionHostStoppedStateCommand();
   } catch (error) {
     logger.error(
-      `Failed to register platform.getExtensionHostStoppedState; windows opened after a stop will not show the notice: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      `Failed to register platform.getExtensionHostStoppedState; windows opened after a stop will not show the notice: ${getErrorMessage(error)}`,
     );
   }
 

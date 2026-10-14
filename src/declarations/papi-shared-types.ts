@@ -1196,8 +1196,11 @@ declare module 'papi-shared-types' {
      */
     'platform.onDidStartExtensionHost': undefined;
     /**
-     * Emitted by the main process when the app begins to quit, before any window is destroyed. No
-     * payload. Best effort: a window may be gone before it arrives.
+     * Emitted by the main process on an explicit quit (Cmd+Q, the Quit menu item, `platform.quit`
+     * or `platform.restart`), before any window is destroyed. Not emitted when closing windows
+     * shuts the app down (close-all from the primary window, or the last window on Windows and
+     * Linux): those windows close their connections cleanly before they are destroyed. No payload.
+     * Best effort: a window may be gone before it arrives.
      *
      * @experimental
      */

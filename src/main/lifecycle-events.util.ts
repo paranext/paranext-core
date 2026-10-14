@@ -11,6 +11,8 @@ import { getErrorMessage, PlatformEventEmitter } from 'platform-bible-utils';
 let extensionHostStoppedEmitter: PlatformEventEmitter<ExtensionHostStoppedEvent> | undefined;
 /** Emitter for {@link EVENT_NAME_ON_WILL_SHUT_DOWN}, undefined until registered */
 let appWillShutDownEmitter: PlatformEventEmitter<undefined> | undefined;
+/** Set once the shutdown has been announced; never reset, because the app is quitting. */
+let hasAnnouncedAppWillShutDown = false;
 
 /**
  * Register the two lifecycle network events so the announce functions below can emit on them. Call
@@ -58,8 +60,12 @@ export async function startLifecycleEvents(): Promise<void> {
     appWillShutDownEmitter = await createNetworkEventEmitterAsync(EVENT_NAME_ON_WILL_SHUT_DOWN, {
       notification: {
         summary:
-          'Emitted when the app begins to quit, before any window is destroyed. No payload. ' +
-          'Best effort: a window may be gone before it arrives.',
+          'Emitted on an explicit quit (Cmd+Q, the Quit menu item, platform.quit or ' +
+          'platform.restart), before any window is destroyed. Not emitted when closing windows ' +
+          "shuts the app down (close-all from the primary window's close button, or closing the " +
+          'last window on Windows and Linux): those windows close their connections cleanly before ' +
+          'they are destroyed, so they need no hint. No payload. Best effort: a window may be gone ' +
+          'before it arrives.',
         params: [],
         'x-experimental': true,
       },
@@ -92,9 +98,14 @@ export function announceExtensionHostStopped(event: ExtensionHostStoppedEvent): 
 /**
  * Tell every window the app is about to quit. No-op before {@link startLifecycleEvents} has
  * registered the event. A failed emit is warned about and swallowed: the quit must proceed.
+ *
+ * Announces once per process. `before-quit` fires a second time when `window-all-closed` re-issues
+ * `app.quit()`, and by then the network service has disposed the emitter, so a second emit could
+ * only fail.
  */
 export function announceAppWillShutDown(): void {
-  if (!appWillShutDownEmitter) return;
+  if (!appWillShutDownEmitter || hasAnnouncedAppWillShutDown) return;
+  hasAnnouncedAppWillShutDown = true;
   try {
     appWillShutDownEmitter.emit(undefined);
   } catch (e) {

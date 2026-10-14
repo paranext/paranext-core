@@ -4622,10 +4622,16 @@ declare module 'shared/models/extension-host-lifecycle.model' {
    */
   export const EVENT_NAME_ON_DID_START_EXTENSION_HOST = 'platform.onDidStartExtensionHost';
   /**
-   * Name of the network event main emits when the app begins to quit, before any window is destroyed.
-   * No payload. A window uses it to read the death of its own connection a moment later as the app
-   * going away rather than as a failure. Best effort: delivery is asynchronous and a window may be
-   * gone before it arrives, so a subscriber must still cope without it.
+   * Name of the network event main emits on an explicit quit (Cmd+Q, the Quit menu item,
+   * `platform.quit` or `platform.restart`), before any window is destroyed. No payload. A window uses
+   * it to read the death of its own connection a moment later as the app going away rather than as a
+   * failure.
+   *
+   * Not emitted when closing windows shuts the app down: a close-all from the primary window's close
+   * button, or closing the last window on Windows and Linux. Those windows close their connections
+   * cleanly before they are destroyed, so they need no hint. Best effort even on an explicit quit:
+   * delivery is asynchronous and a window may be gone before it arrives, so a subscriber must still
+   * cope without it.
    *
    * @experimental
    */
@@ -7294,8 +7300,11 @@ declare module 'papi-shared-types' {
      */
     'platform.onDidStartExtensionHost': undefined;
     /**
-     * Emitted by the main process when the app begins to quit, before any window is destroyed. No
-     * payload. Best effort: a window may be gone before it arrives.
+     * Emitted by the main process on an explicit quit (Cmd+Q, the Quit menu item, `platform.quit`
+     * or `platform.restart`), before any window is destroyed. Not emitted when closing windows
+     * shuts the app down (close-all from the primary window, or the last window on Windows and
+     * Linux): those windows close their connections cleanly before they are destroyed. No payload.
+     * Best effort: a window may be gone before it arrives.
      *
      * @experimental
      */
