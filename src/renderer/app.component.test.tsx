@@ -33,6 +33,9 @@ vi.mock('./components/overlays/overlay-workspace-updating.component', () => ({
 vi.mock('./components/overlays/overlay-connection-lost.component', () => ({
   ConnectionLostOverlay: () => <div data-testid="connection-lost-overlay" />,
 }));
+vi.mock('./components/overlays/extension-host-stopped-banner.component', () => ({
+  ExtensionHostStoppedBanner: () => <div data-testid="extension-host-stopped-banner" />,
+}));
 vi.mock('./components/first-run/first-run-overlay.component', () => ({
   FirstRunOverlay: () => <div data-testid="first-run-overlay" />,
 }));
@@ -66,6 +69,13 @@ describe('App first-run wiring', () => {
     // notice if <ConnectionLostOverlay /> were removed from Main's JSX. Removing the mount must fail.
     render(<App />);
     expect(screen.getByTestId('connection-lost-overlay')).toBeInTheDocument();
+  });
+
+  it('mounts the extension-host-stopped banner so it is listening from startup', () => {
+    // Guards the actual wiring: the banner decides for itself whether to render anything, so
+    // nothing else in this suite would notice if it were removed from Main's JSX.
+    render(<App />);
+    expect(screen.getByTestId('extension-host-stopped-banner')).toBeInTheDocument();
   });
 
   it('mounts the onboarding tour so it can stand itself down when the connection drops', () => {
