@@ -22,11 +22,11 @@ function menuItem(command: `${string}.${string}`): MenuItemContainingCommand {
   };
 }
 
-describe('Help menu links open the destinations their labels promise', () => {
-  beforeEach(() => {
-    vi.mocked(commandService.sendCommand).mockClear();
-  });
+beforeEach(() => {
+  vi.mocked(commandService.sendCommand).mockClear();
+});
 
+describe('Help menu links open the destinations their labels promise', () => {
   /**
    * The label and the destination are the two halves of a menu link that can drift apart, and a
    * rename is exactly when that happens: "Community support" is a relabel of the item formerly
@@ -49,12 +49,14 @@ describe('Help menu links open the destinations their labels promise', () => {
       'https://studio.paratext.org/start',
     );
   });
+});
 
+describe('handleMenuCommand falls through to dispatching unhandled commands', () => {
   /**
-   * A command with no Help-link case is dispatched as itself. The Feature roadmap id is the example
-   * because its page is unpublished, so it must never be given a case that opens a web page.
+   * A command with no case is sent as itself. The unpublished Feature roadmap id is used so a case
+   * that opens a page for it fails this test.
    */
-  test('a command with no Help-link case is dispatched unchanged rather than opened as a page', () => {
+  test('a command with no case is dispatched unchanged rather than opened as a page', () => {
     handleMenuCommand(menuItem('platform.visitFeatureRoadmapPage'));
 
     expect(commandService.sendCommand).toHaveBeenCalledWith(
