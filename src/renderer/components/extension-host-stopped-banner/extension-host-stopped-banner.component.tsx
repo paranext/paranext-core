@@ -1,4 +1,4 @@
-import { Alert, AlertDescription, AlertTitle, Button } from 'platform-bible-react';
+import { Alert, AlertDescription, AlertTitle, Button, cn } from 'platform-bible-react';
 import { resolveLocalizedString } from 'platform-bible-react/experimental';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react';
@@ -189,7 +189,7 @@ export function ExtensionHostStoppedBannerPresentational({
         <AlertDescription>{message}</AlertDescription>
         {/* Not a `ButtonGroup`: that renders a merged, segmented control for related toggles, and
             these are separate, alternative actions. */}
-        <div className={`${ALARM_STRIP_ACTIONS_CLASS_NAME} tw:flex tw:gap-2`}>
+        <div className={cn(ALARM_STRIP_ACTIONS_CLASS_NAME, 'tw:flex tw:gap-2')}>
           {restartExtensionsButton}
           <Button variant="outline" size="sm" onClick={onRestartApp}>
             {restartAppLabel}

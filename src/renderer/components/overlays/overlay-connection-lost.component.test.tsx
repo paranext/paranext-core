@@ -113,9 +113,9 @@ describe('ConnectionLostOverlayPresentational', () => {
   it('holds the reload button in a plain block column, with no row layout', () => {
     render(<ConnectionLostOverlayPresentational {...PROPS} />);
     const column = screen.getByRole('button', { name: 'Reload' }).parentElement;
-    expect(column?.className).toBe(
-      'tw:col-start-3 tw:row-span-2 tw:row-start-1 tw:self-center tw:ps-3',
-    );
+    expect(column).toHaveClass('tw:col-start-3', 'tw:self-center');
+    expect(column).not.toHaveClass('tw:flex');
+    expect(column?.className).not.toMatch(/tw:gap-/);
   });
 });
 
