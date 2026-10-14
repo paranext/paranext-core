@@ -95,7 +95,10 @@ namespace TestParanextDataProvider.Projects.SendReceive
             var service = CreateScriptedService();
             service.Throw = true;
 
-            Assert.That(service.GetProjectsWithUnreceivedChanges(Array.Empty<ScrText>()), Is.Null);
+            Assert.That(
+                service.GetProjectsWithUnreceivedChanges([new SharedDummyScrText()]),
+                Is.Null
+            );
         }
 
         [Test]
@@ -129,27 +132,60 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
+        public void GetProjectsWithUnreceivedChanges_PassesOnlySharedProjectsToTheLookup()
+        {
+            var service = CreateScriptedService();
+            var shared = new SharedDummyScrText();
+            var unshared = new DummyScrText();
+            service.ServerTips[unshared.Guid.ToString().ToUpperInvariant()] = "s1";
+            service.LastSyncedTips[unshared.Guid.ToString()] = "s0";
+
+            var result = service.GetProjectsWithUnreceivedChanges([unshared, shared]);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    service.Lookups,
+                    Is.EqualTo(new[] { new[] { shared.Guid.ToString() } })
+                );
+                Assert.That(result, Is.Empty, "an unshared project is never reported");
+            });
+        }
+
+        [Test]
+        public void GetProjectsWithUnreceivedChanges_NoSharedProjects_SkipsTheLookup()
+        {
+            var service = CreateScriptedService();
+
+            var result = service.GetProjectsWithUnreceivedChanges([new DummyScrText()]);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(service.Lookups, Is.Empty);
+                Assert.That(result, Is.Empty);
+            });
+        }
+
+        [Test]
         public void GetProjectsWithUnreceivedChanges_WarnsOnceUntilSuccess()
         {
             const string warning = "Could not read server tip ids";
             var service = CreateScriptedService();
+            ScrText[] shared = [new SharedDummyScrText()];
             var original = Console.Error;
             var captured = new StringWriter();
             Console.SetError(captured);
             try
             {
                 service.Throw = true;
-                service.GetProjectsWithUnreceivedChanges(Array.Empty<ScrText>());
-                service.GetProjectsWithUnreceivedChanges(Array.Empty<ScrText>());
+                service.GetProjectsWithUnreceivedChanges(shared);
+                service.GetProjectsWithUnreceivedChanges(shared);
                 Assert.That(CountOccurrences(captured.ToString(), warning), Is.EqualTo(1));
 
                 service.Throw = false;
-                Assert.That(
-                    service.GetProjectsWithUnreceivedChanges(Array.Empty<ScrText>()),
-                    Is.Empty
-                );
+                Assert.That(service.GetProjectsWithUnreceivedChanges(shared), Is.Empty);
                 service.Throw = true;
-                service.GetProjectsWithUnreceivedChanges(Array.Empty<ScrText>());
+                service.GetProjectsWithUnreceivedChanges(shared);
                 Assert.That(CountOccurrences(captured.ToString(), warning), Is.EqualTo(2));
             }
             finally

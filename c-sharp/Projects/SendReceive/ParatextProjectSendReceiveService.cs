@@ -228,6 +228,8 @@ internal class ParatextProjectSendReceiveService(
     /// <summary>
     /// The Send/Receive server's current tip id for each of <paramref name="projects"/>, keyed by
     /// upper-cased project id; a <see langword="null"/> value means the server reported no tip.
+    /// <paramref name="projects"/> is never empty and holds only shared projects
+    /// (<see cref="ScrText.IsProjectShared"/>).
     /// One batched request. Callers do not start a lookup while a sync is known to be active, but a
     /// sync may start while a lookup runs: the lookup must tolerate that, and a result that
     /// overlapped a sync is superseded by a lookup after that sync ends.
@@ -251,16 +253,21 @@ internal class ParatextProjectSendReceiveService(
     /// The projects among <paramref name="projects"/> for which the server holds changes not yet
     /// received here — see <see cref="UnreceivedChangesRule"/>. Returns <see langword="null"/> when
     /// the server lookup failed, so a caller can keep its previous answer; logs that failure once
-    /// until a later lookup succeeds.
+    /// until a later lookup succeeds. Only shared projects are looked up: an unshared project is
+    /// never reported, and with none shared no lookup is made and the result is empty.
     /// </summary>
     public IReadOnlyCollection<string>? GetProjectsWithUnreceivedChanges(
         IReadOnlyCollection<ScrText> projects
     )
     {
+        ScrText[] sharedProjects = [.. projects.Where(scrText => scrText.IsProjectShared)];
+        if (sharedProjects.Length == 0)
+            return Array.Empty<string>();
+
         IReadOnlyDictionary<string, string?> serverTips;
         try
         {
-            serverTips = GetServerTipIds(projects);
+            serverTips = GetServerTipIds(sharedProjects);
         }
         catch (Exception ex)
         {
@@ -281,7 +288,7 @@ internal class ParatextProjectSendReceiveService(
             StringComparer.OrdinalIgnoreCase
         );
         var result = new List<string>();
-        foreach (ScrText scrText in projects)
+        foreach (ScrText scrText in sharedProjects)
         {
             string id = scrText.Guid.ToString().ToUpperInvariant();
             tipsById.TryGetValue(id, out string? serverTip);
