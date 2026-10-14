@@ -433,6 +433,15 @@ declare module 'paratext-bible-send-receive' {
      * @experimental This field is unstable and may change or disappear without notice
      */
     toReceive: string[];
+    /**
+     * True from the start of a sync until the local recheck and the server lookup that follow its
+     * end have both finished. While true, `toSend` and `toReceive` can still describe the moment
+     * before the sync. The snapshot that clears it is pushed even when neither list changed. Absent
+     * from builds that predate the field; treat absent as `false`.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    isRechecking?: boolean;
   };
 }
 
