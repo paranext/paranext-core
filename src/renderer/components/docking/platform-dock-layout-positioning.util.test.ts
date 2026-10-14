@@ -95,6 +95,7 @@ describe('Dock Layout Component', () => {
       [
         'platformScriptureEditor.bibleTexts',
         'platformScriptureEditor.commentaries',
+        'platformLexicalTools.dictionary',
         'legacyCommentManager.commentListPanel',
         'platformScriptureEditor.scriptureTextGrid',
         'platformScripture.find',

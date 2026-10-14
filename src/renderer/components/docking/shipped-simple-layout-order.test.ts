@@ -160,12 +160,12 @@ describe('shipped Simple-mode Column 3 order', () => {
 
   it('every pinned webViewType still exists in the extension that provides it', () => {
     // Core cannot import extension source, so these webViewTypes are bare string literals in the
-    // layout data — four of them predate this column's Find tab. Renaming a provider's webViewType
-    // is a pure-rename refactor inside its own extension: it type-checks, it lints, and Simple mode
-    // silently loses that tab, because a saved tab with no registered provider just fails to load.
+    // layout data. Renaming a provider's webViewType is a pure-rename refactor inside its own
+    // extension: it type-checks, it lints, and Simple mode silently loses that tab, because a saved
+    // tab with no registered provider just fails to load.
     // Reading the extension source is the same technique the SCRIPTURE_EDITOR_WEBVIEW_TYPE drift
     // guard uses (web-view.model.test.ts); matching on the literal rather than a constant name keeps
-    // it working across the several differently-named (and mostly non-exported) constants these six
+    // it working across the several differently-named (and mostly non-exported) constants these
     // types are declared under.
     const extensionSourceDirs: Record<string, string> = {
       platformScripture: 'extensions/src/platform-scripture/src',
