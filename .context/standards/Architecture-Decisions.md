@@ -8338,8 +8338,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   each project's local tip at the end of its last successful Send/Receive, keyed by project id and
   written only by a successful sync. A project the record does not cover — every project on an
   installation upgraded from a build without the record, until that project's first successful
-  sync — reads as unknown: no committed-but-unsent changes to send and no changes to receive. Public core therefore detects uncommitted edits only; the committed-but-unsent half
-  switches on in a Studio build, and a missing tip id means "unknown", never "synced". The contract
+  sync — reads as unknown: no committed-but-unsent changes to send and no changes to receive. Public
+  core has no Mercurial, so a shared project's local check cannot run there: it reads as unknown, is
+  logged once per project, and never shows changes to send. Both halves switch on in a Studio
+  build, and a missing tip id means "unknown", never "synced". The contract
   is declared in core's `.d.ts` only, as with the other C#-served Send/Receive seams, so the
   extension repository registers nothing for it. Because every emit is a full snapshot, a lost event
   self-heals on the next write or sync end. The tracker consumes the Send/Receive write gate's disarm
@@ -8350,7 +8352,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   when the next sync begins, so the second pass rechecks the same projects as the first.
 
   The poller adds one server request per 5 minutes per installation plus one per sync, and ⬇️ can
-  lag the server by up to the poll interval. ⬇️ compares tip ids only, so a project restored from
+  lag the server by up to the poll interval. In Studio the lookup goes through the Paratext
+  registry, which rewrites a project's license file (and, if its registry id changed, its settings)
+  outside the Send/Receive write gate when the registry's license for it has changed — the same as
+  the user-opened shared-project list. A routine check writes nothing, because the license text is
+  unchanged between checks. ⬇️ compares tip ids only, so a project restored from
   a backup that carries a stale last-synced tip reads as ⬇️ until its next sync, and a project
   with no last-synced tip at all is never ⬇️. Public core carries an always-empty `toReceive`, and
   the Studio patch must keep the exact `GetServerTipIds` signature so the seam keeps binding.
