@@ -26,8 +26,9 @@ export interface UseMarkerPaletteCompositionCloseOptions {
  * `preventDefault` and composes anyway.
  *
  * So the honest options are to let it land with the palette gone, or to make the editor
- * non-editable for the duration — which is the input lock this design removed, with all its
- * fallout. This takes the first: close, and let the user see their character.
+ * non-editable for the duration — an input lock, which costs the caret, sends stray keys to the
+ * page body and leaves focus stranded when the palette closes. This takes the first: close, and let
+ * the user see their character.
  *
  * Capture phase, so it runs before anything inside the editor can act on the composition.
  */

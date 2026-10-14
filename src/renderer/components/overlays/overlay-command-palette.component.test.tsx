@@ -534,12 +534,11 @@ describe('OverlayCommandPalettePresentational', () => {
     });
 
     it('stops forwarded keys reaching this document\u2019s other shortcut bindings', () => {
-      // Regression: while marker palettes were passive, focus stayed in the requesting WebView\u2019s
-      // iframe and its keydowns never reached the renderer document, so the renderer\u2019s
-      // `document`-level shortcut bindings could not see them. Focusing the list moved focus into
-      // this document and put those bindings back in the path \u2014 `PlatformMenubar` binds bare
-      // `alt` and answers it by dispatching a SYNTHETIC Escape at a menu trigger, which closed the
-      // palette the instant a user reached for a dead key (Option is how `\u00e9` is typed on macOS).
+      // A list-focused palette holds focus in the renderer document rather than in the requesting
+      // WebView’s iframe, which puts the renderer’s `document`-level shortcut bindings in the
+      // key’s path — `PlatformMenubar` binds bare `alt` and answers it by dispatching a SYNTHETIC
+      // Escape at a menu trigger, which would close the palette the instant a user reaches for a
+      // dead key (Option is how `é` is typed on macOS).
       const documentListener = vi.fn();
       document.addEventListener('keydown', documentListener);
       const onKey = vi.fn();

@@ -200,16 +200,15 @@ the same table by each consumer's capture-phase listener, but a COMPOSITION begu
 forwarded — so the consumer closes the palette on `compositionstart` and lets the composed text land
 as ordinary typing. One shared hook does this for both consumers.
 
-**Known gap — `paste`, `cut` and `drop` are no longer blocked.** The input lock used to cancel them
-in document capture, because the editor's own listeners check its editable FLAG rather than the DOM
-attribute. Nothing replaces that. Once the palette holds focus a paste goes to the palette, so the
+**Known gap — `paste`, `cut` and `drop` are not blocked.** Nothing cancels them while a palette is
+open. Once the palette holds focus a paste goes to the palette, so the
 common case is covered by focus alone — but these events need neither a keydown nor focus: a drop
 is dispatched at the element under the pointer, and a context-menu or middle-click paste carries no
 keydown at all. So during the pre-focus window, or from the mouse at any time, content can still
 reach the text while a palette is open. The change guard (§3.3) is what answers this: the content
 change closes the palette and refuses the commit, so the dropped text is the user's own edit rather
-than a marker landing somewhere they never chose. The drop itself still lands — that is the
-remaining difference from the old lock, which cancelled it outright.
+than a marker landing somewhere they never chose. The drop itself still lands; the guard answers
+for the commit, not for the content.
 
 If the editor turns read-only mid-session (an automatic Send/Receive), the web view ends the
 session — including palettes it opened for the footnote popover's editor — because the editor's

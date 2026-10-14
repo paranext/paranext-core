@@ -421,10 +421,10 @@ export function OverlayCommandPalettePresentational({
   //
   // The target may not exist yet on the first attempts: an anchored palette renders through a
   // Radix Popover portal, which mounts its content on a render AFTER this effect has run. A
-  // missing target is therefore a reason to RETRY, not to give up — returning there meant focus
-  // was never requested for any anchored palette at all. Keyed on whether forwarding is set, not
-  // on the object, so a new `keyForwarding` identity cannot re-run this effect and steal focus
-  // after the portal has mounted.
+  // missing target is therefore a reason to RETRY, not to give up: bailing out on the first miss
+  // leaves every anchored palette unfocused. Keyed on whether forwarding is set, not on the
+  // object, so a new `keyForwarding` identity cannot re-run this effect and steal focus after the
+  // portal has mounted.
   const forwardsKeys = !!keyForwarding;
   useEffect(() => {
     if (passive) return () => {};
@@ -490,14 +490,12 @@ export function OverlayCommandPalettePresentational({
         // A list-focused palette OWNS the keyboard while it is open, so nothing else in this
         // document may also act on the key — even one the requester's table decides to ignore.
         //
-        // This matters because of where the focus now is. While marker palettes were passive,
-        // focus stayed inside the requesting WebView's iframe and its keydowns never reached the
-        // renderer's document at all; the renderer's `document`-level shortcut bindings were
-        // therefore unreachable from an open palette. Focusing the list moved focus into THIS
-        // document, which put every one of those bindings back in the path: `PlatformMenubar`'s
+        // This matters because of where the focus is. A list-focused palette holds focus in THIS
+        // document rather than inside the requesting WebView's iframe, which puts every one of the
+        // renderer's `document`-level shortcut bindings in the key's path: `PlatformMenubar`'s
         // bare `alt` fires a SYNTHETIC Escape at a menu trigger (see its `useHotkeys` call), which
-        // dismissed the palette the moment a user reached for a dead key — Option is how `é` is
-        // typed on macOS — and `notification-display`'s Alt+T is the same shape.
+        // would dismiss the palette the moment a user reaches for a dead key — Option is how `é`
+        // is typed on macOS — and `notification-display`'s Alt+T is the same shape.
         //
         // Stopping propagation here rather than fixing each binding keeps the rule in one place:
         // the palette has focus, so the palette's table decides, and a binding that was never

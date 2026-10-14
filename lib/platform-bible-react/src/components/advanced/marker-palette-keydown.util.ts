@@ -35,9 +35,9 @@
  *   selection, leaving nothing for a second marker to attach to.
  * - **Enter and Tab**, unmodified or with Shift, commit the highlighted item; with zero matches
  *   nothing happens and the palette stays open.
- * - **Ctrl/Cmd/Alt chords** (never AltGr) CLOSE the palette. The table does not claim them, but
- *   with focus in the palette they do not reach the editor either — Ctrl+Z and Ctrl+B do nothing
- *   there. Chord+Enter IS claimed on the way out: cmdk acts on any un-prevented Enter regardless of
+ * - **Ctrl/Cmd/Alt chords** (never AltGr) CLOSE the palette. The table does not claim them, but with
+ *   focus in the palette they do not reach the editor either — Ctrl+Z and Ctrl+B do nothing there.
+ *   Chord+Enter IS claimed on the way out: cmdk acts on any un-prevented Enter regardless of
  *   modifiers, so an unclaimed one would click the highlighted item while the dismissal is in
  *   flight.
  * - **Escape** closes. **Up/Down** move the highlight.
@@ -384,10 +384,10 @@ export function handleMarkerPaletteSessionKeyDown(
   // command modifiers everywhere. Alt is not: on macOS, Option is how characters are COMPOSED —
   // `Option+e` begins `é`, `Option+n` begins `ñ`, `Option+a` types `å` outright — so it holds the
   // role AltGr holds on Windows and Linux, which the AltGraph exclusion below already covers.
-  // Reading Option as a chord dismissed the palette the instant a Mac user reached for an accent:
-  // the dead key arrives with `altKey` set, so it never got as far as the rule that ignores keys
-  // which cannot name a marker. Ctrl+Option and Cmd+Option are still chords — their command
-  // modifier is what decides.
+  // Treating Option as a chord would dismiss the palette the instant a Mac user reaches for an
+  // accent: the dead key arrives with `altKey` set, so it has to reach the rule at the bottom that
+  // ignores keys which cannot name a marker. Ctrl+Option and Cmd+Option are still chords — their
+  // command modifier is what decides.
   const isAltAChordModifier = !isMacOs();
   if (
     (event.ctrlKey || event.metaKey || (event.altKey && isAltAChordModifier)) &&

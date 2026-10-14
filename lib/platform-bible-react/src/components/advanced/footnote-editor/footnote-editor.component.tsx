@@ -591,9 +591,8 @@ export default function FootnoteEditor({
    * the shared capture-phase table (`handleMarkerPaletteSessionKeyDown`) — never the document. The
    * collapsed-caret trigger opens one tracked as `kind: 'backslash'`; the selection-wrap trigger
    * opens one tracked as `kind: 'selection'`. Both focus the palette's LIST — the kind decides how
-   * a commit APPLIES, not focus — and the table claims their keys wholesale because the
-   * cross-frame focus handoff can lose, and an unclaimed
-   * keystroke would replace the wrapped selection.
+   * a commit APPLIES, not focus — and the table claims their keys wholesale because the cross-frame
+   * focus handoff can lose, and an unclaimed keystroke would replace the wrapped selection.
    */
   const paletteSession = useRef<MarkerPaletteOpenSession<EditorMarkerMenuItem> | undefined>(
     undefined,

@@ -737,9 +737,9 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
 
   it('treats OPTION as typing on macOS, not as a chord', () => {
     // On macOS Option composes characters — `Option+e` begins `é`, `Option+n` begins `ñ` — so it
-    // holds the role AltGr holds on Windows and Linux. Reading it as a chord dismissed the palette
-    // the instant a Mac user reached for an accent: the dead key arrives with `altKey` set, so it
-    // never reached the rule that ignores keys which cannot name a marker. Live-reported.
+    // holds the role AltGr holds on Windows and Linux. Treating it as a chord would dismiss the
+    // palette the instant a Mac user reaches for an accent: the dead key arrives with `altKey` set,
+    // so it has to reach the rule that ignores keys which cannot name a marker.
     const { userAgent } = navigator;
     Object.defineProperty(navigator, 'userAgent', {
       value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
@@ -1206,9 +1206,9 @@ describe('resolveFilterCharacter — the typed character, with the physical key 
   });
 
   it('ignores anything typed with OPTION held on macOS — it is an alternate character', () => {
-    // Live-reported: with the palette open, `Option+e` then `e` filtered `ee` where it should
-    // filter `e`. Option is macOS's compose modifier — `Option+e` begins `é`, `Option+a` types
-    // `å` — so it never names a marker. Both resolution paths would otherwise produce a letter
+    // With the palette open, `Option+e` then `e` has to filter `e`, not `ee`. Option is macOS's
+    // compose modifier — `Option+e` begins `é`, `Option+a` types `å` — so it never names a
+    // marker. Both resolution paths would otherwise produce a letter
     // from it: the character path if the browser reports `e`, and the physical-key fallback if it
     // reports the dead character `´`.
     const { userAgent } = navigator;

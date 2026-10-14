@@ -14497,9 +14497,9 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
    * Both render a read-only search box over a host-supplied filter and answer commits from the
    * requester's own list, so both must match HOST-SIDE rather than through cmdk: reimplementing
    * cmdk's fuzzy scorer is the only way the two lists could otherwise agree, and a disagreement
-   * commits an item the user cannot see. That host-side rule is {@link PaletteFilterMode}
-   * `'passive'` — a label PREFIX match, mirroring PT9's marker dropdown. Derived in one place so the
-   * palette's display and the host's commit resolution can never drift apart.
+   * commits an item the user cannot see. That host-side rule is {@link PaletteFilterMode} `'passive'`
+   * — a label PREFIX match, mirroring PT9's marker dropdown. Derived in one place so the palette's
+   * display and the host's commit resolution can never drift apart.
    */
   export function isHostDrivenPalette(
     request: Pick<CommandPaletteRequest, 'passive' | 'focusTarget'>,
