@@ -77,8 +77,8 @@ describe('lifecycle events', () => {
     expect(emits.get(EVENT_NAME_ON_WILL_SHUT_DOWN)).toHaveBeenCalledWith(undefined);
   });
 
-  // `before-quit` fires again after `window-all-closed` re-issues `app.quit()`, by which time the
-  // network service has disposed the emitter.
+  // `before-quit` fires again every time `app.quit()` is re-issued; the re-issue from `will-quit`
+  // comes after the network service has disposed the emitter.
   it('announces the shutdown once per process: a second call emits nothing and logs nothing', async () => {
     const { startLifecycleEvents, announceAppWillShutDown, emits, logger } =
       await loadFreshModule();

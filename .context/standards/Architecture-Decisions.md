@@ -2320,10 +2320,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   shutdown, is silent; anything else is announced on the `@experimental` network event
   `platform.onDidStopExtensionHost` with a `reason` of `'lost-connection'` or `'crashed'` and
   nothing else on the wire. (3) Main also emits `platform.onWillShutDown` from `before-quit`,
-  once per process, on an explicit quit (Cmd+Q, the Quit menu item, `platform.quit`,
-  `platform.restart`) before any window is destroyed. A close-all from the primary window's close
-  button and closing the last window on Windows and Linux reach shutdown without it; those windows'
-  ports are closed cleanly (1001) before they are destroyed, so they need no hint. Main also
+  once per process. On an explicit quit (Cmd+Q, the Quit menu item, `platform.quit`,
+  `platform.restart`) it goes out before any window is destroyed. A close-all from the primary
+  window's close button and closing the last window on Windows and Linux reach `before-quit` only
+  after every window is gone, so it is emitted then and no window sees it (other peers, such as the
+  extension host, still do); those windows' ports were closed cleanly (1001) before they were
+  destroyed, so they need no hint. Main also
   answers `platform.getExtensionHostStoppedState` for a window that was not listening when the
   stop happened. (4) The extension host emits
   `platform.onDidStartExtensionHost` once its extensions have initialized: `restartExtensionHost`
@@ -2363,7 +2365,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   requested shutdown joins it rather than exiting with the lost-connection code mid-deactivation.
   An extension host whose first connect to main fails exits with 1, which main reports as a
   crash. Main distinguishes requested from unexpected stops with a module flag set in
-  `waitForExtensionHost` and cleared on the next fork, plus `isAppShuttingDown()`. Three new
+  `waitForExtensionHost` and cleared on the next fork, plus `isAppShuttingDown()`, and it
+  classifies only the exit of the current child: a child it hard-killed or replaced exited for a
+  stop main asked for, however late that exit arrives. Three new
   `@experimental` network events and one `@experimental` command; every peer receives the events,
   only renderers listen. The banner's `role="status"` live region is always mounted, empty until
   there is a notice, because a live region inserted together with its content is generally not

@@ -164,6 +164,18 @@ describe('extension-host-stopped store', () => {
     expect(getExtensionHostNotice()).toEqual(STOPPED_LOST);
   });
 
+  // The fallback's unconfirmed state is where a window lands when the new host really is dead; a
+  // later stop is the one signal that it is.
+  it('a new stop after an unconfirmed restart brings the alarm back', () => {
+    reportExtensionHostStopped({ reason: 'crashed' });
+    markExtensionHostRestarting();
+    markExtensionHostRestarted(false);
+
+    reportExtensionHostStopped({ reason: 'lost-connection' });
+
+    expect(getExtensionHostNotice()).toEqual(STOPPED_LOST);
+  });
+
   it('dismiss clears any state and notifies, and accepts a new report afterwards', () => {
     const listener = vi.fn();
     subscribeToExtensionHostNotice(listener);

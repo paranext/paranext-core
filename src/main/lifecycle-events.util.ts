@@ -60,12 +60,13 @@ export async function startLifecycleEvents(): Promise<void> {
     appWillShutDownEmitter = await createNetworkEventEmitterAsync(EVENT_NAME_ON_WILL_SHUT_DOWN, {
       notification: {
         summary:
-          'Emitted on an explicit quit (Cmd+Q, the Quit menu item, platform.quit or ' +
-          'platform.restart), before any window is destroyed. Not emitted when closing windows ' +
-          "shuts the app down (close-all from the primary window's close button, or closing the " +
-          'last window on Windows and Linux): those windows close their connections cleanly before ' +
-          'they are destroyed, so they need no hint. No payload. Best effort: a window may be gone ' +
-          'before it arrives.',
+          'Emitted when the app quits. On an explicit quit (Cmd+Q, the Quit menu item, ' +
+          'platform.quit or platform.restart) it comes before any window is destroyed. When ' +
+          "closing windows shuts the app down (close-all from the primary window's close button, " +
+          'or closing the last window on Windows and Linux) it comes only after every window is ' +
+          'gone, so no window sees it; those windows closed their connections cleanly (1001) ' +
+          'before they were destroyed, so they need no hint. No payload. Best effort: a window may ' +
+          'be gone before it arrives.',
         params: [],
         'x-experimental': true,
       },
@@ -99,9 +100,10 @@ export function announceExtensionHostStopped(event: ExtensionHostStoppedEvent): 
  * Tell every window the app is about to quit. No-op before {@link startLifecycleEvents} has
  * registered the event. A failed emit is warned about and swallowed: the quit must proceed.
  *
- * Announces once per process. `before-quit` fires a second time when `window-all-closed` re-issues
- * `app.quit()`, and by then the network service has disposed the emitter, so a second emit could
- * only fail.
+ * Announces once per process. `before-quit` fires again every time `app.quit()` is re-issued: from
+ * `window-all-closed`, and from `will-quit` after its teardown, by which time the network service
+ * has disposed the emitter. The first announcement is the one that matters; a later emit could at
+ * best repeat it and at worst fail on the disposed emitter.
  */
 export function announceAppWillShutDown(): void {
   if (!appWillShutDownEmitter || hasAnnouncedAppWillShutDown) return;

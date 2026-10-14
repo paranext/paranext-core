@@ -159,6 +159,24 @@ describe('extensionHostService stop reporting', () => {
     expect(extensionHostService.getLastUnexpectedStop()).toBeUndefined();
   });
 
+  // `kill` hard-kills without setting the requested-stop flag, so only the check that the exiting
+  // child is still the current one keeps this exit quiet.
+  test('the exit of a child main hard-killed directly announces nothing', async () => {
+    const child = new FakeExtensionHost(true);
+    willFork(child);
+    const { extensionHostService, onStop } = await loadService();
+    await extensionHostService.start(MAX_WAIT_MS);
+
+    extensionHostService.kill();
+    // A signal ends it, so Node reports no exit code: null, as `exit` documents.
+    // eslint-disable-next-line no-null/no-null
+    child.exit(null, 'SIGKILL');
+
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(onStop).not.toHaveBeenCalled();
+    expect(extensionHostService.getLastUnexpectedStop()).toBeUndefined();
+  });
+
   test('announces nothing while the app is shutting down', async () => {
     const child = new FakeExtensionHost(true);
     willFork(child);

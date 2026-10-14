@@ -41,16 +41,17 @@ export const EVENT_NAME_ON_DID_STOP_EXTENSION_HOST = 'platform.onDidStopExtensio
 export const EVENT_NAME_ON_DID_START_EXTENSION_HOST = 'platform.onDidStartExtensionHost';
 
 /**
- * Name of the network event main emits on an explicit quit (Cmd+Q, the Quit menu item,
- * `platform.quit` or `platform.restart`), before any window is destroyed. No payload. A window uses
- * it to read the death of its own connection a moment later as the app going away rather than as a
- * failure.
+ * Name of the network event main emits when the app quits. No payload. On an explicit quit (Cmd+Q,
+ * the Quit menu item, `platform.quit` or `platform.restart`) it is emitted before any window is
+ * destroyed, and a window uses it to read the death of its own connection a moment later as the app
+ * going away rather than as a failure.
  *
- * Not emitted when closing windows shuts the app down: a close-all from the primary window's close
- * button, or closing the last window on Windows and Linux. Those windows close their connections
- * cleanly before they are destroyed, so they need no hint. Best effort even on an explicit quit:
- * delivery is asynchronous and a window may be gone before it arrives, so a subscriber must still
- * cope without it.
+ * When closing windows shuts the app down instead (a close-all from the primary window's close
+ * button, or closing the last window on Windows and Linux), it is emitted only after every window
+ * is gone, so no window sees it; those windows closed their connections cleanly (1001) before they
+ * were destroyed, so they need no hint. Other peers, such as the extension host, still receive it.
+ * Best effort even on an explicit quit: delivery is asynchronous and a window may be gone before it
+ * arrives, so a subscriber must still cope without it.
  *
  * @experimental
  */
