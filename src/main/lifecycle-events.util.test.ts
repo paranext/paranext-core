@@ -3,6 +3,7 @@ import * as networkServiceTypes from '@shared/services/network.service';
 import {
   EVENT_NAME_ON_DID_STOP_EXTENSION_HOST,
   EVENT_NAME_ON_WILL_SHUT_DOWN,
+  EXTENSION_HOST_STOPPED_EVENT_SCHEMA,
 } from '@shared/models/extension-host-lifecycle.model';
 
 vi.mock('@shared/services/network.service', () => ({
@@ -54,6 +55,10 @@ describe('lifecycle events', () => {
     );
     calls.forEach(([, docs]) => {
       expect(docs?.notification?.['x-experimental']).toBe(true);
+    });
+    const stopDocs = calls.find(([name]) => name === EVENT_NAME_ON_DID_STOP_EXTENSION_HOST)?.[1];
+    expect(stopDocs?.notification?.params?.[0]).toMatchObject({
+      schema: EXTENSION_HOST_STOPPED_EVENT_SCHEMA,
     });
   });
 

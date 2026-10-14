@@ -1,5 +1,6 @@
 import { extensionHostService } from '@main/services/extension-host.service';
 import { registerCommand } from '@shared/services/command.service';
+import { EXTENSION_HOST_STOPPED_EVENT_SCHEMA } from '@shared/models/extension-host-lifecycle.model';
 
 /**
  * Register `platform.getExtensionHostStoppedState`, the catch-up for a window that was not
@@ -16,20 +17,15 @@ export async function registerExtensionHostStoppedStateCommand(): Promise<void> 
         'x-experimental': true,
         summary:
           'Whether the extension host is currently stopped without main having asked it to, and ' +
-          'why. Undefined while it is running or has been restarted since.',
+          'why. Null while it is running or has been restarted since.',
         params: [],
         result: {
           name: 'return value',
-          summary: 'The stop, or undefined',
+          summary: 'The stop, or null',
           schema: {
             anyOf: [
-              {
-                type: 'object',
-                properties: {
-                  reason: { type: 'string', enum: ['lost-connection', 'crashed'] },
-                },
-                required: ['reason'],
-              },
+              EXTENSION_HOST_STOPPED_EVENT_SCHEMA,
+              // JSON-RPC carries a missing result as null.
               { type: 'null' },
             ],
           },

@@ -4583,11 +4583,12 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
   export default ExtractDataProviderDataTypes;
 }
 declare module 'shared/models/extension-host-lifecycle.model' {
+  import type { Schema } from 'shared/models/openrpc.model';
   /**
    * Why the extension host stopped without main asking it to.
    *
-   * - `'lost-connection'`: it ended itself because its connection to main died (see
-   *   `exit-on-lost-connection.ts` in the extension host).
+   * - `'lost-connection'`: the extension host lost its connection to main and ended itself, since it
+   *   cannot do anything without that connection.
    * - `'crashed'`: any other exit main did not request — an uncaught fatal error, an OS signal, an
    *   out-of-memory kill.
    *
@@ -4595,14 +4596,22 @@ declare module 'shared/models/extension-host-lifecycle.model' {
    */
   export type ExtensionHostStopReason = 'lost-connection' | 'crashed';
   /**
-   * Payload of the {@link EVENT_NAME_ON_DID_STOP_EXTENSION_HOST} network event. Carries the reason
-   * only; the exit code, signal and pid stay in main's log.
+   * Payload of the {@link EVENT_NAME_ON_DID_STOP_EXTENSION_HOST} network event and the answer of
+   * `platform.getExtensionHostStoppedState`. Carries the reason only; the exit code, signal and pid
+   * stay in main's log.
    *
    * @experimental
    */
   export type ExtensionHostStoppedEvent = {
     reason: ExtensionHostStopReason;
   };
+  /**
+   * OpenRPC schema of an {@link ExtensionHostStoppedEvent}, shared by every registration that sends
+   * one over the network.
+   *
+   * @experimental
+   */
+  export const EXTENSION_HOST_STOPPED_EVENT_SCHEMA: Schema;
   /**
    * Name of the network event main emits when the extension host stops without being asked to. Not
    * emitted for a restart main itself requested (`platform.restartExtensionHost`, the dev-mode file
@@ -4629,10 +4638,11 @@ declare module 'shared/models/extension-host-lifecycle.model' {
    *
    * When closing windows shuts the app down instead (a close-all from the primary window's close
    * button, or closing the last window on Windows and Linux), it is emitted only after every window
-   * is gone, so no window sees it; those windows closed their connections cleanly (1001) before they
-   * were destroyed, so they need no hint. Other peers, such as the extension host, still receive it.
-   * Best effort even on an explicit quit: delivery is asynchronous and a window may be gone before it
-   * arrives, so a subscriber must still cope without it.
+   * is gone, so no window sees it. Those windows need no hint: each one's connection was closed
+   * cleanly, as a normal close rather than a failure, before the window was destroyed. Other peers,
+   * such as the extension host, still receive it. Best effort even on an explicit quit: delivery is
+   * asynchronous and a window may be gone before it arrives, so a subscriber must still cope without
+   * it.
    *
    * @experimental
    */
@@ -6221,11 +6231,13 @@ declare module 'papi-shared-types' {
     'test.throwError': (message: string) => void;
     'platform.restartExtensionHost': () => Promise<void>;
     /**
-     * Whether the extension host is currently stopped without main having asked it to, and why.
-     * `undefined` while it is running (or has been restarted since). A window asks this once at
-     * startup, in case the stop happened before it was listening for
+     * Whether the extension host is currently stopped without main having asked it to, and why. A
+     * window asks this once at startup, in case the stop happened before it was listening for
      * `platform.onDidStopExtensionHost`.
      *
+     * @returns The stop, or nothing while the extension host is running (or has been restarted
+     *   since). Over JSON-RPC that "nothing" arrives as `null`, not `undefined`, so test the result
+     *   for truthiness rather than comparing it with `undefined`.
      * @experimental
      */
     'platform.getExtensionHostStoppedState': () => Promise<ExtensionHostStoppedEvent | undefined>;
@@ -7305,8 +7317,8 @@ declare module 'papi-shared-types' {
      * item, `platform.quit` or `platform.restart`) it comes before any window is destroyed. When
      * closing windows shuts the app down (close-all from the primary window, or the last window on
      * Windows and Linux) it comes only after every window is gone, so no window sees it; those
-     * windows closed their connections cleanly (1001) before they were destroyed. No payload. Best
-     * effort: a window may be gone before it arrives.
+     * windows' connections were closed cleanly, as a normal close rather than a failure, before
+     * they were destroyed. No payload. Best effort: a window may be gone before it arrives.
      *
      * @experimental
      */
@@ -13149,6 +13161,10 @@ declare module '@papi/core' {
     WindowLayout,
   } from 'shared/models/docking-framework.model';
   export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
+  export type {
+    ExtensionHostStoppedEvent,
+    ExtensionHostStopReason,
+  } from 'shared/models/extension-host-lifecycle.model';
   export type {
     HandleUri,
     RegisterUriHandler,

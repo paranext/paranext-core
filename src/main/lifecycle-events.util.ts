@@ -3,6 +3,7 @@ import { createNetworkEventEmitterAsync } from '@shared/services/network.service
 import {
   EVENT_NAME_ON_DID_STOP_EXTENSION_HOST,
   EVENT_NAME_ON_WILL_SHUT_DOWN,
+  EXTENSION_HOST_STOPPED_EVENT_SCHEMA,
   ExtensionHostStoppedEvent,
 } from '@shared/models/extension-host-lifecycle.model';
 import { getErrorMessage, PlatformEventEmitter } from 'platform-bible-utils';
@@ -37,13 +38,7 @@ export async function startLifecycleEvents(): Promise<void> {
               name: 'extensionHostStoppedEvent',
               required: true,
               summary: 'Why the extension host stopped.',
-              schema: {
-                type: 'object',
-                properties: {
-                  reason: { type: 'string', enum: ['lost-connection', 'crashed'] },
-                },
-                required: ['reason'],
-              },
+              schema: EXTENSION_HOST_STOPPED_EVENT_SCHEMA,
             },
           ],
           'x-experimental': true,
@@ -64,9 +59,9 @@ export async function startLifecycleEvents(): Promise<void> {
           'platform.quit or platform.restart) it comes before any window is destroyed. When ' +
           "closing windows shuts the app down (close-all from the primary window's close button, " +
           'or closing the last window on Windows and Linux) it comes only after every window is ' +
-          'gone, so no window sees it; those windows closed their connections cleanly (1001) ' +
-          'before they were destroyed, so they need no hint. No payload. Best effort: a window may ' +
-          'be gone before it arrives.',
+          'gone, so no window sees it; those windows need no hint, because their connections were ' +
+          'closed cleanly before they were destroyed. No payload. Best effort: a window may be ' +
+          'gone before it arrives.',
         params: [],
         'x-experimental': true,
       },

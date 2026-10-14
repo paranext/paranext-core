@@ -76,11 +76,13 @@ declare module 'papi-shared-types' {
     'test.throwError': (message: string) => void;
     'platform.restartExtensionHost': () => Promise<void>;
     /**
-     * Whether the extension host is currently stopped without main having asked it to, and why.
-     * `undefined` while it is running (or has been restarted since). A window asks this once at
-     * startup, in case the stop happened before it was listening for
+     * Whether the extension host is currently stopped without main having asked it to, and why. A
+     * window asks this once at startup, in case the stop happened before it was listening for
      * `platform.onDidStopExtensionHost`.
      *
+     * @returns The stop, or nothing while the extension host is running (or has been restarted
+     *   since). Over JSON-RPC that "nothing" arrives as `null`, not `undefined`, so test the result
+     *   for truthiness rather than comparing it with `undefined`.
      * @experimental
      */
     'platform.getExtensionHostStoppedState': () => Promise<ExtensionHostStoppedEvent | undefined>;
@@ -1200,8 +1202,8 @@ declare module 'papi-shared-types' {
      * item, `platform.quit` or `platform.restart`) it comes before any window is destroyed. When
      * closing windows shuts the app down (close-all from the primary window, or the last window on
      * Windows and Linux) it comes only after every window is gone, so no window sees it; those
-     * windows closed their connections cleanly (1001) before they were destroyed. No payload. Best
-     * effort: a window may be gone before it arrives.
+     * windows' connections were closed cleanly, as a normal close rather than a failure, before
+     * they were destroyed. No payload. Best effort: a window may be gone before it arrives.
      *
      * @experimental
      */
