@@ -1,6 +1,7 @@
 import type { DragEvent, KeyboardEvent } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { ResourceCell, GridResource } from './resource-cell.component';
+import type { GridResource } from './grid-resources.utils';
+import { ResourceCell } from './resource-cell.component';
 import type { ZoomMenuLabels } from './resource-cell-view.component';
 import { resourceZoomAreaOf } from './resource-zoom-area.utils';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';

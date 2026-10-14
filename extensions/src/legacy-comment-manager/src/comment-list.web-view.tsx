@@ -21,6 +21,7 @@ import {
   useLocalizedStrings,
   useProjectData,
   useProjectDataProvider,
+  useProjectSetting,
   useWebViewController,
 } from '@papi/frontend/react';
 import {
@@ -401,6 +402,17 @@ global.webViewComponent = function CommentListWebView({
   }, [projectId, legacyPersistedScopeFilter]);
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
+
+  // A published resource advertises no comments interface, so `commentsPdp` never arrives for one
+  // and the panel would stay loading. A failed read counts as not published, the setting's default.
+  const [isPublishedPossiblyError] = useProjectSetting(projectId, 'platform.isPublished', false);
+  const isPublishedResource = useMemo(() => {
+    if (!isPlatformError(isPublishedPossiblyError)) return isPublishedPossiblyError;
+    logger.warn(
+      `Could not read platform.isPublished for ${projectId}: ${getErrorMessage(isPublishedPossiblyError)}`,
+    );
+    return false;
+  }, [isPublishedPossiblyError, projectId]);
 
   // Whether the current user's registration-data fetch (below) has failed. Distinct from merely
   // "not loaded yet": without this, a preset that needs the current user (see
@@ -1105,6 +1117,7 @@ global.webViewComponent = function CommentListWebView({
         // instead of leaving the panel on skeletons forever.
         currentUserNameUnavailable={currentUserNameUnavailable}
         onRetryFetchCurrentUserName={fetchCurrentUserName}
+        isPublishedResource={isPublishedResource}
         handleAddCommentToThread={handleAddCommentToThread}
         handleUpdateComment={handleUpdateComment}
         handleDeleteComment={handleDeleteComment}

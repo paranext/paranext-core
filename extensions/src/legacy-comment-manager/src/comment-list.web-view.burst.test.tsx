@@ -115,6 +115,8 @@ vi.mock('@papi/frontend/react', () => ({
     },
   })),
   useProjectDataProvider: vi.fn(() => ({})),
+  // A translation project: `platform.isPublished` is false.
+  useProjectSetting: vi.fn(() => [false, undefined, undefined, false]),
   useWebViewController: vi.fn(() => undefined),
 }));
 

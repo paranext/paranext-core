@@ -4,7 +4,12 @@ declare module 'platform-get-resources' {
   import type { DblResourceData } from 'platform-bible-utils';
 
   export type GetResourcesDataTypes = {
-    /** List of information about resources that are available from the DBL */
+    /**
+     * List of information about resources that are available from the DBL.
+     *
+     * Rejects when the DBL cannot be reached (for example offline) or the user registration is not
+     * valid. An empty list never stands in for "offline".
+     */
     DblResources: DataProviderDataType<undefined, DblResourceData[], never>;
   };
 
@@ -173,10 +178,11 @@ declare module 'papi-shared-types' {
      * Returns DBL resources from memory cache.
      *
      * If no cached value exists, attempts to fetch them. Failed refresh attempts do NOT clear
-     * existing cached data.
+     * existing cached data. Concurrent calls share one fetch.
      *
      * @returns The cached catalog, or an `unavailable` result when this build cannot produce one.
-     * @throws When the fetch itself fails. Callers that render an error state with a retry should
+     * @throws When the fetch itself fails — including when the DBL cannot be reached, for example
+     *   offline — and no catalog is cached. Callers that render an error state with a retry should
      *   key it on the rejection, never on an `unavailable` result — retrying the latter cannot
      *   change the answer.
      */

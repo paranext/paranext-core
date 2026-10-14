@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UseWebViewScrollGroupScrRefHook, UseWebViewStateHook } from '@papi/core';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
+import { useProjectSetting } from '@papi/frontend/react';
 import { useViewVisibility } from 'platform-bible-react';
 import type { LegacyCommentThread } from 'platform-bible-utils';
 
@@ -35,6 +36,8 @@ vi.mock('@papi/frontend/react', () => ({
     CommentThreads: () => [mocks.commentThreads, vi.fn(), false],
   })),
   useProjectDataProvider: vi.fn(() => ({})),
+  // A translation project: `platform.isPublished` is false.
+  useProjectSetting: vi.fn(() => [false, undefined, undefined, false]),
   useWebViewController: vi.fn(() => undefined),
 }));
 
@@ -60,8 +63,14 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 vi.mock('./comment-list.component', () => ({
   COMMENT_LIST_PANEL_EXTRA_STRING_KEYS: [],
   COMMENT_LIST_STICKY_HEADER_ELEMENT_ID: 'comment-list-sticky-header',
-  CommentListPanel: ({ threads }: { threads: { id: string }[] }) => (
-    <div id="comment-list">
+  CommentListPanel: ({
+    threads,
+    isPublishedResource,
+  }: {
+    threads: { id: string }[];
+    isPublishedResource?: boolean;
+  }) => (
+    <div id="comment-list" data-published-resource={String(!!isPublishedResource)}>
       {threads.map((thread) => (
         <div key={thread.id} id={`comment-thread-${thread.id}`} />
       ))}
@@ -235,5 +244,36 @@ describe('comment list catch-up when its hidden tab is shown', () => {
 
     await waitFor(() => expect(scrolledElementIds).not.toHaveLength(0));
     expect(scrolledElementIds).toEqual(['comment-thread-thread-a']);
+  });
+});
+
+describe('comment list on a published resource', () => {
+  afterEach(() => {
+    cleanup();
+    vi.mocked(useProjectSetting).mockImplementation(() => [false, undefined, undefined, false]);
+  });
+
+  it('tells the panel its project is a published resource when platform.isPublished says so', () => {
+    vi.mocked(useProjectSetting).mockImplementation((projectId, key) =>
+      projectId === 'project-1' && key === 'platform.isPublished'
+        ? [true, undefined, undefined, false]
+        : [false, undefined, undefined, false],
+    );
+
+    renderHiddenCommentList(MRK_1_1);
+
+    expect(document.getElementById('comment-list')).toHaveAttribute(
+      'data-published-resource',
+      'true',
+    );
+  });
+
+  it('tells the panel a translation project is not one', () => {
+    renderHiddenCommentList(MRK_1_1);
+
+    expect(document.getElementById('comment-list')).toHaveAttribute(
+      'data-published-resource',
+      'false',
+    );
   });
 });

@@ -915,7 +915,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Date:** 2026-08-27
 - **Status:** Accepted, amended 2026-09-18 — the Text Collection's follow gate is now decided by
   project kind (`platform.isPublished`), not editability, and the editor's gate on Find's re-point
-  is removed, so Find follows every editor-column switch.
+  is removed, so Find follows every editor-column switch. Amended again 2026-09-29 — the Text
+  Collection now follows a published resource too, and never binds its settings to one; see the
+  superseding note on the "published resources are not followed" bullet.
 - **Context:** Simple mode's Column 3 holds exactly five panels — Bible Texts, Commentaries,
   Comments, the Text Collection, and Find — pinned by `shipped-simple-layout-order.test.ts`. A
   project switch re-pointed three of them explicitly (`openOrUpdateRelatedPanels` sends two
@@ -1048,6 +1050,24 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     trip through a resource reloads Find twice, clearing its results, and an `Editable=F` project now
     reloads the grid. How an unbound grid gets its first project, and what following costs
     in Power mode, is recorded in `adr-active-editor-project-is-a-window-data-type`.
+    *(Superseded 2026-09-29 for the Text Collection, PT-4686: `updateRelatedTextCollectionPanel`
+    now follows every project, published resources included. Staying put showed the outgoing
+    project's texts beside a resource they don't belong to, and kept offering them in the project
+    picker. "An empty panel" was also not the only cost of following: the grid writes into the
+    project it is bound to — `initializeTextCollectionOverlay` on mount, and every View Options
+    change — through `Extensions/UserSettings-<user>.xml` in that project's folder, and a resource
+    advertises the text-connection interface, so a plain follow would have written into the
+    resource's install folder. So the grid never binds a published resource:
+    `useTextCollectionSources` asks `useTextCollectionBinding`, which binds a project only once its
+    own `platform.isPublished` reading says it is not one, leaving a resource with no
+    `textConnectionPdp` for any write to go through. The grid then says resources have no Text
+    Collection and publishes no navigable projects. That also covers the other path onto a
+    resource, an unbound grid seeding itself from `ActiveEditorProjectId`. The Comments panel
+    likewise says resources have no comments instead of waiting on a comments provider a resource
+    never registers. The cost is a reload of the grid on each switch onto or off a resource. The
+    Checks side panel still stays on the translation project, for its own reason: a resource is not
+    something the user checks. The rest of this bullet — `isPublished` rather than `isEditable`, the
+    outgoing sync, Find — still holds.)*
   - **Added 2026-09-18 — what a followed `Editable=F` project's grid offers is unchecked.** Whether
     the Text Collection exposes controls that write to such a project is an open question, tracked on
     PT-4724, which should first settle where to run that check: `default-layout-supplement.json` lists
@@ -1724,7 +1744,78 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   disk is out of date". Both `refreshResourceFlags` and the `recomputeDblResourcesUpdateStatus`
   method it calls through are now marked `@experimental` / `'x-experimental': true`, because this
   recompute contract remains untested beyond its one caller.
+- **Amended 2026-09-25 (`adr-dbl-empty-catalog-is-a-failed-fetch`):** `recomputeDblResourcesInstallStatus`
+  now has a second, unsynchronized caller — the grid's `use-dbl-install-lookup.hook.ts`, calling it
+  directly rather than through `ensureInstalledFlagsSynced`. It reads an empty map the same way this
+  entry's sync does: no answer, not "nothing installed".
 - **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
+
+## adr-dbl-empty-catalog-is-a-failed-fetch: An empty DBL catalog is a failed fetch, and installed DBL resources resolve from disk when the catalog cannot
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** ParatextData's `GetInstallableDBLResources` reports every failure to reach the DBL —
+  offline, a server error, a 401 — by raising an alert and returning an empty list, never by
+  throwing. PT10's `AlertCapture` only logs that alert, so the provider accepted `[]` as the
+  catalog and marked it fetched, and `platform-get-resources` persisted it over the catalog an
+  earlier online session had saved — at every offline startup and on the 12-hour refresh. The Text
+  Collection resolves a DBL reference to a project only through a catalog row, so every such cell
+  read "Resource not installed" while offline; the Bible texts panel kept working only because it
+  also lists read-only projects straight from local metadata.
+- **Decision:** Three layers. (1) The C# provider throws when a fetch returns no resources
+  (`RequireFetchedCatalog`), or none the compatibility whitelist accepts, and writes
+  `_resources`/`_hasFetchedResources` only after both checks, so install status keeps answering
+  from disk. (2) `resolveDblCatalog` rejects an empty catalog;
+  `parsePersistedCatalog` discards an empty persisted one; the startup retry loop stops on an
+  attempt that threw (it exists for `notReady`); concurrent on-demand reads share one fetch; and
+  `getLocalNonDblResources` lists local resources even when the catalog fails. (3) The grid
+  (`scripture-text-grid/use-dbl-install-lookup.hook.ts`) asks `recomputeDblResourcesInstallStatus`
+  for DBL references the catalog cannot resolve, including while the catalog is still loading. An
+  empty install map is never read as an answer — it means "no answer", not "nothing installed" —
+  and while the disk can't answer, a catalog row still decides ("not installed"). "Couldn't check"
+  shows only when the catalog failed and a reference has no row either, and it always comes with a
+  retry banner above the grid, inside a persistent `role="status"` region. An answer holds until
+  the references change or an install from the grid changes the disk; a Retry or a project change
+  anywhere asks again while keeping it, and a Retry skips the ask the catalog refetch would only
+  answer "busy". The Bible texts panel (`resource-text-panel.web-view.tsx`) lets rows that
+  resolved without the catalog — local downloads, project references — win over the catalog-error
+  view, and publishes navigable ids once the catalog has loaded or such a row is shown; a failed
+  catalog alone publishes nothing, so the saved list survives it. A saved selection with no row —
+  a DBL reference, which only the catalog resolves — keeps the catalog-error view and is never
+  overwritten by the fallback to another row.
+- **Alternatives:** *Accept empty only if nothing is cached* — rejected: an empty catalog is never
+  a true answer for a configured user, and C#'s own `_resources` would still be wiped. *Detect
+  offline from the captured alert text* — rejected: it ties behavior to localized PT9 strings;
+  alerts are captured for diagnostics only. *Resolve DBL references by project-id prefix* —
+  rejected: resource project ids are unrelated to DBL uids for many resources
+  (`adr-dbl-install-status-from-backend`). *Keep retrying thrown failures, but lock per attempt* —
+  rejected: with no cache, a reader could slip in between attempts during online startup and get
+  `notReady` instead of waiting for the catalog. *Remember a failed fetch for a window* — rejected:
+  an explicit Retry inside the window would fail without trying.
+- **Consequences:**
+  - Offline startup keeps the saved catalog; a profile whose saved catalog was already emptied
+    resolves installed resources from disk instead.
+  - After a thrown startup attempt, the catalog is not refetched until a reader needs one (none, if
+    a cache is serving), the 12-hour refresh, or the next launch — a single transient failure with a
+    cache in hand leaves "update available" badges stale for that period (installed flags are still
+    reconciled), and a newly-published DBL resource stays invisible for it too.
+  - Offline with no usable cache at all, Get Resources, Home, the resource picker, and the panels
+    all show their own retry state instead of an empty catalog.
+  - The grid is a second caller of the non-waiting `recomputeDblResourcesInstallStatus`; a grid call
+    can make a concurrent flag sync get an empty map and skip one reconcile, which the sync already
+    treats as "no answer". Once the C# catalog has loaded, that call names only catalogued uids, so
+    an installed resource withdrawn from the DBL reads "not installed" — the catalog path's existing
+    limitation.
+  - While the catalog is failing, `getLocalNonDblResources` cannot tell which local resources came
+    from the DBL, so it lists them all, and the Bible texts panel's downloaded rows likewise become
+    project references. A resource picked in that window is saved as a plain project reference: it
+    displays offline, but never gets DBL update or Get Resources status once the catalog returns.
+    Kept deliberately, because hiding those rows would leave an offline user unable to pick an
+    installed resource at all.
+  - The Model Text panel still resolves DBL references through the catalog alone — a known sibling
+    gap, tracked in PT-4814.
+  - **Revisit** if ParatextData ever throws on an unreachable DBL.
+- **Source:** PT-4686.
 
 ## adr-dbl-install-is-idempotent: Installing an already-installed DBL resource succeeds, and `installed` is a hint
 
@@ -1830,6 +1921,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `recomputeDblResourcesInstallStatus` is now marked `@experimental` / `'x-experimental': true` for
   the same reason as its sibling in `adr-dbl-cache-recompute-on-read` — the contract remains
   untested beyond its one caller.
+- **Amended 2026-09-25 (`adr-dbl-empty-catalog-is-a-failed-fetch`):** no longer one caller — the
+  Text Collection grid calls `recomputeDblResourcesInstallStatus` directly too
+  (`use-dbl-install-lookup.hook.ts`), reading an empty map as "no answer" per the contract above.
 - **Source:** PT-4484; builds directly on `adr-dbl-cache-recompute-on-read`.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
