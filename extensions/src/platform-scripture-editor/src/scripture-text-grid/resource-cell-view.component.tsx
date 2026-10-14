@@ -25,7 +25,14 @@ import {
   formatReplacementString,
   type ContentZoomShortcut,
 } from 'platform-bible-utils';
-import { ReactNode, useCallback, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import {
+  ReactNode,
+  useCallback,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type Ref,
+} from 'react';
 import { buildAlignedZoomStyle } from './aligned-grid.styles';
 import { ResourceCellState } from './resource-cell.utils';
 import {
@@ -103,6 +110,14 @@ export type ResourceCellViewProps = {
    * ancestor's grid, and cells that scrolled separately would drift out of alignment anyway.
    */
   contentOverflow?: 'auto' | 'visible';
+  /**
+   * Ref to this cell's scrollable content box, for a caller that scrolls the cell itself
+   * (`contentOverflow="auto"`) — a chapter surface following the scroll-group reference.
+   *
+   * Only the header layout wires it. The inline layout's verse row has nothing to scroll to, since
+   * the cell is already reduced to the reference's verse.
+   */
+  contentRef?: Ref<HTMLDivElement>;
   /**
    * Where the zoom level lands. `'box'` (default) leaves it to the platform, which scales the
    * element marking this resource's text. `'blocks'` publishes the area's level as a custom
@@ -270,6 +285,7 @@ export function ResourceCellView({
   emptyMessage,
   nameDisplay = 'header',
   contentOverflow = 'auto',
+  contentRef,
   zoomTarget = 'box',
   canZoomIn = true,
   canZoomOut = true,
@@ -378,8 +394,13 @@ export function ResourceCellView({
     : undefined;
 
   const contentStyle = zoomTarget === 'blocks' ? buildAlignedZoomStyle(zoomArea) : undefined;
+  // A scroll port has scroll anchoring off: the reference scroll tells the reader's scrolling from
+  // its own by comparing `scrollTop`, and anchoring rewrites it as content arrives above the verse,
+  // which is the case the re-check exists for. See the aligned grid root's `overflow-anchor` rule.
   const contentOverflowClass =
-    contentOverflow === 'visible' ? 'tw:overflow-visible' : 'tw:overflow-auto';
+    contentOverflow === 'visible'
+      ? 'tw:overflow-visible'
+      : 'tw:overflow-auto tw:[overflow-anchor:none]';
 
   return (
     <div
@@ -486,11 +507,16 @@ export function ResourceCellView({
             ) : undefined}
           </div>
           <div
+            ref={contentRef}
             data-cell-content
             className={`tw:flex-1 ${contentOverflowClass}`}
             style={contentStyle}
             dir={textDirection}
           >
+            {/* The zoom root sits INSIDE the content box, never on it: that box is the scroll
+                port a chapter cell scrolls to a verse (`useReferenceScroll`), and `zoom` on the
+                port would leave the target's viewport rect and the port's `scrollTop` in
+                different coordinate spaces, so the port overshoots by the zoom factor. */}
             <div data-cell-pad className="tw:p-2">
               <ContentZoomRoot area={zoomArea} label={label}>
                 {stateContent}

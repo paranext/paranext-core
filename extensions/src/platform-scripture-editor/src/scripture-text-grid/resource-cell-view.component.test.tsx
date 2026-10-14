@@ -1125,10 +1125,15 @@ describe('ResourceCellView content scroll ownership', () => {
     editor: <div data-testid="editor" />,
   };
 
-  it('scrolls its own content by default', () => {
+  it('scrolls its own content by default, with scroll anchoring off', () => {
+    // The reference scroll tells the reader's scrolling from its own by comparing `scrollTop`, and
+    // scroll anchoring rewrites `scrollTop` without either of them — the aligned grid's root turns
+    // it off for the same reason.
     const { container } = renderCells(<ResourceCellView {...baseProps} />);
 
-    expect(container.querySelector('[data-cell-content]')).toHaveClass('tw:overflow-auto');
+    const content = container.querySelector('[data-cell-content]');
+    expect(content).toHaveClass('tw:overflow-auto');
+    expect(content).toHaveClass('tw:[overflow-anchor:none]');
   });
 
   it('hands scrolling to an ancestor when asked, so an aligned grid can own the scroll port', () => {
@@ -1141,6 +1146,7 @@ describe('ResourceCellView content scroll ownership', () => {
     const content = container.querySelector('[data-cell-content]');
     expect(content).toHaveClass('tw:overflow-visible');
     expect(content).not.toHaveClass('tw:overflow-auto');
+    expect(content).not.toHaveClass('tw:[overflow-anchor:none]');
   });
 
   it('exposes the layout anchors the aligned grid styles hook onto', () => {
@@ -1150,5 +1156,16 @@ describe('ResourceCellView content scroll ownership', () => {
     expect(container.querySelector('[data-cell-root]')).toBeInTheDocument();
     expect(container.querySelector('[data-cell-header]')).toBeInTheDocument();
     expect(container.querySelector('[data-cell-pad]')).toBeInTheDocument();
+  });
+
+  it('keeps the header OUTSIDE the content box, which the chapter scroll depends on', () => {
+    // `getFirstVisibleY` treats any `[data-cell-header]` INSIDE the port as a sticky header covering
+    // its top. In a chapter cell the header is the port's sibling, so that lookup finds nothing and
+    // contributes no offset — which is the only reason the port math needs no per-layout branch.
+    // Moving the header inside the port as a NON-sticky element would offset every chapter-mode
+    // scroll by its height, since it scrolls away while still being counted as covering the top.
+    const { container } = renderCells(<ResourceCellView {...baseProps} />);
+
+    expect(container.querySelector('[data-cell-content] [data-cell-header]')).toBeNull();
   });
 });

@@ -6,6 +6,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon } from '@sillsdev/scripture';
+import { VERSE_NUMBER_SCROLL_OFFSET } from '../editor-dom.util';
 import { ResourceCell } from './resource-cell.component';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
 
@@ -32,6 +33,22 @@ const {
       onScrRefChange = handler;
     },
     getEditorScrRefChange: () => onScrRefChange,
+  };
+});
+
+const { mockFindVerseMarker } = vi.hoisted(() => ({
+  /**
+   * Stands in for `findVerseMarkerForVerse`, so a test can see the port and verse the cell asks
+   * for, and script what is found, without rendering real editor DOM.
+   */
+  mockFindVerseMarker: vi.fn(),
+}));
+vi.mock('./reference-scroll.utils', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./reference-scroll.utils')>();
+  return {
+    ...original,
+    findVerseMarkerForVerse: (...args: Parameters<typeof original.findVerseMarkerForVerse>) =>
+      mockFindVerseMarker(...args),
   };
 });
 
@@ -115,6 +132,7 @@ const props = {
   resourceRef: { resourceId: 'r1', projectId: 'p1', label: 'WEB' },
   zoomArea: 'resource-r1',
   scrRef,
+  isViewVisible: true,
   setScrRef: vi.fn(),
 };
 
@@ -218,6 +236,7 @@ describe('ResourceCell', () => {
     setUsjResult(undefined, true);
     render(
       <ResourceCell
+        isViewVisible
         resourceRef={{ resourceId: 'dbl-uid-1', projectId: undefined, label: 'NIV' }}
         zoomArea="resource-dbl-uid-1"
         scrRef={scrRef}
@@ -778,5 +797,238 @@ describe('ResourceCell book not in this text', () => {
     // Lexical's placeholder. Assert the re-feed, matching the twin in
     // `resource-text-panel.component.test.tsx`.
     expect(setUsjSpy).toHaveBeenLastCalledWith(chapter);
+  });
+});
+
+describe('ResourceCell reference scroll wiring', () => {
+  /**
+   * Gives a rendered cell's content box the geometry jsdom does not lay out.
+   *
+   * @param container The render container.
+   * @returns The cell's scroll port.
+   */
+  function scriptPortGeometry(container: HTMLElement): HTMLElement {
+    const port = container.querySelector('[data-cell-content]');
+    if (!(port instanceof HTMLElement)) throw new Error('cell rendered no content box');
+    Object.defineProperty(port, 'scrollHeight', { value: 1000, configurable: true });
+    Object.defineProperty(port, 'clientHeight', { value: 100, configurable: true });
+    port.getBoundingClientRect = () => new DOMRect(0, 0, 0, 100);
+    return port;
+  }
+
+  /**
+   * A verse marker sitting below the fold, whose rect moves as the port scrolls.
+   *
+   * @param port The port it lives in.
+   * @returns The marker element.
+   */
+  function buildMarkerBelowFold(port: HTMLElement): HTMLElement {
+    const marker = document.createElement('span');
+    marker.getBoundingClientRect = () => new DOMRect(0, 500 - port.scrollTop, 0, 20);
+    return marker;
+  }
+
+  beforeEach(() => {
+    mockFindVerseMarker.mockReset();
+    mockFindVerseMarker.mockReturnValue(undefined);
+  });
+
+  it('asks the finder for the reference verse in chapter mode, against its OWN content box', async () => {
+    // Pins the `contentRef` wiring: a refactor that handed the hook some other element, or none,
+    // would still render identically.
+    setUsjResult(chapter, false);
+    const { container } = render(<ResourceCell {...props} viewMode="chapter" />);
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+
+    const port = container.querySelector('[data-cell-content]');
+    expect(mockFindVerseMarker.mock.calls[0][0]).toBe(port);
+    expect(mockFindVerseMarker.mock.calls[0][1]).toBe(scrRef.verseNum);
+  });
+
+  it('asks for no scroll in verse mode', async () => {
+    // `sliceUsjToVerse` has already reduced the cell to the reference's verse, so there is nothing
+    // to scroll to. Verse mode is doubly covered: it renders the inline layout, which wires no
+    // `contentRef` at all, so this stays true even if the `isEnabled` gate were removed. The
+    // aligned case below is the one that pins the gate itself.
+    setUsjResult(chapter, false);
+    render(<ResourceCell {...props} viewMode="verse" />);
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+
+    expect(mockFindVerseMarker).not.toHaveBeenCalled();
+  });
+
+  it('asks for no scroll in aligned mode', async () => {
+    // The aligned grid root owns the scroll for every column, so a cell must not fight it. This is
+    // where `isEnabled: viewMode === 'chapter'` earns its keep: aligned mode renders the header
+    // layout, so the cell DOES have a content box, and the gate is the only thing holding it back.
+    setUsjResult(chapter, false);
+    render(<ResourceCell {...props} viewMode="aligned" />);
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+
+    expect(mockFindVerseMarker).not.toHaveBeenCalled();
+  });
+
+  it('scrolls its content box to a marker below the fold, keeping the shared lead-in', async () => {
+    setUsjResult(chapter, false);
+    const { container, rerender } = render(<ResourceCell {...props} viewMode="chapter" />);
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    mockFindVerseMarker.mockReturnValue(buildMarkerBelowFold(port));
+
+    // A new reference re-arms the scroll.
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={{ ...scrRef, verseNum: 9 }} />);
+
+    // Not flush against the top: the reader keeps `VERSE_NUMBER_SCROLL_OFFSET` of the preceding
+    // verse for context, the same framing the editor and the reference panels use.
+    expect(port.scrollTop).toBe(500 - VERSE_NUMBER_SCROLL_OFFSET);
+  });
+
+  it('scrolls to a marker clipped by the bottom edge, where only its verse number shows', async () => {
+    // The chapter cell's visibility rule: a one-line marker must fit completely. Under the aligned
+    // grid's any-part-showing rule this marker would count as visible and the reader would see a
+    // verse number with none of its verse.
+    setUsjResult(chapter, false);
+    const { container, rerender } = render(<ResourceCell {...props} viewMode="chapter" />);
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    const marker = document.createElement('span');
+    // 90..110 in a port showing 0..100.
+    marker.getBoundingClientRect = () => new DOMRect(0, 90 - port.scrollTop, 0, 20);
+    mockFindVerseMarker.mockReturnValue(marker);
+
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={{ ...scrRef, verseNum: 9 }} />);
+
+    expect(port.scrollTop).toBe(90 - VERSE_NUMBER_SCROLL_OFFSET);
+  });
+
+  it('defers the scroll while its tab is hidden, and catches up when shown', async () => {
+    // `.claude/rules/cross-view-sync-hidden-views.md`: a hidden pane has no layout, so the scroll
+    // waits and runs once on activation. In Simple mode this is the common path.
+    setUsjResult(chapter, false);
+    const { container, rerender } = render(
+      <ResourceCell {...props} viewMode="chapter" isViewVisible={false} />,
+    );
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    mockFindVerseMarker.mockReturnValue(buildMarkerBelowFold(port));
+    const next = { ...scrRef, verseNum: 9 };
+
+    rerender(<ResourceCell {...props} viewMode="chapter" isViewVisible={false} scrRef={next} />);
+    expect(mockFindVerseMarker).not.toHaveBeenCalled();
+    expect(port.scrollTop).toBe(0);
+
+    rerender(<ResourceCell {...props} viewMode="chapter" isViewVisible scrRef={next} />);
+
+    expect(port.scrollTop).toBe(500 - VERSE_NUMBER_SCROLL_OFFSET);
+  });
+
+  it('scrolls back to the verse after its column is moved', async () => {
+    // Reordering keyed columns moves their DOM nodes, and a scroll container that is moved loses its
+    // scroll position. The column's new position re-arms the scroll rather than leaving it at the
+    // top of the chapter, where the next check would read the reset as the reader scrolling.
+    setUsjResult(chapter, false);
+    const { container, rerender } = render(
+      <ResourceCell {...props} viewMode="chapter" orderIndex={3} />,
+    );
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    mockFindVerseMarker.mockReturnValue(buildMarkerBelowFold(port));
+    const next = { ...scrRef, verseNum: 9 };
+    rerender(<ResourceCell {...props} viewMode="chapter" orderIndex={3} scrRef={next} />);
+    expect(port.scrollTop).toBe(500 - VERSE_NUMBER_SCROLL_OFFSET);
+
+    // The move: the browser resets the moved container, and the column now sits first.
+    port.scrollTop = 0;
+    rerender(<ResourceCell {...props} viewMode="chapter" orderIndex={0} scrRef={next} />);
+
+    expect(port.scrollTop).toBe(500 - VERSE_NUMBER_SCROLL_OFFSET);
+  });
+
+  /**
+   * A chapter's USJ naming its book and chapter, as the data provider returns it.
+   *
+   * @param chapterNum The chapter number the content carries.
+   * @returns The USJ.
+   */
+  const chapterOf = (chapterNum: number) => ({
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      { type: 'book', marker: 'id', code: scrRef.book },
+      { type: 'chapter', marker: 'c', number: `${chapterNum}` },
+      { type: 'para', marker: 'p', content: [{ type: 'verse', marker: 'v', number: '1' }] },
+    ],
+  });
+
+  it('scrolls to the verse in the NEW chapter after a chapter change', async () => {
+    // A data hook raises `isLoading` only in an effect, so the render where the reference moves
+    // still has the previous chapter in hand and reads as `ready`. Scrolling then aims at the old
+    // chapter; the loading placeholder that replaces it shrinks the port, the browser clamps
+    // `scrollTop` to 0, and that clamp would read as the reader scrolling away.
+    setUsjResult(chapterOf(5), false);
+    const { container, rerender } = render(<ResourceCell {...props} viewMode="chapter" />);
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    mockFindVerseMarker.mockReturnValue(buildMarkerBelowFold(port));
+    mockFindVerseMarker.mockClear();
+    const nextChapter = { ...scrRef, chapterNum: 6, verseNum: 16 };
+
+    // The reference has moved, but the data is still chapter 5.
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={nextChapter} />);
+    expect(mockFindVerseMarker).not.toHaveBeenCalled();
+
+    // The loading placeholder, and the clamp it causes.
+    setUsjResult(chapterOf(5), true);
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={nextChapter} />);
+    port.scrollTop = 0;
+
+    setUsjResult(chapterOf(6), false);
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={nextChapter} />);
+
+    await waitFor(() => expect(port.scrollTop).toBe(500 - VERSE_NUMBER_SCROLL_OFFSET));
+    expect(mockFindVerseMarker).toHaveBeenLastCalledWith(port, 16);
+  });
+
+  it('scrolls a newly shown resource to the verse, even after the reader clicked in the previous one', async () => {
+    // The chapter-context split swaps `resourceRef` on one cell instance. The reference does not
+    // change, so nothing else would re-arm a scroll the reader's click stood down.
+    setUsjResult(chapterOf(scrRef.chapterNum), false);
+    const { container, rerender } = render(<ResourceCell {...props} viewMode="chapter" />);
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    mockFindVerseMarker.mockReturnValue(buildMarkerBelowFold(port));
+    const clicked = { ...scrRef, verseNum: 9 };
+    getEditorScrRefChange()?.(clicked);
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={clicked} />);
+    expect(port.scrollTop).toBe(0);
+
+    const otherResource = { resourceId: 'r2', projectId: 'p2', label: 'KJV' };
+    setUsjResult(chapterOf(scrRef.chapterNum), true);
+    rerender(
+      <ResourceCell {...props} viewMode="chapter" scrRef={clicked} resourceRef={otherResource} />,
+    );
+    setUsjResult(chapterOf(scrRef.chapterNum), false);
+    rerender(
+      <ResourceCell {...props} viewMode="chapter" scrRef={clicked} resourceRef={otherResource} />,
+    );
+
+    await waitFor(() => expect(port.scrollTop).toBe(500 - VERSE_NUMBER_SCROLL_OFFSET));
+  });
+
+  it('does not scroll for the echo of a verse this cell itself published', async () => {
+    // The reader clicked; the group bounces the same reference straight back. Scrolling for it
+    // would drag their click target to the top. The cell's half of the latch is what is pinned
+    // here — the hook's half has its own tests.
+    setUsjResult(chapter, false);
+    const { container, rerender } = render(<ResourceCell {...props} viewMode="chapter" />);
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    mockFindVerseMarker.mockReturnValue(buildMarkerBelowFold(port));
+
+    const clicked = { ...scrRef, verseNum: 9 };
+    getEditorScrRefChange()?.(clicked);
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={clicked} />);
+
+    expect(port.scrollTop).toBe(0);
   });
 });
