@@ -118,6 +118,45 @@ describe('extension-host check runner', () => {
     });
   });
 
+  it('answers that every check is set up because extension-hosted checks have no setup', async () => {
+    const runner = await checkHostingService.getCheckRunner();
+
+    await expect(runner.isCheckSetupForProject('registered-any-any', 'P1')).resolves.toBe(true);
+  });
+
+  it('completes the job and keeps results when a check’s dispose rejects', async () => {
+    const runner = await checkHostingService.getCheckRunner();
+    const result = {
+      projectId: 'P1',
+      checkResultType: 't',
+      verseText: '',
+      itemText: 'x',
+      messageFormatString: 'found',
+      isDenied: false,
+      verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+      start: { book: 'GEN', chapterNum: 1, verseNum: 1, offset: 0 },
+      end: { book: 'GEN', chapterNum: 1, verseNum: 1, offset: 1 },
+    };
+    const badDispose = await register('bad-dispose', async () => ({
+      initialize: async () => [],
+      dispose: async () => {
+        throw new Error('dispose failed');
+      },
+      getCheckDetails: () => ({ checkName: 'bad-dispose', checkDescription: 'bad-dispose' }),
+      getCheckResults: async () => [result],
+    }));
+    const healthy = await register(
+      'after-bad-dispose',
+      makeCheck('after-bad-dispose', async () => [result]),
+    );
+
+    const report = await runToEnd(runner, [badDispose, healthy]);
+
+    expect(report.status).toBe('completed');
+    expect(report.checkErrors).toBeUndefined();
+    expect(report.totalResultsCount).toBe(2);
+  });
+
   it('records an unregistered check as a check error and completes', async () => {
     const runner = await checkHostingService.getCheckRunner();
     const report = await runToEnd(runner, ['registered-gone-gone']);
