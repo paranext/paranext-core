@@ -8260,16 +8260,20 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   updates it. The truth is "the working directory differs from the last synced state", which has two
   halves: uncommitted changes (`HasUncommittedChanges`, an `hg status`) and changes already committed
   locally but never sent (the editor commits daily on project open and Find/Replace commits on
-  demand), visible as a tip id that differs from the last-synced tip id kept in the Send/Receive
-  memento. Uncommitted-only detection would go dark after the first local commit. Product and UX
+  demand), visible as a tip id that differs from the tip id recorded at the project's last successful
+  Send/Receive. Uncommitted-only detection would go dark after the first local commit. Product and UX
   want a three-state indicator: ⬆️ local changes not yet sent, ⬇️ the server holds changes this
   installation has not received, and ↕️ both. Paratext 9 answers ⬇️ with a periodic batched server
   lookup that compares each project's server tip id with the tip id recorded at the last successful
   sync.
 - **Decision:** The backend owns the answer. A write-gate exit
   (`SendReceiveWriteLock.WriteScopeExited`) triggers a debounced local Mercurial check for that
-  project, and the end of a sync rechecks every tracked project; checks are deferred while a sync is
-  in flight so `hg status` never runs against a repository a sync is replacing. A baseline scan after
+  project, except while the project is already marked and no check of it is running: a write cannot
+  add unsent work to a project that already has some. The end of a sync rechecks the projects that
+  sync announced (the ids carried by its sync-activity and write-gate signals), every marked
+  project, and every check parked during the sync; a sync that announced no ids rechecks every
+  tracked project. Checks are deferred while a sync is in flight so `hg status` never runs against a
+  repository a sync is replacing. A baseline scan after
   the startup barrier covers edits made in a previous session. `UnsyncedChangesTracker` holds the set
   and `UnsyncedChangesNotifierService` publishes it as a full snapshot on
   `SendReceiveSnapshotNotifierService<T>` (event `paratextBibleSendReceive.onUnsyncedChangesChanged`,
@@ -8277,12 +8281,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `useSyncStatus` gains `'unsynced'` with the precedence syncing, then failed, then unsynced, then
   synced, then idle or unknown: a failed last sync already implies unsent work and is the more
   actionable fact. Home's dot and Sync button read the same event. The tracker's signal is strictly
-  "local changes not yet sent". Detection errors (no Mercurial, broken repository) log once per
-  project and report "not unsynced" rather than guess.
+  "local changes not yet sent". A check that cannot reach an answer (no Mercurial, a broken
+  repository) leaves the project as it was, marked or not, rather than guess; the failure is logged
+  once per project until a check of that project succeeds again.
 
   The ⬇️ half is a separate `RemoteChangesPoller` beside the tracker, not folded into it. It makes
-  one batched server-tip lookup covering all local shared projects, first about 10 seconds after the
-  startup baseline scan, then every 5 minutes, plus once after each sync end. A tick is skipped, not
+  one batched server-tip lookup covering all local shared projects, first about 10 seconds after
+  startup, then every 5 minutes, plus once after each sync end. A tick is skipped, not
   deferred, while a sync is active, while internet use is disabled, or while a poll is already in
   flight; the sync-end poll covers the skipped tick. A sync that ends during a lookup discards that
   lookup's result and triggers one follow-up poll, because the result may predate the sync. A failed
@@ -8301,16 +8306,28 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   tip", not "modified here since the last sync". **Uncommitted-only detection** — rejected: it goes
   dark after a local commit that was never sent. **Extending the tracker to poll the server too** —
   rejected: it would mix a local-truth signal with a network-truth signal that has a different
-  cadence, different failure modes, and different gating (a sync defers the local check but only
-  skips the server tick; a network failure must keep the previous answer while a local failure
-  reports "not unsynced"). **Querying the server on every write-gate exit or on demand** — rejected:
+  cadence, different failure modes (a local failure belongs to one project and tends to last; a
+  network failure hits every project at once and tends to pass), and different gating (a sync defers
+  the local check but only skips the server tick). **Querying the server on every write-gate exit or on demand** — rejected:
   it costs one network round trip per edit burst, and Paratext 9 parity is the fixed cadence.
-  **A server push** — not available: no such channel exists.
-- **Consequences:** One `hg status` runs per debounced write burst per project, and one per project
-  during the startup baseline scan, which is why the scan runs after the startup barrier rather than
-  on it. The last-synced tip id is owned by the Paratext 10 Studio patch: public core declares
-  `GetLastSyncedTipId` as a stub returning `null`, and the patch fills it from the Send/Receive
-  memento. Public core therefore detects uncommitted edits only; the committed-but-unsent half
+  **A server push** — not available: no such channel exists. **Reading the Send/Receive memento's
+  `LastTipId`** — rejected: ParatextData rewrites it with the current local tip on every
+  shared-project list fetch and after a failed sync, so it means "local tip at the last list
+  fetch"; reading it showed committed-but-unsent work as changes to receive instead of changes to
+  send.
+- **Consequences:** One `hg status` runs per debounced write burst for a project that is not yet
+  marked, one per announced or marked project at each sync end, and one per shared project during
+  the startup baseline scan, which is why the scan runs after the startup barrier rather than on it.
+  A marked project is not rechecked on writes, so a project whose every change was reverted by hand
+  stays marked until the next sync ends. A change that reaches a repository without passing the
+  write gate (an edit made outside the app, or a write a Send/Receive implementation makes outside
+  the gate) shows once that project is next written through the gate, included in a sync, or
+  scanned at the next startup. The last-synced tip id is owned by the Paratext 10 Studio patch: public core declares
+  `GetLastSyncedTipId` as a stub returning `null`, and the patch fills it from its own record of
+  each project's local tip at the end of its last successful Send/Receive, keyed by project id and
+  written only by a successful sync. A project the record does not cover — every project on an
+  installation upgraded from a build without the record, until that project's first successful
+  sync — reads as unknown: no committed-but-unsent changes to send and no changes to receive. Public core therefore detects uncommitted edits only; the committed-but-unsent half
   switches on in a Studio build, and a missing tip id means "unknown", never "synced". The contract
   is declared in core's `.d.ts` only, as with the other C#-served Send/Receive seams, so the
   extension repository registers nothing for it. Because every emit is a full snapshot, a lost event
@@ -8318,7 +8335,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`SendReceiveWriteLock.BlockStateChanged`) as a sync-end signal alongside `SyncActivityChanged`,
   because as of 2026-10-01 the Paratext 10 patch raises no sync activity signal; once it does, a
   sync can trigger the recheck twice, and the tracker's per-project claim coalesces the second pass
-  into at most one extra check per project.
+  into at most one extra check per project. Both signals' announced ids go into one set that resets
+  when the next sync begins, so the second pass rechecks the same projects as the first.
 
   The poller adds one server request per 5 minutes per installation plus one per sync, and ⬇️ can
   lag the server by up to the poll interval. ⬇️ compares tip ids only, so a project restored from
