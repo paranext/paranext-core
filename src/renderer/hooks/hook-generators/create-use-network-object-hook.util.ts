@@ -1,18 +1,25 @@
 import { NetworkObject, NetworkObjectDetails } from '@shared/models/network-object.model';
 import { useMemo, useState, useCallback } from 'react';
-import { getErrorMessage, isString } from 'platform-bible-utils';
+import { isString } from 'platform-bible-utils';
 import { usePromise, useEvent } from 'platform-bible-react';
 import { onDidCreateNetworkObject } from '@shared/services/network-object.service';
 import { logger } from '@shared/services/logger.service';
 
 /**
- * A finished lookup paired with the source it answers for, carrying either what was found or why
- * the attempt failed. The failure travels IN the value rather than as a rejected promise, so a
- * failure is always attributable to a source — a rejection leaves nothing to attribute, which makes
- * "failed" indistinguishable from "still in flight" and produces an unclearable loading state.
+ * A finished lookup paired with the source and hook arguments it answers for, carrying either what
+ * was found or why the attempt failed. The failure travels IN the value rather than as a rejected
+ * promise, so a failure is always attributable to a source — a rejection leaves nothing to
+ * attribute, which makes "failed" indistinguishable from "still in flight" and produces an
+ * unclearable loading state.
  */
 type NetworkObjectLookup = {
   source: string | NetworkObject<object> | undefined;
+  /**
+   * Every argument the hook was called with. The source alone is not enough: other arguments (for a
+   * project data provider, the `projectInterface` and `pdpFactoryId`) also decide which object
+   * comes back.
+   */
+  args: unknown[];
   networkObject?: NetworkObject<object>;
   error?: unknown;
 };
@@ -42,12 +49,15 @@ export type NetworkObjectState<T> =
    * this most often means the project does not implement the requested `projectInterface`, which no
    * amount of waiting or retrying changes — so report it rather than spinning.
    *
-   * Only a change of source re-runs the lookup; nothing else does. A transient failure (for
-   * instance the bounded wait inside `getMetadataForProject` timing out on a slow start) therefore
-   * persists for as long as the caller keeps asking for the same source, and recovers when it asks
-   * for a different one. If a consumer ever needs recovery without that, the fix is an opt-in retry
-   * on the hook — see PT-4515 — not a retry affordance built on the assumption that this status is
-   * usually transient, because it usually is not.
+   * What re-runs the lookup depends on how this status was reached. If the hook instance has never
+   * held an object that was then disposed, only a change of source (or of the hook's other
+   * arguments) re-runs it, so a transient failure — for instance the bounded wait inside
+   * `getMetadataForProject` timing out on a slow start — persists for as long as the caller keeps
+   * asking for the same thing. Once an object this hook held has been disposed, it also looks again
+   * whenever a matching network object is published (as the hook's
+   * `doesCreatedNetworkObjectMatchSource` decides), so `unavailable` reached after a disposal can
+   * recover on its own. If a consumer needs recovery beyond that, the fix is an opt-in retry on the
+   * hook — see PT-4515 — rather than a retry affordance in each consumer.
    */
   | { status: 'unavailable'; error?: unknown };
 
@@ -171,22 +181,22 @@ function createUseNetworkObjectCoreHook<THookParams extends unknown[]>(
           : async () => {
               try {
                 return {
-                  // Tag the result with the source it answers for. `usePromise` keeps serving its
-                  // last value while the next resolves, so an untagged result cannot be told apart
-                  // from one resolved for a source the caller has since moved off of. Comparing the
-                  // tag is also what reports "in flight" during the render the source changes on,
-                  // without depending on a loading flag from below.
+                  // Tag the result with the source and arguments it answers for. `usePromise` keeps
+                  // serving its last value while the next resolves, so an untagged result cannot be
+                  // told apart from one resolved for a source the caller has since moved off of.
+                  // Comparing the tag is also what reports "in flight" during the render the source
+                  // changes on, without depending on a loading flag from below.
                   source: networkObjectSource,
+                  args,
                   // We have the network object's type, so we need to get the provider
                   networkObject: networkObjectSource ? await getNetworkObject(...args) : undefined,
                 };
               } catch (error) {
                 // TODO(PT-4515): `usePromise` will report the rejection itself, at which point this
                 // catch and the `error` member above can go.
-                logger.warn(
-                  `Could not look up network object '${networkObjectSource}': ${getErrorMessage(error)}`,
-                );
-                return { source: networkObjectSource, error };
+                // The error object itself, not just its message, so the log keeps the stack.
+                logger.warn(`Could not look up network object '${networkObjectSource}':`, error);
+                return { source: networkObjectSource, args, error };
               }
             };
       }, [
@@ -203,8 +213,13 @@ function createUseNetworkObjectCoreHook<THookParams extends unknown[]>(
     // The preserved object, whoever it belongs to — what the plain hook serves. `state` below is
     // the one that can tell whether it answers the source being asked for.
     const networkObject = lookup?.networkObject;
-    /** Whether the preserved lookup answers the source being asked for right now. */
-    const isLookupForCurrentSource = lookup !== undefined && lookup.source === networkObjectSource;
+    /** Whether the preserved lookup answers the source and arguments being asked for right now. */
+    const isLookupForCurrentSource =
+      lookup !== undefined &&
+      lookup.source === networkObjectSource &&
+      // Element by element: `args` is a new array on every render.
+      lookup.args.length === args.length &&
+      lookup.args.every((arg, index) => Object.is(arg, args[index]));
 
     // `!!disposedNetworkObject` is what keeps the first render — where both are `undefined` and so
     // trivially equal — from reading as "the object we are holding is dead" before this hook has
@@ -263,7 +278,9 @@ function createUseNetworkObjectCoreHook<THookParams extends unknown[]>(
       ? networkObjectSource
       : aliveLookupNetworkObject;
 
-    const state = ((): NetworkObjectState<NetworkObject<object>> => {
+    // Memoized so the state keeps its identity across renders that do not change it; consumers key
+    // memos and effects on it.
+    const state = useMemo((): NetworkObjectState<NetworkObject<object>> => {
       // Handed an object (or nothing) directly — there is no lookup to be in flight.
       if (didReceiveNetworkObject)
         return networkObjectSource
@@ -281,7 +298,14 @@ function createUseNetworkObjectCoreHook<THookParams extends unknown[]>(
       if (lookup.error !== undefined) return { status: 'unavailable', error: lookup.error };
       if (!networkObject) return { status: 'unavailable' };
       return { status: 'ready', networkObject };
-    })();
+    }, [
+      didReceiveNetworkObject,
+      networkObjectSource,
+      isNetworkObjectDisposed,
+      isLookupForCurrentSource,
+      lookup,
+      networkObject,
+    ]);
 
     return { networkObject: servedNetworkObject, state };
   };
@@ -291,9 +315,12 @@ function createUseNetworkObjectCoreHook<THookParams extends unknown[]>(
  * Creates a hook that returns the network object for a source, or `undefined`.
  *
  * `undefined` conflates "not yet", "nothing to ask for", and "asking failed", and across a source
- * change this keeps serving the PREVIOUS source's object — so a consumer whose source can change in
- * place should use {@link createUseNetworkObjectStateHook} instead, whose union can tell those
- * apart. See {@link NetworkObjectState}.
+ * change this keeps serving the PREVIOUS source's object until the new lookup settles — so a
+ * consumer whose source can change in place should use {@link createUseNetworkObjectStateHook}
+ * instead, whose union can tell those apart. See {@link NetworkObjectState}.
+ *
+ * If the new lookup rejects, this serves `undefined` rather than keeping the previous object, which
+ * answers for a source the caller is no longer asking about.
  *
  * @param getNetworkObject See {@link createUseNetworkObjectStateHook}
  * @param mapParametersToNetworkObjectSource See {@link createUseNetworkObjectStateHook}

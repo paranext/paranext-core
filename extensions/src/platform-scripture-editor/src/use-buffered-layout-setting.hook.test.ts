@@ -124,6 +124,53 @@ describe('useBufferedLayoutSetting', () => {
     expect(held).toEqual(real);
   });
 
+  // The held copy is filled by an effect, so the read finishing and the held copy holding the value
+  // land on different commits. A caller that trusts `isLoading` alone acts on the placeholder for
+  // one commit — which the Text Collection grid would turn into a pruned, persisted cell order.
+  // Recorded per commit because the held copy catches up on the very next one.
+  describe('never reports not-loading while the held copy is still the placeholder', () => {
+    const recordCommits = () => {
+      const commits: Array<{ held: unknown; isLoading: boolean }> = [];
+      const rendered = renderHook(() => {
+        const [held, isLoading] = useBufferedLayoutSetting(
+          'proj-1',
+          'platformScripture.modelTexts',
+          emptyList,
+        );
+        commits.push({ held, isLoading });
+      });
+      return { commits, rerender: rendered.rerender };
+    };
+
+    it('when the first read finishes', () => {
+      const real = oneProjectList('A', '1');
+      setRaw(emptyList, true);
+      const { commits, rerender } = recordCommits();
+
+      setRaw(real, false);
+      rerender();
+
+      expect(commits.at(-1)).toEqual({ held: real, isLoading: false });
+      expect(commits.filter((commit) => !commit.isLoading && commit.held !== real)).toEqual([]);
+    });
+
+    it('when a setting that failed to read becomes readable', () => {
+      const real = oneProjectList('A', '1');
+      setRaw(newPlatformError('boom'), false);
+      const { commits, rerender } = recordCommits();
+      const commitsBeforeRecovery = commits.length;
+
+      setRaw(real, false);
+      rerender();
+
+      const afterRecovery = commits.slice(commitsBeforeRecovery);
+      expect(afterRecovery.at(-1)).toEqual({ held: real, isLoading: false });
+      expect(afterRecovery.filter((commit) => !commit.isLoading && commit.held !== real)).toEqual(
+        [],
+      );
+    });
+  });
+
   it('holds a later raw change until re-armed', () => {
     const first = oneProjectList('A', '1');
     const second = oneProjectList('B', '2');

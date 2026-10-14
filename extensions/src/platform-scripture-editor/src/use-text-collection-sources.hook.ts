@@ -14,6 +14,16 @@ const DEFAULT_OVERLAY: TextCollectionOverlay = {};
 const DEFAULT_ORDER: string[] = [];
 
 /**
+ * Unsubscribes, warning rather than throwing if that fails. It rejects when the provider the
+ * subscription belongs to is already disposed, which a project switch routinely causes.
+ */
+function unsubscribeAndWarn(unsubscribe: () => Promise<boolean>, subscriptionName: string) {
+  unsubscribe().catch((err) =>
+    logger.warn(`Failed to unsubscribe from ${subscriptionName}: ${getErrorMessage(err)}`),
+  );
+}
+
+/**
  * Assembles the four data sources the View Options helpers read — the admin project-scope
  * `referencedProjectsAndResources` list, the per-user list, the per-user text-collection overlay,
  * and the per-user cell order — into a single {@link TextCollectionSources} object, and returns the
@@ -36,8 +46,7 @@ export function useTextCollectionSources(projectId: string | undefined) {
   );
 
   // The STATE hook, not the plain one: the plain one answers a project change with the previous
-  // project's provider and no way to tell, which is how one project's settings came to be read —
-  // and written — under another's. `ready` is the only status that may be acted on.
+  // project's provider and no way to tell. `ready` is the only status that may be acted on.
   const textConnectionState = useProjectDataProviderState(
     'platformScripture.textConnectionSettings',
     projectId,
@@ -54,31 +63,46 @@ export function useTextCollectionSources(projectId: string | undefined) {
   // wait for the real one, or it writes back only the resources currently shown and discards the
   // saved slot of every hidden one.
   const [order, setOrder] = useState<string[] | undefined>(undefined);
+  // A user-layer subscribe that rejected will never deliver, so `sources` can never assemble.
+  // Reported as a settings error rather than filled with a default: a default user list would let
+  // the grid treat the user's resources as removed, prune them from the saved order, and save that.
+  const [hasSubscribeError, setHasSubscribeError] = useState(false);
 
   useEffect(() => {
-    // Clear whenever the provider changes, not only when there is none: a different provider is a
-    // different project, so nothing the previous subscriptions delivered describes what this hook
-    // now reports on.
+    // Clear whenever the provider changes, not only when there is none: nothing the previous
+    // provider's subscriptions delivered is known to describe what the new one serves (for instance
+    // a replacement registered after the previous provider was disposed).
     setUserReferenced(undefined);
     setOverlay(undefined);
     setOrder(undefined);
+    setHasSubscribeError(false);
 
     if (!textConnectionPdp) return undefined;
 
     let disposed = false;
     const unsubscribers: Array<() => Promise<boolean>> = [];
 
-    const track = (promise: Promise<() => Promise<boolean>>, label: string) => {
+    // `isRequired`: `sources` cannot assemble without this subscription, so its failure must be
+    // reported, or View Options stays on "Loading" for something that is not coming.
+    const track = (
+      promise: Promise<() => Promise<boolean>>,
+      label: string,
+      isRequired: boolean,
+    ) => {
       promise
         .then((unsub) => {
-          // Rejects when the provider it belongs to is already disposed. Reaching this branch means
-          // cleanup has already run, so that is the likely case rather than the exceptional one.
-          if (disposed) return unsub().then(() => undefined);
+          if (disposed) {
+            // Cleanup has already run. Not returned into this chain, so a failed unsubscribe is
+            // never reported by the `.catch` below as a failed subscribe.
+            unsubscribeAndWarn(unsub, label);
+            return undefined;
+          }
           unsubscribers.push(unsub);
           return undefined;
         })
         .catch((err) => {
           logger.warn(`Failed to subscribe to ${label}: ${getErrorMessage(err)}`);
+          if (isRequired && !disposed) setHasSubscribeError(true);
         });
     };
 
@@ -91,6 +115,7 @@ export function useTextCollectionSources(projectId: string | undefined) {
         setUserReferenced(isPlatformError(value) ? DEFAULT_LIST : value);
       }),
       'user referenced projects and resources',
+      true,
     );
     track(
       textConnectionPdp.subscribeTextCollectionOverlay(undefined, (value) => {
@@ -98,33 +123,31 @@ export function useTextCollectionSources(projectId: string | undefined) {
         setOverlay(isPlatformError(value) ? DEFAULT_OVERLAY : value);
       }),
       'text-collection overlay',
+      true,
     );
     track(
       textConnectionPdp.subscribeCellOrder(undefined, (value) => {
         if (disposed) return;
-        // An unreadable order stays pending rather than becoming `[]`: we do not know the saved
-        // slots, and treating "could not read" as "empty" is what would let a reorder erase them.
+        // An unreadable order never becomes `[]`: treating "could not read" as "empty" is what
+        // would let a reorder erase the saved slots. So a failed read keeps whatever order this
+        // project last delivered, and leaves the order pending only if none has arrived yet.
         if (isPlatformError(value)) {
-          logger.warn('Could not read the saved cell order; reordering will stay disabled.');
-          setOrder(undefined);
+          logger.warn(
+            'Could not read the saved cell order; keeping the last order received, if any (reordering stays disabled until one arrives).',
+          );
           return;
         }
         setOrder(value);
       }),
       'cell order',
+      // Not required: `sources` assembles without it, and an order that never arrives stays
+      // pending, which withholds reordering rather than writing from an order nobody has read.
+      false,
     );
 
     return () => {
       disposed = true;
-      unsubscribers.forEach((unsub) =>
-        // Rejects when the provider it belongs to is already disposed, which a project switch
-        // routinely causes; unhandled without this.
-        unsub().catch((err) =>
-          logger.warn(
-            `Failed to unsubscribe from text connection settings: ${getErrorMessage(err)}`,
-          ),
-        ),
-      );
+      unsubscribers.forEach((unsub) => unsubscribeAndWarn(unsub, 'text connection settings'));
     };
   }, [textConnectionPdp]);
 
@@ -165,7 +188,8 @@ export function useTextCollectionSources(projectId: string | undefined) {
     isOrderPending: order === undefined,
     // Surfaced because `sources` alone cannot distinguish "still arriving" from "cannot be read":
     // both leave it `undefined`, and reporting the second as the first is an unending spinner.
-    hasSettingsError: !!adminReferencedError || isPlatformError(adminReferenced),
+    hasSettingsError:
+      !!adminReferencedError || isPlatformError(adminReferenced) || hasSubscribeError,
   };
 }
 

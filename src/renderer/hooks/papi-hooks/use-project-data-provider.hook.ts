@@ -79,6 +79,9 @@ export const useProjectDataProvider = createUseNetworkObjectHook(
  * must not write through it — that distinction between what may be shown and what may be written is
  * the point.
  *
+ * The returned state keeps its identity across renders that do not change it, so it is safe to key
+ * memos and effects on.
+ *
  * @param projectInterface `projectInterface` that the project must support. The `networkObject` in
  *   the `ready` state has the project data provider interface type associated with this
  *   `projectInterface`.

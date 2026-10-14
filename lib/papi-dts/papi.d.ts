@@ -10029,12 +10029,15 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
      * this most often means the project does not implement the requested `projectInterface`, which no
      * amount of waiting or retrying changes — so report it rather than spinning.
      *
-     * Only a change of source re-runs the lookup; nothing else does. A transient failure (for
-     * instance the bounded wait inside `getMetadataForProject` timing out on a slow start) therefore
-     * persists for as long as the caller keeps asking for the same source, and recovers when it asks
-     * for a different one. If a consumer ever needs recovery without that, the fix is an opt-in retry
-     * on the hook — see PT-4515 — not a retry affordance built on the assumption that this status is
-     * usually transient, because it usually is not.
+     * What re-runs the lookup depends on how this status was reached. If the hook instance has never
+     * held an object that was then disposed, only a change of source (or of the hook's other
+     * arguments) re-runs it, so a transient failure — for instance the bounded wait inside
+     * `getMetadataForProject` timing out on a slow start — persists for as long as the caller keeps
+     * asking for the same thing. Once an object this hook held has been disposed, it also looks again
+     * whenever a matching network object is published (as the hook's
+     * `doesCreatedNetworkObjectMatchSource` decides), so `unavailable` reached after a disposal can
+     * recover on its own. If a consumer needs recovery beyond that, the fix is an opt-in retry on the
+     * hook — see PT-4515 — rather than a retry affordance in each consumer.
      */
     | {
         status: 'unavailable';
@@ -10081,9 +10084,12 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
    * Creates a hook that returns the network object for a source, or `undefined`.
    *
    * `undefined` conflates "not yet", "nothing to ask for", and "asking failed", and across a source
-   * change this keeps serving the PREVIOUS source's object — so a consumer whose source can change in
-   * place should use {@link createUseNetworkObjectStateHook} instead, whose union can tell those
-   * apart. See {@link NetworkObjectState}.
+   * change this keeps serving the PREVIOUS source's object until the new lookup settles — so a
+   * consumer whose source can change in place should use {@link createUseNetworkObjectStateHook}
+   * instead, whose union can tell those apart. See {@link NetworkObjectState}.
+   *
+   * If the new lookup rejects, this serves `undefined` rather than keeping the previous object, which
+   * answers for a source the caller is no longer asking about.
    *
    * @param getNetworkObject See {@link createUseNetworkObjectStateHook}
    * @param mapParametersToNetworkObjectSource See {@link createUseNetworkObjectStateHook}
@@ -11435,6 +11441,9 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
    * Act only on `ready`. While `loading`, a consumer may keep displaying what it last rendered, but
    * must not write through it — that distinction between what may be shown and what may be written is
    * the point.
+   *
+   * The returned state keeps its identity across renders that do not change it, so it is safe to key
+   * memos and effects on.
    *
    * @param projectInterface `projectInterface` that the project must support. The `networkObject` in
    *   the `ready` state has the project data provider interface type associated with this

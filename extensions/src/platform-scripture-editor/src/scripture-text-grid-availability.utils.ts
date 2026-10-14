@@ -7,8 +7,9 @@ import type { TextCollectionSources } from './scripture-text-grid-contents.utils
  *
  * - `noProject` — no project is selected, so there is nothing to configure.
  * - `loading` — a project is selected and its settings are still arriving.
- * - `unavailable` — this project has no text-connection settings to configure (most often it does not
- *   implement the `projectInterface`), so waiting will not help.
+ * - `unavailable` — the lookup for the text-connection settings provider finished without one. Every
+ *   Paratext project advertises that interface, so for one this means the lookup failed (for
+ *   instance it timed out during a slow start) rather than that the project lacks the settings.
  * - `settingsError` — the settings exist but could not be read. Distinct from `loading` because the
  *   read has finished, and from `unavailable` because the project does support them.
  * - `ready` — the controls can be operated.
@@ -46,11 +47,10 @@ export type ViewOptionsAvailabilityInput = {
  *
  * One value drives both the `disabled` flag and the message the panel shows, so the two cannot
  * disagree — the panel can never be disabled with no reason given, nor claim a reason while
- * enabled. Deriving them separately is what let it render the TEXTS header over nothing with the
- * controls greyed and no explanation.
+ * enabled.
  *
  * @param input See {@link ViewOptionsAvailabilityInput}.
- * @returns Which of the four availability states the panel is in.
+ * @returns Which of the five availability states the panel is in.
  */
 export function getViewOptionsAvailability({
   textConnectionState,

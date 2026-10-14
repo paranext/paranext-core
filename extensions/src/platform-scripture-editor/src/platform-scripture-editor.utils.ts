@@ -1702,14 +1702,14 @@ export function resolveGridProviderProjectId(
  * Re-points the Text Collection panel at `projectId`, the way {@link openOrUpdateRelatedPanels}
  * re-points the rest of Column 3.
  *
- * Re-pointing is a reload, not an in-place `projectId` update, for two reasons. `papi.webViews`
- * exposes no definition-updating call at all — only a web view can update its _own_ definition
+ * Re-pointing is a reload, not an in-place `projectId` update, because `papi.webViews` exposes no
+ * definition-updating call at all — only a web view can update its _own_ definition
  * (`updateWebViewDefinition` in `WebViewProps`), so from the service side a reload is the only way
- * to change any updatable property, as `reloadWebView`'s own TSDoc says. More importantly the grid
- * _requires_ a remount: it reads admin layout settings through `useBufferedLayoutSetting`, which
- * documents itself as built for consumers that switch projects via `reloadWebView` and NOT safe for
- * ones that change `projectId` in place (it would keep serving the previous project's held value,
- * and it `logger.warn`s if it detects that). Without any re-point the panel would keep rendering
+ * to change any updatable property, as `reloadWebView`'s own TSDoc says. The grid does not depend
+ * on the reload for correctness: it remounts everything that reads admin layout settings through
+ * `useBufferedLayoutSetting` whenever its project changes (see `ScriptureTextGridProjectView`),
+ * because that hook is NOT safe for consumers that change `projectId` in place (it would keep
+ * serving the previous project's held value). Without any re-point the panel would keep rendering
  * the outgoing project's texts indefinitely: an unbound grid seeds itself once from the window's
  * `ActiveEditorProjectId` and keeps that project from then on (see
  * `resolveTextCollectionProjectId`), so only a re-point moves it.
