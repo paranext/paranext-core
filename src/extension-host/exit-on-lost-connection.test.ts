@@ -3,6 +3,7 @@ import { PlatformEventEmitter } from 'platform-bible-utils';
 import { EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE } from '@node/models/interprocess-messages.model';
 import {
   exitExtensionHostOnLostConnection,
+  LOST_CONNECTION_JOINED_SHUTDOWN_TIMEOUT_MS,
   LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS,
 } from './exit-on-lost-connection';
 
@@ -98,6 +99,25 @@ describe('exitExtensionHostOnLostConnection', () => {
     expect(exitProcess).toHaveBeenCalledWith(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE);
   });
 
+  // An unreferenced timer would let Node exit with code 0 when a hung shutdown leaves nothing else
+  // pending, and main would report a crash instead of a lost connection.
+  it('keeps the event loop alive with its watchdog', () => {
+    vi.useRealTimers();
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    const { lostConnection } = setUp(() => new Promise<void>(() => {}));
+
+    lostConnection.emit();
+
+    expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+    const handle = setTimeoutSpy.mock.results[0].value;
+    try {
+      expect(handle.hasRef()).toBe(true);
+    } finally {
+      clearTimeout(handle);
+      setTimeoutSpy.mockRestore();
+    }
+  });
+
   describe('with the real graceful shutdown', () => {
     beforeEach(() => {
       vi.resetModules();
@@ -136,6 +156,53 @@ describe('exitExtensionHostOnLostConnection', () => {
       expect(mocks.extensionShutdown).toHaveBeenCalledTimes(1);
       expect(exitAfterRequestedShutdown).toHaveBeenCalledTimes(1);
       expect(exitProcess).not.toHaveBeenCalled();
+    });
+
+    // The backstop for a joined shutdown fires only when main, which normally hard-kills a
+    // requested stop long before, is gone and an extension's `deactivate` hangs.
+    it('ends a joined shutdown that hangs after the longer backstop, not the lost-connection timeout', async () => {
+      const { runGracefulShutdown, hasGracefulShutdownStarted } = await import(
+        './graceful-shutdown'
+      );
+      mocks.extensionShutdown.mockReturnValue(new Promise<void>(() => {}));
+      const exitAfterRequestedShutdown = vi.fn();
+      runGracefulShutdown(exitAfterRequestedShutdown);
+      const { lostConnection, exitProcess } = setUp(
+        runGracefulShutdown,
+        hasGracefulShutdownStarted,
+      );
+      await vi.waitFor(() => expect(mocks.extensionShutdown).toHaveBeenCalledTimes(1));
+
+      lostConnection.emit();
+      vi.advanceTimersByTime(LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS);
+      expect(exitProcess).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(
+        LOST_CONNECTION_JOINED_SHUTDOWN_TIMEOUT_MS - LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS,
+      );
+      expect(exitProcess).toHaveBeenCalledTimes(1);
+      expect(exitProcess).toHaveBeenCalledWith(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE);
+      expect(exitAfterRequestedShutdown).not.toHaveBeenCalled();
+    });
+
+    // With the real module the started flag turns true as soon as the shutdown is called, so this
+    // pins that the loss reads it before starting the shutdown itself.
+    it('bounds a shutdown the loss itself starts with the lost-connection timeout', async () => {
+      const { runGracefulShutdown, hasGracefulShutdownStarted } = await import(
+        './graceful-shutdown'
+      );
+      mocks.extensionShutdown.mockReturnValue(new Promise<void>(() => {}));
+      const { lostConnection, exitProcess } = setUp(
+        runGracefulShutdown,
+        hasGracefulShutdownStarted,
+      );
+
+      lostConnection.emit();
+      await vi.waitFor(() => expect(mocks.extensionShutdown).toHaveBeenCalledTimes(1));
+      vi.advanceTimersByTime(LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS);
+
+      expect(exitProcess).toHaveBeenCalledTimes(1);
+      expect(exitProcess).toHaveBeenCalledWith(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE);
     });
   });
 });

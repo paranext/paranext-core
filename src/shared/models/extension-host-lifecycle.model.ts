@@ -23,22 +23,41 @@ export type ExtensionHostStoppedEvent = {
   reason: ExtensionHostStopReason;
 };
 
-/** Every {@link ExtensionHostStopReason}, for the schema below. */
-const EXTENSION_HOST_STOP_REASONS: ExtensionHostStopReason[] = ['lost-connection', 'crashed'];
+/**
+ * One entry per {@link ExtensionHostStopReason}. A `Record` over the union, so a reason added to the
+ * union and missing here, and so missing from the schema's `enum` below, is a type error.
+ */
+const EXTENSION_HOST_STOP_REASON_SET: Record<ExtensionHostStopReason, true> = {
+  'lost-connection': true,
+  crashed: true,
+};
+
+/**
+ * Freezes `schema` and every object and array inside it, and returns it with its type unchanged.
+ * `Object.freeze`'s own return type would make the arrays `readonly`, which `Schema` does not
+ * accept.
+ */
+function deepFreeze<T extends object>(schema: T): T {
+  Object.values(schema).forEach((value) => {
+    if (typeof value === 'object' && value) deepFreeze(value);
+  });
+  Object.freeze(schema);
+  return schema;
+}
 
 /**
  * OpenRPC schema of an {@link ExtensionHostStoppedEvent}, shared by every registration that sends
- * one over the network.
+ * one over the network. Frozen throughout, so a registration cannot change it for the others.
  *
  * @experimental
  */
-export const EXTENSION_HOST_STOPPED_EVENT_SCHEMA: Schema = {
+export const EXTENSION_HOST_STOPPED_EVENT_SCHEMA: Schema = deepFreeze<Schema>({
   type: 'object',
   properties: {
-    reason: { type: 'string', enum: EXTENSION_HOST_STOP_REASONS },
+    reason: { type: 'string', enum: Object.keys(EXTENSION_HOST_STOP_REASON_SET) },
   },
   required: ['reason'],
-};
+});
 
 /**
  * Name of the network event main emits when the extension host stops without being asked to. Not

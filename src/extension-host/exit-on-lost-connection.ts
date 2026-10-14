@@ -9,6 +9,14 @@ import { PlatformEvent, Unsubscriber } from 'platform-bible-utils';
  */
 export const LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS = 5_000;
 
+/**
+ * How long a shutdown main requested may still take, once the connection is lost during it, before
+ * the process exits anyway. Main's own hard-kill for a requested stop comes far sooner, so this
+ * only ever fires when main itself is gone (it quit right after sending the shutdown message, or it
+ * crashed) and an extension's `deactivate` hangs, which would otherwise orphan the process.
+ */
+export const LOST_CONNECTION_JOINED_SHUTDOWN_TIMEOUT_MS = 30_000;
+
 type Dependencies = {
   /** The network service's connection-lost event */
   onDidLoseConnection: PlatformEvent<void>;
@@ -31,11 +39,16 @@ type Dependencies = {
  * knows how to start one (`platform.restartExtensionHost`). See
  * `adr-extension-host-exits-on-lost-connection`.
  *
- * Reacts to the first loss only: the shutdown is already under way after that. When this loss is
- * what starts the shutdown, arms a watchdog first ({@link LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS}), so
- * an extension whose `deactivate` never settles cannot keep the process alive with no window told
- * about it. A loss during a shutdown main requested only joins that shutdown and arms nothing: main
- * bounds its own requested stops, and a requested stop must not end with the lost-connection code.
+ * Reacts to the first loss only: the shutdown is already under way after that. Always arms a
+ * watchdog before joining or starting the graceful shutdown, so an extension whose `deactivate`
+ * never settles cannot keep the process alive:
+ *
+ * - When this loss starts the shutdown, the watchdog fires after
+ *   {@link LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS}; nothing else bounds that shutdown.
+ * - When the loss joins a shutdown main requested, main bounds it with its own, much shorter
+ *   hard-kill, and the watchdog is only a backstop for when main is gone
+ *   ({@link LOST_CONNECTION_JOINED_SHUTDOWN_TIMEOUT_MS}). Main has already marked that stop as
+ *   requested, so the exit code this ends with is not reported to anyone.
  *
  * @returns Unsubscriber; the entry module never calls it, this runs for the process's lifetime
  */
@@ -52,16 +65,20 @@ export function exitExtensionHostOnLostConnection({
     logger.error(
       'Extension host lost its connection to main. Exiting so main can report it to the user.',
     );
-    if (!hasGracefulShutdownStarted())
-      // Deliberately keeps the event loop alive until it fires: if the shutdown hangs on a promise
-      // with nothing else pending, an unreferenced timer would let Node exit with code 0, which
-      // main would report as a crash rather than a lost connection.
-      setTimeout(
-        () => exitProcess(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE),
-        LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS,
-      );
+    // Read before `runGracefulShutdown` below, which would make it true.
+    const isJoiningShutdown = hasGracefulShutdownStarted();
+    // Deliberately keeps the event loop alive until it fires: if the shutdown hangs on a promise
+    // with nothing else pending, an unreferenced timer would let Node exit with code 0, which main
+    // would report as a crash rather than a lost connection.
+    setTimeout(
+      () => exitProcess(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE),
+      isJoiningShutdown
+        ? LOST_CONNECTION_JOINED_SHUTDOWN_TIMEOUT_MS
+        : LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS,
+    );
     // Not awaited: `runGracefulShutdown` never rejects and always ends with `exitProcess`. If a
-    // shutdown is already under way, this joins it and that shutdown's own exit stands.
+    // shutdown is already under way, this joins it, and that shutdown's own exit stands unless the
+    // backstop above fires first.
     runGracefulShutdown(() => exitProcess(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE));
   });
   return unsubscribe;

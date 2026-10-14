@@ -4607,7 +4607,7 @@ declare module 'shared/models/extension-host-lifecycle.model' {
   };
   /**
    * OpenRPC schema of an {@link ExtensionHostStoppedEvent}, shared by every registration that sends
-   * one over the network.
+   * one over the network. Frozen throughout, so a registration cannot change it for the others.
    *
    * @experimental
    */

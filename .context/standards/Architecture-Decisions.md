@@ -2363,10 +2363,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   loss is what starts the graceful shutdown, a 5 s watchdog bounds it, because main is not waiting
   for this exit; the watchdog keeps the event loop alive, so a shutdown hung on a promise still
   ends with 70 rather than a 0 main would call a crash. The graceful shutdown runs once per
-  process, and a loss during a shutdown main requested only joins it and arms no watchdog, so a
-  requested stop never ends with the lost-connection code. An extension host whose first connect
-  to main fails exits with `EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE` (1), which main reports as a
-  crash. Main distinguishes requested from unexpected stops with a module flag set in
+  process, and a loss during a shutdown main requested joins it rather than starting another. Main
+  bounds that requested stop with its own, much shorter hard-kill, so the loss arms only a 30 s
+  backstop there: it fires only when main itself is gone (it quit right after the shutdown message,
+  or crashed) and a `deactivate` hangs, which would otherwise orphan the extension host. Main has
+  already marked that stop as requested, so its exit code is not reported. An extension host whose
+  first connect to main fails exits with `EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE` (1), which main
+  reports as a crash. Main distinguishes requested from unexpected stops with a module flag set in
   `waitForExtensionHost` and cleared on the next fork, plus `isAppShuttingDown()`, and it
   classifies only the exit of the current child: a child it hard-killed or replaced exited for a
   stop main asked for, however late that exit arrives. Three new
