@@ -1528,6 +1528,28 @@ describe('stray caret snap (wrapper-para dead-space normalization)', () => {
     expect(editorRef.selectNote).not.toHaveBeenCalled();
     expect(editorRef.focus).not.toHaveBeenCalled();
   });
+
+  it('leaves a stray caret alone on selectionchange while an overlay in another document holds focus', () => {
+    // A palette click moves focus to an overlay outside this document: the editor stays this
+    // document's active element, but the document itself no longer has focus. A snap here would
+    // move the caret a pending palette commit is about to restore.
+    const { editorInput, editorRef } = renderFootnoteEditor({
+      view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+    });
+    placeDomCaretOutsideNote(editorInput);
+    expect(editorInput.ownerDocument.activeElement).toBe(editorInput);
+    vi.mocked(editorRef.focus).mockClear();
+    const hasFocusSpy = vi.spyOn(editorInput.ownerDocument, 'hasFocus').mockReturnValue(false);
+
+    try {
+      editorInput.ownerDocument.dispatchEvent(new Event('selectionchange'));
+    } finally {
+      hasFocusSpy.mockRestore();
+    }
+
+    expect(editorRef.selectNote).not.toHaveBeenCalled();
+    expect(editorRef.focus).not.toHaveBeenCalled();
+  });
 });
 
 describe('paste guard (dead-space caret)', () => {
