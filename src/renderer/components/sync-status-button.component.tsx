@@ -472,6 +472,12 @@ export function SyncStatusButton() {
    * screen reader read "Syncing HNF" and then "Syncing HNF, button" for a single change, and the
    * label churns as project names resolve, turning one sync into three announcements. Empty until
    * the strings load, so the region can never speak a raw `%key%` aloud.
+   *
+   * `unknown` and `unsynced` are announced only as the outcome of a sync the user watched: the hook
+   * keeps a just-synced project out of the unsynced count until the backend has rechecked it, so
+   * the first status after syncing is that sync's outcome. An `unsynced` that appears later,
+   * because of an edit, is not announced, and neither is its direction (see
+   * {@link isSyncOutcomeUnspokenRef}).
    */
   const [announcement, setAnnouncement] = useState('');
   /**
@@ -498,15 +504,20 @@ export function SyncStatusButton() {
    */
   const lastSeenStatusRef = useRef<SyncStatus | undefined>(undefined);
   /**
-   * Set when a sync the user was watching ended in "we cannot tell" while the region could not
-   * speak. Without it that transition is simply lost: by the time the strings load, `status` and
-   * the previous status are both `unknown`, which is indistinguishable from an `unknown` nobody was
-   * waiting on — the one case this region deliberately stays quiet about.
+   * Whether the status shown now is the outcome of a sync the user watched and that outcome has not
+   * been spoken yet: true from the status leaving `syncing` until the status changes again, false
+   * while syncing and for a status that arrived some other way. The hook keeps a project the sync
+   * just exchanged out of the unsynced count until the backend has rechecked it, so the first
+   * status after a sync IS that sync's outcome — and `unknown` and `unsynced` are announced only as
+   * that outcome. An `unknown` nobody was waiting on, or an `unsynced` that appears later because
+   * of an edit, stays silent. Updated on every run of the effect below, including the silent runs
+   * before the strings load, so a transition that happens while the region cannot speak is not
+   * lost: by the time the strings load, the previous status no longer shows it.
    */
-  const hasUnspokenSyncEndedUnknownRef = useRef(false);
+  const isSyncOutcomeUnspokenRef = useRef(false);
 
   // Names every string the announcement can be built from, so a locale change is a change to this
-  // key. Not memoized: it is a join of five strings, and the effect below reads it on every render
+  // key. Not memoized: it is a join of six strings, and the effect below reads it on every render
   // anyway.
   const announcementStringsKey = [
     localizedStrings['%toolbar_sync_status_syncing%'],
@@ -514,17 +525,19 @@ export function SyncStatusButton() {
     localizedStrings['%toolbar_sync_status_cancelled%'],
     localizedStrings['%toolbar_sync_status_failed%'],
     localizedStrings['%toolbar_sync_status_unknown%'],
+    localizedStrings['%toolbar_sync_status_unsynced%'],
   ].join('\u0000');
 
   useEffect(() => {
     const previousStatus = lastSeenStatusRef.current;
     lastSeenStatusRef.current = status;
-    // A sync the user was watching ending in "we cannot tell" IS worth saying; `idle`, and an
-    // `unknown` nobody was waiting on, are not transitions worth interrupting a screen reader for.
-    // Recorded whether or not it can be spoken yet.
-    if (status === 'unknown' && previousStatus === 'syncing')
-      hasUnspokenSyncEndedUnknownRef.current = true;
-    if (status !== 'unknown') hasUnspokenSyncEndedUnknownRef.current = false;
+    // A sync the user was watching ending in "we cannot tell" or with changes left to exchange IS
+    // worth saying; `idle`, and an `unknown` or `unsynced` nobody was waiting on, are not
+    // transitions worth interrupting a screen reader for. Recorded whether or not it can be spoken
+    // yet.
+    if (status === 'syncing') isSyncOutcomeUnspokenRef.current = false;
+    else if (previousStatus === 'syncing') isSyncOutcomeUnspokenRef.current = true;
+    else if (status !== previousStatus) isSyncOutcomeUnspokenRef.current = false;
 
     // Silent until the strings load, so the region can never speak a raw `%key%`. No announcement
     // state is recorded either: nothing was said, so there is nothing to compare a later run against.
@@ -556,8 +569,13 @@ export function SyncStatusButton() {
       setAnnouncement(localizedStrings['%toolbar_sync_status_failed%']);
       return;
     }
-    if (status === 'unknown' && hasUnspokenSyncEndedUnknownRef.current) {
+    if (status === 'unknown' && isSyncOutcomeUnspokenRef.current) {
       setAnnouncement(localizedStrings['%toolbar_sync_status_unknown%']);
+      return;
+    }
+    // No direction is spoken: the visible surfaces and the button's accessible name carry it.
+    if (status === 'unsynced' && isSyncOutcomeUnspokenRef.current) {
+      setAnnouncement(localizedStrings['%toolbar_sync_status_unsynced%']);
       return;
     }
     setAnnouncement('');

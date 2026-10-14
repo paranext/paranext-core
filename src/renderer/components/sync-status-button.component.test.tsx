@@ -2724,6 +2724,127 @@ describe('SyncStatusButton — unsynced changes', () => {
     expect(liveRegion).toHaveTextContent('Test Synced');
   });
 
+  // The outcome of a sync the user watched is worth saying even when it is "changes are still
+  // waiting", e.g. another project the sync did not exchange. No direction is spoken.
+  it('announces unsynced as the outcome of a sync that leaves another project unsynced', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: ['a'], syncingProjectIds: ['a'] },
+      completedState({ a: 'succeeded' }),
+    ]);
+    mockProjectNames({ a: 'AAA', b: 'BBB' });
+    mockUnsyncedSets(['b'], []);
+    render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing');
+    });
+
+    fireSyncStateChanged(false);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Unsynced changes');
+    });
+    expect(screen.getByRole('status')).not.toHaveTextContent('Test Changes to send');
+  });
+
+  it('does not announce unsynced when it appears after the sync outcome was spoken', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: ['a'], syncingProjectIds: ['a'] },
+      completedState({ a: 'succeeded' }),
+    ]);
+    mockProjectNames({ a: 'AAA' });
+    mockUnsyncedSets([], []);
+    const { rerender } = render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing');
+    });
+    fireSyncStateChanged(false);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Synced');
+    });
+
+    // An edit made after the sync leaves the project with changes to send.
+    mockUnsyncedSets(['a'], []);
+    rerender(<SyncStatusButton />);
+
+    await screen.findByRole('button', { name: UNSYNCED_SEND_ACCESSIBLE_NAME });
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('announces an unsynced outcome that arrived while the strings were still loading', async () => {
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    const loadedStrings = Object.fromEntries(
+      LOCALIZED_STRING_KEYS.map((key) => {
+        // `areStringsLoaded` is derived from this key.
+        if (key === '%toolbar_sync%') return [key, 'Sync'];
+        if (key === '%toolbar_sync_status_unsynced%') return [key, 'Test Unsynced changes'];
+        return [key, key];
+      }),
+    );
+    const unloadedStrings = Object.fromEntries(LOCALIZED_STRING_KEYS.map((key) => [key, key]));
+    vi.mocked(useLocalizedStrings).mockReturnValue([unloadedStrings, true]);
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: ['a'], syncingProjectIds: ['a'] },
+      completedState({ a: 'succeeded' }),
+    ]);
+    mockUnsyncedSets(['b'], []);
+
+    const { rerender } = render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent(
+        '%toolbar_sync_status_syncing%',
+      );
+    });
+    fireSyncStateChanged(false);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent(
+        '%toolbar_sync_status_unsynced%',
+      );
+    });
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+
+    vi.mocked(useLocalizedStrings).mockReturnValue([loadedStrings, false]);
+    rerender(<SyncStatusButton />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Unsynced changes');
+    });
+  });
+
+  it('re-announces an unsynced outcome in the new language after a locale switch', async () => {
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: ['a'], syncingProjectIds: ['a'] },
+      completedState({ a: 'succeeded' }),
+    ]);
+    mockUnsyncedSets(['b'], []);
+    const { rerender } = render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing');
+    });
+    fireSyncStateChanged(false);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Unsynced changes');
+    });
+
+    // Only the unsynced sentence differs from the English strings, so the announcement can be
+    // corrected for the switch only if that string is part of what the region is keyed on.
+    const [englishStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
+    const spanishStrings = {
+      ...englishStrings,
+      '%toolbar_sync_status_unsynced%': 'Cambios sin sincronizar',
+    };
+    vi.mocked(useLocalizedStrings).mockReturnValue([spanishStrings, false]);
+    rerender(<SyncStatusButton />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Cambios sin sincronizar');
+    });
+  });
+
   it('does not announce the move from idle to unsynced', async () => {
     mockSyncState(IDLE_STATE);
     const { rerender } = render(<SyncStatusButton />);
