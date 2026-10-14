@@ -348,6 +348,60 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
+        public async Task WriteExit_ForMarkedIdleProject_StartsNoCheck()
+        {
+            _repo["A"] = true;
+            _tracker.OnWriteScopeExited("A");
+            await _tracker.FlushAsync();
+            int callsBefore = _detectCalls;
+
+            _tracker.OnWriteScopeExited("A");
+            await _tracker.FlushAsync();
+
+            Assert.That(_detectCalls, Is.EqualTo(callsBefore));
+            Assert.That(_tracker.HasPendingDebounce("A"), Is.False);
+        }
+
+        [Test]
+        public async Task WriteExit_ForMarkedProjectWithRunningCheck_RequestsRerun()
+        {
+            using var gate = new ManualResetEventSlim(false);
+            using var started = new ManualResetEventSlim(false);
+            int calls = 0;
+            using var tracker = new UnsyncedChangesTracker(
+                _ =>
+                {
+                    if (Interlocked.Increment(ref calls) == 2)
+                    {
+                        started.Set();
+                        gate.Wait();
+                    }
+                    return true;
+                },
+                () => false,
+                () => new[] { "A" },
+                TimeSpan.Zero
+            );
+            tracker.OnWriteScopeExited("A");
+            await tracker.FlushAsync();
+            Assert.That(tracker.GetState().ToSend, Is.EquivalentTo(new[] { "A" }), "A is marked");
+
+            // A sync end starts a second check; it blocks while A is marked.
+            tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            Assert.That(started.Wait(TimeSpan.FromSeconds(5)), Is.True, "second check started");
+            tracker.OnWriteScopeExited("A");
+            Assert.That(
+                SpinWait.SpinUntil(() => !tracker.HasPendingDebounce("A"), TimeSpan.FromSeconds(5)),
+                Is.True,
+                "the write's trigger landed during the check"
+            );
+            gate.Set();
+            await tracker.FlushAsync();
+
+            Assert.That(calls, Is.EqualTo(3), "first check + running check + one re-run");
+        }
+
+        [Test]
         public async Task GateDisarm_RechecksMarkedProject()
         {
             _repo["A"] = true;
