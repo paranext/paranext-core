@@ -15,6 +15,7 @@ import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-options-notice.utils';
 import { TEAM_LAYOUT_BUTTON_STRING_KEYS } from './team-layout-button.component';
 import { STRUCTURE_PROTECTION_BUTTON_STRING_KEYS } from './structure-protection-button.component';
+import { HIDDEN_CONTENT_DELETE_STRING_KEYS } from './hidden-content-delete-confirm.utils';
 import {
   paragraphMarkerNameKey,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
@@ -443,6 +444,22 @@ describe.each([...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS])(
     });
   },
 );
+
+// The confirmation asked before an edit removes content the view does not show (PT-4703): its
+// title, prompt, and buttons.
+describe.each([...HIDDEN_CONTENT_DELETE_STRING_KEYS])('hidden content delete label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
 
 // Markers whose Khmer label is a legitimate exception to the differs-from-English check: `h1`,
 // `h2`, `h3` are deprecated markers not worth translating (Crowdin itself leaves them in English);
