@@ -124,6 +124,19 @@ describe('useUnsyncedChanges', () => {
     expect(logger.warn).toHaveBeenCalled();
   });
 
+  it('a payload whose list holds a non-string id is ignored', async () => {
+    mockSeed({ toSend: ['PROJ1'], toReceive: [] });
+    const { emit } = captureEvent();
+
+    const { result } = renderHook(() => useUnsyncedChanges());
+    await flush();
+
+    emit({ toSend: ['PROJ2', 7], toReceive: [] });
+
+    expect(result.current).toEqual({ toSend: ['PROJ1'], toReceive: [] });
+    expect(logger.warn).toHaveBeenCalled();
+  });
+
   it('a payload carrying only a single project list is treated as malformed', async () => {
     mockSeed({ projectIds: ['A'] });
     const { emit } = captureEvent();

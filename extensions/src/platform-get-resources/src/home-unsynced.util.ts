@@ -1,5 +1,7 @@
+import { isString } from 'platform-bible-utils';
+
 function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+  return Array.isArray(value) && value.every(isString);
 }
 
 /**

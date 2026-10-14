@@ -3,7 +3,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getErrorMessage, isString } from 'platform-bible-utils';
 import { useEvent } from 'platform-bible-react';
 import type { UnsyncedChangesSnapshot } from 'paratext-bible-send-receive';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -21,7 +21,7 @@ export type UnsyncedChangeSets = {
 
 /** Whether a value read off the wire is an array of strings. */
 function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((id: unknown) => typeof id === 'string');
+  return Array.isArray(value) && value.every(isString);
 }
 
 /**
