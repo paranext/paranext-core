@@ -122,8 +122,10 @@ function getAncestorCharacterMarkers(
  * @param usj The chapter USJ the selection's json paths refer to.
  * @param selection The selection to analyze. `undefined` yields an empty coverage.
  * @returns Per-marker coverage. Empty (no markers, nothing uncovered) when there is nothing to
- *   measure — an unresolvable path, or a selection inside a note — which is treated as "no
- *   information", never as a throw and never as "the selection is unmarked".
+ *   measure — a selection inside a note, or a path that does not resolve against `usj` at all
+ *   (which the settled-position contract says cannot happen for a selection the editor reported) —
+ *   which is treated as "no information", never as a throw and never as "the selection is
+ *   unmarked".
  */
 export function computeCharacterMarkerCoverage(
   usj: Usj,

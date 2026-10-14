@@ -304,7 +304,8 @@ export type UsjFlatTextChapterLocation = {
  * JSON path to a {@link MarkerObject}, {@link Usj}, or text content string in the current USJ
  * document.
  *
- * This could actually have more content clauses at the end, but TS types are limited
+ * Eight clauses cover every shape the editors render (table cell → char → nested char → text is
+ * seven). Deeper paths are valid at runtime; the type is a bound, not a rule.
  */
 export type ContentJsonPath =
   | ''
@@ -312,14 +313,23 @@ export type ContentJsonPath =
   | `$.content[${number}]`
   | `$.content[${number}].content[${number}]`
   | `$.content[${number}].content[${number}].content[${number}]`
-  | `$.content[${number}].content[${number}].content[${number}].content[${number}]`;
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}]`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]`;
 
 /**
  * JSON path to the `marker` or an attribute on a {@link MarkerObject} or {@link Usj} in the current
  * USJ document. Note that it seems you must use `['bracket notation']` rather than `.dot` notation
  * if there are symbols other than underscore in the property name
  *
- * This could actually have more content clauses at the end, but TS types are limited
+ * The catch-all template-literal member that matches anything starting `$.` subsumes every depth
+ * member below it — a depth path starts `$.content[` in both notations — so any such path
+ * type-checks, and the per-depth members document the shapes this type is expected to carry rather
+ * than enforcing a bound. (`$['property']`, a property directly on the document root, and the empty
+ * string `''` are the two members the catch-all does not cover, because neither starts `$.`.) Eight
+ * depths cover every shape the editors render (table cell → char → nested char → text is seven).
  */
 export type PropertyJsonPath =
   | ''
@@ -332,7 +342,15 @@ export type PropertyJsonPath =
   | `$.content[${number}].content[${number}].content[${number}].${string}`
   | `$.content[${number}].content[${number}].content[${number}]['${string}']`
   | `$.content[${number}].content[${number}].content[${number}].content[${number}].${string}`
-  | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
 
 /**
  * A JSONPath query to a {@link MarkerContent}, {@link Usj}, or property within a USJ document and
@@ -373,6 +391,57 @@ export type PropertyJsonPath =
  * - {@link UsjClosingAttributeMarkerLocation} - attribute markers are just properties in JSON, plus
  *   they are in the same situation as {@link UsjClosingMarkerLocation} as detailed above.
  *
+ * Every USFM position has exactly one canonical location, and producers should emit only that one.
+ * Following are clarifications on some tricky positions. In each example, the USFM is the whole
+ * document and `|` marks the position.
+ *
+ * - A position immediately in front of a marker. It is that marker's {@link UsjMarkerLocation}, at its
+ *   backslash, even where it also follows the end of other content.
+ *
+ *       \p In the beginning\f + \ft a note\f*|\v 2 God said
+ *
+ *   `{ jsonPath: "$.content[0].content[2]" }`
+ * - A position between two top-level blocks rather than inside either one. It is the start of the
+ *   next block, the same as any position in front of a marker.
+ *
+ *       \p God said
+ *       |\b
+ *
+ *   `{ jsonPath: "$.content[1]" }`
+ * - The end of a line. The newline that ends a line has no location of its own, so it is expressed on
+ *   the line's last token as an offset at that token's length: a text `offset` at the string's
+ *   length, or a `closingMarkerOffset` at the closing marker's length.
+ *
+ *       \p In the beginning|
+ *       \p God said
+ *
+ *   `{ jsonPath: "$.content[0].content[0]", offset: 16 }`
+ *
+ *       \p In the beginning\f + \ft a note\f*|
+ *       \p God said
+ *
+ *   `{ jsonPath: "$.content[0].content[1]", closingMarkerOffset: 3 }`
+ * - Inside a paragraph that has no content. The only thing after its marker name is the newline, so
+ *   the position is the marker name's `propertyOffset` at the name's length.
+ *
+ *       \b|
+ *       \p God said
+ *
+ *   `{ jsonPath: "$.content[0]['marker']", propertyOffset: 1 }`
+ * - The end of the document. It is one past the document's final newline, so it is the end of the
+ *   last line (above) plus one.
+ *
+ *       \p God said
+ *       \b
+ *       |
+ *
+ *   `{ jsonPath: "$.content[1]['marker']", propertyOffset: 2 }`
+ *
+ *       \p God said
+ *       |
+ *
+ *   `{ jsonPath: "$.content[0].content[0]", offset: 9 }`
+ *
  * To see many examples of the same point represented by both USFM and USJ locations, go to
  * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
  */
@@ -406,7 +475,9 @@ export type UsjClosingMarkerLocation = {
   jsonPath: ContentJsonPath;
   /**
    * The character index in the closing marker representation where this location is pointing. The
-   * location is at this offset within the closing marker representation.
+   * location is at this offset within the closing marker representation. At the representation's
+   * length it is the character after the closing marker when that character has no other location
+   * (see {@link UsjDocumentLocation}).
    */
   closingMarkerOffset: number;
 };
@@ -423,7 +494,11 @@ export type UsjTextContentLocation = {
   jsonPath: ContentJsonPath;
   /**
    * The character index in the text content string where this location is pointing. The location is
-   * at this offset within the text content string.
+   * at this offset within the text content string. At the string's length it is the character after
+   * the text when that character has no other location (see {@link UsjDocumentLocation}).
+   *
+   * `offset` means an index into a text content string only: `jsonPath` names that string, never
+   * the marker object or `Usj` containing it.
    */
   offset: number;
 };
@@ -443,7 +518,9 @@ export type UsjPropertyValueLocation = {
   jsonPath: PropertyJsonPath;
   /**
    * The character index in the property's value string where this location is pointing. The
-   * location is at this offset within the property's value string.
+   * location is at this offset within the property's value string. At the value's length it is the
+   * character after the value when that character has no other location — for `marker`, the space
+   * or newline after the marker name (see {@link UsjDocumentLocation}).
    */
   propertyOffset: number;
 };

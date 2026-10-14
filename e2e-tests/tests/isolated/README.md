@@ -46,7 +46,12 @@ These belong to no subset; run them by path (see "How to run").
 - `navigation-history/` (one Electron per test) — tests for back/forward reference history navigation
 - `notes-content-zoom/` (one Electron per spec, worker-scoped via `commentAppOwner`) — tests for the Notes feature's per-pane content zoom (comment list, Simple-mode Comments panel)
 - `overlay/` (one Electron per test) — tests for the project-switch transition overlay
-- `scripture-editor/` (one Electron per test) — tests for the scripture editor itself: which view a mode opens in, marker-attribute display settling, the paragraph-style and marker-palette triggers, type-through-save echo, and the Standard-view clipboard USFM round trip. The clipboard spec writes to the real machine-wide OS clipboard — see "State that leaks between runs" in `e2e-tests/CLAUDE.md`
+- `scripture-editor/` (one Electron per test) — tests for scripture editor behaviors that need a real
+  editor in a real window: which view a project/mode opens in, marker and paragraph-style palette
+  triggers, attribute-display settle, type-through save echo, settled annotation/selection
+  positions, annotations that span verse numbers, milestones, char span openers and paragraph
+  breaks, and the Standard-view clipboard USFM round trip. The clipboard spec writes to the real
+  machine-wide OS clipboard — see "State that leaks between runs" in `e2e-tests/CLAUDE.md`
 - `scroll-groups/` (one Electron per test) — tests for scroll-group synchronization between scripture editors
 - `title-bar/` (one Electron per test) — tests for title bar layout at narrow window widths. The reserved-space spec, which attaches to a running app, lives in `tests/attached/`
 - `verse-navigation/` (one Electron per worker) — tests for verse navigation keyboard shortcuts

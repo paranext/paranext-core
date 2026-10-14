@@ -261,6 +261,23 @@ export async function openScriptureEditor(projectId: string): Promise<void> {
 }
 
 /**
+ * The Find search history the panel shows for `projectId`, read straight from the
+ * `platformScripture.findHistory` data provider, newest first.
+ *
+ * Reading the store instead of opening the panel's history dropdown takes milliseconds rather than
+ * the seconds a click into a web view costs, which matters to a test that has to observe the
+ * history inside the panel's inactivity debounce.
+ */
+export async function getFindHistory(projectId: string): Promise<string[]> {
+  return sendPapiRequestOnce<string[]>(
+    'object:platformScripture.findHistory-data.getHistory',
+    [projectId],
+    undefined,
+    15_000,
+  );
+}
+
+/**
  * Empty both of the find panel's persisted keys for a project: the search history and the last
  * search term.
  *
