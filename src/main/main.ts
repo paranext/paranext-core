@@ -30,6 +30,7 @@ import {
   announceExtensionHostStopped,
   startLifecycleEvents,
 } from '@main/lifecycle-events.util';
+import { registerExtensionHostStoppedStateCommand } from '@main/extension-host-stopped-state.command';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
 import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
@@ -229,7 +230,6 @@ import { GET_METHODS, INTENTIONAL_CLOSE_CODE } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { WINDOW_MIN_WIDTH_PX } from '@shared/models/window-constraints.model';
 import * as commandService from '@shared/services/command.service';
-import { registerExtensionHostStoppedStateCommand } from '@main/extension-host-stopped-state.command';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
@@ -432,6 +432,18 @@ async function main() {
   // process is covered too.
   await startLifecycleEvents();
   extensionHostService.onDidStopUnexpectedly(announceExtensionHostStopped);
+  // Registered this early so a window that connects while main is still starting up can already ask
+  // whether the extension host stopped; a later registration would answer it "no handler". A failure
+  // costs only that catch-up, so it is logged rather than aborting startup.
+  try {
+    await registerExtensionHostStoppedStateCommand();
+  } catch (error) {
+    logger.error(
+      `Failed to register platform.getExtensionHostStoppedState; windows opened after a stop will not show the notice: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
 
   // Register the focused-window-id event so the `focus`/`blur` handlers wired up per window below
   // can announce every change made through `setFocusedWindowId`/`removeWindow`
@@ -2566,8 +2578,6 @@ async function main() {
       },
     },
   });
-
-  registerExtensionHostStoppedStateCommand();
 
   commandService.registerCommand(
     'platform.getLogFileContent',

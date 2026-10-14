@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { extensionHostService } from '@main/services/extension-host.service';
 import { registerCommand } from '@shared/services/command.service';
 import { registerExtensionHostStoppedStateCommand } from './extension-host-stopped-state.command';
@@ -16,6 +16,10 @@ async function registered() {
 }
 
 describe('platform.getExtensionHostStoppedState', () => {
+  beforeEach(() => {
+    vi.mocked(registerCommand).mockClear();
+  });
+
   it('registers under its name, marked experimental', async () => {
     const { name, docs } = await registered();
     expect(name).toBe('platform.getExtensionHostStoppedState');
