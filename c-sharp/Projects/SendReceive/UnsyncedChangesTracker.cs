@@ -53,6 +53,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     private bool _activityActive; // the run marker last reported a sync
     private bool _gateActive; // the write gate last reported armed
     private int _postSyncPasses; // sync-end rechecks scheduled or running
+    private readonly HashSet<string> _owedRechecks = []; // post-sync rechecks queued behind a running check
     private readonly Dictionary<string, CancellationTokenSource> _debounces = [];
     private readonly Dictionary<string, bool> _inFlight = []; // id → re-run requested
     private long _syncEndCount;
@@ -128,8 +129,9 @@ internal sealed class UnsyncedChangesTracker : IDisposable
         new(_unsynced.ToArray(), Array.Empty<string>(), IsRecheckingLocked());
 
     // Under _lock. True from the start of a sync (either signal) until the recheck that follows its
-    // end has finished.
-    private bool IsRecheckingLocked() => _activityActive || _gateActive || _postSyncPasses > 0;
+    // end has finished, including a recheck that had to queue behind a check already running.
+    private bool IsRecheckingLocked() =>
+        _activityActive || _gateActive || _postSyncPasses > 0 || _owedRechecks.Count > 0;
 
     /// <summary>
     /// Subscribes to write-scope exits and both sync signals. Idempotent; does nothing on a
@@ -341,6 +343,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
             }
             debounces = [.. _debounces.Values];
             _debounces.Clear();
+            _owedRechecks.Clear();
         }
         foreach (CancellationTokenSource debounce in debounces)
             debounce.Cancel();
@@ -434,6 +437,9 @@ internal sealed class UnsyncedChangesTracker : IDisposable
         if (_inFlight.ContainsKey(id))
         {
             _inFlight[id] = true;
+            // The sync-end pass owes this project a recheck that the running check's re-run performs.
+            if (_postSyncPasses > 0)
+                _owedRechecks.Add(id);
             return false;
         }
         _inFlight[id] = false;
@@ -452,8 +458,12 @@ internal sealed class UnsyncedChangesTracker : IDisposable
             {
                 if (DeferIfSyncing(id))
                     return;
+                bool owedAtStart;
+                lock (_lock)
+                    owedAtStart = _owedRechecks.Contains(id);
                 CheckResult result = Detect(id);
                 bool changed = false;
+                bool owedCleared = false;
                 lock (_lock)
                 {
                     switch (result)
@@ -471,13 +481,16 @@ internal sealed class UnsyncedChangesTracker : IDisposable
                         case CheckResult.Unknown:
                             break;
                     }
+                    // A check that began after the recheck was owed is the recheck.
+                    if (owedAtStart)
+                        owedCleared = _owedRechecks.Remove(id);
                     rerun = _inFlight[id] && !_disposed;
                     if (rerun)
                         _inFlight[id] = false;
                     else
                         _inFlight.Remove(id);
                 }
-                if (changed)
+                if (changed || owedCleared)
                     RaiseLatestState();
             }
         }

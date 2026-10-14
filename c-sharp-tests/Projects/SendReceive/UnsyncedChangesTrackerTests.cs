@@ -501,7 +501,59 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
-        public async Task ThrowingPass_StillClearsRechecking()
+        public async Task PostSyncRecheck_OfProjectChecked_ElsewhereKeepsRecheckingUntilItRuns()
+        {
+            using var gate = new ManualResetEventSlim(false);
+            using var started = new ManualResetEventSlim(false);
+            var events = new List<UnsyncedChangesState>();
+            int calls = 0;
+            using var tracker = new UnsyncedChangesTracker(
+                _ =>
+                {
+                    if (Interlocked.Increment(ref calls) == 1)
+                    {
+                        started.Set();
+                        gate.Wait(TimeSpan.FromSeconds(10));
+                    }
+                    return false;
+                },
+                () => false,
+                () => new[] { "A" },
+                TimeSpan.Zero
+            );
+            tracker.Changed += state =>
+            {
+                lock (events)
+                    events.Add(state);
+            };
+            tracker.OnWriteScopeExited("A");
+            Assert.That(started.Wait(TimeSpan.FromSeconds(5)), Is.True, "debounced check running");
+
+            // The sync-end pass finds A's check already running, so its own recheck stays queued
+            // behind that check.
+            tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
+            tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+
+            Assert.That(
+                SpinWait.SpinUntil(
+                    () => !tracker.GetState().IsRechecking,
+                    TimeSpan.FromMilliseconds(500)
+                ),
+                Is.False,
+                "still rechecking while A's queued recheck has not run"
+            );
+
+            gate.Set();
+            await tracker.FlushAsync();
+
+            Assert.That(calls, Is.EqualTo(2), "running check + the queued re-run");
+            Assert.That(tracker.GetState().IsRechecking, Is.False);
+            lock (events)
+                Assert.That(events.Last().IsRechecking, Is.False, "the clearing state was pushed");
+        }
+
+        [Test]
+        public async Task FailedCheck_StillClearsRechecking()
         {
             _detectFailure = new InvalidOperationException("hg is gone");
             _tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
