@@ -12,6 +12,7 @@ import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocki
 import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
 import { initConnectionLostService } from '@renderer/services/connection-lost-service';
+import { initExtensionHostStoppedService } from '@renderer/services/extension-host-stopped-service';
 import { startBookChapterControlServiceShard } from '@renderer/services/book-chapter-control.service-shard';
 import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
 import { startNotificationServiceShard } from '@renderer/services/notification.service-shard';
@@ -119,6 +120,9 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
 // is missed for good — and this store is the one thing that tells the user the app has stopped
 // working. Returns an unsubscriber we intentionally never call; it runs for the renderer's lifetime.
 initConnectionLostService();
+// Same reasoning as above, for main's lifecycle events: `getNetworkEvent` returns a subscribable
+// before the network service has connected, and neither event replays to a late subscriber.
+initExtensionHostStoppedService();
 
 // App-wide service setup
 // We are not awaiting these service startups for a few reasons:
