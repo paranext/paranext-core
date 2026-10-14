@@ -4582,6 +4582,55 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
             : never;
   export default ExtractDataProviderDataTypes;
 }
+declare module 'shared/models/extension-host-lifecycle.model' {
+  /**
+   * Why the extension host stopped without main asking it to.
+   *
+   * - `'lost-connection'`: it ended itself because its connection to main died (see
+   *   `exit-on-lost-connection.ts` in the extension host).
+   * - `'crashed'`: any other exit main did not request — an uncaught fatal error, an OS signal, an
+   *   out-of-memory kill.
+   *
+   * @experimental
+   */
+  export type ExtensionHostStopReason = 'lost-connection' | 'crashed';
+  /**
+   * Payload of the {@link EVENT_NAME_ON_DID_STOP_EXTENSION_HOST} network event. Carries the reason
+   * only; the exit code, signal and pid stay in main's log.
+   *
+   * @experimental
+   */
+  export type ExtensionHostStoppedEvent = {
+    reason: ExtensionHostStopReason;
+  };
+  /**
+   * Name of the network event main emits when the extension host stops without being asked to. Not
+   * emitted for a restart main itself requested (`platform.restartExtensionHost`, the dev-mode file
+   * watcher) or while the app is shutting down. Every window shows its "extensions have stopped"
+   * notice on it.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_DID_STOP_EXTENSION_HOST = 'platform.onDidStopExtensionHost';
+  /**
+   * Name of the network event the extension host emits once its extensions have initialized. No
+   * payload. Emitted by every extension host process, including the first; its use is the readiness
+   * signal a window waits for after `platform.restartExtensionHost`, since that command settles at
+   * fork time, long before the new process can serve anything.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_DID_START_EXTENSION_HOST = 'platform.onDidStartExtensionHost';
+  /**
+   * Name of the network event main emits when the app begins to quit, before any window is destroyed.
+   * No payload. A window uses it to read the death of its own connection a moment later as the app
+   * going away rather than as a failure. Best effort: delivery is asynchronous and a window may be
+   * gone before it arrives, so a subscriber must still cope without it.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_WILL_SHUT_DOWN = 'platform.onWillShutDown';
+}
 declare module 'shared/models/docking-framework.model' {
   import { MutableRefObject, ReactNode } from 'react';
   import { WebViewDefinition, WebViewDefinitionUpdateInfo } from 'shared/models/web-view.model';
@@ -6126,6 +6175,7 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from 'shared/services/scroll-group.service-model';
+  import type { ExtensionHostStoppedEvent } from 'shared/models/extension-host-lifecycle.model';
   import type {
     AppWindowInputEvent,
     FocusedWindowIdEvent,
@@ -7219,6 +7269,28 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.onDidChangeFocusedWindowId': FocusedWindowIdEvent;
+    /**
+     * Emitted by the main process when the extension host stops without being asked to: it lost its
+     * connection to main (`'lost-connection'`) or exited for any other reason (`'crashed'`). Not
+     * emitted for a requested restart or during app shutdown.
+     *
+     * @experimental
+     */
+    'platform.onDidStopExtensionHost': ExtensionHostStoppedEvent;
+    /**
+     * Emitted by the extension host once its extensions have initialized, including on the first
+     * start. No payload. The readiness signal after `platform.restartExtensionHost`.
+     *
+     * @experimental
+     */
+    'platform.onDidStartExtensionHost': undefined;
+    /**
+     * Emitted by the main process when the app begins to quit, before any window is destroyed. No
+     * payload. Best effort: a window may be gone before it arrives.
+     *
+     * @experimental
+     */
+    'platform.onWillShutDown': undefined;
   }
   /** Union of all known network event names (keys of {@link NetworkEvents}). */
   type NetworkEventTypes = keyof NetworkEvents;

@@ -6,7 +6,12 @@ import {
   commandLineArgumentsAliases,
 } from '@node/utils/command-line.util';
 import { logger } from '@shared/services/logger.service';
-import { AsyncVariable, debounce, waitForDuration } from 'platform-bible-utils';
+import {
+  AsyncVariable,
+  debounce,
+  PlatformEventEmitter,
+  waitForDuration,
+} from 'platform-bible-utils';
 import { ChildProcess, ChildProcessByStdio, fork } from 'child_process';
 import { app } from 'electron';
 import { PathLike } from 'fs';
@@ -15,6 +20,9 @@ import path from 'path';
 import { Readable } from 'stream';
 import { watch as chokidarWatch, FSWatcher } from 'chokidar';
 import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
+import { isAppShuttingDown } from '@main/services/shutdown-latch.service';
+import { classifyExtensionHostExit } from '@main/services/extension-host-exit.util';
+import { ExtensionHostStoppedEvent } from '@shared/models/extension-host-lifecycle.model';
 
 let processInstanceCounter = 0;
 // Resolves to the current process instance counter value for debug logging purposes
@@ -22,6 +30,14 @@ let processLifetimeVariable: AsyncVariable<number> | undefined;
 let extensionHost: ChildProcess | ChildProcessByStdio<null, Readable, Readable> | undefined;
 /** The watcher that restarts the extension host when files change. Only relevant in dev */
 let extensionHostWatcher: FSWatcher | undefined;
+/**
+ * Set while main is deliberately stopping the extension host — a restart, or the dev-mode file
+ * watcher — so the `exit` handler knows not to report that stop. Cleared when the next process is
+ * forked.
+ */
+let isStopRequested = false;
+/** Announces an exit main did not ask for. See {@link classifyExtensionHostExit}. */
+const unexpectedStopEmitter = new PlatformEventEmitter<ExtensionHostStoppedEvent>();
 
 function createNewProcessLifetimeVariable(): void {
   if (processLifetimeVariable)
@@ -62,6 +78,7 @@ function logProcessInfo(message: unknown) {
  *   anymore without further intervention
  */
 async function waitForExtensionHost(maxWaitTimeInMS: number, shouldCloseWatcher = true) {
+  isStopRequested = true;
   if (shouldCloseWatcher) {
     extensionHostWatcher?.close();
     extensionHostWatcher = undefined;
@@ -165,6 +182,18 @@ function connectToExtensionHostProcess() {
     extensionHost?.stdout?.removeListener('data', logProcessInfo);
     extensionHost = undefined;
     resolveProcessLifetimeVariable();
+
+    const unexpectedStop = classifyExtensionHostExit({
+      code,
+      signal,
+      isStopRequested,
+      isAppShuttingDown: isAppShuttingDown(),
+    });
+    if (!unexpectedStop) return;
+    logger.error(
+      `Extension host stopped unexpectedly (${unexpectedStop.reason}); telling the windows so the user can restart it`,
+    );
+    unexpectedStopEmitter.emit(unexpectedStop);
   });
 }
 
@@ -192,6 +221,7 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
   if (isRestarting) sharedArgs.push(commandLineArgumentsAliases[CommandLineArgs.DidRestart][0]);
 
   function startExtensionHostInternal() {
+    isStopRequested = false;
     createNewProcessLifetimeVariable();
 
     const extensionHostEntryPath = app.isPackaged
@@ -282,6 +312,8 @@ export const extensionHostService = {
   kill: hardKillExtensionHost,
   waitForClose: waitForExtensionHost,
   restart: restartExtensionHost,
+  /** Fires when the extension host exits without main asking it to. Not fired during app shutdown. */
+  onDidStopUnexpectedly: unexpectedStopEmitter.event,
 };
 
 export default extensionHostService;

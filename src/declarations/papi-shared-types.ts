@@ -25,6 +25,7 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from '@shared/services/scroll-group.service-model';
+  import type { ExtensionHostStoppedEvent } from '@shared/models/extension-host-lifecycle.model';
   import type {
     AppWindowInputEvent,
     FocusedWindowIdEvent,
@@ -1170,6 +1171,28 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.onDidChangeFocusedWindowId': FocusedWindowIdEvent;
+    /**
+     * Emitted by the main process when the extension host stops without being asked to: it lost its
+     * connection to main (`'lost-connection'`) or exited for any other reason (`'crashed'`). Not
+     * emitted for a requested restart or during app shutdown.
+     *
+     * @experimental
+     */
+    'platform.onDidStopExtensionHost': ExtensionHostStoppedEvent;
+    /**
+     * Emitted by the extension host once its extensions have initialized, including on the first
+     * start. No payload. The readiness signal after `platform.restartExtensionHost`.
+     *
+     * @experimental
+     */
+    'platform.onDidStartExtensionHost': undefined;
+    /**
+     * Emitted by the main process when the app begins to quit, before any window is destroyed. No
+     * payload. Best effort: a window may be gone before it arrives.
+     *
+     * @experimental
+     */
+    'platform.onWillShutDown': undefined;
   }
 
   /** Union of all known network event names (keys of {@link NetworkEvents}). */

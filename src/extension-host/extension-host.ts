@@ -26,6 +26,10 @@ import { startLocalOAuthServer } from '@extension-host/services/local-oauth.serv
 import * as analyticsService from '@extension-host/services/analytics.service';
 import { runGracefulShutdown } from '@extension-host/graceful-shutdown';
 import { exitExtensionHostOnLostConnection } from '@extension-host/exit-on-lost-connection';
+import {
+  announceExtensionHostStarted,
+  registerExtensionHostStartedEvent,
+} from '@extension-host/announce-extension-host-started';
 import { markStartup } from '@shared/utils/startup-timing.util';
 import { STARTUP_MARK_PROCESS_START } from '@shared/data/platform.data';
 
@@ -92,6 +96,7 @@ process.on('unhandledRejection', (reason) => {
       runGracefulShutdown,
       exitProcess: (code) => process.exit(code),
     });
+    await registerExtensionHostStartedEvent();
     // Analytics initialization must not gate extension-host startup — it can take up to
     // ENVIRONMENT_RESOLUTION_TIMEOUT_MS if the Send/Receive server-target lookup is slow.
     // trackEvent()'s `unresolved` queue tolerates this finishing at any point.
@@ -123,6 +128,7 @@ process.on('unhandledRejection', (reason) => {
     // The extension service locks down importing other modules, so be careful what runs after it
     await extensionService.initialize();
     markStartup('extensions-initialized');
+    announceExtensionHostStarted();
   } catch (error) {
     logger.error(error);
   }
