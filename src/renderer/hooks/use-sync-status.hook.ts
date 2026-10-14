@@ -104,8 +104,9 @@ export type SyncStatusInfo = {
    *
    * Right after a sync, a project that sync reports as having synced successfully is not counted
    * until the backend has rechecked it (`isRechecking` false; at most `SYNC_SETTLE_TIMEOUT_MS`):
-   * until then the lists can still describe the moment before the sync. Only a sync this hook
-   * watched end starts a hold — never a mount.
+   * until then the lists can still describe the moment before the sync. A sync only the activity
+   * signal saw reports no per-project results, so it holds every project it announced, whatever the
+   * outcome. Only a sync this hook watched end starts a hold — never a mount.
    */
   unsyncedProjects: readonly UnsyncedProject[];
   /**
@@ -418,10 +419,8 @@ function isValidSyncState(state: unknown): state is ReadableSyncState {
  * {@link SyncStatusInfo.unsyncedDirection}; how it ranks against the sync signals is set out at the
  * `status` derivation below.
  *
- * Right after a sync, a project that sync reports as having synced successfully is not counted
- * until the backend has rechecked it (`isRechecking` false; at most `SYNC_SETTLE_TIMEOUT_MS`):
- * until then the lists can still describe the moment before the sync. Only a sync this hook watched
- * end starts a hold — never a mount.
+ * Projects a sync just exchanged are held out of the unsynced count until the backend has rechecked
+ * them; see {@link SyncStatusInfo.unsyncedProjects}.
  */
 export function useSyncStatus(): SyncStatusInfo {
   // Starts `unknown`, not `idle`: until the seed answers, nothing here knows whether a sync is
@@ -862,10 +861,8 @@ export function useSyncStatus(): SyncStatusInfo {
    * server. Sets that are not known (`undefined`) are no input at all, never a claim that something
    * is waiting.
    *
-   * Right after a sync, a project that sync reports as having synced successfully is not counted
-   * until the backend has rechecked it (`isRechecking` false; at most `SYNC_SETTLE_TIMEOUT_MS`):
-   * until then the lists can still describe the moment before the sync. Only a sync this hook
-   * watched end starts a hold — never a mount.
+   * Projects a sync just exchanged are held out of these sets until rechecked; see
+   * {@link SyncStatusInfo.unsyncedProjects}.
    */
   const status: SyncStatus = (() => {
     if (activitySyncing) return 'syncing';
