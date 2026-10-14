@@ -1224,7 +1224,12 @@ function getLegacySavedLayout(defaultLayout: LayoutInfo): {
     lowestPrefixedWindowId !== undefined
       ? localStorage.getItem(`${lowestPrefixedWindowId}_${DOCK_LAYOUT_KEY}`)
       : localStorage.getItem(DOCK_LAYOUT_KEY);
-  const savedLayout: LayoutInfo | undefined = saved ? deserialize(saved) : undefined;
+  // Only a stored object is a layout; any other JSON value (`null`, a number, a string, an array,
+  // a boolean) is not one, and healing it would hand rc-dock an empty layout
+  const parsed = saved ? deserialize(saved) : undefined;
+  const savedLayout: LayoutInfo | undefined =
+    // `deserialize` turns a stored `null` into `undefined`, so `typeof` alone excludes it
+    typeof parsed === 'object' && !Array.isArray(parsed) ? reconcileSavedLayout(parsed) : undefined;
   return savedLayout
     ? { layout: savedLayout, isBakedDefault: false }
     : { layout: defaultLayout, isBakedDefault: true };

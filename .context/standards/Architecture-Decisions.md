@@ -4416,6 +4416,63 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-3954 (Sync button on toolbar sometimes does not show), with the activation timeline
   measured from a Paratext 10 Studio `main.log`.
 
+## adr-panel-open-joins-the-group-beside-it: A `'panel'` open joins the tab group beside its target when that group can take it; a target that is not docked gets a new group at the reading-end edge of the dock
+
+- **Date:** 2026-10-12
+- **Status:** Accepted
+- **Context:** A `{ type: 'panel' }` open docked the new tab beside its target with rc-dock's
+  `dockMove(tab, targetTabGroup, direction)`. Beside a floating or maximized target, rc-dock wrapped
+  both tab groups in a new box inside the floating or maximized layer, which draws only the tab
+  groups directly inside it, so both disappeared while their tabs stayed open, and that shape was
+  saved. Beside a docked target, every open squeezed another tab group in between, so Find, Checks
+  and the comment list kept splitting the area beside the editor. `direction` also reached rc-dock as
+  a physical side, the wrong one in a right-to-left UI.
+- **Decision:** `addTabAsPanel` (`platform-dock-layout-storage.util.ts`):
+  - **Docked target:** the new tab joins the tab group on the `direction` side, as its active tab,
+    when that group (`canJoinAdjacentTabGroup`) has tabs, is of the new tab's rc-dock group, is not
+    locked in place (`panelLock`, which Simple mode's fixed columns carry, as do rc-dock's tab-less
+    stand-in groups, which the has-tabs check already excludes), and is at least as
+    wide (as tall for `top`/`bottom`) as the tab group rc-dock's own split would create beside the
+    target. The group on that side is the one whose span across the direction overlaps the
+    target's most (`findAdjacentTabGroup`); a group touching it only at a corner never counts.
+    Spans and widths are fractions of the dock area worked out from rc-dock's `size` weights
+    (`dock-layout-geometry.util.ts`), not measured in the DOM. Otherwise the open splits beside the
+    target.
+  - **Target not docked** (its root box is not the dock box): the new tab gets a tab group of its own
+    at the reading-end edge of the dock area. In a horizontal dock box it is as wide as the average
+    top-level docked group; in a vertical one rc-dock's own 30% share stands (`dockAtReadingEndEdge`).
+    A floating target that would cover it is slid sideways, narrowed when the room beside the new
+    group is narrower than the float, and left alone when there is no room at all
+    (`moveFloatingTabGroupClear`).
+  - `direction` is in reading order: core swaps `left` and `right` in a right-to-left UI
+    (`resolvePanelDirection`), since rc-dock lays the dock out left to right whatever the UI
+    direction.
+  - Saved layouts that already hold the broken shape are healed by `reconcileSavedLayout`
+    (`saved-layout-reconciliation.util.ts`) wherever a layout is loaded or saved: the main process's
+    file parse and save handler, the renderer's push, and the legacy `localStorage` load.
+- **Alternatives:** Always split beside the target (the earlier behaviour) — rejected: it kept
+  squeezing narrow groups in, and it was the path that hid tabs beside a floating target. Join
+  whatever the neighbour's width — rejected: a narrowed neighbour gives the new tool less room than
+  a split would, and hides the tab it was showing. Measure widths in the DOM — rejected: the DOM
+  lags rc-dock's pending layout right after another layout change, a group that does not exist yet
+  cannot be measured, and placement would depend on rendering. For a target that is not docked,
+  choose the dock edge the floating window covers least, or open the new tab as a float beside it —
+  rejected: both give up "a new group at the reading-end edge", and a wide float can cover both
+  edges. Mirror the dock itself with CSS for right-to-left — not taken; if it ever is, the core-side
+  swap has to go (see `resolvePanelDirection`). A per-call option to keep the joined group's active
+  tab — rejected: it needs new public API, and `openWebView` brings every newly created web view to
+  the front anyway.
+- **Consequences:** In Simple mode a Column-3 tool opened as a `'panel'` beside the editor (Find or
+  the comment list, when their probe misses the pinned Column-3 tab) splits the editor's column
+  rather than joining Column 3; a tool that belongs in Column 3 names it explicitly, as Checks does
+  (`adr-simple-column-3-tools-open-on-demand`). An open can move a floating window the user
+  positioned. Placement relies on rc-dock 3.3.2 internals — `size` as flex weights, its 30%/70% edge
+  split, its halving split across an axis, and its collapse of single-child boxes — so revisit when
+  rc-dock is upgraded. Minimum widths and dividers are ignored, so a neighbour close to the threshold
+  may be split from slightly early; a neighbour narrower than the group a split would create is
+  never joined.
+- **Source:** PT-3138 (PR #2881 and its review).
+
 ## adr-panel-readiness-from-sources: Panel readiness is derived from whether data sources arrived, never from a filtered result
 
 - **Formerly:** ADR-0027
@@ -6831,7 +6888,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-simple-column-3-tools-open-on-demand: An on-demand tool joins Simple's third column as one pinned tab, reused on every later open
 
 - **Date:** 2026-09-24
-- **Status:** Accepted
+- **Status:** Accepted; the Power-mode sentence is superseded by
+  `adr-panel-open-joins-the-group-beside-it`.
 - **Context:** Simple's three columns are fixed. Checks, opened from Simple's Quality checks menu
   section, was opened as `{ type: 'panel', direction: 'right' }` beside the editor, which split the
   editor's column into a new pane on every click. Checks is not part of Simple's starting layout,
@@ -6849,7 +6907,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `platform.isPublished`, not `isEditable`, so an `Editable=F` translation project is followed).
   Power keeps the panel beside the editor, and deliberately does not probe either, so each click
   still opens another panel there: layout is free-form in Power, and extra panels are the user's to
-  close. Reference: `open-checks-side-panel.utils.ts`.
+  close. *(Superseded by `adr-panel-open-joins-the-group-beside-it`: in Power, a docked editor's
+  click adds the tab to the group on its reading-end side (right, left in a right-to-left UI) when
+  that group can take it, otherwise opens a new group there; a floating or maximized editor gets a
+  new group at the dock's reading-end edge.)* Reference: `open-checks-side-panel.utils.ts`.
 - **Alternatives:** A static tab in `simple-layout.data.ts` or a `default-layout-supplement.json`
   entry — rejected: both change what every Simple user sees at startup for a tool few open. A
   `panel` layout targeting a third-column tab — rejected: it splits the third column instead. A
