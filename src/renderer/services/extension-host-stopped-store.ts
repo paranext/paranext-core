@@ -12,14 +12,16 @@ import type {
  *   started yet. `platform.restartExtensionHost` settles at fork time, long before the new process
  *   can serve anything (about a minute in a dev build), so the banner waits for
  *   `platform.onDidStartExtensionHost` or its own fallback timer, not for the command.
- * - `restarted`: the new extension host is up. The banner stays, calmer, because a restart does not
- *   heal every part of a window (every settings subscription opened before the restart stays dead,
- *   in main and in the renderer; the toolbar's open-project book list is another known case), so a
- *   banner that vanished could leave things quietly broken. It offers Restart app and Dismiss.
+ * - `restarted`: the restart is over. The banner stays, calmer, because a restart does not heal every
+ *   part of a window (every settings subscription opened before the restart stays dead, in main and
+ *   in the renderer; the toolbar's open-project book list is another known case), so a banner that
+ *   vanished could leave things quietly broken. It offers Restart app and Dismiss. `isConfirmed`
+ *   says whether the new extension host announced its start; it is `false` when the banner's
+ *   fallback timer gave up waiting, so the banner must not claim the restart worked.
  */
 export type ExtensionHostNotice =
   | { phase: 'stopped' | 'restarting'; reason: ExtensionHostStopReason }
-  | { phase: 'restarted' };
+  | { phase: 'restarted'; isConfirmed: boolean };
 
 /**
  * Store remembering that the extension host has stopped without being asked to, and what has
@@ -52,12 +54,15 @@ export function subscribeToExtensionHostNotice(listener: () => void): () => void
 }
 
 /**
- * Records that the extension host stopped. Ignored while already `stopped` (a second stop before a
- * restart is the same outage) or `restarting` (the restart in flight will settle it either way).
- * Replaces a `restarted` notice: the fresh extension host died too, and that is an alarm again.
+ * Records that the extension host stopped. Ignored while already `stopped`: a second stop before a
+ * restart is the same outage. Replaces a `restarting` notice with the new reason: main stays silent
+ * about the stop it was asked for, so a stop arriving while restarting can only be the new
+ * extension host dying before it announced its start, and no start announcement will ever end that
+ * restart. Replaces a `restarted` notice too: the fresh extension host died, and that is an alarm
+ * again.
  */
 export function reportExtensionHostStopped(event: ExtensionHostStoppedEvent): void {
-  if (notice?.phase === 'stopped' || notice?.phase === 'restarting') return;
+  if (notice?.phase === 'stopped') return;
   notice = { phase: 'stopped', reason: event.reason };
   notify();
 }
@@ -77,14 +82,19 @@ export function revertExtensionHostRestart(): void {
 }
 
 /**
- * Records that an extension host is up again. Moves both `stopped` and `restarting` to `restarted`:
- * a start announcement means the host is up regardless of which window restarted it (the
- * `restarting` phase is per window, so another window's restart leaves this one `stopped`). No-op
- * when there is no notice or it is already `restarted`.
+ * Records that the restart is over. Moves both `stopped` and `restarting` to `restarted`: a start
+ * announcement means the host is up regardless of which window restarted it (the `restarting` phase
+ * is per window, so another window's restart leaves this one `stopped`).
+ *
+ * @param isConfirmed `true` (the default) when the new extension host announced its start; `false`
+ *   when the banner's fallback timer gave up waiting for that announcement. A later confirmed call
+ *   upgrades an unconfirmed `restarted`; an unconfirmed call never downgrades a confirmed one.
+ *   No-op when there is no notice.
  */
-export function markExtensionHostRestarted(): void {
-  if (!notice || notice.phase === 'restarted') return;
-  notice = { phase: 'restarted' };
+export function markExtensionHostRestarted(isConfirmed = true): void {
+  if (!notice) return;
+  if (notice.phase === 'restarted' && (notice.isConfirmed || !isConfirmed)) return;
+  notice = { phase: 'restarted', isConfirmed };
   notify();
 }
 

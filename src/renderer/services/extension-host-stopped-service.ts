@@ -13,6 +13,10 @@ import {
   reportExtensionHostStopped,
 } from './extension-host-stopped-store';
 
+// Besides the extension-host notice, this file also wires `platform.onWillShutDown` to the
+// connection-lost store's `markShuttingDown`, because it is the one place this window subscribes to
+// main's lifecycle events.
+
 /**
  * Subscribes this window to main's lifecycle events and drives the stores they feed. Call once at
  * app startup. Returns a cleanup function.

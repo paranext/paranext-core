@@ -1,13 +1,14 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import {
   getExtensionHostNotice,
   markExtensionHostRestarted,
+  markExtensionHostRestarting,
   reportExtensionHostStopped,
   resetExtensionHostStopped,
 } from '@renderer/services/extension-host-stopped-store';
@@ -15,6 +16,7 @@ import {
   reportConnectionLost,
   resetConnectionLost,
 } from '@renderer/services/connection-lost-store';
+import { BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE } from '@renderer/components/toolbar-height.util';
 import {
   ENGLISH_FALLBACKS,
   EXTENSION_HOST_STOPPED_DISMISS_KEY,
@@ -22,6 +24,8 @@ import {
   EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY,
   EXTENSION_HOST_STOPPED_RESTART_APP_KEY,
   EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY,
+  EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY,
+  EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY,
   EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY,
   EXTENSION_HOST_STOPPED_RESTARTING_KEY,
   EXTENSION_HOST_STOPPED_TITLE_KEY,
@@ -31,11 +35,52 @@ import {
 } from './extension-host-stopped-banner.component';
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({ useLocalizedStrings: vi.fn() }));
-vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({ useIsPowerMode: vi.fn(() => true) }));
 vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
+
+/**
+ * Records every observed element and calls back only when the test says so, so a test can play the
+ * browser's part in measuring the strip.
+ */
+class FakeResizeObserver implements ResizeObserver {
+  static instances: FakeResizeObserver[] = [];
+
+  targets: Element[] = [];
+
+  constructor(private readonly callback: ResizeObserverCallback) {
+    FakeResizeObserver.instances.push(this);
+  }
+
+  observe(target: Element) {
+    this.targets.push(target);
+  }
+
+  unobserve(target: Element) {
+    this.targets = this.targets.filter((observed) => observed !== target);
+  }
+
+  disconnect() {
+    this.targets = [];
+  }
+
+  /** Reports a resize of every element this observer still watches. */
+  resize() {
+    // The callback reads the element itself, not the entries, so empty entries are enough here.
+    this.callback([], this);
+  }
+}
+
+/** Gives `element` a laid-out height, as the browser would, and reports the resize. */
+function layOut(element: HTMLElement, height: number) {
+  Object.defineProperty(element, 'offsetHeight', { configurable: true, value: height });
+  act(() =>
+    FakeResizeObserver.instances
+      .filter((observer) => observer.targets.includes(element))
+      .forEach((observer) => observer.resize()),
+  );
+}
 
 /** What `useLocalizedStrings` returns while loading: the raw keys themselves. */
 const UNRESOLVED = Object.fromEntries(LOCALIZED_STRING_KEYS.map((key) => [key, key]));
@@ -68,7 +113,18 @@ function extensionHostStarts() {
 }
 
 describe('ExtensionHostStoppedBanner', () => {
+  const originalResizeObserver = globalThis.ResizeObserver;
+
+  beforeAll(() => {
+    globalThis.ResizeObserver = FakeResizeObserver;
+  });
+
+  afterAll(() => {
+    globalThis.ResizeObserver = originalResizeObserver;
+  });
+
   beforeEach(() => {
+    FakeResizeObserver.instances = [];
     resetExtensionHostStopped();
     resetConnectionLost();
     vi.mocked(sendCommand).mockReset();
@@ -137,13 +193,27 @@ describe('ExtensionHostStoppedBanner', () => {
       ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTARTING_KEY],
     );
     expect(screen.getAllByRole('button')).toHaveLength(2);
-    screen.getAllByRole('button').forEach((button) => expect(button).toBeDisabled());
+    expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeDisabled();
+    // An app restart is always safe, and the way out if the new extension host never comes up.
+    expect(screen.getByRole('button', RESTART_APP)).toBeEnabled();
 
     // The command settles at fork time; the new process is not up yet, so nothing changes.
     await act(async () => restart.resolve());
     expect(getExtensionHostNotice()).toEqual({ phase: 'restarting', reason: 'lost-connection' });
     expect(screen.getAllByRole('button')).toHaveLength(2);
-    screen.getAllByRole('button').forEach((button) => expect(button).toBeDisabled());
+    expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeDisabled();
+    expect(screen.getByRole('button', RESTART_APP)).toBeEnabled();
+  });
+
+  it('restarts the app from the restarting state', async () => {
+    deferredRestart();
+    render(<ExtensionHostStoppedBanner />);
+    stop('crashed');
+    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+
+    await userEvent.click(screen.getByRole('button', RESTART_APP));
+
+    expect(sendCommand).toHaveBeenLastCalledWith('platform.restart');
   });
 
   it('moves to the restarted state when the extension host announces it started', async () => {
@@ -159,12 +229,16 @@ describe('ExtensionHostStoppedBanner', () => {
         ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY],
       ),
     );
+    expect(screen.getByRole('status')).not.toHaveTextContent(
+      ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY],
+    );
+    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted', isConfirmed: true });
     expect(screen.getByRole('button', RESTART_APP)).toBeEnabled();
     expect(screen.getByRole('button', DISMISS)).toBeEnabled();
     expect(screen.queryByRole('button', RESTART_EXTENSIONS)).not.toBeInTheDocument();
   });
 
-  it('falls back to the restarted state after the timeout if no start announcement comes', async () => {
+  it('falls back to an unconfirmed restarted state after the timeout if no start announcement comes', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.mocked(sendCommand).mockResolvedValue(undefined);
     render(<ExtensionHostStoppedBanner />);
@@ -176,7 +250,44 @@ describe('ExtensionHostStoppedBanner', () => {
       vi.advanceTimersByTime(RESTART_READY_FALLBACK_MS);
     });
 
-    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted' });
+    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted', isConfirmed: false });
+    const banner = screen.getByRole('status');
+    expect(banner).toHaveTextContent(
+      ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY],
+    );
+    expect(banner).toHaveTextContent(
+      ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY],
+    );
+    expect(banner).not.toHaveTextContent(
+      ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY],
+    );
+    expect(screen.getByRole('button', RESTART_APP)).toBeEnabled();
+    expect(screen.getByRole('button', DISMISS)).toBeEnabled();
+    expect(screen.queryByRole('button', RESTART_EXTENSIONS)).not.toBeInTheDocument();
+  });
+
+  it('a stop while restarting brings the alarm back, and the fallback timer no longer fires', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(sendCommand).mockResolvedValue(undefined);
+    render(<ExtensionHostStoppedBanner />);
+    stop('crashed');
+    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+    expect(getExtensionHostNotice()).toEqual({ phase: 'restarting', reason: 'crashed' });
+
+    stop('lost-connection');
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY],
+    );
+    expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeEnabled();
+    expect(screen.getByRole('button', RESTART_APP)).toBeEnabled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(RESTART_READY_FALLBACK_MS);
+    });
+
+    expect(getExtensionHostNotice()).toEqual({ phase: 'stopped', reason: 'lost-connection' });
+    expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeEnabled();
   });
 
   it('disarms the fallback timer when the phase leaves restarting', async () => {
@@ -287,5 +398,114 @@ describe('ExtensionHostStoppedBanner', () => {
 
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
     expect(screen.queryAllByRole('button')).toHaveLength(0);
+  });
+
+  // A live region inserted together with its content is generally not announced, so the region
+  // itself must survive every change of what it says.
+  it('keeps one live region, the same DOM node, before a stop, during it and after dismiss', async () => {
+    vi.mocked(sendCommand).mockResolvedValue(undefined);
+    render(<ExtensionHostStoppedBanner />);
+    const region = screen.getByRole('status');
+
+    stop('crashed');
+    expect(screen.getByRole('status')).toBe(region);
+
+    extensionHostStarts();
+    await userEvent.click(screen.getByRole('button', DISMISS));
+    expect(screen.getByRole('status')).toBe(region);
+    expect(region).toBeEmptyDOMElement();
+  });
+
+  describe('dock clearance', () => {
+    it('publishes its measured height so the dock below it moves down', () => {
+      render(<ExtensionHostStoppedBanner />);
+      stop('crashed');
+
+      layOut(screen.getByRole('status'), 72);
+
+      expect(
+        document.documentElement.style.getPropertyValue(BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE),
+      ).toBe('72px');
+    });
+
+    it('publishes a zero height once there is nothing to show', async () => {
+      vi.mocked(sendCommand).mockResolvedValue(undefined);
+      render(<ExtensionHostStoppedBanner />);
+      stop('crashed');
+      layOut(screen.getByRole('status'), 72);
+      extensionHostStarts();
+
+      await userEvent.click(screen.getByRole('button', DISMISS));
+      layOut(screen.getByRole('status'), 0);
+
+      expect(
+        document.documentElement.style.getPropertyValue(BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE),
+      ).toBe('0px');
+    });
+
+    it('removes the height when it unmounts', () => {
+      const { unmount } = render(<ExtensionHostStoppedBanner />);
+      stop('crashed');
+      layOut(screen.getByRole('status'), 72);
+
+      unmount();
+
+      expect(
+        document.documentElement.style.getPropertyValue(BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE),
+      ).toBe('');
+    });
+  });
+
+  describe('keyboard focus across phase changes', () => {
+    it('moves focus to the strip when the focused button is disabled', async () => {
+      deferredRestart();
+      render(<ExtensionHostStoppedBanner />);
+      stop('crashed');
+      act(() => screen.getByRole('button', RESTART_EXTENSIONS).focus());
+
+      await userEvent.keyboard('{Enter}');
+
+      expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeDisabled();
+      expect(screen.getByRole('status')).toHaveFocus();
+    });
+
+    it('moves focus to the strip when the focused button is removed', () => {
+      render(<ExtensionHostStoppedBanner />);
+      stop('crashed');
+      act(() => screen.getByRole('button', RESTART_EXTENSIONS).focus());
+
+      extensionHostStarts();
+
+      expect(screen.queryByRole('button', RESTART_EXTENSIONS)).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveFocus();
+    });
+
+    it('leaves focus on a button that stays usable', () => {
+      render(<ExtensionHostStoppedBanner />);
+      stop('crashed');
+      const restartApp = screen.getByRole('button', RESTART_APP);
+      act(() => restartApp.focus());
+
+      act(() => markExtensionHostRestarting());
+
+      expect(restartApp).toHaveFocus();
+    });
+
+    it('does not take focus that was never inside the strip', () => {
+      render(
+        <>
+          <button type="button">Elsewhere</button>
+          <ExtensionHostStoppedBanner />
+        </>,
+      );
+      stop('crashed');
+      const elsewhere = screen.getByRole('button', { name: 'Elsewhere' });
+      act(() => elsewhere.focus());
+      act(() => elsewhere.blur());
+
+      extensionHostStarts();
+
+      expect(document.body).toHaveFocus();
+    });
   });
 });

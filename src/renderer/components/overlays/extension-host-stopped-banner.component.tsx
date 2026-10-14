@@ -1,18 +1,11 @@
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-  Button,
-  Z_INDEX_ABOVE_DOCK,
-} from 'platform-bible-react';
+import { Alert, AlertDescription, AlertTitle, Button } from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
-import { CircleCheck, TriangleAlert } from 'lucide-react';
-import { useCallback, useEffect } from 'react';
+import { CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react';
+import { FocusEvent, ReactElement, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useExtensionHostNotice } from '@renderer/hooks/use-extension-host-notice.hook';
 import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
-import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
-import { getToolbarHeight } from '@renderer/components/toolbar-height.util';
+import { BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE } from '@renderer/components/toolbar-height.util';
 import {
   dismissExtensionHostNotice,
   ExtensionHostNotice,
@@ -40,6 +33,8 @@ export const EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY =
   '%extensionHostStopped_restartedTitle%' satisfies LocalizeKey;
 export const EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY =
   '%extensionHostStopped_restartedMessage%' satisfies LocalizeKey;
+export const EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY =
+  '%extensionHostStopped_restartUnconfirmed_title%' satisfies LocalizeKey;
 export const EXTENSION_HOST_STOPPED_DISMISS_KEY =
   '%extensionHostStopped_dismiss%' satisfies LocalizeKey;
 
@@ -55,6 +50,7 @@ export type ExtensionHostStoppedKey =
   | typeof EXTENSION_HOST_STOPPED_RESTARTING_KEY
   | typeof EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY
   | typeof EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY
+  | typeof EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY
   | typeof EXTENSION_HOST_STOPPED_DISMISS_KEY;
 
 /** Exported so the localization-parity test asserts against the list the component reads. */
@@ -66,6 +62,7 @@ export const LOCALIZED_STRING_KEYS: ExtensionHostStoppedKey[] = [
   EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY,
   EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY,
   EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY,
+  EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY,
   EXTENSION_HOST_STOPPED_RESTARTING_KEY,
   EXTENSION_HOST_STOPPED_TITLE_KEY,
 ];
@@ -87,14 +84,15 @@ export const ENGLISH_FALLBACKS: { [K in ExtensionHostStoppedKey]: string } = {
   [EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY]: 'Extensions restarted',
   [EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY]:
     'If anything still does not respond, restart the app.',
+  [EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY]: 'Extensions may not have restarted',
   [EXTENSION_HOST_STOPPED_DISMISS_KEY]: 'Dismiss',
 };
 
 /**
  * How long a restart may stay in the restarting phase without `platform.onDidStartExtensionHost`
- * arriving before the banner gives up waiting and shows the restarted state anyway. A dev build
- * needs about a minute to transpile and activate extensions; a packaged build is faster. Exported
- * for the test.
+ * arriving before the banner gives up waiting and shows the unconfirmed restarted state. A dev
+ * build needs about a minute to transpile and activate extensions; a packaged build is faster.
+ * Exported for the test.
  */
 export const RESTART_READY_FALLBACK_MS = 90_000;
 
@@ -115,12 +113,16 @@ const MESSAGE_KEY_BY_REASON: { [R in ExtensionHostStopReason]: ExtensionHostStop
 
 type Props = {
   phase: ExtensionHostNotice['phase'];
+  /**
+   * In the `restarted` phase, whether the new extension host announced its start. Only changes the
+   * icon; the caller picks the matching title. Defaults to `true`.
+   */
+  isRestartConfirmed?: boolean;
   title: string;
   message: string;
   restartExtensionsLabel: string;
   restartAppLabel: string;
   dismissLabel: string;
-  isPowerMode: boolean;
   onRestartExtensions: () => void;
   onRestartApp: () => void;
   onDismiss: () => void;
@@ -133,23 +135,24 @@ type Props = {
  * blocking the window would take away controls that work. The user is told, not fenced in.
  *
  * Three phases. `stopped` alarms (destructive tone, Restart extensions + Restart app). `restarting`
- * keeps the alarm tone with both buttons disabled while the new process comes up. `restarted` stays
- * up, calmer (default tone, Restart app + Dismiss): a restart does not heal every part of a window,
- * so a banner that vanished could leave things quietly dead, which is the failure this notice
- * exists to end.
+ * keeps the alarm tone with Restart extensions disabled while the new process comes up; Restart app
+ * stays enabled, because an app restart is always safe and is the way out if the new extension host
+ * never comes up. `restarted` stays up, calmer (default tone, Restart app + Dismiss): a restart
+ * does not heal every part of a window, so a banner that vanished could leave things quietly dead,
+ * which is the failure this notice exists to end.
  *
- * Carries no live-region role itself: {@link ExtensionHostStoppedBanner} renders it inside a
- * persistent `role="status"` container, because a live region that is inserted together with its
- * content is generally not announced.
+ * Positions nothing itself: {@link ExtensionHostStoppedBanner} places it in flow below the toolbar,
+ * inside a persistent `role="status"` container, because a live region that is inserted together
+ * with its content is generally not announced.
  */
 export function ExtensionHostStoppedBannerPresentational({
   phase,
+  isRestartConfirmed = true,
   title,
   message,
   restartExtensionsLabel,
   restartAppLabel,
   dismissLabel,
-  isPowerMode,
   onRestartExtensions,
   onRestartApp,
   onDismiss,
@@ -162,7 +165,13 @@ export function ExtensionHostStoppedBannerPresentational({
     'tw:rounded-none tw:border-x-0 tw:border-destructive/40 tw:bg-transparent tw:px-3 tw:text-diff-deleted tw:has-[>svg]:grid-cols-[auto_1fr_auto] tw:*:data-[slot=alert-description]:text-diff-deleted/90';
   const calmClassName =
     'tw:rounded-none tw:border-x-0 tw:bg-transparent tw:px-3 tw:has-[>svg]:grid-cols-[auto_1fr_auto]';
-  const icon = isAlarm ? <TriangleAlert aria-hidden="true" /> : <CircleCheck aria-hidden="true" />;
+  let icon = <TriangleAlert aria-hidden="true" />;
+  if (!isAlarm)
+    icon = isRestartConfirmed ? (
+      <CircleCheck aria-hidden="true" />
+    ) : (
+      <CircleAlert aria-hidden="true" />
+    );
   const restartExtensionsButton = isAlarm ? (
     <Button variant="outline" size="sm" disabled={isRestarting} onClick={onRestartExtensions}>
       {restartExtensionsLabel}
@@ -174,10 +183,7 @@ export function ExtensionHostStoppedBannerPresentational({
     </Button>
   );
   return (
-    <div
-      className="pr-twp tw:fixed tw:inset-x-0 tw:bg-background"
-      style={{ top: getToolbarHeight(isPowerMode), zIndex: Z_INDEX_ABOVE_DOCK }}
-    >
+    <div className="pr-twp tw:bg-background">
       <Alert
         variant={isAlarm ? 'destructive' : 'default'}
         // Alert's own role="alert" would nest an assertive region inside the polite one; see
@@ -190,7 +196,7 @@ export function ExtensionHostStoppedBannerPresentational({
         <AlertDescription>{message}</AlertDescription>
         <div className="tw:col-start-3 tw:row-span-2 tw:row-start-1 tw:flex tw:gap-2 tw:self-center tw:ps-3">
           {restartExtensionsButton}
-          <Button variant="outline" size="sm" disabled={isRestarting} onClick={onRestartApp}>
+          <Button variant="outline" size="sm" onClick={onRestartApp}>
             {restartAppLabel}
           </Button>
           {dismissButton}
@@ -202,11 +208,11 @@ export function ExtensionHostStoppedBannerPresentational({
 
 /**
  * The banner wired to the store. Mounted unconditionally from app startup and rendering nothing
- * until the extension host stops: `useLocalizedStrings` and `useIsPowerMode` both read from the
- * extension host, so they must have resolved while it was alive. {@link localizedOrEnglish} backs
- * that up for a stop before localization has answered at all.
+ * until the extension host stops: `useLocalizedStrings` reads from the extension host, so it must
+ * have resolved while it was alive. {@link localizedOrEnglish} backs that up for a stop before
+ * localization has answered at all.
  *
- * Always renders a persistent `role="status"` container, empty when there is nothing to show, so
+ * Always renders one persistent `role="status"` container, empty when there is nothing to show, so
  * screen readers announce the strip's arrival as a change inside an existing live region.
  *
  * Stands down while the connection-lost state is shown: that overlay covers the whole window and
@@ -216,17 +222,69 @@ export function ExtensionHostStoppedBanner() {
   const notice = useExtensionHostNotice();
   const isConnectionLost = useIsConnectionLost();
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
-  const isPowerMode = useIsPowerMode();
   const phase = notice?.phase;
+  // React refs passed to DOM elements must be initialized with null, not undefined.
+  // eslint-disable-next-line no-null/no-null
+  const stripRef = useRef<HTMLDivElement>(null);
+  const hasFocusWithinRef = useRef(false);
+  const previousPhaseRef = useRef(phase);
+
+  // The strip sits in flow between the toolbar and the dock, but the dock is absolutely positioned
+  // below the toolbar, so flow alone cannot move it. The strip publishes its measured height on the
+  // document root instead, and the dock's top inset adds it (`getDockLayoutOuterInset`): the dock
+  // shrinks rather than being painted over, and the strip needs no z-index. An empty strip
+  // publishes 0px.
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return undefined;
+    const rootStyle = document.documentElement.style;
+    const observer = new ResizeObserver(() => {
+      rootStyle.setProperty(BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE, `${strip.offsetHeight}px`);
+    });
+    observer.observe(strip);
+    return () => {
+      observer.disconnect();
+      rootStyle.removeProperty(BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE);
+    };
+  }, []);
 
   // The fallback for a start announcement that never comes: armed on entering `restarting`,
   // disarmed on leaving it (the normal exit is `extension-host-stopped-service.ts` hearing
-  // `platform.onDidStartExtensionHost`), so a late timer cannot move a later state.
+  // `platform.onDidStartExtensionHost`), so a late timer cannot move a later state. It records the
+  // restart as unconfirmed, so the banner does not claim a restart it never saw.
   useEffect(() => {
     if (phase !== 'restarting') return undefined;
-    const timer = setTimeout(markExtensionHostRestarted, RESTART_READY_FALLBACK_MS);
+    const timer = setTimeout(() => markExtensionHostRestarted(false), RESTART_READY_FALLBACK_MS);
     return () => clearTimeout(timer);
   }, [phase]);
+
+  // A phase change disables or removes buttons, and a focused button that goes drops keyboard focus
+  // to the document body. Catch it on the strip itself, so a keyboard user stays where they were.
+  // Only when focus was last inside the strip, so the strip never pulls focus away from elsewhere.
+  useLayoutEffect(() => {
+    if (previousPhaseRef.current === phase) return;
+    previousPhaseRef.current = phase;
+    const strip = stripRef.current;
+    if (!strip || !hasFocusWithinRef.current) return;
+    const active = document.activeElement;
+    const isFocusLost =
+      !active ||
+      active === document.body ||
+      (strip.contains(active) && active !== strip && active.matches(':disabled'));
+    if (isFocusLost) strip.focus();
+  }, [phase]);
+
+  const handleFocus = useCallback(() => {
+    hasFocusWithinRef.current = true;
+  }, []);
+
+  // Focus moving to another element outside the strip ends "focus within". Focus dropping to
+  // nothing (`relatedTarget` null, as when the focused button is removed) does not.
+  const handleBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
+    const next = event.relatedTarget;
+    if (next instanceof Node && !event.currentTarget.contains(next))
+      hasFocusWithinRef.current = false;
+  }, []);
 
   const handleRestartExtensions = useCallback(async () => {
     markExtensionHostRestarting();
@@ -251,38 +309,57 @@ export function ExtensionHostStoppedBanner() {
     dismissExtensionHostNotice();
   }, []);
 
-  if (!notice || isConnectionLost)
-    return <div data-testid={BANNER_TEST_ID} role="status" aria-live="polite" />;
-
   const text = (key: ExtensionHostStoppedKey) => localizedOrEnglish(localizedStrings, key);
 
-  let title: string;
-  let message: string;
-  if (notice.phase === 'restarted') {
-    title = text(EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY);
-    message = text(EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY);
-  } else {
-    title = text(EXTENSION_HOST_STOPPED_TITLE_KEY);
-    message =
-      notice.phase === 'restarting'
-        ? text(EXTENSION_HOST_STOPPED_RESTARTING_KEY)
-        : text(MESSAGE_KEY_BY_REASON[notice.reason]);
-  }
-
-  return (
-    <div data-testid={BANNER_TEST_ID} role="status" aria-live="polite">
+  let content: ReactElement | undefined;
+  if (notice && !isConnectionLost) {
+    let title: string;
+    let message: string;
+    let isRestartConfirmed = true;
+    if (notice.phase === 'restarted') {
+      isRestartConfirmed = notice.isConfirmed;
+      title = text(
+        notice.isConfirmed
+          ? EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY
+          : EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY,
+      );
+      message = text(EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY);
+    } else {
+      title = text(EXTENSION_HOST_STOPPED_TITLE_KEY);
+      message =
+        notice.phase === 'restarting'
+          ? text(EXTENSION_HOST_STOPPED_RESTARTING_KEY)
+          : text(MESSAGE_KEY_BY_REASON[notice.reason]);
+    }
+    content = (
       <ExtensionHostStoppedBannerPresentational
         phase={notice.phase}
+        isRestartConfirmed={isRestartConfirmed}
         title={title}
         message={message}
         restartExtensionsLabel={text(EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY)}
         restartAppLabel={text(EXTENSION_HOST_STOPPED_RESTART_APP_KEY)}
         dismissLabel={text(EXTENSION_HOST_STOPPED_DISMISS_KEY)}
-        isPowerMode={isPowerMode}
         onRestartExtensions={handleRestartExtensions}
         onRestartApp={handleRestartApp}
         onDismiss={handleDismiss}
       />
+    );
+  }
+
+  return (
+    <div
+      ref={stripRef}
+      data-testid={BANNER_TEST_ID}
+      role="status"
+      // Not in the tab order; focusable only so focus has somewhere to land when a phase change
+      // takes away the button it was on.
+      tabIndex={-1}
+      className="tw:shrink-0"
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+    >
+      {content}
     </div>
   );
 }

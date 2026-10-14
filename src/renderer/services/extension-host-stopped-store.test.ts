@@ -12,6 +12,8 @@ import {
 
 const STOPPED_CRASHED = { phase: 'stopped', reason: 'crashed' } as const;
 const STOPPED_LOST = { phase: 'stopped', reason: 'lost-connection' } as const;
+const RESTARTED_CONFIRMED = { phase: 'restarted', isConfirmed: true } as const;
+const RESTARTED_UNCONFIRMED = { phase: 'restarted', isConfirmed: false } as const;
 
 describe('extension-host-stopped store', () => {
   beforeEach(() => {
@@ -43,13 +45,18 @@ describe('extension-host-stopped store', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  it('a report while restarting is ignored (the restart in flight will settle it)', () => {
+  // While restarting, main has already seen the old process exit and silences its own requested
+  // stop, so a stop arriving now can only be the new process dying before it announced its start.
+  it('a report while restarting brings the alarm back with the new reason', () => {
+    const listener = vi.fn();
+    subscribeToExtensionHostNotice(listener);
     reportExtensionHostStopped({ reason: 'crashed' });
     markExtensionHostRestarting();
 
     reportExtensionHostStopped({ reason: 'lost-connection' });
 
-    expect(getExtensionHostNotice()).toEqual({ phase: 'restarting', reason: 'crashed' });
+    expect(getExtensionHostNotice()).toEqual(STOPPED_LOST);
+    expect(listener).toHaveBeenCalledTimes(3);
   });
 
   it('moves stopped → restarting → restarted, notifying each time', () => {
@@ -61,7 +68,7 @@ describe('extension-host-stopped store', () => {
     expect(getExtensionHostNotice()).toEqual({ phase: 'restarting', reason: 'crashed' });
 
     markExtensionHostRestarted();
-    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted' });
+    expect(getExtensionHostNotice()).toEqual(RESTARTED_CONFIRMED);
     expect(listener).toHaveBeenCalledTimes(3);
   });
 
@@ -75,10 +82,44 @@ describe('extension-host-stopped store', () => {
 
     reportExtensionHostStopped({ reason: 'crashed' });
     markExtensionHostRestarted();
-    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted' });
+    expect(getExtensionHostNotice()).toEqual(RESTARTED_CONFIRMED);
     expect(listener).toHaveBeenCalledTimes(2);
 
     markExtensionHostRestarted();
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it('records a restart without a start announcement as unconfirmed', () => {
+    reportExtensionHostStopped({ reason: 'crashed' });
+    markExtensionHostRestarting();
+
+    markExtensionHostRestarted(false);
+
+    expect(getExtensionHostNotice()).toEqual(RESTARTED_UNCONFIRMED);
+  });
+
+  it('a start announcement after an unconfirmed restart confirms it', () => {
+    const listener = vi.fn();
+    subscribeToExtensionHostNotice(listener);
+    reportExtensionHostStopped({ reason: 'crashed' });
+    markExtensionHostRestarting();
+    markExtensionHostRestarted(false);
+
+    markExtensionHostRestarted();
+
+    expect(getExtensionHostNotice()).toEqual(RESTARTED_CONFIRMED);
+    expect(listener).toHaveBeenCalledTimes(4);
+  });
+
+  it('an unconfirmed restart never downgrades a confirmed one', () => {
+    const listener = vi.fn();
+    subscribeToExtensionHostNotice(listener);
+    reportExtensionHostStopped({ reason: 'crashed' });
+    markExtensionHostRestarted();
+
+    markExtensionHostRestarted(false);
+
+    expect(getExtensionHostNotice()).toEqual(RESTARTED_CONFIRMED);
     expect(listener).toHaveBeenCalledTimes(2);
   });
 
@@ -90,7 +131,7 @@ describe('extension-host-stopped store', () => {
     markExtensionHostRestarting();
     markExtensionHostRestarted();
     markExtensionHostRestarting();
-    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted' });
+    expect(getExtensionHostNotice()).toEqual(RESTARTED_CONFIRMED);
   });
 
   it('a reverted restart goes back to stopped with the same reason', () => {

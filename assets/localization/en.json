@@ -45,6 +45,7 @@
   "%extensionHostStopped_restartedTitle%": "Extensions restarted",
   "%extensionHostStopped_restartExtensions%": "Restart extensions",
   "%extensionHostStopped_restarting%": "Restarting extensions. This can take a moment…",
+  "%extensionHostStopped_restartUnconfirmed_title%": "Extensions may not have restarted",
   "%extensionHostStopped_title%": "Extensions have stopped working",
   "%firstRun_button_back%": "Back",
   "%firstRun_button_continueWithoutFinishingSetup%": "Continue without finishing setup",

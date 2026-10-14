@@ -68,7 +68,7 @@ describe('extension-host-stopped service', () => {
 
     fire(EVENT_NAME_ON_DID_START_EXTENSION_HOST);
 
-    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted' });
+    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted', isConfirmed: true });
     teardown();
   });
 
@@ -80,7 +80,7 @@ describe('extension-host-stopped service', () => {
 
     reportExtensionHostStopped({ reason: 'crashed' });
     fire(EVENT_NAME_ON_DID_START_EXTENSION_HOST);
-    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted' });
+    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted', isConfirmed: true });
     teardown();
   });
 

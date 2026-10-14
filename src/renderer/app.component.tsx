@@ -36,12 +36,13 @@ function Main() {
   return (
     <TestContext.Provider value="test">
       <PlatformBibleToolbar />
+      {/* In flow directly below the toolbar; the dock clears its measured height. */}
+      <ExtensionHostStoppedBanner />
       <PlatformDockLayout />
       <NotificationDisplay />
       <OverlayHost />
       <WorkspaceUpdatingOverlay />
       <ConnectionLostOverlay />
-      <ExtensionHostStoppedBanner />
       <FirstRunOverlay />
       <OnboardingTour />
     </TestContext.Provider>
