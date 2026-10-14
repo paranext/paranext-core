@@ -6,10 +6,14 @@ import {
   EmptyHeader,
   EmptyMedia,
 } from 'platform-bible-react';
-import { AlertTriangle, BookOpen, CloudOff } from 'lucide-react';
+import { BookOpen, CloudOff } from 'lucide-react';
 import { ReactNode } from 'react';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
-import { PanelRetryableErrorView, LoadingView } from './panel-state-views.component';
+import {
+  PANEL_FILL_CLASSES,
+  PanelRetryableErrorView,
+  LoadingView,
+} from './panel-state-views.component';
 
 /**
  * Renders the front of a resource panel's state machine — everything before it has something to
@@ -73,16 +77,8 @@ export function PanelReadinessView({
   // An unreadable setting is its own answer — never the empty prompt, which would invite the user
   // to replace a resource that may already be configured.
   if (readiness === 'error') {
-    return (
-      <Empty className="tw:h-screen" role="alert">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <AlertTriangle />
-          </EmptyMedia>
-          <EmptyDescription>{errorMessage}</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
+    // No `onRetry`: nothing here can re-drive the setting read, so the view shows its message alone.
+    return <PanelRetryableErrorView message={errorMessage} />;
   }
 
   // A failed catalog fetch, unlike an unreadable setting, can genuinely be re-driven — so this
@@ -102,7 +98,7 @@ export function PanelReadinessView({
 
   if (readiness === 'empty') {
     return (
-      <Empty className="tw:h-screen">
+      <Empty className={PANEL_FILL_CLASSES}>
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <BookOpen />
@@ -110,6 +106,8 @@ export function PanelReadinessView({
           <EmptyDescription>{emptyPrompt}</EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
+          {/* The disclosure sits above the button (PT-4262). A long expansion can push the button
+              below the fold; the panel's safe centering keeps it reachable by scrolling. */}
           {moreInfo}
           <Button onClick={() => onPick()}>{pickLabel}</Button>
         </EmptyContent>
