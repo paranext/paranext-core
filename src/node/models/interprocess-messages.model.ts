@@ -10,3 +10,10 @@ export const heartbeatMessage = 'heartbeat';
  * above report a signal.
  */
 export const EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE = 70;
+
+/**
+ * Exit code the extension host uses when it cannot start, such as when its first connection to main
+ * fails. Main classifies every unexpected exit other than
+ * {@link EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE} as a crash, which is what this is reported as.
+ */
+export const EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE = 1;

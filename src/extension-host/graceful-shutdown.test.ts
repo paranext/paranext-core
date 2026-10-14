@@ -88,3 +88,14 @@ test('a second call while the first is under way joins it instead of running aga
   expect(firstExit).toHaveBeenCalledTimes(1);
   expect(secondExit).not.toHaveBeenCalled();
 });
+
+test('reports whether a shutdown has started', async () => {
+  const { runGracefulShutdown, hasGracefulShutdownStarted } = await import('./graceful-shutdown');
+  expect(hasGracefulShutdownStarted()).toBe(false);
+
+  const shutdown = runGracefulShutdown(vi.fn());
+
+  expect(hasGracefulShutdownStarted()).toBe(true);
+  await shutdown;
+  expect(hasGracefulShutdownStarted()).toBe(true);
+});

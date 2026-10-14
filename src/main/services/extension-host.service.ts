@@ -179,9 +179,10 @@ function connectToExtensionHostProcess() {
 
   const child = extensionHost;
   child.once('exit', (code, signal) => {
-    // A child that is no longer the current one was given up on: hard-killed, or replaced by a
-    // newer fork. Its exit belongs to a stop main asked for, however late it arrives, and the
-    // flags below describe whichever process is current now, not this one.
+    // A child that is no longer the current one was hard-killed (`hardKillExtensionHost`, reached
+    // through `kill()` or a requested stop that ran out of time), which drops the reference before
+    // the exit arrives. Its exit belongs to a stop main asked for, however late it arrives, and the
+    // requested-stop flag below need not describe it: `kill()` does not set that flag.
     const isCurrentChild = extensionHost === child;
     if (signal) {
       logger.info(`'exit' event: extension host process terminated with signal ${signal}`);
@@ -193,6 +194,9 @@ function connectToExtensionHostProcess() {
     extensionHost = undefined;
     resolveProcessLifetimeVariable();
 
+    // The cleanup above is safe for a stale child too: no newer child can exist yet, because
+    // `createNewProcessLifetimeVariable` refuses to fork until this exit has resolved the lifetime,
+    // so clearing `extensionHost` and resolving the lifetime touch only this child's state.
     if (!isCurrentChild) return;
     const unexpectedStop = classifyExtensionHostExit({
       code,

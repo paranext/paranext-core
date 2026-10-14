@@ -19,12 +19,15 @@ import { initialize as initializeSettingsService } from '@extension-host/service
 import { initialize as initializeThemeData } from '@extension-host/services/theme-data.service-host';
 import { startProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { initialize as initializeLocalizationService } from '@extension-host/services/localization.service-host';
-import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
+import {
+  EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE,
+  gracefulShutdownMessage,
+} from '@node/models/interprocess-messages.model';
 import { killChildProcessesFromExtensions } from '@extension-host/services/create-process.service';
 import { initialize as initializeDatabaseService } from '@extension-host/services/database.service-host';
 import { startLocalOAuthServer } from '@extension-host/services/local-oauth.service';
 import * as analyticsService from '@extension-host/services/analytics.service';
-import { runGracefulShutdown } from '@extension-host/graceful-shutdown';
+import { hasGracefulShutdownStarted, runGracefulShutdown } from '@extension-host/graceful-shutdown';
 import { exitExtensionHostOnLostConnection } from '@extension-host/exit-on-lost-connection';
 import {
   announceExtensionHostStarted,
@@ -98,12 +101,15 @@ process.on('unhandledRejection', (reason) => {
       logger.error(
         `Extension host could not connect to main; exiting so main can report it. ${getErrorMessage(error)}`,
       );
-      process.exit(1);
+      // The queued analytics (`app_launch`) are deliberately not flushed: there is no connection
+      // to flush them over.
+      process.exit(EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE);
     }
     // Subscribed as soon as there is a connection to lose. Returns an unsubscriber we never call.
     exitExtensionHostOnLostConnection({
       onDidLoseConnection: networkService.onDidLoseConnection,
       runGracefulShutdown,
+      hasGracefulShutdownStarted,
       exitProcess: (code) => process.exit(code),
     });
     await registerExtensionHostStartedEvent();

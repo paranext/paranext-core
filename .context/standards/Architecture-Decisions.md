@@ -2359,11 +2359,13 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (#2853), so a silent restart could leave half-working UI with no signal. A blocking scrim was
   rejected because everything main hosts still works in this state.
 - **Consequences:** The extension host now has a deliberate exit path besides the graceful-shutdown
-  message. Its exit code is 70, outside Node's own codes (1–13) and the 128+ signal range. A 5 s
-  watchdog bounds that path's graceful shutdown, which nothing else bounds because main is not
-  waiting for this exit, and the graceful shutdown runs once per process, so a loss during a
-  requested shutdown joins it rather than exiting with the lost-connection code mid-deactivation.
-  An extension host whose first connect to main fails exits with 1, which main reports as a
+  message. Its exit code is 70, outside Node's own codes (1–13) and the 128+ signal range. When the
+  loss is what starts the graceful shutdown, a 5 s watchdog bounds it, because main is not waiting
+  for this exit; the watchdog keeps the event loop alive, so a shutdown hung on a promise still
+  ends with 70 rather than a 0 main would call a crash. The graceful shutdown runs once per
+  process, and a loss during a shutdown main requested only joins it and arms no watchdog, so a
+  requested stop never ends with the lost-connection code. An extension host whose first connect
+  to main fails exits with `EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE` (1), which main reports as a
   crash. Main distinguishes requested from unexpected stops with a module flag set in
   `waitForExtensionHost` and cleared on the next fork, plus `isAppShuttingDown()`, and it
   classifies only the exit of the current child: a child it hard-killed or replaced exited for a

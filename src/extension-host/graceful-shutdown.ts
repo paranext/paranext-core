@@ -22,6 +22,11 @@ export function runGracefulShutdown(exitProcess: () => void): Promise<void> {
   return shutdownPromise;
 }
 
+/** Whether {@link runGracefulShutdown} has been called in this process. Stays `true` once it has. */
+export function hasGracefulShutdownStarted(): boolean {
+  return shutdownPromise !== undefined;
+}
+
 async function shutDownThenExit(exitProcess: () => void): Promise<void> {
   // Analytics first: its shutdown is self-bounded to half a second (its
   // ANALYTICS_SHUTDOWN_BUDGET_MS), and extension deactivation below may take the rest of the
@@ -36,7 +41,7 @@ async function shutDownThenExit(exitProcess: () => void): Promise<void> {
   } catch (error) {
     logger.error(`Failed to deactivate extensions. ${getErrorMessage(error)}`);
   } finally {
-    logger.info('Finally shutting down process due to graceful shutdown message');
+    logger.info('Finished the graceful shutdown; ending the process');
     exitProcess();
   }
 }

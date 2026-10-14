@@ -27,12 +27,14 @@ function setUp(
     // Runs its exit callback at once, like the real one does in its `finally`
     exit();
   }),
+  hasGracefulShutdownStarted: () => boolean = () => false,
 ) {
   const lostConnection = new PlatformEventEmitter<void>();
   const exitProcess = vi.fn<(code: number) => void>();
   const unsubscribe = exitExtensionHostOnLostConnection({
     onDidLoseConnection: lostConnection.event,
     runGracefulShutdown,
+    hasGracefulShutdownStarted,
     exitProcess,
   });
   return { lostConnection, exitProcess, runGracefulShutdown, unsubscribe };
@@ -104,10 +106,13 @@ describe('exitExtensionHostOnLostConnection', () => {
     });
 
     // Main's graceful-shutdown message and the socket closing can both arrive during an app quit or
-    // a restart. A second shutdown run would end the process with the lost-connection code while
-    // the first is still deactivating extensions.
+    // a restart. That shutdown is main's to bound: neither a second shutdown run nor a watchdog may
+    // end the process with the lost-connection code while it is still deactivating extensions,
+    // however long that takes.
     it('a loss during a shutdown already under way does not start a second one or exit with the lost-connection code', async () => {
-      const { runGracefulShutdown } = await import('./graceful-shutdown');
+      const { runGracefulShutdown, hasGracefulShutdownStarted } = await import(
+        './graceful-shutdown'
+      );
       let finishDeactivating: () => void = () => {};
       mocks.extensionShutdown.mockReturnValue(
         new Promise<void>((resolve) => {
@@ -116,10 +121,15 @@ describe('exitExtensionHostOnLostConnection', () => {
       );
       const exitAfterRequestedShutdown = vi.fn();
       const requestedShutdown = runGracefulShutdown(exitAfterRequestedShutdown);
-      const { lostConnection, exitProcess } = setUp(runGracefulShutdown);
+      const { lostConnection, exitProcess } = setUp(
+        runGracefulShutdown,
+        hasGracefulShutdownStarted,
+      );
       await vi.waitFor(() => expect(mocks.extensionShutdown).toHaveBeenCalledTimes(1));
 
       lostConnection.emit();
+      vi.advanceTimersByTime(LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS);
+      expect(exitProcess).not.toHaveBeenCalled();
       finishDeactivating();
       await requestedShutdown;
 
