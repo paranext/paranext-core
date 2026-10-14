@@ -20,9 +20,9 @@ import {
   CHECK_RESULTS_INVALIDATED_EVENT,
   CHECK_RUNNER_NETWORK_OBJECT_TYPE,
   CHECK_STOP_DEFAULT_TIMEOUT_MS,
-  LOOKUP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION,
+  LOOK_UP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION,
 } from './check.model';
-import { lookupCheckSetupStatusWithFallback, mergeCheckErrors } from './check-aggregator.utils';
+import { lookUpCheckSetupStatusWithFallback, mergeCheckErrors } from './check-aggregator.utils';
 
 /**
  * When a job is started, it may need to be split up and sent to multiple check runners depending on
@@ -266,10 +266,10 @@ class CheckAggregatorDataProviderEngine
     return checkRunner.isCheckSetupForProject(checkId, projectId);
   }
 
-  async lookupCheckSetupStatus(checkId: string, projectId: string): Promise<CheckSetupState> {
+  async lookUpCheckSetupStatus(checkId: string, projectId: string): Promise<CheckSetupState> {
     const checkRunner = await this.findCheckRunnerForCheckId(checkId);
     if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);
-    return lookupCheckSetupStatusWithFallback(checkRunner, checkId, projectId);
+    return lookUpCheckSetupStatusWithFallback(checkRunner, checkId, projectId);
   }
 
   // #endregion
@@ -429,7 +429,7 @@ async function initialize(): Promise<void> {
             new CheckAggregatorDataProviderEngine(),
             undefined,
             undefined,
-            { methods: [LOOKUP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION] },
+            { methods: [LOOK_UP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION] },
           );
           resolve();
         } catch (error) {

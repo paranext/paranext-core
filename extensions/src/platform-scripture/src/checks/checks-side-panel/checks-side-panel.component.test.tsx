@@ -318,13 +318,17 @@ describe('checks that could not run', () => {
     expect(screen.queryByText(PARATEXT_9_HINT_LABEL)).toBeNull();
   });
 
-  it('shows each check’s message and the Paratext 9 hint after clicking Show details', async () => {
+  it('shows each check’s message after clicking Show details, with the hint under a setup-required check only', async () => {
     const user = setupUser();
     render(
       <ChecksSidePanel
         {...buildProps({
           hasActiveJob: true,
           jobStatusReport: REPORT_WITH_ERRORS,
+          checksInfo: [
+            { checkId: 'Quotation', checkName: 'Quotations', setupStatus: 'setupRequired' },
+            { checkId: 'registered-gone', checkName: 'registered-gone', setupStatus: 'ready' },
+          ],
           getLocalizedCheckDescription: (checkId) => (checkId === 'Quotation' ? 'Quotations' : ''),
         })}
       />,
@@ -332,11 +336,14 @@ describe('checks that could not run', () => {
 
     await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
 
-    expect(
-      screen.getByText('Quotations: Quotes settings are invalid for project zzz6.'),
-    ).toBeInTheDocument();
+    const quotationLine = screen.getByText(
+      'Quotations: Quotes settings are invalid for project zzz6.',
+    );
     const unregisteredLine = screen.getByText('registered-gone: Check is not registered');
     expect(screen.getAllByText(PARATEXT_9_HINT_LABEL)).toHaveLength(1);
+    // The hint sits directly under the failed check that needs setup, not under the ready one
+    expect(quotationLine.nextElementSibling).toHaveTextContent(PARATEXT_9_HINT_LABEL);
+    expect(unregisteredLine.nextElementSibling).toBeNull();
     const hideToggle = screen.getByRole('button', { name: HIDE_DETAILS_LABEL });
     expect(hideToggle).toHaveAttribute('aria-expanded', 'true');
     const detailsId = hideToggle.getAttribute('aria-controls');
@@ -345,6 +352,24 @@ describe('checks that could not run', () => {
 
     await user.click(hideToggle);
     expect(screen.queryByText('registered-gone: Check is not registered')).toBeNull();
+  });
+
+  it('shows no Paratext 9 hint when the failed check is ready or its setup is unknown', async () => {
+    const user = setupUser();
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: REPORT_WITH_ERRORS,
+          checksInfo: [{ checkId: 'Quotation', checkName: 'Quotations', setupStatus: 'ready' }],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
+
+    expect(screen.getByText(/^Quotation: Quotes settings are invalid/)).toBeInTheDocument();
+    expect(screen.queryByText(PARATEXT_9_HINT_LABEL)).toBeNull();
   });
 
   it('names a check once when it failed with different messages', () => {

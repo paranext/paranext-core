@@ -529,7 +529,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
       setChecksInfo(
         await buildChecksInfo(
           availableChecks,
-          (checkId) => checkAggregator.lookupCheckSetupStatus(checkId, projectId),
+          (checkId) => checkAggregator.lookUpCheckSetupStatus(checkId, projectId),
           getLocalizedCheckDescription,
         ),
       );
