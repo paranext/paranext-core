@@ -1,12 +1,14 @@
 import { EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE } from '@node/models/interprocess-messages.model';
 import { ExtensionHostStoppedEvent } from '@shared/models/extension-host-lifecycle.model';
 
-// The child process `exit` event reports an absent code or signal as null
-/* eslint-disable no-null/no-null */
+// The child process `exit` event reports the absent one of code and signal as null, so these types
+// mirror that.
 type ExtensionHostExit = {
   /** Exit code from the child process `exit` event; `null` when a signal ended it */
+  // eslint-disable-next-line no-null/no-null
   code: number | null;
   /** Signal name from the child process `exit` event; `null` when it exited on its own */
+  // eslint-disable-next-line no-null/no-null
   signal: string | null;
   /** Whether main asked for this stop (restart, dev-mode file watcher) */
   isStopRequested: boolean;
@@ -32,7 +34,7 @@ export function classifyExtensionHostExit({
   isAppShuttingDown,
 }: ExtensionHostExit): ExtensionHostStoppedEvent | undefined {
   if (isStopRequested || isAppShuttingDown) return undefined;
-  if (signal === null && code === EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE)
+  if (!signal && code === EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE)
     return { reason: 'lost-connection' };
   return { reason: 'crashed' };
 }

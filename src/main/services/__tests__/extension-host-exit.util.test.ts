@@ -1,8 +1,13 @@
-// The child process `exit` event reports an absent code or signal as null
-/* eslint-disable no-null/no-null */
 import { describe, expect, it } from 'vitest';
 import { EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE } from '@node/models/interprocess-messages.model';
 import { classifyExtensionHostExit } from '@main/services/extension-host-exit.util';
+
+// The child process `exit` event reports an absent signal as null.
+// eslint-disable-next-line no-null/no-null
+const NO_SIGNAL = null;
+// The child process `exit` event reports an absent exit code as null.
+// eslint-disable-next-line no-null/no-null
+const NO_CODE = null;
 
 const notRequested = { isStopRequested: false, isAppShuttingDown: false };
 
@@ -11,32 +16,43 @@ describe('classifyExtensionHostExit', () => {
     expect(
       classifyExtensionHostExit({
         code: EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE,
-        signal: null,
+        signal: NO_SIGNAL,
         ...notRequested,
       }),
     ).toEqual({ reason: 'lost-connection' });
   });
 
   it('reports crashed for any other exit code', () => {
-    expect(classifyExtensionHostExit({ code: 1, signal: null, ...notRequested })).toEqual({
+    expect(classifyExtensionHostExit({ code: 1, signal: NO_SIGNAL, ...notRequested })).toEqual({
       reason: 'crashed',
     });
-    expect(classifyExtensionHostExit({ code: 0, signal: null, ...notRequested })).toEqual({
+    expect(classifyExtensionHostExit({ code: 0, signal: NO_SIGNAL, ...notRequested })).toEqual({
       reason: 'crashed',
     });
   });
 
   it('reports crashed for a signal', () => {
-    expect(classifyExtensionHostExit({ code: null, signal: 'SIGKILL', ...notRequested })).toEqual({
-      reason: 'crashed',
-    });
+    expect(
+      classifyExtensionHostExit({ code: NO_CODE, signal: 'SIGKILL', ...notRequested }),
+    ).toEqual({ reason: 'crashed' });
+  });
+
+  // Only an exit the extension host chose itself carries meaning in its code.
+  it('reports crashed for a signal even when the code equals the lost-connection code', () => {
+    expect(
+      classifyExtensionHostExit({
+        code: EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE,
+        signal: 'SIGTERM',
+        ...notRequested,
+      }),
+    ).toEqual({ reason: 'crashed' });
   });
 
   it('reports nothing when main requested the stop', () => {
     expect(
       classifyExtensionHostExit({
         code: 0,
-        signal: null,
+        signal: NO_SIGNAL,
         isStopRequested: true,
         isAppShuttingDown: false,
       }),
@@ -49,7 +65,7 @@ describe('classifyExtensionHostExit', () => {
     expect(
       classifyExtensionHostExit({
         code: EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE,
-        signal: null,
+        signal: NO_SIGNAL,
         isStopRequested: true,
         isAppShuttingDown: false,
       }),
@@ -60,7 +76,7 @@ describe('classifyExtensionHostExit', () => {
     expect(
       classifyExtensionHostExit({
         code: EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE,
-        signal: null,
+        signal: NO_SIGNAL,
         isStopRequested: false,
         isAppShuttingDown: true,
       }),
