@@ -1,8 +1,8 @@
 /**
  * E2E for the Simple-mode Comments panel's per-pane content zoom: Ctrl+wheel and the tab's own
- * "Zoom in" / "Zoom out" / "Reset zoom to default" menu items scale the panel, and the level is
- * remembered under the panel's project identity (the `notes` kind), the same identity a project's
- * tab list opens at.
+ * "Zoom in" / "Zoom out" / "Zoom reset" menu items scale the panel, and the level is remembered
+ * under the panel's project identity (the `notes` kind), the same identity a project's tab list
+ * opens at.
  *
  * Own Electron app (`commentAppOwner`): a shared app would carry over whatever layout change
  * another comment spec left behind, and the fixture only starts a fresh worker when the option
@@ -144,7 +144,7 @@ test.describe('Comments panel content zoom in Simple mode', () => {
       await expect.poll(() => readFactor(panelFrame, '')).toBe(1.1);
 
       await tab.click({ button: 'right' });
-      await mainPage.getByRole('menuitem', { name: 'Reset zoom to default' }).click();
+      await mainPage.getByRole('menuitem', { name: 'Zoom reset' }).click();
       await expect.poll(() => readFactor(panelFrame, '')).toBe(1);
     });
 
