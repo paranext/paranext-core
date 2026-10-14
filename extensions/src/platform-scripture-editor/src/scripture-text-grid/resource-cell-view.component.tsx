@@ -18,6 +18,8 @@ import {
   CSSProperties,
   ReactNode,
   useCallback,
+  useLayoutEffect,
+  useRef,
   useState,
   type KeyboardEvent,
   type MouseEvent,
@@ -239,12 +241,12 @@ function ResourceNameDisclosure({
   onActivate: () => void;
   className?: string;
 }) {
-  const { ref, open, onPointerEnter, onPointerLeave } = useTruncationTooltip<HTMLButtonElement>();
+  // Measured on the span, which is what truncates: the button never overflows itself.
+  const { ref, open, onPointerEnter, onPointerLeave } = useTruncationTooltip<HTMLSpanElement>();
 
   return (
     <ResourceNameTooltip label={label} open={open}>
       <Button
-        ref={ref}
         type="button"
         variant="link"
         size="sm"
@@ -262,23 +264,22 @@ function ResourceNameDisclosure({
           event.stopPropagation();
           onActivate();
         }}
-        className={`tw:h-auto tw:justify-start tw:p-0 tw:no-underline tw:hover:no-underline ${RESOURCE_NAME_CLASS} ${className ?? ''}`}
+        className={`tw:h-auto tw:min-w-0 tw:justify-start tw:p-0 tw:no-underline tw:hover:no-underline ${className ?? ''}`}
       >
-        {label}
+        {/* Truncation lives on this span because `Button` is `inline-flex`, and text-overflow
+            draws no ellipsis on a flex container's text. */}
+        <span ref={ref} className={RESOURCE_NAME_CLASS}>
+          {label}
+        </span>
       </Button>
     </ResourceNameTooltip>
   );
 }
 
-type ReorderGripProps = {
-  /** Stable id of this resource; the parent restores focus by querying for this attribute. */
-  reorderHandleId?: string;
-  /** Accessible name for the grip (e.g. "Reorder Genesis"). */
-  reorderHandleLabel?: string;
-  /** Tooltip text shown on hover and keyboard focus. */
-  reorderHint?: string;
-  /** Keydown handler; the parent owns the arrow-key reorder logic. */
-  onReorderKeyDown?: (event: KeyboardEvent) => void;
+type ReorderGripProps = Pick<
+  ResourceCellViewProps,
+  'reorderHandleId' | 'reorderHandleLabel' | 'reorderHint' | 'onReorderKeyDown'
+> & {
   /** Placement and reveal classes, which differ between the header band and the verse row. */
   className?: string;
 };
@@ -328,10 +329,11 @@ function ReorderGrip({
  * (`downloading`/`failed`/`unavailable`). Data-free so Storybook can drive every state;
  * `ResourceCell` wraps it with the PAPI fetch/direction/availability wiring.
  *
- * All role, focus, activation, and accessible-name concerns are handled by the parent verse
- * `listitem` in `ScriptureTextGrid` — this component is purely presentational. It adds only the
- * per-resource zoom surfaces (the header kebab dropdown and the right-click zoom/copy menu) and the
- * drag/keyboard reorder handle grip.
+ * Activation logic belongs to `ScriptureTextGrid`. In verse mode the cell renders the controls that
+ * carry it: the name becomes the row's disclosure control when `onDisclosureActivate` is passed
+ * (the row's tab stop, accessible name and `aria-expanded`), and the reorder grip when
+ * `showDragHandle` is set. It also adds the per-resource zoom surfaces (the header kebab dropdown
+ * and the right-click zoom/copy menu).
  */
 export function ResourceCellView({
   state,
@@ -450,35 +452,71 @@ export function ResourceCellView({
   const contentStyle: CSSProperties | undefined =
     zoomFactor !== undefined && zoomFactor !== 1 ? { zoom: zoomFactor } : undefined;
 
+  // The verse row's name is sized to its own text, as in PT9, so line 1 starts right after it. The
+  // float exclusion that holds line 1 back lives inside the zoomed editor, which CSS cannot size from
+  // the name beside it, so measure the name and publish its width for the stylesheet. Skips a zero
+  // width: a row in a hidden tab has no layout, and the observer fires again when it is shown.
+  // React's ref API requires `null` as the initial value for DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const verseRowRef = useRef<HTMLDivElement>(null);
+  const [nameWidth, setNameWidth] = useState<number | undefined>(undefined);
+  const hasDisclosure = onDisclosureActivate !== undefined;
+  useLayoutEffect(() => {
+    const name = verseRowRef.current?.querySelector<HTMLElement>('.stg-verse-name');
+    if (!name) return undefined;
+    const measure = () => {
+      const { width } = name.getBoundingClientRect();
+      if (width > 0) setNameWidth(width);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(name);
+    return () => observer.disconnect();
+    // The name element is replaced when the row switches between the label and the disclosure
+    // control; a label change resizes the same element, which the observer already reports.
+  }, [nameDisplay, hasDisclosure]);
+
   // The verse row publishes its zoom factor to CSS so the float exclusion inside the zoomed subtree
   // can divide by it and still reserve the same device pixels as the unzoomed name beside it.
   // React.CSSProperties has no index signature for custom properties; widening the declared type
   // here (rather than asserting at the use site) keeps this free of type assertions.
   const rowStyle: CSSProperties & Record<`--${string}`, string | number> = {
     '--stg-zoom': zoomFactor ?? 1,
+    ...(nameWidth !== undefined ? { '--stg-name-width': `${nameWidth}px` } : {}),
   };
 
   return (
     <div
       onContextMenuCapture={zoomMenuLabels ? handleCellContextMenu : undefined}
-      // `group` powers the hover/focus-visible kebab reveal. Activation (opening the chapter split)
-      // is owned by the parent verse `listitem` in ScriptureTextGrid — this cell is presentational.
+      // `group` powers the hover/focus-visible kebab reveal.
       className="tw:group tw:flex tw:min-w-0 tw:flex-col"
     >
       {nameDisplay === 'inline' ? (
-        // Verse-row cell: the name is a fixed-width label taken out of flow at the row's
-        // inline-start, and `.editor-input::before` (see _scripture-text-grid-verse.scss) is a float
-        // of the same width inside the editor's own block flow. Line 1 starts after the name; line
-        // 2+ tuck under it at the flush edge — the PT9 shape, which a two-column split cannot
-        // produce. The width is fixed rather than capped so rows align with each other whatever the
-        // name's length, and the label sits outside the zoomed subtree so a zoomed row still aligns
-        // with its neighbours; the exclusion inside divides by --stg-zoom to compensate. `dir` on
-        // the row resolves every inline-start against the resource's own direction.
+        // Verse-row cell: the name is a label taken out of flow at the row's inline-start, and
+        // `.editor-input::before` (see _scripture-text-grid-verse.scss) is a float of the same width
+        // inside the editor's own block flow. Line 1 starts after the name; line 2+ tuck under it at
+        // the flush edge — the PT9 shape, which a two-column split cannot produce. As in PT9 the name
+        // is as wide as its text (capped, so a long one truncates), so rows with different names
+        // start line 1 on different columns. The label sits outside the zoomed subtree so it keeps
+        // its size when the row zooms; the exclusion inside divides by --stg-zoom to compensate.
+        // `dir` on the row resolves every inline-start against the resource's own direction.
         <div
-          className="stg-verse-row tw:relative tw:flex tw:flex-1 tw:flex-col"
+          ref={verseRowRef}
+          className={`stg-verse-row${showDragHandle ? ' stg-verse-row-with-grip' : ''} tw:relative tw:flex tw:flex-1 tw:flex-col`}
           dir={textDirection}
           style={rowStyle}
         >
+          {showDragHandle ? (
+            // Leads the row, before the name, in the same place and always visible like the chapter
+            // view's grip. Rendered first so the tab order follows the visual order.
+            <ReorderGrip
+              reorderHandleId={reorderHandleId}
+              reorderHandleLabel={reorderHandleLabel}
+              reorderHint={reorderHint}
+              onReorderKeyDown={onReorderKeyDown}
+              className="stg-verse-grip tw:absolute tw:h-6 tw:w-6 tw:shrink-0 tw:cursor-grab tw:text-muted-foreground"
+            />
+          ) : undefined}
           {onDisclosureActivate ? (
             <ResourceNameDisclosure
               label={label}
@@ -491,18 +529,6 @@ export function ResourceCellView({
           ) : (
             <ResourceNameLabel label={label} className="stg-verse-name tw:absolute tw:text-sm" />
           )}
-          {showDragHandle ? (
-            // Pinned at the inline-end of the already-reserved name area, so it costs no row width
-            // and never overlays verse text. Hidden until hover/focus for pointer users; always
-            // visible on touch (`hover: none`) where there is no hover to reveal it.
-            <ReorderGrip
-              reorderHandleId={reorderHandleId}
-              reorderHandleLabel={reorderHandleLabel}
-              reorderHint={reorderHint}
-              onReorderKeyDown={onReorderKeyDown}
-              className="stg-verse-grip tw:absolute tw:h-6 tw:w-6 tw:shrink-0 tw:cursor-grab tw:text-muted-foreground tw:opacity-0 tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:focus-visible:opacity-100 tw:[@media(hover:none)]:opacity-100"
-            />
-          ) : undefined}
           <div
             className="stg-verse-content tw:min-w-0 tw:flex-1 tw:overflow-auto"
             style={contentStyle}

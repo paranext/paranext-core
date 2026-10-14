@@ -109,7 +109,9 @@ export function ScriptureTextGrid({
   const gridRef = useRef<HTMLDivElement>(null);
   // Ties each verse row's aria-controls to the chapter-context panel it discloses.
   const chapterContextPanelId = useId();
-  // resourceId of the listitem that opened the split, so focus can return to it when the split closes.
+  // resourceId of the row last activated, kept while the split is open, so focus can return to that
+  // row's name control when the split closes (the X button and Escape unmount the control that had
+  // focus). Cleared once restored.
   const focusRestoreResourceIdRef = useRef<string | undefined>(undefined);
   const draggedIdRef = useRef<string | undefined>(undefined);
   const [dragOverId, setDragOverId] = useState<string | undefined>(undefined);
@@ -181,18 +183,17 @@ export function ScriptureTextGrid({
     gridRef.current?.querySelector<HTMLElement>(`[data-reorder-handle-id="${movedId}"]`)?.focus();
   }, [resources]);
 
-  // Return focus to the listitem that opened or closed the split (WCAG 2.4.3). The verse column
-  // remounts on BOTH transitions — it moves between a bare wrapper and a ResizablePanel — so restore
-  // on every change, not only on close, or a keyboard toggle cannot fire a second time: the row that
-  // opened the split would be destroyed with focus falling to <body>. Restore by identity
-  // (resourceId) against the freshly-rendered DOM, not by a stale element reference. Uses
+  // Return focus to the row that opened the split once it closes (WCAG 2.4.3). Closing from the
+  // panel's X button or Escape unmounts the control that had focus, which would otherwise drop focus
+  // to <body>. The verse column itself never remounts, so a toggle from the row keeps its focus and
+  // needs no restore. Restore by identity (resourceId) rather than an element reference. Uses
   // data-resource-id (always present) rather than data-project-id (absent for unavailable resources
   // whose projectId is undefined).
   useEffect(() => {
+    if (chapterContext) return;
     const resourceId = focusRestoreResourceIdRef.current;
     if (!resourceId) return;
-    // Clear the latch only once the split is closed, so a later Escape or X close still has a target.
-    if (!chapterContext) focusRestoreResourceIdRef.current = undefined;
+    focusRestoreResourceIdRef.current = undefined;
     gridRef.current
       ?.querySelector<HTMLElement>(`[data-resource-id="${resourceId}"] [data-disclosure-control]`)
       ?.focus();
@@ -340,15 +341,17 @@ export function ScriptureTextGrid({
   }
 
   // Verse view: a vertical column of stacked resource rows (one per resource); the column scrolls
-  // vertically (`overflow-y-auto`) when the rows don't fit. Clicking (or Enter/Space on) a row opens
-  // the chapter-context split beside the column. When `onReorder` is set each listitem is also a
-  // drag source + drop target, and its grip (rendered by ResourceCell) is the keyboard reorder
-  // control (ArrowUp/ArrowDown) — the grip stops click/key propagation so reordering never triggers
-  // the listitem's chapter-context activation. The Scripture reference is constant across rows in a
-  // render, so format it once for the accessible name (`"{name}, {ref}"`, or just the name when no
-  // template is provided). Resolved so the announcement names the verse the cells actually display:
-  // at a verse-0 reference they show verse 1. This names the row, not its contents — a resource that
-  // lacks verse 1 shows the empty state under the same label.
+  // vertically (`overflow-y-auto`) when the rows don't fit. Clicking a row, or Enter/Space on its
+  // name control, toggles the chapter-context split beside the column: it opens the split for that
+  // row, closes it if that row is already open, or switches it from another row. When `onReorder`
+  // is set each listitem is also a drag source + drop target, and its grip (rendered by
+  // ResourceCell) is the keyboard reorder control (ArrowUp/ArrowDown) — the grip stops click/key
+  // propagation so reordering never triggers the listitem's chapter-context activation. The
+  // Scripture reference is constant across rows in a render, so format it once for the accessible
+  // name (`"{name}, {ref}"`, or just the name when no template is provided). Resolved so the
+  // announcement names the verse the cells actually display: at a verse-0 reference they show verse
+  // 1. This names the row, not its contents — a resource that lacks verse 1 shows the empty state
+  // under the same label.
   //
   // Accepted a11y cost (`adr-single-verse-surfaces-resolve-verse-zero-to-one`): this makes
   // verse 0 unobservable inside the grid. At MAT 5:0 the label announces "MAT 5:1" and the cells show verse 1, so a
@@ -406,7 +409,15 @@ export function ScriptureTextGrid({
             draggable={onReorder ? true : undefined}
             onClick={
               activate
-                ? () => {
+                ? (event) => {
+                    // Portaled descendants (the right-click menu) bubble here through the React
+                    // tree even though they sit outside the row in the DOM; only a click inside
+                    // the row is a click on the row.
+                    if (
+                      !(event.target instanceof Node) ||
+                      !event.currentTarget.contains(event.target)
+                    )
+                      return;
                     // A click that ends a drag-selection inside the verse must not toggle the split:
                     // closing it would destroy the selection the context-menu Copy item reads.
                     if (window.getSelection()?.toString().trim()) return;
@@ -476,54 +487,58 @@ export function ScriptureTextGrid({
   );
 
   // `gridRef` wraps the whole return (both the verse column and, when open, the chapter-context
-  // panel) so `useResourceZoomInput` sees wheel events over either side.
-  if (!chapterContext) {
-    return (
-      <div ref={gridRef} className="tw:h-full tw:min-h-0">
-        {verseColumn}
-      </div>
-    );
-  }
-
+  // panel) so `useResourceZoomInput` sees wheel events over either side. The group and the verse
+  // panel render whether or not the split is open, so the column keeps its place in the tree and
+  // opening or closing the split never remounts the rows' editors; only the handle and the
+  // chapter-context panel come and go. Their ids let the group re-lay out when they do.
   return (
     <div ref={gridRef} className="tw:h-full tw:min-h-0">
       <ResizablePanelGroup direction="horizontal" className="tw:h-full tw:min-h-0">
-        <ResizablePanel defaultSize={55} minSize={30} className="tw:min-h-0">
+        <ResizablePanel id="verse-column" minSize={30} className="tw:min-h-0">
           {verseColumn}
         </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={45} minSize={25} className="tw:min-h-0">
-          <div
-            id={chapterContextPanelId}
-            role="region"
-            aria-label={chapterContext.label}
-            data-testid="scripture-text-grid-chapter-context"
-            data-project-id={chapterContext.projectId}
-            data-resource-id={chapterContext.resourceId}
-            className="tw:flex tw:h-full tw:min-h-0 tw:flex-col"
-          >
-            <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:px-1 tw:py-0.5">
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={closeChapterContextLabel}
-                onClick={onChapterContextClose}
+        {chapterContext ? (
+          <>
+            <ResizableHandle withHandle />
+            <ResizablePanel
+              id="chapter-context"
+              defaultSize={45}
+              minSize={25}
+              className="tw:min-h-0"
+            >
+              <div
+                id={chapterContextPanelId}
+                role="region"
+                aria-label={chapterContext.label}
+                data-testid="scripture-text-grid-chapter-context"
+                data-project-id={chapterContext.projectId}
+                data-resource-id={chapterContext.resourceId}
+                className="tw:flex tw:h-full tw:min-h-0 tw:flex-col"
               >
-                <X className="tw:h-4 tw:w-4" />
-              </Button>
-            </div>
-            <div className="tw:flex tw:min-h-0 tw:flex-1">
-              <ResourceCell
-                resourceRef={chapterContext}
-                scrRef={scrRef}
-                setScrRef={setScrRef}
-                viewMode="chapter"
-                zoom={zoom}
-                zoomMenuLabels={zoomMenuLabels}
-              />
-            </div>
-          </div>
-        </ResizablePanel>
+                <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:px-1 tw:py-0.5">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={closeChapterContextLabel}
+                    onClick={onChapterContextClose}
+                  >
+                    <X className="tw:h-4 tw:w-4" />
+                  </Button>
+                </div>
+                <div className="tw:flex tw:min-h-0 tw:flex-1">
+                  <ResourceCell
+                    resourceRef={chapterContext}
+                    scrRef={scrRef}
+                    setScrRef={setScrRef}
+                    viewMode="chapter"
+                    zoom={zoom}
+                    zoomMenuLabels={zoomMenuLabels}
+                  />
+                </div>
+              </div>
+            </ResizablePanel>
+          </>
+        ) : undefined}
       </ResizablePanelGroup>
     </div>
   );

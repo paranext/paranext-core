@@ -116,6 +116,7 @@ const EDITOR_SHIM_STYLE = `
   .editor-container { color: inherit; position: relative; line-height: 20px; text-align: start; }
   .editor-input { min-height: 150px; font-size: 15px; position: relative; tab-size: 1; outline: 0; padding: 15px 10px; flex: auto; }
   .editor-input > p { direction: inherit; margin-top: 0; margin-bottom: 0; line-height: 1.5; }
+  .formatted-font .usfm_v { font-size: 66%; vertical-align: text-top; }
   .text-spacing .usfm_p { text-indent: 2.5vw; }
   .text-spacing .usfm_q1 { text-indent: -10vw; }
   .text-spacing[dir='ltr'] .usfm_q1 { margin-left: 15vw; }
@@ -144,7 +145,7 @@ function SampleEditorial({
         dir={rtl ? 'rtl' : 'ltr'}
       >
         <p className={poetry ? 'usfm_q1' : 'usfm_p'}>
-          <sup>3</sup> {body}
+          <span className="usfm_v">3</span> {body}
         </p>
       </div>
     </div>
@@ -924,8 +925,8 @@ export const VerseWrapAroundRightToLeft: Story = {
 };
 
 /**
- * Rows with short, medium and long names. Every row's verse text must begin on the same column —
- * that alignment is the whole reason the name area is a fixed width rather than a cap.
+ * Rows with short, medium and long names. As in PT9 each name is as wide as its own text, so each
+ * row's verse text begins right after its name and rows start line 1 on different columns.
  */
 export const VerseNameAlignmentRow: Story = {
   render: () => (
@@ -949,7 +950,8 @@ export const VerseNameAlignmentRow: Story = {
 
 /**
  * The zoom-compensation proof. The name sits outside the zoomed subtree and the float inside it
- * divides by `--stg-zoom`, so rows at 0.5x, 1x and 2x still start their text on the same column.
+ * divides by `--stg-zoom`, so rows at 0.5x, 1x and 2x, all with the same name, still start their
+ * text on the same column.
  */
 export const VerseNameAlignmentRowZoomed: Story = {
   render: () => (
@@ -973,8 +975,9 @@ export const VerseNameAlignmentRowZoomed: Story = {
 };
 
 /**
- * Poetry keeps its hanging indent. A float shortens the line box and composes with `usfm_q1`'s
- * indent; reserving the name width with `text-indent` instead would destroy it.
+ * Poetry keeps its hanging indent on the lines after the first. Line 1 sits beside the name, so its
+ * hanging indent is dropped there rather than pulling the text back under the name; reserving the
+ * name width with `text-indent` instead would destroy the indent on every line.
  */
 export const VerseWrapAroundPoetry: Story = {
   render: () => (
@@ -982,6 +985,22 @@ export const VerseWrapAroundPoetry: Story = {
       <ResourceCellView
         state="ready"
         label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleEditorial poetry />}
+      />
+    </VerseRowBox>
+  ),
+};
+
+/** Poetry under a name that fills the whole name area, where any overlap with line 1 would show. */
+export const VerseWrapAroundPoetryLongName: Story = {
+  render: () => (
+    <VerseRowBox>
+      <ResourceCellView
+        state="ready"
+        label="Berean Standard Bible"
         textDirection="ltr"
         localizedStrings={localizedStrings}
         nameDisplay="inline"

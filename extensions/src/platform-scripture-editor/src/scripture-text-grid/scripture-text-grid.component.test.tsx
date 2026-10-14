@@ -5,7 +5,7 @@ import * as React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
-import { ResourceCellView } from './resource-cell-view.component';
+import { ResourceCellView, type ZoomMenuLabels } from './resource-cell-view.component';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 
 // jsdom doesn't ship a ResizeObserver (needed by the grip's Radix tooltip), or PointerCapture APIs.
@@ -45,6 +45,7 @@ const mockResourceCell = vi.fn(
     // setScrRef stays in the type (so mock.calls[n][0].setScrRef type-checks in the setter-sync test)
     // but is not destructured here because it is not used in the rendered JSX.
     viewMode,
+    zoomMenuLabels,
     showDragHandle,
     reorderHandleLabel,
     reorderHint,
@@ -58,6 +59,7 @@ const mockResourceCell = vi.fn(
     scrRef: { verseNum: number };
     setScrRef: (scrRef: unknown) => void;
     viewMode?: string;
+    zoomMenuLabels?: ZoomMenuLabels;
     showDragHandle?: boolean;
     reorderHandleLabel?: string;
     reorderHint?: string;
@@ -78,6 +80,8 @@ const mockResourceCell = vi.fn(
         localizedStrings={{}}
         editor={`${resourceRef.label}@${scrRef.verseNum}`}
         nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
+        zoomMenuLabels={zoomMenuLabels}
+        canZoomIn
         showDragHandle={showDragHandle}
         reorderHandleId={resourceRef.resourceId}
         reorderHandleLabel={reorderHandleLabel}
@@ -276,7 +280,7 @@ describe('ScriptureTextGrid', () => {
       />,
     );
     expect(screen.queryByTestId('scripture-text-grid-chapter-context')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('resizable-panel-group')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('resizable-handle')).not.toBeInTheDocument();
   });
   it('opens the chapter-context split for the activated listitem', () => {
     const onChapterContextChange = vi.fn();
@@ -665,28 +669,51 @@ describe('ScriptureTextGrid — chapter-context toggle', () => {
 
     selection?.removeAllRanges();
   });
-  it('restores focus to the opening listitem when the split OPENS', () => {
-    // The verse column remounts on open as well as close, so without a restore on both transitions
-    // focus falls to <body> and a keyboard toggle cannot fire a second time.
-    const { rerender } = render(
+  it('ignores a click on a right-click menu item, which bubbles to the row through its portal', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onChapterContextChange = vi.fn();
+    render(
       <ScriptureTextGrid
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
-        onChapterContextChange={vi.fn()}
+        zoomMenuLabels={{
+          zoomIn: 'Zoom In',
+          zoomOut: 'Zoom Out',
+          reset: 'Reset Zoom',
+          options: 'Zoom options',
+        }}
+        onChapterContextChange={onChapterContextChange}
       />,
     );
-    fireEvent.click(getDisclosure('r-b'));
-    rerender(
+
+    fireEvent.contextMenu(screen.getByText('KJV@3'));
+    await user.click(screen.getByRole('menuitem', { name: 'Zoom In' }));
+    expect(onChapterContextChange).not.toHaveBeenCalled();
+  });
+  it('keeps the verse column mounted, and focus on the opener, as the split opens and closes', () => {
+    const renderWith = (chapterContext?: (typeof resources)[number]) => (
       <ScriptureTextGrid
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
-        chapterContext={resources[1]}
+        chapterContext={chapterContext}
         onChapterContextChange={vi.fn()}
-      />,
+        onChapterContextClose={vi.fn()}
+      />
     );
-    expect(getDisclosure('r-b')).toHaveFocus();
+    const { rerender } = render(renderWith());
+    const opener = getDisclosure('r-b');
+    opener.focus();
+
+    rerender(renderWith(resources[1]));
+    // Same node, not an equal one: a remount would rebuild every row's editor.
+    expect(getDisclosure('r-b')).toBe(opener);
+    expect(opener).toHaveFocus();
+
+    rerender(renderWith());
+    expect(getDisclosure('r-b')).toBe(opener);
+    expect(opener).toHaveFocus();
   });
 });
 

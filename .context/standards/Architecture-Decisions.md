@@ -5687,7 +5687,8 @@ step, no automation. Just a record.
 ## adr-verse-row-reserves-with-a-generated-float: The Text Collection verse row reserves its name width with a generated float inside the editor's own block flow
 
 - **Date:** 2026-09-18
-- **Status:** Accepted
+- **Status:** Accepted; the **fixed** name width is superseded by
+  `adr-verse-row-name-sized-to-its-text` (the float mechanism stands)
 - **Context:** The Text Collection's verse rows put a resource short name beside the verse text.
   Laid out as a two-column flex split, each name sized to its own content under a `max-w-24` cap, so
   rows did not align with each other, and wrapped lines stayed in the right-hand column leaving a
@@ -5730,6 +5731,33 @@ step, no automation. Just a record.
   any of this, and its copy of the rules can drift from the stylesheet; the e2e spec is what checks
   the real cascade.
 - **Source:** PT-4544 (WI-18), serving TODD-NTH-1.1/1.2 and TODD-NTH-1.3's residual grip.
+
+## adr-verse-row-name-sized-to-its-text: The Text Collection verse row's name is as wide as its text, measured and published to the stylesheet
+
+- **Date:** 2026-10-14
+- **Status:** Accepted
+- **Context:** `adr-verse-row-reserves-with-a-generated-float` gave every verse row's name a fixed
+  6rem area so rows would start line 1 on the same column. Seen in Storybook, that leaves a wide gap
+  between a short name (`WEB`, `KJV`) and the verse, which is most rows. The requirement is "flow
+  content after and beneath shortname — same as PT9", and PT9's Text Collection
+  (`ParatextBase/TextCollection/TextCollectionCss.css`, `.abbrev`) floats the abbreviation at its
+  own width with an 8px margin, so the text starts right after it.
+- **Decision:** The name is `inline-size: max-content` up to a `--stg-name-max-width` cap (6rem,
+  past which it truncates with the full-name tooltip). The float that reserves line 1 lives inside
+  the zoomed editor, which CSS cannot size from the unzoomed name beside it, so `ResourceCellView`
+  measures the name with a `ResizeObserver` and sets `--stg-name-width` on the row; every derived
+  length (`--stg-text-start`, the float, the placeholder reserve) follows it. Until the first
+  measurement the cap stands in, so line 1 never starts under the name. A zero measurement (a row in
+  a hidden tab, which has no layout) is ignored; the observer fires again when the row is shown.
+- **Alternatives:** **Size every row to the widest name in the collection** — keeps rows aligned
+  with far less gap, but is not what PT9 does; not chosen. **A smaller fixed width** — still wastes
+  space for three-letter names and truncates more. **Keep the fixed 6rem** — the gap this replaces.
+- **Consequences:** Rows with different names start line 1 on different columns, as in PT9; the
+  e2e geometry spec now asserts line 1 starts right after each row's own name rather than on a
+  shared column. Rows with the same name still align at any zoom, because the name is unzoomed and
+  the float divides by `--stg-zoom`. The layout now depends on a measurement in JavaScript rather
+  than CSS alone.
+- **Source:** PT-4544 review follow-up.
 
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 

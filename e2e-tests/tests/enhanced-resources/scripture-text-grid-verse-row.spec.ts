@@ -12,12 +12,16 @@
  * - `.editor-input` and `.editor-inner` compute `overflow: visible` (the BFC dependency, asserted
  *   directly so an upstream `overflow` fails loudly rather than as a subtle misrender).
  * - The `::before` exclusion is a float with non-zero width.
- * - Line 1 starts after the reserved name area; line 2 starts back at the row's flush inline edge.
- * - Every row's line-1 start agrees within 1px across rows AT THE SAME ZOOM.
+ * - The row leads with the reorder grip when there is one, otherwise the name, at its inline edge.
+ * - Line 1 starts after the reserved name area, level with the name; line 2 starts back at the row's
+ *   flush inline edge.
+ * - Line 1 starts right after the row's own name, which is as wide as its text (as in PT9), so rows
+ *   with different names start line 1 on different columns.
  * - Zooming one row leaves its exclusion the same rendered width — the `--stg-zoom` compensation.
- *   Line-1 starts are NOT expected to agree across different zooms: the paragraph's own
- *   `text-indent` lives inside the zoomed subtree and is deliberately not compensated, because
- *   compensating it would fight the marker indents the float approach exists to preserve.
+ *   Line-1 starts are NOT expected to agree across different zooms for every marker: the hanging
+ *   (negative) `text-indent`s of poetry and lists live inside the zoomed subtree and are
+ *   deliberately not compensated, because compensating them would fight the indents the float
+ *   approach exists to preserve.
  *
  * Honest runnability: requires a running Platform.Bible instance with 2+ resources flagged and
  * visible in the Text Collection, in verse view, at a reference where both have text. Skipped in CI
@@ -45,7 +49,10 @@ function twoResources(): FlaggedResourceItem[] {
 /** Geometry for one verse row, measured inside the page against the real cascade. */
 type RowGeometry = {
   rowLeft: number;
-  nameLeft: number;
+  leadLeft: number;
+  nameTop: number;
+  nameEnd: number;
+  lineTops: number[];
   editorOverflow: string;
   innerOverflow: string;
   floatSide: string;
@@ -87,11 +94,17 @@ test.describe('Text Collection verse row', () => {
         // Line boxes, via the range rects of the paragraph's own contents.
         const range = document.createRange();
         range.selectNodeContents(paragraph);
-        const lineStarts = [...range.getClientRects()].map((rect) => Math.round(rect.left));
+        const lineRects = [...range.getClientRects()];
+        const lineStarts = lineRects.map((rect) => Math.round(rect.left));
+        // The grip leads the row when reorder is on; otherwise the name does.
+        const lead = row.querySelector('.stg-verse-grip') ?? name;
 
         return {
           rowLeft: Math.round(row.getBoundingClientRect().left),
-          nameLeft: Math.round(name.getBoundingClientRect().left),
+          leadLeft: Math.round(lead.getBoundingClientRect().left),
+          nameTop: Math.round(name.getBoundingClientRect().top),
+          nameEnd: Math.round(name.getBoundingClientRect().right),
+          lineTops: lineRects.map((rect) => Math.round(rect.top)),
           editorOverflow: getComputedStyle(editorInput).overflow,
           innerOverflow: inner ? getComputedStyle(inner).overflow : 'visible',
           floatSide: before.float,
@@ -116,8 +129,12 @@ test.describe('Text Collection verse row', () => {
       expect(geometry.floatSide).not.toBe('none');
       expect(geometry.floatWidth).toBeGreaterThan(0);
 
-      // The name hangs at the row's own inline edge — no reintroduced left margin.
-      expect(Math.abs(geometry.nameLeft - geometry.rowLeft)).toBeLessThanOrEqual(12);
+      // The row's leading element hangs at its own inline edge — no reintroduced left margin.
+      expect(Math.abs(geometry.leadLeft - geometry.rowLeft)).toBeLessThanOrEqual(12);
+
+      // Line 1 sits beside the name rather than below it, so the text flows after the name. The
+      // tolerance covers the name's smaller font and a superscript verse number leading the line.
+      expect(Math.abs(geometry.lineTops[0] - geometry.nameTop)).toBeLessThanOrEqual(6);
 
       // Line 1 clears the reserved area; line 2 returns to the flush edge. Only meaningful for a
       // verse long enough to wrap, so skip single-line rows rather than asserting vacuously.
@@ -127,13 +144,14 @@ test.describe('Text Collection verse row', () => {
       }
     });
 
-    // Every row's first line starts on the same column at a common zoom — the alignment a
-    // content-sized name breaks.
-    const firstLineStarts = geometries
-      .map((geometry) => geometry.lineStarts[0])
-      .filter((start) => start !== undefined);
-    const spread = Math.max(...firstLineStarts) - Math.min(...firstLineStarts);
-    expect(spread).toBeLessThanOrEqual(1);
+    // Line 1 starts right after the row's own name — the gap after it, not a column shared with
+    // other rows. The reserved width is measured from the name, so a stale or missing measurement
+    // shows up here as line 1 starting under the name or well past it.
+    geometries.forEach((geometry) => {
+      const gapAfterName = geometry.lineStarts[0] - geometry.nameEnd;
+      expect(gapAfterName).toBeGreaterThanOrEqual(0);
+      expect(gapAfterName).toBeLessThanOrEqual(16);
+    });
   });
 
   test('keeps the reserved width constant when one row is zoomed', async ({ mainPage }) => {

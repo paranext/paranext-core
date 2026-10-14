@@ -809,6 +809,55 @@ describe('ResourceCellView verse row layout', () => {
       />,
     );
     expect(document.querySelector('[data-reorder-handle-id]')).toBeNull();
+    expect(document.querySelector('.stg-verse-row-with-grip')).toBeNull();
+  });
+
+  it('leads the row with the grip, before the name, as the chapter header does', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        showDragHandle
+        reorderHandleId="web"
+        reorderHandleLabel="Reorder WEB"
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="WEB"
+      />,
+    );
+    const grip = screen.getByRole('button', { name: 'Reorder WEB' });
+    const name = screen.getByRole('button', { name: 'WEB' });
+    // Document order is the tab order; the stylesheet places the name past the grip's lane only
+    // for a row carrying the with-grip class.
+    const row = grip.closest('.stg-verse-row');
+    expect(row).toHaveClass('stg-verse-row-with-grip');
+    const buttons = [...(row?.querySelectorAll<HTMLElement>('button') ?? [])];
+    expect(buttons.indexOf(grip)).toBeLessThan(buttons.indexOf(name));
+  });
+
+  it("publishes the name's rendered width so line 1 starts right after it", () => {
+    // jsdom does no layout, so stand in for the browser's measurement of the name alone.
+    const measure = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function measureElement(this: HTMLElement) {
+        return new DOMRect(0, 0, this.classList.contains('stg-verse-name') ? 41.5 : 0, 20);
+      });
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const row = document.querySelector<HTMLElement>('.stg-verse-row');
+    expect(row?.style.getPropertyValue('--stg-name-width')).toBe('41.5px');
+    measure.mockRestore();
   });
 
   it('carries the classes the verse stylesheet scopes its float exclusion on', () => {
