@@ -213,7 +213,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
-        public void Rechecking_IsTheUnionOfBothSources()
+        public async Task Rechecking_IsTheUnionOfBothSources()
         {
             _poller.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
             var viaRemote = (UnsyncedChangesState)
@@ -222,6 +222,12 @@ namespace TestParanextDataProvider.Projects.SendReceive
 
             _tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
             _poller.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            await _poller.FlushAsync();
+            Assert.That(
+                _poller.GetState().IsRechecking,
+                Is.False,
+                "the poller has finished rechecking"
+            );
             var viaLocal = (UnsyncedChangesState)
                 Client.InvokeRequestHandler(GetUnsyncedChangesCommand)!;
             Assert.That(viaLocal.IsRechecking, Is.True, "the tracker alone");
