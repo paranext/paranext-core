@@ -2,7 +2,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { WebViewProps } from '@papi/core';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReferenceList } from 'platform-scripture';
@@ -78,7 +78,7 @@ const STRINGS: Record<string, string> = {
   '%webView_resourcePanel_noProject%': 'No project selected.',
   '%general_loading%': 'Loading',
   '%webView_scriptureTextGrid_viewOptions_notSupported%':
-    'Text Collection settings are not available for this project.',
+    'Text Collection settings could not be loaded for this project.',
   '%webView_scriptureTextGrid_viewOptions_settingsUnavailable%':
     "Couldn't load your texts. They will appear once they're available.",
   '%webView_scriptureTextGrid_chapterContext_close%': 'Close chapter view',
@@ -160,9 +160,21 @@ vi.mock('@papi/frontend/react', () => ({
       callback(pickerResult),
 }));
 
+/**
+ * Every call the web view made to `useTextCollectionSources`, with the project the calling hook
+ * instance was first called for. The two differ only if one instance moved between projects.
+ */
+let sourcesHookCalls: Array<{ projectId: string | undefined; mountedFor: string | undefined }> = [];
+
+function useRecordedSourcesHook(projectId: string | undefined) {
+  const mountedFor = useRef(projectId);
+  sourcesHookCalls.push({ projectId, mountedFor: mountedFor.current });
+  return readHookResult(projectId);
+}
+
 vi.mock('./use-text-collection-sources.hook', () => ({
-  useTextCollectionSources: (projectId: string | undefined) => readHookResult(projectId),
-  default: (projectId: string | undefined) => readHookResult(projectId),
+  useTextCollectionSources: useRecordedSourcesHook,
+  default: useRecordedSourcesHook,
 }));
 
 vi.mock('./scripture-text-grid/scripture-text-grid.component', () => ({
@@ -353,6 +365,7 @@ const UNINSTALLED_RESOURCE: DblResourceData = {
 };
 
 beforeEach(() => {
+  sourcesHookCalls = [];
   hookResultsByProjectId = new Map();
   fallbackHookResult = unboundResult('noSource');
   activeEditorProjectId = undefined;
@@ -371,7 +384,7 @@ describe('View Options disabled reason', () => {
   // indistinguishable from a broken panel — so a bound-but-still-loading project needs one too.
   it.each([
     ['noSource', 'No project selected.'],
-    ['unavailable', 'Text Collection settings are not available for this project.'],
+    ['unavailable', 'Text Collection settings could not be loaded for this project.'],
     ['loading', 'Loading'],
   ] as const)('names a reason while the provider status is %s', async (status, expectedMessage) => {
     fallbackHookResult = unboundResult(status);
@@ -394,6 +407,29 @@ describe('View Options disabled reason', () => {
     const textsSection = screen.getByText(TEXTS_HEADER).parentElement;
     expect(textsSection).not.toBeNull();
     expect(textsSection?.textContent).not.toBe(TEXTS_HEADER);
+  });
+});
+
+describe('project change', () => {
+  it('remounts everything below the project choice, so no hook instance serves two projects', async () => {
+    // `useBufferedLayoutSetting`, inside the real sources hook, keeps the admin list it applied
+    // first. An instance carried from one project to the next would hand the incoming project the
+    // outgoing project's admin list, and the reconcile effect would prune the incoming project's
+    // saved cell order against it and save that.
+    hookResultsByProjectId.set(
+      'projectOne',
+      readyResult(twoResourceSources([]), createFakeTextConnectionPdp()),
+    );
+    hookResultsByProjectId.set(
+      'projectTwo',
+      readyResult(twoResourceSources([]), createFakeTextConnectionPdp()),
+    );
+
+    const { rerender } = await renderWebView({ projectId: 'projectOne' });
+    rerender(<ScriptureTextGridWebView {...makeProps({ projectId: 'projectTwo' })} />);
+
+    await waitFor(() => expect(sourcesHookCalls.at(-1)?.projectId).toBe('projectTwo'));
+    expect(sourcesHookCalls.filter((call) => call.mountedFor !== call.projectId)).toEqual([]);
   });
 });
 
@@ -441,6 +477,8 @@ describe('chapter-context split across a project change', () => {
 
     rerender(<ScriptureTextGridWebView {...makeProps({ projectId: 'projectTwo' })} />);
 
+    // The project change remounts the View Options panel, so reopen it to look.
+    await openViewOptions();
     expect(screen.getByText('Installing WEB…')).toBeInTheDocument();
   });
 });

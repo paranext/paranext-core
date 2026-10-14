@@ -22,6 +22,19 @@ const KNOWN_RESOURCE_TYPES = new Set([
   'sourceLanguageResource',
 ]);
 
+/**
+ * Unsubscribes from the user setting, warning rather than throwing if that fails. It rejects when
+ * the provider the subscription belongs to is already disposed, which a project switch routinely
+ * causes.
+ */
+function unsubscribeAndWarn(unsubscribe: () => Promise<boolean>) {
+  unsubscribe().catch((err) =>
+    logger.warn(
+      `Failed to unsubscribe from user text connection settings: ${getErrorMessage(err)}`,
+    ),
+  );
+}
+
 function getDeduplicationKey(item: ResourceReference): string | undefined {
   if ('id' in item && typeof item.id === 'string') return `id:${item.id}`;
   if ('name' in item && typeof item.name === 'string') return `name:${item.name}`;
@@ -106,6 +119,7 @@ export function useEffectiveResourceReferenceList(
     projectId,
   );
   const userPdp = userPdpState.status === 'ready' ? userPdpState.networkObject : undefined;
+  const isUserPdpUnavailable = userPdpState.status === 'unavailable';
 
   const [userResourceReferenceList, setUserResourceReferenceList] = useState<
     ResourceReferenceList | undefined
@@ -113,7 +127,9 @@ export function useEffectiveResourceReferenceList(
 
   useEffect(() => {
     if (!userPdp) {
-      setUserResourceReferenceList(undefined);
+      // A lookup that finished without a provider will not deliver a user layer, so the project-level
+      // items are the answer (see the hook doc), not a reason to keep loading.
+      setUserResourceReferenceList(isUserPdpUnavailable ? DEFAULT_LIST : undefined);
       return;
     }
 
@@ -134,9 +150,12 @@ export function useEffectiveResourceReferenceList(
 
     subscribePromise
       .then((unsub) => {
-        // Rejects when the provider it belongs to is already disposed. Reaching this branch means
-        // cleanup has already run, so that is the likely case rather than the exceptional one.
-        if (disposed) return unsub().then(() => undefined);
+        if (disposed) {
+          // Cleanup has already run. Not returned into this chain, so a failed unsubscribe is never
+          // reported by the `.catch` below as a failed subscribe.
+          unsubscribeAndWarn(unsub);
+          return undefined;
+        }
         unsubscribe = unsub;
         return undefined;
       })
@@ -152,30 +171,9 @@ export function useEffectiveResourceReferenceList(
 
     return () => {
       disposed = true;
-      // Rejects when the provider it belongs to is already disposed, which a project switch
-      // routinely causes; unhandled without this.
-      unsubscribe?.().catch((err) =>
-        logger.warn(
-          `Failed to unsubscribe from user text connection settings: ${getErrorMessage(err)}`,
-        ),
-      );
+      if (unsubscribe) unsubscribeAndWarn(unsubscribe);
     };
-  }, [userPdp, settingName]);
-
-  // `useBufferedLayoutSetting` copies the loaded value into its held copy from an effect, so on the
-  // commit where the project setting finishes loading `isProjectSettingLoading` is already false
-  // while `projectResourceReferenceList` is still the empty `DEFAULT_LIST` stand-in. Reporting
-  // `ready` on that commit hands the caller a merge with no admin items in it at all.
-  //
-  // This latch is declared after `useBufferedLayoutSetting`, so its effect runs after that hook's
-  // apply effect in the same flush: by the commit that observes `hasHeldCopyCaughtUp`, the held copy
-  // is the loaded value. Comparing the held copy to `DEFAULT_LIST` by reference would be simpler and
-  // wrong — a project whose stored setting really is the default is served that same object, and the
-  // list would never be reported ready at all.
-  const [hasHeldCopyCaughtUp, setHasHeldCopyCaughtUp] = useState(false);
-  useEffect(() => {
-    if (!isProjectSettingLoading) setHasHeldCopyCaughtUp(true);
-  }, [isProjectSettingLoading]);
+  }, [userPdp, isUserPdpUnavailable, settingName]);
 
   return useMemo(() => {
     // Readiness must account for BOTH sources. The user layer needs `useProjectDataProvider` to
@@ -191,9 +189,6 @@ export function useEffectiveResourceReferenceList(
     if (projectSettingError || isPlatformError(projectResourceReferenceList))
       return { status: 'error' };
 
-    // Checked after the error branch so a read failure is still reported on the commit it lands.
-    if (!hasHeldCopyCaughtUp) return { status: 'loading' };
-
     if (userResourceReferenceList === undefined) return { status: 'loading' };
 
     return {
@@ -205,7 +200,6 @@ export function useEffectiveResourceReferenceList(
     projectSettingError,
     projectResourceReferenceList,
     userResourceReferenceList,
-    hasHeldCopyCaughtUp,
   ]);
 }
 

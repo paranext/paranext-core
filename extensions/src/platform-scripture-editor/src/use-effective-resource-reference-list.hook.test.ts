@@ -7,6 +7,7 @@ import type {
   ITextConnectionSettingsProjectDataProvider,
 } from 'platform-scripture';
 import { useProjectSetting, useProjectDataProviderState } from '@papi/frontend/react';
+import { logger } from '@papi/frontend';
 import {
   useEffectiveResourceReferenceList,
   type EffectiveResourceReferenceListState,
@@ -157,6 +158,88 @@ describe('useEffectiveResourceReferenceList', () => {
         state.status === 'ready' && !state.list.items.some((item) => item.id === 'admin-001'),
     );
     expect(readyWithoutAdmin).toHaveLength(0);
+  });
+
+  it('never reports ready without the admin items while recovering from a failed first read', async () => {
+    // The first read is an error, so nothing is applied to the held copy. When the setting becomes
+    // readable the error clears on that commit, but the held copy is applied by an effect and is
+    // still the empty placeholder — a `ready` there is an empty prompt the panels would show.
+    const adminList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'Admin Text', id: 'admin-001' }],
+    };
+    serveProvider(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+    // Mount while loading, so the held copy starts as the placeholder rather than the error.
+    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
+
+    const observed: EffectiveResourceReferenceListState[] = [];
+    const { rerender } = renderHook(() => {
+      const state = useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts');
+      observed.push(state);
+      return state;
+    });
+
+    mockUseProjectSetting.mockReturnValue([makePlatformError(), undefined, undefined, false]);
+    rerender();
+    await waitFor(() => expect(observed.at(-1)?.status).toBe('error'));
+
+    mockUseProjectSetting.mockReturnValue([adminList, undefined, undefined, false]);
+    rerender();
+
+    await waitFor(() => expect(observed.at(-1)?.status).toBe('ready'));
+    const readyWithoutAdmin = observed.filter(
+      (state) =>
+        state.status === 'ready' && !state.list.items.some((item) => item.id === 'admin-001'),
+    );
+    expect(readyWithoutAdmin).toHaveLength(0);
+  });
+
+  it('returns the admin items when the user settings provider lookup is unavailable', async () => {
+    // The lookup finished without a provider, so no user layer is coming. The hook promises the
+    // admin items in that case rather than a spinner that never clears.
+    const adminList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'Admin Text', id: 'admin-001' }],
+    };
+    mockUseProjectSetting.mockReturnValue([adminList, undefined, undefined, false]);
+    // The mock only needs the discriminant the hook reads.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    mockUseProjectDataProviderState.mockReturnValue({ status: 'unavailable' } as never);
+
+    const { result } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(readyList(result.current).items).toEqual([
+      expect.objectContaining({ id: 'admin-001', source: 'admin' }),
+    ]);
+  });
+
+  it('logs a failed unsubscribe after unmount as a warning, not a subscribe error', async () => {
+    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
+    let resolveSubscribe: (unsub: () => Promise<boolean>) => void = () => {};
+    serveProvider({
+      subscribeUserModelTexts: vi.fn(
+        () =>
+          new Promise<() => Promise<boolean>>((resolve) => {
+            resolveSubscribe = resolve;
+          }),
+      ),
+    });
+
+    const { unmount } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+    unmount();
+    await act(async () => {
+      resolveSubscribe(() => Promise.reject(new Error('provider already disposed')));
+    });
+
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to unsubscribe from user text connection settings'),
+    );
+    expect(vi.mocked(logger.error)).not.toHaveBeenCalled();
   });
 
   it('clears the stale user list when the PDP goes away, preventing a wrong cross-project merge', () => {

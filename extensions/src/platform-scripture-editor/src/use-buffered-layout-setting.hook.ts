@@ -24,10 +24,10 @@ import type { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types
  * for the incoming project goes unreported. The held copy, arm flag, and error gate are private, so
  * a consumer cannot repair this from outside. A runtime tripwire `logger.warn`s on such a move.
  *
- * The Scripture Text Grid depends on the binding case: opened by the default layout with no
- * `projectId`, it is seeded once from the active editor's project and afterwards moves only by a
- * reload (see `resolveTextCollectionProjectId`). A consumer that needs to move in place would need
- * this hook to reset and re-arm when its project data provider changes; a reset keyed on
+ * The Scripture Text Grid never hands this hook a second project: everything that calls it sits
+ * under `ScriptureTextGridProjectView`, which is keyed by the grid's project id and so remounts on
+ * any project change, binding included. A consumer that needs to move in place without remounting
+ * would need this hook to reset and re-arm when its project data provider changes; a reset keyed on
  * `projectId` alone would still latch the outgoing provider's value.
  *
  * The mount arm waits for `isLoading` to be `false`: until the subscription resolves,
@@ -41,11 +41,12 @@ import type { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types
  * placeholder — indistinguishable from a genuinely empty setting. Once a real value has been
  * applied, a later failed read is swallowed so working content is not replaced by an error.
  *
- * @returns `[heldSetting, isLoading, settingError]`. `isLoading` and `settingError` describe the
- *   current read, not the held copy. The held copy is filled by an effect, so on the commit where a
- *   value first becomes readable `isLoading` is already `false` while `heldSetting` is still the
- *   placeholder. `settingError` is set while the setting cannot be read AND nothing readable has
- *   arrived yet. `heldSetting` may itself be a {@link PlatformError} if a first-render raw value
+ * @returns `[heldSetting, isLoading, settingError]`. `isLoading` is `true` until the held copy has
+ *   applied a real value — not merely until the read finishes, since the held copy is filled by an
+ *   effect and so is still the placeholder on the commit where a value first becomes readable — and
+ *   `true` again while a later read is in flight. It is `false` while a read error is reported on
+ *   `settingError`, which is set while the setting cannot be read AND nothing readable has been
+ *   applied yet. `heldSetting` may itself be a {@link PlatformError} if a first-render raw value
  *   were ever one; check with `isPlatformError`.
  */
 export function useBufferedLayoutSetting<ProjectSettingName extends ProjectSettingNames>(
@@ -100,7 +101,9 @@ export function useBufferedLayoutSetting<ProjectSettingName extends ProjectSetti
 
   return [
     heldSetting,
-    isLoading,
+    // Until a real value is applied the held copy is the placeholder, and a caller that reads it as
+    // the setting acts on nothing — e.g. prunes every admin item out of a saved order.
+    isLoading || (!hasAppliedRealValue && !isPlatformError(rawSetting)),
     isPlatformError(rawSetting) && !hasAppliedRealValue ? rawSetting : undefined,
   ];
 }
