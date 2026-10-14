@@ -29,7 +29,7 @@ import {
   getExtensionHostNotice,
   markExtensionHostRestarting,
   reportExtensionHostStopped,
-  resetExtensionHostStopped,
+  resetExtensionHostNotice,
 } from '@renderer/services/extension-host-stopped-store';
 import {
   getIsConnectionLost,
@@ -48,7 +48,7 @@ describe('extension-host-stopped service', () => {
     captured.clear();
     unsubscribers.clear();
     vi.mocked(sendCommand).mockReset();
-    resetExtensionHostStopped();
+    resetExtensionHostNotice();
     resetConnectionLost();
   });
 

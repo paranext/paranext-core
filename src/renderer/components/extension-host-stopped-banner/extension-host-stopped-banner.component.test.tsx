@@ -10,7 +10,7 @@ import {
   markExtensionHostRestarted,
   markExtensionHostRestarting,
   reportExtensionHostStopped,
-  resetExtensionHostStopped,
+  resetExtensionHostNotice,
 } from '@renderer/services/extension-host-stopped-store';
 import {
   reportConnectionLost,
@@ -125,7 +125,7 @@ describe('ExtensionHostStoppedBanner', () => {
 
   beforeEach(() => {
     FakeResizeObserver.instances = [];
-    resetExtensionHostStopped();
+    resetExtensionHostNotice();
     resetConnectionLost();
     vi.mocked(sendCommand).mockReset();
     vi.mocked(logger.error).mockClear();
@@ -506,6 +506,40 @@ describe('ExtensionHostStoppedBanner', () => {
       extensionHostStarts();
 
       expect(document.body).toHaveFocus();
+    });
+
+    it('does not pull focus back after the user clicked away from the strip onto the page', async () => {
+      render(<ExtensionHostStoppedBanner />);
+      stop('crashed');
+      act(() => screen.getByRole('button', RESTART_EXTENSIONS).focus());
+
+      await userEvent.click(document.body);
+      expect(document.body).toHaveFocus();
+      extensionHostStarts();
+
+      expect(document.body).toHaveFocus();
+    });
+  });
+
+  describe('button emphasis', () => {
+    it('makes Restart extensions the primary action while extensions are down', () => {
+      render(<ExtensionHostStoppedBanner />);
+      stop('crashed');
+
+      expect(screen.getByRole('button', RESTART_EXTENSIONS)).toHaveAttribute(
+        'data-variant',
+        'default',
+      );
+      expect(screen.getByRole('button', RESTART_APP)).toHaveAttribute('data-variant', 'outline');
+    });
+
+    it('keeps Restart app and Dismiss secondary once extensions are back', () => {
+      render(<ExtensionHostStoppedBanner />);
+      stop('crashed');
+      extensionHostStarts();
+
+      expect(screen.getByRole('button', RESTART_APP)).toHaveAttribute('data-variant', 'outline');
+      expect(screen.getByRole('button', DISMISS)).toHaveAttribute('data-variant', 'ghost');
     });
   });
 });

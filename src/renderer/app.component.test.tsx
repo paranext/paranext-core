@@ -33,9 +33,12 @@ vi.mock('./components/overlays/overlay-workspace-updating.component', () => ({
 vi.mock('./components/overlays/overlay-connection-lost.component', () => ({
   ConnectionLostOverlay: () => <div data-testid="connection-lost-overlay" />,
 }));
-vi.mock('./components/overlays/extension-host-stopped-banner.component', () => ({
-  ExtensionHostStoppedBanner: () => <div data-testid="extension-host-stopped-banner" />,
-}));
+vi.mock(
+  './components/extension-host-stopped-banner/extension-host-stopped-banner.component',
+  () => ({
+    ExtensionHostStoppedBanner: () => <div data-testid="extension-host-stopped-banner" />,
+  }),
+);
 vi.mock('./components/first-run/first-run-overlay.component', () => ({
   FirstRunOverlay: () => <div data-testid="first-run-overlay" />,
 }));

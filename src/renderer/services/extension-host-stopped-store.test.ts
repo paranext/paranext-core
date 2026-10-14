@@ -5,7 +5,7 @@ import {
   markExtensionHostRestarted,
   markExtensionHostRestarting,
   reportExtensionHostStopped,
-  resetExtensionHostStopped,
+  resetExtensionHostNotice,
   revertExtensionHostRestart,
   subscribeToExtensionHostNotice,
 } from '@renderer/services/extension-host-stopped-store';
@@ -17,7 +17,7 @@ const RESTARTED_UNCONFIRMED = { phase: 'restarted', isConfirmed: false } as cons
 
 describe('extension-host-stopped store', () => {
   beforeEach(() => {
-    resetExtensionHostStopped();
+    resetExtensionHostNotice();
   });
 
   it('starts empty', () => {
@@ -214,7 +214,7 @@ describe('extension-host-stopped store', () => {
     const listener = vi.fn();
     subscribeToExtensionHostNotice(listener);
     reportExtensionHostStopped({ reason: 'crashed' });
-    resetExtensionHostStopped();
+    resetExtensionHostNotice();
 
     reportExtensionHostStopped({ reason: 'crashed' });
 

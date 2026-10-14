@@ -1,7 +1,7 @@
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useWindowBlockingOverlay } from '@renderer/hooks/use-window-blocking-overlay.hook';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { getToolbarHeight } from '@renderer/components/toolbar-height.util';
+import { getDockTop } from '@renderer/components/toolbar-height.util';
 import { CANCEL_ENTER_ZOOM_STYLE } from '@renderer/components/overlays/full-screen-dialog.util';
 import { getDockLayoutSync } from '@renderer/services/web-view.service-shard';
 import { getNavigationTargetWebView } from '@renderer/services/window.service-shard';
@@ -92,14 +92,15 @@ export function WorkspaceUpdatingOverlayPresentational({ label, isPowerMode }: P
         // than leaving `aria-describedby` pointing at an element that does not exist.
         aria-describedby={undefined}
         // Inline insets rather than the `tw:top-12 tw:right-2 tw:bottom-2 tw:left-2` class form,
-        // which for some reason did not work. The top value clears the toolbar; the other three
+        // which for some reason did not work. The top value is where the dock starts — below the
+        // toolbar and any strip under it — because this covers the dock, not the strip; the other three
         // allow for the window borders. 8px insets would match the border size, but some content
         // can drift into the border area and make the border look dirty at that inset, so these are
         // 2px — worth revisiting once that drift is cleaned up.
         style={{
           ...CANCEL_ENTER_ZOOM_STYLE,
           zIndex: Z_INDEX_WORKSPACE_UPDATING,
-          top: getToolbarHeight(isPowerMode),
+          top: getDockTop(isPowerMode),
           right: 2,
           bottom: 2,
           left: 2,

@@ -7,6 +7,10 @@ import { useExtensionHostNotice } from '@renderer/hooks/use-extension-host-notic
 import { useIsConnectionLost } from '@renderer/hooks/use-is-connection-lost.hook';
 import { BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE } from '@renderer/components/toolbar-height.util';
 import {
+  ALARM_STRIP_ACTIONS_CLASS_NAME,
+  ALARM_STRIP_ALERT_CLASS_NAME,
+} from '@renderer/components/alarm-strip.util';
+import {
   dismissExtensionHostNotice,
   ExtensionHostNotice,
   markExtensionHostRestarted,
@@ -34,7 +38,7 @@ export const EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY =
 export const EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY =
   '%extensionHostStopped_restartedMessage%' satisfies LocalizeKey;
 export const EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY =
-  '%extensionHostStopped_restartUnconfirmed_title%' satisfies LocalizeKey;
+  '%extensionHostStopped_restartUnconfirmedTitle%' satisfies LocalizeKey;
 export const EXTENSION_HOST_STOPPED_DISMISS_KEY =
   '%extensionHostStopped_dismiss%' satisfies LocalizeKey;
 
@@ -75,9 +79,9 @@ export const LOCALIZED_STRING_KEYS: ExtensionHostStoppedKey[] = [
 export const ENGLISH_FALLBACKS: { [K in ExtensionHostStoppedKey]: string } = {
   [EXTENSION_HOST_STOPPED_TITLE_KEY]: 'Extensions have stopped working',
   [EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY]:
-    'Extensions lost contact with the rest of the app. Editing and most tabs will not respond until they are restarted.',
+    'Extensions lost contact with the rest of the app. Editing and most tabs will not respond until extensions are restarted.',
   [EXTENSION_HOST_STOPPED_MESSAGE_CRASHED_KEY]:
-    'Extensions stopped unexpectedly. Editing and most tabs will not respond until they are restarted.',
+    'Extensions stopped unexpectedly. Editing and most tabs will not respond until extensions are restarted.',
   [EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY]: 'Restart extensions',
   [EXTENSION_HOST_STOPPED_RESTART_APP_KEY]: 'Restart app',
   [EXTENSION_HOST_STOPPED_RESTARTING_KEY]: 'Restarting extensions. This can take a moment…',
@@ -159,10 +163,6 @@ export function ExtensionHostStoppedBannerPresentational({
 }: Props) {
   const isAlarm = phase !== 'restarted';
   const isRestarting = phase === 'restarting';
-  // `diff-deleted` is the text-grade red that reaches 4.5:1 contrast where `destructive` does not;
-  // see `overlay-connection-lost.component.tsx`.
-  const alarmClassName =
-    'tw:rounded-none tw:border-x-0 tw:border-destructive/40 tw:bg-transparent tw:px-3 tw:text-diff-deleted tw:has-[>svg]:grid-cols-[auto_1fr_auto] tw:*:data-[slot=alert-description]:text-diff-deleted/90';
   const calmClassName =
     'tw:rounded-none tw:border-x-0 tw:bg-transparent tw:px-3 tw:has-[>svg]:grid-cols-[auto_1fr_auto]';
   let icon = <TriangleAlert aria-hidden="true" />;
@@ -172,8 +172,10 @@ export function ExtensionHostStoppedBannerPresentational({
     ) : (
       <CircleAlert aria-hidden="true" />
     );
+  // While extensions are down, restarting them is the primary action and restarting the app the
+  // fallback; once they are back, Restart app is the only action left besides Dismiss.
   const restartExtensionsButton = isAlarm ? (
-    <Button variant="outline" size="sm" disabled={isRestarting} onClick={onRestartExtensions}>
+    <Button variant="default" size="sm" disabled={isRestarting} onClick={onRestartExtensions}>
       {restartExtensionsLabel}
     </Button>
   ) : undefined;
@@ -189,12 +191,14 @@ export function ExtensionHostStoppedBannerPresentational({
         // Alert's own role="alert" would nest an assertive region inside the polite one; see
         // `overlay-connection-lost.component.tsx`.
         role={undefined}
-        className={isAlarm ? alarmClassName : calmClassName}
+        className={isAlarm ? ALARM_STRIP_ALERT_CLASS_NAME : calmClassName}
       >
         {icon}
         <AlertTitle>{title}</AlertTitle>
         <AlertDescription>{message}</AlertDescription>
-        <div className="tw:col-start-3 tw:row-span-2 tw:row-start-1 tw:flex tw:gap-2 tw:self-center tw:ps-3">
+        {/* Not a `ButtonGroup`: that renders a merged, segmented control for related toggles, and
+            these are separate, alternative actions. */}
+        <div className={ALARM_STRIP_ACTIONS_CLASS_NAME}>
           {restartExtensionsButton}
           <Button variant="outline" size="sm" onClick={onRestartApp}>
             {restartAppLabel}
@@ -261,6 +265,9 @@ export function ExtensionHostStoppedBanner() {
   // A phase change disables or removes buttons, and a focused button that goes drops keyboard focus
   // to the document body. Catch it on the strip itself, so a keyboard user stays where they were.
   // Only when focus was last inside the strip, so the strip never pulls focus away from elsewhere.
+  // Keyed on the phase alone: when the connection-lost state empties the strip with the phase
+  // unchanged, focus is deliberately left alone, because that overlay takes over the whole window
+  // and manages focus itself.
   useLayoutEffect(() => {
     if (previousPhaseRef.current === phase) return;
     previousPhaseRef.current = phase;
@@ -278,12 +285,15 @@ export function ExtensionHostStoppedBanner() {
     hasFocusWithinRef.current = true;
   }, []);
 
-  // Focus moving to another element outside the strip ends "focus within". Focus dropping to
-  // nothing (`relatedTarget` null, as when the focused button is removed) does not.
+  // Focus leaving the strip ends "focus within", whether it moves to another element or drops to the
+  // page because the user clicked elsewhere. A blur this banner caused does not: a focused button
+  // that a phase change disabled or removed, which the effect above rescues.
   const handleBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
     const next = event.relatedTarget;
-    if (next instanceof Node && !event.currentTarget.contains(next))
-      hasFocusWithinRef.current = false;
+    if (next instanceof Node && event.currentTarget.contains(next)) return;
+    const left = event.target;
+    if (!left.isConnected || left.matches(':disabled')) return;
+    hasFocusWithinRef.current = false;
   }, []);
 
   const handleRestartExtensions = useCallback(async () => {

@@ -33,7 +33,7 @@ function WithSimulatedApp(Story: Parameters<Decorator>[0]): ReturnType<Decorator
 const meta: Meta<typeof ExtensionHostStoppedBannerPresentational> = {
   title: 'Advanced/ExtensionHostStoppedBanner',
   component: ExtensionHostStoppedBannerPresentational,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
   decorators: [WithSimulatedApp],
   parameters: {
     docs: {

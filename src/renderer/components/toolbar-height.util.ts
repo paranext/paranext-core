@@ -32,6 +32,15 @@ export function getToolbarHeight(isPowerMode: boolean): number {
  * CSS custom property, set on the document root, holding the measured height of the strip that sits
  * in flow between the toolbar and the dock (the extension-host-stopped banner). The dock adds it to
  * its top inset, so the strip pushes the dock down instead of covering its top row of tabs. Unset,
- * the dock reads it as `0px`.
+ * it reads as `0px`.
  */
 export const BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE = '--below-toolbar-strip-height';
+
+/**
+ * CSS `top` for a layer that starts where the dock starts: below the toolbar and below the strip
+ * under it ({@link BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE}). Use it for anything meant to cover the
+ * dock, so it neither paints over the strip nor leaves a gap when there is none.
+ */
+export function getDockTop(isPowerMode: boolean): string {
+  return `calc(${getToolbarHeight(isPowerMode)}px + var(${BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE}, 0px))`;
+}

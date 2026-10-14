@@ -29,8 +29,8 @@ describe('platform.getExtensionHostStoppedState', () => {
 
   it('describes its result with the shared stop schema, or null', async () => {
     const { docs } = await registered();
-    expect(docs?.method?.result?.schema).toEqual({
-      anyOf: [EXTENSION_HOST_STOPPED_EVENT_SCHEMA, { type: 'null' }],
+    expect(docs?.method?.result).toMatchObject({
+      schema: { anyOf: [EXTENSION_HOST_STOPPED_EVENT_SCHEMA, { type: 'null' }] },
     });
   });
 

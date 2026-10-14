@@ -114,6 +114,6 @@ export function dismissExtensionHostNotice(): void {
  *
  * @internal
  */
-export function resetExtensionHostStopped(): void {
+export function resetExtensionHostNotice(): void {
   notice = undefined;
 }
