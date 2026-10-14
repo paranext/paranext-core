@@ -665,7 +665,7 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.update).toHaveBeenCalledWith({ filterText: 'q' });
   });
 
-  it('enter session: nothing lands and the palette stays open — it guards a pending split like selection guards a selection', () => {
+  it('enter session: nothing lands and the palette stays open — the pending split is not committed', () => {
     // Unlike 'backslash', which can let an unrelated key land while dismissing because nothing is
     // pending for it, 'enter' holds the user's paragraph split: the web view claims the Enter and
     // withholds the split until the palette commits, so a key that landed would also discard the

@@ -2757,10 +2757,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             event.stopPropagation();
             return;
           }
-          // ACTIVE palette: the trigger never lands, whatever the selection shape — typing
-          // filters the palette, not the document. In capture phase the claim keeps Lexical
-          // from ever seeing the `\`. (`passive` still selects the overlay's
-          // non-focus-stealing display for the collapsed caret.)
+          // The trigger never lands, whatever the selection shape — typing filters the palette,
+          // not the document. In capture phase the claim keeps Lexical from ever seeing the `\`.
+          // Every kind opens the same way now: focus goes to the palette's LIST.
           // Claimed only when a palette actually opens: with nothing to offer, the `\` is an
           // ordinary character and must still reach the document.
           if (openMarkerPaletteAtCaret()) {

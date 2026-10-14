@@ -35,9 +35,11 @@
  *   selection, leaving nothing for a second marker to attach to.
  * - **Enter and Tab**, unmodified or with Shift, commit the highlighted item; with zero matches
  *   nothing happens and the palette stays open.
- * - **Ctrl/Cmd/Alt chords** (never AltGr) CLOSE the palette and do their normal job. Chord+Enter is
- *   still claimed on the way out: cmdk acts on any un-prevented Enter regardless of modifiers, so
- *   an unclaimed one would click the highlighted item while the dismissal is in flight.
+ * - **Ctrl/Cmd/Alt chords** (never AltGr) CLOSE the palette. The table does not claim them, but
+ *   with focus in the palette they do not reach the editor either — Ctrl+Z and Ctrl+B do nothing
+ *   there. Chord+Enter IS claimed on the way out: cmdk acts on any un-prevented Enter regardless of
+ *   modifiers, so an unclaimed one would click the highlighted item while the dismissal is in
+ *   flight.
  * - **Escape** closes. **Up/Down** move the highlight.
  * - **Everything else** — punctuation, accented Latin, every non-Latin script, `Dead`, Delete and the
  *   navigation keys — is IGNORED: claimed, so nothing reaches the text, and the palette stays open.
@@ -392,7 +394,9 @@ export function handleMarkerPaletteSessionKeyDown(
     !event.getModifierState?.('AltGraph')
   ) {
     // A real chord (Ctrl+C, Cmd+V, …): never ingest it into the filter, and normally never claim
-    // it — let it do its normal job. The palette is no longer relevant to what happens next. AltGr
+    // it — the palette is no longer relevant to what happens next, so leave the key alone. Note
+    // that leaving it unclaimed is not the same as letting it act on the EDITOR: focus is in the
+    // palette and the host stops propagation, so Ctrl+Z and Ctrl+B reach nothing. AltGr
     // is the exception: on Windows/Linux a character typed WITH AltGr held reports `ctrlKey &&
     // altKey` both set, so without the explicit exclusion ordinary typing on several European
     // layouts dismissed the session.
@@ -427,10 +431,11 @@ export function handleMarkerPaletteSessionKeyDown(
     const matches = filterAndRankPaletteItems(
       session.items.map((item) => ({ label: item.marker })),
       session.filter,
-      // Containment, for every kind: all marker palettes are host-driven (the session owns the
-      // query and the palette renders it read-only), so this commit must resolve against the same
-      // list the host filtered. Ranking cmdk's way here instead would commit an item the rendered
-      // list never offered.
+      // The host-driven mode, for every kind: all marker palettes are host-driven (the session
+      // owns the query and the palette renders it read-only), so this commit must resolve against
+      // the same list the host filtered. `'passive'` is that mode's name — a label PREFIX match,
+      // mirroring PT9's marker dropdown — not containment. Ranking cmdk's way here instead would
+      // commit an item the rendered list never offered.
       'passive',
     );
     if (matches.length === 0) {

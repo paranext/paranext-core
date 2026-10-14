@@ -171,32 +171,34 @@ focused input whatever a handler cancels, and once a composition is under way pe
 longer apply to it. With the list focused no composition starts, so a dead key arrives as an
 ordinary keydown and the ignore rule covers it.
 
-**The editor stays fully editable and keeps its caret throughout.** An earlier design made the
-content element non-editable for the life of a session; that worked, but it blurred the editor, so
-keys landed on the page body, the caret was lost, focus did not come back after a `\` palette
+**The editor stays fully editable for the life of a session.** It does not show a caret while a
+palette is open — the palette holds focus — but the caret it had is captured on focus-out and
+restored on every way the session ends, so the user lands back where they were. An earlier design
+made the content element non-editable instead; that worked, but it blurred the editor, so keys
+landed on the page body, the caret was lost for good, focus did not come back after a `\` palette
 closed, and the popover and the footnote pane each needed their own copy. Routing is now simply
 "the editor has focus", in both consumers.
 
-**Known gap — the editor's own settles can close a palette.** A pending marker edit settles on
-blur, and again one second after the last change. Both fire while a palette is open: the blur
-settle as focus moves to the palette, the idle settle a second later. A settle updates the editor,
-which moves the selection, which makes Lexical focus the editor root and pull focus out of the
-palette — and the renderer then dismisses it on window blur. Reproducible as `\qt-s`, `\`, wait:
-the reopened palette closes by itself.
+**The editor's own settles are suspended while a palette is open.** Three clocks would otherwise
+close one: the blur settle as focus moves to the palette, the idle settle a second later, and the
+caret-departure settle on any commit at all. A settle commits dirty nodes, Lexical re-asserts the
+DOM selection on such a commit and focuses the editor root when focus has left it, and the renderer
+then dismisses the palette on the window blur that follows. It was reproducible as `\`, `nd`, `\`,
+wait: the reopened palette closed by itself, on Windows and macOS alike.
 
-Settling before the palette opens does NOT fix this. `commitPendingMarkerEdits` deliberately skips
-the node under a live caret while the editor holds DOM focus, which is exactly where the pending
-edit is at trigger time — so it cannot settle the one node that matters, while it can force-settle
-unrelated pending nodes and push a history entry the user never asked for. Closing this needs a
-pause/resume API on `EditorRef` in `scripture-editors` (setting `markerSettleDelayMs` to `-1` is
-not enough: it does not cancel an already-armed timer), which has to land there first.
+`EditorRef.setMarkerSettleSuspended` holds all three for the life of a session. The session writers
+are the only thing that calls it — suspend synchronously as a session is set, before focus moves,
+because the blur settle fires on the focus move itself; resume when none is left. Settling before
+the palette opens was considered and does not work: `commitPendingMarkerEdits` deliberately skips
+the node under a live caret, which is exactly where the pending edit is at trigger time, so it
+cannot settle the one node that matters while it can force-settle unrelated nodes and push a history
+entry nobody asked for.
 
 **The one accepted gap:** the session is created synchronously in the trigger's keydown, and for a
 short window before the palette has focus the editor still does. Keys in that window are routed to
 the same table by each consumer's capture-phase listener, but a COMPOSITION begun there cannot be
 forwarded — so the consumer closes the palette on `compositionstart` and lets the composed text land
-as ordinary typing. Both consumers have their own handler for this, because each owns its own
-session.
+as ordinary typing. One shared hook does this for both consumers.
 
 **Known gap — `paste`, `cut` and `drop` are no longer blocked.** The input lock used to cancel them
 in document capture, because the editor's own listeners check its editable FLAG rather than the DOM

@@ -589,9 +589,10 @@ export default function FootnoteEditor({
    * scoped to this popover's own `.editor-input` and driven by its own `editorRef`. Both kinds are
    * ACTIVE: the trigger is claimed and never lands, and typed characters filter the palette through
    * the shared capture-phase table (`handleMarkerPaletteSessionKeyDown`) — never the document. The
-   * collapsed-caret trigger opens a non-focus-stealing palette (`kind: 'backslash'`); the
-   * selection-wrap trigger opens a FOCUSED palette tracked as `kind: 'selection'`, whose keys the
-   * table claims wholesale because the cross-frame focus handoff can lose, and an unclaimed
+   * collapsed-caret trigger opens one tracked as `kind: 'backslash'`; the selection-wrap trigger
+   * opens one tracked as `kind: 'selection'`. Both focus the palette's LIST — the kind decides how
+   * a commit APPLIES, not focus — and the table claims their keys wholesale because the
+   * cross-frame focus handoff can lose, and an unclaimed
    * keystroke would replace the wrapped selection.
    */
   const paletteSession = useRef<MarkerPaletteOpenSession<EditorMarkerMenuItem> | undefined>(

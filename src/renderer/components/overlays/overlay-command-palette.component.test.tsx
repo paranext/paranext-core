@@ -343,8 +343,8 @@ describe('OverlayCommandPalettePresentational', () => {
     it('should focus the search input of an ANCHORED palette, whose input mounts after the palette', async () => {
       // Anchored mode renders the input inside a Radix Popover portal, which mounts its content on
       // a render AFTER the palette's own mount effects have run — so at the first attempt there is
-      // no input to focus yet. The Enter paragraph palette is anchored and never forwards keys, so
-      // an unfocused one leaves every typed filter character landing in the document instead.
+      // no input to focus yet. An anchored palette that fails to focus leaves every typed filter
+      // character landing in the document instead.
       render(
         <OverlayCommandPalettePresentational
           items={sampleItems}

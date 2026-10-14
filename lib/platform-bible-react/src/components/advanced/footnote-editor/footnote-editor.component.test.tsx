@@ -451,7 +451,7 @@ describe('FootnoteEditor marker palette wiring', () => {
     });
   });
 
-  describe('editable marker mode with markerPalette, collapsed caret (non-focus-stealing palette)', () => {
+  describe('editable marker mode with markerPalette, collapsed caret', () => {
     it('claims the trigger (never lands) and opens the palette with ONE options object', () => {
       // The trigger `\` is claimed in every selection shape — nothing of the palette's ever
       // reaches the note. One options object rather than positional parameters, so an
@@ -1758,8 +1758,8 @@ describe('close-and-save settle (abandonment window)', () => {
       new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
     );
 
-    // Opening a palette settles once, deliberately, so the editor's own blur/idle settles have
-    // nothing left to do while it is open. Everything after that point is what this test is about.
+    // Nothing settles on open any more — the host suspends the editor's own clocks for the life of
+    // a session instead. The count is taken here so this test measures only what follows.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const settleMock = editorRef.commitPendingMarkerEdits as ReturnType<typeof vi.fn>;
     const settlesBefore = settleMock.mock.calls.length;
