@@ -564,6 +564,180 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
+        public async Task TwoSyncEnds_KeepRecheckingUntilACheckStartedAfterTheSecondCompletes()
+        {
+            // A's second to fourth checks block until released. A is marked, so every post-sync
+            // pass reaches it before B: B's check shows the pass has found A's check running and
+            // asked it for a re-run.
+            using var aChecks = new CallGates(2, 3, 4);
+            using var bChecked = new SemaphoreSlim(0);
+            int aCalls = 0;
+            var events = new List<UnsyncedChangesState>();
+            using var tracker = CreateTracker(
+                id =>
+                {
+                    if (id == "B")
+                    {
+                        bChecked.Release();
+                        return false;
+                    }
+                    aChecks.Enter(Interlocked.Increment(ref aCalls));
+                    return true;
+                },
+                events
+            );
+            tracker.OnWriteScopeExited("A");
+            await tracker.FlushAsync();
+            Assert.That(tracker.GetState().ToSend, Is.EquivalentTo(new[] { "A" }), "A is marked");
+
+            // The baseline scan's check of A runs across the first sync's end.
+            tracker.StartBaselineScan();
+            Assert.That(aChecks.WaitStarted(2), Is.True, "A's second check started");
+            RunSync(tracker, "B");
+            Assert.That(bChecked.Wait(TimeSpan.FromSeconds(5)), Is.True, "the first pass ran");
+
+            // Its re-run starts after the first sync's end and runs across the second's.
+            aChecks.Release(2);
+            Assert.That(aChecks.WaitStarted(3), Is.True, "A's third check started");
+            RunSync(tracker, "B");
+            Assert.That(bChecked.Wait(TimeSpan.FromSeconds(5)), Is.True, "the second pass ran");
+
+            // Only the fourth check started after the second sync's end.
+            aChecks.Release(3);
+            Assert.That(aChecks.WaitStarted(4), Is.True, "A's fourth check started");
+            Assert.That(
+                SpinWait.SpinUntil(
+                    () => !tracker.GetState().IsRechecking,
+                    TimeSpan.FromMilliseconds(500)
+                ),
+                Is.False,
+                "a check that started before the second sync's end does not settle its recheck"
+            );
+
+            aChecks.Release(4);
+            await tracker.FlushAsync();
+
+            Assert.That(aCalls, Is.EqualTo(4));
+            Assert.That(tracker.GetState().IsRechecking, Is.False);
+            lock (events)
+                Assert.That(events.Last().IsRechecking, Is.False, "the clearing state was pushed");
+        }
+
+        [Test]
+        public async Task OwedRecheck_ParkedByANewSync_KeepsRecheckingUntilThatSyncsRecheckCompletes()
+        {
+            using var aChecks = new CallGates(1, 2);
+            bool syncing = false;
+            int calls = 0;
+            var events = new List<UnsyncedChangesState>();
+            using var tracker = CreateTracker(
+                _ =>
+                {
+                    aChecks.Enter(Interlocked.Increment(ref calls));
+                    return false;
+                },
+                events,
+                () => Volatile.Read(ref syncing)
+            );
+            tracker.OnWriteScopeExited("A");
+            Assert.That(aChecks.WaitStarted(1), Is.True, "the write's check is running");
+            RunSync(tracker, "A");
+
+            // The next sync is already under way (its live read reports it before its signal
+            // arrives), so the recheck A is owed parks instead of running.
+            Volatile.Write(ref syncing, true);
+            aChecks.Release(1);
+            await tracker.FlushAsync();
+            Assert.That(calls, Is.EqualTo(1), "the recheck parked");
+            Assert.That(tracker.GetState().IsRechecking, Is.True, "a parked recheck is still owed");
+
+            tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
+            Volatile.Write(ref syncing, false);
+            tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            Assert.That(aChecks.WaitStarted(2), Is.True, "the sync-end recheck started");
+            Assert.That(tracker.GetState().IsRechecking, Is.True, "still true mid-recheck");
+
+            aChecks.Release(2);
+            await tracker.FlushAsync();
+
+            Assert.That(tracker.GetState().IsRechecking, Is.False);
+            lock (events)
+                Assert.That(events.Last().IsRechecking, Is.False, "the clearing state was pushed");
+        }
+
+        [Test]
+        public async Task Dispose_ClearsAnOwedRecheck()
+        {
+            using var aChecks = new CallGates(1);
+            int calls = 0;
+            using var tracker = CreateTracker(
+                _ =>
+                {
+                    aChecks.Enter(Interlocked.Increment(ref calls));
+                    return false;
+                },
+                []
+            );
+            RunSync(tracker, "A");
+            Assert.That(aChecks.WaitStarted(1), Is.True, "the sync-end recheck started");
+            Assert.That(tracker.GetState().IsRechecking, Is.True);
+
+            tracker.Dispose();
+
+            Assert.That(tracker.GetState().IsRechecking, Is.False);
+            aChecks.Release(1);
+            await tracker.FlushAsync();
+        }
+
+        [Test]
+        public async Task WriteTriggeredCheck_DuringAPostSyncPass_DoesNotHoldRechecking()
+        {
+            using var aChecks = new CallGates(1);
+            using var bChecks = new CallGates(1);
+            int aCalls = 0;
+            int bCalls = 0;
+            var events = new List<UnsyncedChangesState>();
+            using var tracker = CreateTracker(
+                id =>
+                {
+                    if (id == "B")
+                        bChecks.Enter(Interlocked.Increment(ref bCalls));
+                    else
+                        aChecks.Enter(Interlocked.Increment(ref aCalls));
+                    return false;
+                },
+                events
+            );
+            RunSync(tracker, "B");
+            Assert.That(bChecks.WaitStarted(1), Is.True, "the sync-end recheck of B is running");
+
+            // A is edited during the pass: its check runs, and a second write asks it to re-run.
+            tracker.OnWriteScopeExited("A");
+            Assert.That(aChecks.WaitStarted(1), Is.True, "A's write check is running");
+            tracker.OnWriteScopeExited("A");
+            Assert.That(
+                SpinWait.SpinUntil(() => !tracker.HasPendingDebounce("A"), TimeSpan.FromSeconds(5)),
+                Is.True,
+                "the second write's trigger landed during A's check"
+            );
+
+            bChecks.Release(1);
+            Assert.That(
+                SpinWait.SpinUntil(() => !tracker.GetState().IsRechecking, TimeSpan.FromSeconds(5)),
+                Is.True,
+                "B's recheck clears the flag while A's write check still runs"
+            );
+
+            aChecks.Release(1);
+            await tracker.FlushAsync();
+
+            Assert.That(aCalls, Is.EqualTo(2), "A's check + its one re-run");
+            Assert.That(tracker.GetState().IsRechecking, Is.False);
+            lock (events)
+                Assert.That(events.Last().IsRechecking, Is.False);
+        }
+
+        [Test]
         public async Task SyncEndFromBothSignals_ChecksEachProjectAtMostTwice()
         {
             _tracker.StartBaselineScan();
@@ -626,6 +800,72 @@ namespace TestParanextDataProvider.Projects.SendReceive
             finally
             {
                 tracker.Dispose();
+            }
+        }
+
+        // A tracker over project A alone, with a zero debounce, recording every raised state.
+        private static UnsyncedChangesTracker CreateTracker(
+            Func<string, bool?> detect,
+            List<UnsyncedChangesState> events,
+            Func<bool>? isSyncing = null
+        )
+        {
+            var tracker = new UnsyncedChangesTracker(
+                detect,
+                isSyncing ?? (() => false),
+                () => new[] { "A" },
+                TimeSpan.Zero
+            );
+            tracker.Changed += state =>
+            {
+                lock (events)
+                    events.Add(state);
+            };
+            return tracker;
+        }
+
+        // A whole sync reported by the run marker: its start announcing the given projects, then
+        // its end.
+        private static void RunSync(UnsyncedChangesTracker tracker, params string[] projectIds)
+        {
+            tracker.OnSyncActivityChanged(new SyncActivityState(true, projectIds));
+            tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+        }
+
+        // Holds chosen calls of a detector (numbered from 1) until the test releases each one, and
+        // reports when each has started.
+        private sealed class CallGates : IDisposable
+        {
+            private readonly Dictionary<
+                int,
+                (ManualResetEventSlim Started, ManualResetEventSlim Released)
+            > _gates;
+
+            public CallGates(params int[] calls) =>
+                _gates = calls.ToDictionary(
+                    call => call,
+                    _ => (new ManualResetEventSlim(false), new ManualResetEventSlim(false))
+                );
+
+            public void Enter(int call)
+            {
+                if (!_gates.TryGetValue(call, out var gate))
+                    return;
+                gate.Started.Set();
+                gate.Released.Wait(TimeSpan.FromSeconds(10));
+            }
+
+            public bool WaitStarted(int call) => _gates[call].Started.Wait(TimeSpan.FromSeconds(5));
+
+            public void Release(int call) => _gates[call].Released.Set();
+
+            public void Dispose()
+            {
+                foreach (var (started, released) in _gates.Values)
+                {
+                    started.Dispose();
+                    released.Dispose();
+                }
             }
         }
 

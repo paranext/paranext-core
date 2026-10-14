@@ -34,6 +34,16 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <see cref="SendReceiveWriteLock.GetBlockState"/>) when it raises its end transition; if the other
 /// signal is still active then, the recheck parks again and runs when that one ends.
 /// </para>
+/// <para>
+/// <see cref="UnsyncedChangesState.IsRechecking"/> follows one rule. Sync ends are numbered in
+/// order, and each one stamps every project it queues for recheck with its number: the project
+/// owes a recheck. Every check records the number current when its read of the repository starts,
+/// and when it completes with any result it settles a stamp no newer than that number, because it
+/// observed the repository after that sync ended. A check that parks settles nothing; a project
+/// that no longer exists owes nothing. The flag is true while either sync signal is active or any
+/// project still owes a recheck. A check triggered by a write never owes one, though it settles
+/// one when it started after the stamp.
+/// </para>
 /// </summary>
 internal sealed class UnsyncedChangesTracker : IDisposable
 {
@@ -53,11 +63,13 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     private readonly HashSet<string> _syncCovered = []; // ids the current or last sync announced
     private bool _activityActive; // the run marker last reported a sync
     private bool _gateActive; // the write gate last reported armed
-    private int _postSyncPasses; // sync-end rechecks scheduled or running
-    private readonly HashSet<string> _owedRechecks = []; // post-sync rechecks queued behind a running check
+    private long _syncEndSequence; // the number of the latest sync end; 0 before the first
+
+    // id → number of the latest sync end that queued it for recheck, until a check settles it. A
+    // fresh stamp is always unsettled: a check reading that number starts after the stamp exists.
+    private readonly Dictionary<string, long> _owedStamps = [];
     private readonly Dictionary<string, CancellationTokenSource> _debounces = [];
     private readonly Dictionary<string, bool> _inFlight = []; // id → re-run requested
-    private long _syncEndCount;
     private int _outstandingWork;
     private TaskCompletionSource _idle = new();
     private bool _started;
@@ -129,10 +141,9 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     private UnsyncedChangesState StateLocked() =>
         new(_unsynced.ToArray(), Array.Empty<string>(), IsRecheckingLocked());
 
-    // Under _lock. True from the start of a sync (either signal) until the recheck that follows its
-    // end has finished, including a recheck that had to queue behind a check already running.
-    private bool IsRecheckingLocked() =>
-        _activityActive || _gateActive || _postSyncPasses > 0 || _owedRechecks.Count > 0;
+    // Under _lock. True from the start of a sync (either signal) until every project its end queued
+    // for recheck has been checked by a check that started after that end (see the class summary).
+    private bool IsRecheckingLocked() => _activityActive || _gateActive || _owedStamps.Count > 0;
 
     /// <summary>
     /// Subscribes to write-scope exits and both sync signals. Idempotent; does nothing on a
@@ -191,7 +202,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
 
     /// <summary>
     /// While a sync runs, records the project ids it announces; at the end of the run, rechecks
-    /// (see <see cref="RecheckAfterSync"/>).
+    /// (see <see cref="QueueRecheckAfterSyncLocked"/>).
     /// </summary>
     internal void OnSyncActivityChanged(SyncActivityState state)
     {
@@ -203,8 +214,8 @@ internal sealed class UnsyncedChangesTracker : IDisposable
 
     /// <summary>
     /// While the write gate is armed, records the project ids it blocks; when it disarms, rechecks
-    /// (see <see cref="RecheckAfterSync"/>). Arming starts no check: checks consult the gate when
-    /// they start.
+    /// (see <see cref="QueueRecheckAfterSyncLocked"/>). Arming starts no check: checks consult the
+    /// gate when they start.
     /// </summary>
     internal void OnBlockStateChanged(SendReceiveBlockState state)
     {
@@ -237,17 +248,26 @@ internal sealed class UnsyncedChangesTracker : IDisposable
 
     private void EndSyncSignal(bool isActivity)
     {
+        string[] ids;
+        bool isSettled;
         lock (_lock)
         {
             if (isActivity)
                 _activityActive = false;
             else
                 _gateActive = false;
-            // Counted in the same critical section as the flag clear, so the flag never reads
-            // false between the sync's end and the start of its recheck.
-            _postSyncPasses++;
+            if (_disposed)
+                return;
+            // Stamped in the same critical section as the flag clear, so the flag never reads
+            // false between the sync's end and its recheck.
+            ids = QueueRecheckAfterSyncLocked();
+            isSettled = !IsRecheckingLocked();
         }
-        RecheckAfterSync();
+        // With nothing queued and no other signal active, this end is what clears the flag; any
+        // other end leaves the clearing state to the check that settles the last owed stamp.
+        if (isSettled)
+            RaiseLatestState();
+        _ = Task.Run(() => RunPass(() => ids));
     }
 
     /// <summary>
@@ -257,50 +277,28 @@ internal sealed class UnsyncedChangesTracker : IDisposable
         service.GetSyncActivity().IsSyncing || SendReceiveWriteLock.GetBlockState().IsBlocking;
 
     /// <summary>
-    /// Rechecks the projects the sync announced (every project seen so far when it announced none),
-    /// every project currently marked unsynced, and every check parked during the sync. Marked
-    /// projects go first, then parked ones, then the rest, so a project the sync just sent leaves
-    /// the set before the pass spends time on any other project.
+    /// Numbers this sync end and queues its recheck, returning the projects for the caller to pass
+    /// to <see cref="RunPass"/>: the projects the sync announced (every project seen so far when it
+    /// announced none), every project currently marked unsynced, and every check parked during the
+    /// sync, each stamped as owing a recheck. Marked projects go first, then parked ones, then the
+    /// rest, so a project the sync just sent leaves the set before the pass spends time on any
+    /// other project. Under <c>_lock</c>; begins the work unit the pass ends.
     /// </summary>
-    private void RecheckAfterSync()
+    private string[] QueueRecheckAfterSyncLocked()
     {
-        string[] ids;
-        lock (_lock)
-        {
-            if (_disposed)
-                return;
-            _syncEndCount++;
-            ids =
-            [
-                .. _unsynced
-                    .Concat(_deferred)
-                    .Concat(_syncCovered.Count > 0 ? _syncCovered : _tracked)
-                    .Distinct(),
-            ];
-            _deferred.Clear();
-            // Two work units: RunPass ends one; RunPostSyncPass holds the other until it has
-            // lowered the pass count and pushed the state, so FlushAsync cannot complete earlier.
-            BeginWorkLocked();
-            BeginWorkLocked();
-        }
-        _ = Task.Run(() => RunPostSyncPass(ids));
-    }
-
-    // Runs the sync-end recheck, then lowers the pass count and pushes the state that carries the
-    // cleared IsRechecking flag, even when no project changed.
-    private void RunPostSyncPass(string[] ids)
-    {
-        try
-        {
-            RunPass(() => ids); // catches everything
-            lock (_lock)
-                _postSyncPasses--;
-            RaiseLatestState();
-        }
-        finally
-        {
-            EndWork();
-        }
+        _syncEndSequence++;
+        string[] ids =
+        [
+            .. _unsynced
+                .Concat(_deferred)
+                .Concat(_syncCovered.Count > 0 ? _syncCovered : _tracked)
+                .Distinct(),
+        ];
+        _deferred.Clear();
+        foreach (string id in ids)
+            _owedStamps[id] = _syncEndSequence;
+        BeginWorkLocked();
+        return ids;
     }
 
     /// <summary>Completes once no debounce, check, or scan is outstanding. For tests.</summary>
@@ -319,8 +317,8 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     }
 
     /// <summary>
-    /// Unsubscribes and cancels pending debounces. A check already running finishes, but raises
-    /// nothing.
+    /// Unsubscribes, cancels pending debounces, and drops every owed recheck, which no check will
+    /// settle any more. A check already running finishes, but raises nothing.
     /// </summary>
     public void Dispose()
     {
@@ -338,7 +336,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
             }
             debounces = [.. _debounces.Values];
             _debounces.Clear();
-            _owedRechecks.Clear();
+            _owedStamps.Clear();
         }
         foreach (CancellationTokenSource debounce in debounces)
             debounce.Cancel();
@@ -432,9 +430,6 @@ internal sealed class UnsyncedChangesTracker : IDisposable
         if (_inFlight.ContainsKey(id))
         {
             _inFlight[id] = true;
-            // The sync-end pass owes this project a recheck that the running check's re-run performs.
-            if (_postSyncPasses > 0)
-                _owedRechecks.Add(id);
             return false;
         }
         _inFlight[id] = false;
@@ -453,12 +448,12 @@ internal sealed class UnsyncedChangesTracker : IDisposable
             {
                 if (DeferIfSyncing(id))
                     return;
-                bool owedAtStart;
+                long startSequence;
                 lock (_lock)
-                    owedAtStart = _owedRechecks.Contains(id);
+                    startSequence = _syncEndSequence;
                 CheckResult result = Detect(id);
                 bool changed = false;
-                bool owedCleared = false;
+                bool settled = false;
                 lock (_lock)
                 {
                     switch (result)
@@ -476,16 +471,24 @@ internal sealed class UnsyncedChangesTracker : IDisposable
                         case CheckResult.Unknown:
                             break;
                     }
-                    // A check that began after the recheck was owed is the recheck.
-                    if (owedAtStart)
-                        owedCleared = _owedRechecks.Remove(id);
+                    // A check that started after the sync end that stamped the project observed
+                    // the post-sync repository, so it is that recheck whatever its result. A check
+                    // that started earlier leaves the stamp to a later one: the sync-end pass
+                    // either claims the project itself or asks this check for a re-run.
+                    if (
+                        _owedStamps.TryGetValue(id, out long owedSequence)
+                        && (startSequence >= owedSequence || result == CheckResult.Removed)
+                    )
+                        settled = _owedStamps.Remove(id);
                     rerun = _inFlight[id] && !_disposed;
                     if (rerun)
                         _inFlight[id] = false;
                     else
                         _inFlight.Remove(id);
                 }
-                if (changed || owedCleared)
+                // Settling the last owed stamp clears IsRechecking, which raises even when no
+                // project changed.
+                if (changed || settled)
                     RaiseLatestState();
             }
         }
@@ -502,14 +505,14 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     {
         while (true)
         {
-            long syncEndCount;
+            long syncEndSequence;
             lock (_lock)
-                syncEndCount = _syncEndCount;
+                syncEndSequence = _syncEndSequence;
             if (!IsSyncing())
                 return false;
             lock (_lock)
             {
-                if (syncEndCount != _syncEndCount)
+                if (syncEndSequence != _syncEndSequence)
                     continue;
                 _deferred.Add(id);
                 _inFlight.Remove(id);
