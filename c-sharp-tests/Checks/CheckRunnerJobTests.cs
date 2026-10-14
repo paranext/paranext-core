@@ -352,14 +352,14 @@ internal class CheckRunnerJobTests : PapiTestBase
     }
 
     [Test]
-    public void LookupCheckSetupStatus_IsExposedAndIsCheckSetupFollowsIt()
+    public void LookUpCheckSetupStatus_IsExposedAndIsCheckSetupFollowsIt()
     {
         _scrText.Settings.Quotes = new QuoteMarks("");
         var runner = CreateRunner();
 
         var state = Invoke<CheckSetupState>(
             runner,
-            "LookupCheckSetupStatus",
+            "LookUpCheckSetupStatus",
             s_quotationCheckId,
             _projectId
         );

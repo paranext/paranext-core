@@ -30,13 +30,12 @@ const seedProjects: ChecksSidePanelProject[] = [
 ];
 
 const seedChecksInfo: CheckInfo[] = [
-  { checkId: 'capitalization', checkName: 'Capitalization', isSetup: true, setupStatus: 'ready' },
-  { checkId: 'punctuation', checkName: 'Punctuation', isSetup: true, setupStatus: 'ready' },
-  { checkId: 'characters', checkName: 'Characters', isSetup: false, setupStatus: 'setupRequired' },
+  { checkId: 'capitalization', checkName: 'Capitalization', setupStatus: 'ready' },
+  { checkId: 'punctuation', checkName: 'Punctuation', setupStatus: 'ready' },
+  { checkId: 'characters', checkName: 'Characters', setupStatus: 'setupRequired' },
   {
     checkId: 'quotation',
     checkName: 'Quotation',
-    isSetup: true,
     setupStatus: 'notApplicable',
     notApplicableReason: '%checkSetup_notApplicable_quotationMarksNotUsed%',
   },

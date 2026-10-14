@@ -89,22 +89,22 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             ("getAvailableChecks", GetAvailableChecks),
             ("retrieveCheckJobUpdate", RetrieveCheckJobUpdate),
             ("isCheckSetupForProject", IsCheckSetupForProject),
-            ("lookupCheckSetupStatus", LookupCheckSetupStatus),
+            ("lookUpCheckSetupStatus", LookUpCheckSetupStatus),
             ("stopCheckJob", StopCheckJob),
         ];
     }
 
     /// <summary>
-    /// Marks only <c>lookupCheckSetupStatus</c> experimental (<c>x-experimental: true</c>); the rest
+    /// Marks only <c>lookUpCheckSetupStatus</c> experimental (<c>x-experimental: true</c>); the rest
     /// of the check runner contract is stable. Mirrors the <c>@experimental</c> tag on
-    /// <c>CheckConfigurationProvider.lookupCheckSetupStatus</c> in <c>platform-scripture.d.ts</c>.
+    /// <c>CheckConfigurationProvider.lookUpCheckSetupStatus</c> in <c>platform-scripture.d.ts</c>.
     /// </summary>
     protected override NetworkObjectDocumentation GetNetworkObjectDocumentation() =>
         new()
         {
             Methods = new Dictionary<string, OpenRpcSingleMethodDocumentation>
             {
-                ["lookupCheckSetupStatus"] = ExperimentalMethodDocumentation.Create(
+                ["lookUpCheckSetupStatus"] = ExperimentalMethodDocumentation.Create(
                     "Whether a check is ready to run on a project, needs setup first, or does not apply to it.",
                     [
                         ExperimentalMethodDocumentation.Param(
@@ -187,7 +187,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         return job.GenerateStatusReport(maxResultsToInclude);
     }
 
-    private CheckSetupState LookupCheckSetupStatus(string checkId, string projectId)
+    private CheckSetupState LookUpCheckSetupStatus(string checkId, string projectId)
     {
         ArgumentException.ThrowIfNullOrEmpty(checkId);
         ArgumentException.ThrowIfNullOrEmpty(projectId);
@@ -199,7 +199,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
     // A check that does not apply to the project counts as set up: the project has made its choice.
     private bool IsCheckSetupForProject(string checkId, string projectId) =>
-        LookupCheckSetupStatus(checkId, projectId).Status != CheckSetupStatus.SetupRequired;
+        LookUpCheckSetupStatus(checkId, projectId).Status != CheckSetupStatus.SetupRequired;
 
     private bool DenyCheckResult(
         string checkId,
@@ -296,7 +296,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             {
                 try
                 {
-                    state = LookupCheckSetupStatus(checkId, projectId);
+                    state = LookUpCheckSetupStatus(checkId, projectId);
                 }
                 catch (Exception)
                 {

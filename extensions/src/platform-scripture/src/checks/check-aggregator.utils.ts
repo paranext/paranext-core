@@ -45,17 +45,21 @@ export function mergeCheckErrors(reports: CheckJobStatusReport[]): CheckJobError
 }
 
 /**
- * Asks a check runner for a check's setup status. A runner that predates `lookupCheckSetupStatus`
+ * Asks a check runner for a check's setup status. A runner that predates `lookUpCheckSetupStatus`
  * rejects the call, so the answer is derived from its `isCheckSetupForProject` instead; when that
  * also rejects, the original lookup error is rethrown.
+ *
+ * Falls back on ANY rejection on purpose: telling "method not found" apart from a real error would
+ * mean matching JSON-RPC error message text. A real error therefore costs one extra failing
+ * `isCheckSetupForProject` call before the original error is rethrown.
  */
-export async function lookupCheckSetupStatusWithFallback(
-  runner: Pick<CheckConfigurationProvider, 'lookupCheckSetupStatus' | 'isCheckSetupForProject'>,
+export async function lookUpCheckSetupStatusWithFallback(
+  runner: Pick<CheckConfigurationProvider, 'lookUpCheckSetupStatus' | 'isCheckSetupForProject'>,
   checkId: string,
   projectId: string,
 ): Promise<CheckSetupState> {
   try {
-    return await runner.lookupCheckSetupStatus(checkId, projectId);
+    return await runner.lookUpCheckSetupStatus(checkId, projectId);
   } catch (lookupError) {
     try {
       const isSetUp = await runner.isCheckSetupForProject(checkId, projectId);

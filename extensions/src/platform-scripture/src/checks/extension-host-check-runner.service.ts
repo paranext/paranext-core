@@ -37,7 +37,7 @@ import { addCheckError } from './check-aggregator.utils';
 import {
   CHECK_RUNNER_NETWORK_OBJECT_TYPE,
   CHECK_STOP_DEFAULT_TIMEOUT_MS,
-  LOOKUP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION,
+  LOOK_UP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION,
 } from './check.model';
 import { PersistedCheckRunResults } from './persisted-check-run-result.model';
 
@@ -190,7 +190,7 @@ class CheckRunnerEngine
   // use instance state but cannot be static because it implements the CheckConfigurationProvider
   // interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  async lookupCheckSetupStatus(
+  async lookUpCheckSetupStatus(
     // Parameters are required by the interface but unused since every check is ready.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _checkId: string,
@@ -454,7 +454,7 @@ async function initialize(): Promise<void> {
             checkRunnerEngine,
             CHECK_RUNNER_NETWORK_OBJECT_TYPE,
             undefined,
-            { methods: [LOOKUP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION] },
+            { methods: [LOOK_UP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION] },
           );
           unsubscribers.add(dataProvider.dispose);
           unsubscribers.add(
