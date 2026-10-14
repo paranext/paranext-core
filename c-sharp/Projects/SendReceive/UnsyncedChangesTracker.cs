@@ -8,8 +8,8 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <para>
 /// A project is (re)checked when a write scope for it closes
 /// (<see cref="SendReceiveWriteLock.WriteScopeExited"/>, debounced per project so a burst of edits
-/// costs one check), when a Send/Receive run ends (every project seen so far), and once for every
-/// project in the baseline scan. A check re-reads the repository through
+/// costs one check), when a Send/Receive run ends (the projects it announced, or every project seen so far when it
+/// announced none; plus every marked project), and once for every project in the baseline scan. A check re-reads the repository through
 /// <see cref="ParatextProjectSendReceiveService.HasUnsyncedLocalChanges"/> rather than trusting the
 /// trigger, and never writes project data.
 /// </para>
@@ -48,6 +48,9 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     private readonly HashSet<string> _unsynced = [];
     private readonly HashSet<string> _tracked = []; // every known project checked so far
     private readonly HashSet<string> _deferred = []; // checks parked while a sync was active
+    private readonly HashSet<string> _syncCovered = []; // ids the current or last sync announced
+    private bool _activityActive; // the run marker last reported a sync
+    private bool _gateActive; // the write gate last reported armed
     private readonly Dictionary<string, CancellationTokenSource> _debounces = [];
     private readonly Dictionary<string, bool> _inFlight = []; // id → re-run requested
     private long _syncEndCount;
@@ -165,21 +168,61 @@ internal sealed class UnsyncedChangesTracker : IDisposable
         _ = DebounceThenCheckAsync(id, debounce);
     }
 
-    /// <summary>At the end of a sync run, rechecks; see <see cref="RecheckAfterSync"/>.</summary>
+    /// <summary>
+    /// While a sync runs, records the project ids it announces; at the end of the run, rechecks
+    /// (see <see cref="RecheckAfterSync"/>).
+    /// </summary>
     internal void OnSyncActivityChanged(SyncActivityState state)
     {
-        if (!state.IsSyncing)
-            RecheckAfterSync();
+        if (state.IsSyncing)
+            NoteSyncSignal(isActivity: true, state.ProjectIds);
+        else
+            EndSyncSignal(isActivity: true);
     }
 
     /// <summary>
-    /// When the write gate disarms, rechecks; see <see cref="RecheckAfterSync"/>. Arming needs no
-    /// action: checks consult the gate when they start.
+    /// While the write gate is armed, records the project ids it blocks; when it disarms, rechecks
+    /// (see <see cref="RecheckAfterSync"/>). Arming starts no check: checks consult the gate when
+    /// they start.
     /// </summary>
     internal void OnBlockStateChanged(SendReceiveBlockState state)
     {
-        if (!state.IsBlocking)
-            RecheckAfterSync();
+        if (state.IsBlocking)
+            NoteSyncSignal(isActivity: false, state.ProjectIds);
+        else
+            EndSyncSignal(isActivity: false);
+    }
+
+    // Both signals' announced ids go into one set that resets when the next sync begins (neither
+    // signal active), so the second pass of a sync that ends both signals rechecks the same
+    // projects as the first.
+    private void NoteSyncSignal(bool isActivity, IEnumerable<string> projectIds)
+    {
+        string[] ids = [.. Normalize(projectIds ?? [])];
+        lock (_lock)
+        {
+            if (_disposed)
+                return;
+            if (!_activityActive && !_gateActive)
+                _syncCovered.Clear();
+            if (isActivity)
+                _activityActive = true;
+            else
+                _gateActive = true;
+            _syncCovered.UnionWith(ids);
+        }
+    }
+
+    private void EndSyncSignal(bool isActivity)
+    {
+        lock (_lock)
+        {
+            if (isActivity)
+                _activityActive = false;
+            else
+                _gateActive = false;
+        }
+        RecheckAfterSync();
     }
 
     /// <summary>
@@ -189,9 +232,10 @@ internal sealed class UnsyncedChangesTracker : IDisposable
         service.GetSyncActivity().IsSyncing || SendReceiveWriteLock.GetBlockState().IsBlocking;
 
     /// <summary>
-    /// Rechecks every project seen so far plus every check parked during the sync. Projects that
-    /// are currently marked unsynced go first, then parked ones, then the rest, so a project the
-    /// sync just sent leaves the set before the pass spends time on any other project.
+    /// Rechecks the projects the sync announced (every project seen so far when it announced none),
+    /// every project currently marked unsynced, and every check parked during the sync. Marked
+    /// projects go first, then parked ones, then the rest, so a project the sync just sent leaves
+    /// the set before the pass spends time on any other project.
     /// </summary>
     private void RecheckAfterSync()
     {
@@ -201,7 +245,13 @@ internal sealed class UnsyncedChangesTracker : IDisposable
             if (_disposed)
                 return;
             _syncEndCount++;
-            ids = [.. _unsynced.Concat(_deferred).Concat(_tracked).Distinct()];
+            ids =
+            [
+                .. _unsynced
+                    .Concat(_deferred)
+                    .Concat(_syncCovered.Count > 0 ? _syncCovered : _tracked)
+                    .Distinct(),
+            ];
             _deferred.Clear();
             BeginWorkLocked();
         }

@@ -109,17 +109,119 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
-        public async Task SyncEnd_RechecksAllTracked()
+        public async Task SyncEnd_WithoutAnnouncedIds_RechecksAllTracked()
+        {
+            _repo["A"] = true;
+            _tracker.OnWriteScopeExited("A");
+            _tracker.OnWriteScopeExited("B");
+            await _tracker.FlushAsync();
+            _repo["A"] = false;
+            _repo["B"] = true;
+            _tracker.OnSyncActivityChanged(new SyncActivityState(true, Array.Empty<string>()));
+            _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "B" }));
+        }
+
+        [Test]
+        public async Task SyncEnd_RechecksOnlyCoveredProjects()
+        {
+            _tracker.StartBaselineScan();
+            await _tracker.FlushAsync();
+            _repo["A"] = true;
+            _repo["B"] = true;
+
+            _tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "a" }));
+            _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "A" }));
+        }
+
+        [Test]
+        public async Task SyncEnd_ArmWithNoIds_FallsBackToAllTracked()
+        {
+            _tracker.StartBaselineScan();
+            await _tracker.FlushAsync();
+            _repo["A"] = true;
+            _repo["B"] = true;
+
+            _tracker.OnBlockStateChanged(new SendReceiveBlockState(true, Array.Empty<string>()));
+            _tracker.OnBlockStateChanged(new SendReceiveBlockState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "A", "B" }));
+        }
+
+        [Test]
+        public async Task SyncEnd_AlwaysRechecksMarkedProjects()
         {
             _repo["A"] = true;
             _tracker.OnWriteScopeExited("A");
             await _tracker.FlushAsync();
             _repo["A"] = false;
+
+            _tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "B" }));
+            _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+
+            Assert.That(_tracker.GetState().ToSend, Is.Empty);
+        }
+
+        [Test]
+        public async Task SyncEnd_ScheduledArmGrowingItsSet_RechecksEveryAnnouncedProject()
+        {
+            _tracker.StartBaselineScan();
+            await _tracker.FlushAsync();
+            _repo["A"] = true;
+            _repo["B"] = true;
+
+            _tracker.OnBlockStateChanged(new SendReceiveBlockState(true, new[] { "A" }));
+            _tracker.OnBlockStateChanged(new SendReceiveBlockState(true, new[] { "A", "B" }));
+            _tracker.OnBlockStateChanged(new SendReceiveBlockState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "A", "B" }));
+        }
+
+        [Test]
+        public async Task CoveredIds_ResetWhenTheNextSyncBegins()
+        {
+            _tracker.StartBaselineScan();
+            await _tracker.FlushAsync();
             _tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
             _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
             await _tracker.FlushAsync();
-            Assert.That(_tracker.GetState().ToSend, Is.Empty);
-            Assert.That(_events.Last().ToSend, Is.Empty);
+            _repo["A"] = true;
+            _repo["B"] = true;
+
+            _tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "B" }));
+            _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "B" }));
+        }
+
+        [Test]
+        public async Task BothSignalsEndingOneSync_RecheckTheSameCoveredSet()
+        {
+            _tracker.StartBaselineScan();
+            await _tracker.FlushAsync();
+            _tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
+            _tracker.OnBlockStateChanged(new SendReceiveBlockState(true, new[] { "A" }));
+
+            _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+            _repo["A"] = true;
+            _repo["B"] = true;
+            _tracker.OnBlockStateChanged(new SendReceiveBlockState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+
+            Assert.That(
+                _tracker.GetState().ToSend,
+                Is.EquivalentTo(new[] { "A" }),
+                "the second pass rechecks the covered project and nothing else"
+            );
         }
 
         [Test]
@@ -246,7 +348,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
-        public async Task GateDisarm_RechecksAllTracked()
+        public async Task GateDisarm_RechecksMarkedProject()
         {
             _repo["A"] = true;
             _tracker.OnWriteScopeExited("A");
