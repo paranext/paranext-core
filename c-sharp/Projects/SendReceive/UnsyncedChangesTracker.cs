@@ -291,15 +291,9 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     {
         try
         {
-            try
-            {
-                RunPass(() => ids);
-            }
-            finally
-            {
-                lock (_lock)
-                    _postSyncPasses--;
-            }
+            RunPass(() => ids); // catches everything
+            lock (_lock)
+                _postSyncPasses--;
             RaiseLatestState();
         }
         finally
