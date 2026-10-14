@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import papi, { logger } from '@papi/frontend';
 import { WebViewProps } from '@papi/core';
 import { useTabIconSelection, type TabIconUrls } from 'platform-bible-react';
@@ -8,7 +8,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { Dictionary } from './dictionary.component';
 import { DICTIONARY_LOCALIZED_STRING_KEYS } from '../utils/dictionary-ui.utils';
-import { DictionaryScope } from '../utils/dictionary.utils';
+import { DICTIONARY_TITLE_KEY, DictionaryScope } from '../utils/dictionary.utils';
 
 const DICTIONARY_ICON_URLS: TabIconUrls = {
   lightDefault: 'papi-extension://platformLexicalTools/assets/book-a.svg',
@@ -57,6 +57,27 @@ globalThis.webViewComponent = function DictionaryWebView({
   useEffect(() => {
     updateWebViewDefinition({ iconUrl: tabIconUrl });
   }, [tabIconUrl, updateWebViewDefinition]);
+
+  // #endregion
+
+  // #region Tab tooltip (Simple mode only; see main.ts for why Power mode must not gain one)
+
+  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
+  const isPowerMode = useMemo(() => {
+    if (isPlatformError(interfaceModePossiblyError)) {
+      logger.warn(`Error getting interface mode: ${getErrorMessage(interfaceModePossiblyError)}`);
+      return false;
+    }
+    return interfaceModePossiblyError === 'power';
+  }, [interfaceModePossiblyError]);
+
+  // `main.ts` resolves the tooltip once, when the tab opens/reloads; this keeps it current when the
+  // interface language changes afterward, which doesn't reload the tab.
+  useEffect(() => {
+    const resolvedTitle = localizedStrings[DICTIONARY_TITLE_KEY];
+    if (!resolvedTitle) return;
+    updateWebViewDefinition({ tooltip: isPowerMode ? undefined : resolvedTitle });
+  }, [localizedStrings, isPowerMode, updateWebViewDefinition]);
 
   // #endregion
 
