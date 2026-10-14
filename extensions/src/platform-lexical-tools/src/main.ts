@@ -14,6 +14,7 @@ import { LexicalReferenceService } from './lexical-reference.service';
 import { LexicalReferenceTextManager } from './lexical-reference-text-manager.model';
 import { LexicalReferenceProjectDataProviderEngineFactory } from './lexical-reference-project-data-provider-engine-factory.model';
 import { LEXICAL_REFERENCE_PROJECT_INTERFACES } from './lexical-reference-project-data-provider-engine.model';
+import { DICTIONARY_TITLE_KEY } from './utils/dictionary.utils';
 
 const DICTIONARY_WEB_VIEW_TYPE = 'platformLexicalTools.dictionary';
 
@@ -39,10 +40,12 @@ const dictionaryWebViewProvider: IWebViewProvider = {
     // other fixed Column 3 panels (e.g. comment-list-panel-web-view.factory.ts).
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
 
-    const title = '%platformLexicalTools_dictionary_title_sdbhSdbg%';
+    const title = DICTIONARY_TITLE_KEY;
     // `PlatformTabTitle` resolves a `%...%` title itself (live, on locale change), but it renders
     // `tooltip` verbatim with no such resolution — so the tooltip needs an already-resolved string,
-    // not the raw key `title` carries.
+    // not the raw key `title` carries. This is only the tooltip's INITIAL value for a fresh/reloaded
+    // tab; the web view keeps it current on a subsequent interface-language change (see
+    // dictionary.web-view.tsx), since `getWebView` doesn't re-run just because a setting changed.
     const resolvedTitle = await papi.localization.getLocalizedString({ localizeKey: title });
 
     return {
