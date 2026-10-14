@@ -372,6 +372,73 @@ describe('checks that could not run', () => {
     expect(screen.queryByText(PARATEXT_9_HINT_LABEL)).toBeNull();
   });
 
+  it('shows the Paratext 9 hint under a setup-required Quotation types failure too', async () => {
+    const user = setupUser();
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: {
+            ...JOB_STATUS_REPORT,
+            checkErrors: [{ checkId: 'QuotationTypes', message: 'Not enabled' }],
+          },
+          checksInfo: [
+            {
+              checkId: 'QuotationTypes',
+              checkName: 'Quotation types',
+              setupStatus: 'setupRequired',
+            },
+          ],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
+
+    expect(screen.getAllByText(PARATEXT_9_HINT_LABEL)).toHaveLength(1);
+  });
+
+  it('shows no Paratext 9 hint under a setup-required check that is not a quotation check', async () => {
+    const user = setupUser();
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: {
+            ...JOB_STATUS_REPORT,
+            checkErrors: [{ checkId: 'Characters', message: 'Inventory is empty' }],
+          },
+          checksInfo: [
+            { checkId: 'Characters', checkName: 'Characters', setupStatus: 'setupRequired' },
+          ],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
+
+    expect(screen.getByText(/^Characters: Inventory is empty/)).toBeInTheDocument();
+    expect(screen.queryByText(PARATEXT_9_HINT_LABEL)).toBeNull();
+  });
+
+  it('keeps the error details container in the document, hidden, while collapsed', async () => {
+    const user = setupUser();
+    render(
+      <ChecksSidePanel
+        {...buildProps({ hasActiveJob: true, jobStatusReport: REPORT_WITH_ERRORS })}
+      />,
+    );
+
+    const showToggle = screen.getByRole('button', { name: SHOW_DETAILS_LABEL });
+    const detailsId = showToggle.getAttribute('aria-controls') ?? '';
+    const collapsed = document.getElementById(detailsId);
+    expect(collapsed).not.toBeNull();
+    expect(collapsed).not.toBeVisible();
+
+    await user.click(showToggle);
+    expect(document.getElementById(detailsId)).toBeVisible();
+  });
+
   it('names a check once when it failed with different messages', () => {
     render(
       <ChecksSidePanel
@@ -426,6 +493,28 @@ describe('checks that could not run', () => {
       // The notice stands in for the status bar's "No results found" line
       expect(screen.queryByText('%webView_find_noResultsFound%')).toBeNull();
       expect(screen.getByTestId('checks-could-not-run-notice')).toBeInTheDocument();
+    });
+
+    it('does not say the selected checks could not run while the job is still running', () => {
+      const props = buildProps({
+        hasActiveJob: true,
+        selectedCheckTypeIds: ['Quotation', 'RepeatedWord'],
+        jobStatusReport: { ...ALL_FAILED_REPORT, status: 'running', percentComplete: 50 },
+      });
+      const { rerender } = render(<ChecksSidePanel {...props} />);
+
+      expect(screen.queryByText('%webView_checksSidePanel_selectedChecksCouldNotRun%')).toBeNull();
+      expect(screen.getByText('%webView_checksSidePanel_noCheckResults%')).toBeInTheDocument();
+
+      rerender(
+        <ChecksSidePanel
+          {...props}
+          jobStatusReport={{ ...ALL_FAILED_REPORT, status: 'completed' }}
+        />,
+      );
+      expect(
+        screen.getByText('%webView_checksSidePanel_selectedChecksCouldNotRun%'),
+      ).toBeInTheDocument();
     });
 
     it('keeps "No check results" when only some of the selected checks failed', () => {
