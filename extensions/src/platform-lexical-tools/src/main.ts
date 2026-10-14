@@ -39,19 +39,31 @@ const dictionaryWebViewProvider: IWebViewProvider = {
     // other fixed Column 3 panels (e.g. comment-list-panel-web-view.factory.ts).
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
 
+    const title = '%platformLexicalTools_dictionary_title_sdbhSdbg%';
+    // `PlatformTabTitle` resolves a `%...%` title itself (live, on locale change), but it renders
+    // `tooltip` verbatim with no such resolution — so the tooltip needs an already-resolved string,
+    // not the raw key `title` carries.
+    const resolvedTitle = await papi.localization.getLocalizedString({ localizeKey: title });
+
     return {
       ...savedWebView,
-      title: '%platformLexicalTools_dictionary_title_sdbhSdbg%',
+      title,
       content: dictionaryWebViewReact,
       styles: tailwindCssStyles,
       shouldShowToolbar: true,
       projectId,
+      // Mirrors the title so the tab's name is discoverable on hover once Simple mode shrinks it to
+      // icon-only — matches Comments'/Find's existing tooltip convention. Gated on Simple mode: Power
+      // mode never had a tooltip here and must not gain one now (this panel is reachable in Power
+      // mode too).
+      tooltip: interfaceMode === 'simple' ? resolvedTitle : savedWebView.tooltip,
       // In Simple mode this is the pinned Column 3 tab, forced onto scroll group 0 to stay
       // verse-synced with the Scripture editor (also forced to 0 there) regardless of which editor
       // last invoked `openDictionary` — matches Bible Texts/Commentaries/Comments' own forcing.
-      // Power mode preserves whichever scroll group the invoking editor asked to follow.
       scrollGroupScrRef: interfaceMode === 'simple' ? 0 : getWebViewOptions.editorScrollGroupId,
-      iconUrl: 'papi-extension://platformLexicalTools/assets/text-initial.svg',
+      // Shown in both Power and Simple mode (product decision) — see dictionary.web-view.tsx for
+      // the live theme/selection-adaptive swap, likewise unconditional.
+      iconUrl: 'papi-extension://platformLexicalTools/assets/book-a.svg',
       isClosable: interfaceMode === 'power',
     };
   },
