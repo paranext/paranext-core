@@ -77,3 +77,21 @@ a:hover {
   overflow-y: auto;
   white-space: pre-wrap;
 }
+
+/*
+ * Window-drag regions (`-webkit-app-region: drag`, set inline on the toolbar) swallow clicks: the OS
+ * takes the mouse-down to move the window, so the page never sees it and an open menu or popover
+ * does not get its outside-click to dismiss. While any portalled menu, popover or select list is
+ * open, switch every drag region in the toolbar off so a click there reaches the page and closes it.
+ * Tooltips are left out on purpose: they open on hover, and dropping drag for them would make the
+ * window undraggable whenever the pointer had just passed over a toolbar button.
+ * `!important` is required to beat the inline `-webkit-app-region` styles.
+ * Not covered: menus open inside a web view's iframe, which this document's selectors cannot see.
+ */
+body:has([data-radix-popper-content-wrapper] :is([role='menu'], [role='dialog'], [role='listbox']))
+  .app-toolbar-drag-host,
+body:has([data-radix-popper-content-wrapper] :is([role='menu'], [role='dialog'], [role='listbox']))
+  .app-toolbar-drag-host
+  * {
+  -webkit-app-region: no-drag !important;
+}

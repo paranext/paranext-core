@@ -871,7 +871,13 @@ export function PlatformBibleToolbar() {
   }, [openHome]);
 
   return (
-    <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
+    <div
+      data-testid="toolbar-reserved-space-wrapper"
+      // Hook for app.component.scss, which switches this toolbar's window-drag regions off while a
+      // menu or popover is open
+      className="app-toolbar-drag-host"
+      style={toolbarReservedSpaceStyle}
+    >
       <Toolbar
         menuData={menuData}
         onSelectMenuItem={handleMenuCommand}

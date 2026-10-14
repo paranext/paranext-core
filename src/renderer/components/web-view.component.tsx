@@ -60,6 +60,7 @@ import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { windowService } from '@shared/services/window.service';
 import { WindowClosingError } from '@renderer/services/window-closing-error.model';
+import { registerFrameForCrossFrameDismissal } from '@renderer/services/cross-frame-dismissal.util';
 import {
   BOOKS_PRESENT_DEFAULT,
   getBookIdsFromBooksPresent,
@@ -373,7 +374,11 @@ export function WebView({
 
     iframe.contentWindow.addEventListener('focusin', handleFocusIn);
 
+    // Presses in this web view close menus and popovers open in other frames, and the reverse
+    const unregisterCrossFrameDismissal = registerFrameForCrossFrameDismissal(iframe.contentWindow);
+
     return () => {
+      unregisterCrossFrameDismissal();
       // It seems React gets rid of contentWindow faster than we can unregister the event listener,
       // but this doesn't seem to be a problem. Seems it automatically cleans it up
       if (!iframe.contentWindow) return;
