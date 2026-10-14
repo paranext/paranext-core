@@ -403,4 +403,42 @@ describe('Home unsent local changes marker', () => {
     expect(screen.queryByTestId('home-project-unsynced-dot')).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Open' })).not.toBeNull();
   });
+
+  /*
+   * Both layouts are in the DOM (CSS decides which one shows). The narrow layout's menu trigger
+   * comes first in a row, ahead of the wide layout's own trigger.
+   */
+  function openNarrowRowMenu(projectName: string) {
+    const row = screen.getByText(projectName).closest('tr');
+    if (!row) throw new Error(`No table row was rendered for ${projectName}`);
+    const menuTrigger = row.querySelector('button[aria-haspopup="menu"]');
+    if (!menuTrigger) throw new Error('The narrow layout row menu button was not rendered');
+    // jsdom has no PointerEvent, so the trigger is opened with its keyboard path instead.
+    fireEvent.keyDown(menuTrigger, { key: 'Enter' });
+  }
+
+  it('offers no Sync in the narrow row menu of a local-only project listed as unsynced', async () => {
+    renderHomeList({
+      localProjectsInfo: [{ ...LOCAL_COPY, projectId: 'localOnly1', name: 'LOC' }],
+      unsyncedProjectIds: ['LOCALONLY1'],
+    });
+
+    openNarrowRowMenu('LOC');
+
+    await screen.findByRole('menuitem', { name: 'Open' });
+    expect(screen.queryByRole('menuitem', { name: 'Sync' })).toBeNull();
+  });
+
+  it('offers Sync before Open in the narrow row menu of a shared project listed as unsynced', async () => {
+    renderHomeList({
+      sharedProjectsInfo: SHARED_PROJECTS,
+      localProjectsInfo: [LOCAL_COPY],
+      unsyncedProjectIds: [PROJECT_ID.toUpperCase()],
+    });
+
+    openNarrowRowMenu('SHR');
+
+    await screen.findByRole('menuitem', { name: 'Open' });
+    expect(screen.queryByRole('menuitem', { name: 'Sync' })).not.toBeNull();
+  });
 });

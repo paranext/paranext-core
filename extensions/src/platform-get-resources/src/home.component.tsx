@@ -683,11 +683,12 @@ export function Home({
                               <div className="tw:grow tw:hidden tw:max-[300px]:!flex">
                                 <div className="tw:grow" />
                                 <HomeItemDropdownMenu ellipsisButtonClassName="tw:h-6">
-                                  {(!project.isLocallyAvailable || isEdited(project)) && (
-                                    <DropdownMenuItem asChild>
-                                      {syncOrGetButton(project, true)}
-                                    </DropdownMenuItem>
-                                  )}
+                                  {project.isSendReceivable &&
+                                    (!project.isLocallyAvailable || isEdited(project)) && (
+                                      <DropdownMenuItem asChild>
+                                        {syncOrGetButton(project, true)}
+                                      </DropdownMenuItem>
+                                    )}
                                   {project.isLocallyAvailable && (
                                     <DropdownMenuItem asChild>
                                       {openButton(project, true)}
