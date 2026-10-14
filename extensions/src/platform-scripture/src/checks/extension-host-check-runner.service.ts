@@ -171,19 +171,19 @@ class CheckRunnerEngine
 
   // #region Check Configuration Provider
 
-  // isCheckSetupForProject doesn't use instance state but cannot be static because it implements
-  // the CheckConfigurationProvider interface
+  // Checks hosted in the extension host have no setup concept, so every one counts as set up. This
+  // doesn't use instance state but cannot be static because it implements the
+  // CheckConfigurationProvider interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async isCheckSetupForProject(
-    // Parameters are required by the interface but unused since the method always throws.
+    // Parameters are required by the interface but unused since every check is set up.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _checkId: string,
-    // Second parameter also required by the interface but unused since the method always throws.
+    // Second parameter also required by the interface but unused since every check is set up.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _projectId: string,
   ): Promise<boolean> {
-    throw new Error(`isCheckSetupForProject is not implemented for the extensionHostCheckRunner.
-        Did you mean to call the checkAggregator?`);
+    return true;
   }
 
   // Checks hosted in the extension host have no setup concept, so every one is ready. This doesn't
@@ -361,7 +361,15 @@ class CheckRunnerEngine
               addCheckError(job.checkErrors, { checkId, message: getErrorMessage(error) });
               incrementStepsCompleted();
             } finally {
-              if (check) await check.dispose();
+              // A check that fails to clean up has still produced its results, so the failure is
+              // logged rather than recorded as a check error or allowed to fail the job
+              try {
+                if (check) await check.dispose();
+              } catch (disposeError) {
+                logger.warn(
+                  `Check ${checkId} failed to dispose after running: ${getErrorMessage(disposeError)}`,
+                );
+              }
             }
           }
         });
