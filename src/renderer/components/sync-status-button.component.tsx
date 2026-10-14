@@ -91,6 +91,9 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_sync_status_syncing_projects%',
   '%toolbar_sync_status_unknown%',
   '%toolbar_sync_status_unsynced%',
+  '%toolbar_sync_status_unsynced_both%',
+  '%toolbar_sync_status_unsynced_receive%',
+  '%toolbar_sync_status_unsynced_send%',
   '%toolbar_sync_view_details%',
   SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
   SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY,
@@ -561,11 +564,29 @@ export function SyncStatusButton() {
   }, [status, areStringsLoaded, wasCancelled, localizedStrings, announcementStringsKey]);
 
   /**
-   * The button's accessible name, supplied only for `unknown`. `idle` and `unknown` share one
-   * visible label — the label is capped and truncates, so it names the control rather than the
-   * status — which would otherwise leave the difference between them carried only by an
-   * `aria-hidden` icon, and a screen-reader user hearing "Sync, button" for both. That collapses
-   * the very distinction `unknown` exists to draw.
+   * The words that complete the button's accessible name, for the two states whose difference from
+   * the visible label would otherwise live only in an `aria-hidden` icon.
+   *
+   * `idle` and `unknown` share one visible label — the label is capped and truncates, so it names
+   * the control rather than the status — so a screen-reader user would hear "Sync, button" for
+   * both. That collapses the very distinction `unknown` exists to draw. `unsynced` has one label
+   * for three icons (send, receive, both), so the direction would be sighted-only; it is spoken as
+   * the same wording the popover's headings use. A missing direction takes the send wording,
+   * matching the send icon the button falls back to.
+   */
+  const buttonStatusDetail = (() => {
+    if (status === 'unknown') return localizedStrings['%toolbar_sync_status_unknown%'];
+    if (status !== 'unsynced') return undefined;
+    if (unsyncedDirection === 'receive') {
+      return localizedStrings['%toolbar_sync_status_unsynced_receive%'];
+    }
+    if (unsyncedDirection === 'both')
+      return localizedStrings['%toolbar_sync_status_unsynced_both%'];
+    return localizedStrings['%toolbar_sync_status_unsynced_send%'];
+  })();
+
+  /**
+   * The button's accessible name, supplied for the states {@link buttonStatusDetail} describes.
    *
    * The visible label is KEPT as the first half rather than replaced. An `aria-label` overrides the
    * accessible name wholesale, so naming the button only for its status leaves no overlap between
@@ -580,11 +601,8 @@ export function SyncStatusButton() {
    * underscore status underscore unknown percent, button". The live region beside it is explicitly
    * guarded against the same thing.
    */
-  const unknownStatusText = localizedStrings['%toolbar_sync_status_unknown%'];
   const buttonAccessibleName =
-    status === 'unknown' && areStringsLoaded && unknownStatusText
-      ? `${buttonLabel} — ${unknownStatusText}`
-      : undefined;
+    areStringsLoaded && buttonStatusDetail ? `${buttonLabel} — ${buttonStatusDetail}` : undefined;
 
   /**
    * The progress line for the running sync, or `undefined` when there is nothing to say.
