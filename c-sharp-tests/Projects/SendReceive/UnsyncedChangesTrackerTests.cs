@@ -75,6 +75,32 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
+        public async Task Changed_SubscriberThrows_TheRestStillRunAndTrackingContinues()
+        {
+            // The raise happens on a thread-pool check, where an escaping subscriber exception would
+            // be unobserved and could cut the later subscribers off.
+            var laterStates = new List<UnsyncedChangesState>();
+            _tracker.Changed += _ => throw new InvalidOperationException("bad subscriber");
+            _tracker.Changed += state =>
+            {
+                lock (laterStates)
+                    laterStates.Add(state);
+            };
+
+            _repo["A"] = true;
+            _tracker.OnWriteScopeExited("A");
+            await _tracker.FlushAsync();
+            Assert.That(laterStates, Has.Count.EqualTo(1), "the subscriber after the thrower ran");
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "A" }));
+
+            _repo["B"] = true;
+            _tracker.OnWriteScopeExited("B");
+            await _tracker.FlushAsync();
+            Assert.That(laterStates, Has.Count.EqualTo(2), "a later change is still raised");
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "A", "B" }));
+        }
+
+        [Test]
         public async Task UnchangedResult_DoesNotRaise()
         {
             _tracker.OnWriteScopeExited("A");

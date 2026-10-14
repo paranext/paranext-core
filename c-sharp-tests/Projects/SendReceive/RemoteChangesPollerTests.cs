@@ -58,6 +58,28 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
+        public async Task Changed_SubscriberThrows_TheRestStillRunAndPollingContinues()
+        {
+            // The raise happens on a thread-pool poll, where an escaping subscriber exception would
+            // be unobserved and could cut the later subscribers off.
+            int laterHandlerRuns = 0;
+            _poller.Changed += () => throw new InvalidOperationException("bad subscriber");
+            _poller.Changed += () => Interlocked.Increment(ref laterHandlerRuns);
+
+            _next = ["a"];
+            _poller.Tick();
+            await _poller.FlushAsync().WaitAsync(s_bound);
+            Assert.That(laterHandlerRuns, Is.EqualTo(1), "the subscriber after the thrower ran");
+            Assert.That(_poller.GetState().ToReceive, Is.EquivalentTo(new[] { "A" }));
+
+            _next = ["a", "b"];
+            _poller.Tick();
+            await _poller.FlushAsync().WaitAsync(s_bound);
+            Assert.That(laterHandlerRuns, Is.EqualTo(2), "a later change is still raised");
+            Assert.That(_poller.GetState().ToReceive, Is.EquivalentTo(new[] { "A", "B" }));
+        }
+
+        [Test]
         public async Task Tick_UnchangedSet_DoesNotRaise()
         {
             _next = ["A"];
