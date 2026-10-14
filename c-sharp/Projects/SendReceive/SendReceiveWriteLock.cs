@@ -304,9 +304,11 @@ internal static class SendReceiveWriteLock
     /// </summary>
     internal static void ResetForTests(long generation = 0)
     {
-        // Drop every BlockStateChanged subscriber too — the event is static, so a subscription a
-        // test wires up would otherwise leak into later tests (and be invoked by their transitions).
+        // Drop every subscriber of both static events (BlockStateChanged, WriteScopeExited): a
+        // subscription a test wires up would otherwise leak into later tests and be invoked by
+        // their transitions and scope exits.
         BlockStateChanged = null;
+        WriteScopeExited = null;
         _blockedProjectIds = EmptyProjectIds;
         Volatile.Write(ref _state, (generation << GenerationShift) & GenerationMask);
     }
