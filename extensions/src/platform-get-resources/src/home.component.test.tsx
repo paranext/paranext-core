@@ -348,7 +348,7 @@ describe('Home projects-only view', () => {
   });
 });
 
-describe('Home unsent local changes marker', () => {
+describe('Home unsynced changes marker', () => {
   const LOCAL_COPY: LocalProjectInfo = {
     projectId: PROJECT_ID,
     isPublished: false,
@@ -357,7 +357,7 @@ describe('Home unsent local changes marker', () => {
     language: 'en',
   };
 
-  it('marks a downloaded project listed as having unsent changes and offers Sync first', () => {
+  it('marks a downloaded project listed as having unsynced changes and offers Sync first', () => {
     renderHomeList({
       sharedProjectsInfo: SHARED_PROJECTS,
       localProjectsInfo: [LOCAL_COPY],
@@ -382,7 +382,7 @@ describe('Home unsent local changes marker', () => {
     expect(screen.queryByRole('button', { name: 'Open' })).toBeNull();
   });
 
-  it('shows no marker and offers Open first when no project has unsent changes', () => {
+  it('shows no marker and offers Open first when no project has unsynced changes', () => {
     renderHomeList({
       sharedProjectsInfo: SHARED_PROJECTS,
       localProjectsInfo: [LOCAL_COPY],

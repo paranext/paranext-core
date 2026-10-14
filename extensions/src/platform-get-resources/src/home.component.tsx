@@ -149,12 +149,19 @@ export type MergedProjectInfo = {
   isSendReceivable: boolean;
   isLocallyAvailable?: boolean;
   editedStatus?: EditedStatus;
-  /** Whether the project has local changes that have not been sent to the server. */
+  /**
+   * Whether the project has changes to send to the server or to receive from it, per
+   * {@link HomeProps.unsyncedProjectIds}.
+   */
   hasUnsyncedChanges?: boolean;
   lastSendReceiveDate?: string;
 };
 
-/** Whether a project has local changes to send, by its server-reported status or the live set. */
+/**
+ * Whether a project is out of step with the server: the shared-project list reports it as edited
+ * (`editedStatus`), or it is in the live set of projects with changes to send or receive. A marked
+ * row shows the dot and, when it can be synced, offers Sync before Open.
+ */
 const isEdited = (project: MergedProjectInfo) =>
   project.editedStatus === 'edited' || !!project.hasUnsyncedChanges;
 
