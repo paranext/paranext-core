@@ -9,11 +9,11 @@ export const CHECK_RESULTS_INVALIDATED_EVENT = 'checkResultsInvalidated' as cons
 export const CHECK_STOP_DEFAULT_TIMEOUT_MS = 2000;
 
 /**
- * OpenRPC documentation for the `lookupCheckSetupStatus` method of check runners and the check
+ * OpenRPC documentation for the `lookUpCheckSetupStatus` method of check runners and the check
  * aggregator. Marked experimental on the wire to match the `@experimental` tag on the type.
  */
-export const LOOKUP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION = {
-  name: 'lookupCheckSetupStatus',
+export const LOOK_UP_CHECK_SETUP_STATUS_METHOD_DOCUMENTATION = {
+  name: 'lookUpCheckSetupStatus',
   'x-experimental': true,
   summary:
     'Whether a check is ready to run on a project, needs setup first, or does not apply to it',

@@ -832,8 +832,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** Every check runner isolates each check and lists the ones that could not run on
   `CheckJobStatusReport.checkErrors`; the job still ends `completed`, and `errored` means the job
   itself failed. A check that failed is not cached, so the next job retries it after a settings fix.
-  `lookupCheckSetupStatus(checkId, projectId)` reports `ready`, `setupRequired` or `notApplicable`
-  (with a localized `reason`). Not applicable covers quotation rules set to `none`, Quotation types
+  `lookUpCheckSetupStatus(checkId, projectId)` reports `ready`, `setupRequired` or `notApplicable`
+  (with a `reason` localize key that each consumer localizes). Not applicable covers quotation rules set to `none`, Quotation types
   switched off in Quotation rules, and Study Bible Additions projects. `isCheckSetupForProject`
   counts not-applicable as set up, so existing "Setup required" filters stay correct. A
   not-applicable check is skipped by the job with no result and no error.

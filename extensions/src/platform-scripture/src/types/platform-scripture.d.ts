@@ -2238,7 +2238,7 @@ declare module 'platform-scripture' {
     /**
      * Returns if setup/configuration for the check has been completed. A check that does not apply
      * to the project counts as set up. Invalid quotation rules count as not set up. See
-     * {@link CheckConfigurationProvider.lookupCheckSetupStatus} for the reason.
+     * {@link CheckConfigurationProvider.lookUpCheckSetupStatus} for the reason.
      */
     isCheckSetupForProject: (checkId: string, projectId: string) => Promise<boolean>;
     /**
@@ -2247,7 +2247,7 @@ declare module 'platform-scripture' {
      *
      * @experimental
      */
-    lookupCheckSetupStatus: (checkId: string, projectId: string) => Promise<CheckSetupState>;
+    lookUpCheckSetupStatus: (checkId: string, projectId: string) => Promise<CheckSetupState>;
   };
 
   /**

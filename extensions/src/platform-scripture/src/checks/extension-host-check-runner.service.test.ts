@@ -113,7 +113,7 @@ describe('extension-host check runner', () => {
   it('reports every check as ready because extension-hosted checks have no setup', async () => {
     const runner = await checkHostingService.getCheckRunner();
 
-    await expect(runner.lookupCheckSetupStatus('registered-any-any', 'P1')).resolves.toEqual({
+    await expect(runner.lookUpCheckSetupStatus('registered-any-any', 'P1')).resolves.toEqual({
       status: 'ready',
     });
   });

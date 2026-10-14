@@ -28,7 +28,7 @@ import {
   makeProjectSelectorCustomData,
 } from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
-import { useCallback, useId, useMemo, useState } from 'react';
+import { Fragment, useCallback, useId, useMemo, useState } from 'react';
 import {
   CHECK_SCOPE_FILTER_STRINGS,
   CheckInfo,
@@ -423,7 +423,8 @@ export function ChecksSidePanel({
               showBadge
               checkName={getLocalizedCheckDescription(result.checkId ?? result.checkResultType)}
               isCheckSetup={
-                checksInfo.find((check) => check.checkId === result.checkId)?.isSetup ?? true
+                checksInfo.find((check) => check.checkId === result.checkId)?.setupStatus !==
+                'setupRequired'
               }
               checkCardDescription={result.messageFormatString}
             />
@@ -495,25 +496,32 @@ export function ChecksSidePanel({
               {areErrorDetailsShown && (
                 <div id={errorDetailsId} className="tw:flex tw:flex-col tw:gap-1">
                   {checkErrors.map((checkError) => (
-                    <p
-                      key={`${checkError.checkId}-${checkError.message}`}
-                      className="tw:font-light tw:whitespace-pre-line"
-                    >
-                      {formatReplacementString(
-                        localizedStrings['%webView_checksSidePanel_checkCouldNotRun_detail%'],
-                        {
-                          checkName: getCheckDisplayName(
-                            checkError.checkId,
-                            getLocalizedCheckDescription,
-                          ),
-                          message: checkError.message,
-                        },
+                    <Fragment key={`${checkError.checkId}-${checkError.message}`}>
+                      <p className="tw:font-light tw:whitespace-pre-line">
+                        {formatReplacementString(
+                          localizedStrings['%webView_checksSidePanel_checkCouldNotRun_detail%'],
+                          {
+                            checkName: getCheckDisplayName(
+                              checkError.checkId,
+                              getLocalizedCheckDescription,
+                            ),
+                            message: checkError.message,
+                          },
+                        )}
+                      </p>
+                      {/* Only a check that needs setup has settings to point to in Paratext 9 */}
+                      {checksInfo.find((check) => check.checkId === checkError.checkId)
+                        ?.setupStatus === 'setupRequired' && (
+                        <p className="tw:font-light">
+                          {
+                            localizedStrings[
+                              '%webView_checksSidePanel_checkCouldNotRun_paratext9Hint%'
+                            ]
+                          }
+                        </p>
                       )}
-                    </p>
+                    </Fragment>
                   ))}
-                  <p className="tw:font-light">
-                    {localizedStrings['%webView_checksSidePanel_checkCouldNotRun_paratext9Hint%']}
-                  </p>
                 </div>
               )}
             </div>

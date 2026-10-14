@@ -12,7 +12,6 @@ function info(overrides: Partial<CheckInfo>): CheckInfo {
   return {
     checkId: 'Quotation',
     checkName: 'Quotations',
-    isSetup: true,
     setupStatus: 'ready',
     ...overrides,
   };
@@ -22,7 +21,7 @@ describe('getCheckTypeSecondaryLabel', () => {
   it('says the check could not run before anything else', () => {
     expect(
       getCheckTypeSecondaryLabel(
-        info({ isSetup: false, setupStatus: 'setupRequired' }),
+        info({ setupStatus: 'setupRequired' }),
         [{ checkId: 'Quotation', message: 'bad' }],
         STRINGS,
       ),
@@ -43,13 +42,9 @@ describe('getCheckTypeSecondaryLabel', () => {
   });
 
   it('says setup is required', () => {
-    expect(
-      getCheckTypeSecondaryLabel(
-        info({ isSetup: false, setupStatus: 'setupRequired' }),
-        [],
-        STRINGS,
-      ),
-    ).toBe('Setup required');
+    expect(getCheckTypeSecondaryLabel(info({ setupStatus: 'setupRequired' }), [], STRINGS)).toBe(
+      'Setup required',
+    );
   });
 
   it('has no label for a ready check without errors', () => {
@@ -78,7 +73,6 @@ describe('buildChecksInfo', () => {
       {
         checkId: 'Quotation',
         checkName: 'Quotation name',
-        isSetup: true,
         setupStatus: 'notApplicable',
         notApplicableReason: '%checkSetup_notApplicable_quotationMarksNotUsed%',
         setUpLink: undefined,
@@ -86,7 +80,6 @@ describe('buildChecksInfo', () => {
       {
         checkId: 'registered-x',
         checkName: 'registered-x name',
-        isSetup: false,
         setupStatus: 'setupRequired',
         notApplicableReason: undefined,
         setUpLink: undefined,

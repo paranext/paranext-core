@@ -57,8 +57,6 @@ export type CheckInfo = {
   checkId: string;
   /** Localized display name of the check */
   checkName: string;
-  /** Whether the check has been properly set up (anything but `setupRequired`) */
-  isSetup: boolean;
   /** Whether the check is ready, needs setup, or does not apply to the project */
   setupStatus: CheckSetupStatus;
   /** Only when `setupStatus` is `notApplicable`: why the check does not apply */
@@ -71,26 +69,24 @@ export type CheckInfo = {
 
 /**
  * Looks up every check's setup status for the project. A lookup that fails counts as `ready`, so a
- * runner that cannot answer (the extension-host runner never can) does not blank the other checks'
- * labels.
+ * runner that cannot answer does not blank the other checks' labels.
  */
 export async function buildChecksInfo(
   checks: CheckRunnerCheckDetails[],
-  lookupCheckSetupStatus: (checkId: string) => Promise<CheckSetupState>,
+  lookUpCheckSetupStatus: (checkId: string) => Promise<CheckSetupState>,
   getCheckName: (checkId: string) => string,
 ): Promise<CheckInfo[]> {
   return Promise.all(
     checks.map(async ({ checkId }) => {
       let state: CheckSetupState = { status: 'ready' };
       try {
-        state = await lookupCheckSetupStatus(checkId);
+        state = await lookUpCheckSetupStatus(checkId);
       } catch {
         // Keep the default: no label is better than a wrong one
       }
       return {
         checkId,
         checkName: getCheckName(checkId),
-        isSetup: state.status !== 'setupRequired',
         setupStatus: state.status,
         notApplicableReason: state.status === 'notApplicable' ? state.reason : undefined,
         setUpLink: undefined, // TODO: Add setUpLink when available from backend
