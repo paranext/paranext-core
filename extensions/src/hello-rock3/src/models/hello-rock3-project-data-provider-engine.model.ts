@@ -31,37 +31,48 @@ export type HelloRock3ProjectData = {
   extensionData: { [key: string]: string | undefined };
 };
 
+// The checks below refuse exactly what the Paratext PDP refuses, so an extension tested against this
+// sample behaves the same on a real project. Keys here are flat strings, so none of them closes any
+// access in this store. Their string methods are native, like the Paratext PDP's, so the two agree
+// on what a ".." or a segment is.
+
 /**
- * What every one of an extension's extension-data keys starts with. Rejects a missing or blank
- * extension name, as the Paratext PDP does for get, set and list alike.
+ * What every one of an extension's extension-data keys starts with. Rejects, for get, set and list
+ * alike, a missing or blank extension name, or one containing ".." anywhere.
  */
 function getExtensionKeyPrefix(extensionName: string): string {
   // Checked at runtime because the scope arrives over the network, whatever its declared type
   const name: unknown = extensionName;
   if (typeof name !== 'string' || name.trim() === '')
     throw new Error('Must provide an extension name');
+  if (name.includes('..')) throw new Error(`Extension name '${name}' must not contain '..'`);
   return `${name}/`;
 }
 
 /**
- * Rejects an extension name that would list every extension's data rather than its own: "." alone,
- * or any ".." segment, as the Paratext PDP does. Keys here are flat strings, so no name reaches
- * another extension's data; the check keeps the sample answering as the real PDP does.
+ * Rejects an extension name that is "." alone (or "./"), which would list every extension's data
+ * rather than its own. A ".." is refused for every operation by `getExtensionKeyPrefix`.
  */
 function assertListableExtensionName(extensionName: string): void {
-  // Native, like the Paratext PDP's String.Split, so the two agree on what a segment is
   const segments = extensionName
     .split(/[/\\]/)
     .map((segment) => segment.trim())
     .filter((segment) => segment !== '');
-  if (segments.every((segment) => segment === '.') || segments.includes('..'))
+  if (segments.every((segment) => segment === '.'))
     throw new Error(
       `Extension name '${extensionName}' must stay within its own extension-data directory`,
     );
 }
 
+/** Rejects an empty data qualifier, or one containing ".." anywhere. */
 function getExtensionDataKey(scope: ExtensionDataScope): string {
-  return `${getExtensionKeyPrefix(scope.extensionName)}${scope.dataQualifier}`;
+  const prefix = getExtensionKeyPrefix(scope.extensionName);
+  const qualifier: unknown = scope.dataQualifier;
+  if (typeof qualifier !== 'string' || qualifier === '')
+    throw new Error('Must provide a data qualifier');
+  if (qualifier.includes('..'))
+    throw new Error(`Data qualifier '${qualifier}' must not contain '..'`);
+  return `${prefix}${qualifier}`;
 }
 
 export class HelloRock3ProjectDataProviderEngine
