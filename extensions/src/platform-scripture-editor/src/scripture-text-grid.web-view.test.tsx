@@ -177,6 +177,12 @@ vi.mock('./use-text-collection-sources.hook', () => ({
   default: useRecordedSourcesHook,
 }));
 
+// Content zoom reads platform settings and sends platform commands, none of which these tests are
+// about; the grid stand-in below never reads the controller.
+vi.mock('./scripture-text-grid/use-resource-content-zoom.hook', () => ({
+  useResourceContentZoom: () => ({}),
+}));
+
 vi.mock('./scripture-text-grid/scripture-text-grid.component', () => ({
   // The real grid renders a live Scripture editor per cell. This stand-in exposes only the two
   // gestures these tests need — a verse click that opens the chapter split, and a completed
