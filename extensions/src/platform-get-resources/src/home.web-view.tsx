@@ -6,7 +6,6 @@ import { Home as HomeIcon } from 'lucide-react';
 
 import {
   getErrorMessage,
-  isErrorMessageAboutParatextBlockingInternetAccess,
   isErrorMessageAboutRegistryAuthFailure,
   isPlatformError,
   newGuid,
@@ -15,6 +14,7 @@ import {
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.component';
+import { getInternetBlockedNotification } from './internet-block-notification.utils';
 import { useLocalProjects } from './use-local-projects.hook';
 
 const defaultInterfaceLanguages: string[] = ['en'];
@@ -180,8 +180,9 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
     }, []),
   );
 
-  // Declared before the first use below: the send/receive failure paths all report through the same
-  // notification id so a repeat failure replaces the previous toast instead of stacking.
+  // Declared before the first use below: the send/receive failures that are not internet blocks
+  // report through this id, so a repeat failure replaces the previous toast instead of stacking.
+  // Internet blocks carry their own id, shared with everywhere else that notices the same block.
   const sharedProjectErrorNotificationId = useMemo(() => newGuid(), []);
 
   const sendReceiveProject = async (projectId: string) => {
@@ -215,17 +216,12 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
         setIsSendReceiveInProgress(false);
       }
 
-      // The two failures we can recognize get their own notification with a link to the setting
-      // that fixes them, the same way the shared-projects fetch reports them — their raw messages
-      // are ParatextData internals and say nothing a user can act on.
-      if (isErrorMessageAboutParatextBlockingInternetAccess(errorMessage)) {
-        papi.notifications.send({
-          severity: 'error',
-          message: '%data_loading_error_internetAccess_disabled_2%',
-          clickCommandLabel: '%general_open%',
-          clickCommand: 'paratextRegistration.showInternetSettings',
-          notificationId: sharedProjectErrorNotificationId,
-        });
+      // The failures we can recognize report through a notification instead of Home's "Sync failed"
+      // alert: their raw messages are ParatextData internals, and only the notification carries the
+      // link to the setting that fixes them.
+      const internetBlockedNotification = getInternetBlockedNotification(errorMessage);
+      if (internetBlockedNotification) {
+        papi.notifications.send(internetBlockedNotification);
         return;
       }
       if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {
@@ -278,17 +274,13 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
         const errorMessage = getErrorMessage(e);
         // The server was reached and refused for a reason the user can act on, as opposed to not
         // answering at all — the banner says so differently, because the notification sent here
-        // already names the cause and the fix.
+        // already names the cause and the fix. An internet block does not retry: it comes from the
+        // user's internet setting, so retrying cannot succeed until they change it.
         let failureState: 'unreachable' | 'unavailable' = 'unreachable';
-        if (isErrorMessageAboutParatextBlockingInternetAccess(errorMessage)) {
+        const internetBlockedNotification = getInternetBlockedNotification(errorMessage);
+        if (internetBlockedNotification) {
           failureState = 'unavailable';
-          papi.notifications.send({
-            severity: 'error',
-            message: '%data_loading_error_internetAccess_disabled_2%',
-            clickCommandLabel: '%general_open%',
-            clickCommand: 'paratextRegistration.showInternetSettings',
-            notificationId: sharedProjectErrorNotificationId,
-          });
+          papi.notifications.send(internetBlockedNotification);
         } else if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {
           failureState = 'unavailable';
           papi.notifications.send({

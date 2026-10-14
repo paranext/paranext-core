@@ -1574,8 +1574,9 @@ export declare function getAllObjectFunctionNames(obj: {
  */
 export declare function createSyncProxyForAsyncObject<T extends object>(getObject: (args?: unknown[]) => Promise<T>, objectToProxy?: Partial<T>): T;
 /**
- * Indicates if the exception or error message provided appears to be from ParatextData.dll
- * indicating that Paratext is blocking internet access.
+ * Indicates if the exception or error message provided shows that Paratext refused internet access
+ * because of the user's internet setting — either ParatextData.dll's own block, or the .NET data
+ * provider's gate on Registry, Send/Receive, and Digital Bible Library access.
  *
  * @param errorMessage Error message or exception to check
  * @returns `true` if the message indicates Paratext is blocking internet access, `false` otherwise
