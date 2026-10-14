@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -134,6 +134,7 @@ describe('ExtensionHostStoppedBanner', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('keeps an empty live region mounted while the extension host is running', () => {
@@ -526,7 +527,42 @@ describe('ExtensionHostStoppedBanner', () => {
       expect(document.body).toHaveFocus();
     });
 
+    // A browser can blur a button the moment it becomes disabled, before React's effect sees the
+    // phase change; that blur is the banner's own doing, not the user leaving the strip.
+    it('still rescues focus when the browser blurs a button as it becomes disabled', () => {
+      render(<ExtensionHostStoppedBanner />);
+      stop('crashed');
+      const restartExtensions = screen.getByRole('button', RESTART_EXTENSIONS);
+      act(() => restartExtensions.focus());
+
+      // The browser's side of a disabling: the button is disabled and loses focus with nowhere
+      // particular to go, ahead of the phase change that React then renders.
+      restartExtensions.setAttribute('disabled', '');
+      fireEvent.blur(restartExtensions);
+      act(() => markExtensionHostRestarting());
+
+      expect(screen.getByRole('status')).toHaveFocus();
+    });
+
+    // Switching to another app blurs the focused button too, but the user did not leave the strip.
+    it('still rescues focus after the window itself lost focus', () => {
+      const hasFocus = vi.spyOn(document, 'hasFocus');
+      render(<ExtensionHostStoppedBanner />);
+      stop('crashed');
+      act(() => screen.getByRole('button', RESTART_EXTENSIONS).focus());
+
+      hasFocus.mockReturnValue(false);
+      act(() => screen.getByRole('button', RESTART_EXTENSIONS).blur());
+      hasFocus.mockRestore();
+      extensionHostStarts();
+
+      expect(screen.getByRole('status')).toHaveFocus();
+    });
+
     it('does not pull focus back after the user clicked away from the strip onto the page', async () => {
+      // A window the user just clicked in has focus. jsdom says otherwise as soon as focus drops to
+      // the body, so play the browser's part.
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
       render(<ExtensionHostStoppedBanner />);
       stop('crashed');
       act(() => screen.getByRole('button', RESTART_EXTENSIONS).focus());

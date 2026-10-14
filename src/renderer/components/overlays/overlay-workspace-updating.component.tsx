@@ -93,10 +93,10 @@ export function WorkspaceUpdatingOverlayPresentational({ label, isPowerMode }: P
         aria-describedby={undefined}
         // Inline insets rather than the `tw:top-12 tw:right-2 tw:bottom-2 tw:left-2` class form,
         // which for some reason did not work. The top value is where the dock starts — below the
-        // toolbar and any strip under it — because this covers the dock, not the strip; the other three
-        // allow for the window borders. 8px insets would match the border size, but some content
-        // can drift into the border area and make the border look dirty at that inset, so these are
-        // 2px — worth revisiting once that drift is cleaned up.
+        // toolbar and any strip under it — because this covers the dock, not the strip; the other
+        // three allow for the window borders. 8px insets would match the border size, but some
+        // content can drift into the border area and make the border look dirty at that inset, so
+        // these are 2px — worth revisiting once that drift is cleaned up.
         style={{
           ...CANCEL_ENTER_ZOOM_STYLE,
           zIndex: Z_INDEX_WORKSPACE_UPDATING,

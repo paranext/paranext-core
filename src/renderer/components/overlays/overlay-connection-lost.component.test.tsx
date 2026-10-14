@@ -107,6 +107,16 @@ describe('ConnectionLostOverlayPresentational', () => {
     render(<ConnectionLostOverlayPresentational {...PROPS} isPowerMode={false} />);
     expect(screen.getByTestId('connection-lost-banner')).toHaveStyle({ top: '56px' });
   });
+
+  // The shared alarm-strip classes position the column; a single button needs no row layout, so
+  // the column stays a plain block box and the button sits exactly where it always has.
+  it('holds the reload button in a plain block column, with no row layout', () => {
+    render(<ConnectionLostOverlayPresentational {...PROPS} />);
+    const column = screen.getByRole('button', { name: 'Reload' }).parentElement;
+    expect(column?.className).toBe(
+      'tw:col-start-3 tw:row-span-2 tw:row-start-1 tw:self-center tw:ps-3',
+    );
+  });
 });
 
 describe('ConnectionLostOverlay', () => {

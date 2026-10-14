@@ -33,7 +33,8 @@ export const ALARM_STRIP_ALERT_CLASS_NAME =
  * and message rows, holding its buttons in normal flow. `Alert`'s own action slot positions its
  * children absolutely over the text and reserves only 72px for them, which suits a one-word action
  * or an icon; a strip as wide as the window with multi-word labels needs them in flow, the only
- * layout that cannot overlap the message.
+ * layout that cannot overlap the message. A strip with more than one button adds its own row layout
+ * (for example `tw:flex tw:gap-2`).
  */
 export const ALARM_STRIP_ACTIONS_CLASS_NAME =
-  'tw:col-start-3 tw:row-span-2 tw:row-start-1 tw:flex tw:gap-2 tw:self-center tw:ps-3';
+  'tw:col-start-3 tw:row-span-2 tw:row-start-1 tw:self-center tw:ps-3';

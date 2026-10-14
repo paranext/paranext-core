@@ -200,9 +200,9 @@ export function ConnectionLostOverlayPresentational({
           // also the ground the text contrast below is measured against. A fully saturated
           // `tw:bg-destructive` would flatten that contrast instead.
           className="tw:absolute tw:inset-x-0 tw:bg-background"
-          // Right below the toolbar, not below the strip that can sit under it (`getDockTop`): this
-          // state covers the whole window, and that strip, the extension-host-stopped banner, empties
-          // itself while it is shown, so there is nothing there to keep clear.
+          // Right below the toolbar, not below the strip that can sit under it (`getDockTop`):
+          // this state covers the whole window, and that strip, the extension-host-stopped banner,
+          // empties itself while it is shown, so there is nothing there to keep clear.
           style={{ top: getToolbarHeight(isPowerMode) }}
         >
           <Alert

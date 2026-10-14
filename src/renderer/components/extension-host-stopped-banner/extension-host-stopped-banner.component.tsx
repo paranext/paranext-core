@@ -189,7 +189,7 @@ export function ExtensionHostStoppedBannerPresentational({
         <AlertDescription>{message}</AlertDescription>
         {/* Not a `ButtonGroup`: that renders a merged, segmented control for related toggles, and
             these are separate, alternative actions. */}
-        <div className={ALARM_STRIP_ACTIONS_CLASS_NAME}>
+        <div className={`${ALARM_STRIP_ACTIONS_CLASS_NAME} tw:flex tw:gap-2`}>
           {restartExtensionsButton}
           <Button variant="outline" size="sm" onClick={onRestartApp}>
             {restartAppLabel}
@@ -276,14 +276,18 @@ export function ExtensionHostStoppedBanner() {
     hasFocusWithinRef.current = true;
   }, []);
 
-  // Focus leaving the strip ends "focus within", whether it moves to another element or drops to the
-  // page because the user clicked elsewhere. A blur this banner caused does not: a focused button
-  // that a phase change disabled or removed, which the effect above rescues.
+  // Focus leaving the strip ends "focus within", whether it moves to another element or drops to
+  // the page because the user clicked elsewhere. Two blurs do not:
+  // - the window itself losing focus (switching to another app), which is not the user leaving the
+  //   strip;
+  // - a button the browser blurs because a phase change disabled it, which the effect above
+  //   rescues. A button a phase change removes needs no check here: React never delivers a blur
+  //   from a node that is no longer in the document.
   const handleBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
+    if (!document.hasFocus()) return;
     const next = event.relatedTarget;
     if (next instanceof Node && event.currentTarget.contains(next)) return;
-    const left = event.target;
-    if (!left.isConnected || left.matches(':disabled')) return;
+    if (event.target.matches(':disabled')) return;
     hasFocusWithinRef.current = false;
   }, []);
 
