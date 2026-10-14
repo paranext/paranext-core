@@ -471,15 +471,18 @@ export function handleMarkerPaletteSessionKeyDown(
       // inserts nothing.
       const typedMarker = stripMarkerNestingPrefix(session.filter).toLowerCase();
       if (session.isNoteMarker?.(typedMarker)) {
-        const isOffered = session.items.some(
+        const offered = session.items.find(
           (item) => stripMarkerNestingPrefix(item.marker).toLowerCase() === typedMarker,
         );
-        // Offered: commit the palette selection, inserting an empty note exactly like `\f` + Enter.
+        // Offered: commit THAT item, inserting an empty note exactly like `\f` + Enter. Named
+        // explicitly rather than through `commit()`, which would apply whatever is HIGHLIGHTED:
+        // Space is the commit-what-was-TYPED key, so typing `f` and arrowing down to `fe` must
+        // still insert `f`. The selection-wrap Space below resolves its commit the same way.
+        //
         // Not offered: insert NOTHING. Materializing the literal would hand the Tier-2 tokenizer a
-        // raw `\f ` that absorbs the following word as the new note's caller, and committing would
-        // apply whatever happens to be HIGHLIGHTED — never what the user typed, since the marker
-        // they typed is by definition absent from this list.
-        if (isOffered) driver.commit();
+        // raw `\f ` that absorbs the following word as the new note's caller, and there is no item
+        // to name — the marker they typed is by definition absent from this list.
+        if (offered) driver.commitItem(offered.marker);
         else driver.dismiss();
         return 'ended';
       }

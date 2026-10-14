@@ -232,11 +232,21 @@ marked dirty on every commit, so those report a change for every palette that ap
 
 It acts twice in the MAIN editor. That editor's change callback closes the palette at the moment of
 the change, because a palette floating over text it no longer describes is confusing and refusing
-later just looks like nothing happening. The shared spine then refuses the apply as a backstop,
-which is what covers a change arriving between the user's choice and the commit. The footnote
-popover has only the second half today: nothing there closes its palette when the note changes, so
-it refuses at commit time instead of closing at change time. This is also what covers `paste`, `cut`
-and `drop`: they are no longer blocked, so instead the content change they cause closes the palette.
+later just looks like nothing happening. The refusal then covers a change arriving between the
+user's choice and the commit. This is also what covers `paste`, `cut` and `drop`: they are no longer
+blocked, so instead the content change they cause closes the palette.
+
+The refusal itself is asked on BOTH commit routes, which is what makes it the backstop:
+
+- a HIGHLIGHTED commit (Enter, Tab, click) comes back through the overlay into the session spine,
+  which asks before applying;
+- a TYPED commit (Space on the typed marker, `*`, the `\` commit-and-reopen, and the selection-wrap
+  Space) applies straight from the key router, which asks the same function before each one.
+
+**Known gap:** the footnote popover has no live close — nothing there closes its palette when the
+note changes. It therefore relies entirely on the refusal, which is what protects the data: a note
+that changes under an open palette (a mouse drop, say) refuses the next commit rather than applying
+it at a caret pointing into different content. Closing at change time there is still worth adding.
 
 ### 3.4 Every way a session ends restores the caret
 

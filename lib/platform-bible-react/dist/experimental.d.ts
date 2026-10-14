@@ -1545,12 +1545,29 @@ export interface RouteMarkerPaletteKeyOptions<TItem extends MarkerMenuItem> {
 	 */
 	reopenAtCaret: () => boolean;
 	/**
-	 * The consumer's change-guard baseline, cleared here once no session remains. A baseline
-	 * describes the editor as THIS session's palette took focus; carrying one into the next session
-	 * would compare against a stale document and refuse a good commit. Both consumers already did
-	 * this, in two different places.
+	 * Ends the session this token identifies, if it is still the current one — the consumer's writer
+	 * from `useMarkerPaletteSessionWriters`, not a local equivalent.
+	 *
+	 * Routing through the writer rather than clearing the ref here is what keeps the writers the ONLY
+	 * place settling resumes. Clearing locally still worked, because the show promise later reaches
+	 * the spine's own clear, but it made resume wait on an overlay round trip and left settling
+	 * suspended for good if that promise never settled. It also duplicated the baseline clearing.
 	 */
-	baselineRef?: React$1.MutableRefObject<EditorContentSnapshot | undefined>;
+	clearSessionIfCurrent: (token: number) => void;
+	/**
+	 * Whether the editor changed under the open palette, compared against the baseline taken as the
+	 * palette took focus. The same function the consumer gives the session spine.
+	 *
+	 * The spine asks it before applying a HIGHLIGHTED commit, which comes back through the overlay.
+	 * TYPED commits — Space on the typed marker, `*`, the `\` commit-and-reopen, and the
+	 * selection-wrap Space — never go near the spine; they apply straight from here, so without this
+	 * they are unguarded. That matters most for a consumer with no live close: if the document
+	 * changed while the palette was open, the next typed commit applies at a caret pointing into
+	 * different content, which is exactly what the guard exists to refuse.
+	 *
+	 * Omit it and no guard runs, as before.
+	 */
+	hasEditorChangedSinceFocus?: () => boolean;
 }
 /**
  * Routes one key a focused palette forwarded back to its session owner.

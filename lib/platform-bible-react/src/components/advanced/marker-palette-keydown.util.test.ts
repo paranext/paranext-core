@@ -509,9 +509,23 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     const event = makeEvent(' ');
     expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
     expect(event.defaultPrevented).toBe(true); // claimed: no literal space lands
-    expect(driver.commit).toHaveBeenCalledOnce();
+    expect(driver.commitItem).toHaveBeenCalledExactlyOnceWith('f');
+    expect(driver.commit).not.toHaveBeenCalled();
     expect(driver.commitTyped).not.toHaveBeenCalled();
     expect(driver.dismiss).not.toHaveBeenCalled();
+  });
+
+  it('Space commits the TYPED note, not whatever the user arrowed onto', () => {
+    // Space is the commit-what-was-typed key. Resolving through `commit()` would apply the
+    // HIGHLIGHTED item, so typing `f` and arrowing down to `fe` would insert `fe` — a marker the
+    // user never typed. The selection-wrap Space resolves its commit the same way.
+    const driver = makeDriver();
+    const state: MarkerPaletteSessionState = {
+      ...session('backslash', 'f', [{ marker: 'f' }, { marker: 'fe' }]),
+      isNoteMarker: (marker) => marker === 'f' || marker === 'fe',
+    };
+    expect(handleMarkerPaletteSessionKeyDown(makeEvent(' '), state, driver)).toBe('ended');
+    expect(driver.commitItem).toHaveBeenCalledExactlyOnceWith('f');
   });
 
   it('Space on a note marker this list does NOT offer closes and inserts NOTHING', () => {
@@ -574,7 +588,8 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
       isNoteMarker: (marker) => marker === 'f',
     };
     expect(handleMarkerPaletteSessionKeyDown(makeEvent(' '), state, driver)).toBe('ended');
-    expect(driver.commit).toHaveBeenCalledOnce();
+    // The ITEM's own marker commits, so the offered casing wins over what was typed.
+    expect(driver.commitItem).toHaveBeenCalledExactlyOnceWith('f');
   });
 
   it('Backspace on an empty filter is CLAIMED and closes the backslash and selection palettes', () => {

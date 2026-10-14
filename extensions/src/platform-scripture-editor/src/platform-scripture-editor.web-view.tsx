@@ -997,6 +997,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * while the palette holds focus, and making it non-editable instead blurred it, which put the
    * user's keys on the page body and lost the caret.
    */
+  /**
+   * Whether the editor changed under the open palette. ONE function for both consumers of it: the
+   * session spine, which asks before a highlighted commit, and the key router, which asks before
+   * each TYPED commit.
+   */
+  const hasEditorChangedSinceFocus = useCallback(
+    () =>
+      hasEditorChanged(
+        paletteBaselineSnapshotRef.current,
+        captureEditorContentSnapshot(
+          () => editorRef.current?.getUsj(),
+          () => editorRef.current?.getSelection(),
+        ),
+      ),
+    [],
+  );
+
   const { setSession: setPaletteSession, clearSessionIfCurrent: clearPaletteSession } =
     useMarkerPaletteSessionWriters({
       sessionRef: paletteSession,
@@ -2464,14 +2481,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // created, and the literal then reached the PDP as data), so a nulled selection is
         // restored from the focus-out capture before the spine focuses and applies.
         restoreSelectionIfLost: () => restoreEditorSelection(),
-        hasEditorChangedSinceFocus: () =>
-          hasEditorChanged(
-            paletteBaselineSnapshotRef.current,
-            captureEditorContentSnapshot(
-              () => editorRef.current?.getUsj(),
-              () => editorRef.current?.getSelection(),
-            ),
-          ),
+        hasEditorChangedSinceFocus,
         focusEditor: () => editorRef.current?.focus(),
         applyItem: (selected) => {
           if (isEnter) {
@@ -2496,6 +2506,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       clearPaletteSession,
       restoreEditorSelection,
       styleInfo,
+      hasEditorChangedSinceFocus,
     ],
   );
 
@@ -2554,7 +2565,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         },
         restoreCaret: restoreEditorSelection,
         reopenAtCaret: openMarkerPaletteAtCaret,
-        baselineRef: paletteBaselineSnapshotRef,
+        clearSessionIfCurrent: clearPaletteSession,
+        hasEditorChangedSinceFocus,
       });
       // The palette outlived its session: it holds real focus and forwards EVERY key here, so
       // returning would swallow them all — Escape included — leaving a box the keyboard cannot get
@@ -2572,6 +2584,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       restoreEditorSelection,
       isReadOnlyEffective,
       dismissPaletteSessionIfOpen,
+      clearPaletteSession,
+      hasEditorChangedSinceFocus,
     ],
   );
 

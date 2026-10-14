@@ -36,11 +36,24 @@ function setUp(sessionOverrides: Partial<MarkerPaletteOpenSession<MarkerMenuItem
   const restoreCaret = vi.fn();
   const reopenAtCaret = vi.fn(() => true);
   const baselineRef: MutableRefObject<EditorContentSnapshot | undefined> = {
-    // Only its presence matters here — this module clears the baseline, never reads inside it
+    // Only its presence matters here — the WRITER clears the baseline, never this module
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     current: {} as unknown as EditorContentSnapshot,
   };
-  const options = { sessionRef, editorRef, palette, restoreCaret, reopenAtCaret, baselineRef };
+  /** Stands in for `useMarkerPaletteSessionWriters`' writer, which owns both of these. */
+  const clearSessionIfCurrent = vi.fn((token: number) => {
+    if (sessionRef.current?.token !== token) return;
+    sessionRef.current = undefined;
+    baselineRef.current = undefined;
+  });
+  const options = {
+    sessionRef,
+    editorRef,
+    palette,
+    restoreCaret,
+    reopenAtCaret,
+    clearSessionIfCurrent,
+  };
   return {
     session,
     sessionRef,
@@ -49,6 +62,7 @@ function setUp(sessionOverrides: Partial<MarkerPaletteOpenSession<MarkerMenuItem
     restoreCaret,
     reopenAtCaret,
     baselineRef,
+    clearSessionIfCurrent,
     options,
   };
 }
@@ -92,12 +106,14 @@ describe('routeMarkerPaletteKey', () => {
     expect(sessionRef.current?.token).toBe(2);
   });
 
-  it('clears the session and the change-guard baseline once the session ends', () => {
+  it('ends the session through the WRITER, not by clearing the ref itself', () => {
     // A baseline describes the editor as THIS session's palette took focus; carrying one into the
     // next session would compare against a stale document and refuse a good commit.
     const { options, sessionRef, baselineRef } = setUp();
 
     expect(routeMarkerPaletteKey(makeEvent('Escape'), options)).toBe('routed');
+    // Routing the clear through the writer is what keeps it the only place settling resumes.
+    expect(options.clearSessionIfCurrent).toHaveBeenCalledExactlyOnceWith(1);
     expect(sessionRef.current).toBeUndefined();
     expect(baselineRef.current).toBeUndefined();
   });
@@ -124,5 +140,75 @@ describe('routeMarkerPaletteKey', () => {
 
     expect(routeMarkerPaletteKey(makeEvent('\\'), options)).toBe('routed');
     expect(palette.dismiss).toHaveBeenCalledOnce();
+  });
+});
+
+describe('routeMarkerPaletteKey — the change guard on TYPED commits', () => {
+  // The spine asks the guard before a HIGHLIGHTED commit, which comes back through the overlay.
+  // Typed commits never go near the spine — they apply straight from the router — so each one is
+  // covered here. A consumer with no live close (the footnote popover) has nothing else standing
+  // between a changed document and a commit at a stale caret.
+  const typedCommitKeys: readonly {
+    key: string;
+    filter: string;
+    applied: keyof ReturnType<typeof setUp>['editor'];
+  }[] = [
+    { key: ' ', filter: 'wj', applied: 'commitTypedMarker' },
+    { key: '*', filter: 'wj', applied: 'commitTypedCloser' },
+    { key: '\\', filter: 'wj', applied: 'commitTypedMarker' },
+  ];
+
+  typedCommitKeys.forEach(({ key, filter, applied }) => {
+    it(`refuses the ${key === ' ' ? 'Space' : key} commit and closes when the editor changed`, () => {
+      const { options, editor, palette } = setUp({ filter });
+      const changed = { ...options, hasEditorChangedSinceFocus: () => true };
+
+      expect(routeMarkerPaletteKey(makeEvent(key), changed)).toBe('routed');
+      expect(editor[applied]).not.toHaveBeenCalled();
+      expect(palette.dismiss).toHaveBeenCalled();
+    });
+
+    it(`applies the ${key === ' ' ? 'Space' : key} commit when the editor did NOT change`, () => {
+      const { options, editor } = setUp({ filter });
+      const unchanged = { ...options, hasEditorChangedSinceFocus: () => false };
+
+      expect(routeMarkerPaletteKey(makeEvent(key), unchanged)).toBe('routed');
+      expect(editor[applied]).toHaveBeenCalled();
+    });
+  });
+
+  it('refuses the selection-wrap Space commit when the editor changed', () => {
+    const { options, editor, palette } = setUp({ kind: 'selection', filter: 'wj' });
+    const changed = { ...options, hasEditorChangedSinceFocus: () => true };
+
+    expect(routeMarkerPaletteKey(makeEvent(' '), changed)).toBe('routed');
+    expect(editor.applyMarkerMenuSelection).not.toHaveBeenCalled();
+    expect(palette.dismiss).toHaveBeenCalled();
+  });
+
+  it('asks the guard BEFORE restoring the caret', () => {
+    // Same reason the spine does: the restore writes a selection back, so a guard asked afterwards
+    // compares against that write rather than against what the user left.
+    const order: string[] = [];
+    const { options, restoreCaret } = setUp({ filter: 'wj' });
+    restoreCaret.mockImplementation(() => order.push('restore'));
+    const guarded = {
+      ...options,
+      hasEditorChangedSinceFocus: () => {
+        order.push('guard');
+        return false;
+      },
+    };
+
+    routeMarkerPaletteKey(makeEvent(' '), guarded);
+
+    expect(order).toEqual(['guard', 'restore']);
+  });
+
+  it('applies as before when no guard is supplied', () => {
+    const { options, editor } = setUp({ filter: 'wj' });
+
+    expect(routeMarkerPaletteKey(makeEvent(' '), options)).toBe('routed');
+    expect(editor.commitTypedMarker).toHaveBeenCalled();
   });
 });

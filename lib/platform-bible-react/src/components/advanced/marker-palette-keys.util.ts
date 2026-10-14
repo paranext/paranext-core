@@ -22,12 +22,10 @@ import type { MutableRefObject, RefObject } from 'react';
 import type { EditorRef, MarkerMenuItem } from '@eten-tech-foundation/platform-editor';
 import type { PaletteDriver } from 'platform-bible-utils/experimental';
 import {
-  clearPaletteSessionIfCurrent,
   handleMarkerPaletteSessionKeyDown,
   type MarkerPaletteKeyEvent,
 } from '@/components/advanced/marker-palette-keydown.util';
 import type { MarkerPaletteOpenSession } from '@/components/advanced/marker-palette-session.util';
-import type { EditorContentSnapshot } from '@/components/advanced/marker-palette-change-guard.util';
 
 /** What {@link routeMarkerPaletteKey} needs from its consumer. */
 export interface RouteMarkerPaletteKeyOptions<TItem extends MarkerMenuItem> {
@@ -57,12 +55,29 @@ export interface RouteMarkerPaletteKeyOptions<TItem extends MarkerMenuItem> {
    */
   reopenAtCaret: () => boolean;
   /**
-   * The consumer's change-guard baseline, cleared here once no session remains. A baseline
-   * describes the editor as THIS session's palette took focus; carrying one into the next session
-   * would compare against a stale document and refuse a good commit. Both consumers already did
-   * this, in two different places.
+   * Ends the session this token identifies, if it is still the current one — the consumer's writer
+   * from `useMarkerPaletteSessionWriters`, not a local equivalent.
+   *
+   * Routing through the writer rather than clearing the ref here is what keeps the writers the ONLY
+   * place settling resumes. Clearing locally still worked, because the show promise later reaches
+   * the spine's own clear, but it made resume wait on an overlay round trip and left settling
+   * suspended for good if that promise never settled. It also duplicated the baseline clearing.
    */
-  baselineRef?: MutableRefObject<EditorContentSnapshot | undefined>;
+  clearSessionIfCurrent: (token: number) => void;
+  /**
+   * Whether the editor changed under the open palette, compared against the baseline taken as the
+   * palette took focus. The same function the consumer gives the session spine.
+   *
+   * The spine asks it before applying a HIGHLIGHTED commit, which comes back through the overlay.
+   * TYPED commits — Space on the typed marker, `*`, the `\` commit-and-reopen, and the
+   * selection-wrap Space — never go near the spine; they apply straight from here, so without this
+   * they are unguarded. That matters most for a consumer with no live close: if the document
+   * changed while the palette was open, the next typed commit applies at a caret pointing into
+   * different content, which is exactly what the guard exists to refuse.
+   *
+   * Omit it and no guard runs, as before.
+   */
+  hasEditorChangedSinceFocus?: () => boolean;
 }
 
 /**
@@ -76,47 +91,76 @@ export function routeMarkerPaletteKey<TItem extends MarkerMenuItem>(
   event: MarkerPaletteKeyEvent,
   options: RouteMarkerPaletteKeyOptions<TItem>,
 ): 'routed' | 'no-session' {
-  const { sessionRef, editorRef, palette, restoreCaret, reopenAtCaret, baselineRef } = options;
+  const {
+    sessionRef,
+    editorRef,
+    palette,
+    restoreCaret,
+    reopenAtCaret,
+    clearSessionIfCurrent,
+    hasEditorChangedSinceFocus,
+  } = options;
   const session = sessionRef.current;
   if (!session) return 'no-session';
+
+  /**
+   * Runs an editor-side commit unless the editor moved under the open palette, in which case the
+   * palette closes and nothing is applied. The caret this commit would land at is no longer the one
+   * the user chose, so applying would put the marker somewhere they did not ask for; closing lets
+   * them reopen where they actually want it, which is the same answer the spine gives a highlighted
+   * commit.
+   *
+   * Asked BEFORE `restoreCaret`, for the reason the spine asks before its own restore: the restore
+   * writes a selection back into the editor, so a guard consulted afterwards compares against that
+   * write rather than against what the user left.
+   */
+  const applyUnlessEditorChanged = (apply: () => void) => {
+    if (hasEditorChangedSinceFocus?.()) {
+      palette.dismiss();
+      return;
+    }
+    apply();
+  };
 
   const outcome = handleMarkerPaletteSessionKeyDown(event, session, {
     update: (update) => palette.update(update),
     commit: () => palette.commit(),
     dismiss: () => palette.dismiss(),
-    commitTyped: (typed) => {
-      restoreCaret();
-      editorRef.current?.commitTypedMarker(typed);
-    },
-    commitTypedAndReopen: (typed) => {
-      // The `\` commit: the same materialization as Space with NO terminating space, then a fresh
-      // palette for the backslash just pressed. Showing a new palette replaces the current overlay
-      // (the old show promise rejects ABORTED, which the spine already handles), so there is no
-      // explicit dismiss to sequence against the commit.
-      restoreCaret();
-      editorRef.current?.commitTypedMarker(typed, { trailingSpace: false });
-      if (!reopenAtCaret()) palette.dismiss();
-    },
-    commitTypedCloser: (typed) => {
-      restoreCaret();
-      editorRef.current?.commitTypedCloser(typed);
-    },
-    commitItem: (marker) => {
-      const selected = session.items.find((item) => item.marker === marker);
-      if (!selected) return;
-      restoreCaret();
-      editorRef.current?.applyMarkerMenuSelection(selected, {
-        trigger: 'backslash',
-        literalPrefixLanded: false,
-      });
-    },
+    commitTyped: (typed) =>
+      applyUnlessEditorChanged(() => {
+        restoreCaret();
+        editorRef.current?.commitTypedMarker(typed);
+      }),
+    commitTypedAndReopen: (typed) =>
+      applyUnlessEditorChanged(() => {
+        // The `\` commit: the same materialization as Space with NO terminating space, then a
+        // fresh palette for the backslash just pressed. Showing a new palette replaces the current
+        // overlay (the old show promise rejects ABORTED, which the spine already handles), so there
+        // is no explicit dismiss to sequence against the commit.
+        restoreCaret();
+        editorRef.current?.commitTypedMarker(typed, { trailingSpace: false });
+        if (!reopenAtCaret()) palette.dismiss();
+      }),
+    commitTypedCloser: (typed) =>
+      applyUnlessEditorChanged(() => {
+        restoreCaret();
+        editorRef.current?.commitTypedCloser(typed);
+      }),
+    commitItem: (marker) =>
+      applyUnlessEditorChanged(() => {
+        const selected = session.items.find((item) => item.marker === marker);
+        if (!selected) return;
+        restoreCaret();
+        editorRef.current?.applyMarkerMenuSelection(selected, {
+          trigger: 'backslash',
+          literalPrefixLanded: false,
+        });
+      }),
   });
 
   // Clear only if this session is still the current one: a `\` commit opens a REPLACEMENT session
-  // synchronously inside the table call above, and an unconditional clear would kill it.
-  if (outcome === 'ended') {
-    clearPaletteSessionIfCurrent(sessionRef, session.token);
-    if (baselineRef && !sessionRef.current) baselineRef.current = undefined;
-  }
+  // synchronously inside the table call above, and an unconditional clear would kill it. The
+  // writer's own token check does exactly that, and resumes settling when nothing is left.
+  if (outcome === 'ended') clearSessionIfCurrent(session.token);
   return 'routed';
 }

@@ -634,6 +634,23 @@ export default function FootnoteEditor({
    */
   const paletteBaselineSnapshotRef = useRef<EditorContentSnapshot | undefined>(undefined);
 
+  /**
+   * Whether this note changed under the open palette. ONE function for both consumers of it: the
+   * session spine, which asks before a highlighted commit, and the key router, which asks before
+   * each TYPED commit.
+   */
+  const hasEditorChangedSinceFocus = useCallback(
+    () =>
+      hasEditorChanged(
+        paletteBaselineSnapshotRef.current,
+        captureEditorContentSnapshot(
+          () => editorRef.current?.getUsj(),
+          () => editorRef.current?.getSelection(),
+        ),
+      ),
+    [],
+  );
+
   const { setSession: setPaletteSession, clearSessionIfCurrent: clearPaletteSession } =
     useMarkerPaletteSessionWriters({
       sessionRef: paletteSession,
@@ -1301,14 +1318,7 @@ export default function FootnoteEditor({
         // invalid trailing span after the note's closing marker while the typed literal strands at
         // the real caret (live-observed: a red `\fq` after `\f*`).
         restoreSelectionIfLost,
-        hasEditorChangedSinceFocus: () =>
-          hasEditorChanged(
-            paletteBaselineSnapshotRef.current,
-            captureEditorContentSnapshot(
-              () => editorRef.current?.getUsj(),
-              () => editorRef.current?.getSelection(),
-            ),
-          ),
+        hasEditorChangedSinceFocus,
         focusEditor: () => editorRef.current?.focus(),
         applyItem: (selected) =>
           editorRef.current?.applyMarkerMenuSelection(selected, {
@@ -1332,6 +1342,7 @@ export default function FootnoteEditor({
     [
       markerPalette,
       restoreSelectionIfLost,
+      hasEditorChangedSinceFocus,
       options.styleInfo,
       setPaletteSession,
       clearPaletteSession,
@@ -1371,14 +1382,21 @@ export default function FootnoteEditor({
         palette: markerPalette,
         restoreCaret: restoreSelectionIfLost,
         reopenAtCaret: openMarkerPaletteAtCaret,
-        baselineRef: paletteBaselineSnapshotRef,
+        clearSessionIfCurrent: clearPaletteSession,
+        hasEditorChangedSinceFocus,
       });
       // The palette outlived its session: it holds real focus and forwards EVERY key here, so
       // returning would swallow them all — Escape included — leaving a box the keyboard cannot
       // get out of. Close it instead.
       if (routed === 'no-session') markerPalette.dismiss();
     },
-    [markerPalette, openMarkerPaletteAtCaret, restoreSelectionIfLost],
+    [
+      markerPalette,
+      openMarkerPaletteAtCaret,
+      restoreSelectionIfLost,
+      clearPaletteSession,
+      hasEditorChangedSinceFocus,
+    ],
   );
 
   useEffect(() => {
