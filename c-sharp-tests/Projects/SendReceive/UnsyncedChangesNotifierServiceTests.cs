@@ -211,5 +211,20 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 Client.InvokeRequestHandler(GetUnsyncedChangesCommand)!;
             Assert.That(later.ToReceive, Is.EquivalentTo(new[] { "B", "C" }));
         }
+
+        [Test]
+        public void Rechecking_IsTheUnionOfBothSources()
+        {
+            _poller.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
+            var viaRemote = (UnsyncedChangesState)
+                Client.InvokeRequestHandler(GetUnsyncedChangesCommand)!;
+            Assert.That(viaRemote.IsRechecking, Is.True, "the poller alone");
+
+            _tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
+            _poller.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            var viaLocal = (UnsyncedChangesState)
+                Client.InvokeRequestHandler(GetUnsyncedChangesCommand)!;
+            Assert.That(viaLocal.IsRechecking, Is.True, "the tracker alone");
+        }
     }
 }

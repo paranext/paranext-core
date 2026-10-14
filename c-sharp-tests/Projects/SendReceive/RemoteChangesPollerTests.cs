@@ -49,7 +49,11 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _next = ["a"];
             _poller.Tick();
             await _poller.FlushAsync().WaitAsync(s_bound);
-            Assert.That(_poller.GetState(), Is.EquivalentTo(new[] { "A" }), "ids are upper-cased");
+            Assert.That(
+                _poller.GetState().ToReceive,
+                Is.EquivalentTo(new[] { "A" }),
+                "ids are upper-cased"
+            );
             Assert.That(_events, Is.EqualTo(1));
         }
 
@@ -76,7 +80,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _poller.Tick();
             await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_fetchCalls, Is.EqualTo(2));
-            Assert.That(_poller.GetState(), Is.EquivalentTo(new[] { "A" }));
+            Assert.That(_poller.GetState().ToReceive, Is.EquivalentTo(new[] { "A" }));
             Assert.That(_events, Is.EqualTo(1));
         }
 
@@ -93,7 +97,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             fail = true;
             poller.Tick();
             await poller.FlushAsync().WaitAsync(s_bound);
-            Assert.That(poller.GetState(), Is.EquivalentTo(new[] { "A" }));
+            Assert.That(poller.GetState().ToReceive, Is.EquivalentTo(new[] { "A" }));
         }
 
         [Test]
@@ -152,7 +156,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _poller.Tick();
             await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_fetchCalls, Is.Zero);
-            Assert.That(_poller.GetState(), Is.Empty);
+            Assert.That(_poller.GetState().ToReceive, Is.Empty);
         }
 
         [Test]
@@ -167,7 +171,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _poller.OnSyncEnded();
             await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_fetchCalls, Is.EqualTo(1));
-            Assert.That(_poller.GetState(), Is.EquivalentTo(new[] { "A" }));
+            Assert.That(_poller.GetState().ToReceive, Is.EquivalentTo(new[] { "A" }));
         }
 
         [Test]
@@ -177,7 +181,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _poller.OnSyncEnded();
             await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_fetchCalls, Is.EqualTo(1));
-            Assert.That(_poller.GetState(), Is.EquivalentTo(new[] { "B" }));
+            Assert.That(_poller.GetState().ToReceive, Is.EquivalentTo(new[] { "B" }));
         }
 
         [Test]
@@ -204,7 +208,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 "the timer ran the first poll"
             );
             await poller.FlushAsync().WaitAsync(s_bound);
-            Assert.That(poller.GetState(), Is.EquivalentTo(new[] { "A" }));
+            Assert.That(poller.GetState().ToReceive, Is.EquivalentTo(new[] { "A" }));
         }
 
         [Test]
@@ -255,7 +259,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             poller.Changed += () =>
             {
                 lock (raisedStates)
-                    raisedStates.Add([.. poller.GetState()]);
+                    raisedStates.Add([.. poller.GetState().ToReceive]);
             };
             try
             {
@@ -270,13 +274,13 @@ namespace TestParanextDataProvider.Projects.SendReceive
             await poller.FlushAsync().WaitAsync(s_bound);
 
             Assert.That(calls, Is.EqualTo(2), "one follow-up poll after the stale one");
-            Assert.That(poller.GetState(), Is.EquivalentTo(new[] { "NEW" }));
+            Assert.That(poller.GetState().ToReceive, Is.EquivalentTo(new[] { "NEW" }));
             Assert.That(
                 raisedStates.SelectMany(state => state),
                 Has.No.Member("OLD"),
                 "the stale result was never published"
             );
-            Assert.That(raisedStates, Has.Count.EqualTo(1));
+            Assert.That(raisedStates.Last(), Is.EquivalentTo(new[] { "NEW" }));
         }
 
         [Test]
@@ -315,7 +319,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _poller.OnSyncEnded();
             await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_fetchCalls, Is.Zero);
-            Assert.That(_poller.GetState(), Is.Empty);
+            Assert.That(_poller.GetState().ToReceive, Is.Empty);
         }
 
         [Test]
@@ -354,14 +358,131 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _poller.OnSyncEnded();
             await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_fetchCalls, Is.Zero);
-            Assert.That(_poller.GetState(), Is.Empty);
+            Assert.That(_poller.GetState().ToReceive, Is.Empty);
 
             // The other source's own end signal arrives once it reads idle.
             _syncing = false;
             _poller.OnSyncEnded();
             await _poller.FlushAsync().WaitAsync(s_bound);
             Assert.That(_fetchCalls, Is.EqualTo(1));
-            Assert.That(_poller.GetState(), Is.EquivalentTo(new[] { "A" }));
+            Assert.That(_poller.GetState().ToReceive, Is.EquivalentTo(new[] { "A" }));
+        }
+
+        [Test]
+        public async Task SyncStart_ReportsRechecking_UntilThePostSyncPollCompletes()
+        {
+            using var gate = new ManualResetEventSlim(false);
+            using var started = new ManualResetEventSlim(false);
+            using var poller = CreatePoller(() =>
+            {
+                started.Set();
+                gate.Wait(s_bound);
+                return ["A"];
+            });
+            poller.OnSyncActivityChanged(new SyncActivityState(true, ["A"]));
+            Assert.That(poller.GetState().IsRechecking, Is.True, "true from the sync's start");
+            Assert.That(_events, Is.EqualTo(1), "the flag flip is announced");
+
+            poller.OnSyncActivityChanged(new SyncActivityState(false, []));
+            Assert.That(started.Wait(s_bound), Is.True, "the post-sync poll started");
+            Assert.That(poller.GetState().IsRechecking, Is.True, "still true while it runs");
+
+            gate.Set();
+            await poller.FlushAsync().WaitAsync(s_bound);
+            Assert.That(poller.GetState().IsRechecking, Is.False);
+            Assert.That(poller.GetState().ToReceive, Is.EquivalentTo(new[] { "A" }));
+            Assert.That(_events, Is.EqualTo(2), "start, then the set and the flag in one raise");
+        }
+
+        [Test]
+        public async Task PostSyncPoll_InternetDisabled_ClearsRechecking()
+        {
+            _internet = false;
+            _poller.OnSyncActivityChanged(new SyncActivityState(true, ["A"]));
+            _poller.OnSyncActivityChanged(new SyncActivityState(false, []));
+            await _poller.FlushAsync().WaitAsync(s_bound);
+
+            Assert.That(_fetchCalls, Is.Zero);
+            Assert.That(_poller.GetState().IsRechecking, Is.False);
+            Assert.That(_events, Is.EqualTo(2), "the clearing flip is announced");
+        }
+
+        [Test]
+        public async Task PostSyncPoll_FailedLookup_ClearsRechecking()
+        {
+            _next = null;
+            _poller.OnBlockStateChanged(new SendReceiveBlockState(true, ["A"]));
+            _poller.OnBlockStateChanged(new SendReceiveBlockState(false, []));
+            await _poller.FlushAsync().WaitAsync(s_bound);
+
+            Assert.That(_fetchCalls, Is.EqualTo(1));
+            Assert.That(_poller.GetState().IsRechecking, Is.False);
+            Assert.That(_events, Is.EqualTo(2));
+        }
+
+        [Test]
+        public async Task SyncEndDuringPoll_StaysRecheckingUntilTheFollowUp()
+        {
+            using var gate = new ManualResetEventSlim(false);
+            using var started = new ManualResetEventSlim(false);
+            using var followUpStarted = new ManualResetEventSlim(false);
+            using var followUpGate = new ManualResetEventSlim(false);
+            int calls = 0;
+            using var poller = CreatePoller(() =>
+            {
+                if (Interlocked.Increment(ref calls) == 1)
+                {
+                    started.Set();
+                    gate.Wait(s_bound);
+                    return ["OLD"];
+                }
+                followUpStarted.Set();
+                followUpGate.Wait(s_bound);
+                return ["NEW"];
+            });
+            try
+            {
+                poller.Tick();
+                Assert.That(started.Wait(s_bound), Is.True, "first poll started");
+                poller.OnSyncActivityChanged(new SyncActivityState(true, ["A"]));
+                poller.OnSyncActivityChanged(new SyncActivityState(false, []));
+                gate.Set();
+                Assert.That(followUpStarted.Wait(s_bound), Is.True, "follow-up started");
+                Assert.That(
+                    poller.GetState().IsRechecking,
+                    Is.True,
+                    "the stale poll's completion does not clear the flag"
+                );
+            }
+            finally
+            {
+                gate.Set();
+                followUpGate.Set();
+            }
+            await poller.FlushAsync().WaitAsync(s_bound);
+            Assert.That(poller.GetState().IsRechecking, Is.False);
+            Assert.That(poller.GetState().ToReceive, Is.EquivalentTo(new[] { "NEW" }));
+        }
+
+        [Test]
+        public async Task SyncEnd_WhileOtherSignalStillSyncing_StaysRechecking()
+        {
+            _syncing = true;
+            _poller.OnSyncActivityChanged(new SyncActivityState(true, ["A"]));
+            _poller.OnSyncActivityChanged(new SyncActivityState(false, []));
+            await _poller.FlushAsync().WaitAsync(s_bound);
+            Assert.That(_fetchCalls, Is.Zero);
+            Assert.That(
+                _poller.GetState().IsRechecking,
+                Is.True,
+                "the skipped poll keeps the flag"
+            );
+
+            _syncing = false;
+            _poller.OnBlockStateChanged(new SendReceiveBlockState(false, []));
+            await _poller.FlushAsync().WaitAsync(s_bound);
+            Assert.That(_fetchCalls, Is.EqualTo(1));
+            Assert.That(_poller.GetState().IsRechecking, Is.False);
         }
 
         private RemoteChangesPoller CreatePoller(Func<IReadOnlyCollection<string>?> fetch)

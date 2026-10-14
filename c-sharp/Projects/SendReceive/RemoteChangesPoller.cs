@@ -30,6 +30,14 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// cannot deadlock against a poll. Raises are serialized by the single in-flight poll.
 /// </para>
 /// <para>
+/// <see cref="RemoteChangesState.IsRechecking"/> is true from the start of a sync (either signal
+/// reporting active) until the poll that follows its end has finished. That poll clears the flag
+/// whether its lookup succeeded or failed; a poll skipped because internet use is disabled or
+/// because the lookup conditions cannot be read clears it too, while a poll skipped because another
+/// sync source still reads active leaves it for that source's own end. A poll that a later sync end
+/// made stale does not clear it: the follow-up does.
+/// </para>
+/// <para>
 /// Both sync signals the <see cref="UnsyncedChangesTracker"/> uses are consumed:
 /// <see cref="ParatextProjectSendReceiveService.SyncActivityChanged"/> going idle and
 /// <see cref="SendReceiveWriteLock.BlockStateChanged"/> disarming. When both end one sync, this
@@ -52,6 +60,9 @@ internal sealed class RemoteChangesPoller : IDisposable
     // Everything below is guarded by _lock. Ids are upper-cased.
     private readonly object _lock = new();
     private HashSet<string> _toReceive = new(StringComparer.OrdinalIgnoreCase);
+    private bool _activityActive; // the run marker last reported a sync
+    private bool _gateActive; // the write gate last reported armed
+    private bool _awaitingPostSyncPoll; // a sync ended and its poll has not completed
     private bool _polling; // at most one poll in flight
     private bool _followUpRequested; // a sync ended during the poll in flight
     private long _generation; // bumped at every sync end
@@ -99,19 +110,25 @@ internal sealed class RemoteChangesPoller : IDisposable
     }
 
     /// <summary>
-    /// Raised when the set of projects with changes to receive changes by value; read it with
-    /// <see cref="GetState"/>. Never raised under the poller's lock. After <see cref="Dispose"/>
+    /// Raised when the set of projects with changes to receive changes by value, or when
+    /// <see cref="RemoteChangesState.IsRechecking"/> flips; read it with <see cref="GetState"/>. Never raised under the poller's lock. After <see cref="Dispose"/>
     /// the set no longer changes, so only a raise already under way can still arrive. A throwing
     /// subscriber is logged and does not affect the others.
     /// </summary>
     public event Action? Changed;
 
-    /// <summary>A snapshot of the projects the last successful poll reported.</summary>
-    public IReadOnlyCollection<string> GetState()
+    /// <summary>
+    /// A snapshot of the projects the last successful poll reported and whether a sync is active or
+    /// its poll is still outstanding, read together.
+    /// </summary>
+    public RemoteChangesState GetState()
     {
         lock (_lock)
-            return _toReceive.ToArray();
+            return new(_toReceive.ToArray(), IsRecheckingLocked());
     }
+
+    // Under _lock.
+    private bool IsRecheckingLocked() => _activityActive || _gateActive || _awaitingPostSyncPoll;
 
     /// <summary>
     /// Arms the poll timer and, on a poller built with the production constructor, subscribes to
@@ -136,12 +153,21 @@ internal sealed class RemoteChangesPoller : IDisposable
     /// <summary>
     /// Polls now after a sync ended. A poll in flight is marked stale and followed by one more.
     /// </summary>
-    internal void OnSyncEnded()
+    internal void OnSyncEnded() => EndSync(signal: null);
+
+    // Clears the ending signal's flag and requests the post-sync poll in one critical section, so
+    // IsRechecking never reads false between the sync's end and its poll.
+    private void EndSync(bool? signal)
     {
         lock (_lock)
         {
             if (_disposed)
                 return;
+            if (signal is true)
+                _activityActive = false;
+            else if (signal is false)
+                _gateActive = false;
+            _awaitingPostSyncPoll = true;
             _generation++;
             if (_polling)
             {
@@ -160,8 +186,14 @@ internal sealed class RemoteChangesPoller : IDisposable
             if (_disposed || _polling)
                 return;
         }
-        if (!CanPoll())
-            return;
+        switch (CanPoll())
+        {
+            case PollCondition.StillSyncing:
+                return;
+            case PollCondition.Unavailable:
+                ClearAwaitingPostSyncPoll();
+                return;
+        }
         lock (_lock)
         {
             if (_disposed || _polling)
@@ -213,16 +245,54 @@ internal sealed class RemoteChangesPoller : IDisposable
         timer?.Dispose();
     }
 
-    private void OnSyncActivityChanged(SyncActivityState state)
+    internal void OnSyncActivityChanged(SyncActivityState state)
     {
-        if (!state.IsSyncing)
-            OnSyncEnded();
+        if (state.IsSyncing)
+            BeginSync(isActivity: true);
+        else
+            EndSync(signal: true);
     }
 
-    private void OnBlockStateChanged(SendReceiveBlockState state)
+    internal void OnBlockStateChanged(SendReceiveBlockState state)
     {
-        if (!state.IsBlocking)
-            OnSyncEnded();
+        if (state.IsBlocking)
+            BeginSync(isActivity: false);
+        else
+            EndSync(signal: false);
+    }
+
+    private void BeginSync(bool isActivity)
+    {
+        bool flipped;
+        lock (_lock)
+        {
+            if (_disposed)
+                return;
+            bool before = IsRecheckingLocked();
+            if (isActivity)
+                _activityActive = true;
+            else
+                _gateActive = true;
+            flipped = before != IsRecheckingLocked();
+        }
+        if (flipped)
+            RaiseChanged();
+    }
+
+    // The lookup conditions are not met, so no poll will answer for the sync that just ended.
+    private void ClearAwaitingPostSyncPoll()
+    {
+        bool flipped;
+        lock (_lock)
+        {
+            if (_disposed || !_awaitingPostSyncPoll)
+                return;
+            bool before = IsRecheckingLocked();
+            _awaitingPostSyncPoll = false;
+            flipped = before != IsRecheckingLocked();
+        }
+        if (flipped)
+            RaiseChanged();
     }
 
     private static IReadOnlyCollection<string>? FetchFromServer(
@@ -253,19 +323,28 @@ internal sealed class RemoteChangesPoller : IDisposable
         return service.GetProjectsWithUnreceivedChanges(scrTexts);
     }
 
+    private enum PollCondition
+    {
+        Ready,
+        StillSyncing, // skipped; the sync source that is still active ends with its own signal
+        Unavailable, // internet use disabled or the conditions could not be read
+    }
+
     // A failing read counts as "do not poll": skipping is always safe, and the next tick retries.
-    private bool CanPoll()
+    private PollCondition CanPoll()
     {
         try
         {
-            return !_isSyncing() && _isInternetEnabled();
+            if (_isSyncing())
+                return PollCondition.StillSyncing;
+            return _isInternetEnabled() ? PollCondition.Ready : PollCondition.Unavailable;
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine(
                 $"[RemoteChangesPoller] Could not read the poll conditions: {ex}"
             );
-            return false;
+            return PollCondition.Unavailable;
         }
     }
 
@@ -291,11 +370,9 @@ internal sealed class RemoteChangesPoller : IDisposable
                 result = null;
             }
             if (result is not null)
-            {
                 Interlocked.Exchange(ref _pollFailureWarned, 0);
-                if (Apply(result, generation))
-                    RaiseChanged();
-            }
+            if (Apply(result, generation))
+                RaiseChanged();
         }
         catch (Exception ex)
         {
@@ -307,20 +384,24 @@ internal sealed class RemoteChangesPoller : IDisposable
         }
     }
 
-    // Publishes the result unless a sync ended since the poll was claimed. True when the set
-    // changed by value.
-    private bool Apply(IReadOnlyCollection<string> result, long generation)
+    // Publishes the result unless a sync ended since the poll was claimed, and ends the wait for
+    // the post-sync poll when the poll is current, whether or not its lookup succeeded (a null
+    // result). True when the set changed by value or IsRechecking flipped.
+    private bool Apply(IReadOnlyCollection<string>? result, long generation)
     {
-        var next = new HashSet<string>(
-            result.Select(id => id.ToUpperInvariant()),
-            StringComparer.OrdinalIgnoreCase
-        );
+        HashSet<string>? next = result is null
+            ? null
+            : new(result.Select(id => id.ToUpperInvariant()), StringComparer.OrdinalIgnoreCase);
         lock (_lock)
         {
-            if (_disposed || generation != _generation || next.SetEquals(_toReceive))
+            if (_disposed || generation != _generation)
                 return false;
-            _toReceive = next;
-            return true;
+            bool before = IsRecheckingLocked();
+            _awaitingPostSyncPoll = false;
+            bool setChanged = next is not null && !next.SetEquals(_toReceive);
+            if (setChanged)
+                _toReceive = next!;
+            return setChanged || before != IsRecheckingLocked();
         }
     }
 
@@ -356,3 +437,15 @@ internal sealed class RemoteChangesPoller : IDisposable
         }
     }
 }
+
+/// <summary>
+/// What <see cref="RemoteChangesPoller.GetState"/> reports, read together.
+/// </summary>
+/// <param name="ToReceive">The projects the last successful poll reported as having server changes
+/// not yet received here.</param>
+/// <param name="IsRechecking">True from the start of a sync until the poll that follows its end has
+/// finished.</param>
+internal readonly record struct RemoteChangesState(
+    IReadOnlyCollection<string> ToReceive,
+    bool IsRechecking
+);

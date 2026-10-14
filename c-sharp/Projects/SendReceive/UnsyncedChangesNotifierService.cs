@@ -8,7 +8,7 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// to the PAPI so the renderer can show, per project, which direction Send/Receive has work in:
 /// local changes not yet sent (<c>toSend</c>) and server changes not yet received (<c>toReceive</c>).
 /// <para>
-/// Two surfaces, both carrying the same wire shape <c>{ toSend, toReceive }</c> (an
+/// Two surfaces, both carrying the same wire shape <c>{ toSend, toReceive, isRechecking }</c> (an
 /// <see cref="UnsyncedChangesState"/> serialized via the shared camelCase PAPI JSON options):
 /// <list type="bullet">
 /// <item><description>
@@ -58,18 +58,21 @@ internal class UnsyncedChangesNotifierService(
                 Experimental = true,
                 Summary =
                     "Announces, per sync direction, the projects with changes waiting "
-                    + "({ toSend, toReceive }), whenever either set changes. toSend is local "
+                    + "({ toSend, toReceive, isRechecking }), whenever either set changes. toSend is local "
                     + "repository truth: the projects whose local repository holds changes not yet "
                     + "sent by Send/Receive. toReceive is the result of the last server lookup, "
                     + "refreshed every few minutes and after each sync; it is always empty in "
                     + "public Platform.Bible, and only a build that supplies server information "
-                    + "reports it.",
+                    + "reports it. isRechecking is true from the start of a sync until the "
+                    + "post-sync recheck and server lookup finish; the snapshot that clears it is "
+                    + "pushed even when neither list changed.",
                 Params =
                 [
                     new()
                     {
                         Name = "state",
-                        Summary = "The current unsynced-changes snapshot ({ toSend, toReceive })",
+                        Summary =
+                            "The current unsynced-changes snapshot ({ toSend, toReceive, isRechecking })",
                         Required = true,
                         Schema = new() { Type = "object" },
                     },
@@ -80,7 +83,12 @@ internal class UnsyncedChangesNotifierService(
     private static UnsyncedChangesState ReadMerged(
         UnsyncedChangesTracker tracker,
         RemoteChangesPoller poller
-    ) => new(tracker.GetState().ToSend, poller.GetState());
+    )
+    {
+        UnsyncedChangesState local = tracker.GetState();
+        RemoteChangesState remote = poller.GetState();
+        return new(local.ToSend, remote.ToReceive, local.IsRechecking || remote.IsRechecking);
+    }
 
     private readonly SendReceiveSnapshotNotifierService<UnsyncedChangesState> _notifier =
         new(
@@ -108,15 +116,17 @@ internal class UnsyncedChangesNotifierService(
             s_unsyncedChangesEventDocumentation,
             Create(
                 "Returns, per sync direction, the projects with changes waiting ({ toSend, "
-                    + "toReceive }) so a renderer can seed its indicator on demand instead of "
+                    + "toReceive, isRechecking }) so a renderer can seed its indicator on demand instead of "
                     + "waiting for the next onUnsyncedChangesChanged transition. toSend is local "
                     + "repository truth. toReceive is the result of the last server lookup, "
                     + "refreshed every few minutes and after each sync; it is always empty in "
                     + "public Platform.Bible, and only a build that supplies server information "
-                    + "reports it.",
+                    + "reports it. isRechecking is true from the start of a sync until the "
+                    + "post-sync recheck and server lookup finish; the snapshot that clears it is "
+                    + "pushed even when neither list changed.",
                 result: ResultOf(
                     "object",
-                    "The current unsynced-changes snapshot ({ toSend, toReceive })"
+                    "The current unsynced-changes snapshot ({ toSend, toReceive, isRechecking })"
                 )
             )
         );

@@ -28,6 +28,13 @@ namespace TestParanextDataProvider.Projects.SendReceive
             );
 
         [Test]
+        public void Equals_DiffersOnRechecking() =>
+            Assert.That(
+                new UnsyncedChangesState(new[] { "a" }, new[] { "c" }, IsRechecking: true),
+                Is.Not.EqualTo(new UnsyncedChangesState(new[] { "a" }, new[] { "c" }))
+            );
+
+        [Test]
         public void Equals_SetsAreNotInterchangeable() =>
             Assert.That(
                 new UnsyncedChangesState(new[] { "a" }, Array.Empty<string>()),
@@ -68,7 +75,12 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 new UnsyncedChangesState(new[] { "PROJ1" }, new[] { "PROJ2" }),
                 SerializationOptions.CreateSerializationOptions()
             );
-            Assert.That(json, Is.EqualTo("{\"toSend\":[\"PROJ1\"],\"toReceive\":[\"PROJ2\"]}"));
+            Assert.That(
+                json,
+                Is.EqualTo(
+                    "{\"toSend\":[\"PROJ1\"],\"toReceive\":[\"PROJ2\"],\"isRechecking\":false}"
+                )
+            );
         }
     }
 }

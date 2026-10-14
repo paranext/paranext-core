@@ -21,7 +21,8 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// </remarks>
 public readonly record struct UnsyncedChangesState(
     IReadOnlyCollection<string> ToSend,
-    IReadOnlyCollection<string> ToReceive
+    IReadOnlyCollection<string> ToReceive,
+    bool IsRechecking = false
 )
 {
     /// <summary>The snapshot with no unsynced projects in either direction.</summary>
@@ -30,7 +31,7 @@ public readonly record struct UnsyncedChangesState(
 
     /// <summary>
     /// Compares by VALUE, including the contents of <see cref="ToSend"/> and
-    /// <see cref="ToReceive"/>.
+    /// <see cref="ToReceive"/> and the <see cref="IsRechecking"/> flag.
     /// <para>
     /// The synthesized equality a record struct would give this compares
     /// <see cref="IReadOnlyCollection{T}"/> with the default comparer, i.e. by REFERENCE — so two
@@ -41,13 +42,16 @@ public readonly record struct UnsyncedChangesState(
     /// </para>
     /// </summary>
     public bool Equals(UnsyncedChangesState other) =>
-        SetEquals(ToSend, other.ToSend) && SetEquals(ToReceive, other.ToReceive);
+        IsRechecking == other.IsRechecking
+        && SetEquals(ToSend, other.ToSend)
+        && SetEquals(ToReceive, other.ToReceive);
 
     /// <summary>
     /// Hashes the same values <see cref="Equals(UnsyncedChangesState)"/> compares,
     /// order-insensitively so two equal snapshots cannot hash differently.
     /// </summary>
-    public override int GetHashCode() => HashCode.Combine(SetHash(ToSend), SetHash(ToReceive));
+    public override int GetHashCode() =>
+        HashCode.Combine(SetHash(ToSend), SetHash(ToReceive), IsRechecking);
 
     private static bool SetEquals(IReadOnlyCollection<string> a, IReadOnlyCollection<string> b) =>
         a.Count == b.Count && a.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(b);

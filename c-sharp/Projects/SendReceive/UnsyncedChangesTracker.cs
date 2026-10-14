@@ -52,6 +52,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     private readonly HashSet<string> _syncCovered = []; // ids the current or last sync announced
     private bool _activityActive; // the run marker last reported a sync
     private bool _gateActive; // the write gate last reported armed
+    private int _postSyncPasses; // sync-end rechecks scheduled or running
     private readonly Dictionary<string, CancellationTokenSource> _debounces = [];
     private readonly Dictionary<string, bool> _inFlight = []; // id → re-run requested
     private long _syncEndCount;
@@ -105,18 +106,30 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     /// <summary>
     /// Raised with the new state when the set of unsynced projects changes by value. Never raised
     /// under the tracker's state lock; raises are serialized and each carries the latest state, so
-    /// once checks settle the last state a subscriber received matches <see cref="GetState"/>. Not
-    /// raised after <see cref="Dispose"/>. A throwing
-    /// subscriber is logged and does not affect the others.
+    /// once checks settle the last state a subscriber received matches <see cref="GetState"/>. The
+    /// state includes <see cref="UnsyncedChangesState.IsRechecking"/>, so a change of that flag alone
+    /// raises too: the snapshot that clears it is pushed even when no project changed. Not raised
+    /// after <see cref="Dispose"/>. A throwing subscriber is logged and does not affect the others.
     /// </summary>
     public event Action<UnsyncedChangesState>? Changed;
 
-    /// <summary>A snapshot of the projects currently known to hold unsent local changes.</summary>
+    /// <summary>
+    /// A snapshot of the projects currently known to hold unsent local changes, and whether a sync
+    /// is active or its recheck is still outstanding.
+    /// </summary>
     public UnsyncedChangesState GetState()
     {
         lock (_lock)
-            return new(_unsynced.ToArray(), Array.Empty<string>());
+            return StateLocked();
     }
+
+    // Under _lock.
+    private UnsyncedChangesState StateLocked() =>
+        new(_unsynced.ToArray(), Array.Empty<string>(), IsRecheckingLocked());
+
+    // Under _lock. True from the start of a sync (either signal) until the recheck that follows its
+    // end has finished.
+    private bool IsRecheckingLocked() => _activityActive || _gateActive || _postSyncPasses > 0;
 
     /// <summary>
     /// Subscribes to write-scope exits and both sync signals. Idempotent; does nothing on a
@@ -216,6 +229,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
                 _gateActive = true;
             _syncCovered.UnionWith(ids);
         }
+        RaiseLatestState();
     }
 
     private void EndSyncSignal(bool isActivity)
@@ -226,6 +240,9 @@ internal sealed class UnsyncedChangesTracker : IDisposable
                 _activityActive = false;
             else
                 _gateActive = false;
+            // Counted in the same critical section as the flag clear, so the flag never reads
+            // false between the sync's end and the start of its recheck.
+            _postSyncPasses++;
         }
         RecheckAfterSync();
     }
@@ -258,9 +275,35 @@ internal sealed class UnsyncedChangesTracker : IDisposable
                     .Distinct(),
             ];
             _deferred.Clear();
+            // Two work units: RunPass ends one; RunPostSyncPass holds the other until it has
+            // lowered the pass count and pushed the state, so FlushAsync cannot complete earlier.
+            BeginWorkLocked();
             BeginWorkLocked();
         }
-        _ = Task.Run(() => RunPass(() => ids));
+        _ = Task.Run(() => RunPostSyncPass(ids));
+    }
+
+    // Runs the sync-end recheck, then lowers the pass count and pushes the state that carries the
+    // cleared IsRechecking flag, even when no project changed.
+    private void RunPostSyncPass(string[] ids)
+    {
+        try
+        {
+            try
+            {
+                RunPass(() => ids);
+            }
+            finally
+            {
+                lock (_lock)
+                    _postSyncPasses--;
+            }
+            RaiseLatestState();
+        }
+        finally
+        {
+            EndWork();
+        }
     }
 
     /// <summary>Completes once no debounce, check, or scan is outstanding. For tests.</summary>
@@ -522,7 +565,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
             {
                 if (_disposed)
                     return;
-                latest = new(_unsynced.ToArray(), Array.Empty<string>());
+                latest = StateLocked();
             }
             if (latest.Equals(_lastRaised))
                 return;

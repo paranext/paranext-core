@@ -415,15 +415,101 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
-        public async Task GateArm_TriggersNothing()
+        public async Task GateArm_ChecksNothing()
         {
             _repo["A"] = true;
             _tracker.OnWriteScopeExited("A");
             await _tracker.FlushAsync();
             int callsBefore = _detectCalls;
+            int eventsBefore = _events.Count;
             _tracker.OnBlockStateChanged(new SendReceiveBlockState(true, new[] { "A" }));
             await _tracker.FlushAsync();
             Assert.That(_detectCalls, Is.EqualTo(callsBefore));
+            Assert.That(_events, Has.Count.EqualTo(eventsBefore + 1), "only the flag is announced");
+            Assert.That(_events.Last().IsRechecking, Is.True);
+            Assert.That(_events.Last().ToSend, Is.EquivalentTo(new[] { "A" }));
+        }
+
+        [Test]
+        public async Task PostSyncPass_ReportsRecheckingWhileItRuns()
+        {
+            using var gate = new ManualResetEventSlim(false);
+            using var started = new ManualResetEventSlim(false);
+            var events = new List<UnsyncedChangesState>();
+            using var tracker = new UnsyncedChangesTracker(
+                _ =>
+                {
+                    started.Set();
+                    gate.Wait(TimeSpan.FromSeconds(10));
+                    return false;
+                },
+                () => false,
+                () => new[] { "A" },
+                TimeSpan.Zero
+            );
+            tracker.Changed += state =>
+            {
+                lock (events)
+                    events.Add(state);
+            };
+            tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
+            Assert.That(tracker.GetState().IsRechecking, Is.True, "true from the sync's start");
+
+            tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            Assert.That(started.Wait(TimeSpan.FromSeconds(5)), Is.True, "the recheck started");
+            Assert.That(tracker.GetState().IsRechecking, Is.True, "still true mid-pass");
+
+            gate.Set();
+            await tracker.FlushAsync();
+            Assert.That(tracker.GetState().IsRechecking, Is.False);
+            Assert.That(events.Last().IsRechecking, Is.False, "the clearing state was pushed");
+        }
+
+        [Test]
+        public async Task PostSyncPass_RaisesWhenOnlyTheFlagChanges()
+        {
+            _tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
+            Assert.That(_events, Has.Count.EqualTo(1));
+            Assert.That(_events[0].IsRechecking, Is.True);
+
+            _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+
+            Assert.That(_events, Has.Count.EqualTo(2));
+            Assert.That(_events[1].IsRechecking, Is.False);
+            Assert.That(_events[1].ToSend, Is.Empty, "nothing changed but the flag");
+        }
+
+        [Test]
+        public async Task BothSignals_RecheckingStaysTrueUntilBothEnd()
+        {
+            _tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
+            _tracker.OnBlockStateChanged(new SendReceiveBlockState(true, new[] { "A" }));
+
+            _tracker.OnBlockStateChanged(new SendReceiveBlockState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+            Assert.That(
+                _tracker.GetState().IsRechecking,
+                Is.True,
+                "the run marker still reports a sync"
+            );
+
+            _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+            Assert.That(_tracker.GetState().IsRechecking, Is.False);
+            Assert.That(_events.Last().IsRechecking, Is.False);
+        }
+
+        [Test]
+        public async Task ThrowingPass_StillClearsRechecking()
+        {
+            _detectFailure = new InvalidOperationException("hg is gone");
+            _tracker.OnSyncActivityChanged(new SyncActivityState(true, new[] { "A" }));
+            _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+
+            Assert.That(_tracker.GetState().IsRechecking, Is.False);
+            Assert.That(_events.Last().IsRechecking, Is.False);
         }
 
         [Test]
