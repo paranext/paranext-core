@@ -17,6 +17,13 @@ export type UnsyncedChangeSets = {
   toSend: readonly string[];
   /** Projects for which the server holds changes not yet received. */
   toReceive: readonly string[];
+  /**
+   * Whether the backend is still rechecking after a sync: true from a sync's start until the local
+   * recheck and the server lookup that follow its end have both finished. While true, the lists can
+   * still describe the moment before that sync. An absent or non-boolean value on the wire (a
+   * backend that predates the field) reads as `false`.
+   */
+  isRechecking: boolean;
 };
 
 /** Whether a value read off the wire is an array of strings. */
@@ -50,9 +57,17 @@ function isSameSet(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((id, index) => id === b[index]);
 }
 
-/** Whether both lists are unchanged, so the previous value can keep its identity. */
+/**
+ * Whether both lists and the recheck flag are unchanged, so the previous value can keep its
+ * identity.
+ */
 function isSameSets(a: UnsyncedChangeSets | undefined, b: UnsyncedChangeSets): boolean {
-  return !!a && isSameSet(a.toSend, b.toSend) && isSameSet(a.toReceive, b.toReceive);
+  return (
+    !!a &&
+    a.isRechecking === b.isRechecking &&
+    isSameSet(a.toSend, b.toSend) &&
+    isSameSet(a.toReceive, b.toReceive)
+  );
 }
 
 /**
@@ -67,8 +82,13 @@ function isSameSets(a: UnsyncedChangeSets | undefined, b: UnsyncedChangeSets): b
  * baseline per backend start, and carries no replay for a subscriber that arrives later. An event
  * that lands while the seed is in flight wins: it describes a later moment than the snapshot does.
  * If the backend stays unreachable for longer than the seed's retry window during a cold start,
- * this stays `undefined` until the next event arrives. The same lists arriving again keep the same
- * object, so consumers can depend on identity.
+ * this stays `undefined` until the next event arrives. The same lists and flag arriving again keep
+ * the same object, so consumers can depend on identity; a change of the flag alone yields a new
+ * object that keeps the previous list arrays, so a consumer keyed on a list does not re-run.
+ *
+ * {@link UnsyncedChangeSets.isRechecking} says whether the lists can still describe the moment
+ * before a sync: the backend sets it from a sync's start until the recheck that follows its end has
+ * finished, and pushes the snapshot that clears it even when neither list changed.
  */
 export function useUnsyncedChanges(): UnsyncedChangeSets | undefined {
   const [sets, setSets] = useState<UnsyncedChangeSets | undefined>(undefined);
@@ -80,8 +100,21 @@ export function useUnsyncedChanges(): UnsyncedChangeSets | undefined {
     const next: UnsyncedChangeSets = Object.freeze({
       toSend: toIdSet(snapshot.toSend),
       toReceive: toIdSet(snapshot.toReceive),
+      isRechecking: snapshot.isRechecking === true,
     });
-    setSets((previous) => (isSameSets(previous, next) ? previous : next));
+    setSets((previous) => {
+      if (isSameSets(previous, next)) return previous;
+      if (!previous) return next;
+      // Keeps each list's identity while its ids are unchanged, so a flag-only change does not
+      // re-run anything keyed on a list.
+      return Object.freeze({
+        toSend: isSameSet(previous.toSend, next.toSend) ? previous.toSend : next.toSend,
+        toReceive: isSameSet(previous.toReceive, next.toReceive)
+          ? previous.toReceive
+          : next.toReceive,
+        isRechecking: next.isRechecking,
+      });
+    });
   }, []);
 
   useEffect(

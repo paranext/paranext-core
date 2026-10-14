@@ -13,6 +13,7 @@ import type { UnsyncedChangeSets } from './use-unsynced-changes.hook';
 import {
   SYNC_SEED_RETRY_INTERVAL_MS,
   SYNC_SEED_RETRY_WINDOW_MS,
+  SYNC_SETTLE_TIMEOUT_MS,
   useSyncStatus,
 } from './use-sync-status.hook';
 
@@ -45,10 +46,12 @@ vi.mock('./use-unsynced-changes.hook', () => ({ useUnsyncedChanges: () => unsync
 function unsyncedSets(
   toSend: readonly string[],
   toReceive: readonly string[] = [],
+  isRechecking = false,
 ): UnsyncedChangeSets {
   return Object.freeze({
     toSend: Object.freeze([...toSend]),
     toReceive: Object.freeze([...toReceive]),
+    isRechecking,
   });
 }
 
@@ -808,9 +811,10 @@ describe('useSyncStatus', () => {
   });
 
   it('reports unsynced after a successful sync when the set is non-empty', async () => {
-    // The last sync finishing says nothing about edits made since it ran.
+    // The last sync finishing says nothing about edits made since it ran. Mounting after a sync
+    // never starts a hold, even while the backend reports rechecking.
     commands.mockGetSyncState(completedStateFor({ PROJ1: 'succeeded' }));
-    unsyncedChanges.sets = unsyncedSets(['PROJ1']);
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
 
     const { result } = renderHook(() => useSyncStatus());
     await act(async () => {
@@ -1019,6 +1023,193 @@ describe('useSyncStatus', () => {
     });
 
     expect(result.current.unsyncedDirection).toBe('receive');
+    expect(result.current.unsyncedProjects).toEqual([]);
+  });
+
+  // --- Just-synced projects are held out of the unsynced count until the backend rechecked ---
+
+  /**
+   * Mounts idle, then runs one sync through the event path: a start, then an end whose follow-up
+   * read answers with `endState`. Returns after the end event's read has settled.
+   */
+  async function runSyncThroughEvents(
+    endState: Partial<SyncState>,
+    options: { projectNames?: Record<string, string> } = {},
+  ) {
+    commands.mockGetSyncState(
+      { isSyncing: false, lastRequestedProjectIds: [] },
+      { isSyncing: true, lastRequestedProjectIds: [] },
+      endState,
+    );
+    if (options.projectNames) mockProjectNames(options.projectNames);
+    const { emitSyncStateChanged } = captureEventCallbacks();
+    const rendered = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    emitSyncStateChanged({ isSyncing: true });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    emitSyncStateChanged({ isSyncing: false });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    return { ...rendered, emitSyncStateChanged };
+  }
+
+  /** Re-renders with new unsynced sets, as the real hook does when the backend pushes a snapshot. */
+  async function pushUnsyncedSets(
+    rerender: () => void,
+    sets: UnsyncedChangeSets | undefined,
+  ): Promise<void> {
+    unsyncedChanges.sets = sets;
+    rerender();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  }
+
+  it('does not count a just-synced project while the backend is still rechecking', async () => {
+    // H1: the lists can still describe the moment before the sync, so the project the sync just
+    // exchanged is left out until the backend says it rechecked.
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
+    const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }));
+
+    expect(result.current.status).toBe('synced');
+    expect(result.current.unsyncedProjects).toEqual([]);
+    expect(result.current.unsyncedDirection).toBeUndefined();
+  });
+
+  it('still reports at once a project the sync did not exchange', async () => {
+    // H2
+    unsyncedChanges.sets = unsyncedSets(['PROJ1', 'PROJ2'], [], true);
+    const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }), {
+      projectNames: { PROJ1: 'ONE', PROJ2: 'TWO' },
+    });
+
+    expect(result.current.status).toBe('unsynced');
+    expect(result.current.unsyncedProjects).toEqual([
+      { projectId: 'PROJ2', name: 'TWO', direction: 'send' },
+    ]);
+    expect(result.current.unsyncedDirection).toBe('send');
+  });
+
+  it('shows the project once the backend has finished rechecking', async () => {
+    // H3
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
+    const { result, rerender } = await runSyncThroughEvents(
+      completedStateFor({ PROJ1: 'succeeded' }),
+      { projectNames: { PROJ1: 'ONE' } },
+    );
+    expect(result.current.status).toBe('synced');
+
+    await pushUnsyncedSets(rerender, unsyncedSets(['PROJ1'], [], false));
+
+    expect(result.current.status).toBe('unsynced');
+    expect(result.current.unsyncedProjects).toEqual([
+      { projectId: 'PROJ1', name: 'ONE', direction: 'send' },
+    ]);
+  });
+
+  it('does not hold when the backend already finished rechecking at the end of the sync', async () => {
+    // H4
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], false);
+    const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }));
+
+    expect(result.current.status).toBe('unsynced');
+  });
+
+  it('releases the hold after the settle timeout when the backend never clears the flag', async () => {
+    // H5
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
+    const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }));
+    expect(result.current.status).toBe('synced');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_SETTLE_TIMEOUT_MS - 1);
+    });
+    expect(result.current.status).toBe('synced');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(result.current.status).toBe('unsynced');
+  });
+
+  it('does not hold a project the sync failed to exchange', async () => {
+    // H6
+    unsyncedChanges.sets = unsyncedSets(['PROJ1', 'PROJ2'], [], true);
+    const { result } = await runSyncThroughEvents(
+      completedStateFor({ PROJ1: 'failed', PROJ2: 'succeeded' }),
+      { projectNames: { PROJ1: 'ONE', PROJ2: 'TWO' } },
+    );
+
+    expect(result.current.status).toBe('failed');
+    expect(result.current.unsyncedProjects).toEqual([
+      { projectId: 'PROJ1', name: 'ONE', direction: 'send' },
+    ]);
+  });
+
+  it('holds a just-synced project in both directions', async () => {
+    // H7
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], ['PROJ1'], true);
+    const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }));
+
+    expect(result.current.status).toBe('synced');
+    expect(result.current.unsyncedDirection).toBeUndefined();
+  });
+
+  it('does not let a later failed sync inherit the previous sync hold', async () => {
+    // H8
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
+    const { result, emitSyncStateChanged } = await runSyncThroughEvents(
+      completedStateFor({ PROJ1: 'succeeded' }),
+      { projectNames: { PROJ1: 'ONE' } },
+    );
+    expect(result.current.status).toBe('synced');
+
+    // Same flag, a second sync that fails for the same project.
+    commands.mockGetSyncState(
+      { isSyncing: true, lastRequestedProjectIds: [] },
+      completedStateFor({ PROJ1: 'failed' }),
+    );
+    emitSyncStateChanged({ isSyncing: true });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    emitSyncStateChanged({ isSyncing: false });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('failed');
+    expect(result.current.unsyncedProjects).toEqual([
+      { projectId: 'PROJ1', name: 'ONE', direction: 'send' },
+    ]);
+  });
+
+  it('holds the projects an activity-only sync announced', async () => {
+    // H9: no claim saw this sync, so the outcome is unknown, and the announced project is still
+    // held out of the count until the backend rechecked it.
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
+    captureEventCallbacks();
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    pushActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    pushActivity({ isSyncing: false, projectIds: [] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unknown');
     expect(result.current.unsyncedProjects).toEqual([]);
   });
 });

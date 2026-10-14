@@ -2469,10 +2469,14 @@ describe('SyncStatusButton — accessibility', () => {
 
 describe('SyncStatusButton — unsynced changes', () => {
   const mockUnsyncedProjectIds = (projectIds: string[]) => {
-    vi.mocked(useUnsyncedChanges).mockReturnValue({ toSend: projectIds, toReceive: [] });
+    vi.mocked(useUnsyncedChanges).mockReturnValue({
+      toSend: projectIds,
+      toReceive: [],
+      isRechecking: false,
+    });
   };
-  const mockUnsyncedSets = (toSend: string[], toReceive: string[]) => {
-    vi.mocked(useUnsyncedChanges).mockReturnValue({ toSend, toReceive });
+  const mockUnsyncedSets = (toSend: string[], toReceive: string[], isRechecking = false) => {
+    vi.mocked(useUnsyncedChanges).mockReturnValue({ toSend, toReceive, isRechecking });
   };
 
   it('labels the button and shows the unsynced icon', async () => {
@@ -2657,6 +2661,67 @@ describe('SyncStatusButton — unsynced changes', () => {
     expect(toolbarButton.getAttribute('aria-label') ?? '').not.toMatch(/%/);
     // Positive control: the label is in its unloaded, key-for-value state.
     expect(toolbarButton).toHaveTextContent('%toolbar_sync_status_unsynced%');
+  });
+
+  // The backend's lists can still describe the moment before a sync until it has rechecked, so the
+  // project the sync just sent is held out of the count: the button goes from Syncing straight to
+  // Synced, and a screen reader is never told "Unsynced changes" in between.
+  it('never shows or announces Unsynced changes between a sync that sent a project and Synced', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      IDLE_STATE,
+      { isSyncing: true, lastRequestedProjectIds: ['a'], syncingProjectIds: ['a'] },
+      completedState({ a: 'succeeded' }),
+    ]);
+    mockProjectNames({ a: 'AAA' });
+    mockUnsyncedSets(['a'], [], true);
+    const { rerender } = render(<SyncStatusButton />);
+    await screen.findByRole('button', { name: UNSYNCED_SEND_ACCESSIBLE_NAME });
+
+    fireSyncStateChanged(true);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing');
+    });
+
+    // Everything the button and the region hold from here on, recorded from `oldValue` and removed
+    // nodes: the callback runs after React has committed, so reading the nodes there would report
+    // only the final text.
+    const held: string[] = [];
+    const record = (records: MutationRecord[]) => {
+      records.forEach((entry) => {
+        if (entry.oldValue) held.push(entry.oldValue);
+        entry.removedNodes.forEach((node) => held.push(node.textContent ?? ''));
+      });
+    };
+    const button = screen.getByTestId('toolbar-sync-button');
+    const liveRegion = screen.getByRole('status');
+    const observer = new MutationObserver(record);
+    [button, liveRegion].forEach((target) =>
+      observer.observe(target, {
+        attributes: true,
+        attributeOldValue: true,
+        childList: true,
+        characterData: true,
+        characterDataOldValue: true,
+        subtree: true,
+      }),
+    );
+
+    // The sync ends while the backend is still rechecking.
+    fireSyncStateChanged(false);
+    await waitFor(() => {
+      expect(liveRegion).toHaveTextContent('Test Synced');
+    });
+    // The backend finishes rechecking and the project is clean.
+    mockUnsyncedSets([], [], false);
+    rerender(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(button).toHaveTextContent('Test Synced');
+    });
+    observer.disconnect();
+
+    expect(held.join('|')).not.toContain('Test Unsynced changes');
+    expect(liveRegion).toHaveTextContent('Test Synced');
   });
 
   it('does not announce the move from idle to unsynced', async () => {

@@ -83,7 +83,7 @@ describe('useUnsyncedChanges', () => {
     await flush();
 
     expect(sendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getUnsyncedChanges');
-    expect(result.current).toEqual({ toSend: ['A'], toReceive: ['B'] });
+    expect(result.current).toEqual({ toSend: ['A'], toReceive: ['B'], isRechecking: false });
   });
 
   it('applies onUnsyncedChangesChanged events', async () => {
@@ -92,11 +92,11 @@ describe('useUnsyncedChanges', () => {
 
     const { result } = renderHook(() => useUnsyncedChanges());
     await flush();
-    expect(result.current).toEqual({ toSend: [], toReceive: [] });
+    expect(result.current).toEqual({ toSend: [], toReceive: [], isRechecking: false });
 
     emit({ toSend: ['B', 'A'], toReceive: ['C'] });
 
-    expect(result.current).toEqual({ toSend: ['A', 'B'], toReceive: ['C'] });
+    expect(result.current).toEqual({ toSend: ['A', 'B'], toReceive: ['C'], isRechecking: false });
   });
 
   it('event beats a late seed', async () => {
@@ -107,7 +107,7 @@ describe('useUnsyncedChanges', () => {
     emit({ toSend: ['FRESH'], toReceive: [] });
     await flush(6000);
 
-    expect(result.current).toEqual({ toSend: ['FRESH'], toReceive: [] });
+    expect(result.current).toEqual({ toSend: ['FRESH'], toReceive: [], isRechecking: false });
   });
 
   it('malformed payload is ignored', async () => {
@@ -116,11 +116,11 @@ describe('useUnsyncedChanges', () => {
 
     const { result } = renderHook(() => useUnsyncedChanges());
     await flush();
-    expect(result.current).toEqual({ toSend: ['PROJ1'], toReceive: [] });
+    expect(result.current).toEqual({ toSend: ['PROJ1'], toReceive: [], isRechecking: false });
 
     emit({ toSend: ['PROJ2'], toReceive: 'x' });
 
-    expect(result.current).toEqual({ toSend: ['PROJ1'], toReceive: [] });
+    expect(result.current).toEqual({ toSend: ['PROJ1'], toReceive: [], isRechecking: false });
     expect(logger.warn).toHaveBeenCalled();
   });
 
@@ -133,7 +133,7 @@ describe('useUnsyncedChanges', () => {
 
     emit({ toSend: ['PROJ2', 7], toReceive: [] });
 
-    expect(result.current).toEqual({ toSend: ['PROJ1'], toReceive: [] });
+    expect(result.current).toEqual({ toSend: ['PROJ1'], toReceive: [], isRechecking: false });
     expect(logger.warn).toHaveBeenCalled();
   });
 
@@ -171,7 +171,11 @@ describe('useUnsyncedChanges', () => {
     const { result } = renderHook(() => useUnsyncedChanges());
     await flush();
     const before = result.current;
-    expect(before).toEqual({ toSend: ['PROJ1', 'PROJ2'], toReceive: ['PROJ3'] });
+    expect(before).toEqual({
+      toSend: ['PROJ1', 'PROJ2'],
+      toReceive: ['PROJ3'],
+      isRechecking: false,
+    });
 
     emit({ toSend: ['PROJ2', 'proj1'], toReceive: ['PROJ3', 'proj3'] });
 
@@ -189,6 +193,61 @@ describe('useUnsyncedChanges', () => {
     emit({ toSend: ['PROJ1'], toReceive: ['PROJ2'] });
 
     expect(result.current).not.toBe(before);
-    expect(result.current).toEqual({ toSend: ['PROJ1'], toReceive: ['PROJ2'] });
+    expect(result.current).toEqual({
+      toSend: ['PROJ1'],
+      toReceive: ['PROJ2'],
+      isRechecking: false,
+    });
+  });
+
+  it('reports isRechecking from events: true, then false', async () => {
+    // U1
+    mockSeed({ toSend: [], toReceive: [] });
+    const { emit } = captureEvent();
+
+    const { result } = renderHook(() => useUnsyncedChanges());
+    await flush();
+    expect(result.current?.isRechecking).toBe(false);
+
+    emit({ toSend: ['PROJ1'], toReceive: [], isRechecking: true });
+    expect(result.current?.isRechecking).toBe(true);
+
+    emit({ toSend: ['PROJ1'], toReceive: [], isRechecking: false });
+    expect(result.current?.isRechecking).toBe(false);
+  });
+
+  it('reads an absent or non-boolean isRechecking as false and still applies the lists', async () => {
+    // U2
+    mockSeed({ toSend: [], toReceive: [] });
+    const { emit } = captureEvent();
+
+    const { result } = renderHook(() => useUnsyncedChanges());
+    await flush();
+    emit({ toSend: ['PROJ1'], toReceive: [], isRechecking: true });
+    expect(result.current?.isRechecking).toBe(true);
+
+    emit({ toSend: ['PROJ2'], toReceive: [] });
+    expect(result.current).toEqual({ toSend: ['PROJ2'], toReceive: [], isRechecking: false });
+
+    emit({ toSend: ['PROJ3'], toReceive: [], isRechecking: true });
+    emit({ toSend: ['PROJ4'], toReceive: [], isRechecking: 'yes' });
+    expect(result.current).toEqual({ toSend: ['PROJ4'], toReceive: [], isRechecking: false });
+  });
+
+  it('keeps the list arrays when only isRechecking changes', async () => {
+    // U3
+    mockSeed({ toSend: ['PROJ1'], toReceive: ['PROJ2'], isRechecking: true });
+    const { emit } = captureEvent();
+
+    const { result } = renderHook(() => useUnsyncedChanges());
+    await flush();
+    const before = result.current;
+
+    emit({ toSend: ['proj1'], toReceive: ['proj2'], isRechecking: false });
+
+    expect(result.current).not.toBe(before);
+    expect(result.current?.isRechecking).toBe(false);
+    expect(result.current?.toSend).toBe(before?.toSend);
+    expect(result.current?.toReceive).toBe(before?.toReceive);
   });
 });

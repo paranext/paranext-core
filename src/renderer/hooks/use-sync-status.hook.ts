@@ -101,6 +101,11 @@ export type SyncStatusInfo = {
    * apart. Filled whatever the status — not only under `unsynced` — because it is read
    * independently of the sync signals, so a `failed` status can still name the projects left
    * unsent.
+   *
+   * Right after a sync, a project that sync reports as having synced successfully is not counted
+   * until the backend has rechecked it (`isRechecking` false; at most `SYNC_SETTLE_TIMEOUT_MS`):
+   * until then the lists can still describe the moment before the sync. Only a sync this hook
+   * watched end starts a hold — never a mount.
    */
   unsyncedProjects: readonly UnsyncedProject[];
   /**
@@ -175,6 +180,14 @@ function withDirections(
 }
 
 /**
+ * How long the projects a sync just exchanged stay out of the unsynced count while the backend
+ * rechecks them, at most. The backend clears its `isRechecking` flag long before this in practice;
+ * the cap keeps a flag that is never cleared (a lost event, a backend that stalls) from hiding
+ * unsynced changes indefinitely.
+ */
+export const SYNC_SETTLE_TIMEOUT_MS = 60_000;
+
+/**
  * Re-exported so consumers and tests that pace against this hook's seeding keep one import site.
  * Defined in `seed-with-retry.util` alongside the loop that reads them.
  */
@@ -211,6 +224,40 @@ const FAILED_RESULT_STATUSES: ReadonlySet<string> = new Set<ResultStatus>([
   'notUpgraded',
   'projectVersionUpgraded',
 ]);
+
+/**
+ * The normalized ids of the projects a completed sync reports as having synced successfully. Empty
+ * when `resultsInfo` is not an object or holds no results: absent evidence of success names no
+ * project.
+ */
+export function succeededProjectIds(resultsInfo: unknown): readonly string[] {
+  if (typeof resultsInfo !== 'object' || !resultsInfo) return NO_PROJECT_IDS;
+  const ids = Object.entries(resultsInfo)
+    .filter(([, result]) => {
+      if (typeof result !== 'object' || !result || !('resultStatus' in result)) return false;
+      return (
+        typeof result.resultStatus === 'string' &&
+        SUCCEEDED_RESULT_STATUSES.has(result.resultStatus)
+      );
+    })
+    .map(([projectId]) => normalizeProjectId(projectId));
+  return ids.length > 0 ? Object.freeze(ids) : NO_PROJECT_IDS;
+}
+
+/** A frozen copy of the sets without the given projects in either list. */
+export function withoutProjects(
+  sets: UnsyncedChangeSets,
+  projectIds: readonly string[],
+): UnsyncedChangeSets {
+  const excluded = new Set(projectIds.map(normalizeProjectId));
+  const keep = (ids: readonly string[]) =>
+    Object.freeze(ids.filter((id) => !excluded.has(normalizeProjectId(id))));
+  return Object.freeze({
+    toSend: keep(sets.toSend),
+    toReceive: keep(sets.toReceive),
+    isRechecking: sets.isRechecking,
+  });
+}
 
 /**
  * Whether a value is a per-project result carrying a `resultStatus` this build recognizes. An
@@ -370,6 +417,11 @@ function isValidSyncState(state: unknown): state is ReadableSyncState {
  * sorted exactly as the syncing projects are, each with its direction) and
  * {@link SyncStatusInfo.unsyncedDirection}; how it ranks against the sync signals is set out at the
  * `status` derivation below.
+ *
+ * Right after a sync, a project that sync reports as having synced successfully is not counted
+ * until the backend has rechecked it (`isRechecking` false; at most `SYNC_SETTLE_TIMEOUT_MS`):
+ * until then the lists can still describe the moment before the sync. Only a sync this hook watched
+ * end starts a hold — never a mount.
  */
 export function useSyncStatus(): SyncStatusInfo {
   // Starts `unknown`, not `idle`: until the seed answers, nothing here knows whether a sync is
@@ -422,6 +474,13 @@ export function useSyncStatus(): SyncStatusInfo {
    * The activity signal restarts independently, in `initSyncActivityService`.
    */
   const [seedGeneration, setSeedGeneration] = useState(0);
+  /**
+   * The projects a sync this hook watched end just exchanged successfully, held out of the unsynced
+   * count until the backend has rechecked them (see the `isHolding` derivation below). Set only
+   * when a sync ends — from the claim's end-of-sync read, or from an activity-only sync ending —
+   * and never on mount or from the seed, so a hold always starts from a sync this hook saw.
+   */
+  const [settlingProjectIds, setSettlingProjectIds] = useState<readonly string[]>(NO_PROJECT_IDS);
 
   /**
    * Whether an `onSyncStateChanged` event has been seen. Once one has, the mount snapshot is stale
@@ -612,6 +671,14 @@ export function useSyncStatus(): SyncStatusInfo {
           }
           setClaimStatus(deriveStatusFromSnapshot(state));
           applySyncingProjectIds(state.syncingProjectIds ?? NO_PROJECT_IDS);
+          // A sync ending that succeeded for some projects starts a hold on exactly those; any other
+          // event (a start, a still-running claim, a later sync) replaces the previous hold, so a
+          // hold never outlives the sync it describes.
+          setSettlingProjectIds(
+            !isSyncing && !state.isSyncing
+              ? succeededProjectIds(state.lastResults?.resultsInfo)
+              : NO_PROJECT_IDS,
+          );
           return undefined;
         })
         .catch((e: unknown) => {
@@ -686,6 +753,12 @@ export function useSyncStatus(): SyncStatusInfo {
    */
   const isActivitySyncingRef = useRef(false);
   const didClaimSeeActivitySyncRef = useRef(false);
+  /** Every project the activity signal announced during the sync it is reporting. */
+  const activityHoldIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!activitySyncing) return;
+    activityProjectIds.forEach((id) => activityHoldIdsRef.current.add(normalizeProjectId(id)));
+  }, [activitySyncing, activityProjectIds]);
   useEffect(() => {
     if (activitySyncing) {
       isActivitySyncingRef.current = true;
@@ -700,23 +773,60 @@ export function useSyncStatus(): SyncStatusInfo {
     // the never-was-syncing case returns early, because there is no sync to have lost track of.
     if (!isActivitySyncingRef.current) return;
     isActivitySyncingRef.current = false;
-    if (!didClaimSeeActivitySyncRef.current) setIsClaimVerdictStale(true);
+    if (!didClaimSeeActivitySyncRef.current) {
+      setIsClaimVerdictStale(true);
+      // No claim result says which projects this sync exchanged, so the projects it announced stand
+      // in: they are held out of the unsynced count until the backend has rechecked them.
+      setSettlingProjectIds(
+        activityHoldIdsRef.current.size > 0
+          ? Object.freeze([...activityHoldIdsRef.current])
+          : NO_PROJECT_IDS,
+      );
+    }
     didClaimSeeActivitySyncRef.current = false;
+    activityHoldIdsRef.current = new Set();
   }, [activitySyncing, claimStatus]);
 
   const unsyncedSets = useUnsyncedChanges();
-  const unsyncedDirection = deriveUnsyncedDirection(unsyncedSets);
+  /**
+   * Right after a sync, the unsynced lists can still describe the moment before it: a project the
+   * sync just sent would be counted as unsynced until the backend rechecks it, and the indicator
+   * would show "Unsynced changes" between the sync's end and its "Synced". So while the backend
+   * reports `isRechecking`, a project that sync reported as having synced successfully is left out
+   * of the lists (at most {@link SYNC_SETTLE_TIMEOUT_MS}); every other project is reported at once.
+   * Only a sync this hook watched end starts a hold — never a mount.
+   */
+  const isHolding = settlingProjectIds.length > 0 && unsyncedSets?.isRechecking === true;
+  const effectiveSets = useMemo(
+    () =>
+      unsyncedSets && isHolding ? withoutProjects(unsyncedSets, settlingProjectIds) : unsyncedSets,
+    [unsyncedSets, isHolding, settlingProjectIds],
+  );
+  // The hold ends when the backend finishes rechecking...
+  useEffect(() => {
+    if (settlingProjectIds.length > 0 && unsyncedSets?.isRechecking !== true)
+      setSettlingProjectIds(NO_PROJECT_IDS);
+  }, [settlingProjectIds, unsyncedSets?.isRechecking]);
+  // ...or after the cap, if it never says so.
+  useEffect(() => {
+    if (settlingProjectIds.length === 0) return undefined;
+    const timer = setTimeout(() => setSettlingProjectIds(NO_PROJECT_IDS), SYNC_SETTLE_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [settlingProjectIds]);
+  const unsyncedDirection = deriveUnsyncedDirection(effectiveSets);
   const hasUnsynced = unsyncedDirection !== undefined;
   /**
-   * Every project in either set, once. Derived from the sets' identity, which the unsynced-changes
-   * hook keeps while both lists are unchanged, so the name lookup keyed on this does not re-run.
+   * Every project in either set, once. Derived from the lists' identity, which the unsynced-changes
+   * hook keeps while a list is unchanged, so the name lookup keyed on this does not re-run.
    */
+  const effectiveToSend = effectiveSets?.toSend;
+  const effectiveToReceive = effectiveSets?.toReceive;
   const unsyncedProjectIds = useMemo(
     () =>
-      unsyncedSets
-        ? Object.freeze([...new Set([...unsyncedSets.toSend, ...unsyncedSets.toReceive])])
+      effectiveToSend && effectiveToReceive
+        ? Object.freeze([...new Set([...effectiveToSend, ...effectiveToReceive])])
         : NO_PROJECT_IDS,
-    [unsyncedSets],
+    [effectiveToSend, effectiveToReceive],
   );
 
   /**
@@ -751,6 +861,11 @@ export function useSyncStatus(): SyncStatusInfo {
    * claim that could not be read nor a stale verdict unmakes a fact read from the repository or the
    * server. Sets that are not known (`undefined`) are no input at all, never a claim that something
    * is waiting.
+   *
+   * Right after a sync, a project that sync reports as having synced successfully is not counted
+   * until the backend has rechecked it (`isRechecking` false; at most `SYNC_SETTLE_TIMEOUT_MS`):
+   * until then the lists can still describe the moment before the sync. Only a sync this hook
+   * watched end starts a hold — never a mount.
    */
   const status: SyncStatus = (() => {
     if (activitySyncing) return 'syncing';
@@ -788,8 +903,8 @@ export function useSyncStatus(): SyncStatusInfo {
   const syncingProjects = useProjectNames(effectiveProjectIds);
   const namedUnsyncedProjects = useProjectNames(unsyncedProjectIds);
   const unsyncedProjects = useMemo(
-    () => withDirections(namedUnsyncedProjects, unsyncedSets),
-    [namedUnsyncedProjects, unsyncedSets],
+    () => withDirections(namedUnsyncedProjects, effectiveSets),
+    [namedUnsyncedProjects, effectiveSets],
   );
 
   return useMemo(
