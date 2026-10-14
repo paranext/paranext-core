@@ -153,12 +153,13 @@ const NEUTRALIZED_BACKDROP = 'tw:bg-transparent tw:supports-backdrop-filter:back
  *   behind the scrim, so besides opening a menu whose items dispatch over the dead socket, it pulls
  *   focus out of the scope entirely.
  *
- * The first two categories need main to be told the renderer has latched — a design change rather
- * than a patch, and out of scope here (TODO(main-renderer-shutdown-relay); see
- * `adr-connection-lost-is-renderer-local` for the marker's meaning). The third is renderer-local
- * and so is closable without that relay: `PlatformMenubar` would need its `useHotkeys` call gated
- * by a new prop. It is grouped here rather than fixed because gating it alone would leave the
- * guarantee just as false while looking fixed. All three are a known, documented limit.
+ * The first two categories need main to notice on its own that this window's port died — this
+ * renderer cannot tell it, its only link is the one that broke. TODO(PT-4851): suppress main's
+ * accelerators and the document-level hotkeys while this state is shown. The third is
+ * renderer-local and so is closable without that relay: `PlatformMenubar` would need its
+ * `useHotkeys` call gated by a new prop. It is grouped here rather than fixed because gating it
+ * alone would leave the guarantee just as false while looking fixed. All three are a known,
+ * documented limit.
  *
  * The alternatives considered and rejected — a hand-rolled `document` keydown trap (blind to
  * keydowns inside a web view's iframe), and letting content behind the scrim stay selectable — are

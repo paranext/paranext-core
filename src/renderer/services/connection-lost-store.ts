@@ -48,8 +48,8 @@ export function subscribeToConnectionLost(listener: () => void): () => void {
  *
  * Those signals reach only as far as the browser does. A window closing while the app stays up and
  * a reload both raise them; an app quit does not, because main destroys the window instead of
- * closing it and `destroy()` skips them. See {@link initConnectionLostService} for what that leaves
- * uncovered.
+ * closing it and `destroy()` skips them. The quit is covered by main's `platform.onWillShutDown`
+ * event, which `extension-host-stopped-service.ts` turns into a call to this function.
  */
 export function markShuttingDown(): void {
   isShuttingDown = true;
