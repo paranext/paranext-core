@@ -2718,6 +2718,7 @@ describe('SyncStatusButton — unsynced changes', () => {
     await waitFor(() => {
       expect(button).toHaveTextContent('Test Synced');
     });
+    record(observer.takeRecords());
     observer.disconnect();
 
     expect(held.join('|')).not.toContain('Test Unsynced changes');

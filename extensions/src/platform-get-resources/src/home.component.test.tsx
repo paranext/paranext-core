@@ -439,6 +439,9 @@ describe('Home unsynced changes marker', () => {
     openNarrowRowMenu('SHR');
 
     await screen.findByRole('menuitem', { name: 'Open' });
-    expect(screen.queryByRole('menuitem', { name: 'Sync' })).not.toBeNull();
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Sync',
+      'Open',
+    ]);
   });
 });

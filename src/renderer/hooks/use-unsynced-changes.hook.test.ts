@@ -201,7 +201,6 @@ describe('useUnsyncedChanges', () => {
   });
 
   it('reports isRechecking from events: true, then false', async () => {
-    // U1
     mockSeed({ toSend: [], toReceive: [] });
     const { emit } = captureEvent();
 
@@ -217,7 +216,6 @@ describe('useUnsyncedChanges', () => {
   });
 
   it('reads an absent or non-boolean isRechecking as false and still applies the lists', async () => {
-    // U2
     mockSeed({ toSend: [], toReceive: [] });
     const { emit } = captureEvent();
 
@@ -235,7 +233,6 @@ describe('useUnsyncedChanges', () => {
   });
 
   it('keeps the list arrays when only isRechecking changes', async () => {
-    // U3
     mockSeed({ toSend: ['PROJ1'], toReceive: ['PROJ2'], isRechecking: true });
     const { emit } = captureEvent();
 

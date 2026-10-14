@@ -1071,7 +1071,7 @@ describe('useSyncStatus', () => {
   }
 
   it('does not count a just-synced project while the backend is still rechecking', async () => {
-    // H1: the lists can still describe the moment before the sync, so the project the sync just
+    // the lists can still describe the moment before the sync, so the project the sync just
     // exchanged is left out until the backend says it rechecked.
     unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
     const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }));
@@ -1082,7 +1082,6 @@ describe('useSyncStatus', () => {
   });
 
   it('still reports at once a project the sync did not exchange', async () => {
-    // H2
     unsyncedChanges.sets = unsyncedSets(['PROJ1', 'PROJ2'], [], true);
     const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }), {
       projectNames: { PROJ1: 'ONE', PROJ2: 'TWO' },
@@ -1096,7 +1095,6 @@ describe('useSyncStatus', () => {
   });
 
   it('shows the project once the backend has finished rechecking', async () => {
-    // H3
     unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
     const { result, rerender } = await runSyncThroughEvents(
       completedStateFor({ PROJ1: 'succeeded' }),
@@ -1113,7 +1111,6 @@ describe('useSyncStatus', () => {
   });
 
   it('does not hold when the backend already finished rechecking at the end of the sync', async () => {
-    // H4
     unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], false);
     const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }));
 
@@ -1121,7 +1118,6 @@ describe('useSyncStatus', () => {
   });
 
   it('releases the hold after the settle timeout when the backend never clears the flag', async () => {
-    // H5
     unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
     const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }));
     expect(result.current.status).toBe('synced');
@@ -1138,7 +1134,6 @@ describe('useSyncStatus', () => {
   });
 
   it('does not hold a project the sync failed to exchange', async () => {
-    // H6
     unsyncedChanges.sets = unsyncedSets(['PROJ1', 'PROJ2'], [], true);
     const { result } = await runSyncThroughEvents(
       completedStateFor({ PROJ1: 'failed', PROJ2: 'succeeded' }),
@@ -1152,7 +1147,6 @@ describe('useSyncStatus', () => {
   });
 
   it('holds a just-synced project in both directions', async () => {
-    // H7
     unsyncedChanges.sets = unsyncedSets(['PROJ1'], ['PROJ1'], true);
     const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }));
 
@@ -1161,7 +1155,6 @@ describe('useSyncStatus', () => {
   });
 
   it('does not let a later failed sync inherit the previous sync hold', async () => {
-    // H8
     unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
     const { result, emitSyncStateChanged } = await runSyncThroughEvents(
       completedStateFor({ PROJ1: 'succeeded' }),
@@ -1190,7 +1183,7 @@ describe('useSyncStatus', () => {
   });
 
   it('holds the projects an activity-only sync announced', async () => {
-    // H9: no claim saw this sync, so the outcome is unknown, and the announced project is still
+    // no claim saw this sync, so the outcome is unknown, and the announced project is still
     // held out of the count until the backend rechecked it.
     commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
     unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
@@ -1201,6 +1194,38 @@ describe('useSyncStatus', () => {
     });
 
     pushActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    pushActivity({ isSyncing: false, projectIds: [] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unknown');
+    expect(result.current.unsyncedProjects).toEqual([]);
+  });
+
+  it('holds every project an activity-only sync announced, even as the announced set changes', async () => {
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    unsyncedChanges.sets = unsyncedSets(['PROJ1', 'PROJ2'], [], true);
+    captureEventCallbacks();
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // The announced set grows and then shrinks while the sync runs; no single snapshot names both
+    // projects at the end.
+    pushActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    pushActivity({ isSyncing: true, projectIds: ['PROJ1', 'PROJ2'] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    pushActivity({ isSyncing: true, projectIds: ['PROJ2'] });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
