@@ -58,12 +58,27 @@ namespace TestParanextDataProvider.Projects.SendReceive
         {
             public bool Throw { get; set; }
 
+            /// <summary>Server tips returned by the lookup, keyed exactly as scripted.</summary>
+            public Dictionary<string, string?> ServerTips { get; } = [];
+
+            /// <summary>Last-synced tips by project id (as <c>ScrText.Guid.ToString()</c>).</summary>
+            public Dictionary<string, string?> LastSyncedTips { get; } = [];
+
+            /// <summary>The project lists the lookup was called with.</summary>
+            public List<string[]> Lookups { get; } = [];
+
             protected internal override IReadOnlyDictionary<string, string?> GetServerTipIds(
                 IReadOnlyCollection<ScrText> scrTexts
-            ) =>
-                Throw
+            )
+            {
+                Lookups.Add([.. scrTexts.Select(scrText => scrText.Guid.ToString())]);
+                return Throw
                     ? throw new InvalidOperationException("lookup failed")
-                    : new Dictionary<string, string?>();
+                    : new Dictionary<string, string?>(ServerTips);
+            }
+
+            protected internal override string? GetLastSyncedTipId(ScrText scrText) =>
+                LastSyncedTips.GetValueOrDefault(scrText.Guid.ToString());
         }
 
         private ScriptedTipService CreateScriptedService() =>
@@ -81,6 +96,36 @@ namespace TestParanextDataProvider.Projects.SendReceive
             service.Throw = true;
 
             Assert.That(service.GetProjectsWithUnreceivedChanges(Array.Empty<ScrText>()), Is.Null);
+        }
+
+        [Test]
+        public void GetProjectsWithUnreceivedChanges_ReportsProjectWhoseServerTipMoved()
+        {
+            // P2 is matched so a lookup that reported every project would not pass.
+            var service = CreateScriptedService();
+            var moved = new SharedDummyScrText();
+            var matched = new SharedDummyScrText();
+            service.ServerTips[moved.Guid.ToString().ToUpperInvariant()] = "s1";
+            service.LastSyncedTips[moved.Guid.ToString()] = "s0";
+            service.ServerTips[matched.Guid.ToString().ToUpperInvariant()] = "t1";
+            service.LastSyncedTips[matched.Guid.ToString()] = "t1";
+
+            var result = service.GetProjectsWithUnreceivedChanges([moved, matched]);
+
+            Assert.That(result, Is.EqualTo(new[] { moved.Guid.ToString().ToUpperInvariant() }));
+        }
+
+        [Test]
+        public void GetProjectsWithUnreceivedChanges_FindsTipUnderLowerCasedKey()
+        {
+            var service = CreateScriptedService();
+            var project = new SharedDummyScrText();
+            service.ServerTips[project.Guid.ToString().ToLowerInvariant()] = "s1";
+            service.LastSyncedTips[project.Guid.ToString()] = "s0";
+
+            var result = service.GetProjectsWithUnreceivedChanges([project]);
+
+            Assert.That(result, Is.EqualTo(new[] { project.Guid.ToString().ToUpperInvariant() }));
         }
 
         [Test]

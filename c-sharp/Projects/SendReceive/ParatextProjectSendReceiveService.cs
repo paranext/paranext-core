@@ -223,7 +223,7 @@ internal class ParatextProjectSendReceiveService(
     /// network). Do not remove — removing it breaks the patch.
     /// </para>
     /// </summary>
-    protected internal string? GetLastSyncedTipId(ScrText scrText) => null;
+    protected internal virtual string? GetLastSyncedTipId(ScrText scrText) => null;
 
     /// <summary>
     /// The Send/Receive server's current tip id for each of <paramref name="projects"/>, keyed by
