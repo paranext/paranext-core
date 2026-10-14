@@ -25,6 +25,7 @@ import { initialize as initializeDatabaseService } from '@extension-host/service
 import { startLocalOAuthServer } from '@extension-host/services/local-oauth.service';
 import * as analyticsService from '@extension-host/services/analytics.service';
 import { runGracefulShutdown } from '@extension-host/graceful-shutdown';
+import { exitExtensionHostOnLostConnection } from '@extension-host/exit-on-lost-connection';
 import { markStartup } from '@shared/utils/startup-timing.util';
 import { STARTUP_MARK_PROCESS_START } from '@shared/data/platform.data';
 
@@ -85,6 +86,12 @@ process.on('unhandledRejection', (reason) => {
 
     // The network service has to start first, and it uses the shared store after initialization
     await networkService.initialize();
+    // Subscribed as soon as there is a connection to lose. Returns an unsubscriber we never call.
+    exitExtensionHostOnLostConnection({
+      onDidLoseConnection: networkService.onDidLoseConnection,
+      runGracefulShutdown,
+      exitProcess: (code) => process.exit(code),
+    });
     // Analytics initialization must not gate extension-host startup — it can take up to
     // ENVIRONMENT_RESOLUTION_TIMEOUT_MS if the Send/Receive server-target lookup is slow.
     // trackEvent()'s `unresolved` queue tolerates this finishing at any point.
