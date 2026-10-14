@@ -1,0 +1,33 @@
+import{j as c}from"./iframe-BMcjL2Xn.js";import{F as W}from"./footnote-item.component-DG_txqG3.js";import"./usj-nodes-l0sNRNKZ.js";import{c as T}from"./utils-BPbySc-g.js";import{u as e}from"./footnotes.usj.data-Cuw5cGp3.js";import"./preload-helper-CTOgD26E.js";import"./circle-alert-9UnFciZO.js";import"./createLucideIcon-DQDNpihC.js";import"./index-D8rZSbDD.js";import"./index-DCo3rgjq.js";const A={title:"Advanced/FootnoteItem",component:W,tags:["autodocs"],decorators:[o=>c.jsx("div",{className:T("formatted-font","tw:p-4"),children:c.jsx(o,{})})],args:{formatCaller:void 0,showMarkers:!0}},t={args:{footnote:e[0]}},r={args:{footnote:e[2]}};function b({callerSymbol:o,...v}){return c.jsx(W,{...v,formatCaller:m=>{if(m==="+")return o;if(m!=="-")return m}})}const s={args:{callerSymbol:"†",footnote:e[1]},argTypes:{callerSymbol:{control:"text"}},render:o=>c.jsx(b,{...o})},n={args:{footnote:e[5]}},a={args:{formatCaller:o=>{if(o==="+")return"a";if(o!=="-")return o},footnote:e[4]}};var i,l,d;t.parameters={...t.parameters,docs:{...(i=t.parameters)==null?void 0:i.docs,source:{originalSource:`{
+  args: {
+    footnote: usjFootnotes[0]
+  } satisfies FootnoteItemProps
+}`,...(d=(l=t.parameters)==null?void 0:l.docs)==null?void 0:d.source}}};var p,u,f;r.parameters={...r.parameters,docs:{...(p=r.parameters)==null?void 0:p.docs,source:{originalSource:`{
+  args: {
+    footnote: usjFootnotes[2]
+  } satisfies FootnoteItemProps
+}`,...(f=(u=r.parameters)==null?void 0:u.docs)==null?void 0:f.source}}};var g,F,C;s.parameters={...s.parameters,docs:{...(g=s.parameters)==null?void 0:g.docs,source:{originalSource:`{
+  args: {
+    callerSymbol: '†',
+    footnote: usjFootnotes[1]
+  },
+  argTypes: {
+    callerSymbol: {
+      control: 'text'
+    }
+  },
+  render: args => <FootnoteItemWithFormatCallerStory {...args} />
+}`,...(C=(F=s.parameters)==null?void 0:F.docs)==null?void 0:C.source}}};var h,x,y;n.parameters={...n.parameters,docs:{...(h=n.parameters)==null?void 0:h.docs,source:{originalSource:`{
+  args: {
+    footnote: usjFootnotes[5]
+  } satisfies FootnoteItemProps
+}`,...(y=(x=n.parameters)==null?void 0:x.docs)==null?void 0:y.source}}};var S,j,I;a.parameters={...a.parameters,docs:{...(S=a.parameters)==null?void 0:S.docs,source:{originalSource:`{
+  args: {
+    formatCaller: c => {
+      if (c === '+') return 'a';
+      if (c === '-') return undefined;
+      return c;
+    },
+    footnote: usjFootnotes[4]
+  } satisfies FootnoteItemProps
+}`,...(I=(j=a.parameters)==null?void 0:j.docs)==null?void 0:I.source}}};const M=["Basic","CrossReferenceWithoutCaller","WithCallerFormatting","UnmarkedFootnoteText","Complex"];export{t as Basic,a as Complex,r as CrossReferenceWithoutCaller,n as UnmarkedFootnoteText,s as WithCallerFormatting,M as __namedExportsOrder,A as default};
