@@ -8297,6 +8297,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   both sets is ↕️. The server-tip lookup is a patch-filled seam (`GetServerTipIds`), so public
   Platform.Bible never reports ⬇️; only Paratext 10 Studio does. The cadence is not
   user-configurable.
+
+  Both sources report `isRechecking`: true from a sync's start until the post-sync local recheck and
+  server lookup finish, and the snapshot that clears it is pushed even when no list changed. The
+  toolbar leaves the projects the sync reported as succeeded out of the unsynced count until that
+  snapshot (capped at 60 s), so 'Synced' is not preceded by a stale 'Unsynced changes'. Home does not
+  hold; its dot can linger for the length of the recheck.
 - **Alternatives:** **An in-memory dirty flag set on writes and cleared on sync** — rejected: it is
   wrong after a restart, when the unsent edits are still on disk, and it reports false positives for
   writes that change nothing (a no-op `PutText`, a settings save of an equal value). The Mercurial
@@ -8314,7 +8320,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `LastTipId`** — rejected: ParatextData rewrites it with the current local tip on every
   shared-project list fetch and after a failed sync, so it means "local tip at the last list
   fetch"; reading it showed committed-but-unsent work as changes to receive instead of changes to
-  send.
+  send. **A timer-only hold in the renderer** — rejected: it hides a persistent state for the whole
+  window, and the indicator flickers back when the lookup is slower than the timer. **Holding the
+  whole status instead of the just-synced projects** — rejected: it would hide other projects that
+  really have changes waiting. **Hiding the covered projects in the backend during the sync** —
+  rejected: it cannot cover syncs the renderer cannot see. **One unconditional end-of-recheck
+  event** — rejected: there are two sources, and the renderer would depend on which arrives first.
 - **Consequences:** One `hg status` runs per debounced write burst for a project that is not yet
   marked, one per announced or marked project at each sync end, and one per shared project during
   the startup baseline scan, which is why the scan runs after the startup barrier rather than on it.
