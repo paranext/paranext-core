@@ -53,6 +53,13 @@ export const CHECKS_SIDE_PANEL_STRING_KEYS = Object.freeze([
   ...PROJECT_SELECTOR_STRING_KEYS,
 ] as const);
 
+/**
+ * Ids of the checks that fail with a Paratext 9 message naming a settings location (Quotation
+ * rules). Other checks' failures carry no such location, so the Paratext 9 hint is limited to
+ * these.
+ */
+const QUOTATION_CHECK_IDS: readonly string[] = ['Quotation', 'QuotationTypes'];
+
 /** A project (or resource) the user can select to run checks against. */
 export type ChecksSidePanelProject = ProjectOption & {
   /** Unique id of the project. */
@@ -313,14 +320,17 @@ export function ChecksSidePanel({
     [checkErrors, getLocalizedCheckDescription],
   );
   // With nothing to show, the reason is that the checks failed, not that they found nothing
+  const hasJobFinished =
+    jobStatusReport.status === 'completed' || jobStatusReport.status === 'stopped';
   const allSelectedChecksCouldNotRun = useMemo(
     () =>
+      hasJobFinished &&
       checkResults.length === 0 &&
       selectedCheckTypeIds.length > 0 &&
       selectedCheckTypeIds.every((checkTypeId) =>
         checkErrors.some((checkError) => checkError.checkId === checkTypeId),
       ),
-    [checkResults.length, selectedCheckTypeIds, checkErrors],
+    [hasJobFinished, checkResults.length, selectedCheckTypeIds, checkErrors],
   );
 
   let emptyResultsKey: LocalizeKey = '%webView_checksSidePanel_noCheckResults%';
@@ -493,9 +503,14 @@ export function ChecksSidePanel({
                     : localizedStrings['%webView_checksSidePanel_checkCouldNotRun_showDetails%']}
                 </Button>
               </div>
-              {areErrorDetailsShown && (
-                <div id={errorDetailsId} className="tw:flex tw:flex-col tw:gap-1">
-                  {checkErrors.map((checkError) => (
+              {/* Always rendered so the toggle's aria-controls resolves while collapsed */}
+              <div
+                id={errorDetailsId}
+                hidden={!areErrorDetailsShown}
+                className="tw:flex tw:flex-col tw:gap-1"
+              >
+                {areErrorDetailsShown &&
+                  checkErrors.map((checkError) => (
                     <Fragment key={`${checkError.checkId}-${checkError.message}`}>
                       <p className="tw:font-light tw:whitespace-pre-line">
                         {formatReplacementString(
@@ -509,21 +524,21 @@ export function ChecksSidePanel({
                           },
                         )}
                       </p>
-                      {/* Only a check that needs setup has settings to point to in Paratext 9 */}
-                      {checksInfo.find((check) => check.checkId === checkError.checkId)
-                        ?.setupStatus === 'setupRequired' && (
-                        <p className="tw:font-light">
-                          {
-                            localizedStrings[
-                              '%webView_checksSidePanel_checkCouldNotRun_paratext9Hint%'
-                            ]
-                          }
-                        </p>
-                      )}
+                      {/* Only a quotation check that needs setup has settings to point to in Paratext 9 */}
+                      {QUOTATION_CHECK_IDS.includes(checkError.checkId) &&
+                        checksInfo.find((check) => check.checkId === checkError.checkId)
+                          ?.setupStatus === 'setupRequired' && (
+                          <p className="tw:font-light">
+                            {
+                              localizedStrings[
+                                '%webView_checksSidePanel_checkCouldNotRun_paratext9Hint%'
+                              ]
+                            }
+                          </p>
+                        )}
                     </Fragment>
                   ))}
-                </div>
-              )}
+              </div>
             </div>
           )}
           {/* The job encountered an error while running */}
