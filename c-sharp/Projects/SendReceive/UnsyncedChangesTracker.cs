@@ -78,7 +78,9 @@ internal sealed class UnsyncedChangesTracker : IDisposable
     }
 
     /// <param name="detect">Whether a project has unsent local changes; <see langword="null"/> when
-    /// the project is unknown, which drops it from the set.</param>
+    /// that could not be determined, which leaves the project's state unchanged; throws
+    /// <see cref="ProjectNotFoundException"/> when the project no longer exists, which drops it from
+    /// the set.</param>
     /// <param name="isSyncing">Whether a Send/Receive run is active.</param>
     /// <param name="allProjectIds">Every project the baseline scan checks.</param>
     /// <param name="debounce">Quiet time after a project's last write before it is checked.</param>
@@ -255,7 +257,7 @@ internal sealed class UnsyncedChangesTracker : IDisposable
         }
         catch (ProjectNotFoundException)
         {
-            return null; // removed or never existed: an expected outcome, not worth a log line
+            throw; // removed or never existed: the caller drops the project from the set
         }
         catch (Exception ex)
         {
@@ -352,13 +354,25 @@ internal sealed class UnsyncedChangesTracker : IDisposable
             {
                 if (DeferIfSyncing(id))
                     return;
-                bool? result = Detect(id);
-                bool changed;
+                CheckResult result = Detect(id);
+                bool changed = false;
                 lock (_lock)
                 {
-                    if (result is null)
-                        _tracked.Remove(id);
-                    changed = result == true ? _unsynced.Add(id) : _unsynced.Remove(id);
+                    switch (result)
+                    {
+                        case CheckResult.Unsynced:
+                            changed = _unsynced.Add(id);
+                            break;
+                        case CheckResult.Synced:
+                            changed = _unsynced.Remove(id);
+                            break;
+                        case CheckResult.Removed:
+                            _tracked.Remove(id);
+                            changed = _unsynced.Remove(id);
+                            break;
+                        case CheckResult.Unknown:
+                            break;
+                    }
                     rerun = _inFlight[id] && !_disposed;
                     if (rerun)
                         _inFlight[id] = false;
@@ -411,19 +425,36 @@ internal sealed class UnsyncedChangesTracker : IDisposable
         }
     }
 
-    // A failed check reports "no unsent changes": the indicator never claims work it cannot see.
-    private bool? Detect(string id)
+    private enum CheckResult
+    {
+        Synced,
+        Unsynced,
+        Unknown,
+        Removed,
+    }
+
+    // A check that cannot reach an answer leaves the project's state unchanged.
+    private CheckResult Detect(string id)
     {
         try
         {
-            return _detect(id);
+            return _detect(id) switch
+            {
+                true => CheckResult.Unsynced,
+                false => CheckResult.Synced,
+                null => CheckResult.Unknown,
+            };
+        }
+        catch (ProjectNotFoundException)
+        {
+            return CheckResult.Removed;
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine(
                 $"[UnsyncedChangesTracker] Check failed for {id}: {ex.Message}"
             );
-            return false;
+            return CheckResult.Unknown;
         }
     }
 

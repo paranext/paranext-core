@@ -71,27 +71,20 @@ internal class ParatextProjectSendReceiveService(
     /// <summary>
     /// Whether <paramref name="scrText"/> holds local changes Send/Receive has not sent — see
     /// <see cref="UnsyncedChangesRule"/>. Local repository reads only (an <c>hg status</c> and a tip
-    /// lookup); never contacts the server. Any failure (no Mercurial, broken repository) is logged
-    /// once per project and answered <see langword="false"/>: an indicator must never claim unsent work
-    /// it cannot see. Read by <see cref="UnsyncedChangesTracker"/>.
+    /// lookup); never contacts the server. Returns <see langword="null"/> when the repository cannot
+    /// be read (no Mercurial, a broken repository), so the caller can keep its previous answer; the
+    /// failure is logged once per project until a later check of that project succeeds. Read by
+    /// <see cref="UnsyncedChangesTracker"/>.
     /// </summary>
-    public bool HasUnsyncedLocalChanges(ScrText scrText)
+    public bool? HasUnsyncedLocalChanges(ScrText scrText)
     {
         try
         {
             if (!scrText.IsProjectShared)
                 return false;
-            if (VersioningManager.Get(scrText).HasUncommittedChanges())
-                return true;
-            string? lastSynced = GetLastSyncedTipId(scrText);
-            if (string.IsNullOrEmpty(lastSynced))
-                return false;
-            return UnsyncedChangesRule.Evaluate(
-                true,
-                false,
-                Hg.Default.GetTipId(scrText.Directory),
-                lastSynced
-            );
+            bool hasUnsyncedChanges = ReadUnsyncedLocalChanges(scrText);
+            _unsyncedCheckWarned.TryRemove(scrText.Guid.ToString(), out _);
+            return hasUnsyncedChanges;
         }
         catch (Exception ex)
         {
@@ -99,10 +92,28 @@ internal class ParatextProjectSendReceiveService(
                 Console.Error.WriteLine(
                     $"Could not determine unsynced changes for project {scrText.Name}: {ex.Message}"
                 );
-            return false;
+            return null;
         }
     }
 
+    private bool ReadUnsyncedLocalChanges(ScrText scrText)
+    {
+        if (VersioningManager.Get(scrText).HasUncommittedChanges())
+            return true;
+        string? lastSynced = GetLastSyncedTipId(scrText);
+        if (string.IsNullOrEmpty(lastSynced))
+            return false;
+        return UnsyncedChangesRule.Evaluate(
+            true,
+            false,
+            Hg.Default.GetTipId(scrText.Directory),
+            lastSynced
+        );
+    }
+
+    /// <summary>
+    /// Projects whose check failure has been logged and whose checks have not succeeded since.
+    /// </summary>
     private readonly ConcurrentDictionary<string, bool> _unsyncedCheckWarned = new();
 
     /// <summary>

@@ -3,6 +3,7 @@ using System.Reflection;
 using Paranext.DataProvider;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Projects.SendReceive;
+using Paratext.Data;
 
 namespace TestParanextDataProvider.Projects.SendReceive
 {
@@ -15,7 +16,10 @@ namespace TestParanextDataProvider.Projects.SendReceive
     [ExcludeFromCodeCoverage]
     internal class UnsyncedChangesTrackerTests
     {
+        // A null value is a check that cannot reach an answer; a missing key is a project that no
+        // longer exists (ProjectNotFoundException).
         private Dictionary<string, bool?> _repo = null!;
+        private Exception? _detectFailure;
         private bool _syncing;
         private List<UnsyncedChangesState> _events = null!;
         private UnsyncedChangesTracker _tracker = null!;
@@ -28,12 +32,17 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _syncing = false;
             _events = [];
             _detectCalls = 0;
+            _detectFailure = null;
             _tracker = new UnsyncedChangesTracker(
                 id =>
                 {
                     Interlocked.Increment(ref _detectCalls);
+                    if (_detectFailure is not null)
+                        throw _detectFailure;
                     lock (_repo)
-                        return _repo.TryGetValue(id, out var v) ? v : null;
+                        return _repo.TryGetValue(id, out var v)
+                            ? v
+                            : throw new ProjectNotFoundException(id);
                 },
                 () => _syncing,
                 () =>
@@ -136,15 +145,57 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
-        public async Task UnknownProject_IsDroppedFromSet()
+        public async Task RemovedProject_IsDroppedFromSet()
         {
             _repo["A"] = true;
             _tracker.OnWriteScopeExited("A");
             await _tracker.FlushAsync();
             _repo.Remove("A");
-            _tracker.OnWriteScopeExited("A");
+            _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
             await _tracker.FlushAsync();
             Assert.That(_tracker.GetState().ToSend, Is.Empty);
+            Assert.That(_events.Last().ToSend, Is.Empty);
+        }
+
+        [Test]
+        public async Task FailedCheck_KeepsMarkedProjectMarked()
+        {
+            _repo["A"] = true;
+            _tracker.OnWriteScopeExited("A");
+            await _tracker.FlushAsync();
+            int eventsBefore = _events.Count;
+
+            _repo["A"] = null;
+            _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "A" }));
+            Assert.That(_events, Has.Count.EqualTo(eventsBefore), "no state change is raised");
+        }
+
+        [Test]
+        public async Task DetectThrows_KeepsMarkedProjectMarked()
+        {
+            _repo["A"] = true;
+            _tracker.OnWriteScopeExited("A");
+            await _tracker.FlushAsync();
+
+            _detectFailure = new InvalidOperationException("hg is gone");
+            _tracker.OnSyncActivityChanged(new SyncActivityState(false, Array.Empty<string>()));
+            await _tracker.FlushAsync();
+
+            Assert.That(_tracker.GetState().ToSend, Is.EquivalentTo(new[] { "A" }));
+        }
+
+        [Test]
+        public async Task FailedCheck_LeavesUnmarkedProjectUnmarked()
+        {
+            _repo["A"] = null;
+            _tracker.OnWriteScopeExited("A");
+            await _tracker.FlushAsync();
+
+            Assert.That(_tracker.GetState().ToSend, Is.Empty);
+            Assert.That(_events, Is.Empty);
         }
 
         [Test]
