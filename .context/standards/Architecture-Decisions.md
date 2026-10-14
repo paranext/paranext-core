@@ -867,9 +867,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   The repair then puts the marker back above them, as Paratext 9 saves the bytes it holds and
   restores the marker at the top of a later chapter; chapter 1 is left without one, as Paratext 9
   leaves it. Text typed ahead of a later chapter's marker is the placement rule's case above,
-  reachable by typing, and `chapter-line-left-as-text.spec.ts` pins it end to end. The caret the
-  user had in such a line stays at the same character of it (`caretInMovedText` in
-  `chapter-marker-repair.util.ts`).
+  reachable by typing, and `chapter-line-left-as-text.spec.ts` pins it end to end. Text typed
+  ahead of a marker with a paragraph before it joins the end of that paragraph instead
+  (`\mt1 Ruth X`), because USFM reads text behind a line break with no marker of its own as part of
+  the paragraph before it, which is where the save and the reload put it. The caret the user had in
+  such a line stays at the same character of it, in a marker typed over the `\c` as in its text
+  (`caretInMovedText` in `chapter-marker-repair.util.ts`).
   **Revisit** if the editor ever gains a way to reject a marker edit at the source, or if Paratext
   relaxes the "text before chapter marker" rule.
 - **Source:** PT-4608; Paratext 9 `UsfmEditorTextLoader.FixChapterNumbers` and its test table.

@@ -435,6 +435,64 @@ describe('prepareUsjForChapterSave', () => {
       expect(usjToSave?.content).toEqual([ID_GEN, nameless('1'), para('p', 'body')]);
     });
 
+    // `\sc 2` once an `s` is typed into the `\c`: a character style with the number as its text.
+    const smallCaps: MarkerContent = {
+      type: 'char',
+      marker: 'sc',
+      closed: 'false',
+      content: ['2 '],
+    };
+
+    it.each([
+      ['just past the backslash', 1, { jsonPath: '$.content[1].marker', propertyOffset: 0 }],
+      ['in the marker name', 2, { jsonPath: '$.content[1].marker', propertyOffset: 1 }],
+      ['at the end of the marker name', 3, { jsonPath: '$.content[1].marker', propertyOffset: 2 }],
+      ['in the text after the marker', 5, { jsonPath: '$.content[1].content[0]', offset: 1 }],
+    ])('keeps a caret %s of a marker typed into the chapter marker', (_label, offset, expected) => {
+      const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
+        usjOf(smallCaps, para('p', 'body')),
+        stored,
+        2,
+        caretInLine(offset),
+      );
+      expect(repairedUsj?.content).toEqual([chapter('2'), smallCaps, para('p', 'body')]);
+      expect(caretTarget).toEqual({ start: expected });
+    });
+
+    it('keeps a caret read after the line settled, in its marker name', () => {
+      const { caretTarget } = prepareUsjForChapterSave(
+        usjOf(smallCaps, para('p', 'body')),
+        stored,
+        2,
+        { start: { jsonPath: '$.content[0].marker', propertyOffset: 1 } },
+      );
+      expect(caretTarget).toEqual({
+        start: { jsonPath: '$.content[1].marker', propertyOffset: 1 },
+      });
+    });
+
+    it('keeps a caret in a paragraph marker typed over the chapter marker', () => {
+      const { caretTarget } = prepareUsjForChapterSave(
+        usjOf(para('q1', '2 '), para('p', 'body')),
+        stored,
+        2,
+        caretInLine(3),
+      );
+      expect(caretTarget).toEqual({
+        start: { jsonPath: '$.content[1].marker', propertyOffset: 2 },
+      });
+    });
+
+    it('uses the usual caret for a caret in a paragraph after the chapter line', () => {
+      const { caretTarget } = prepareUsjForChapterSave(
+        usjOf(smallCaps, para('p', 'body')),
+        stored,
+        2,
+        { start: { jsonPath: '$.content[1].content[0]', offset: 2 } },
+      );
+      expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
+    });
+
     it('uses the usual caret when the caret was not in the moved text', () => {
       const { caretTarget } = prepareUsjForChapterSave(usjOf('c 2', para('p', 'body')), stored, 2, {
         start: { jsonPath: '$.content[1].content[0]', offset: 2 },

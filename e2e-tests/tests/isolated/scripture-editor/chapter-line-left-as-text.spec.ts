@@ -4,11 +4,13 @@
  * editor saves what the user left on the line as text, the save-boundary repair restores the marker
  * at the top of the chapter, and the user's text stays below it with the caret where it was.
  *
- * Two edits reach it:
+ * Three edits reach it:
  *
  * - Deleting the `c` of `\c 2` leaves `\ 2`, which is not a marker.
+ * - Typing an `s` into `\c 4` leaves `\sc 4`, a character style; the caret stays in its marker.
  * - Typing ahead of the `\` leaves text before the marker; the repair puts the marker first, so the
- *   text moves to the line below it.
+ *   text moves to the line below it. In chapter 1, where a paragraph comes before the marker, the
+ *   text joins the end of that paragraph instead, as the save and the reload put it.
  *
  * Keys go through `mainPage.keyboard` once a click has put the focus in the editor (`locator.press`
  * focuses its target first and is slow per key).
@@ -173,6 +175,58 @@ test.describe('scripture editor chapter line left as text', () => {
       await mainPage.keyboard.press('End');
       await mainPage.keyboard.type('9');
       await expect.poll(() => getRuthUsfm(2), { timeout: 30_000 }).toMatch(/^\\c 2\s+\\ 29\s+\\p/);
+    });
+
+    await test.step('typing an s into \\c 4 leaves \\sc 4, which keeps the caret', async () => {
+      await navigateToolbarBcv(mainPage, 'Ruth 4:1');
+      await expect(chapterMarker).toHaveAttribute('data-number', '4', { timeout: 60_000 });
+      await chapterMarker.locator('span').first().click();
+      await mainPage.keyboard.press('Home');
+      await mainPage.keyboard.press('ArrowRight');
+      await mainPage.keyboard.type('s');
+
+      await expect
+        .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
+        .toEqual(expect.arrayContaining([expect.stringContaining(correctionMessage(4))]));
+      // `\sc` is a character style, so the line is the number in small caps, and the caret stays
+      // between the `s` and the `c` of its marker.
+      await expect.poll(readLines, { timeout: 20_000 }).toEqual({
+        chapterLine: '\\c 4 ',
+        nextLine: '\\sc 4 ',
+        caretInNextLine: true,
+        textBeforeCaret: '\\s',
+      });
+      await expect.poll(() => getRuthUsfm(4), { timeout: 30_000 }).toMatch(/^\\c 4\s+\\sc 4/);
+    });
+
+    await test.step('typing ahead of the \\ of \\c 1 joins the line before it', async () => {
+      await navigateToolbarBcv(mainPage, 'Ruth 1:1');
+      await expect(chapterMarker).toHaveAttribute('data-number', '1', { timeout: 60_000 });
+      await chapterMarker.locator('span').first().click();
+      await mainPage.keyboard.press('Home');
+      await mainPage.keyboard.type('X');
+
+      // The text joins `\mt1 Ruth` once it settles, which is where the save and the reload put it:
+      // text standing behind a line break with no marker of its own belongs to the paragraph
+      // before it.
+      const readLineBeforeChapter = async () =>
+        editorEvalFrame.evaluate(() => {
+          const line = document.querySelector('p.chapter[data-marker="c"]')?.previousElementSibling;
+          const selection = document.getSelection();
+          const caretNode = selection?.anchorNode;
+          let textBeforeCaret = '';
+          if (line && caretNode && selection && line.contains(caretNode)) {
+            const range = document.createRange();
+            range.setStart(line, 0);
+            range.setEnd(caretNode, selection.anchorOffset);
+            textBeforeCaret = range.toString().replace(/\s/g, ' ');
+          }
+          return { line: (line?.textContent ?? '').replace(/\s/g, ' '), textBeforeCaret };
+        });
+      await expect
+        .poll(readLineBeforeChapter, { timeout: 20_000 })
+        .toEqual({ line: '\\mt1 Ruth X', textBeforeCaret: '\\mt1 Ruth X' });
+      await expect.poll(() => getRuthUsfm(1), { timeout: 30_000 }).toMatch(/\\mt1 Ruth X\s+\\c 1/);
     });
   });
 });
