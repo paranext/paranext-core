@@ -167,6 +167,37 @@ export function readNugetLicenseFiles(dir: string | undefined): NamedText[] {
   return readPackageFiles(dir, isLicenseTextFileName);
 }
 
+/**
+ * The text of each file a reviewed exception's `creditFiles` names, keyed by the path as recorded,
+ * and `undefined` for one that is missing, is not a file, or whose path leaves the package folder -
+ * which `applyException` refuses with the path named. Read here because `classify` reads nothing
+ * off disk.
+ */
+export function readCreditFiles(
+  dir: string | undefined,
+  paths: unknown,
+): Record<string, string | undefined> {
+  if (!dir || !Array.isArray(paths)) return {};
+  const root = path.resolve(dir);
+  const read = (file: string): string | undefined => {
+    const resolved = path.resolve(root, file);
+    if (!resolved.startsWith(`${root}${path.sep}`)) return undefined;
+    try {
+      return readTextFile(resolved);
+    } catch (error: unknown) {
+      // A directory, or a path running through a file, is a slip in the policy entry rather than a
+      // fault reading the package, so it is refused like a missing file instead of ending the run.
+      if (codeOf(error) === 'EISDIR' || codeOf(error) === 'ENOTDIR') return undefined;
+      throw error;
+    }
+  };
+  return Object.fromEntries(
+    paths
+      .filter((file): file is string => typeof file === 'string')
+      .map((file) => [file, read(file)]),
+  );
+}
+
 /** Every `NOTICE` a package ships. */
 export function readPackageNotices(dir: string | undefined): NamedText[] {
   return readPackageFiles(dir, isNoticeFileName);

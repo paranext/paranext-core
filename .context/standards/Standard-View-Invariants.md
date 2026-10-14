@@ -58,7 +58,10 @@ repo's half for the facts each side holds alone.
 ## 3. Marker palette key semantics
 
 `lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts` is the single
-forwarding table for BOTH the scripture editor web view and the footnote-editor popover. The
+forwarding table for all three consumers: the scripture editor web view, the footnote editor
+component (any host that runs it in editable marker mode), and the footnotes pane's inline row
+editor (Standard view — see `resolveNoteEditingSurface` in
+`extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`). The
 per-consumer copies drifted once already; there is one table now.
 
 The palette is **ACTIVE**: the `\` trigger never lands in the document, in any selection shape, and
@@ -85,12 +88,55 @@ frames). Enter and Escape are claimed there so they cannot reach the document: a
 Lexical performs the unmarked plain split the palette exists to prevent, and leaves the palette open
 with nothing committed.
 
+**What the palette OFFERS is the editor's to decide, not the host's.** Both Standard-view palettes
+are built from the engine: `EditorRef.getMarkerMenuContext()` describes the caret, and
+`getMarkerMenuItems` / `getEnterMenuItems` turn that into the list
+(`platform-scripture-editor.web-view.tsx`). The host renders the list and forwards the pick to
+`applyMarkerMenuSelection` / `splitParagraphWithMarker` — it must not filter the list or assemble
+its own for a region, because the engine is what knows which markers the caret's block can take. Two
+consequences worth knowing here:
+
+- **`generateInlineMarkerMenuListItems` is a different menu.** It builds from the `usfmMarkers` map
+  in `platform-bible-utils` and serves the OTHER view types. Its result is computed in EVERY view
+  (the `inlineMarkerMenuItems` memo in `platform-scripture-editor.web-view.tsx` carries no
+  `viewType` guard) but only ever OPENED outside Standard view (`viewType !== 'standard'`). A
+  Standard-view palette question is never answered by that function.
+- **Everything offered must be insertable, and the `\` only commits to the document through a
+  palette that opened.** With nothing to offer, the `\` is an ordinary character and lands. The
+  editor half owns the rule that no offered entry is a silent no-op — see "A menu offers nothing it
+  cannot insert" in `docs/standard-view-invariants.md` (`scripture-editors`), which also covers the
+  `\id` line, where `\` offers the inline list and the Enter palette's paragraph pick splits the
+  line instead of retagging it.
+
+**The editor's right-click menu outranks both palettes, and the hand-off rests on listener order
+across the two repos.** While `ContextMenuPlugin`'s menu is open it is the only keyboard mode on
+screen: the `\` trigger is claimed and does nothing, the Enter trigger stands down so the menu gets
+the press, and the insert shortcuts are swallowed. `isEditorContextMenuOpen` in
+`platform-scripture-editor.web-view.utils.ts` is the gate, and it depends on two facts owned by the
+editor package:
+
+- **The menu claims its keys from a capture-phase listener on the iframe's `document`, and this web
+  view claims its own from one on `window`.** Capture runs window → document, so the web view always
+  sees a key first, and handing Enter down means returning *without* `stopPropagation` — a
+  `stopPropagation` there ends the press before the menu's listener runs. Were the menu's listener
+  ever moved onto `window` too, the two would run in registration order, and neither side could
+  count on seeing a key first.
+- **The menu is found by the FOCUSED editor's `aria-controls="editor-context-menu"` attribute**,
+  which the editor package sets on that editor's own root for exactly as long as its menu stays
+  open (`isEditorContextMenuOpenFor` in `editor-context-menu.util.ts` reads it). Only
+  scripture-editors#14 sets it — an earlier `platform-editor` build never marks the root, so every
+  gate keyed on `isEditorContextMenuOpen` silently evaluates "menu closed" against it, all at once:
+  the `\` trigger, the Enter hand-down, and the insert-shortcut swallow all fall through together,
+  with no local signal that anything broke. `footnote-editor.context-menu-gate.test.tsx` and
+  `editor-context-menu-merge-order-contract.test.tsx` both mount the real editor rather than a mock,
+  so they exercise the actual attribute instead of assuming its shape.
+
 Every keyboard handler change here must also update `src/shared/data/keyboard-shortcuts.data.ts` — see
 `.claude/rules/keyboard-shortcuts-catalog.md`.
 
 ---
 
-## 4. The footnote editor popover
+## 4. The footnote editor
 
 `lib/platform-bible-react/src/components/advanced/footnote-editor/`.
 
@@ -107,7 +153,9 @@ Every keyboard handler change here must also update `src/shared/data/keyboard-sh
   passes `isNoteShellEditable: false`, which renders `\f + ` in Lexical's `token` mode — necessary,
   but on its own that still lets a caret land among those characters, where a keystroke replaces the
   whole node: a lost caller, or a destroyed note. The editor's `NoteShellCaretGuardPlugin` is what
-  keeps the caret out; the `scripture-editors` invariants carry the full rule. A `\cat` category run
+  keeps the caret out, and it narrows a selection that reaches into the shell (a double-click on
+  the caller, select-all) to the note's content, so typing over it cannot remove the shell either;
+  the `scripture-editors` invariants carry the full rule. A `\cat` category run
   typed just after the caller belongs to the note's CONTENT, which is where the guard puts the caret.
 - **The caller is ONE choice, applied in one call.** The applied caller is a function of both the
   type and the custom character (a type of `custom` means nothing without one), and the dropdown's
@@ -139,6 +187,25 @@ Every keyboard handler change here must also update `src/shared/data/keyboard-sh
   onto the note as an attribute, so anything rendering a footnote from `content` alone drops it
   silently. `footnote-item.component.tsx` reads the field and renders the run after the caller, in
   the file's own order.
+- **A click on a pane row lands the row editor's caret on the same character — markers included.**
+  `getCaretPositionFromClick` and `EditorRef.selectNoteTextOffset` walk the same sequence: content
+  text counted as an offset, and a run's marker glyphs (`\ft`, `\ft*`, `\+nd`, unmatched markers,
+  and `\cat`/`\cat*` in the category field) addressed by their order among the glyphs at that
+  offset. Both skip the note's own marker, caller and closing marker, every NBSP separator, and
+  attribute text. A change to what `FootnoteItem` renders as a `.marker` (or to what the editor
+  renders as a glyph) has to change the other side too, or clicks land off by the difference.
+- **In Standard view, the same component runs `inline` inside the footnotes pane — there is no
+  popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply unchanged. Its
+  live-apply re-keys the note in the parent editor, so the host must re-sync its session key from
+  `onUsjChange`'s `insertedNodeKey`, and must not hand the mounted editor a new `noteOps` identity
+  for its own live-apply — that reloads the editor mid-typing. An unclosed note (the one kind the text
+  shows the content of) is edited in place in the text as well, as PT9 does, and the row editor is
+  not opened on one typed or pasted there; see `adr-footnote-unclosed-note-edited-in-place`.
+- **The caller and note-type changes rebuild the note from `getNoteOps`, which reads the live tree
+  unsettled.** Both must settle pending marker edits (`commitPendingMarkerEdits`, skipped while a
+  marker-palette session is open) before reading — the same rule `closeAndSave` and
+  `flushPendingEdits` follow, for the same reason: a mid-rename marker still under the caret would
+  otherwise be read and saved as its stale pre-rename literal.
 
 ---
 

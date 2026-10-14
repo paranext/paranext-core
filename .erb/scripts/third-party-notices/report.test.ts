@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { PLACEHOLDER_TEMPLATE_VALUE } from './policy';
 import { describeBlock, stalePolicyEntries } from './report';
 
+/** What the template offers for each operand's credit, for the reader to replace. */
+const CREDIT_PLACEHOLDER =
+  '<the notice(s) this operand is granted under, copied whole lines from this file>';
+
 const block = {
   ecosystem: 'npm' as const,
   name: 'weird-pkg',
@@ -35,6 +39,8 @@ describe('describeBlock', () => {
     const json = message.slice(message.indexOf('{'), message.lastIndexOf('}') + 1);
     const parsed = JSON.parse(json);
     expect(parsed.package).toBe('npm:weird-pkg');
+    // Not a conjunction, so no per-operand credits to fill in.
+    expect(parsed.copyrightByOperand).toBeUndefined();
     // Provenance beside the key, so the determination stays re-checkable against what was read.
     expect(parsed.version).toBe('2.1.0');
     expect(parsed.textSha256).toBe('deadbeef');
@@ -398,6 +404,26 @@ describe('a remedy the gate would reject is not offered', () => {
     expect(message).toContain('aggregation rather than derivation');
   });
 
+  it('tells the reader to credit each operand when one file stacks several grants', () => {
+    // `posthog-node`'s shape: MIT declared, and a LICENSE stacking an Apache-2.0 grant over MIT
+    // grants that nothing identifies. The reader records the conjunction by hand, so the template
+    // cannot know one is coming, and without `copyrightByOperand` every operand's canonical text is
+    // credited to the package's own notice.
+    const message = describeBlock(
+      {
+        ...block,
+        name: 'stacked-pkg',
+        reason: 'LICENSE could not be identified (NOASSERTION)',
+        detected: 'NOASSERTION',
+      },
+      POLICY,
+    );
+    expect(message).toContain('"copyrightByOperand"');
+    expect(message).toContain('copied from this file whole lines at a time');
+    expect(message).toContain('Credit every notice the file states');
+    expect(message).toContain('"creditFiles"');
+  });
+
   // A conjunction leaves `detected` undefined, so this printed a placeholder asking the reader for
   // something already on the line above. What such an exception must record is the compound
   // expression - the shape all three conjunction entries in the closure carry.
@@ -423,6 +449,12 @@ describe('a remedy the gate would reject is not offered', () => {
     const json = message.slice(message.indexOf('{'), message.lastIndexOf('}') + 1);
     expect(JSON.parse(json).spdx).toBe('MIT AND Apache-2.0');
     expect(message).not.toContain('<SPDX identifier this package is actually under>');
+    // A conjunction must record credits, so the entry carries one placeholder per operand for the
+    // reader to replace - pasted without them it would be refused for a field it never offered.
+    expect(JSON.parse(json).copyrightByOperand).toEqual({
+      MIT: CREDIT_PLACEHOLDER,
+      'Apache-2.0': CREDIT_PLACEHOLDER,
+    });
   });
 
   // The three operator shapes reach `policyRemedy` when the package ships no license text, and NO
