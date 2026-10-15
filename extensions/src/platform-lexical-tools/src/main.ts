@@ -24,6 +24,71 @@ export interface DictionaryWebViewOptions extends OpenWebViewOptions {
   editorWebViewId: string | undefined;
 }
 
+/**
+ * Resolves the project and scroll group a Dictionary tab opened from `editorWebViewId` should use.
+ * Degrades to an unlabeled, default-scroll-group tab rather than rejecting when the editor's
+ * definition can't be resolved — the request still opens a usable tab, just without a known
+ * project.
+ */
+async function resolveDictionaryWebViewOptions(
+  editorWebViewId: string | undefined,
+): Promise<DictionaryWebViewOptions> {
+  let projectId: string | undefined;
+  let editorScrollGroupId: ScrollGroupScrRef | undefined;
+
+  if (editorWebViewId) {
+    try {
+      const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(editorWebViewId);
+      projectId = webViewDefinition?.projectId;
+      editorScrollGroupId = webViewDefinition?.scrollGroupScrRef;
+    } catch (e) {
+      logger.warn(
+        `Could not resolve the project for web view ${editorWebViewId}: ${getErrorMessage(e)}`,
+      );
+    }
+  }
+
+  return { projectId, editorWebViewId, editorScrollGroupId };
+}
+
+/**
+ * Raises an open Dictionary tab without reloading it, and opens nothing when none is open. Mirrors
+ * `showOrCreateTab` in `platform-scripture-editor/src/show-panel.util.ts`, which the scripture
+ * editor's other Simple Tools items use.
+ */
+const RAISE_EXISTING_DICTIONARY_TAB_ONLY: OpenWebViewOptions = {
+  existingId: '?',
+  createNewIfNotFound: false,
+  bringToFront: true,
+};
+
+/**
+ * Brings the Dictionary tab to the front, the way clicking it would. An open tab is raised, never
+ * reloaded, so its current lookup survives. If no tab is open, opens one for the editor's project.
+ *
+ * This implements the `platformLexicalTools.showDictionaryPanel` command.
+ *
+ * @param editorWebViewId The scripture editor the request came from
+ * @returns The Dictionary web view's ID, or `undefined` if it couldn't be shown
+ */
+async function showDictionaryPanel(
+  editorWebViewId: string | undefined,
+): Promise<string | undefined> {
+  const existingId = await papi.webViews.openWebView(
+    DICTIONARY_WEB_VIEW_TYPE,
+    undefined,
+    RAISE_EXISTING_DICTIONARY_TAB_ONLY,
+  );
+  if (existingId) return existingId;
+
+  const dictionaryWebViewOptions = await resolveDictionaryWebViewOptions(editorWebViewId);
+  return papi.webViews.openWebView(
+    DICTIONARY_WEB_VIEW_TYPE,
+    { type: 'tab' },
+    dictionaryWebViewOptions,
+  );
+}
+
 const dictionaryWebViewProvider: IWebViewProvider = {
   async getWebView(
     savedWebView: SavedWebViewDefinition,
@@ -106,6 +171,29 @@ export async function activate(context: ExecutionActivationContext) {
     },
   );
 
+  const showDictionaryPanelCommandPromise = papi.commands.registerCommand(
+    'platformLexicalTools.showDictionaryPanel',
+    showDictionaryPanel,
+    {
+      method: {
+        summary: 'Bring the Dictionary tab to the front, opening it if it is not open',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary: 'The scripture editor whose project a newly opened tab shows',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the Dictionary web view, or undefined if it could not be shown',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   const lexicalReferenceTextManager = new LexicalReferenceTextManager();
 
   const lexicalReferenceServicePromise = papi.dataProviders.registerEngine(
@@ -137,6 +225,7 @@ export async function activate(context: ExecutionActivationContext) {
   context.registrations.add(
     await dictionaryWebViewProviderPromise,
     await openDictionaryCommandPromise,
+    await showDictionaryPanelCommandPromise,
     lexicalReferenceTextManager,
     lexicalReferenceService,
     await lexicalReferencePdpefPromise,

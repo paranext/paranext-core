@@ -340,11 +340,19 @@
             "command": "platformScriptureEditor.showCommentariesPanel"
           },
           {
+            "label": "%webView_platformScriptureEditor_showDictionaryPanel%",
+            "hiddenInterfaceModes": ["power"],
+            "localizeNotes": "Scripture editor top menu (Simple) > Tools > Dictionary — brings the Dictionary tab in the third column to the front",
+            "group": "platformScriptureEditor.simpleToolsPanels",
+            "order": 3,
+            "command": "platformLexicalTools.showDictionaryPanel"
+          },
+          {
             "label": "%webView_platformScriptureEditor_showCommentsPanel%",
             "hiddenInterfaceModes": ["power"],
             "localizeNotes": "Scripture editor top menu (Simple) > Tools > Comments — brings the project's Comments tab in the third column to the front",
             "group": "platformScriptureEditor.simpleToolsPanels",
-            "order": 3,
+            "order": 4,
             "command": "legacyCommentManager.showCommentListPanel"
           },
           {
@@ -352,7 +360,7 @@
             "hiddenInterfaceModes": ["power"],
             "localizeNotes": "Scripture editor top menu (Simple) > Tools > Text collection — brings the Text collection tab in the third column to the front",
             "group": "platformScriptureEditor.simpleToolsPanels",
-            "order": 4,
+            "order": 5,
             "command": "platformScriptureEditor.showTextCollectionPanel"
           },
           {
@@ -360,7 +368,7 @@
             "hiddenInterfaceModes": ["power"],
             "localizeNotes": "Scripture editor top menu (Simple) > Tools > Find — brings the Find tab in the third column to the front",
             "group": "platformScriptureEditor.simpleToolsPanels",
-            "order": 5,
+            "order": 6,
             "command": "platformScripture.openFind"
           },
           {

@@ -701,5 +701,15 @@ declare module 'papi-shared-types' {
     'platformLexicalTools.openDictionary': (
       editorWebViewId: string | undefined,
     ) => Promise<string | undefined>;
+    /**
+     * Brings the Dictionary tab to the front. If it isn't open, opens it for the editor's project.
+     * An open tab is raised, never reloaded, so it keeps its state.
+     *
+     * @param editorWebViewId The scripture editor whose project a newly opened tab shows
+     * @returns The Dictionary web view's ID, or `undefined` if it couldn't be shown
+     */
+    'platformLexicalTools.showDictionaryPanel': (
+      editorWebViewId?: string,
+    ) => Promise<string | undefined>;
   }
 }
