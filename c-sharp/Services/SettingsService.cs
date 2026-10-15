@@ -151,7 +151,7 @@ internal static class SettingsService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Could not read setting {key}: {ex}");
+            Console.Error.WriteLine($"Could not read setting {key}: {ex}");
             value = default;
             return false;
         }
