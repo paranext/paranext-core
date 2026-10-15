@@ -24,42 +24,25 @@
  * Runs against an isolated project root, so the only project is the bundled sample WEB: `npm run
  * test:e2e:isolated tests/isolated/scripture-editor/standard-view-space-run-positions.spec.ts`.
  */
-import { FrameLocator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   chapterLocation,
-  findCharSpanText,
-  getChapterUsj,
+  NBSP,
+  openTargetVerseEditor,
+  readDomCaret,
+  readDomSelectedText,
   readEditorSelection,
   sendToEditorController,
-  waitForEditorControllerMethod,
+  TARGET_CHAR_MARKER as CHAR_MARKER,
+  TARGET_VERSE_REF,
 } from '../../../fixtures/settled-positions-helpers';
-import {
-  makeSampleProjectEditable,
-  navigateToolbarBcv,
-  openEditableScriptureEditorForProject,
-  SAMPLE_WEB_PROJECT_ID,
-  waitForHomeTab,
-} from '../../../fixtures/scripture-editor-helpers';
+import { clickBeforeGlyph } from '../../../fixtures/scripture-editor-helpers';
 
-/**
- * John 2:4 is `\wj "Woman, what does that have to do with you and me? My hour has not yet
- * come."\wj*` — one plain text string, so its USJ offsets are the string's own indexes.
- */
-const TARGET_REFERENCE = 'John 2:4';
-const TARGET_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 4 };
-const CHAR_MARKER = 'wj';
-/** Pins the fixture data: drift in the sample project would silently move every offset. */
-const EXPECTED_CHAR_TEXT =
-  '“Woman, what does that have to do with you and me? My hour has not yet come.”';
 /** Where the run goes: right after the existing space that follows `Woman,`. */
 const RUN_AFTER = '“Woman, ';
 
 const ANNOTATION_TYPE = 'spelling';
 const ANNOTATION_ID = 'space-run-probe';
-
-/** The display character for a space in a run, and for the separator after a char span's glyph. */
-const NBSP = '\u00a0';
 
 test.use({
   interfaceMode: 'power',
@@ -74,30 +57,7 @@ test.describe('scripture editor settled positions', () => {
     // and three editor round trips). 3x "slow" budget — see standard-default-power-mode.spec.ts.
     test.slow();
 
-    await waitForHomeTab(mainPage);
-    await makeSampleProjectEditable();
-    const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
-    const editorFrame: FrameLocator = mainPage.frameLocator(
-      `iframe[data-web-view-id="${editorId}"]`,
-    );
-    await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
-
-    await navigateToolbarBcv(mainPage, TARGET_REFERENCE);
-    // `.first()`: an open footnote popover carries its own `.editor-input.marker-editable`.
-    const editorInput = editorFrame.locator('.editor-input.marker-editable').first();
-    await expect(editorInput).toBeAttached({ timeout: 60_000 });
-    // Positive control, and the gate that the chapter finished loading before its USJ is read.
-    await expect(editorInput).toContainText(EXPECTED_CHAR_TEXT, { timeout: 60_000 });
-
-    const chapterUsj = await getChapterUsj(TARGET_VERSE_REF);
-    const charSpanText = findCharSpanText(chapterUsj.content ?? [], CHAR_MARKER);
-    if (!charSpanText)
-      throw new Error(
-        `No \\${CHAR_MARKER} char span with plain text content in ${TARGET_REFERENCE}'s USJ`,
-      );
-    expect(charSpanText.text).toBe(EXPECTED_CHAR_TEXT);
-    const { jsonPath, text: charText } = charSpanText;
-    await waitForEditorControllerMethod(editorId, 'setAnnotation');
+    const { editorId, editorInput, jsonPath, charText } = await openTargetVerseEditor(mainPage);
 
     /** The span's content as the browser holds it: the separator NBSP, then the display text. */
     const spanDomText = () =>
@@ -129,18 +89,7 @@ test.describe('scripture editor settled positions', () => {
       // so the space would be typed somewhere else and the failure would surface below as a
       // confusing display-run diff instead of here.
       await expect
-        .poll(
-          async () =>
-            editorInput.evaluate((root) => {
-              const sel = root.ownerDocument.getSelection();
-              return {
-                anchorText: sel?.anchorNode?.textContent ?? undefined,
-                anchorOffset: sel?.anchorOffset ?? undefined,
-                isCollapsed: sel?.isCollapsed ?? undefined,
-              };
-            }),
-          { timeout: 20_000 },
-        )
+        .poll(() => readDomCaret(editorInput), { timeout: 20_000 })
         // One past the USJ offset: the separator NBSP precedes the span's text in the DOM.
         .toEqual({
           anchorText: NBSP + charText,
@@ -162,12 +111,9 @@ test.describe('scripture editor settled positions', () => {
       // Just inside the left edge of the closing glyph is the insertion point immediately before
       // `\wj*`, the end of the span's text. Reaching it by gesture makes this the live → USJ
       // direction: nothing translated coordinates on the way in.
-      const closingGlyph = editorInput
-        .locator(`span.closing[data-marker="${CHAR_MARKER}"]`)
-        .first();
-      const glyphBox = await closingGlyph.boundingBox();
-      if (!glyphBox) throw new Error('The char span closing glyph has no bounding box');
-      await closingGlyph.click({ position: { x: 1, y: glyphBox.height / 2 } });
+      await clickBeforeGlyph(
+        editorInput.locator(`span.closing[data-marker="${CHAR_MARKER}"]`).first(),
+      );
 
       // Poll on the offset: the caret sat in this same span's text before the click.
       await expect
@@ -190,11 +136,7 @@ test.describe('scripture editor settled positions', () => {
       // What the browser highlights is the oracle; a shift applied on the way in and again on the
       // way out would cancel in anything the editor reports back.
       await expect
-        .poll(
-          async () =>
-            editorInput.evaluate((root) => root.ownerDocument.getSelection()?.toString() ?? ''),
-          { timeout: 20_000 },
-        )
+        .poll(() => readDomSelectedText(editorInput), { timeout: 20_000 })
         .toBe(charText.slice(-2));
       await expectRunStillOnScreen();
     });

@@ -29,6 +29,10 @@
  *   grace\w*` span — while an idle-settle clock can still collapse that edit to its bare `|grace`
  *   form at any moment — still marks exactly the RIGHT word LATER IN THE SAME SENTENCE: the harder
  *   case a word in a different, untouched paragraph would pass even if this were broken.
+ * - With the idle settle clock off, a marker literal typed at the front of a verse stays pending
+ *   while positions are computed against the SETTLED USJ (which does not contain it): a clicked
+ *   caret after it reports the settled location, `selectRange` over a settled word after it
+ *   highlights exactly that word, and `setAnnotation` over another marks exactly that word.
  * - Once that pending edit settles, `setAnnotation` over the settled attribute's value (`['lemma']
  *   propertyOffset …`) and over a verse number (`['number'] propertyOffset …`) holds each
  *   annotation on those display bytes — never wrapping them in a mark, and painting exactly the
@@ -68,50 +72,31 @@
  * by the C# backend into the empty root): `npm run test:e2e:isolated
  * tests/isolated/scripture-editor/standard-view-annotation-positions.spec.ts`.
  */
-import { FrameLocator, Locator } from '@playwright/test';
+import { Locator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   chapterLocation,
   chapterPropertyLocation,
   contentJsonPath,
-  findCharSpanText,
   findVersePath,
   findVerseText,
   getChapterUsj,
   getScrollGroupRef,
+  NBSP,
+  openTargetVerseEditor,
+  readDomCaret,
+  readDomSelectedText,
   readEditorSelection,
   sendToEditorController,
   SerializedVerseRef,
   setScrollGroupRefFromRenderer,
   setUserSetting,
-  waitForEditorControllerMethod,
+  TARGET_CHAR_MARKER as CHAR_MARKER,
+  TARGET_REFERENCE,
+  TARGET_VERSE_REF,
+  UsjMarkerObject,
 } from '../../../fixtures/settled-positions-helpers';
-import {
-  makeSampleProjectEditable,
-  navigateToolbarBcv,
-  openEditableScriptureEditorForProject,
-  SAMPLE_WEB_PROJECT_ID,
-  waitForHomeTab,
-} from '../../../fixtures/scripture-editor-helpers';
-
-/**
- * John 2:4 is `\wj "Woman, what does that have to do with you and me? My hour has not yet
- * come."\wj*` — one plain text string, so its settled offsets are the string's own indexes with
- * nothing in between. Chapter 2 deliberately: a `ScriptureRange` built from USJ document locations
- * carries no verse number, so the editor extension derives one by walking the loaded chapter's USJ
- * for a book id (`convertScriptureRangeToEditorRange` in platform-scripture-editor.utils.ts); only
- * a chapter-1 USJ carries the `id` marker, so a chapter-2 target exercises that book-id fallback
- * end to end on every `ScriptureRange` this spec sends.
- */
-const TARGET_REFERENCE = 'John 2:4';
-const TARGET_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 4 };
-const CHAR_MARKER = 'wj';
-/**
- * Pins the fixture data: a sample project whose `\wj` content at this verse drifted would silently
- * move the offsets.
- */
-const EXPECTED_CHAR_TEXT =
-  '“Woman, what does that have to do with you and me? My hour has not yet come.”';
+import { clickBeforeGlyph, navigateToolbarBcv } from '../../../fixtures/scripture-editor-helpers';
 
 /**
  * Annotation identity. The editor prefixes an externally-set annotation type with `external-` and
@@ -130,10 +115,67 @@ const CLICKED_ANNOTATION_ID = 'clicked-verse-number-probe';
  */
 const UNHANDLED_INTERACTION_COMMAND = 'e2eTest.unhandledAnnotationInteraction';
 
-/** The display separator the editor places between an opening marker glyph and its content. */
-const NBSP = '\u00a0';
-
 const WORD_MARKER = 'w';
+/**
+ * The marker whose opener the pending-literal step types: with the idle settle clock off it stays
+ * literal text in the editor until the caret leaves, while the settled USJ does not contain it.
+ */
+const PENDING_LITERAL_MARKER = 'nd';
+
+/** The settled `\w` span's text and the text after it, located in a chapter's USJ. */
+type SettledWordSpan = {
+  spanPath: string;
+  spanTextPath: string;
+  spanText: string;
+  /** The span's `lemma`, which `\\w grace|grace\\w*` writes right before its closer. */
+  lemma: string | undefined;
+  textAfterPath: string;
+  textAfter: string;
+  /** Whether an `\nd` span (the settled form of the pending literal) comes before the span. */
+  isAfterPendingMarker: boolean;
+};
+
+/**
+ * Finds the first `\w` span holding plain text and followed by plain text, searching depth first so
+ * it is found whether or not the settled `\nd` span moved it to another depth.
+ */
+function findSettledWordSpan(
+  content: readonly (string | UsjMarkerObject)[],
+  indexes: readonly number[] = [],
+  state = { seenPendingMarker: false },
+): SettledWordSpan | undefined {
+  for (let index = 0; index < content.length; index += 1) {
+    const node = content[index];
+    if (typeof node !== 'string') {
+      const nodeIndexes = [...indexes, index];
+      if (node.type === 'char' && node.marker === PENDING_LITERAL_MARKER)
+        state.seenPendingMarker = true;
+      const spanText = node.content?.[0];
+      const textAfter = content[index + 1];
+      if (
+        node.type === 'char' &&
+        node.marker === WORD_MARKER &&
+        typeof spanText === 'string' &&
+        typeof textAfter === 'string'
+      )
+        return {
+          spanPath: contentJsonPath(nodeIndexes),
+          spanTextPath: `${contentJsonPath(nodeIndexes)}.content[0]`,
+          spanText,
+          lemma: 'lemma' in node && typeof node.lemma === 'string' ? node.lemma : undefined,
+          textAfterPath: contentJsonPath([...indexes, index + 1]),
+          textAfter,
+          isAfterPendingMarker: state.seenPendingMarker,
+        };
+      const found = findSettledWordSpan(node.content ?? [], nodeIndexes, state);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+/** A word after the `\w` span in John 2:5 that the pending-literal step annotates. */
+const PENDING_ANNOTATED_WORD = 'says';
+const PENDING_LITERAL_ANNOTATION_ID = 'pending-literal-word-probe';
 /**
  * The content this spec types into its own `\w` span, and (unrelatedly) the pending attribute's
  * value — `lemma` is the marker's own default attribute, so the named form collapses to `|grace`.
@@ -271,36 +313,8 @@ test.describe('scripture editor settled positions', () => {
     // three editor round trips). 3x "slow" budget — see standard-default-power-mode.spec.ts.
     test.slow();
 
-    await waitForHomeTab(mainPage);
-    await makeSampleProjectEditable();
-    const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
-    const editorFrame: FrameLocator = mainPage.frameLocator(
-      `iframe[data-web-view-id="${editorId}"]`,
-    );
-    await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
-
-    await navigateToolbarBcv(mainPage, TARGET_REFERENCE);
-    // `.first()`: an open footnote popover carries its own `.editor-input.marker-editable`.
-    const editorInput = editorFrame.locator('.editor-input.marker-editable').first();
-    await expect(editorInput).toBeAttached({ timeout: 60_000 });
-    // Positive control, and the gate that the chapter finished loading before its USJ is read.
-    await expect(editorInput).toContainText(EXPECTED_CHAR_TEXT, { timeout: 60_000 });
-    // Standard view actually renders the char span's marker glyphs, so the NBSP separator that
-    // makes these coordinates non-trivial is really present.
-    await expect(
-      editorInput.locator(`span.opening[data-marker="${CHAR_MARKER}"]`).first(),
-    ).toBeAttached({ timeout: 30_000 });
-
-    const chapterUsj = await getChapterUsj(TARGET_VERSE_REF);
-    const charSpanText = findCharSpanText(chapterUsj.content ?? [], CHAR_MARKER);
-    if (!charSpanText)
-      throw new Error(
-        `No \\${CHAR_MARKER} char span with plain text content in ${TARGET_REFERENCE}'s USJ`,
-      );
-    expect(charSpanText.text).toBe(EXPECTED_CHAR_TEXT);
-
-    const { jsonPath, text: charText } = charSpanText;
-    await waitForEditorControllerMethod(editorId, 'setAnnotation');
+    const { editorId, editorInput, chapterUsj, jsonPath, charText } =
+      await openTargetVerseEditor(mainPage);
     const readSelection = () => readEditorSelection(editorId);
 
     await test.step("a caret clicked to the span's end reports the span text's own last offset", async () => {
@@ -309,12 +323,9 @@ test.describe('scripture editor settled positions', () => {
       // unpredictable offset). Reaching the position by gesture is what makes this the LIVE→USJ
       // direction: nothing translated coordinates on the way in, so the number the editor reports
       // answers only to where the caret physically sits.
-      const closingGlyph = editorInput
-        .locator(`span.closing[data-marker="${CHAR_MARKER}"]`)
-        .first();
-      const glyphBox = await closingGlyph.boundingBox();
-      if (!glyphBox) throw new Error('The char span closing glyph has no bounding box');
-      await closingGlyph.click({ position: { x: 1, y: glyphBox.height / 2 } });
+      await clickBeforeGlyph(
+        editorInput.locator(`span.closing[data-marker="${CHAR_MARKER}"]`).first(),
+      );
 
       // The editor reports asynchronously, so poll for the caret to land in the span's text; the
       // offset below is then a hard assertion.
@@ -342,11 +353,7 @@ test.describe('scripture editor settled positions', () => {
       // What the browser highlights is the oracle. Asking the editor to report the range back
       // would prove nothing: a shift applied on the way in and again on the way out cancels.
       await expect
-        .poll(
-          async () =>
-            editorInput.evaluate((root) => root.ownerDocument.getSelection()?.toString() ?? ''),
-          { timeout: 20_000 },
-        )
+        .poll(() => readDomSelectedText(editorInput), { timeout: 20_000 })
         .toBe(charText.slice(-2));
     });
 
@@ -361,18 +368,7 @@ test.describe('scripture editor settled positions', () => {
       // settled offset 0 must sit at DOM offset 1 in that node — immediately after the NBSP,
       // immediately before the first character of the span's text.
       await expect
-        .poll(
-          async () =>
-            editorInput.evaluate((root) => {
-              const sel = root.ownerDocument.getSelection();
-              return {
-                anchorText: sel?.anchorNode?.textContent ?? undefined,
-                anchorOffset: sel?.anchorOffset ?? undefined,
-                isCollapsed: sel?.isCollapsed ?? undefined,
-              };
-            }),
-          { timeout: 20_000 },
-        )
+        .poll(() => readDomCaret(editorInput), { timeout: 20_000 })
         .toEqual({ anchorText: NBSP + charText, anchorOffset: 1, isCollapsed: true });
 
       // The editor reports app-placed selections explicitly, so the webViewController's own
@@ -483,9 +479,7 @@ test.describe('scripture editor settled positions', () => {
       // unaffected by the wrapping concern above. It appends after the span's own text and never
       // touches the opening glyph's leading NBSP separator, which sits at the other end of the span
       // entirely.
-      const closerBox = await wCloser.boundingBox();
-      if (!closerBox) throw new Error('The new \\w span closing glyph has no bounding box');
-      await wCloser.click({ position: { x: 1, y: closerBox.height / 2 } });
+      await clickBeforeGlyph(wCloser);
 
       // Type the attribute and stop. The edit stays pending on caret departure, but ALSO settles on
       // its own on an idle clock, re-armed by every keystroke with no further departure needed, so
@@ -579,6 +573,133 @@ test.describe('scripture editor settled positions', () => {
       await expect(editorInput.locator(`.annotationId-${VERSE_ANNOTATION_ID}`)).toHaveCount(0);
     });
 
+    await test.step('positions after a marker literal that is still pending address the settled text they name', async () => {
+      // The previous steps left John 2:5 as: text before, the settled `\w grace|grace\w*` span,
+      // then the text from "servants" on. A marker literal typed at the very front of the verse is
+      // earlier in the same paragraph than that span and the text after it. With the idle clock off
+      // the literal stays pending, so the editor shows its bytes while the settled USJ — which every
+      // caller computes positions against — does not contain them.
+      const pendingLiteral = `\\${PENDING_LITERAL_MARKER} `;
+      const originalVerseFiveText = findVerseText(chapterUsj.content ?? [], '5');
+      if (!originalVerseFiveText)
+        throw new Error("No plain text found for John 2:5 in the chapter's USJ");
+      const settledTextBefore = originalVerseFiveText.text.slice(
+        0,
+        originalVerseFiveText.text.indexOf(SPAN_INSERTION_ANCHOR),
+      );
+      await setUserSetting(MARKER_SETTLE_DELAY_SETTING_KEY, -1);
+      let literalTyped = false;
+      try {
+        const frontOfVerse = chapterLocation(SPAN_VERSE_REF, originalVerseFiveText.jsonPath, 0);
+        await sendToEditorController(editorId, 'selectRange', [
+          { start: frontOfVerse, end: frontOfVerse },
+        ]);
+        await expect
+          .poll(async () => (await readSelection())?.start?.documentLocation, {
+            timeout: 30_000,
+          })
+          .toEqual({ jsonPath: originalVerseFiveText.jsonPath, offset: 0 });
+        await editorInput.pressSequentially(pendingLiteral, { delay: 30 });
+        literalTyped = true;
+        await expect(editorInput).toContainText(`${pendingLiteral}${settledTextBefore}`, {
+          timeout: 15_000,
+        });
+
+        // `getUsj()` while an edit is pending already equals the document after it settles, so
+        // the saved chapter holds the literal as an `\nd` span while the screen still shows its
+        // typed bytes: that difference is what makes this step's positions translate. The `\w`
+        // span and the text after it are found in that settled document, wherever the `\nd` span
+        // put them.
+        let settledWordSpan: SettledWordSpan | undefined;
+        await expect
+          .poll(
+            async () => {
+              const settledChapter = await getChapterUsj(SPAN_VERSE_REF);
+              settledWordSpan = findSettledWordSpan(settledChapter.content ?? []);
+              return settledWordSpan?.isAfterPendingMarker;
+            },
+            { timeout: 30_000 },
+          )
+          .toBe(true);
+        if (!settledWordSpan) throw new Error('The settled chapter holds no \\w span');
+        const { spanPath, lemma, textAfterPath, textAfter: settledTextAfter } = settledWordSpan;
+        await expect(editorInput).toContainText(`${pendingLiteral}${settledTextBefore}`);
+
+        // (a) A caret clicked in front of the span's closer reports the settled location there,
+        // the end of the `|grace` value written before `\w*`, at the span's SETTLED path rather
+        // than one shifted by the literal in front of it.
+        if (lemma === undefined) throw new Error('The settled \\w span has no lemma');
+        await clickBeforeGlyph(
+          editorInput.locator(`span.closing[data-marker="${WORD_MARKER}"]`).first(),
+        );
+        await expect
+          .poll(async () => (await readSelection())?.start?.documentLocation, {
+            timeout: 30_000,
+          })
+          .toEqual({ jsonPath: `${spanPath}['lemma']`, propertyOffset: lemma.length });
+
+        // (b) A range over a settled word after the span highlights exactly that word.
+        const selectedWordOffset = settledTextAfter.indexOf(SPAN_INSERTION_ANCHOR);
+        const annotatedWordOffset = settledTextAfter.indexOf(PENDING_ANNOTATED_WORD);
+        if (selectedWordOffset === -1 || annotatedWordOffset === -1)
+          throw new Error(`Unexpected text after the span in John 2:5: ${settledTextAfter}`);
+        await sendToEditorController(editorId, 'selectRange', [
+          {
+            start: chapterLocation(SPAN_VERSE_REF, textAfterPath, selectedWordOffset),
+            end: chapterLocation(
+              SPAN_VERSE_REF,
+              textAfterPath,
+              selectedWordOffset + SPAN_INSERTION_ANCHOR.length,
+            ),
+          },
+        ]);
+        await expect
+          .poll(() => readDomSelectedText(editorInput), { timeout: 20_000 })
+          .toBe(SPAN_INSERTION_ANCHOR);
+
+        // (c) An annotation over another settled word after the span marks exactly that word.
+        await sendToEditorController(editorId, 'setAnnotation', [
+          {
+            start: chapterLocation(SPAN_VERSE_REF, textAfterPath, annotatedWordOffset),
+            end: chapterLocation(
+              SPAN_VERSE_REF,
+              textAfterPath,
+              annotatedWordOffset + PENDING_ANNOTATED_WORD.length,
+            ),
+          },
+          ANNOTATION_TYPE,
+          PENDING_LITERAL_ANNOTATION_ID,
+        ]);
+        const annotatedMark = editorInput.locator(
+          `mark.annotationId-${PENDING_LITERAL_ANNOTATION_ID}`,
+        );
+        await expect(annotatedMark).toHaveCount(1, { timeout: 30_000 });
+        expect(await annotatedMark.textContent()).toBe(PENDING_ANNOTATED_WORD);
+
+        // Still pending after all three: the literal never settled during the step, so each answer
+        // above was measured against a document that still showed its bytes.
+        await expect(editorInput).toContainText(`${pendingLiteral}${settledTextBefore}`);
+      } finally {
+        await setUserSetting(MARKER_SETTLE_DELAY_SETTING_KEY, DEFAULT_MARKER_SETTLE_DELAY_MS);
+        if (literalTyped) {
+          // Undo rather than delete by position: the caret has moved since, and a settled offset
+          // 0 can sit on either side of the literal's bytes. Undo until the literal is gone, with
+          // a bound so a literal that cannot be undone fails here instead of eating earlier edits.
+          // The editor displays the literal's separator as a no-break space.
+          const showsLiteral = async () =>
+            ((await editorInput.textContent()) ?? '')
+              .replaceAll(NBSP, ' ')
+              .includes(pendingLiteral);
+          await editorInput.focus();
+          for (let attempt = 0; attempt < 6; attempt += 1) {
+            if (!(await showsLiteral())) break;
+            await editorInput.press('Control+z');
+          }
+          await expect(editorInput).not.toContainText(pendingLiteral, { timeout: 15_000 });
+        }
+      }
+    });
+
     await test.step("a selectRange to the web view's own verse lands even while the scroll group has just moved away", async () => {
       // Put the web view on John 2:4 and wait until it has RENDERED that verse, not just until the
       // scroll group holds it: the reference scroll marks the verse `highlighted` only once the web
@@ -614,14 +735,7 @@ test.describe('scripture editor settled positions', () => {
       // The browser's own caret agrees: inside the span's text, one past the NBSP separator. The
       // earlier annotation over the span's last two characters holds them in their own mark, so the
       // text node the caret sits in ends just before them.
-      const browserCaret = await editorInput.evaluate((root) => {
-        const sel = root.ownerDocument.getSelection();
-        return {
-          anchorText: sel?.anchorNode?.textContent ?? undefined,
-          anchorOffset: sel?.anchorOffset ?? undefined,
-          isCollapsed: sel?.isCollapsed ?? undefined,
-        };
-      });
+      const browserCaret = await readDomCaret(editorInput);
       expect(browserCaret).toEqual({
         anchorText: NBSP + charText.slice(0, -2),
         anchorOffset: CROSS_VERSE_CARET_OFFSET + 1,
@@ -809,9 +923,7 @@ test.describe('scripture editor settled positions', () => {
 
         // Click just inside the left edge of the new span's own closer — the same boundary the
         // pending-attribute step above clicks to append after a span's own text.
-        const closerBox = await wCloser.boundingBox();
-        if (!closerBox) throw new Error('The new \\w span closing glyph has no bounding box');
-        await wCloser.click({ position: { x: 1, y: closerBox.height / 2 } });
+        await clickBeforeGlyph(wCloser);
 
         // The settled span splits this text's own array slot into three (text before, the new
         // marker, text after) in place, so the span's own path is this text's index chain with

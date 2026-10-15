@@ -54,6 +54,7 @@ import {
   contentJsonPath,
   findVerseText,
   getChapterUsj,
+  NBSP,
   readEditorSelection,
   sendToEditorController,
   SerializedVerseRef,
@@ -63,6 +64,7 @@ import {
   waitForEditorControllerMethod,
 } from '../../../fixtures/settled-positions-helpers';
 import {
+  clickBeforeGlyph,
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
@@ -76,9 +78,6 @@ import {
  * something a mark cannot hold renders as one mark per side, all carrying the same id.
  */
 const ANNOTATION_TYPE = 'spelling';
-
-/** The display separator after a marker glyph (`\p`, a char opener, a verse number). */
-const NBSP = '\u00a0';
 
 /**
  * John 2 in the sample WEB project. Paragraph by paragraph: v1–3 · v4 · v5 · v6–11 · v12 · v13–17 ·
@@ -569,9 +568,7 @@ test.describe('scripture editor annotation shapes', () => {
 
       // Type the named form of `\w`'s default attribute just inside the closer, then leave: the
       // edit settles to the bare `|grace` form, re-spelling bytes in front of the comment.
-      const closerBox = await wordCloser.boundingBox();
-      if (!closerBox) throw new Error('The typed \\w span closing glyph has no bounding box');
-      await wordCloser.click({ position: { x: 1, y: closerBox.height / 2 } });
+      await clickBeforeGlyph(wordCloser);
       await editorInput.pressSequentially('|lemma="grace"', { delay: 30 });
       await clickAway();
 
