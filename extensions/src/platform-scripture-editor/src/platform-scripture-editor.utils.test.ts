@@ -53,6 +53,7 @@ import {
   resolveNoteEditingSurface,
   shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
+  validateCommentSelection,
   withDocumentEndOnText,
   selectableParagraphMarkers,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
@@ -4617,6 +4618,181 @@ describe('withDocumentEndOnText', () => {
     expect(withDocumentEndOnText(location, 8, followed)).toBe(location);
   });
 });
+describe('validateCommentSelection', () => {
+  const NOT_RESOLVED = '%webView_platformScriptureEditor_error_selectionNotResolved%';
+  const CONTAINS_MARKERS = '%webView_platformScriptureEditor_error_selectionContainsMarkers%';
+  const NO_TEXT = '%webView_platformScriptureEditor_error_noTextSelected%';
+
+  const refrain = 'for his loving kindness endures forever.';
+  const doc: Usj = {
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'PSA' },
+      { type: 'chapter', marker: 'c', number: '136' },
+      // 2: verse text with a footnote and a \nd span
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'In the beginning',
+          {
+            type: 'note',
+            marker: 'f',
+            caller: '+',
+            content: [{ type: 'char', marker: 'ft', content: ['a note'] }],
+          },
+          ' God said ',
+          { type: 'char', marker: 'nd', content: ['LORD'] },
+          ' hello',
+        ],
+      },
+      { type: 'para', marker: 'q2', content: [refrain] },
+      { type: 'para', marker: 'b' },
+      { type: 'para', marker: 'q1', content: [{ type: 'verse', marker: 'v', number: '2' }] },
+      { type: 'para', marker: 'q2', content: [refrain] },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [{ type: 'char', marker: 'w', lemma: 'grace', content: ['grace'] }, ' end'],
+      },
+    ],
+  };
+  const text = '$.content[2].content[1]';
+
+  it('anchors a text range as is', () => {
+    expect(
+      validateCommentSelection(
+        { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+        doc,
+      ),
+    ).toEqual({
+      range: { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+    });
+  });
+
+  it('expands a collapsed caret to the word around it', () => {
+    expect(validateCommentSelection({ start: { jsonPath: text, offset: 10 } }, doc)).toEqual({
+      range: { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+    });
+  });
+
+  it('refuses a collapsed caret between whitespace', () => {
+    expect(
+      validateCommentSelection({ start: { jsonPath: '$.content[2].content[3]', offset: 0 } }, doc),
+    ).toEqual({ notice: NO_TEXT });
+  });
+
+  it('warns for a text path that does not resolve', () => {
+    const result = validateCommentSelection(
+      { start: { jsonPath: '$.content[40].content[1]', offset: 2 } },
+      doc,
+    );
+    expect(result).toMatchObject({ notice: NOT_RESOLVED });
+    expect(result).toHaveProperty('warning');
+  });
+
+  it('warns for an end offset past the length of the text', () => {
+    const result = validateCommentSelection(
+      { start: { jsonPath: text, offset: 2 }, end: { jsonPath: text, offset: 40 } },
+      doc,
+    );
+    expect(result).toMatchObject({ notice: NOT_RESOLVED });
+    expect(result).toHaveProperty('warning');
+  });
+
+  it('warns for a collapsed caret past the length of the text', () => {
+    const result = validateCommentSelection({ start: { jsonPath: text, offset: 17 } }, doc);
+    expect(result).toMatchObject({ notice: NOT_RESOLVED });
+    expect(result).toHaveProperty('warning');
+  });
+
+  it('accepts the document end on the last text', () => {
+    const lastText: Usj = {
+      ...doc,
+      content: [...doc.content.slice(0, 2), { type: 'para', marker: 'p', content: ['The end'] }],
+    };
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: '$.content[2].content[0]', offset: 4 },
+          end: { jsonPath: '$.content[2].content[0]', offset: 8 },
+        },
+        lastText,
+      ),
+    ).toEqual({
+      range: {
+        start: { jsonPath: '$.content[2].content[0]', offset: 4 },
+        end: { jsonPath: '$.content[2].content[0]', offset: 7 },
+      },
+    });
+  });
+
+  it('refuses a range across a character span', () => {
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: '$.content[2].content[3]', offset: 2 },
+          end: { jsonPath: '$.content[2].content[5]', offset: 3 },
+        },
+        doc,
+      ),
+    ).toEqual({ notice: CONTAINS_MARKERS });
+  });
+
+  it('refuses a range across two identical strings in different paragraphs', () => {
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: '$.content[3].content[0]', offset: 4 },
+          end: { jsonPath: '$.content[6].content[0]', offset: 10 },
+        },
+        doc,
+      ),
+    ).toEqual({ notice: CONTAINS_MARKERS });
+  });
+
+  it.each([
+    ['an empty paragraph marker', { jsonPath: "$.content[4]['marker']", propertyOffset: 1 }],
+    [
+      'a line-final verse number',
+      { jsonPath: "$.content[5].content[0]['number']", propertyOffset: 1 },
+    ],
+    [
+      'a lemma that equals the word',
+      { jsonPath: "$.content[7].content[0]['lemma']", propertyOffset: 2 },
+    ],
+  ])('refuses a collapsed caret on %s without a warning', (_name, start) => {
+    expect(validateCommentSelection({ start }, doc)).toEqual({ notice: NO_TEXT });
+  });
+
+  it('refuses a range ending on a property location without a warning', () => {
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: text, offset: 2 },
+          end: { jsonPath: "$.content[5].content[0]['number']", propertyOffset: 1 },
+        },
+        doc,
+      ),
+    ).toEqual({ notice: CONTAINS_MARKERS });
+  });
+
+  it('treats a range end on the next marker as the end of the text before it', () => {
+    const viaMarker = validateCommentSelection(
+      { start: { jsonPath: text, offset: 7 }, end: { jsonPath: '$.content[2].content[2]' } },
+      doc,
+    );
+    const viaText = validateCommentSelection(
+      { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+      doc,
+    );
+    expect(viaMarker).toEqual(viaText);
+    expect(viaMarker).toHaveProperty('range');
+  });
+});
+
 // #region resolveNoteVerseRef
 
 describe('resolveNoteVerseRef (picking a note navigates to its verse)', () => {
