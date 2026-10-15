@@ -46,6 +46,10 @@
  * Runs against an isolated project root, so the only project is the bundled sample WEB (installed
  * by the C# backend into an empty root, and discarded with it): `npm run test:e2e:isolated
  * tests/isolated/scripture-editor/standard-view-annotation-shapes.spec.ts`.
+ *
+ * A cold first run can fail mid-test when the app tears the editor's web view down and rebuilds it
+ * (an `OutPortal` portal error, the web view controller going missing, or `useWebViewState` reading
+ * `papi` before it exists) — a known product bug, PT-4863, not a position regression.
  */
 import { ConsoleMessage, FrameLocator, Locator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
