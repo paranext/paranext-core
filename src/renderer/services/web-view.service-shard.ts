@@ -2540,7 +2540,6 @@ globalThis.resetContentZoomById = (webViewId, areaId) => {
     logger.warn(`Content zoom reset failed for ${webViewId}: ${getErrorMessage(e)}`),
   );
 };
-globalThis.registerWebViewRootById = registerWebViewRoot;
 // The bootstrap calls these two synchronously while it is still setting itself up, so anything they
 // throw crosses back into the web view's realm and can abort the bootstrap before its wheel and key
 // listeners are installed. This boundary warns and continues, exactly as the asynchronous pair above
@@ -2562,6 +2561,8 @@ globalThis.reportContentZoomActiveAreaById = (webViewId, areaId) => {
     logger.warn(`Content zoom active area report failed for ${webViewId}: ${getErrorMessage(e)}`);
   }
 };
+// The bootstrap reports each React root it creates so the web view component can unmount it
+globalThis.registerWebViewRootById = registerWebViewRoot;
 
 // #endregion Set up global variables to use in `openWebView`'s `imports` below
 
@@ -2958,8 +2959,10 @@ export async function openOrReloadWebView(
       // The component can only unmount a root it knows about, and a document replaced before it ever
       // loads is never the iframe's document at a load. So the bootstrap hands each root to
       // `registerWebViewRootById` as soon as it creates it, together with its document and a
-      // `hasUnloaded` flag that the `unload` listener sets before it queues the unmount. The component
-      // warns when it has to unmount a replaced root whose flag is still false.
+      // `hasUnloaded` flag that an `unload` listener added at that point sets, even if the first
+      // render throws. The component warns when it has to unmount a replaced root whose document
+      // loaded but whose flag is still false; a document replaced before it loaded may never see
+      // `unload`, so that case unmounts silently.
       //
       // Add the component as a script
       // WARNING: DO NOT add anything between the closing of the script tag and the insertion of
@@ -2993,6 +2996,15 @@ export async function openOrReloadWebView(
                 } catch (e) {
                   console.log('Error registering WebView React root', e);
                 }
+                // Added here, ahead of the first render, so a render that throws still leaves the
+                // flag to be set when the document unloads
+                window.addEventListener(
+                  'unload',
+                  () => {
+                    registeredRoot.hasUnloaded = true;
+                  },
+                  { once: true },
+                );
 
                 function renderRoot(savedDefinition) {
                   // Set up WebViewProps to pass into the WebView component
@@ -3044,16 +3056,14 @@ export async function openOrReloadWebView(
                   // On unload, then queued: see the bootstrap comment in web-view.service-shard.ts
                   window.addEventListener(
                     'unload',
-                    () => {
-                      registeredRoot.hasUnloaded = true;
+                    () =>
                       queueMicrotask(() => {
                         try {
                           root.unmount();
                         } catch (e) {
                           console.log('Error unmounting WebView React root', e);
                         }
-                      });
-                    },
+                      }),
                     { once: true },
                   );
                 };

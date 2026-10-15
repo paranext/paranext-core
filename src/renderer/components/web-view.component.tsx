@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  RegisteredWebViewRoot,
-  WEB_VIEW_CONTENT_TYPE,
-  WebViewDefinition,
-} from '@shared/models/web-view.model';
+import { WEB_VIEW_CONTENT_TYPE, WebViewDefinition } from '@shared/models/web-view.model';
+import type { RegisteredWebViewRoot } from '@renderer/global-this-web-view.model';
 import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
   convertWebViewDefinitionToSaved,
@@ -23,7 +20,7 @@ import {
   applyContentZoomForWebView,
   forgetContentZoom,
 } from '@renderer/services/web-view-content-zoom.service';
-import { claimWebViewRoots } from '@renderer/services/web-view-root.registry';
+import { claimWebViewRoots, getShownDocument } from '@renderer/services/web-view-root.registry';
 import { logger } from '@shared/services/logger.service';
 import {
   PromiseChainingMap,
@@ -192,6 +189,11 @@ export function WebView({
    * while parsing already finds this component.
    */
   const heldRootsRef = useRef(new Set<RegisteredWebViewRoot>());
+  /**
+   * The held roots whose document has been the iframe's shown document at a load. A document that
+   * never got that far never ran `pagehide`, so it may never run `unload` either.
+   */
+  const loadedRootsRef = useRef(new WeakSet<RegisteredWebViewRoot>());
   useLayoutEffect(() => {
     const heldRoots = heldRootsRef.current;
     const releaseClaim = claimWebViewRoots(id, iframeRef, (root) => heldRoots.add(root));
@@ -325,11 +327,18 @@ export function WebView({
     // document replaced before it ever loaded (a second move before the first new document's load)
     // is unmounted here too: its own queued unmount is dropped with its realm, and this load
     // belongs to a later document. The root of the current document is kept.
-    const shownDocument = iframeRef.current?.contentDocument;
+    const shownDocument = getShownDocument(iframeRef.current);
+    heldRootsRef.current.forEach((root) => {
+      if (root.document === shownDocument) loadedRootsRef.current.add(root);
+    });
     heldRootsRef.current.forEach((root) => {
       if (root.document === shownDocument) return;
       heldRootsRef.current.delete(root);
-      if (!root.hasUnloaded)
+      if (!loadedRootsRef.current.has(root))
+        logger.debug(
+          `Unmounting the React root of a document that was replaced before it loaded for WebView ${id}`,
+        );
+      else if (!root.hasUnloaded)
         logger.warn(
           `The replaced document's unload never ran for WebView ${id}, so its React root was unmounted late. Electron may no longer fire unload in web view iframes.`,
         );
@@ -462,11 +471,12 @@ export function WebView({
   useEffect(() => () => forgetContentZoom(id), [id]);
 
   // Unmount the React roots on close. A layout-effect cleanup runs before React removes the iframe,
-  // so `contentWindow` still resolves to the document shown at close. That document's root can be
-  // one this component has not been handed, so it is looked up on the window as well as taken from
-  // the held roots. A close before a replacement document loads would otherwise leave that
-  // document's root mounted, since its own unload-time unmount cannot be relied on once the iframe is
-  // removed.
+  // so `contentWindow` still resolves to the document shown at close. The held roots are the
+  // normal source of what to unmount; the shown document's own published unmount is a fallback for
+  // a root that never reached this component (its registration failed, or the registry module was
+  // reset by a hot reload). A close before a replacement document loads would otherwise leave that
+  // document's root mounted, since its own unload-time unmount cannot be relied on once the iframe
+  // is removed.
   // WARNING: a Suspense or Activity boundary above the dock that hides this content would run this
   // cleanup too, unmounting live roots whose iframes stay in place.
   useLayoutEffect(() => {

@@ -3,7 +3,6 @@ import { FunctionComponent } from 'react';
 import {
   ContentZoomAreaId,
   GetSavedWebViewDefinition,
-  RegisteredWebViewRoot,
   SavedWebViewDefinition,
   UpdateWebViewDefinition,
   UseWebViewScrollGroupScrRefHook,
@@ -99,13 +98,6 @@ declare global {
    * @experimental This function is unstable and may change or disappear without notice
    */
   var reportContentZoomActiveAreaById: (webViewId: string, areaId: ContentZoomAreaId) => void;
-  /**
-   * Report the React root a web view's bootstrap created in the current document of its iframe, so
-   * the renderer can unmount it once that document is replaced.
-   *
-   * @experimental This function is unstable and may change or disappear without notice
-   */
-  var registerWebViewRootById: (webViewId: string, root: RegisteredWebViewRoot) => void;
   /** Indicates whether test code meant just for developers to see should be run */
   var isNoisyDevModeEnabled: boolean;
   /**

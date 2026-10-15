@@ -300,7 +300,8 @@ describe("the web view unmounts the React roots of its iframe's documents", () =
     const unmountMiddleRoot = vi.fn();
     const unmountLastRoot = vi.fn();
 
-    publishRootOfNewDocument(webView, unmountFirstRoot);
+    // The first document loaded and ran its unload handlers, so only the middle one could warn
+    publishRootOfNewDocument(webView, unmountFirstRoot, { hasUnloaded: true });
     fireEvent.load(webView.iframe);
     publishRootOfNewDocument(webView, unmountMiddleRoot);
     publishRootOfNewDocument(webView, unmountLastRoot);
@@ -309,9 +310,12 @@ describe("the web view unmounts the React roots of its iframe's documents", () =
     expect(unmountMiddleRoot).toHaveBeenCalledTimes(1);
     expect(unmountFirstRoot).toHaveBeenCalledTimes(1);
     expect(unmountLastRoot).not.toHaveBeenCalled();
+    // The middle document never loaded, so it never saw `pagehide` or `unload`; that is not a
+    // missing unload to warn about
+    expect(mocks.loggerWarn).not.toHaveBeenCalled();
   });
 
-  test('warns when a replaced document never ran its unload handlers', async () => {
+  test('warns when a replaced document loaded and never ran its unload handlers', async () => {
     const webView = await renderWebView();
     const unmountFirstRoot = vi.fn();
 

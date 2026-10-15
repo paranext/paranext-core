@@ -3522,7 +3522,11 @@ describe('React web view bootstrap teardown', () => {
    * iframe's window, with a fake `createRoot`, and returns the root it created plus a way to fire
    * events on that window.
    */
-  function runReactBootstrap(content: string, registerWebViewRootById: unknown = vi.fn()) {
+  function runReactBootstrap(
+    content: string,
+    registerWebViewRootById: unknown = vi.fn(),
+    { canRender = true }: { canRender?: boolean } = {},
+  ) {
     const bootstrapScript = [...content.matchAll(/<script nonce="[^"]*">([\s\S]*?)<\/script>/g)]
       .map((match) => match[1])
       .find((script) => script.includes('function initializeReact'));
@@ -3543,13 +3547,19 @@ describe('React web view bootstrap teardown', () => {
       React: { createElement: vi.fn(() => ({})) },
       WebViewErrorBoundary: () => undefined,
       papi: { webViews: { onDidUpdateWebView: vi.fn(() => unsubscribeUpdateWebView) } },
-      getSavedWebViewDefinition: () => ({ id: 'wv-react', webViewType: 'test.type' }),
+      getSavedWebViewDefinition: () =>
+        canRender ? { id: 'wv-react', webViewType: 'test.type' } : undefined,
       console,
       queueMicrotask,
     };
     // The bootstrap reads `window` and `globalThis` interchangeably, as it can inside an iframe
     iframeWindow.window = iframeWindow;
-    vm.runInNewContext(bootstrapScript, vm.createContext(iframeWindow));
+    try {
+      vm.runInNewContext(bootstrapScript, vm.createContext(iframeWindow));
+    } catch (error) {
+      // A web view that cannot render throws out of the bootstrap; the document stays in place
+      if (canRender) throw error;
+    }
 
     return {
       root,
@@ -3671,6 +3681,23 @@ describe('React web view bootstrap teardown', () => {
       expect(root.unmount).toHaveBeenCalledTimes(1);
     },
   );
+
+  test('marks its document as unloaded even when the first render throws before pagehide is handled', async () => {
+    const registerWebViewRootById = vi.fn();
+    const { root, dispatch } = runReactBootstrap(
+      await openReactWebViewContent(),
+      registerWebViewRootById,
+      { canRender: false },
+    );
+    // Control: the bootstrap got as far as registering its root, and the render did throw
+    expect(registerWebViewRootById).toHaveBeenCalledTimes(1);
+    expect(root.render).not.toHaveBeenCalled();
+    const [, record] = registerWebViewRootById.mock.calls[0];
+
+    dispatch('unload');
+
+    expect(record.hasUnloaded).toBe(true);
+  });
 
   test('logs a root that fails to unmount instead of throwing out of the unload', async () => {
     const { root, dispatch } = runReactBootstrap(await openReactWebViewContent());

@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import type { RegisteredWebViewRoot } from '@shared/models/web-view.model';
+import type { RegisteredWebViewRoot } from '@renderer/global-this-web-view.model';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage, type Unsubscriber } from 'platform-bible-utils';
 
@@ -16,13 +16,14 @@ type WebViewRootOwner = {
  */
 const ownersByWebViewId = new Map<string, Set<WebViewRootOwner>>();
 
-/** The document an iframe is showing now, or `undefined` if it has none or it is cross-origin */
-function getShownDocument(iframe: HTMLIFrameElement | null): Document | undefined {
-  try {
-    return iframe?.contentDocument ?? undefined;
-  } catch {
-    return undefined;
-  }
+/**
+ * The document an iframe is showing now, or `undefined` if it has none: the iframe is missing or
+ * removed, or its document is cross-origin (`contentDocument` is `null` then rather than throwing)
+ */
+export function getShownDocument(
+  iframe: HTMLIFrameElement | null | undefined,
+): Document | undefined {
+  return iframe?.contentDocument ?? undefined;
 }
 
 /**
