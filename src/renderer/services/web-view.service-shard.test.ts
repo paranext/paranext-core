@@ -3522,7 +3522,7 @@ describe('React web view bootstrap teardown', () => {
    * iframe's window, with a fake `createRoot`, and returns the root it created plus a way to fire
    * events on that window.
    */
-  function runReactBootstrap(content: string) {
+  function runReactBootstrap(content: string, registerWebViewRootById: unknown = vi.fn()) {
     const bootstrapScript = [...content.matchAll(/<script nonce="[^"]*">([\s\S]*?)<\/script>/g)]
       .map((match) => match[1])
       .find((script) => script.includes('function initializeReact'));
@@ -3532,10 +3532,13 @@ describe('React web view bootstrap teardown', () => {
     const unsubscribeUpdateWebView = vi.fn(() => true);
     const windowEvents = new EventTarget();
     const container = {};
+    const iframeDocument = { readyState: 'complete', getElementById: () => container };
     const iframeWindow: Record<string, unknown> = {
       addEventListener: windowEvents.addEventListener.bind(windowEvents),
       removeEventListener: windowEvents.removeEventListener.bind(windowEvents),
-      document: { readyState: 'complete', getElementById: () => container },
+      document: iframeDocument,
+      // The `imports` block of the web view captures this from the parent before it deletes the parent
+      registerWebViewRootById,
       createRoot: vi.fn(() => root),
       React: { createElement: vi.fn(() => ({})) },
       WebViewErrorBoundary: () => undefined,
@@ -3550,6 +3553,8 @@ describe('React web view bootstrap teardown', () => {
 
     return {
       root,
+      iframeWindow,
+      iframeDocument,
       unsubscribeUpdateWebView,
       dispatch: (eventName: string) => windowEvents.dispatchEvent(new Event(eventName)),
     };
@@ -3602,6 +3607,70 @@ describe('React web view bootstrap teardown', () => {
     // `window` now resolving to the replacement document's half-initialized globals
     expect(root.unmount).toHaveBeenCalledTimes(1);
   });
+
+  test('captures the root registration function before it deletes the parent window', async () => {
+    const content = await openReactWebViewContent();
+
+    const captureIndex = content.indexOf(
+      'var registerWebViewRootById = window.parent.registerWebViewRootById;',
+    );
+    expect(captureIndex).toBeGreaterThanOrEqual(0);
+    expect(captureIndex).toBeLessThan(content.indexOf('delete window.parent;'));
+  });
+
+  test('registers its root with the renderer, marking the document as unloaded before the unmount is queued', async () => {
+    const registerWebViewRootById = vi.fn();
+    const content = await openReactWebViewContent();
+    const webViewId = /window\.webViewId = '([^']+)'/.exec(content)?.[1];
+    expect(webViewId).toBeTruthy();
+    const { root, iframeDocument, dispatch } = runReactBootstrap(content, registerWebViewRootById);
+
+    expect(registerWebViewRootById).toHaveBeenCalledTimes(1);
+    const [registeredId, record] = registerWebViewRootById.mock.calls[0];
+    expect(registeredId).toBe(webViewId);
+    expect(record.document).toBe(iframeDocument);
+    expect(record.hasUnloaded).toBe(false);
+
+    dispatch('pagehide');
+    expect(record.hasUnloaded).toBe(false);
+
+    // The flag is set synchronously inside the `unload` listener, ahead of the queued unmount
+    dispatch('unload');
+    expect(record.hasUnloaded).toBe(true);
+    expect(root.unmount).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(root.unmount).toHaveBeenCalledTimes(1);
+
+    // The registered unmount is the root's own
+    record.unmountRoot();
+    expect(root.unmount).toHaveBeenCalledTimes(2);
+  });
+
+  test.each([
+    ['is missing', undefined],
+    [
+      'throws',
+      () => {
+        throw new Error('registry is gone');
+      },
+    ],
+  ])(
+    'still mounts and tears down when the root registration function %s',
+    async (_label, registrar) => {
+      const { root, iframeWindow, dispatch } = runReactBootstrap(
+        await openReactWebViewContent(),
+        registrar,
+      );
+
+      expect(root.render).toHaveBeenCalledTimes(1);
+      expect(iframeWindow.webViewCleanup).toBeDefined();
+
+      dispatch('pagehide');
+      dispatch('unload');
+      await Promise.resolve();
+      expect(root.unmount).toHaveBeenCalledTimes(1);
+    },
+  );
 
   test('logs a root that fails to unmount instead of throwing out of the unload', async () => {
     const { root, dispatch } = runReactBootstrap(await openReactWebViewContent());

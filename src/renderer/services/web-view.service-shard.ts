@@ -32,6 +32,7 @@ import {
   setContentZoomActiveArea,
   setContentZoomAreas,
 } from '@renderer/services/web-view-content-zoom.service';
+import { registerWebViewRoot } from '@renderer/services/web-view-root.registry';
 import { spliceIntoWebViewHead } from '@renderer/services/web-view-head.util';
 import { isCreateElementAllowedByStack } from '@renderer/services/renderer-create-element-guard.util';
 import { localThemeService } from '@renderer/services/theme.service';
@@ -2539,6 +2540,7 @@ globalThis.resetContentZoomById = (webViewId, areaId) => {
     logger.warn(`Content zoom reset failed for ${webViewId}: ${getErrorMessage(e)}`),
   );
 };
+globalThis.registerWebViewRootById = registerWebViewRoot;
 // The bootstrap calls these two synchronously while it is still setting itself up, so anything they
 // throw crosses back into the web view's realm and can abort the bootstrap before its wheel and key
 // listeners are installed. This boundary warns and continues, exactly as the asynchronous pair above
@@ -2839,6 +2841,7 @@ export async function openOrReloadWebView(
   var resetContentZoomById = window.parent.resetContentZoomById;
   var reportContentZoomAreasById = window.parent.reportContentZoomAreasById;
   var reportContentZoomActiveAreaById = window.parent.reportContentZoomActiveAreaById;
+  var registerWebViewRootById = window.parent.registerWebViewRootById;
   window.fetch = papi.fetch;
   window.WebSocket = papi.WebSocket;
   window.XMLHttpRequest = papi.XMLHttpRequest;
@@ -2952,6 +2955,12 @@ export async function openOrReloadWebView(
       // Correctness does not depend on whether the queued microtask still runs in that case, because
       // a second `root.unmount()` is a no-op.
       //
+      // The component can only unmount a root it knows about, and a document replaced before it ever
+      // loads is never the iframe's document at a load. So the bootstrap hands each root to
+      // `registerWebViewRootById` as soon as it creates it, together with its document and a
+      // `hasUnloaded` flag that the `unload` listener sets before it queues the unmount. The component
+      // warns when it has to unmount a replaced root whose flag is still false.
+      //
       // Add the component as a script
       // WARNING: DO NOT add anything between the closing of the script tag and the insertion of
       // reactWebView.contents. Doing so would mess up debugging web views
@@ -2975,6 +2984,15 @@ export async function openOrReloadWebView(
               function initializeReact() {
                 const container = document.getElementById('root');
                 const root = createRoot(container);
+                const unmountRoot = root.unmount.bind(root);
+                // Reported to the renderer so the web view component can unmount this root even if
+                // this document goes away before its unload-time unmount runs
+                const registeredRoot = { unmountRoot, document, hasUnloaded: false };
+                try {
+                  registerWebViewRootById?.('${webView.id}', registeredRoot);
+                } catch (e) {
+                  console.log('Error registering WebView React root', e);
+                }
 
                 function renderRoot(savedDefinition) {
                   // Set up WebViewProps to pass into the WebView component
@@ -3026,14 +3044,16 @@ export async function openOrReloadWebView(
                   // On unload, then queued: see the bootstrap comment in web-view.service-shard.ts
                   window.addEventListener(
                     'unload',
-                    () =>
+                    () => {
+                      registeredRoot.hasUnloaded = true;
                       queueMicrotask(() => {
                         try {
                           root.unmount();
                         } catch (e) {
                           console.log('Error unmounting WebView React root', e);
                         }
-                      }),
+                      });
+                    },
                     { once: true },
                   );
                 };
@@ -3042,7 +3062,7 @@ export async function openOrReloadWebView(
 
                 // Store cleanup functions globally so they can be called from parent window
                 globalThis.webViewCleanup = {
-                  unmountRoot: root.unmount.bind(root),
+                  unmountRoot,
                 };
 
                 window.addEventListener('pagehide', handlePageHide);

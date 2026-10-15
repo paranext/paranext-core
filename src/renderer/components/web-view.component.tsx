@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { WEB_VIEW_CONTENT_TYPE, WebViewDefinition } from '@shared/models/web-view.model';
+import {
+  RegisteredWebViewRoot,
+  WEB_VIEW_CONTENT_TYPE,
+  WebViewDefinition,
+} from '@shared/models/web-view.model';
 import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
   convertWebViewDefinitionToSaved,
@@ -19,6 +23,7 @@ import {
   applyContentZoomForWebView,
   forgetContentZoom,
 } from '@renderer/services/web-view-content-zoom.service';
+import { claimWebViewRoots } from '@renderer/services/web-view-root.registry';
 import { logger } from '@shared/services/logger.service';
 import {
   PromiseChainingMap,
@@ -131,8 +136,8 @@ function getCurrentDocumentUnmountRoot(
       | undefined;
     return contentWindowWithCleanup?.webViewCleanup?.unmountRoot;
   } catch {
-    // While closing the WebView, we log a warning if the cleanup function is missing. Logging here
-    // would only add startup noise, since the unmount is looked for several times
+    // The close-time cleanup logs a warning if it finds no unmount to call, so a miss here needs no
+    // message of its own
     return undefined;
   }
 }
@@ -181,35 +186,19 @@ export function WebView({
    */
   const messageBufferRef = useRef<Parameters<WebViewMessageRequestHandler>[]>([]);
 
-  // Store reference to iframe's cleanup function so we can call it before iframe loses contentWindow
-  const unmountRootFunctionRef = useRef<(() => void) | undefined>(undefined);
-
-  // Extract and store cleanup function when iframe loads
-  useEffect(() => {
-    const currentIframe = iframeRef.current;
-    if (!currentIframe) return;
-
-    const extractCleanupFunction = () => {
-      // Never replaces a stored unmount: that is the load handler's job, because a stored unmount
-      // can belong to a document the iframe is replacing, and only the load handler unmounts it
-      if (unmountRootFunctionRef.current) return;
-      unmountRootFunctionRef.current = getCurrentDocumentUnmountRoot(currentIframe);
-    };
-
-    // Try to extract immediately in case iframe is already loaded
-    extractCleanupFunction();
-
-    // Also try shortly after the iframe loads to give time for the iframe's React app to initialize
-    const handleLoad = () => {
-      setTimeout(extractCleanupFunction, 200);
-    };
-
-    currentIframe.addEventListener('load', handleLoad);
-
+  /**
+   * The React roots that this iframe's documents have registered and that have not been unmounted
+   * yet. Claimed before the iframe's document can parse, so a bootstrap that registers its root
+   * while parsing already finds this component.
+   */
+  const heldRootsRef = useRef(new Set<RegisteredWebViewRoot>());
+  useLayoutEffect(() => {
+    const heldRoots = heldRootsRef.current;
+    const releaseClaim = claimWebViewRoots(id, iframeRef, (root) => heldRoots.add(root));
     return () => {
-      currentIframe.removeEventListener('load', handleLoad);
+      releaseClaim();
     };
-  }, [id, content]); // Re-run when content changes
+  }, [id]);
 
   /**
    * Flush all buffered messages to the iframe. Called when the iframe becomes ready to receive
@@ -327,25 +316,31 @@ export function WebView({
   }, [id, postMessageCallback]);
 
   const handleLoadIframe = useCallback(() => {
-    // A new document's root replaces the stored one. rc-dock moving this tab within the window
-    // re-inserts the iframe, which loads a new document while this component stays mounted, and
-    // React comes from this window, so the replaced document's root stays mounted here unless it is
-    // unmounted now. After a reload its own unload handler has already unmounted it, making this a
-    // no-op; it is also the fallback should that `unload` not run, though the replaced root can then
-    // render into the loading document until this load. The `contentWindow` always resolves to the
-    // current document, so a stored unmount equal to the current one is the live root and is kept.
-    const currentUnmountRoot = getCurrentDocumentUnmountRoot(iframeRef.current);
-    const replacedUnmountRoot = unmountRootFunctionRef.current;
-    if (replacedUnmountRoot && replacedUnmountRoot !== currentUnmountRoot) {
+    // Every held root whose document is no longer the iframe's is unmounted. rc-dock moving this
+    // tab within the window re-inserts the iframe, which loads a new document while this component
+    // stays mounted, and React comes from this window, so a replaced document's root stays mounted
+    // here unless it is unmounted now. A reload normally has the document's own `unload` handler
+    // unmount it first, making this a no-op; this is the fallback should that `unload` not run,
+    // though the replaced root can then render into the loading document until this load. A
+    // document replaced before it ever loaded (a second move before the first new document's load)
+    // is unmounted here too: its own queued unmount is dropped with its realm, and this load
+    // belongs to a later document. The root of the current document is kept.
+    const shownDocument = iframeRef.current?.contentDocument;
+    heldRootsRef.current.forEach((root) => {
+      if (root.document === shownDocument) return;
+      heldRootsRef.current.delete(root);
+      if (!root.hasUnloaded)
+        logger.warn(
+          `The replaced document's unload never ran for WebView ${id}, so its React root was unmounted late. Electron may no longer fire unload in web view iframes.`,
+        );
       try {
-        replacedUnmountRoot();
+        root.unmountRoot();
       } catch (error) {
         logger.warn(
           `Failed to unmount replaced React root for WebView ${id}: ${getErrorMessage(error)}`,
         );
       }
-    }
-    unmountRootFunctionRef.current = currentUnmountRoot;
+    });
 
     // Mark that the iframe content has loaded so messages can be sent
     iframeHasLoadedRef.current = true;
@@ -467,15 +462,16 @@ export function WebView({
   useEffect(() => () => forgetContentZoom(id), [id]);
 
   // Unmount the React roots on close. A layout-effect cleanup runs before React removes the iframe,
-  // so `contentWindow` still resolves to the document shown at close. That document's root can
-  // differ from the stored one: a reload or tab move replaces the document, and the stored unmount
-  // catches up only on the new document's load. A close before that load would otherwise leave
-  // the new root mounted, since its own unload-time unmount cannot be relied on once the iframe is
+  // so `contentWindow` still resolves to the document shown at close. That document's root can be
+  // one this component has not been handed, so it is looked up on the window as well as taken from
+  // the held roots. A close before a replacement document loads would otherwise leave that
+  // document's root mounted, since its own unload-time unmount cannot be relied on once the iframe is
   // removed.
   // WARNING: a Suspense or Activity boundary above the dock that hides this content would run this
   // cleanup too, unmounting live roots whose iframes stay in place.
   useLayoutEffect(() => {
     const currentIframe = iframeRef.current;
+    const heldRoots = heldRootsRef.current;
 
     return () => {
       if (!currentIframe) {
@@ -483,10 +479,12 @@ export function WebView({
         return;
       }
       const unmountRoots = new Set(
-        [unmountRootFunctionRef.current, getCurrentDocumentUnmountRoot(currentIframe)].filter(
-          (unmountRoot) => unmountRoot !== undefined,
-        ),
+        [
+          ...[...heldRoots].map((root) => root.unmountRoot),
+          getCurrentDocumentUnmountRoot(currentIframe),
+        ].filter((unmountRoot) => unmountRoot !== undefined),
       );
+      heldRoots.clear();
       if (unmountRoots.size === 0) {
         logger.warn(`No cleanup function available for WebView ${id}`);
         return;
@@ -505,7 +503,6 @@ export function WebView({
           }
         });
         if (!anyUnmountFailed) logger.debug(`Successfully unmounted React root for WebView ${id}`);
-        unmountRootFunctionRef.current = undefined;
       }, 0);
     };
   }, [id]);

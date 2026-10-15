@@ -308,6 +308,37 @@ export type SavedWebViewDefinition = (
   Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
 
 /**
+ * The React root a web view's bootstrap created in one document of its iframe, as the bootstrap
+ * reports it to the renderer. The root renders through the renderer's React, so it outlives the
+ * document that created it unless something in the renderer unmounts it.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type RegisteredWebViewRoot = {
+  /**
+   * Unmount the root. Calling it again after the root is unmounted does nothing.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  unmountRoot: () => void;
+  /**
+   * The document the root was created in. The renderer hands the root to the web view whose iframe
+   * is showing this document.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  document: Document;
+  /**
+   * Whether the document has run its `unload` handlers. The bootstrap sets it before it queues the
+   * root's unmount, so a root whose document is gone while this is still `false` was not unmounted
+   * by the document itself.
+   *
+   * @experimental This property is unstable and may change or disappear without notice
+   */
+  hasUnloaded: boolean;
+};
+
+/**
  * Id of one zoom area — a named part of a web view's content that zooms as one and keeps its own
  * content zoom level. Ids are lower-case letters, digits and hyphens, starting with a letter
  * (`[a-z][a-z0-9-]*`), and are stable strings a web view chooses once (for example `main` for a
