@@ -289,17 +289,16 @@ export async function setScrollGroupRefFromRenderer(
   );
 }
 
-/** The editor's current selection, or undefined while the controller is still waiting for one. */
+/**
+ * The editor's current selection, or undefined while the editor has none. The controller waits for
+ * the editor's first report and gives up with undefined after its own timeout, so a slow first
+ * report is a retry for the caller's poll. Any other error (a torn-down controller, a missing
+ * method) propagates.
+ */
 export async function readEditorSelection(
   editorId: string,
 ): Promise<ReportedSelection | undefined> {
-  try {
-    return await sendToEditorController<ReportedSelection>(editorId, 'getSelection', []);
-  } catch {
-    // The controller blocks its first caller until the editor reports a selection, so a slow
-    // first report is a retry, not a result.
-    return undefined;
-  }
+  return sendToEditorController<ReportedSelection>(editorId, 'getSelection', []);
 }
 
 /**
