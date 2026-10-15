@@ -30,16 +30,19 @@ public class PersistedStringDictionarySettingTests
 
     private PersistedStringDictionarySetting CreateSetting() => new(_client, Key, s_retryDelay);
 
-    private static void WaitUntilLoaded(PersistedStringDictionarySetting setting)
+    private static void WaitUntil(Func<bool> condition, string failureMessage)
     {
         var stopwatch = Stopwatch.StartNew();
-        while (!setting.IsLoaded)
+        while (!condition())
         {
             if (stopwatch.Elapsed > TimeSpan.FromSeconds(5))
-                Assert.Fail("The background read never delivered the stored value");
+                Assert.Fail(failureMessage);
             Thread.Sleep(s_retryDelay);
         }
     }
+
+    private static void WaitUntilLoaded(PersistedStringDictionarySetting setting) =>
+        WaitUntil(() => setting.IsLoaded, "The background read never delivered the stored value");
 
     [Test]
     public void FirstReadSucceeds_ValueIsTheStoredValue()
@@ -137,6 +140,53 @@ public class PersistedStringDictionarySettingTests
 
         var saved = (SerializableStringDictionary)_settingsService.GetSettingValue(Key)!;
         Assert.That(saved["newKey"], Is.EqualTo("added this session"));
+        Assert.That(saved["storedKey"], Is.EqualTo("stored"));
+    }
+
+    [Test]
+    public void FirstReadReturnsNull_StaysUnloadedUntilAValueIsStored()
+    {
+        // Null means the service had no answer, so treating it as the stored value would let a
+        // save wipe whatever is really stored.
+        _settingsService.AddSettingValue(Key, null!);
+        var setting = CreateSetting();
+        Thread.Sleep(s_retryDelay * 10);
+
+        setting.SafeSave();
+
+        Assert.That(setting.IsLoaded, Is.False);
+        Assert.That(_settingsService.GetSettingValue(Key), Is.Null);
+
+        SettingsService.SetSetting(
+            _client,
+            Key,
+            new SerializableStringDictionary { ["storedKey"] = "stored" }
+        );
+        WaitUntilLoaded(setting);
+
+        Assert.That(setting.Value["storedKey"], Is.EqualTo("stored"));
+    }
+
+    [Test]
+    public void FirstReadFails_SafeSaveSkipped_SavesMergedValueOnceStoredValueArrives()
+    {
+        var setting = CreateSetting();
+        setting.Value["newKey"] = "added this session";
+        setting.SafeSave(); // still unreadable, so deferred
+
+        _settingsService.AddSettingValue(
+            Key,
+            new SerializableStringDictionary { ["storedKey"] = "stored" }
+        );
+
+        // No further access to the setting: the deferred save must happen without one.
+        WaitUntil(
+            () =>
+                _settingsService.GetSettingValue(Key) is SerializableStringDictionary saved
+                && saved.ContainsKey("newKey"),
+            "The deferred save never happened"
+        );
+        var saved = (SerializableStringDictionary)_settingsService.GetSettingValue(Key)!;
         Assert.That(saved["storedKey"], Is.EqualTo("stored"));
     }
 }
