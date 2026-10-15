@@ -54,6 +54,47 @@ public class SettingsServiceTests
         Assert.That(retrievedSettingValue, Is.EqualTo(settingValue));
     }
 
+    [TestCase()]
+    public void TryGetSetting_StoredValue_ReturnsTrueWithValue()
+    {
+        _settingsService.AddSettingValue("testNum", 15);
+
+        var succeeded = SettingsService.TryGetSetting<int>(_client, "testNum", out var value);
+
+        Assert.That(succeeded, Is.True);
+        Assert.That(value, Is.EqualTo(15));
+    }
+
+    [TestCase()]
+    public void TryGetSetting_StoredNull_ReturnsTrue()
+    {
+        _settingsService.AddSettingValue("nullableSetting", null!);
+
+        var succeeded = SettingsService.TryGetSetting<string>(
+            _client,
+            "nullableSetting",
+            out var value
+        );
+
+        Assert.That(succeeded, Is.True);
+        Assert.That(value, Is.Null);
+    }
+
+    [TestCase()]
+    public void TryGetSetting_ReadThrows_ReturnsFalse()
+    {
+        // DummySettingsService throws for a setting it has no value for, as the real service's
+        // absence or a timeout surfaces as a throw from GetSetting.
+        var succeeded = SettingsService.TryGetSetting<string>(
+            _client,
+            "missingSetting",
+            out var value
+        );
+
+        Assert.That(succeeded, Is.False);
+        Assert.That(value, Is.Null);
+    }
+
     #region SettingsChanged fan-out
 
     /// <summary>

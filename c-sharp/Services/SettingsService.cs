@@ -137,6 +137,27 @@ internal static class SettingsService
     }
 
     /// <summary>
+    /// Like <see cref="GetSetting{T}"/> (and BLOCKING in the same way), but returns
+    /// <see langword="false"/> instead of throwing when the read fails, e.g. because the settings
+    /// service is not up yet or the read timed out. A stored <see langword="null"/> still counts as
+    /// a successful read.
+    /// </summary>
+    public static bool TryGetSetting<T>(PapiClient papiClient, string key, out T? value)
+    {
+        try
+        {
+            value = GetSetting<T>(papiClient, key);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Could not read setting {key}: {ex}");
+            value = default;
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Reads a setting without blocking a thread. Bounded by the papi request timeout rather than
     /// <see cref="ThreadingUtils.DefaultTimeout"/>, since there is no thread being held hostage
     /// here.
