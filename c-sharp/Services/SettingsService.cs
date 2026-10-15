@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace Paranext.DataProvider.Services;
@@ -149,6 +150,49 @@ internal static class SettingsService
     public static Task<T?> GetSettingAsync<T>(PapiClient papiClient, string key)
     {
         return papiClient.SendRequestAsync<T?>(SERVICE_GET, [key]);
+    }
+
+    /// <summary>
+    /// Waits until the settings service answers a read of the setting with a value. The extension
+    /// host brings the settings service up after this process starts, and a read sent before then
+    /// fails at once instead of waiting for it.
+    /// </summary>
+    /// <returns>
+    /// <see langword="false"/> when <paramref name="timeout"/> passes or the client disconnects
+    /// first.
+    /// </returns>
+    public static async Task<bool> WaitForSettingAsync<T>(
+        PapiClient papiClient,
+        string key,
+        TimeSpan timeout,
+        TimeSpan retryDelay
+    )
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var hasLoggedWait = false;
+        while (!papiClient.DisconnectTask.IsCompleted)
+        {
+            string reason;
+            try
+            {
+                if (await GetSettingAsync<T>(papiClient, key) != null)
+                    return true;
+                reason = "no value returned";
+            }
+            catch (Exception ex)
+            {
+                reason = ex.Message;
+            }
+            if (stopwatch.Elapsed >= timeout)
+                return false;
+            if (!hasLoggedWait)
+            {
+                Console.WriteLine($"Waiting for the settings service to answer {key}: {reason}");
+                hasLoggedWait = true;
+            }
+            await Task.Delay(retryDelay);
+        }
+        return false;
     }
 
     public static bool SetSetting(PapiClient papiClient, string key, object? settingData)

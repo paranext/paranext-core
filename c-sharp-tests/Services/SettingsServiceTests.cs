@@ -54,6 +54,92 @@ public class SettingsServiceTests
         Assert.That(retrievedSettingValue, Is.EqualTo(settingValue));
     }
 
+    #region WaitForSettingAsync
+
+    private static readonly TimeSpan s_retryDelay = TimeSpan.FromMilliseconds(10);
+
+    [Test]
+    public async Task WaitForSettingAsync_SettingHasValue_ReturnsTrue()
+    {
+        _settingsService.AddSettingValue("testNum", 15);
+
+        var answered = await SettingsService.WaitForSettingAsync<int?>(
+            _client,
+            "testNum",
+            TimeSpan.FromSeconds(5),
+            s_retryDelay
+        );
+
+        Assert.That(answered, Is.True);
+    }
+
+    [Test]
+    public async Task WaitForSettingAsync_ServiceRegistersWhileWaiting_ReturnsTrue()
+    {
+        using var client = new DummyPapiClient();
+        var waitTask = SettingsService.WaitForSettingAsync<int?>(
+            client,
+            "testNum",
+            TimeSpan.FromSeconds(5),
+            s_retryDelay
+        );
+        await Task.Delay(s_retryDelay * 5);
+        Assert.That(waitTask.IsCompleted, Is.False);
+
+        var settingsService = new DummySettingsService(client);
+        settingsService.AddSettingValue("testNum", 15);
+        await settingsService.RegisterDataProviderAsync();
+
+        Assert.That(await waitTask, Is.True);
+    }
+
+    [Test]
+    public async Task WaitForSettingAsync_ReadThrowsUntilTimeout_ReturnsFalse()
+    {
+        // DummySettingsService throws for a setting it has no value for
+        var answered = await SettingsService.WaitForSettingAsync<int?>(
+            _client,
+            "missingSetting",
+            TimeSpan.FromMilliseconds(100),
+            s_retryDelay
+        );
+
+        Assert.That(answered, Is.False);
+    }
+
+    [Test]
+    public async Task WaitForSettingAsync_ReadReturnsNullUntilTimeout_ReturnsFalse()
+    {
+        _settingsService.AddSettingValue("nullSetting", null!);
+
+        var answered = await SettingsService.WaitForSettingAsync<string>(
+            _client,
+            "nullSetting",
+            TimeSpan.FromMilliseconds(100),
+            s_retryDelay
+        );
+
+        Assert.That(answered, Is.False);
+    }
+
+    [Test]
+    public void WaitForSettingAsync_ClientDisconnected_ReturnsFalseWithoutWaitingForTimeout()
+    {
+        _client.Dispose();
+
+        var waitTask = SettingsService.WaitForSettingAsync<int?>(
+            _client,
+            "missingSetting",
+            TimeSpan.FromMinutes(10),
+            s_retryDelay
+        );
+
+        Assert.That(waitTask.Wait(TimeSpan.FromSeconds(5)), Is.True);
+        Assert.That(waitTask.Result, Is.False);
+    }
+
+    #endregion
+
     #region SettingsChanged fan-out
 
     /// <summary>
