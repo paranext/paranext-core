@@ -19,10 +19,11 @@ export const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_checkingBadge_title%',
   '%webView_checksSidePanel_checkRequiresSetup%',
   '%webView_checksSidePanel_checkCouldNotRun%',
-  '%webView_checksSidePanel_checkCouldNotRun_detail%',
   '%webView_checksSidePanel_checkCouldNotRun_hideDetails%',
-  '%webView_checksSidePanel_checkCouldNotRun_paratext9Hint%',
+  '%webView_checksSidePanel_checkCouldNotRun_needsSetup%',
+  '%webView_checksSidePanel_checkCouldNotRun_needsSetupInParatext9%',
   '%webView_checksSidePanel_checkCouldNotRun_showDetails%',
+  '%webView_checksSidePanel_checkCouldNotRun_unexpectedError%',
   '%webView_checksSidePanel_checksCouldNotRun_notice%',
   '%checkSetup_notApplicable_quotationMarksNotUsed%',
   '%checkSetup_notApplicable_quotationTypesNotEnabled%',
@@ -50,6 +51,7 @@ export const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webview_checksSidePanel_checkTypeFilter_setUp%',
   // Misc used elsewhere on the page
   '%webView_find_noResultsFound%',
+  '%settings_errorMessages_viewError%',
 ];
 
 export type CheckInfo = {
