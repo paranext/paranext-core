@@ -15,7 +15,7 @@
 - Localize key: `%userProfile_interfaceMode_power_previewBadge%`. en: `"Preview"`, es: `"Preliminar"`.
 - Never edit an existing localize key or value (Localization Guide).
 - `Badge` `variant="outline"`, `className="user-profile-popover-text-3xs tw:h-4 tw:px-1.5"`, `data-testid="user-profile-interface-mode-power-preview-badge"`.
-- Wrapper row classes: `tw:flex tw:flex-wrap tw:items-center tw:gap-1.5`.
+- Wrapper row classes: `user-profile-popover-baseline-row tw:flex tw:flex-wrap tw:gap-1.5`. The first is a new raw CSS class (`align-items: baseline`) in `user-profile-popover.component.css`.
 - Renderer code gets no Tailwind processing: use only `tw:` classes already rendered in `user-profile-popover.component.tsx` (every class above qualifies).
 - No edits under `lib/platform-bible-react/src/components/shadcn-ui/`.
 - Verification commands: `npm run lint` and `npm test`. Skip `npm run typecheck` (too slow; lint + build are enough).
@@ -36,6 +36,7 @@
 - Modify: `assets/localization/en.json` (after `%userProfile_interfaceMode_power_label%`)
 - Modify: `assets/localization/es.json` (after `%userProfile_interfaceMode_power_label%`)
 - Modify: `src/renderer/components/user-profile-popover/user-profile-popover.component.tsx` (imports, `LOCALIZED_STRING_KEYS`, the Power `ToggleGroupItem`)
+- Modify: `src/renderer/components/user-profile-popover/user-profile-popover.component.css` (one new rule after `.user-profile-popover-text-3xs`)
 - Test: `src/renderer/components/user-profile-popover/user-profile-popover.test.tsx`
 
 **Interfaces:**
@@ -124,7 +125,7 @@ In `user-profile-popover.component.tsx`:
 3. In the Power `ToggleGroupItem` (`value="power"`), replace the label `<span>` (the one rendering `%userProfile_interfaceMode_power_label%`) with:
 
 ```tsx
-            <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5">
+            <span className="user-profile-popover-baseline-row tw:flex tw:flex-wrap tw:gap-1.5">
               <span
                 className={cn(
                   'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
@@ -153,6 +154,16 @@ Leave the description `<span>` and the whole Simple item unchanged.
  * expect missing features rather than read the gaps as bugs.
 ```
 
+5. In `user-profile-popover.component.css`, add after the `.user-profile-popover-text-3xs` rule:
+
+```css
+/* Lines a row's children up on their text baseline, so a badge taller than the label beside it
+   still reads on the label's line. A raw class for the same reason as the font sizes above. */
+.user-profile-popover-baseline-row {
+  align-items: baseline;
+}
+```
+
 - [ ] **Step 6: Run the tests to verify they pass**
 
 Run: `npm test -- src/renderer/components/user-profile-popover/user-profile-popover.test.tsx`
@@ -172,6 +183,7 @@ Expected: exit 0, no errors.
 ```bash
 git add assets/localization/en.json assets/localization/es.json \
   src/renderer/components/user-profile-popover/user-profile-popover.component.tsx \
+  src/renderer/components/user-profile-popover/user-profile-popover.component.css \
   src/renderer/components/user-profile-popover/user-profile-popover.test.tsx
 git commit -m "feat: mark Power mode as a Preview in the mode switcher (PT-4833)
 
@@ -196,7 +208,7 @@ Use the `app-runner` skill (headless with CDP: `./.erb/scripts/refresh.sh`). If 
 - [ ] **Step 2: Screenshot the four theme × mode combinations in English**
 
 Use the `visual-verification` skill. For each of {Simple, Power} × {light, dark}: set the mode and theme through the popover's own controls, open the popover (`user-profile-popover-trigger`), and screenshot it.
-Expected in all four: an outlined pill reading "Preview" sits right after "Power mode" on the same line. It has a visible border, its text is no larger than "Power mode", and its height is not taller than the label line. It is readable on the selected Power card's accent background.
+Expected in all four: an outlined pill reading "Preview" sits right after "Power mode" on the same line. The "Preview" text sits on the same baseline as "Power mode", not higher or lower (zoom in to check). The pill has a visible border, its text is no larger than "Power mode", and it is readable on the selected Power card's accent background.
 
 - [ ] **Step 3: Screenshot Spanish**
 
