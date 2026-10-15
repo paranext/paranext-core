@@ -58,8 +58,14 @@ export function ErrorDump({
   const infoMessage = localizeString(localizedStrings, '%webView_error_dump_info_message%');
   const copyButtonLabel = localizeString(localizedStrings, '%webView_error_dump_copy_button%');
 
-  function handleCopy() {
-    navigator.clipboard.writeText(errorDetails);
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(errorDetails);
+    } catch {
+      // The clipboard refused the text (for example, permission denied), so there is nothing
+      // to announce as copied.
+      return;
+    }
     if (handleCopyNotify) {
       handleCopyNotify();
     }
@@ -82,9 +88,10 @@ export function ErrorDump({
         <Button
           variant="secondary"
           size="icon"
-          className="size-8"
           aria-label={copyButtonLabel}
-          onClick={() => handleCopy()}
+          onClick={() => {
+            handleCopy();
+          }}
         >
           <Copy />
         </Button>
