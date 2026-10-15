@@ -385,17 +385,14 @@ export function ChecksSidePanel({
     });
     return [...groups].map(([checkId, messages]) => ({ checkId, messages }));
   }, [checkErrors]);
-  // A check that failed with several different messages is named once
+  // Taken from the same groups as the detail blocks, so the notice and the details always list the
+  // same checks, each once
   const couldNotRunNames = useMemo(
     () =>
-      [
-        ...new Set(
-          checkErrors.map((checkError) =>
-            getCheckDisplayName(checkError.checkId, getLocalizedCheckDescription),
-          ),
-        ),
-      ].join(', '),
-    [checkErrors, getLocalizedCheckDescription],
+      checkErrorGroups
+        .map((group) => getCheckDisplayName(group.checkId, getLocalizedCheckDescription))
+        .join(', '),
+    [checkErrorGroups, getLocalizedCheckDescription],
   );
   // With nothing to show, the reason is that the checks failed, not that they found nothing
   const hasJobFinished =

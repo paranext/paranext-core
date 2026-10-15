@@ -7,6 +7,7 @@ import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { CheckJobStatusReport } from 'platform-scripture';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import localizedStringsFile from '../../../contributions/localizedStrings.json';
 import { isProjectSelectorSharedKey, localizedValueFor } from '../../project-selector.test-utils';
 import { CheckScopes } from '../../checks-side-panel.utils';
 import {
@@ -65,8 +66,22 @@ const PICKER_BOUND_CHECKS_SIDE_PANEL_KEYS: readonly LocalizeKey[] = [
 ];
 
 /**
+ * The keys whose shipped English text the could-not-run tests assert against: the notice and the
+ * three per-check lines.
+ */
+const SHIPPED_COULD_NOT_RUN_KEYS: readonly LocalizeKey[] = [
+  '%webView_checksSidePanel_checksCouldNotRun_notice%',
+  '%webView_checksSidePanel_checkCouldNotRun_needsSetup%',
+  '%webView_checksSidePanel_checkCouldNotRun_needsSetupInParatext9%',
+  '%webView_checksSidePanel_checkCouldNotRun_unexpectedError%',
+];
+
+const shippedEnglishStrings: Record<string, string> = localizedStringsFile.localizedStrings.en;
+
+/**
  * Maps every localized key to the key itself, so assertions can target an exact, stable string
- * without depending on the shipped English wording (which is free to change).
+ * without depending on the shipped English wording, except for {@link SHIPPED_COULD_NOT_RUN_KEYS},
+ * which take the text from `contributions/localizedStrings.json`.
  *
  * The exceptions are the keys the picker reads: the shared `%projectSelector_*%` block (by
  * membership, see {@link isProjectSelectorSharedKey}) and
@@ -77,22 +92,10 @@ const PICKER_BOUND_CHECKS_SIDE_PANEL_KEYS: readonly LocalizeKey[] = [
 function stubLocalizedStrings(keys: readonly LocalizeKey[]): LanguageStrings {
   const strings: LanguageStrings = {};
   keys.forEach((key) => {
-    // The notice needs a real format string so its `{checkNames}` placeholder gets filled
-    if (key === '%webView_checksSidePanel_checksCouldNotRun_notice%') {
-      strings[key] = 'Couldn’t run: {checkNames}';
-      return;
-    }
-    // The per-check lines need real format strings so their `{checkName}` placeholder gets filled
-    if (key === '%webView_checksSidePanel_checkCouldNotRun_needsSetupInParatext9%') {
-      strings[key] = '{checkName} needs setup in Paratext 9:';
-      return;
-    }
-    if (key === '%webView_checksSidePanel_checkCouldNotRun_needsSetup%') {
-      strings[key] = '{checkName} needs setup.';
-      return;
-    }
-    if (key === '%webView_checksSidePanel_checkCouldNotRun_unexpectedError%') {
-      strings[key] = '{checkName}: An error occurred.';
+    // The notice and the per-check lines need the shipped format strings so their placeholders get
+    // filled, and so assertions check the wording users see
+    if (SHIPPED_COULD_NOT_RUN_KEYS.includes(key)) {
+      strings[key] = shippedEnglishStrings[key];
       return;
     }
     if (key === '%settings_errorMessages_viewError%') {
@@ -123,6 +126,8 @@ const LAST_USED_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_la
 const SHOW_DETAILS_LABEL = '%webView_checksSidePanel_checkCouldNotRun_showDetails%';
 const HIDE_DETAILS_LABEL = '%webView_checksSidePanel_checkCouldNotRun_hideDetails%';
 const VIEW_ERROR_LABEL = 'View error';
+// The sentence the shipped setup-in-Paratext-9 line carries and the plain setup line does not
+const SETTINGS_NOT_EDITABLE_HERE = "These settings can't be changed in Paratext 10 yet.";
 
 const JOB_STATUS_REPORT: CheckJobStatusReport = {
   jobId: '',
@@ -293,7 +298,7 @@ describe('checks that could not run', () => {
     );
 
     expect(screen.getByTestId('checks-could-not-run-notice')).toHaveTextContent(
-      'Couldn’t run: Quotations, registered-gone',
+      "Couldn't run: Quotations, registered-gone",
     );
     // The no-results line still shows alongside the notice
     expect(screen.getByText('%webView_find_noResultsFound%')).toBeInTheDocument();
@@ -314,7 +319,7 @@ describe('checks that could not run', () => {
     );
 
     expect(screen.getByTestId('checks-could-not-run-notice')).toHaveTextContent(
-      'Couldn’t run: registered-gone',
+      "Couldn't run: registered-gone",
     );
   });
 
@@ -354,7 +359,9 @@ describe('checks that could not run', () => {
 
     await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
 
-    const disclaimer = screen.getByText('Quotations needs setup in Paratext 9:');
+    const disclaimer = screen.getByText(
+      `Quotations needs setup. ${SETTINGS_NOT_EDITABLE_HERE} In Paratext 9:`,
+    );
     const message = screen.getByText('Quotes settings are invalid for project zzz6.');
     expect(disclaimer).toBeInTheDocument();
     // The message sits beneath the disclaimer, in the same block
@@ -386,7 +393,9 @@ describe('checks that could not run', () => {
 
     await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
 
-    expect(screen.getByText('QuotationTypes needs setup in Paratext 9:')).toBeInTheDocument();
+    expect(
+      screen.getByText(`QuotationTypes needs setup. ${SETTINGS_NOT_EDITABLE_HERE} In Paratext 9:`),
+    ).toBeInTheDocument();
     expect(screen.getByText('Not enabled')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: VIEW_ERROR_LABEL })).toBeNull();
   });
@@ -411,7 +420,7 @@ describe('checks that could not run', () => {
     await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
 
     expect(screen.getByText('References needs setup.')).toBeInTheDocument();
-    expect(screen.queryByText(/needs setup in Paratext 9/)).toBeNull();
+    expect(screen.queryByText(/These settings can't be changed in Paratext 10 yet/)).toBeNull();
     expect(screen.queryByText('Reference inventory is empty')).toBeNull();
 
     await user.click(screen.getByRole('button', { name: VIEW_ERROR_LABEL }));
@@ -584,7 +593,9 @@ describe('checks that could not run', () => {
 
     await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
 
-    expect(screen.getAllByText('Quotation needs setup in Paratext 9:')).toHaveLength(1);
+    expect(
+      screen.getAllByText(`Quotation needs setup. ${SETTINGS_NOT_EDITABLE_HERE} In Paratext 9:`),
+    ).toHaveLength(1);
     expect(screen.getByText('First failure')).toBeInTheDocument();
     expect(screen.getByText('Second failure')).toBeInTheDocument();
   });
@@ -659,7 +670,7 @@ describe('checks that could not run', () => {
     );
 
     expect(screen.getByTestId('checks-could-not-run-notice')).toHaveTextContent(
-      /^Couldn’t run: Quotation$/,
+      /^Couldn't run: Quotation$/,
     );
   });
 
