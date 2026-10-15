@@ -168,10 +168,11 @@ public class PersistedStringDictionarySettingTests
     }
 
     [Test]
-    public void FirstReadFails_SafeSaveSkipped_SavesMergedValueOnceStoredValueArrives()
+    public void FirstReadFails_SafeSaveSkipped_SavesMergedCopyOnceStoredValueArrives()
     {
         var setting = CreateSetting();
-        setting.Value["newKey"] = "added this session";
+        var heldValue = setting.Value;
+        heldValue["newKey"] = "added this session";
         setting.SafeSave(); // still unreadable, so deferred
 
         _settingsService.AddSettingValue(
@@ -188,5 +189,10 @@ public class PersistedStringDictionarySettingTests
         );
         var saved = (SerializableStringDictionary)_settingsService.GetSettingValue(Key)!;
         Assert.That(saved["storedKey"], Is.EqualTo("stored"));
+
+        // The dictionary a caller holds only changes on that caller's next access.
+        Assert.That(saved, Is.Not.SameAs(heldValue));
+        Assert.That(heldValue.ContainsKey("storedKey"), Is.False);
+        Assert.That(setting.Value["storedKey"], Is.EqualTo("stored"));
     }
 }

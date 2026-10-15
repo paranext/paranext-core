@@ -104,6 +104,7 @@ internal sealed class PersistedStringDictionarySetting
                 return;
             }
             SettingsService.SetSetting(_papiClient, _key, _value);
+            _isSaveDeferred = false;
         }
     }
 
@@ -133,32 +134,67 @@ internal sealed class PersistedStringDictionarySetting
                 continue;
             }
 
-            // The await may have resumed on the JSON-RPC dispatch thread, where the blocking
-            // SetSetting below would wait on a response that thread has to deliver.
-            await Task.Run(() => AcceptStoredValue(storedValue));
+            lock (_lock)
+                _unmergedStoredValue = storedValue;
+            // The await above may have resumed on the JSON-RPC dispatch thread, where the
+            // blocking SetSetting in SaveDeferredAsync would wait on a response that thread has to
+            // deliver.
+            await Task.Run(SaveDeferredAsync);
             return;
         }
     }
 
-    private void AcceptStoredValue(SerializableStringDictionary storedValue)
+    /// <summary>
+    /// Makes a save that was skipped before the stored value arrived, since the next access that
+    /// would otherwise make it may never come. It saves a merged copy rather than merging into
+    /// <see cref="_value"/>, so the dictionary callers hold is only changed on their own thread.
+    /// </summary>
+    private async Task SaveDeferredAsync()
     {
-        lock (_lock)
+        while (!_papiClient.DisconnectTask.IsCompleted)
         {
-            _unmergedStoredValue = storedValue;
-            // A skipped save would otherwise wait for the next access, which may never come, so
-            // merge and save now.
-            if (!_isSaveDeferred)
-                return;
-            MergeStoredValueLocked();
-            _isSaveDeferred = false;
-            try
+            lock (_lock)
             {
-                SettingsService.SetSetting(_papiClient, _key, _value);
+                if (!_isSaveDeferred)
+                    return;
+                if (TryCopyMergedValueLocked(out var mergedValue))
+                {
+                    _isSaveDeferred = false;
+                    try
+                    {
+                        SettingsService.SetSetting(_papiClient, _key, mergedValue);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Could not save setting {_key}: {ex}");
+                    }
+                    return;
+                }
             }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Could not save setting {_key}: {ex}");
-            }
+            await Task.Delay(_retryDelay);
+        }
+    }
+
+    /// <returns>
+    /// <see langword="false"/> when a caller changed <see cref="_value"/> while it was being
+    /// copied. The lock can't prevent that, since callers use the dictionary after the getter
+    /// releases it.
+    /// </returns>
+    private bool TryCopyMergedValueLocked(out SerializableStringDictionary mergedValue)
+    {
+        mergedValue = [];
+        try
+        {
+            foreach (var (key, value) in _unmergedStoredValue ?? [])
+                mergedValue[key] = value;
+            // Entries changed this session are newer than the stored ones, so they win.
+            foreach (var (key, value) in _value)
+                mergedValue[key] = value;
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
         }
     }
 
