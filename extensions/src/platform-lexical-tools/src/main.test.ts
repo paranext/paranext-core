@@ -10,6 +10,9 @@ vi.mock('./tailwind.css?inline', () => ({ default: 'mock-tailwind-css' }));
 // vi.hoisted to avoid a temporal-dead-zone reference.
 const mocks = vi.hoisted(() => {
   const registeredCommands = new Map<string, (...args: unknown[]) => unknown>();
+  // Set by registerWebViewProviderImpl so tests can call getWebView directly instead of only
+  // exercising it indirectly through a command.
+  let capturedWebViewProvider: { getWebView: (...args: unknown[]) => unknown } | undefined;
   // Minimal stand-in base class so `class X extends DataProviderEngine` in main.ts's module graph
   // can be constructed; none of the tests below exercise its behavior.
   class PapiBackendStubBase {}
@@ -19,12 +22,21 @@ const mocks = vi.hoisted(() => {
     registeredCommands.set(name, handler);
     return async () => true;
   }
+  async function registerWebViewProviderImpl(_type: string, provider: unknown) {
+    // `provider` is whatever main.ts registers; narrowing it to the one method these tests call.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    capturedWebViewProvider = provider as { getWebView: (...args: unknown[]) => unknown };
+    return async () => true;
+  }
   return {
     registeredCommands,
+    getCapturedWebViewProvider: () => capturedWebViewProvider,
     openWebView: vi.fn(async () => 'wv-1'),
     getOpenWebViewDefinition: vi.fn(async () => undefined),
     registerCommand: vi.fn(registerCommandImpl),
     registerCommandImpl,
+    registerWebViewProvider: vi.fn(registerWebViewProviderImpl),
+    registerWebViewProviderImpl,
     PapiBackendStubBase,
   };
 });
@@ -33,7 +45,7 @@ vi.mock('@papi/backend', () => ({
   default: {
     commands: { registerCommand: mocks.registerCommand },
     webViewProviders: {
-      registerWebViewProvider: vi.fn(async () => async () => true),
+      registerWebViewProvider: mocks.registerWebViewProvider,
     },
     webViews: {
       openWebView: mocks.openWebView,
@@ -60,8 +72,9 @@ vi.mock('@papi/backend', () => ({
 // mocks are applied to the module under test.
 /* eslint-disable import/first */
 import { UnsubscriberAsyncList } from 'platform-bible-utils';
-import { logger } from '@papi/backend';
+import papi, { logger } from '@papi/backend';
 import { activate } from './main';
+import { DICTIONARY_TITLE_KEY } from './utils/dictionary.utils';
 /* eslint-enable import/first */
 
 function makeContext() {
@@ -82,6 +95,7 @@ describe('platform lexical tools main.ts activation', () => {
     // resetAllMocks() also strips this mock's own base implementation; restore it since every
     // test below depends on activate() populating registeredCommands.
     mocks.registerCommand.mockImplementation(mocks.registerCommandImpl);
+    mocks.registerWebViewProvider.mockImplementation(mocks.registerWebViewProviderImpl);
   });
 
   it('showDictionaryPanel raises an open Dictionary tab without reloading it', async () => {
@@ -156,5 +170,49 @@ describe('platform lexical tools main.ts activation', () => {
       { type: 'tab' },
       { projectId: undefined, editorWebViewId: undefined, editorScrollGroupId: undefined },
     );
+  });
+
+  describe('getWebView', () => {
+    const savedWebView = { id: 'dict-1', webViewType: 'platformLexicalTools.dictionary' };
+    const getWebViewOptions = {
+      projectId: undefined,
+      editorScrollGroupId: undefined,
+      editorWebViewId: undefined,
+    };
+
+    async function getCapturedWebView() {
+      await activate(makeContext());
+      const provider = mocks.getCapturedWebViewProvider();
+      expect(provider).toBeDefined();
+      return provider?.getWebView(savedWebView, getWebViewOptions);
+    }
+
+    it('falls back to Simple mode when reading the interface mode setting rejects', async () => {
+      vi.mocked(papi.settings.get).mockRejectedValueOnce(new Error('settings service unavailable'));
+      vi.mocked(papi.localization.getLocalizedString).mockResolvedValueOnce(
+        'Dictionary: SDBH/SDBG',
+      );
+
+      // getWebView's real return type is a large union; narrowing to the one field this test checks.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const webView = (await getCapturedWebView()) as { shouldShowToolbar: boolean };
+
+      expect(webView.shouldShowToolbar).toBe(false);
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('interface mode'));
+    });
+
+    it('falls back to the raw key as the tooltip when resolving the localized string rejects', async () => {
+      vi.mocked(papi.settings.get).mockResolvedValueOnce('power');
+      vi.mocked(papi.localization.getLocalizedString).mockRejectedValueOnce(
+        new Error('localization service unavailable'),
+      );
+
+      // getWebView's real return type is a large union; narrowing to the one field this test checks.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const webView = (await getCapturedWebView()) as { tooltip: string };
+
+      expect(webView.tooltip).toBe(DICTIONARY_TITLE_KEY);
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('tooltip'));
+    });
   });
 });

@@ -101,17 +101,33 @@ const dictionaryWebViewProvider: IWebViewProvider = {
 
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
-    // Re-read every call so mode changes are picked up at open/replace/restore time, matching the
-    // other fixed Column 3 panels (e.g. comment-list-panel-web-view.factory.ts).
-    const interfaceMode = await papi.settings.get('platform.interfaceMode');
-
     const title = DICTIONARY_TITLE_KEY;
-    // `PlatformTabTitle` resolves a `%...%` title itself (live, on locale change), but it renders
-    // `tooltip` verbatim with no such resolution, so the tooltip has to arrive already localized.
-    // This is only the tab's INITIAL tooltip, for a fresh/reloaded tab, since `getWebView` doesn't
-    // re-run just because a setting changed; dictionary.web-view.tsx's own effect keeps it current
-    // on a subsequent interface-language change.
-    const tooltip = await papi.localization.getLocalizedString({ localizeKey: title });
+
+    // Run concurrently, and tolerate either one rejecting: an uncaught rejection here would throw
+    // `getWebView` itself, leaving the tab stuck on the `%tab_title_unknown%` placeholder
+    // (non-closable in Simple mode, since this is the pinned Column 3 tab) with nothing to recover
+    // it short of a restart. Degrading to a sane default is safer than that.
+    const [interfaceMode, tooltip] = await Promise.all([
+      // Re-read every call so mode changes are picked up at open/replace/restore time, matching the
+      // other fixed Column 3 panels (e.g. comment-list-panel-web-view.factory.ts).
+      papi.settings.get('platform.interfaceMode').catch((e): 'simple' => {
+        logger.warn(
+          `Could not read the interface mode for the Dictionary tab; defaulting to Simple mode: ${getErrorMessage(e)}`,
+        );
+        return 'simple';
+      }),
+      // `PlatformTabTitle` resolves a `%...%` title itself (live, on locale change), but it renders
+      // `tooltip` verbatim with no such resolution, so the tooltip has to arrive already localized.
+      // This is only the tab's INITIAL tooltip, for a fresh/reloaded tab, since `getWebView` doesn't
+      // re-run just because a setting changed; dictionary.web-view.tsx's own effect keeps it current
+      // on a subsequent interface-language change.
+      papi.localization.getLocalizedString({ localizeKey: title }).catch((e): string => {
+        logger.warn(
+          `Could not resolve the Dictionary tooltip; falling back to the raw key: ${getErrorMessage(e)}`,
+        );
+        return title;
+      }),
+    ]);
 
     return {
       ...savedWebView,
