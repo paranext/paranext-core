@@ -7,12 +7,19 @@ import { ErrorDump } from './error-dump.component';
 
 const COPY_LABEL = 'Copy error details';
 
+const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+
 function stubClipboardWriteText(writeText: (text: string) => Promise<void>) {
   Object.defineProperty(navigator, 'clipboard', {
     value: { writeText },
     configurable: true,
   });
 }
+
+afterEach(() => {
+  if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard);
+  else Reflect.deleteProperty(navigator, 'clipboard');
+});
 
 describe('ErrorDump copy button', () => {
   it('has the localized accessible name', () => {
@@ -44,32 +51,26 @@ describe('ErrorDump copy button', () => {
     expect(writeText).toHaveBeenCalledWith('Something broke');
   });
 
-  it('does not notify, and does not leave a rejection unhandled, when the clipboard rejects', async () => {
+  // An unhandled rejection from the copy would fail the run through Vitest's own reporting
+  it('does not notify when the clipboard rejects', async () => {
     const writeText = vi.fn().mockRejectedValue(new Error('denied'));
     stubClipboardWriteText(writeText);
     const handleCopyNotify = vi.fn();
-    const unhandled = vi.fn();
-    process.on('unhandledRejection', unhandled);
-    try {
-      render(
-        <ErrorDump
-          errorDetails="Something broke"
-          handleCopyNotify={handleCopyNotify}
-          localizedStrings={{ '%webView_error_dump_copy_button%': COPY_LABEL }}
-        />,
-      );
+    render(
+      <ErrorDump
+        errorDetails="Something broke"
+        handleCopyNotify={handleCopyNotify}
+        localizedStrings={{ '%webView_error_dump_copy_button%': COPY_LABEL }}
+      />,
+    );
 
-      fireEvent.click(screen.getByRole('button', { name: COPY_LABEL }));
+    fireEvent.click(screen.getByRole('button', { name: COPY_LABEL }));
 
-      await waitFor(() => expect(writeText).toHaveBeenCalledWith('Something broke'));
-      // Let any pending rejection handling settle before checking.
-      await new Promise((resolve) => {
-        setTimeout(resolve, 20);
-      });
-      expect(handleCopyNotify).not.toHaveBeenCalled();
-      expect(unhandled).not.toHaveBeenCalled();
-    } finally {
-      process.off('unhandledRejection', unhandled);
-    }
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('Something broke'));
+    // One macrotask lets the rejected write's handling finish before the check
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(handleCopyNotify).not.toHaveBeenCalled();
   });
 });
