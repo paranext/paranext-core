@@ -682,6 +682,7 @@
   "%userProfile_header_notRegistered%": "Not registered",
   "%userProfile_interfaceMode_power_description%": "Full Paratext interface with all panels and tools",
   "%userProfile_interfaceMode_power_label%": "Power mode",
+  "%userProfile_interfaceMode_power_previewBadge%": "Preview",
   "%userProfile_interfaceMode_simple_description%": "Streamlined interface for focused translation work",
   "%userProfile_interfaceMode_simple_label%": "Simple mode",
   "%userProfile_language%": "Language",

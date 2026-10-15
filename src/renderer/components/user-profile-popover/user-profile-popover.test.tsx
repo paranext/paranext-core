@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { newPlatformError, type PlatformError } from 'platform-bible-utils';
@@ -96,6 +96,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%userProfile_interfaceMode_simple_description%': 'Fewer panels',
       '%userProfile_interfaceMode_power_label%': 'Advanced UI',
       '%userProfile_interfaceMode_power_description%': 'All panels',
+      '%userProfile_interfaceMode_power_previewBadge%': 'Preview badge',
       '%userProfile_profileAndRegistration%': 'Profile and registration row',
       '%userProfile_networkSettings_2%': 'Internet and connectivity row',
       '%userProfile_language%': 'UI language',
@@ -287,6 +288,33 @@ describe('UserProfilePopover interface mode', () => {
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     fireEvent.click(screen.getByTestId('user-profile-interface-mode-power'));
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
+  });
+
+  test('marks the Power option, and only the Power option, with the localized Preview badge', () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    const powerOption = screen.getByTestId('user-profile-interface-mode-power');
+    expect(
+      within(powerOption).getByTestId('user-profile-interface-mode-power-preview-badge'),
+    ).toHaveTextContent('Preview badge');
+    // Screen-reader users get the preview status with the option itself, not as a separate stop.
+    expect(powerOption).toHaveAccessibleName(/Preview badge/);
+    expect(
+      within(screen.getByTestId('user-profile-interface-mode-simple')).queryByText('Preview badge'),
+    ).not.toBeInTheDocument();
+  });
+
+  test('keeps the Preview badge on the Power option while Power mode is selected', () => {
+    setMockSetting('interfaceMode', 'power');
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    expect(
+      within(screen.getByTestId('user-profile-interface-mode-power')).getByTestId(
+        'user-profile-interface-mode-power-preview-badge',
+      ),
+    ).toHaveTextContent('Preview badge');
   });
 });
 

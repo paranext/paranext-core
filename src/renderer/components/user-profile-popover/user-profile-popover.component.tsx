@@ -1,4 +1,5 @@
 import {
+  Badge,
   Button,
   cn,
   Popover,
@@ -56,6 +57,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_interfaceMode_simple_description%',
   '%userProfile_interfaceMode_power_label%',
   '%userProfile_interfaceMode_power_description%',
+  '%userProfile_interfaceMode_power_previewBadge%',
   '%userProfile_profileAndRegistration%',
   '%userProfile_registrationNeeded%',
   '%userProfile_networkSettings_2%',
@@ -132,6 +134,9 @@ function ReminderDot({ testId, className }: { testId: string; className?: string
  * email), interface mode, registration / network settings shortcuts, language, and appearance
  * (theme) controls. Replaces the previous standalone theme-toggle, internet-settings, and
  * Paratext-registration buttons in the toolbar.
+ *
+ * The Power option carries a "Preview" badge: Power mode is shipped as a preview, so users should
+ * expect missing features rather than read the gaps as bugs.
  *
  * When the user's Paratext registration is missing or invalid, an unobtrusive reminder dot appears
  * on the toolbar trigger and on the "Profile & registration" row. The dot is never the only signal:
@@ -438,13 +443,22 @@ export function UserProfilePopover() {
                 'tw:border-2 tw:border-primary tw:bg-accent tw:text-accent-foreground tw:shadow-sm',
             )}
           >
-            <span
-              className={cn(
-                'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
-                safeInterfaceMode === 'power' && 'tw:text-accent-foreground',
-              )}
-            >
-              {localizedStrings['%userProfile_interfaceMode_power_label%']}
+            <span className="user-profile-popover-label-row tw:flex tw:flex-wrap">
+              <span
+                className={cn(
+                  'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
+                  safeInterfaceMode === 'power' && 'tw:text-accent-foreground',
+                )}
+              >
+                {localizedStrings['%userProfile_interfaceMode_power_label%']}
+              </span>
+              <Badge
+                variant="outline"
+                data-testid="user-profile-interface-mode-power-preview-badge"
+                className="user-profile-popover-text-3xs tw:h-4 tw:px-1.5"
+              >
+                {localizedStrings['%userProfile_interfaceMode_power_previewBadge%']}
+              </Badge>
             </span>
             <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
               {localizedStrings['%userProfile_interfaceMode_power_description%']}
