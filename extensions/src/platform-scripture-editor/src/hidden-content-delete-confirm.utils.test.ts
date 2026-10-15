@@ -1,5 +1,4 @@
 import type { HiddenContentDeleteRequest } from '@eten-tech-foundation/platform-editor';
-import { LanguageStrings } from 'platform-bible-utils';
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildHiddenContentDeleteConfirm,
@@ -8,10 +7,11 @@ import {
   HiddenContentDeleteConfirmOptions,
 } from './hidden-content-delete-confirm.utils';
 
-const localizedStrings: LanguageStrings = {
-  '%webView_platformScriptureEditor_hiddenContentDelete_prompt%':
-    'This would delete content that this view cannot display: {markers}.',
-};
+vi.mock('@papi/frontend', () => ({
+  logger: { warn: vi.fn() },
+}));
+
+const promptTemplate = 'This would delete content that this view cannot display: {markers}.';
 
 describe('describeHiddenContent', () => {
   it('names constructs by marker, once each, falling back to their type', () => {
@@ -31,7 +31,7 @@ describe('buildHiddenContentDeleteConfirm', () => {
     expect(
       buildHiddenContentDeleteConfirm(
         { items: [{ tag: 'figure', marker: 'fig' }], action: 'deleteBackward', canSkip: true },
-        localizedStrings,
+        promptTemplate,
       ),
     ).toEqual({
       title: '%webView_platformScriptureEditor_hiddenContentDelete_title%',
@@ -46,7 +46,7 @@ describe('buildHiddenContentDeleteConfirm', () => {
   it('offers to skip over the content when the editor can skip it', () => {
     const { cancelLabel } = buildHiddenContentDeleteConfirm(
       { items: [{ tag: 'sidebar', marker: 'esb' }], action: 'deleteForward', canSkip: true },
-      localizedStrings,
+      promptTemplate,
     );
     expect(cancelLabel).toBe('%webView_platformScriptureEditor_hiddenContentDelete_skip%');
   });
@@ -55,7 +55,7 @@ describe('buildHiddenContentDeleteConfirm', () => {
     // A word or line delete that reaches hidden content further along: "keep" cancels it.
     const { cancelLabel } = buildHiddenContentDeleteConfirm(
       { items: [{ tag: 'figure', marker: 'fig' }], action: 'deleteBackward', canSkip: false },
-      localizedStrings,
+      promptTemplate,
     );
     expect(cancelLabel).toBe('%webView_platformScriptureEditor_hiddenContentDelete_keep%');
   });
@@ -63,7 +63,7 @@ describe('buildHiddenContentDeleteConfirm', () => {
   it('offers to keep the content for an edit over a selection', () => {
     const { cancelLabel } = buildHiddenContentDeleteConfirm(
       { items: [{ tag: 'figure', marker: 'fig' }], action: 'replaceSelection', canSkip: false },
-      localizedStrings,
+      promptTemplate,
     );
     expect(cancelLabel).toBe('%webView_platformScriptureEditor_hiddenContentDelete_keep%');
   });
@@ -75,25 +75,62 @@ describe('createHiddenContentDeleteHandler', () => {
     action: 'deleteBackward',
     canSkip: true,
   };
+  const localize = async () => promptTemplate;
 
   it('deletes only when the user confirms', async () => {
     const confirm = vi.fn<(options: HiddenContentDeleteConfirmOptions) => Promise<boolean>>(
       async () => true,
     );
-    const handler = createHiddenContentDeleteHandler(localizedStrings, confirm);
+    const handler = createHiddenContentDeleteHandler(localize, confirm);
 
     await expect(handler(request)).resolves.toBe('delete');
     expect(confirm).toHaveBeenCalledWith(
-      buildHiddenContentDeleteConfirm(request, localizedStrings),
+      expect.objectContaining({
+        prompt: 'This would delete content that this view cannot display: \\fig.',
+        okLabel: '%webView_platformScriptureEditor_hiddenContentDelete_delete%',
+        isDestructive: true,
+        isModal: true,
+      }),
+    );
+  });
+
+  it('looks up the prompt each time it asks', async () => {
+    const localizeSpy = vi.fn(localize);
+    const handler = createHiddenContentDeleteHandler(localizeSpy, async () => false);
+
+    await handler(request);
+    await handler(request);
+
+    expect(localizeSpy).toHaveBeenCalledTimes(2);
+    expect(localizeSpy).toHaveBeenCalledWith(
+      '%webView_platformScriptureEditor_hiddenContentDelete_prompt%',
     );
   });
 
   it('keeps the content when the user cancels or dismisses the dialog', async () => {
     await expect(
-      createHiddenContentDeleteHandler(localizedStrings, async () => false)(request),
+      createHiddenContentDeleteHandler(localize, async () => false)(request),
     ).resolves.toBe('keep');
     await expect(
-      createHiddenContentDeleteHandler(localizedStrings, async () => undefined)(request),
+      createHiddenContentDeleteHandler(localize, async () => undefined)(request),
     ).resolves.toBe('keep');
+  });
+
+  it('keeps the content, without asking, when the prompt cannot be looked up', async () => {
+    const confirm = vi.fn(async () => true);
+    const handler = createHiddenContentDeleteHandler(async () => {
+      throw new Error('localization service unavailable');
+    }, confirm);
+
+    await expect(handler(request)).resolves.toBe('keep');
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it('keeps the content when the dialog fails', async () => {
+    const handler = createHiddenContentDeleteHandler(localize, async () => {
+      throw new Error('dialog closed');
+    });
+
+    await expect(handler(request)).resolves.toBe('keep');
   });
 });

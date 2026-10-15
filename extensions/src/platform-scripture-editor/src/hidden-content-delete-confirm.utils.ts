@@ -3,7 +3,8 @@ import type {
   HiddenContentDeleteRequest,
   HiddenContentItem,
 } from '@eten-tech-foundation/platform-editor';
-import { formatReplacementString, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { logger } from '@papi/frontend';
+import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 
 const TITLE_KEY: LocalizeKey = '%webView_platformScriptureEditor_hiddenContentDelete_title%';
 const PROMPT_KEY: LocalizeKey = '%webView_platformScriptureEditor_hiddenContentDelete_prompt%';
@@ -11,7 +12,11 @@ const DELETE_KEY: LocalizeKey = '%webView_platformScriptureEditor_hiddenContentD
 const SKIP_KEY: LocalizeKey = '%webView_platformScriptureEditor_hiddenContentDelete_skip%';
 const KEEP_KEY: LocalizeKey = '%webView_platformScriptureEditor_hiddenContentDelete_keep%';
 
-/** Localization keys the hidden-content confirmation reads; the web view preloads them. */
+/**
+ * Localization keys the hidden-content confirmation shows. The dialog service localizes the title
+ * and button keys itself; the handler looks up the prompt when it asks, since it fills in
+ * `{markers}`.
+ */
 export const HIDDEN_CONTENT_DELETE_STRING_KEYS = Object.freeze([
   TITLE_KEY,
   PROMPT_KEY,
@@ -31,10 +36,6 @@ export type HiddenContentDeleteConfirmOptions = {
   isModal: true;
 };
 
-/** Shown if the prompt's localized string has not loaded yet. */
-const PROMPT_FALLBACK =
-  'This would delete content that this view cannot display ({markers}). It is hidden here, but it is part of your text.';
-
 /**
  * Names hidden constructs the way the user would meet them in USFM: by marker (`\fig`, `\esb`), or
  * by USJ type when a construct has no marker of its own. Each name appears once.
@@ -51,11 +52,11 @@ export function describeHiddenContent(items: HiddenContentItem[]): string {
  */
 export function buildHiddenContentDeleteConfirm(
   request: HiddenContentDeleteRequest,
-  localizedStrings: LanguageStrings,
+  promptTemplate: string,
 ): HiddenContentDeleteConfirmOptions {
   return {
     title: TITLE_KEY,
-    prompt: formatReplacementString(localizedStrings[PROMPT_KEY] ?? PROMPT_FALLBACK, {
+    prompt: formatReplacementString(promptTemplate, {
       markers: describeHiddenContent(request.items),
     }),
     okLabel: DELETE_KEY,
@@ -67,17 +68,27 @@ export function buildHiddenContentDeleteConfirm(
 
 /**
  * The editor's `onHiddenContentDelete`: asks with `confirm` and deletes only on an explicit yes.
- * Cancelling, dismissing, or a failed dialog all keep the content.
+ * Cancelling, dismissing, or a failed lookup or dialog all keep the content.
  *
- * @param localizedStrings - Resolved strings for {@link HIDDEN_CONTENT_DELETE_STRING_KEYS}.
+ * @param localize - Looks up a localized string in the user's current language, e.g.
+ *   `papi.localization.getLocalizedString({ localizeKey })`. Called each time it asks, so the
+ *   prompt is in the same language the dialog service gives the title and buttons.
  * @param confirm - Shows the confirmation, e.g. `papi.dialogs.showDialog('platform.confirm', …)`.
  */
 export function createHiddenContentDeleteHandler(
-  localizedStrings: LanguageStrings,
+  localize: (localizeKey: LocalizeKey) => Promise<string>,
   confirm: (options: HiddenContentDeleteConfirmOptions) => Promise<boolean | undefined>,
 ): HiddenContentDeleteHandler {
   return async (request) => {
-    const isConfirmed = await confirm(buildHiddenContentDeleteConfirm(request, localizedStrings));
-    return isConfirmed === true ? 'delete' : 'keep';
+    try {
+      const promptTemplate = await localize(PROMPT_KEY);
+      const isConfirmed = await confirm(buildHiddenContentDeleteConfirm(request, promptTemplate));
+      return isConfirmed === true ? 'delete' : 'keep';
+    } catch (error) {
+      logger.warn(
+        `Kept hidden content: could not ask before deleting it: ${getErrorMessage(error)}`,
+      );
+      return 'keep';
+    }
   };
 }

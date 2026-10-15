@@ -445,8 +445,8 @@ describe.each([...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS])(
   },
 );
 
-// The confirmation asked before an edit removes content the view does not show (PT-4703): its
-// title, prompt, and buttons.
+// The confirmation asked before an edit removes content the view does not show: its title, prompt,
+// and buttons.
 describe.each([...HIDDEN_CONTENT_DELETE_STRING_KEYS])('hidden content delete label %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();
@@ -459,6 +459,14 @@ describe.each([...HIDDEN_CONTENT_DELETE_STRING_KEYS])('hidden content delete lab
   it('Spanish label differs from English', () => {
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
+});
+
+// The prompt names the hidden content through `{markers}`; a translation that drops it would stop
+// saying what is about to be deleted.
+it.each(['en', 'es'] as const)('hidden content delete prompt keeps {markers} in %s', (locale) => {
+  expect(
+    localizedStrings[locale]['%webView_platformScriptureEditor_hiddenContentDelete_prompt%'],
+  ).toContain('{markers}');
 });
 
 // Markers whose Khmer label is a legitimate exception to the differs-from-English check: `h1`,

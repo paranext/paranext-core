@@ -239,10 +239,7 @@ import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
 } from './sync-blocked-banner.component';
-import {
-  createHiddenContentDeleteHandler,
-  HIDDEN_CONTENT_DELETE_STRING_KEYS,
-} from './hidden-content-delete-confirm.utils';
+import { createHiddenContentDeleteHandler } from './hidden-content-delete-confirm.utils';
 
 /**
  * Pass-through wrapper for the editor inside {@link InPortal}. `react-reverse-portal`'s `InPortal`
@@ -273,6 +270,12 @@ const PDP_SAVE_DEBOUNCE_MS = 700;
 
 const FOOTNOTES_ZOOM_AREA_LABEL_KEY: LocalizeKey = '%webView_footnoteList_header%';
 
+/** Asks before an edit removes a figure, sidebar, or other content the view hides. */
+const handleHiddenContentDelete = createHiddenContentDeleteHandler(
+  (localizeKey) => papi.localization.getLocalizedString({ localizeKey }),
+  (confirmOptions) => papi.dialogs.showDialog('platform.confirm', confirmOptions),
+);
+
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...COMMENT_EDITOR_STRING_KEYS,
   ...FOOTNOTE_EDITOR_STRING_KEYS,
@@ -283,7 +286,6 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
   ...TEAM_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
-  ...HIDDEN_CONTENT_DELETE_STRING_KEYS,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
   // gets its remove row localized through the `localizedStrings` this web view already resolves.
   ...CHARACTER_MARKER_MENU_STRING_KEYS,
@@ -1954,15 +1956,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [projectId, localizedStrings, isReadOnlyEffective, endPaneNoteEdit],
   );
 
-  // Asks before an edit removes a figure, sidebar, or other content the view hides (PT-4703).
-  const handleHiddenContentDelete = useMemo(
-    () =>
-      createHiddenContentDeleteHandler(localizedStrings, (confirmOptions) =>
-        papi.dialogs.showDialog('platform.confirm', confirmOptions),
-      ),
-    [localizedStrings],
-  );
-
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnlyEffective,
@@ -2001,7 +1994,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [
       isReadOnlyEffective,
       structureProtectionMode,
-      handleHiddenContentDelete,
       canUserCreateComments,
       isSyncBlocked,
       textDirectionEffective,
