@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Localize key: `%userProfile_interfaceMode_power_previewBadge%`. en: `"Preview"`, es: `"Vista previa"`.
+- Localize key: `%userProfile_interfaceMode_power_previewBadge%`. en: `"Preview"`, es: `"Preliminar"`.
 - Never edit an existing localize key or value (Localization Guide).
 - `Badge` `variant="outline"`, `className="user-profile-popover-text-3xs tw:h-4 tw:px-1.5"`, `data-testid="user-profile-interface-mode-power-preview-badge"`.
 - Wrapper row classes: `tw:flex tw:flex-wrap tw:items-center tw:gap-1.5`.
@@ -22,7 +22,7 @@
 
 ## Review Focus
 
-1. **A long translation in a narrow card.** Spanish "Modo avanzado" + "Vista previa" nearly fills the card. Expect the badge to wrap below the label, not overflow or get clipped. Covered by the Spanish screenshot in Task 2.
+1. **A long translation in a narrow card.** Spanish "Modo avanzado" + "Preliminar" nearly fills the card. Expect the badge to wrap below the label, not overflow or get clipped. Covered by the Spanish screenshot in Task 2.
 2. **The selected Power card.** It has a `bg-accent` background and a 2px primary border. Expect the outline badge to stay readable on it in both themes. Covered by the Power × light/dark screenshots in Task 2.
 3. **Screen readers.** The badge text joins the Power toggle's accessible name. Expect "Preview" to be announced with the Power option. Covered by the accessible-name assertion in Task 1.
 4. **Wrong option.** Expect the badge on Power only, never on Simple. Covered by the "Simple has no badge" assertion in Task 1, which is the reject side of the placement test.
@@ -107,7 +107,7 @@ Expected: the two new tests FAIL with `Unable to find an element by: [data-testi
 `assets/localization/es.json`, directly after the `"%userProfile_interfaceMode_power_label%": "Modo avanzado",` line:
 
 ```json
-  "%userProfile_interfaceMode_power_previewBadge%": "Vista previa",
+  "%userProfile_interfaceMode_power_previewBadge%": "Preliminar",
 ```
 
 - [ ] **Step 5: Render the badge**
@@ -201,7 +201,7 @@ Expected in all four: an outlined pill reading "Preview" sits right after "Power
 - [ ] **Step 3: Screenshot Spanish**
 
 Switch the interface language to Español from the popover's language pills (accept the restart prompt), open the popover in Power mode, and screenshot it.
-Expected: "Vista previa" either fits after "Modo avanzado" or wraps onto its own line under it. It must not overflow the card or get clipped. Switch the language back to English afterwards.
+Expected: "Preliminar" either fits after "Modo avanzado" or wraps onto its own line under it. It must not overflow the card or get clipped. Switch the language back to English afterwards.
 
 - [ ] **Step 4: If the badge renders unstyled**
 
