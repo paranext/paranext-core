@@ -304,8 +304,9 @@ export type UsjFlatTextChapterLocation = {
  * JSON path to a {@link MarkerObject}, {@link Usj}, or text content string in the current USJ
  * document.
  *
- * Eight clauses cover every shape the editors render (table cell → char → nested char → text is
- * seven). Deeper paths are valid at runtime; the type is a bound, not a rule.
+ * Eight clauses cover the shapes the editors render in practice (table → row → cell → note → char →
+ * nested char → text is seven). Deeper paths are valid at runtime; the type is a bound, not a
+ * rule.
  */
 export type ContentJsonPath =
   | ''
@@ -329,7 +330,8 @@ export type ContentJsonPath =
  * type-checks, and the per-depth members document the shapes this type is expected to carry rather
  * than enforcing a bound. (`$['property']`, a property directly on the document root, and the empty
  * string `''` are the two members the catch-all does not cover, because neither starts `$.`.) Eight
- * depths cover every shape the editors render (table cell → char → nested char → text is seven).
+ * depths cover the shapes the editors render in practice (table → row → cell → note → char → nested
+ * char → text is seven).
  */
 export type PropertyJsonPath =
   | ''
@@ -391,9 +393,14 @@ export type PropertyJsonPath =
  * - {@link UsjClosingAttributeMarkerLocation} - attribute markers are just properties in JSON, plus
  *   they are in the same situation as {@link UsjClosingMarkerLocation} as detailed above.
  *
- * Every USFM position has exactly one canonical location, and producers should emit only that one.
- * Following are clarifications on some tricky positions. In each example, the USFM is the whole
- * document and `|` marks the position.
+ * Every USFM position has exactly one canonical location, which is the one `UsjReaderWriter`
+ * produces. One alias is allowed: a position at the end of a text string that is immediately
+ * followed by a marker or a closing marker may also be spelled as that string's `offset` at its
+ * length (the Scripture editor reports a caret held at the end of the text this way). Because of
+ * that alias, compare two locations by converting them with
+ * `usjDocumentLocationToUsfmVerseRefVerseLocation`, never by their shape. Following are
+ * clarifications on some tricky positions. In each example, the USFM is the whole document and `|`
+ * marks the position.
  *
  * - A position immediately in front of a marker. It is that marker's {@link UsjMarkerLocation}, at its
  *   backslash, even where it also follows the end of other content.
@@ -408,6 +415,13 @@ export type PropertyJsonPath =
  *       |\b
  *
  *   `{ jsonPath: "$.content[1]" }`
+ * - The end of a character marker's or note's content. It is in front of the closing marker, so it is
+ *   the closing marker's `closingMarkerOffset` 0. The text's `offset` at its length is the allowed
+ *   alias.
+ *
+ *       \p \nd LORD|\nd* said
+ *
+ *   `{ jsonPath: "$.content[0].content[0]", closingMarkerOffset: 0 }`
  * - The end of a line. The newline that ends a line has no location of its own, so it is expressed on
  *   the line's last token as an offset at that token's length: a text `offset` at the string's
  *   length, or a `closingMarkerOffset` at the closing marker's length.
@@ -421,6 +435,23 @@ export type PropertyJsonPath =
  *       \p God said
  *
  *   `{ jsonPath: "$.content[0].content[1]", closingMarkerOffset: 3 }`
+ *
+ *   A line that ends in a verse or chapter number ends on the number's `propertyOffset` at the
+ *   number's length.
+ *
+ *       \p
+ *       \v 1|
+ *       \p God said
+ *
+ *   `{ jsonPath: "$.content[0].content[0]['number']", propertyOffset: 1 }`
+ *
+ *   An `optbreak` (`//`) has no closing marker and no location inside it, so every position from its
+ *   start to the end of its line is the optbreak's own marker location.
+ *
+ *       \p God said //|
+ *       \p and it was so
+ *
+ *   `{ jsonPath: "$.content[0].content[1]" }`
  * - Inside a paragraph that has no content. The only thing after its marker name is the newline, so
  *   the position is the marker name's `propertyOffset` at the name's length.
  *
