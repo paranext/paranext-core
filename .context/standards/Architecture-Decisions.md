@@ -7362,23 +7362,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   that keeps the toast still binds to a `SyncProjects` that predates the parameter. Today:
   `main/startup-tasks.ts` passes `true`; `syncOnProjectSwitch` passes `true` only for a known
   `'simple'` and omits it otherwise; the first-run consent step omits it (the wizard covers the
-  indicator). An implementation must not honor the flag without also raising the sync-activity
-  signal for the run.
+  indicator). In the Send/Receive extension, `syncOpenProjects` passes `true` only for a known
+  `'simple'` and omits it otherwise; the auto-sync engine and `runScheduledSessionSync` omit it,
+  since they run only in Power mode. An implementation must not honor the flag without also raising
+  the sync-activity signal for the run.
 - **Alternatives:** **Cache the mode in the dotnet process** — rejected for the reasons above. **A
   core `protected virtual` hook the patch overrides** (`ShouldShowPersistentSyncToast`) — removed:
   nothing overrode it, and a per-call flag needs no per-run state on the class. **Reuse
   `suppressNotification` on `syncProjects`** — rejected: it would also hide the failure toasts.
   **Treat an unknown mode as Simple** (as `useIsPowerMode()` does) — rejected for this decision:
   the toolbar indicator falls back to the last known mode, not to Simple, so it can be absent.
-- **Consequences:** Core's `syncProjects` declaration leads the upstream copy in
-  `paratext-bible-internal-extensions`, which must add the parameter before its callers can pass it.
-  This change and the patch that implements the flag must merge together: Studio builds core `main`
-  unpinned, and a one-parameter `SyncProjects` rejects the two-argument Simple-mode calls. Accepted
-  costs: a
-  mode change mid-sync is not reconciled (Simple→Power leaves that sync with no persistent surface;
-  Power→Simple shows both); the outgoing `sendReceiveProjects` half of a project switch still shows
-  both in Simple mode; the Send/Receive extension's `syncOpenProjects` and auto-sync engine still
-  show both in Simple mode until they pass the flag; the first-run consent sync keeps the toast.
+- **Consequences:** This change and the patch that implements the flag must merge together: Studio
+  builds core `main` unpinned, and a one-parameter `SyncProjects` rejects the two-argument
+  Simple-mode calls. Accepted costs: a mode change mid-sync is not reconciled (Simple→Power leaves
+  that sync with no persistent surface; Power→Simple shows both); the outgoing `sendReceiveProjects`
+  half of a project switch still shows both in Simple mode; the first-run consent sync keeps the
+  toast.
 - **Source:** PT-4398; paranext/paratext-10-studio#177 and its review.
 
 ## adr-tab-bar-drop-zone-app-side-target: The whole tab bar accepts tab drops through an app-registered rc-dock drop target, not a patched or stretched rc-dock tab

@@ -8,8 +8,6 @@
 // When the Send/Receive contract changes, re-sync the parts declared here from that file.
 // NOTE: Preserve any types that exist here but not in the upstream file (structural refinements
 // added in core before the upstream adopts them). Do not replace the module block wholesale.
-// `syncProjects`' `suppressProgressNotification` parameter is one such addition: declared here
-// first, ahead of the upstream file.
 // Likewise for declarations that exist in BOTH copies: a re-sync must not downgrade a richer
 // declaration here (extra doc detail or type refinements) to a poorer upstream one — merge the
 // two, and upstream the improvement instead.
@@ -581,8 +579,7 @@ declare module 'papi-shared-types' {
      *   Callers omit the argument rather than passing `false`: an implementation that predates this
      *   parameter rejects a two-argument call, so omitting it keeps every toast-keeping call
      *   working against it. The current callers are listed in `adr-sync-surface-per-interface-mode`
-     *   (`.context/standards/Architecture-Decisions.md`). The Send/Receive extension's
-     *   `syncOpenProjects` and auto-sync engine do not pass it yet.
+     *   (`.context/standards/Architecture-Decisions.md`).
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10)
      * @throws When another Send/Receive is already in progress — rejects fail-fast rather than
