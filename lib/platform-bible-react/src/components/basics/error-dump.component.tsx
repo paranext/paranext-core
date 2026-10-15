@@ -8,6 +8,7 @@ import { LocalizedStringValue } from 'platform-bible-utils';
  * localized strings and pass them into the localizedStrings prop of this component
  */
 export const ERROR_DUMP_STRING_KEYS = Object.freeze([
+  '%webView_error_dump_copy_button%',
   '%webView_error_dump_header%',
   '%webView_error_dump_info_message%',
 ] as const);
@@ -55,6 +56,7 @@ export function ErrorDump({
 }: ErrorDumpProps) {
   const headerText = localizeString(localizedStrings, '%webView_error_dump_header%');
   const infoMessage = localizeString(localizedStrings, '%webView_error_dump_info_message%');
+  const copyButtonLabel = localizeString(localizedStrings, '%webView_error_dump_copy_button%');
 
   function handleCopy() {
     navigator.clipboard.writeText(errorDetails);
@@ -77,7 +79,13 @@ export function ErrorDump({
             {infoMessage}
           </div>
         </div>
-        <Button variant="secondary" size="icon" className="size-8" onClick={() => handleCopy()}>
+        <Button
+          variant="secondary"
+          size="icon"
+          className="size-8"
+          aria-label={copyButtonLabel}
+          onClick={() => handleCopy()}
+        >
           <Copy />
         </Button>
       </div>
