@@ -4,16 +4,14 @@ namespace Paranext.DataProvider.Services;
 
 internal class PersistedPtxUtilsSettings(PapiClient papiClient) : IPtxUtilsSettings
 {
-    // Read while the data provider starts, which can be before the extension host has brought up
-    // the settings service. Starting empty loses saved UI state; throwing ends the process.
-    public SerializableStringDictionary MementoData { get; set; } =
-        SettingsService.TryGetSetting(
-            papiClient,
-            Settings.PTX_UTILS_MEMENTO_DATA,
-            out SerializableStringDictionary? value
-        )
-            ? value ?? []
-            : [];
+    private readonly PersistedStringDictionarySetting _mementoData =
+        new(papiClient, Settings.PTX_UTILS_MEMENTO_DATA);
+
+    public SerializableStringDictionary MementoData
+    {
+        get => _mementoData.Value;
+        set => _mementoData.Value = value;
+    }
 
     public bool UpgradeNeeded
     {
@@ -29,6 +27,6 @@ internal class PersistedPtxUtilsSettings(PapiClient papiClient) : IPtxUtilsSetti
 
     public void SafeSave()
     {
-        SettingsService.SetSetting(papiClient, Settings.PTX_UTILS_MEMENTO_DATA, MementoData);
+        _mementoData.SafeSave();
     }
 }
