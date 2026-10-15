@@ -1,4 +1,5 @@
 import {
+  Badge,
   Button,
   cn,
   Popover,
@@ -56,6 +57,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_interfaceMode_simple_description%',
   '%userProfile_interfaceMode_power_label%',
   '%userProfile_interfaceMode_power_description%',
+  '%userProfile_interfaceMode_power_previewBadge%',
   '%userProfile_profileAndRegistration%',
   '%userProfile_registrationNeeded%',
   '%userProfile_networkSettings_2%',
@@ -438,13 +440,24 @@ export function UserProfilePopover() {
                 'tw:border-2 tw:border-primary tw:bg-accent tw:text-accent-foreground tw:shadow-sm',
             )}
           >
-            <span
-              className={cn(
-                'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
-                safeInterfaceMode === 'power' && 'tw:text-accent-foreground',
-              )}
-            >
-              {localizedStrings['%userProfile_interfaceMode_power_label%']}
+            {/* Inline beside the label rather than pinned to a corner: `flex-wrap` drops the
+                badge under the label when a translation runs long, instead of overlapping it. */}
+            <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-1">
+              <span
+                className={cn(
+                  'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
+                  safeInterfaceMode === 'power' && 'tw:text-accent-foreground',
+                )}
+              >
+                {localizedStrings['%userProfile_interfaceMode_power_label%']}
+              </span>
+              <Badge
+                variant="outline"
+                data-testid="user-profile-interface-mode-power-preview-badge"
+                className="user-profile-popover-text-3xs tw:h-4 tw:px-1.5 tw:py-0 tw:leading-none tw:font-medium"
+              >
+                {localizedStrings['%userProfile_interfaceMode_power_previewBadge%']}
+              </Badge>
             </span>
             <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
               {localizedStrings['%userProfile_interfaceMode_power_description%']}

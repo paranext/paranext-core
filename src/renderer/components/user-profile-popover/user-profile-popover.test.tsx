@@ -96,6 +96,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%userProfile_interfaceMode_simple_description%': 'Fewer panels',
       '%userProfile_interfaceMode_power_label%': 'Advanced UI',
       '%userProfile_interfaceMode_power_description%': 'All panels',
+      '%userProfile_interfaceMode_power_previewBadge%': 'Early access',
       '%userProfile_profileAndRegistration%': 'Profile and registration row',
       '%userProfile_networkSettings_2%': 'Internet and connectivity row',
       '%userProfile_language%': 'UI language',
@@ -269,6 +270,17 @@ describe('UserProfilePopover interface mode', () => {
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     fireEvent.click(screen.getByTestId('user-profile-interface-mode-power'));
     expect(mockState.setInterfaceMode).toHaveBeenCalledWith('power');
+  });
+
+  test('marks only the Power option with the localized Preview badge', () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const badge = screen.getByTestId('user-profile-interface-mode-power-preview-badge');
+    expect(badge).toHaveTextContent('Early access');
+    expect(screen.getByTestId('user-profile-interface-mode-power')).toContainElement(badge);
+    expect(screen.getByTestId('user-profile-interface-mode-simple')).not.toHaveTextContent(
+      'Early access',
+    );
   });
 
   test('ignores deselect attempt on the already-selected mode', () => {
