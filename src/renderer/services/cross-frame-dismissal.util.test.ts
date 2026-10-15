@@ -1,5 +1,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerFrameForCrossFrameDismissal } from '@renderer/services/cross-frame-dismissal.util';
+import {
+  registerFrameForCrossFrameDismissal,
+  WEB_VIEW_MENU_OPEN_ATTRIBUTE,
+} from '@renderer/services/cross-frame-dismissal.util';
 import { Unsubscriber } from 'platform-bible-utils';
 
 /** Jsdom has no `PointerEvent`; Electron's Chromium does. Only the fields the module sets matter. */
@@ -21,6 +24,23 @@ function openPopperSurface(targetDocument: Document): HTMLElement {
   wrapper.setAttribute('data-radix-popper-content-wrapper', '');
   targetDocument.body.appendChild(wrapper);
   return wrapper;
+}
+
+/** Adds an open menu the way Radix renders one: a `role="menu"` inside the popper wrapper */
+function openMenu(targetDocument: Document): HTMLElement {
+  const wrapper = openPopperSurface(targetDocument);
+  const menu = targetDocument.createElement('div');
+  menu.setAttribute('role', 'menu');
+  wrapper.appendChild(menu);
+  return wrapper;
+}
+
+/** Adds the scripture editor's own right-click menu, which the editor portals to `body` */
+function openEditorContextMenu(targetDocument: Document): HTMLElement {
+  const menu = targetDocument.createElement('div');
+  menu.className = 'typeahead-popover auto-embed-menu';
+  targetDocument.body.appendChild(menu);
+  return menu;
 }
 
 /** Records the outside presses Radix would see: `pointerdown` events on the document itself */
@@ -82,6 +102,15 @@ describe('registerFrameForCrossFrameDismissal', () => {
     pressOn(webViewWindow.document.body);
 
     expect(mainPresses).toHaveLength(1);
+  });
+
+  it("closes the scripture editor's right-click menu in a web view", () => {
+    openEditorContextMenu(webViewWindow.document);
+    const webViewPresses = recordDocumentPresses(webViewWindow.document);
+
+    pressOn(document.body);
+
+    expect(webViewPresses).toHaveLength(1);
   });
 
   it('closes menus in a sibling web view', () => {
@@ -204,6 +233,79 @@ describe('registerFrameForCrossFrameDismissal', () => {
       window.dispatchEvent(new FocusEvent('blur'));
 
       expect(webViewPresses).toHaveLength(0);
+    });
+  });
+
+  describe('marking the main document while a web view has a menu open', () => {
+    function isMarked() {
+      return document.documentElement.hasAttribute(WEB_VIEW_MENU_OPEN_ATTRIBUTE);
+    }
+
+    it('marks it while a web view menu is open and clears it once the menu closes', async () => {
+      const menu = openMenu(webViewWindow.document);
+      await vi.waitFor(() => expect(isMarked()).toBe(true));
+
+      menu.remove();
+
+      await vi.waitFor(() => expect(isMarked()).toBe(false));
+    });
+
+    it("marks it while the scripture editor's right-click menu is open", async () => {
+      openEditorContextMenu(webViewWindow.document);
+
+      await vi.waitFor(() => expect(isMarked()).toBe(true));
+    });
+
+    it('does not mark it for a web view tooltip, which opens on hover', async () => {
+      const wrapper = openPopperSurface(webViewWindow.document);
+      const tooltip = webViewWindow.document.createElement('div');
+      tooltip.setAttribute('role', 'tooltip');
+      wrapper.appendChild(tooltip);
+      // Positive control: a menu in the same frame is noticed, so the tooltip had its chance
+      const menu = openMenu(webViewWindow.document);
+      await vi.waitFor(() => expect(isMarked()).toBe(true));
+
+      menu.remove();
+
+      await vi.waitFor(() => expect(isMarked()).toBe(false));
+    });
+
+    it('does not mark it for a menu open in the main document itself', async () => {
+      openMenu(document);
+      // Positive control, so the main-document menu had a mutation cycle to be noticed in
+      const webViewMenu = openMenu(webViewWindow.document);
+      await vi.waitFor(() => expect(isMarked()).toBe(true));
+
+      webViewMenu.remove();
+
+      await vi.waitFor(() => expect(isMarked()).toBe(false));
+    });
+
+    it('stays marked while another web view still has a menu open', async () => {
+      const siblingIframe = document.createElement('iframe');
+      document.body.appendChild(siblingIframe);
+      if (!siblingIframe.contentWindow) throw new Error('jsdom did not create the iframe window');
+      unsubscribers.push(registerFrameForCrossFrameDismissal(siblingIframe.contentWindow));
+      const menu = openMenu(webViewWindow.document);
+      openMenu(siblingIframe.contentWindow.document);
+      await vi.waitFor(() => expect(isMarked()).toBe(true));
+
+      menu.remove();
+      // Let the removal's mutation callback run before asserting the mark survived it
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+
+      expect(isMarked()).toBe(true);
+    });
+
+    it('clears the mark when a web view with an open menu is unregistered', async () => {
+      openMenu(webViewWindow.document);
+      await vi.waitFor(() => expect(isMarked()).toBe(true));
+
+      unsubscribers[1]();
+
+      expect(isMarked()).toBe(false);
     });
   });
 });

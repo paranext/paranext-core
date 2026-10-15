@@ -8,6 +8,30 @@ import { Unsubscriber } from 'platform-bible-utils';
 const OPEN_POPPER_SURFACE_SELECTOR = '[data-radix-popper-content-wrapper]';
 
 /**
+ * The scripture editor's own right-click menu. It is not a Radix surface: the editor package
+ * portals it to `body` under these classes and closes it on any `pointerdown` reaching its
+ * document.
+ */
+const EDITOR_CONTEXT_MENU_SELECTOR = '.typeahead-popover';
+
+/** Every open surface a press in another frame should close */
+const OPEN_SURFACE_SELECTOR = `${OPEN_POPPER_SURFACE_SELECTOR}, ${EDITOR_CONTEXT_MENU_SELECTOR}`;
+
+/**
+ * The open surfaces that switch the main window's title-bar drag regions off: menus, popovers and
+ * select lists, but not tooltips, which open on hover. Mirrors the main-document selector in
+ * `app.component.scss`.
+ */
+const CLICK_TO_CLOSE_SURFACE_SELECTOR = `${OPEN_POPPER_SURFACE_SELECTOR} :is([role='menu'], [role='dialog'], [role='listbox']), ${EDITOR_CONTEXT_MENU_SELECTOR}`;
+
+/**
+ * Set on the main document's root element while any web view has a menu, popover or select list
+ * open. `app.component.scss` switches the title-bar drag regions off while it is present, so a
+ * click there reaches the page and closes the web view's menu instead of starting a window drag.
+ */
+export const WEB_VIEW_MENU_OPEN_ATTRIBUTE = 'data-web-view-menu-open';
+
+/**
  * Parent-document overlays the overlay service renders ON BEHALF OF a web view (command palettes,
  * anchored popovers). Clicking one is interacting with that web view's UI, so it must not close the
  * web view's own menus.
@@ -17,6 +41,45 @@ const WEB_VIEW_OVERLAY_SELECTOR =
 
 /** Every frame whose open surfaces close when the user presses somewhere in another frame */
 const registeredWindows = new Set<Window>();
+
+/** The registered web view frames that currently have a {@link CLICK_TO_CLOSE_SURFACE_SELECTOR} open */
+const framesWithOpenMenu = new Set<Window>();
+
+function updateWebViewMenuOpenAttribute(): void {
+  document.documentElement.toggleAttribute(
+    WEB_VIEW_MENU_OPEN_ATTRIBUTE,
+    framesWithOpenMenu.size > 0,
+  );
+}
+
+/**
+ * Keeps {@link framesWithOpenMenu} current for one web view frame. Watches the whole body because a
+ * surface can portal into a container nested inside it (a popover inside a dialog). Attributes and
+ * text are not watched: a surface opening or closing always adds or removes its element.
+ *
+ * @returns Function that stops watching and forgets the frame
+ */
+function trackOpenMenus(frameWindow: Window): () => void {
+  const update = () => {
+    let hasOpenMenu = false;
+    try {
+      hasOpenMenu = !!frameWindow.document.querySelector(CLICK_TO_CLOSE_SURFACE_SELECTOR);
+    } catch {
+      // The frame navigated away and can no longer be read; whatever it had open is gone
+    }
+    if (hasOpenMenu) framesWithOpenMenu.add(frameWindow);
+    else framesWithOpenMenu.delete(frameWindow);
+    updateWebViewMenuOpenAttribute();
+  };
+  const observer = new MutationObserver(update);
+  observer.observe(frameWindow.document.documentElement, { childList: true, subtree: true });
+  update();
+  return () => {
+    observer.disconnect();
+    framesWithOpenMenu.delete(frameWindow);
+    updateWebViewMenuOpenAttribute();
+  };
+}
 
 /**
  * The synthetic presses {@link dismissOpenSurfaces} dispatched, so the frame they land in does not
@@ -43,7 +106,7 @@ const dismissalPresses = new WeakSet<Event>();
  */
 function dismissOpenSurfaces(targetWindow: Window): void {
   const targetDocument = targetWindow.document;
-  if (!targetDocument.querySelector(OPEN_POPPER_SURFACE_SELECTOR)) return;
+  if (!targetDocument.querySelector(OPEN_SURFACE_SELECTOR)) return;
   // Built in this realm: Radix reads only the press's target and button, which survive dispatch into
   // a same-origin frame's document
   const press = new PointerEvent('pointerdown', {
@@ -123,8 +186,11 @@ export function registerFrameForCrossFrameDismissal(frameWindow: Window): Unsubs
   frameWindow.addEventListener('pointerdown', handlePointerDown, { capture: true });
   frameWindow.addEventListener('blur', handleBlur);
   registeredWindows.add(frameWindow);
+  // The main document's own open menus are matched directly by `app.component.scss`
+  const stopTrackingOpenMenus = frameWindow === window ? undefined : trackOpenMenus(frameWindow);
   return () => {
     registeredWindows.delete(frameWindow);
+    stopTrackingOpenMenus?.();
     try {
       frameWindow.removeEventListener('pointerdown', handlePointerDown, { capture: true });
       frameWindow.removeEventListener('blur', handleBlur);

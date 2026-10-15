@@ -4942,7 +4942,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           text (see useLivePopoverAnchor), so they follow the text when it scrolls or reflows. They
           stay at interface scale. */}
       {/** Inline markers menu components */}
-      <Popover open={showMarkersMenu}>
+      <Popover
+        open={showMarkersMenu}
+        // Lets an outside press close the menu, including the one the main window replays into this
+        // frame when the user presses in another web view or in the main window
+        onOpenChange={(open) => {
+          if (!open) setShowMarkersMenu(false);
+        }}
+      >
         <PopoverAnchor virtualRef={markersMenuAnchor.virtualRef} />
         <PopoverContent
           className="tw:w-[500px] tw:p-0"
