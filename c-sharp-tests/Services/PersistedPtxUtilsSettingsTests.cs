@@ -25,16 +25,6 @@ public class PersistedPtxUtilsSettingsTests
     }
 
     [Test]
-    public void Constructor_SettingReadFails_StartsEmptyInsteadOfThrowing()
-    {
-        // No stored value, so DummySettingsService's "get" throws, as the real read does when the
-        // settings service is not up yet.
-        var settings = new PersistedPtxUtilsSettings(_client);
-
-        Assert.That(settings.MementoData, Is.Empty);
-    }
-
-    [Test]
     public void Constructor_SettingStored_ReturnsStoredValue()
     {
         var stored = new SerializableStringDictionary { ["someKey"] = "someValue" };
@@ -43,5 +33,24 @@ public class PersistedPtxUtilsSettingsTests
         var settings = new PersistedPtxUtilsSettings(_client);
 
         Assert.That(settings.MementoData, Is.EqualTo(stored));
+    }
+
+    [Test]
+    public void SafeSave_WritesPropertyToSettingKey()
+    {
+        _settingsService.AddSettingValue(
+            Settings.PTX_UTILS_MEMENTO_DATA,
+            new SerializableStringDictionary()
+        );
+        var settings = new PersistedPtxUtilsSettings(_client);
+        var changed = new SerializableStringDictionary { ["someKey"] = "changed" };
+        settings.MementoData = changed;
+
+        settings.SafeSave();
+
+        Assert.That(
+            _settingsService.GetSettingValue(Settings.PTX_UTILS_MEMENTO_DATA),
+            Is.EqualTo(changed)
+        );
     }
 }

@@ -9,7 +9,9 @@ namespace Paranext.DataProvider.Services;
 /// and the stored value is read again in the background until it arrives, then merged in, with
 /// entries changed this session winning. Until then <see cref="SafeSave"/> only remembers that a
 /// save is due, because <see cref="SettingsService.SetSetting"/> replaces the whole stored value
-/// and would wipe whatever the failed read missed.
+/// and would wipe whatever the failed read missed. A read that returns <see langword="null"/>
+/// counts as failed: the settings this holds declare a default, so <see langword="null"/> means the
+/// service has no answer yet, not that nothing is stored.
 /// <para>
 /// The merge cannot tell an entry deleted this session from one never added, so a stored entry
 /// whose key was added and then removed before the stored value arrived comes back.
@@ -80,7 +82,10 @@ internal sealed class PersistedStringDictionarySetting
         }
     }
 
-    /// <summary>Whether the stored value has been read and merged in.</summary>
+    /// <summary>
+    /// Whether the stored value has been read and merged in. Like <see cref="Value"/>, reading it
+    /// merges in a stored value the background read has received.
+    /// </summary>
     public bool IsLoaded
     {
         get
@@ -123,14 +128,12 @@ internal sealed class PersistedStringDictionarySetting
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Retrying read of setting {_key}: {ex.Message}");
+                Console.Error.WriteLine($"Retrying read of setting {_key}: {ex.Message}");
                 continue;
             }
-            // The settings this holds declare a default, so null means the service has no
-            // answer yet, not that nothing is stored.
             if (storedValue == null)
             {
-                Console.WriteLine($"Retrying read of setting {_key}: no value returned");
+                Console.Error.WriteLine($"Retrying read of setting {_key}: no value returned");
                 continue;
             }
 
@@ -166,6 +169,8 @@ internal sealed class PersistedStringDictionarySetting
                     }
                     catch (Exception ex)
                     {
+                        // No caller to throw to on this background thread. The stored value is
+                        // still unmerged, so the next SafeSave merges it in and saves again.
                         Console.Error.WriteLine($"Could not save setting {_key}: {ex}");
                     }
                     return;
@@ -187,7 +192,7 @@ internal sealed class PersistedStringDictionarySetting
         {
             foreach (var (key, value) in _unmergedStoredValue ?? [])
                 mergedValue[key] = value;
-            // Entries changed this session are newer than the stored ones, so they win.
+            // Same precedence as MergeStoredValueLocked
             foreach (var (key, value) in _value)
                 mergedValue[key] = value;
             return true;

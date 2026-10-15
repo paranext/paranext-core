@@ -44,6 +44,10 @@ namespace TestParanextDataProvider
         // _localMethods, which the base client keeps for request handlers.
         private readonly ConcurrentDictionary<string, Delegate> _localEventHandlers = new();
 
+        // Counted before the base client can reject a request (e.g. once disposed), so tests can
+        // see attempts that never reached a handler.
+        private readonly ConcurrentDictionary<string, int> _requestAttemptCounts = new();
+
         #region Overrides of PapiClient
 
         public override Task<bool> ConnectAsync()
@@ -117,12 +121,20 @@ namespace TestParanextDataProvider
         /// </summary>
         public IReadOnlyCollection<string> RegisteredRequestTypes => _localMethods.Keys.ToArray();
 
+        /// <summary>
+        /// How many times <see cref="SendRequestAsync{T}"/> was called for the request type,
+        /// including calls that threw before reaching a handler.
+        /// </summary>
+        public int GetRequestAttemptCount(string requestType) =>
+            _requestAttemptCounts.GetValueOrDefault(requestType);
+
         public override Task<T?> SendRequestAsync<T>(
             string requestType,
             IReadOnlyList<object?>? requestContents
         )
             where T : default
         {
+            _requestAttemptCounts.AddOrUpdate(requestType, 1, (_, count) => count + 1);
             if (_localMethods.TryGetValue(requestType, out _))
                 return base.SendRequestAsync<T>(requestType, requestContents);
             _sentRequests.Enqueue((requestType, requestContents));

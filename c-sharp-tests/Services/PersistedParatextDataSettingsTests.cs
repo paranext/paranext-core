@@ -25,16 +25,6 @@ public class PersistedParatextDataSettingsTests
     }
 
     [Test]
-    public void Constructor_SettingReadFails_StartsEmptyInsteadOfThrowing()
-    {
-        // No stored value, so DummySettingsService's "get" throws, as the real read does when the
-        // settings service is not up yet.
-        var settings = new PersistedParatextDataSettings(_client);
-
-        Assert.That(settings.LastRegistryDataCachedTimes, Is.Empty);
-    }
-
-    [Test]
     public void Constructor_SettingStored_ReturnsStoredValue()
     {
         var stored = new SerializableStringDictionary { ["someProject"] = "2026-01-01" };
@@ -46,5 +36,26 @@ public class PersistedParatextDataSettingsTests
         var settings = new PersistedParatextDataSettings(_client);
 
         Assert.That(settings.LastRegistryDataCachedTimes, Is.EqualTo(stored));
+    }
+
+    [Test]
+    public void SafeSave_WritesPropertyToSettingKey()
+    {
+        _settingsService.AddSettingValue(
+            Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
+            new SerializableStringDictionary()
+        );
+        var settings = new PersistedParatextDataSettings(_client);
+        var changed = new SerializableStringDictionary { ["someProject"] = "2026-01-01" };
+        settings.LastRegistryDataCachedTimes = changed;
+
+        settings.SafeSave();
+
+        Assert.That(
+            _settingsService.GetSettingValue(
+                Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES
+            ),
+            Is.EqualTo(changed)
+        );
     }
 }

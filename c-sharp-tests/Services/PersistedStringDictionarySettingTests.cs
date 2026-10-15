@@ -9,6 +9,8 @@ namespace Paranext.DataProvider.Services.Tests;
 public class PersistedStringDictionarySettingTests
 {
     private const string Key = "testDictionary";
+    private const string GetRequestType =
+        $"object:{SettingsService.SETTINGS_SERVICE_NAME}-data.get";
     private static readonly TimeSpan s_retryDelay = TimeSpan.FromMilliseconds(10);
 
     private DummyPapiClient _client = null!;
@@ -40,6 +42,8 @@ public class PersistedStringDictionarySettingTests
             Thread.Sleep(s_retryDelay);
         }
     }
+
+    private int GetReadCount() => _client.GetRequestAttemptCount(GetRequestType);
 
     private static void WaitUntilLoaded(PersistedStringDictionarySetting setting) =>
         WaitUntil(() => setting.IsLoaded, "The background read never delivered the stored value");
@@ -89,13 +93,12 @@ public class PersistedStringDictionarySettingTests
         var setting = CreateSetting();
         Assert.That(setting.Value, Is.Empty);
 
-        _settingsService.AddSettingValue(
-            Key,
-            new SerializableStringDictionary { ["storedKey"] = "stored" }
-        );
+        var stored = new SerializableStringDictionary { ["storedKey"] = "stored" };
+        _settingsService.AddSettingValue(Key, stored);
         WaitUntilLoaded(setting);
 
         Assert.That(setting.Value["storedKey"], Is.EqualTo("stored"));
+        Assert.That(_settingsService.GetSettingValue(Key), Is.SameAs(stored));
     }
 
     [Test]
@@ -150,7 +153,8 @@ public class PersistedStringDictionarySettingTests
         // save wipe whatever is really stored.
         _settingsService.AddSettingValue(Key, null!);
         var setting = CreateSetting();
-        Thread.Sleep(s_retryDelay * 10);
+        // The constructor's read plus two background reads
+        WaitUntil(() => GetReadCount() >= 3, "The background read never retried");
 
         setting.SafeSave();
 
@@ -165,6 +169,21 @@ public class PersistedStringDictionarySettingTests
         WaitUntilLoaded(setting);
 
         Assert.That(setting.Value["storedKey"], Is.EqualTo("stored"));
+    }
+
+    [Test]
+    public void FirstReadFails_ClientDisconnects_StopsRetrying()
+    {
+        CreateSetting();
+        WaitUntil(() => GetReadCount() >= 2, "The background read never retried");
+
+        // Disposing is the only way to complete DisconnectTask on the dummy client.
+        _client.Dispose();
+        var readsAtDisconnect = GetReadCount();
+        Thread.Sleep(s_retryDelay * 10);
+
+        // A read already past the disconnect check can still arrive.
+        Assert.That(GetReadCount(), Is.LessThanOrEqualTo(readsAtDisconnect + 1));
     }
 
     [Test]
