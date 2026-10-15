@@ -1461,7 +1461,7 @@ describe('overlay.service-host', () => {
       '%overlay_aria_commandPaletteOpened%': 'Command palette opened',
       '%overlay_aria_commandPaletteHighlightedItem%': '{label}, {index} of {count}',
       '%overlay_aria_commandPaletteNoResults%': 'No results',
-      '%overlay_aria_commandPaletteResultCount%': '{count} results',
+      '%overlay_aria_commandPaletteResultCount%': 'Results: {count}',
     };
 
     /** Empties the live region, so the next assertion sees only what was said after this point. */
@@ -1532,7 +1532,7 @@ describe('overlay.service-host', () => {
       await overlayService.updateCommandPalette('sr-list', { filterText: 'fe' });
       await flushAnnouncements();
 
-      expect(ariaLiveText()).toBe('1 results');
+      expect(ariaLiveText()).toBe('Results: 1');
 
       await dismissAndAwait(palette);
     });
@@ -1560,7 +1560,7 @@ describe('overlay.service-host', () => {
 
       await overlayService.updateCommandPalette('sr-list-arrow', { filterText: 'f' });
       await flushAnnouncements();
-      expect(ariaLiveText()).toBe('3 results');
+      expect(ariaLiveText()).toBe('Results: 3');
 
       clearAriaLive();
       await overlayService.updateCommandPalette('sr-list-arrow', { moveSelection: 1 });

@@ -2455,10 +2455,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               // "Search...". Passed as the key, not a resolved string: the overlay renders in the
               // renderer frame and localizes it there (the palette-open path only awaits
               // localization for ITEM text, so a key here does not reintroduce the
-              // dropped-keystroke window). The paragraph menu has its own key, which says what
-              // that menu does.
+              // dropped-keystroke window). The Enter palette has its own key: it chooses the
+              // marker for the NEW paragraph the split creates and leaves the current paragraph's
+              // style alone, so the paragraph-style menu's "change paragraph style" prompt would
+              // describe the opposite of what happens.
               placeholder: isEnter
-                ? '%markerMenu_searchPlaceholder_paragraph%'
+                ? '%markerMenu_searchPlaceholder_newParagraph%'
                 : '%markerMenu_searchPlaceholder%',
               keyForwarding,
               // No fuzzy scoring: typing a marker and pressing Space must agree byte-for-byte
@@ -2599,10 +2601,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const footnoteMarkerPalette = useMemo<FootnoteEditorMarkerPalette>(
     () => ({
       // One options object rather than positional parameters, which is what makes a dropped
-      // argument unrepresentable: TypeScript accepts a shorter implementation arity, so a
-      // three-parameter version once compiled while silently discarding `keyForwarding` — the
-      // popover's selection-`\` palette then opened focus-stealing with no forwarding, and the
-      // Space/`*`/`\`/Backspace commit semantics never ran.
+      // argument unrepresentable: TypeScript accepts a SHORTER implementation arity, so with
+      // positional parameters an implementation that omits `keyForwarding` still compiles. The
+      // popover's selection-`\` palette would then open focus-stealing with no forwarding, and the
+      // Space/`*`/`\`/Backspace commit semantics would never run.
       show: ({ items, anchor, keyForwarding }) => {
         noteEditorPalettesOpen.current += 1;
         const shown = papi.overlays.showCommandPalette(
@@ -2703,6 +2705,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // insert a footnote/cross-reference, and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
+    /**
+     * Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux). Read by BOTH listeners below:
+     * the capture one claims it while a palette session is open, the bubble one acts on it
+     * otherwise.
+     */
+    const isInsertCommentChord = (event: KeyboardEvent) =>
+      isMac
+        ? event.metaKey &&
+          event.altKey &&
+          // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
+          (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
+        : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
+          (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
+
     // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
     // root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
     // listener, so a window BUBBLE-phase handler runs too late — the paragraph has already split
@@ -2735,9 +2751,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         const session = paletteSession.current;
 
         if (session) {
+          // Decided BEFORE the table runs: the table treats this chord as an ordinary chord —
+          // dismiss the palette, decline the key — and a declined key keeps propagating with the
+          // session already cleared, so the bubble-phase handler below would insert a comment
+          // anyway. The dismissal's refocus then lands on the editor and pulls focus straight back
+          // out of the comment box the user is typing in.
+          //
+          // Claimed, so the chord only closes the palette. That is also what it does once the
+          // palette HAS focus, where the keystroke goes to the renderer and never reaches this web
+          // view at all — so the pre-focus window and the focused case now behave the same.
+          const closesPaletteOnly = isInsertCommentChord(event);
           // Through the ref so this listener and the palette's forwarded keys provably run the
           // same handler (and so this effect needs no dependency on it).
           runPaletteSessionKeyRef.current(event);
+          if (closesPaletteOnly) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
           return;
         }
 
@@ -2804,20 +2834,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
       }
 
-      const isInsertCommentHotkey = isMac
-        ? event.metaKey &&
-          event.altKey &&
-          // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
-          (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
-        : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
-          (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
-      if (isInsertCommentHotkey && !paletteSession.current) {
-        // Not while a marker palette is open. The table passes ordinary chords through unclaimed so
-        // Cmd+S and friends keep working, so without this gate the branch would run behind an open
-        // palette: the comment anchors against an editor the palette has blurred (so its
-        // Lexical selection may be null, landing the comment at the document tail), its popover
-        // opens stacked on the palette, and dismissing the palette then pulls focus back out of the
-        // comment box mid-typing. The Ctrl+T branch below is already gated this way.
+      if (isInsertCommentChord(event)) {
+        // Nothing here excludes an open marker palette: the capture-phase listener above claims
+        // this chord while a session is open, so a palette closes and this never runs. A check
+        // here could not do it anyway — the table clears the session synchronously, ahead of this
+        // bubble phase.
         event.preventDefault();
         event.stopPropagation();
         // Swallowed while the editor's right-click menu is up, like the Ctrl+T shortcuts below.

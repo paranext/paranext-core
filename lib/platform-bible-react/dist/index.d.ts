@@ -1369,6 +1369,7 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%markerMenu_searchPlaceholder%",
 	"%markerMenu_searchPlaceholder_character%",
 	"%markerMenu_searchPlaceholder_insert%",
+	"%markerMenu_searchPlaceholder_newParagraph%",
 	"%markerMenu_searchPlaceholder_paragraph%",
 	...`%${string}%`[],
 	"%footnoteEditor_callerDropdown_item_custom%",
@@ -1554,6 +1555,7 @@ export declare const MARKER_MENU_STRING_KEYS: readonly [
 	"%markerMenu_searchPlaceholder%",
 	"%markerMenu_searchPlaceholder_character%",
 	"%markerMenu_searchPlaceholder_insert%",
+	"%markerMenu_searchPlaceholder_newParagraph%",
 	"%markerMenu_searchPlaceholder_paragraph%"
 ];
 export type MarkerMenuLocalizedStrings = {

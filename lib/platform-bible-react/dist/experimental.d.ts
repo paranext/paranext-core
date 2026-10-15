@@ -1387,9 +1387,9 @@ export interface RunMarkerPaletteSessionOptions<TItem extends {
 	 * selected text, split the paragraph, or land at the caret — and nothing about focus or display:
 	 * EVERY kind is shown list-focused now, and the consumer's `show` must display them that way.
 	 *
-	 * A consumer that passes `passive: true` instead, as an older version of this doc implied, loses
-	 * key forwarding and brings composed input back: a passive palette leaves focus in the editor,
-	 * where an IME or a dead key composes into the verse.
+	 * A consumer that passes `passive: true` instead loses key forwarding and brings composed input
+	 * back: a passive palette leaves focus in the editor, where an IME or a dead key composes into
+	 * the verse.
 	 */
 	kind: MarkerPaletteSessionKind;
 	/**
@@ -1552,9 +1552,9 @@ export interface RouteMarkerPaletteKeyOptions<TItem extends MarkerMenuItem> {
 	 * from `useMarkerPaletteSessionWriters`, not a local equivalent.
 	 *
 	 * Routing through the writer rather than clearing the ref here is what keeps the writers the ONLY
-	 * place settling resumes. Clearing locally still worked, because the show promise later reaches
-	 * the spine's own clear, but it made resume wait on an overlay round trip and left settling
-	 * suspended for good if that promise never settled. It also duplicated the baseline clearing.
+	 * place settling resumes. A local clear would leave the session gone but settling still suspended
+	 * until the show promise reached the spine's own clear — an overlay round trip away, and forever
+	 * if that promise never settles.
 	 */
 	clearSessionIfCurrent: (token: number) => void;
 	/**
@@ -1568,7 +1568,7 @@ export interface RouteMarkerPaletteKeyOptions<TItem extends MarkerMenuItem> {
 	 * changed while the palette was open, the next typed commit applies at a caret pointing into
 	 * different content, which is exactly what the guard exists to refuse.
 	 *
-	 * Omit it and no guard runs, as before.
+	 * Optional: omit it and no guard runs.
 	 */
 	hasEditorChangedSinceFocus?: () => boolean;
 }

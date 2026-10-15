@@ -60,9 +60,9 @@ export interface RunMarkerPaletteSessionOptions<TItem extends { marker: string }
    * selected text, split the paragraph, or land at the caret — and nothing about focus or display:
    * EVERY kind is shown list-focused now, and the consumer's `show` must display them that way.
    *
-   * A consumer that passes `passive: true` instead, as an older version of this doc implied, loses
-   * key forwarding and brings composed input back: a passive palette leaves focus in the editor,
-   * where an IME or a dead key composes into the verse.
+   * A consumer that passes `passive: true` instead loses key forwarding and brings composed input
+   * back: a passive palette leaves focus in the editor, where an IME or a dead key composes into
+   * the verse.
    */
   kind: MarkerPaletteSessionKind;
   /**

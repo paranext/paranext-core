@@ -12103,6 +12103,11 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * keydown.
      *
      * Ignored when `passive` is true, which takes no focus at all.
+     *
+     * `'list'` REQUIRES {@link CommandPaletteRequest.keyForwarding} (unless `passive`), and a request
+     * without it is rejected. A list-focused palette drives nothing itself: its filter renders
+     * read-only and it handles no key but Escape, so with no requester answering for the keys there
+     * is no way to type, navigate or commit.
      */
     focusTarget?: 'input' | 'list';
     /**

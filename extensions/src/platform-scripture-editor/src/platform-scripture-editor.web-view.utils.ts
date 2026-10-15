@@ -282,8 +282,8 @@ export interface EditingSessionActivityInput {
  * Tracked as PT-4817. The intended fix is a staleness bound like the note session's refreshed-at
  * bound — a palette session defers only within the editor-ownership window of the last local edit,
  * after which the update applies and the change guard closes the palette — not dismissing the
- * palette on unrelated keys. An automatic Send/Receive now dismisses the palette before it writes,
- * so that particular collision is closed; other external writers can still be overwritten.
+ * palette on unrelated keys. An automatic Send/Receive dismisses the palette before it writes, so
+ * that particular collision is closed; other external writers can still be overwritten.
  *
  * A pane session is never reported stale: it stops holding updates back once the user stops editing
  * in it (see {@link EditingSessionActivityInput.paneSession}), and the update it then lets through
