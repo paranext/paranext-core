@@ -12,10 +12,10 @@
  * unmount. The move is a real drag through rc-dock's drag manager, released on the tab bar's empty
  * space after the tabs so the dragged tab becomes the panel's last.
  *
- * That this spec goes red without the web view component's load-handler unmount relies on Chromium
- * dropping the replaced document's queued unmount along with that document; the component's unit
- * tests (`web-view.component.test.tsx`) pin the load-handler unmount whatever the browser does, and
- * this spec is the end-to-end proof.
+ * That this spec goes red without the web view component's load-time unmount of replaced roots
+ * relies on Chromium dropping the replaced document's queued unmount along with that document; the
+ * component's unit tests (`web-view.component.test.tsx`) pin that unmount whatever the browser
+ * does, and this spec is the end-to-end proof.
  *
  * ## How to run
  *

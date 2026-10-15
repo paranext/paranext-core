@@ -10,8 +10,11 @@
  * Which render lands in that loading window is a matter of timing, so the crash itself cannot be
  * forced. What is deterministic is the leak: the replaced document's root container stays populated
  * for as long as its root stays mounted, and React empties it on unmount. That is what this spec
- * pins, plus — as a secondary check — that neither the reloads nor the tab's close log a crash or
- * React's synchronous-unmount-during-render warning for this web view.
+ * pins: every replaced document's root ends up unmounted, whether by the replaced document's
+ * bootstrap `unload` handler or by the component's load-time fallback (`handleLoadIframe` in
+ * `web-view.component.tsx`). It does not tell the two apart; `extension-teardown-listeners.spec.ts`
+ * pins the bootstrap's own ordering. As a secondary check, neither the reloads nor the tab's close
+ * log a crash or React's synchronous-unmount-during-render warning for this web view.
  *
  * Setup goes through PAPI (the isolated-suite setup exception): there is no UI that reloads a web
  * view in place, which is exactly what extensions do when they re-point an open panel.
