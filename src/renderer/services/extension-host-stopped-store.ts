@@ -14,10 +14,11 @@ import type {
  *   `platform.onDidStartExtensionHost` or its own fallback timer, not for the command.
  * - `restarted`: the restart is over. The banner stays, calmer, because a restart does not heal every
  *   part of a window (every settings subscription opened before the restart stays dead, in main and
- *   in the renderer; the toolbar's open-project book list is another known case), so a banner that
- *   vanished could leave things quietly broken. It offers Restart app and Dismiss. `isConfirmed`
- *   says whether the new extension host announced its start; it is `false` when the banner's
- *   fallback timer gave up waiting, so the banner must not claim the restart worked.
+ *   in the renderer, until PT-4807 lands; the toolbar's open-project book list is another known
+ *   case), so a banner that vanished could leave things quietly broken. It offers Restart app and
+ *   Dismiss. `isConfirmed` says whether the new extension host announced its start; it is `false`
+ *   when the banner's fallback timer gave up waiting, so the banner must not claim the restart
+ *   worked.
  */
 export type ExtensionHostNotice =
   | { phase: 'stopped' | 'restarting'; reason: ExtensionHostStopReason }

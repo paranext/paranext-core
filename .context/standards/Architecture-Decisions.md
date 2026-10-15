@@ -2377,8 +2377,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   only renderers listen. The banner's `role="status"` live region is always mounted, empty until
   there is a notice, because a live region inserted together with its content is generally not
   announced by screen readers. Healing main's and the renderer's settings subscriptions after a
-  restart is NOT done here and has no ticket yet; the banner's restarted state and Restart app are
-  the mitigation. The quit-time relay is best effort: delivery over the port is asynchronous and
+  restart is NOT done here; PT-4807 (the shared service wrappers keep a disposed extension-host
+  provider cached) owns it, and the banner's restarted state and Restart app are the mitigation. The quit-time relay is best effort: delivery over the port is asynchronous and
   the window may be destroyed first, which was already the situation, so it can only suppress a
   false alarm. Marker sites 1 and 2 of `adr-connection-lost-is-renderer-local` are closed; site 3
   (accelerators behind the overlay) is PT-4851 and needs main to notice a window's port dying on
