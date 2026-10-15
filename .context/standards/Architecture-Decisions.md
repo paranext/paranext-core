@@ -942,9 +942,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     top-level line where the stored marker stood, and only when that line changed in place — the
     stored line after it is still next. A chapter line merged into the paragraph below it (a
     selection from the chapter line into that paragraph, typed over) leaves that paragraph in its
-    place, and a caret there counts only the paragraph's own text, so it is not read this way. A
-    caret anywhere else is never carried across: a caret in another paragraph's text is addressed
-    exactly as one counting a chapter line is, so the two cannot be told apart.
+    place, with the line after it being the stored line two after the marker. The repair moves that
+    paragraph down whole and the caret in it counts only the paragraph's own content, so its path is
+    kept as it was with only the paragraph's index changed. A caret anywhere else is never carried
+    across: a caret in another paragraph's text is addressed exactly as one counting a chapter line
+    is, so the two cannot be told apart.
 - **Alternatives:**
   - **Apply the repair as OT delta ops (`EditorRef.applyUpdate`) instead of `setUsj`** — rejected
     for now, though it would keep the history (no load, so no `CLEAR_HISTORY_COMMAND`). A chapter is

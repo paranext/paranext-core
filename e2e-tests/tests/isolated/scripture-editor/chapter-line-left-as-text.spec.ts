@@ -11,6 +11,8 @@
  * - Typing ahead of the `\` leaves text before the marker; the repair puts the marker first, so the
  *   text moves to the line below it. In chapter 1, where a paragraph comes before the marker, the
  *   text joins the end of that paragraph instead, as the save and the reload put it.
+ * - Selecting from the chapter line into the paragraph below and typing over it merges the two; the
+ *   paragraph moves below the restored marker, with the caret still after the typing.
  *
  * Keys go through `mainPage.keyboard` once a click has put the focus in the editor (`locator.press`
  * focuses its target first and is slow per key).
@@ -42,9 +44,9 @@ test.use({
 const WEBSOCKET_PORT = 8876;
 const PDP_REQUEST_TIMEOUT_MS = 30_000;
 
-/** How the correction notice reads for chapter `chapterNum` of Ruth. */
-const correctionMessage = (chapterNum: number) =>
-  `The chapter marker in Ruth ${chapterNum} did not match the chapter, so it was corrected`;
+/** How the correction notice reads for chapter `chapterNum` of `bookName`. */
+const correctionMessage = (chapterNum: number, bookName = 'Ruth') =>
+  `The chapter marker in ${bookName} ${chapterNum} did not match the chapter, so it was corrected`;
 
 test.describe('scripture editor chapter line left as text', () => {
   test('keeps what is left on a chapter line below a restored marker, with the caret in it', async ({
@@ -63,13 +65,14 @@ test.describe('scripture editor chapter line left as text', () => {
       WEBSOCKET_PORT,
       LAUNCH_PHASE_TIMEOUT_MS,
     );
-    const getRuthUsfm = (chapterNum: number) =>
+    const getChapterUsfm = (book: string, chapterNum: number) =>
       sendPapiRequestOnce<string>(
         `object:${pdpId}.getChapterUSFM`,
-        [{ book: 'RUT', chapterNum, verseNum: 1 }],
+        [{ book, chapterNum, verseNum: 1 }],
         WEBSOCKET_PORT,
         PDP_REQUEST_TIMEOUT_MS,
       );
+    const getRuthUsfm = (chapterNum: number) => getChapterUsfm('RUT', chapterNum);
 
     const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
@@ -227,6 +230,50 @@ test.describe('scripture editor chapter line left as text', () => {
         .poll(readLineBeforeChapter, { timeout: 20_000 })
         .toEqual({ line: '\\mt1 Ruth X', textBeforeCaret: '\\mt1 Ruth X' });
       await expect.poll(() => getRuthUsfm(1), { timeout: 30_000 }).toMatch(/\\mt1 Ruth X\s+\\c 1/);
+    });
+
+    await test.step('typing over a selection from \\c 2 into the text below keeps the caret', async () => {
+      await navigateToolbarBcv(mainPage, 'Jonah 2:1');
+      await expect(chapterMarker).toHaveAttribute('data-number', '2', { timeout: 60_000 });
+      await expect(editorInput).toContainText('Then Jonah prayed to Yahweh', { timeout: 60_000 });
+      // Focus the editor, then select from the start of the chapter line to just after "Then ".
+      await chapterMarker.locator('span').first().click();
+      const didSelect = await editorEvalFrame.evaluate(() => {
+        const chapterLine = document.querySelector('p.chapter[data-marker="c"]');
+        const walker = document.createTreeWalker(
+          chapterLine?.nextElementSibling ?? document.body,
+          NodeFilter.SHOW_TEXT,
+        );
+        let textNode = walker.nextNode();
+        while (textNode && !textNode.textContent?.includes('Then Jonah'))
+          textNode = walker.nextNode();
+        const glyphText = chapterLine?.querySelector('span')?.firstChild;
+        if (!textNode?.textContent || !glyphText) return false;
+        const offset = textNode.textContent.indexOf('Then Jonah') + 'Then '.length;
+        document.getSelection()?.setBaseAndExtent(glyphText, 0, textNode, offset);
+        return true;
+      });
+      expect(didSelect).toBe(true);
+      await mainPage.keyboard.type('ab');
+
+      await expect
+        .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
+        .toEqual(expect.arrayContaining([expect.stringContaining(correctionMessage(2, 'Jonah'))]));
+      // The caret is back after the typing, in the paragraph below the restored marker.
+      await expect
+        .poll(
+          async () => {
+            const { chapterLine, caretInNextLine, textBeforeCaret } = await readLines();
+            return { chapterLine, caretInNextLine, endsWithTyping: textBeforeCaret.endsWith('ab') };
+          },
+          { timeout: 20_000 },
+        )
+        .toEqual({ chapterLine: '\\c 2 ', caretInNextLine: true, endsWithTyping: true });
+      // A key typed now lands in the text, not in the paragraph's marker.
+      await mainPage.keyboard.type('c');
+      await expect
+        .poll(() => getChapterUsfm('JON', 2), { timeout: 30_000 })
+        .toMatch(/^\\c 2\s+\\p\s+abcJonah prayed/);
     });
   });
 });

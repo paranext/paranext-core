@@ -493,19 +493,21 @@ describe('prepareUsjForChapterSave', () => {
       expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
     });
 
-    // A selection from the chapter line into the paragraph below, typed over, deletes the chapter
-    // line and leaves that paragraph where the line stood; a caret in it counts only its own text.
-    it.each([1, 2, 3, 5])(
-      'does not count a paragraph the chapter line merged into as the chapter line (offset %i)',
-      (offset) => {
-        const verse = { type: 'verse', marker: 'v', number: '1' };
+    // A selection from the chapter line into the paragraph below it, typed over, deletes the chapter
+    // line and leaves that paragraph where the line stood. The repair moves the paragraph down whole,
+    // so the caret keeps its place in it; it counts only the paragraph's own text, not a marker.
+    describe('a chapter line merged into the paragraph below it', () => {
+      const verse: MarkerContent = { type: 'verse', marker: 'v', number: '1' };
+      const storedRuth2 = usjOf(
+        chapter('2', { sid: 'RUT 2' }),
+        { type: 'para', marker: 'p', content: [verse, 'Naomi had a relative'] },
+        para('p', 'next'),
+      );
+
+      it.each([1, 2, 3, 5])('keeps a caret at offset %i of its text', (offset) => {
         const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
           usjOf(para('p', 'abhad a relative'), para('p', 'next')),
-          usjOf(
-            chapter('2', { sid: 'RUT 2' }),
-            { type: 'para', marker: 'p', content: [verse, 'Naomi had a relative'] },
-            para('p', 'next'),
-          ),
+          storedRuth2,
           2,
           caretInLine(offset),
         );
@@ -514,9 +516,39 @@ describe('prepareUsjForChapterSave', () => {
           para('p', 'abhad a relative'),
           para('p', 'next'),
         ]);
+        expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset } });
+      });
+
+      it('keeps a caret past a marker the paragraph kept', () => {
+        const { caretTarget } = prepareUsjForChapterSave(
+          usjOf({ type: 'para', marker: 'p', content: [verse, 'abNaomi'] }, para('p', 'next')),
+          storedRuth2,
+          2,
+          { start: { jsonPath: '$.content[0].content[1]', offset: 2 } },
+        );
+        expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[1]', offset: 2 } });
+      });
+
+      it('uses the usual caret for a caret in a later paragraph', () => {
+        const { caretTarget } = prepareUsjForChapterSave(
+          usjOf(para('p', 'abhad a relative'), para('p', 'next')),
+          storedRuth2,
+          2,
+          { start: { jsonPath: '$.content[1].content[0]', offset: 2 } },
+        );
         expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
-      },
-    );
+      });
+
+      it('uses the usual caret when the paragraph after it changed too', () => {
+        const { caretTarget } = prepareUsjForChapterSave(
+          usjOf(para('p', 'abhad a relative'), para('p', 'next, edited')),
+          storedRuth2,
+          2,
+          caretInLine(2),
+        );
+        expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
+      });
+    });
 
     it('uses the usual caret when the caret was not in the moved text', () => {
       const { caretTarget } = prepareUsjForChapterSave(usjOf('c 2', para('p', 'body')), stored, 2, {

@@ -278,6 +278,9 @@ function caretAtStartOf({ indexes, textOffset }: Placement): SelectionRange {
 /** A caret address inside a top-level item: the item's index, and the rest of the path below it. */
 const TOP_LEVEL_CARET_PATH_REGEX = /^\$\.content\[(\d+)\](.*)$/;
 
+/** A path below a top-level item that goes only through `content` children. */
+const CONTENT_INDEXES_PATH_REGEX = /^(\.content\[\d+\])*$/;
+
 /** The rest of a top-level caret path when it is in the item's first child. */
 const FIRST_CHILD_PATH = '.content[0]';
 
@@ -303,17 +306,25 @@ const MARKER_NAME_PATH = '.marker';
  * caret read from it and the target given back to it. A nameless marker's own `\ ` holds no caret,
  * so a caret that was inside it goes to the start of the text after it.
  *
+ * A chapter line merged into the paragraph below it (a selection from the chapter line into that
+ * paragraph, typed over) leaves that paragraph where the line stood. The repair moves it down
+ * whole, and the caret in it addresses the paragraph alone, so it keeps its exact place: only the
+ * paragraph's index changes.
+ *
  * @param caret The editor's caret when the save was made, if it had one.
  * @param content The document's top-level content, in the coordinates `caret` addresses.
  * @param placements Where each item of `content` ended up in the repaired document.
  * @param chapterLineIndex Where in `content` what is left of the stored chapter line stands, if it
  *   is known.
+ * @param mergedLineIndex Where in `content` the paragraph the stored chapter line merged into
+ *   stands, if it is known.
  */
 function caretInMovedText(
   caret: SelectionRange | undefined,
   content: MarkerContent[],
   placements: Map<number, Placement>,
   chapterLineIndex: number | undefined,
+  mergedLineIndex: number | undefined,
 ): SelectionRange | undefined {
   if (!caret || (caret.end && !deepEqualAcrossIframes(caret.end, caret.start))) return undefined;
   const match = TOP_LEVEL_CARET_PATH_REGEX.exec(caret.start.jsonPath);
@@ -325,6 +336,18 @@ function caretInMovedText(
   if (!placement || placement.textOffset !== undefined) return undefined;
   const [newIndex, ...deeper] = placement.indexes;
   if (deeper.length > 0 || newIndex === index) return undefined;
+  // The typing that merges the lines leaves the caret in text, so a text position is all this keeps.
+  if (index === mergedLineIndex) {
+    if (!('offset' in caret.start) || caret.start.offset === undefined) return undefined;
+    if (!CONTENT_INDEXES_PATH_REGEX.test(pathBelowItem)) return undefined;
+    const indexesBelowItem = [...pathBelowItem.matchAll(/\d+/g)].map(([digits]) => Number(digits));
+    return {
+      start: {
+        jsonPath: usjJsonPathFromIndexes([newIndex, ...indexesBelowItem]),
+        offset: caret.start.offset,
+      },
+    };
+  }
   const isChapterLine = index === chapterLineIndex;
   const caretInMarkerName = (propertyOffset: number): SelectionRange => ({
     start: { jsonPath: `$.content[${newIndex}]${MARKER_NAME_PATH}`, propertyOffset },
@@ -392,12 +415,15 @@ function toRepairResult(
  * @param caret The editor's caret, if it has one; see {@link caretInMovedText}.
  * @param chapterLineIndex Where in the document's content what is left of the stored chapter line
  *   stands, if it is known; see {@link caretInMovedText}.
+ * @param mergedLineIndex Where in the document's content the paragraph the stored chapter line
+ *   merged into stands, if it is known; see {@link caretInMovedText}.
  */
 export function repairChapterMarkers(
   usj: Usj,
   expectedChapterNum: number,
   caret?: SelectionRange,
   chapterLineIndex?: number,
+  mergedLineIndex?: number,
 ): ChapterMarkerRepairResult {
   // Without a real chapter number there is nothing to repair the document toward.
   if (expectedChapterNum < 1) return { usj, didRepair: false, caretTarget: undefined };
@@ -522,7 +548,13 @@ export function repairChapterMarkers(
     expected,
   );
   // A line the user is typing in that the repair only moved keeps their caret, ahead of all these.
-  const movedTextCaret = caretInMovedText(caret, strippedContent, placements, chapterLineIndex);
+  const movedTextCaret = caretInMovedText(
+    caret,
+    strippedContent,
+    placements,
+    chapterLineIndex,
+    mergedLineIndex,
+  );
   let caretTarget: ChapterMarkerCaretTarget | undefined;
   if (movedTextCaret) {
     caretTarget = movedTextCaret;
@@ -578,11 +610,30 @@ function isStoredChapterWithoutItsMarker(usjFromEditor: Usj, usjFromPdp: Usj | u
  * paragraph's own text.
  */
 function isChapterLineChangedInPlace(usjFromEditor: Usj, usjFromPdp: Usj, index: number): boolean {
-  const lineAfter = (usj: Usj): Usj => ({
-    ...usj,
-    content: usj.content.slice(index + 1, index + 2),
-  });
-  return areUsjContentsEqualExceptWhitespace(lineAfter(usjFromPdp), lineAfter(usjFromEditor));
+  return areUsjContentsEqualExceptWhitespace(
+    lineAt(usjFromPdp, index + 1),
+    lineAt(usjFromEditor, index + 1),
+  );
+}
+
+/**
+ * Whether the editor's line at `index`, where the stored chapter marker stood, is the paragraph
+ * below the chapter line with the chapter line merged into it: the stored line after that paragraph
+ * is now the one after `index`.
+ */
+function isChapterLineMergedIntoNext(usjFromEditor: Usj, usjFromPdp: Usj, index: number): boolean {
+  return (
+    isParaObject(usjFromEditor.content[index]) &&
+    areUsjContentsEqualExceptWhitespace(
+      lineAt(usjFromPdp, index + 2),
+      lineAt(usjFromEditor, index + 1),
+    )
+  );
+}
+
+/** The document holding only its top-level item at `index`, or nothing if it has none there. */
+function lineAt(usj: Usj, index: number): Usj {
+  return { ...usj, content: usj.content.slice(index, index + 1) };
 }
 
 /**
@@ -623,18 +674,28 @@ export function prepareUsjForChapterSave(
   // outright, or the chapter line merged into the paragraph below it, and the text after it moved
   // up into its place.
   const storedChapterIndex = usjFromPdp?.content.findIndex(isChapterObject) ?? -1;
+  const hasChapterLine = !!usjFromPdp && !isMarkerDeleted && storedChapterIndex >= 0;
   const chapterLineIndex =
-    !usjFromPdp ||
-    isMarkerDeleted ||
-    storedChapterIndex < 0 ||
-    !isChapterLineChangedInPlace(usjFromEditor, usjFromPdp, storedChapterIndex)
-      ? undefined
-      : storedChapterIndex;
+    hasChapterLine && isChapterLineChangedInPlace(usjFromEditor, usjFromPdp, storedChapterIndex)
+      ? storedChapterIndex
+      : undefined;
+  const mergedLineIndex =
+    hasChapterLine &&
+    chapterLineIndex === undefined &&
+    isChapterLineMergedIntoNext(usjFromEditor, usjFromPdp, storedChapterIndex)
+      ? storedChapterIndex
+      : undefined;
   const {
     usj: repaired,
     didRepair,
     caretTarget,
-  } = repairChapterMarkers(usjFromEditor, expectedChapterNum, caret, chapterLineIndex);
+  } = repairChapterMarkers(
+    usjFromEditor,
+    expectedChapterNum,
+    caret,
+    chapterLineIndex,
+    mergedLineIndex,
+  );
   // A restored marker always goes at the start (chapter 1, which may lack one, is never restored).
   const restoredMarkerCaret = caretAfterChapterNumber(
     [0],
