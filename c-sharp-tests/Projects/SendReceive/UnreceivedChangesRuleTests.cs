@@ -25,6 +25,48 @@ namespace TestParanextDataProvider.Projects.SendReceive
     }
 
     /// <summary>
+    /// Unit tests for <see cref="ParatextProjectSendReceiveService.AllowsServerLookup"/>: which
+    /// internet settings let the poller contact the Send/Receive server.
+    /// </summary>
+    [TestFixture]
+    [ExcludeFromCodeCoverage]
+    internal class AllowsServerLookupTests
+    {
+        [TestCase(
+            InternetUse.Enabled,
+            InternetUse.Enabled,
+            ExpectedResult = true,
+            TestName = "Enabled_Allows"
+        )]
+        [TestCase(
+            InternetUse.Enabled,
+            InternetUse.VpnRequired,
+            ExpectedResult = false,
+            TestName = "SomeServicesDisabled_OutsideSensitiveLocation_Refuses"
+        )]
+        [TestCase(
+            InternetUse.Disabled,
+            InternetUse.VpnRequired,
+            ExpectedResult = false,
+            TestName = "SomeServicesDisabled_InSensitiveLocation_Refuses"
+        )]
+        [TestCase(
+            InternetUse.Disabled,
+            InternetUse.Disabled,
+            ExpectedResult = false,
+            TestName = "Disabled_Refuses"
+        )]
+        [TestCase(
+            InternetUse.ProxyOnly,
+            InternetUse.ProxyOnly,
+            ExpectedResult = false,
+            TestName = "ProxyOnly_Refuses"
+        )]
+        public bool AllowsServerLookup(InternetUse effective, InternetUse saved) =>
+            ParatextProjectSendReceiveService.AllowsServerLookup(effective, saved);
+    }
+
+    /// <summary>
     /// Stub defaults of the server-tip seam on <see cref="ParatextProjectSendReceiveService"/>.
     /// </summary>
     [TestFixture]

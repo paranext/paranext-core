@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Paranext.DataProvider.Services;
+using Paranext.DataProvider.Users;
 using Paratext.Data;
 using Paratext.Data.Repository;
 using Paratext.Data.Users;
@@ -258,10 +259,25 @@ internal class ParatextProjectSendReceiveService(
     ) => new Dictionary<string, string?>();
 
     /// <summary>
-    /// Whether the user allows unrestricted internet use (the Paratext internet setting).
+    /// Whether the Paratext internet setting allows contacting the Send/Receive server — see
+    /// <see cref="AllowsServerLookup"/>.
     /// </summary>
     protected internal virtual bool IsInternetUseEnabled() =>
-        InternetAccess.Status == InternetUse.Enabled;
+        AllowsServerLookup(InternetAccess.Status, InternetAccess.RawStatus);
+
+    /// <summary>
+    /// Whether internet use resolves to enabled (<paramref name="effectiveInternetUse"/>, ParatextData's
+    /// <c>InternetAccess.Status</c>) and the saved setting (<paramref name="savedInternetUse"/>,
+    /// <c>InternetAccess.RawStatus</c>) does not turn off Send/Receive. Both are needed:
+    /// ParatextData resolves the saved "Disable access to some Bible translation services" to enabled
+    /// outside sensitive locations, but <see cref="InternetServicesGate"/> refuses Send/Receive for it.
+    /// </summary>
+    internal static bool AllowsServerLookup(
+        InternetUse effectiveInternetUse,
+        InternetUse savedInternetUse
+    ) =>
+        effectiveInternetUse == InternetUse.Enabled
+        && !InternetServicesGate.IsBlocked(savedInternetUse);
 
     /// <summary>
     /// The projects among <paramref name="projects"/> for which the server holds changes not yet
