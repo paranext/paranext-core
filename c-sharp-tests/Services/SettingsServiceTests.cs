@@ -66,7 +66,7 @@ public class SettingsServiceTests
     }
 
     [TestCase()]
-    public void TryGetSetting_StoredNull_ReturnsTrue()
+    public void TryGetSetting_ReadReturnsNull_ReturnsTrueWithNull()
     {
         _settingsService.AddSettingValue("nullableSetting", null!);
 

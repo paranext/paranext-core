@@ -139,8 +139,9 @@ internal static class SettingsService
     /// <summary>
     /// Like <see cref="GetSetting{T}"/> (and BLOCKING in the same way), but returns
     /// <see langword="false"/> instead of throwing when the read fails, e.g. because the settings
-    /// service is not up yet or the read timed out. A stored <see langword="null"/> still counts as
-    /// a successful read.
+    /// service is not up yet or the read timed out. Returns <see langword="true"/> with whatever
+    /// <see cref="GetSetting{T}"/> returned, including <see langword="null"/>; see
+    /// <see cref="GetSettingAsync"/> for what a <see langword="null"/> means.
     /// </summary>
     public static bool TryGetSetting<T>(PapiClient papiClient, string key, out T? value)
     {
