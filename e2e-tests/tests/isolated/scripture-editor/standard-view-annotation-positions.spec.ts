@@ -40,7 +40,7 @@
  * - A position at the very end of the chapter's last text resolves to that text's own path and
  *   offset, not to the preceding verse's own `['number']` location.
  * - Clicking an annotation held on only part of a verse number (`runAnnotationAction(…, 'clicked')`)
- *   scrolls it into view, although the editor paints it with a highlight that no element carries.
+ *   scrolls it into view, although the element it paints is only a piece of the verse glyph.
  * - A collapsed `selectRange` at a verse text's own settled offset 0 reports that text's location,
  *   not the preceding verse number's `['number']` location: content wins over a verse glyph's own
  *   trailing separator.
@@ -205,57 +205,43 @@ const MARKER_SETTLE_DELAY_SETTING_KEY = 'platformScriptureEditor.markerSettleDel
 /** The editor's own built-in idle delay — an unset setting behaves identically to this value. */
 const DEFAULT_MARKER_SETTLE_DELAY_MS = 1000;
 
-/** One piece of display text the editor paints with a CSS Custom Highlight. */
-interface HighlightedPiece {
-  /** The text the piece covers. */
+/** One element the editor paints with an annotation's classes. */
+interface PaintedElement {
+  /** The element's text. */
   text: string;
-  /** The whole text of the element the piece starts in. */
-  startElementText: string;
-  /** The number of the verse glyph the piece sits in, if it sits in one. */
+  /** The element's tag name, lower case. */
+  tag: string;
+  /** Whether it carries `display-annotation`, which everything painted but a `<mark>` carries. */
+  displayAnnotation: boolean;
+  /** The text of the node right before it: for a piece of a cut carrier, the piece before it. */
+  previousText: string | undefined;
+  /** The number of the verse glyph it is, or sits in, if any. */
   verseNumber: string | undefined;
 }
 
 /**
- * The names of the CSS Custom Highlights registered in the editor's frame.
+ * Every element in the editor that carries annotation `annotationId`'s class, in document order.
  *
- * The editor paints the part of a display byte (an attribute value, a verse number) an annotation
- * holds with a highlight rather than an element, so no element carries the annotation's class
- * there. It registers one highlight per set of annotation class names, under names it does not
- * publish, so a step takes the names before setting an annotation and reads the highlights added
- * after.
+ * The editor paints an annotation as classes on real elements: a `<mark>` around the content text
+ * it holds and, on display bytes (an attribute value, a verse number), the carrier's own element. A
+ * carrier the annotation holds only part of is cut into sibling pieces of its own class and
+ * `data-*` attributes, so the annotation's classes land on exactly the piece it holds.
  */
-async function readHighlightNames(editorInput: Locator): Promise<string[]> {
-  return editorInput.evaluate(() => {
-    const names: string[] = [];
-    CSS.highlights.forEach((_, name) => names.push(name));
-    return names;
-  });
-}
-
-/** The pieces painted by every highlight in the editor's frame except those named in `except`. */
-async function readHighlightedPieces(
+async function readPaintedElements(
   editorInput: Locator,
-  except: string[],
-): Promise<HighlightedPiece[]> {
-  return editorInput.evaluate((_, skippedNames) => {
-    const pieces: HighlightedPiece[] = [];
-    CSS.highlights.forEach((highlight, name) => {
-      if (skippedNames.includes(name)) return;
-      highlight.forEach((range) => {
-        if (!(range instanceof Range)) return;
-        const { startContainer } = range;
-        const start =
-          startContainer instanceof Element ? startContainer : startContainer.parentElement;
-        pieces.push({
-          text: range.toString(),
-          startElementText: start?.textContent ?? '',
-          verseNumber:
-            start?.closest('[data-marker="v"]')?.getAttribute('data-number') ?? undefined,
-        });
-      });
-    });
-    return pieces;
-  }, except);
+  annotationId: string,
+): Promise<PaintedElement[]> {
+  return editorInput.evaluate(
+    (root, id) =>
+      Array.from(root.querySelectorAll(`.annotationId-${CSS.escape(id)}`), (element) => ({
+        text: element.textContent ?? '',
+        tag: element.tagName.toLowerCase(),
+        displayAnnotation: element.classList.contains('display-annotation'),
+        previousText: element.previousSibling?.textContent ?? undefined,
+        verseNumber: element.closest('[data-marker="v"]')?.getAttribute('data-number') ?? undefined,
+      })),
+    annotationId,
+  );
 }
 
 test.use({
@@ -533,7 +519,6 @@ test.describe('scripture editor settled positions', () => {
       if (textIndex === undefined) throw new Error('findVerseText returned an empty index chain');
       const wSpanPath = contentJsonPath([...verseFiveText.indexes.slice(0, -1), textIndex + 1]);
 
-      const highlightsBeforeAttribute = await readHighlightNames(editorInput);
       await sendToEditorController(editorId, 'setAnnotation', [
         {
           start: chapterPropertyLocation(SPAN_VERSE_REF, `${wSpanPath}['lemma']`, 0),
@@ -542,21 +527,31 @@ test.describe('scripture editor settled positions', () => {
         ANNOTATION_TYPE,
         ATTRIBUTE_ANNOTATION_ID,
       ]);
-      // Exactly the value's bytes are painted, inside the `|grace` run: not its `|`.
+      // Exactly the value's bytes are painted: the `|grace` run is cut into a `|` piece and a
+      // `grace` piece, and only the `grace` piece carries the annotation's classes.
       await expect
-        .poll(() => readHighlightedPieces(editorInput, highlightsBeforeAttribute), {
+        .poll(() => readPaintedElements(editorInput, ATTRIBUTE_ANNOTATION_ID), {
           timeout: 30_000,
         })
-        .toEqual([{ text: SPAN_WORD, startElementText: `|${SPAN_WORD}`, verseNumber: undefined }]);
-      // Held on the run itself, never a <mark> around (part of) it, and never painted whole: the
-      // run stays whole.
-      await expect(editorInput.locator(`.annotationId-${ATTRIBUTE_ANNOTATION_ID}`)).toHaveCount(0);
+        .toEqual([
+          {
+            text: SPAN_WORD,
+            tag: 'span',
+            displayAnnotation: true,
+            previousText: '|',
+            verseNumber: undefined,
+          },
+        ]);
+      // Held on the run itself, never a <mark> around (part of) it, and the run's text on screen
+      // is unchanged by the cut.
+      await expect(editorInput.locator(`mark.annotationId-${ATTRIBUTE_ANNOTATION_ID}`)).toHaveCount(
+        0,
+      );
       await expect(editorInput).toContainText(`${SPAN_WORD}|${SPAN_WORD}\\${WORD_MARKER}*`);
 
       const versePath = findVersePath(chapterUsj.content ?? [], String(TARGET_VERSE_REF.verseNum));
       if (!versePath)
         throw new Error(`No verse ${TARGET_VERSE_REF.verseNum} marker in the chapter USJ`);
-      const highlightsBeforeVerse = await readHighlightNames(editorInput);
       await sendToEditorController(editorId, 'setAnnotation', [
         {
           start: chapterPropertyLocation(TARGET_VERSE_REF, `${versePath}['number']`, 0),
@@ -565,18 +560,24 @@ test.describe('scripture editor settled positions', () => {
         ANNOTATION_TYPE,
         VERSE_ANNOTATION_ID,
       ]);
-      // Exactly the number's one byte is painted, inside verse 4's glyph: not its `\v` or its
-      // separator.
+      // Exactly the number's one byte is painted, as its own piece of verse 4's glyph: not its
+      // `\v` or its separator, which stay in pieces of their own that the annotation leaves alone.
       await expect
         .poll(
           async () =>
-            (await readHighlightedPieces(editorInput, highlightsBeforeVerse)).map(
+            (await readPaintedElements(editorInput, VERSE_ANNOTATION_ID)).map(
               ({ text, verseNumber }) => ({ text, verseNumber }),
             ),
           { timeout: 30_000 },
         )
         .toEqual([{ text: '4', verseNumber: '4' }]);
-      await expect(editorInput.locator(`.annotationId-${VERSE_ANNOTATION_ID}`)).toHaveCount(0);
+      // Exact, not `toHaveText`: that normalizes whitespace, and the separator is a piece here.
+      expect(
+        await editorInput
+          .locator(`span.verse[data-number="${TARGET_VERSE_REF.verseNum}"]`)
+          .allTextContents(),
+      ).toEqual([`\\v${NBSP}`, '4', ' ']);
+      await expect(editorInput.locator(`mark.annotationId-${VERSE_ANNOTATION_ID}`)).toHaveCount(0);
     });
 
     await test.step("a selectRange to the web view's own verse lands even while the scroll group has just moved away", async () => {
@@ -670,9 +671,8 @@ test.describe('scripture editor settled positions', () => {
       const freshChapter = await getChapterUsj(LAST_VERSE_REF);
       const lastVersePath = findVersePath(freshChapter.content ?? [], '25');
       if (!lastVersePath) throw new Error('No verse 25 marker in a fresh read of the chapter USJ');
-      // The first digit of `25` only: the editor paints it with a highlight, so no element carries
-      // the annotation's class and only its ranges say where it is.
-      const highlightsBefore = await readHighlightNames(editorInput);
+      // The first digit of `25` only: the editor cuts the verse glyph so that digit is a piece of
+      // its own, and paints that piece.
       await sendToEditorController(editorId, 'setAnnotation', [
         {
           start: chapterPropertyLocation(LAST_VERSE_REF, `${lastVersePath}['number']`, 0),
@@ -685,7 +685,7 @@ test.describe('scripture editor settled positions', () => {
       await expect
         .poll(
           async () =>
-            (await readHighlightedPieces(editorInput, highlightsBefore)).map(
+            (await readPaintedElements(editorInput, CLICKED_ANNOTATION_ID)).map(
               ({ text, verseNumber }) => ({ text, verseNumber }),
             ),
           { timeout: 30_000 },

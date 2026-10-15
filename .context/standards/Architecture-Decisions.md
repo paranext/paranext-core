@@ -2217,7 +2217,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Date:** 2026-09-28
 - **Status:** Accepted; its painting (whole-carrier classes, class lookups) superseded by
-  `adr-editor-annotations-paint-exactly`
+  `adr-editor-annotations-paint-exactly`, and its unsplit carrier by
+  `adr-editor-annotations-paint-by-element`
 - **Context:** A checks result, a comment, or any other `setAnnotation` caller must be able to
   annotate essentially any location the position model resolves — a marker glyph, a verse or
   chapter number, a note caller, an attribute value — not only ordinary content text. The editor's
@@ -2231,15 +2232,19 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `686d5754`).
 - **Decision:** An annotation that covers display bytes is never expressed as a mark wrapping them.
   Instead the CARRIER node itself (the marker glyph, the verse/chapter node, the note-caller text,
-  the attribute-run text) holds a new node state, `displayAnnotationsState`
-  (`{ basis, annotations: [{ type, id, start, end }] }`), remapped through a character alignment of
-  the carrier's old and new text whenever that text changes, so the tree shape every scanner,
-  settle rewrite, and exporter depends on is completely unchanged. Painting and events come from a
-  per-editor index that adds the same class names `TypedMarkNode` would (`<typedMark>-<type>`,
-  `<typedMarkOverlap>-<type>`, `annotationId-<id>`) plus `display-annotation` to the carrier's DOM
-  element, so host CSS and `scrollToAnnotation` (`.annotationId-<id>`) work unchanged. _(Superseded
-  by `adr-editor-annotations-paint-exactly`: only a carrier painted in full gets the classes, and
-  hosts find annotations with `EditorRef.getAnnotationRanges`.)_ `getUsj()`
+  the attribute-run text) holds a new node state, `displayAnnotationsState` (`{ basis, annotations:
+  [{ type, id, start, end }] }`), remapped through a character alignment of the carrier's old and
+  new text whenever that text changes, so the tree shape every scanner, settle rewrite, and exporter
+  depends on is completely unchanged. _(Superseded by `adr-editor-annotations-paint-by-element`: a
+  carrier held in part is cut into sibling pieces of its own class, and those readers see one
+  carrier through the chain helpers.)_ Painting and events come from a per-editor index that adds
+  the same class names `TypedMarkNode` would (`<typedMark>-<type>`, `<typedMarkOverlap>-<type>`,
+  `annotationId-<id>`) plus `display-annotation` to the carrier's DOM element, so host CSS and
+  `scrollToAnnotation` (`.annotationId-<id>`) work unchanged. _(Superseded by
+  `adr-editor-annotations-paint-exactly`: only a carrier painted in full gets the classes, and hosts
+  find annotations with `EditorRef.getAnnotationRanges`. That in turn is superseded by
+  `adr-editor-annotations-paint-by-element`: every painted element, a carrier's held piece included,
+  gets the classes, and hosts still measure with `EditorRef.getAnnotationRanges`.)_ `getUsj()`
   carries none of this — attribute values are plain strings with no sub-string annotation shape in
   USJ — so the host re-applies its own anchors after a reload, as it already does today.
 - **Alternatives:** **Option A — let marks sit inside display runs and make every reader
@@ -2257,7 +2262,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   it — a check naming one attribute's value highlights the whole attribute-run text, and a check on
   a verse number highlights the glyph's whole `\v 12 ` — because splitting the carrier node is the
   corruption this decision exists to avoid. _(Superseded by `adr-editor-annotations-paint-exactly`,
-  which paints the held part with the Highlight API rejected for now below.)_ The exact range is stored regardless, so painting only
+  which paints the held part with the Highlight API rejected for now below, and in turn by
+  `adr-editor-annotations-paint-by-element`, which cuts the carrier into pieces of its own class
+  and paints the held pieces as elements.)_ The exact range is stored regardless, so painting only
   the named bytes (the Highlight API, or overlay rectangles) can be added later without redoing this
   work. No `zmsc` (or other USJ shape) exists for an annotation held only on display bytes;
   `getUsj()` never carries it, and a host that needs it back after a `setUsj` reload re-applies from
@@ -2266,10 +2273,64 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   distinct removal accounting that does not touch marks' existing behavior.
 - **Source:** PT-4370; paranext-core PR #2823, scripture-editors PR paranext/scripture-editors#11.
 
+## adr-editor-annotations-paint-by-element: Every annotation paints as classes on real elements; a carrier held in part is cut into pieces of its own class
+
+- **Date:** 2026-10-14
+- **Status:** Accepted
+- **Context:** `adr-editor-annotations-paint-exactly` painted a display byte held only in part with
+  a CSS Custom Highlight, styled by translating the host's own class rules. `::highlight()` carries
+  only `background-color`, `color`, `text-decoration` and `text-shadow`, so a partly held byte lost
+  borders, padding, font changes and `:hover`; the painter, its host-style translator and the
+  stale-range repair it needed were a second paint path beside the classes on `<mark>`s and whole
+  carriers; and a host that looked an annotation up by its class missed the highlighted bytes. The
+  requirement: every annotation held and painted the same way, with full CSS fidelity, exact
+  everywhere.
+- **Decision:** Every annotation paints as CSS classes on a real element, with the class names a
+  `<mark>` carries (`<typedMark>-<type>`, `<typedMarkOverlap>-<type>`, `annotationId-<id>`), plus
+  `display-annotation` on everything painted that is not a `<mark>`. Content text keeps its
+  `<mark>`. An editable display-byte carrier (a marker glyph, a verse, an attribute run's text, an
+  editable caller, a chapter glyph, an unmatched closer) is never held in part at the end of an
+  update: it is cut at every hold boundary into adjacent sibling pieces of its own class and
+  `data-*` attributes, each held whole or not at all — the first piece is the carrier's own node —
+  and neighbouring pieces the same annotations hold are joined again. Every structural reader that
+  finds a run's pieces by position, reads a carrier's text whole or acts once per carrier goes
+  through the editor's chain helpers (`$pieces`, `$pieceHead`, `$logicalText`,
+  `$logicalNextSibling`, `$setLogicalText`, …) and sees one carrier. A read-only decorator is never
+  cut: held whole, its root takes the classes; held in part, it draws sub-spans carrying the classes
+  and `data-annotation-keys` over exactly the characters held. Whitespace between two held bytes in
+  one block is painted whole on its own element. The CSS Custom Highlight painter and its
+  host-style translator are deleted. A generated transparency oracle runs every keystroke case of
+  the pending/settled oracle twice — on the document as loaded, and with a fixed annotation set held
+  on every display-byte carrier of the edited paragraph (whole, a prefix, a suffix, an interior
+  byte, crossings into the content beside it) — and requires every observable to be identical:
+  `getUsj()` pending and settled, the document and screen text, every caret position's report and
+  round trip, the collab delta, the `onUsjChange` ops and a copy's `text/plain`. Annotations change
+  nothing but painting.
+- **Alternatives:** **Keep the highlights** — rejected: partly held bytes keep only part of the
+  host's CSS, and painting keeps two paths; the requirement is every annotation held and painted
+  the same way, with full CSS fidelity, exact everywhere. **Wrap the held display bytes in a mark**
+  — rejected for the reason `adr-editor-annotations-on-display-bytes` gives: readers find a run's
+  pieces by position and class, and a foreign element inside a run corrupts it, whereas pieces of
+  the carrier's own class are still the carrier to every reader that goes through the chain
+  helpers. **Overlay rectangles** — rejected: they must be repositioned on every reflow and scroll,
+  and take no part in the host's class rules.
+- **Consequences:** Every host class rule, any property and `:hover` included, applies to
+  everything an annotation paints, and `CSS.highlights` is never used. A selector for a carrier
+  (`span.verse[data-number="4"]`, `span.opening[data-marker="wj"]`) can match several sibling
+  pieces; no DOM attribute marks a later piece, but the first comes first, so `querySelector` and
+  Playwright's `.first()` find it. Hosts keep measuring, scrolling to and hit-testing an annotation
+  with `EditorRef.getAnnotationRanges(type, id)` — one range over each painted element's contents,
+  in document order — and a sub-span a React-rendered decorator draws appears only once React has
+  rendered it. A box rule on a carrier class repeats on every piece, or lands on one piece only
+  (`padding-inline-start` on a table row's opening glyph, the `.attribute:hover` lift, the
+  verse-arrival pulse on the first piece's `::before`); this is cosmetic and open.
+- **Source:** PT-4370.
+
 ## adr-editor-annotations-paint-exactly: An annotation paints exactly the bytes it holds, and hosts find it by its ranges
 
 - **Date:** 2026-10-01
-- **Status:** Accepted
+- **Status:** Accepted; its highlight painting superseded by
+  `adr-editor-annotations-paint-by-element`
 - **Context:** `adr-editor-annotations-on-display-bytes` held an annotation exactly but painted its
   carrier whole: a check on `G5485` lit all of `|lemma="grace" strong="G5485"`, one on the `2` of
   `\v 12 ` lit the glyph and its trailing space, and a click anywhere on a run fired every
@@ -2277,34 +2338,42 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   cannot paint most of what host class rules set.
 - **Decision:** Paint from what each annotation holds. A leaf every annotation on it covers in full
   keeps element classes (`<typedMark>-<type>`, `<typedMarkOverlap>-<type>`, `annotationId-<id>`,
-  `display-annotation`), so host styling, `:hover` and element events are unchanged there. A
-  display byte held only in part is painted with a CSS Custom Highlight per class set, which the
-  editor styles by translating the host's own class rules: it measures a hidden probe carrying the
-  classes against one carrying none and copies what differs among `background-color`, `color`,
+  `display-annotation`), so host styling, `:hover` and element events are unchanged there. A display
+  byte held only in part is painted with a CSS Custom Highlight per class set, which the editor
+  styles by translating the host's own class rules: it measures a hidden probe carrying the classes
+  against one carrying none and copies what differs among `background-color`, `color`,
   `text-decoration` and `text-shadow`; a bottom border becomes an underline. Every other property,
-  and `:hover`, applies only to bytes painted as elements. Whitespace between two held bytes of one
-  annotation in one block (a separator, a char opener's no-break space) is painted, so `12 In` has
-  no hole; whitespace at an annotation's edges never is. Bytes a view does not display (a `\va`
-  where markers are hidden) are held and reported on removal but paint nothing. A read-only
-  decorator's holds are stored in the bytes it stands for and mapped onto what it draws only when
-  read, so a collapse, an expand, or a write while it is drawn differently never widens one. Click
-  and hover fire only for the annotation painted under the pointer. Hosts measure, scroll to and
-  hit-test an annotation with `EditorRef.getAnnotationRanges(type, id)` — live DOM ranges over
-  everything it paints, in document order — never by its class, which no element carries where a
-  highlight paints; `platform-scripture-editor`'s `editor-dom.util.ts` does.
+  and `:hover`, applies only to bytes painted as elements. _(Superseded by
+  `adr-editor-annotations-paint-by-element`: a display byte held in part is cut into a piece of its
+  own and painted as an element, with every class rule; no highlight is used.)_ Whitespace between
+  two held bytes of one annotation in one block (a separator, a char opener's no-break space) is
+  painted, so `12 In` has no hole; whitespace at an annotation's edges never is. Bytes a view does
+  not display (a `\va` where markers are hidden) are held and reported on removal but paint nothing.
+  A read-only decorator's holds are stored in the bytes it stands for and mapped onto what it draws
+  only when read, so a collapse, an expand, or a write while it is drawn differently never widens
+  one. Click and hover fire only for the annotation painted under the pointer. Hosts measure, scroll
+  to and hit-test an annotation with `EditorRef.getAnnotationRanges(type, id)` — live DOM ranges
+  over everything it paints, in document order — never by its class, which no element carries where
+  a highlight paints; `platform-scripture-editor`'s `editor-dom.util.ts` does. _(Superseded by
+  `adr-editor-annotations-paint-by-element`: every painted element carries the class; hosts still
+  measure with the ranges.)_
 - **Alternatives:** **Keep whole-carrier painting** — rejected: it shows more than the check or
-  comment names, and its click target is wider than what is painted. **Split the carrier to wrap
-  the held part in an element** — rejected for the reason `adr-editor-annotations-on-display-bytes`
-  gives: it is the run-corrupting shape that entry exists to avoid. **Overlay rectangles** —
-  rejected: they must be repositioned on every reflow and scroll, and take no part in the host's
-  class rules. **Ask hosts for highlight-specific styles** — rejected: hosts keep one class
-  contract, and the editor translates it.
+  comment names, and its click target is wider than what is painted. **Split the carrier to wrap the
+  held part in an element** — rejected for the reason `adr-editor-annotations-on-display-bytes`
+  gives: it is the run-corrupting shape that entry exists to avoid. _(Superseded by
+  `adr-editor-annotations-paint-by-element`: the carrier is cut into pieces of its own class, not
+  wrapped in a foreign element, and readers reach the pieces through chain helpers.)_ **Overlay
+  rectangles** — rejected: they must be repositioned on every reflow and scroll, and take no part in
+  the host's class rules. **Ask hosts for highlight-specific styles** — rejected: hosts keep one
+  class contract, and the editor translates it.
 - **Consequences:** A partly held byte cannot show borders, padding, font changes or `:hover`
   styling; a host that needs them there needs the byte held whole. Without the highlight API a held
   display byte is painted whole. A host that still looks annotations up by `.annotationId-<id>`
   misses partly held display bytes; CSS rules keyed on the class keep working, since the editor
-  translates them. The annotation-location oracle checks painted bytes against held bytes plus
-  interior whitespace in every view.
+  translates them. _(Superseded by `adr-editor-annotations-paint-by-element`: a partly held byte is
+  painted as an element, so every class rule applies and a class lookup finds it.)_ The
+  annotation-location oracle checks painted bytes against held bytes plus interior whitespace in
+  every view.
 - **Source:** PT-4370 round 9; paranext-core PR #2823, scripture-editors PR
   paranext/scripture-editors#11.
 

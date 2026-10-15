@@ -178,11 +178,12 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
 
     // A row's own \tr glyph rides in the anonymous cell the browser generates around the only
     // non-cell content of a <tr>, so it matches neither the td nor the th rule and would sit flush
-    // against the table edge without this.
+    // against the table edge without this. Only the head piece of a glyph an annotation cuts into
+    // pieces is padded, so the cut glyph keeps the one gap the uncut glyph has.
     it('pads a row marker like the cells around it', () => {
       expect(scss).toContain(
-        '.usfm .table-row > .opening,\n' +
-          '.usfm .table-row > .marker {\n' +
+        '.usfm .table-row > .opening:not([data-piece-continuation]),\n' +
+          '.usfm .table-row > .marker:not([data-piece-continuation]) {\n' +
           '  padding-inline-start: 0.28em;\n' +
           '}',
       );
