@@ -54,6 +54,8 @@ import {
   shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
   validateCommentSelection,
+  readCommentRangeText,
+  hasPendingCommentTextChanged,
   withDocumentEndOnText,
   selectableParagraphMarkers,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
@@ -4921,3 +4923,74 @@ describe('resolveNoteVerseRef (picking a note navigates to its verse)', () => {
 });
 
 // #endregion resolveNoteVerseRef
+
+describe('readCommentRangeText', () => {
+  const makeDoc = (content: Usj['content'][number][]): Usj => ({
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [{ type: 'book', marker: 'id', code: 'PSA' }, ...content],
+  });
+  const path = '$.content[1].content[0]';
+  const range = (startOffset: number, endOffset: number) => ({
+    start: { jsonPath: path, offset: startOffset },
+    end: { jsonPath: path, offset: endOffset },
+  });
+  const doc = makeDoc([{ type: 'para', marker: 'p', content: ['In the beginning'] }]);
+
+  it.each([
+    ['a slice of the text', doc, range(3, 6), 'the'],
+    ['the whole text', doc, range(0, 16), 'In the beginning'],
+    [
+      'a path that is gone',
+      makeDoc([{ type: 'para', marker: 'p', content: [] }]),
+      range(3, 6),
+      undefined,
+    ],
+    [
+      'a path that is now a marker',
+      makeDoc([
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'char', marker: 'nd', content: ['the'] }],
+        },
+      ]),
+      range(3, 6),
+      undefined,
+    ],
+    [
+      'text that is now shorter than the range',
+      makeDoc([{ type: 'para', marker: 'p', content: ['In'] }]),
+      range(3, 6),
+      undefined,
+    ],
+  ])('reads %s', (_name, usj, r, expected) => {
+    expect(readCommentRangeText(r, usj)).toBe(expected);
+  });
+});
+
+describe('hasPendingCommentTextChanged', () => {
+  const path = '$.content[1].content[0]';
+  const pending = {
+    range: { start: { jsonPath: path, offset: 3 }, end: { jsonPath: path, offset: 6 } },
+    anchoredText: 'the',
+  };
+  const docWith = (text: string): Usj => ({
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'PSA' },
+      { type: 'para', marker: 'p', content: [text] },
+    ],
+  });
+
+  it.each([
+    ['the anchored text is unchanged', 'In the beginning', false],
+    ['text after the range changed', 'In the beginnings', false],
+    ['text before the range shifted it', 'Oh, in the beginning', true],
+    ['the anchored text itself changed', 'In her beginning', true],
+    ['the text became too short', 'In', true],
+  ])('when %s', (_name, text, expected) => {
+    expect(hasPendingCommentTextChanged(pending, docWith(text))).toBe(expected);
+  });
+});

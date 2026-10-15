@@ -214,6 +214,56 @@ const NOTICE_NO_TEXT: CommentSelectionNoticeKey =
   '%webView_platformScriptureEditor_error_noTextSelected%';
 
 /**
+ * Reads the text a validated comment range names. {@link validateCommentSelection} guarantees both
+ * ends are text locations on the same path, so the range names one slice of one string.
+ *
+ * @param range A range from {@link validateCommentSelection}
+ * @param usj The document to read from
+ * @returns The named text, or `undefined` if the path no longer resolves to a string or the offsets
+ *   no longer fit inside it
+ */
+export function readCommentRangeText(
+  range: { start: UsjDocumentLocation; end: UsjDocumentLocation },
+  usj: Usj,
+): string | undefined {
+  if (
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(range.start) ||
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(range.end) ||
+    range.start.jsonPath !== range.end.jsonPath
+  )
+    return undefined;
+  try {
+    const usjRW = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
+    const node = usjRW.jsonPathToUsjNodeAndDocumentLocation(range.start.jsonPath)?.node;
+    if (!isString(node)) return undefined;
+    const { offset: startOffset } = range.start;
+    const { offset: endOffset } = range.end;
+    if (startOffset < 0 || endOffset < startOffset || endOffset > node.length) return undefined;
+    return node.slice(startOffset, endOffset);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether a pending comment must be discarded because the text it is anchored to is no longer what
+ * was selected. The comment is saved against the frozen range, so a range that now names other text
+ * (or none) would store the comment on the wrong characters.
+ *
+ * @param pending The pending comment's frozen range and the text it named when captured
+ * @param usj The current settled document
+ */
+export function hasPendingCommentTextChanged(
+  pending: {
+    range: { start: UsjDocumentLocation; end: UsjDocumentLocation };
+    anchoredText: string;
+  },
+  usj: Usj,
+): boolean {
+  return readCommentRangeText(pending.range, usj) !== pending.anchoredText;
+}
+
+/**
  * A range end that names a marker object, with no offset, is the same USFM position as the end of
  * the string right before that marker (Find and Checks spell "up to the footnote" this way). It is
  * rewritten onto that string so it validates the same as the text-end spelling.

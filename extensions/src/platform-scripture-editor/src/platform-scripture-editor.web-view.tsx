@@ -194,6 +194,8 @@ import {
   selectableParagraphMarkers,
   selectCommentThreadInPanelSafe,
   validateCommentSelection,
+  readCommentRangeText,
+  hasPendingCommentTextChanged,
   shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
 } from './platform-scripture-editor.utils';
@@ -310,6 +312,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // Same reasoning as SYNC_EDIT_BLOCKED_KEY above, for the Edit flyout's blocked-action notice.
   EDIT_ACTION_BLOCKED_KEY,
   '%webView_platformScriptureEditor_error_noTextSelected%',
+  '%webView_platformScriptureEditor_warning_pendingCommentTextChanged%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   '%webView_platformScriptureEditor_error_selectionNotResolved%',
   ...PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
@@ -577,11 +580,38 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   /**
    * Stores the annotation range for the pending comment being created. This is captured when the
    * user initiates comment creation and used to create the annotation highlight and to extract
-   * selection info when saving the comment.
+   * selection info when saving the comment. `anchoredText` is the text the range named when it was
+   * captured; the pending comment is discarded if the settled document stops naming that text.
    */
   const pendingCommentAnnotationRange = useRef<
-    { range: AnnotationRange; verseRef: SerializedVerseRef } | undefined
+    { range: AnnotationRange; verseRef: SerializedVerseRef; anchoredText?: string } | undefined
   >(undefined);
+
+  /** Latest `onCommentEditorCancel`, readable from the editor's change callback defined before it. */
+  const discardPendingCommentRef = useRef<() => void>(() => {});
+
+  /**
+   * A pending comment is saved against its frozen range, so it cannot outlive a change to the text
+   * that range names — local typing or a remote apply. Discards it, with a notice, when `usj` no
+   * longer has the captured text there. Only a pending comment with a captured text pays for the
+   * comparison.
+   */
+  const discardPendingCommentIfAnchorChanged = useRef((usj: Usj) => {
+    const pendingComment = pendingCommentAnnotationRange.current;
+    if (
+      pendingComment?.anchoredText === undefined ||
+      !hasPendingCommentTextChanged(
+        { range: pendingComment.range, anchoredText: pendingComment.anchoredText },
+        correctEditorUsjVersion(usj),
+      )
+    )
+      return;
+    discardPendingCommentRef.current();
+    papi.notifications.send({
+      message: '%webView_platformScriptureEditor_warning_pendingCommentTextChanged%',
+      severity: 'warning',
+    });
+  });
 
   /** Map from annotationId -> info about the annotation that we need to keep to perform some actions */
   const annotationInfoByIdRef = useRef<
@@ -1631,6 +1661,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // editor had not applied yet is overwritten, exactly as the incoming document overwrites the
     // rest of the chapter.
     if (editingNoteKey.current) closeFootnoteEditorRef.current(false);
+    // An external apply never reaches `onUsjChange`, so a pending comment is checked here too.
+    discardPendingCommentIfAnchorChanged.current(usj);
     editorRef.current?.setUsj(usj);
     // A hidden pane is left without a document; showing it fetches the editor's, which is this one
     // from here on (`getUsj()` returns what `setUsj` was just handed).
@@ -1752,6 +1784,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // comment or a crash.
     const editorUsj = editorRef.current?.getUsj();
     const editorUsjCorrected = editorUsj ? correctEditorUsjVersion(editorUsj) : undefined;
+    let anchoredText: string | undefined;
     if (editorUsjCorrected) {
       const validation = validateCommentSelection(selection, editorUsjCorrected);
       if ('notice' in validation) {
@@ -1761,6 +1794,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       }
       annotationRange.start = { ...validation.range.start };
       annotationRange.end = { ...validation.range.end };
+      anchoredText = readCommentRangeText(validation.range, editorUsjCorrected);
     }
 
     // Try to find the selected text element to anchor the popover to. No rendered editor content
@@ -1771,7 +1805,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     const editorContainer = document.querySelector<HTMLElement>('.usfm');
     if (!editorContainer) return;
 
-    pendingCommentAnnotationRange.current = { range: annotationRange, verseRef: scrRef };
+    pendingCommentAnnotationRange.current = {
+      range: annotationRange,
+      verseRef: scrRef,
+      anchoredText,
+    };
 
     // Create a temporary annotation to highlight the selected text
     editorRef.current?.setAnnotation(
@@ -3881,6 +3919,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // the editor's own single commit listener, `handleCommit` in `Editor.tsx`), so it never
       // reaches this callback at all — the source gate is belt-and-braces on top of that.
       if (source === 'local') lastLocalEditTimestamp.current = Date.now();
+      discardPendingCommentIfAnchorChanged.current(usj);
       // Capture the current chapter's save fn and chapter key into the debounce payload so a
       // pending trailing save always targets the chapter this content was typed in.
       //
@@ -4173,6 +4212,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
     setShowCommentEditor(false);
   }, []);
+
+  discardPendingCommentRef.current = onCommentEditorCancel;
 
   /** Flag to indicate if a comment submission is in progress so we don't submit multiple times */
   const isSubmittingComment = useRef(false);
