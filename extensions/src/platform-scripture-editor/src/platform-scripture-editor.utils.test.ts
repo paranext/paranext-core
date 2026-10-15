@@ -4576,11 +4576,26 @@ describe('buildScriptureTextGridWebView', () => {
 // #endregion
 
 describe('withDocumentEndOnText', () => {
+  /** `\p \v 1 In the b` as the document's last paragraph; its text is `$.content[2].content[1]`. */
+  const lastParagraph = {
+    type: 'para',
+    marker: 'p',
+    content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the b'],
+  };
+  const endsInText: Usj = {
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN' },
+      { type: 'chapter', marker: 'c', number: '1' },
+      lastParagraph,
+    ],
+  };
+
   it('brings the document-end spelling (one past the text) onto the end of the text', () => {
-    expect(withDocumentEndOnText({ jsonPath: '$.content[2].content[1]', offset: 9 }, 8)).toEqual({
-      jsonPath: '$.content[2].content[1]',
-      offset: 8,
-    });
+    expect(
+      withDocumentEndOnText({ jsonPath: '$.content[2].content[1]', offset: 9 }, 8, endsInText),
+    ).toEqual({ jsonPath: '$.content[2].content[1]', offset: 8 });
   });
 
   it.each([
@@ -4589,7 +4604,17 @@ describe('withDocumentEndOnText', () => {
     ['an offset no location rule produces', { jsonPath: '$.content[2].content[1]', offset: 10 }],
     ['a location that is not on text', { jsonPath: '$.content[2].content[1]' }],
   ])('leaves %s alone', (_name, location) => {
-    expect(withDocumentEndOnText(location, 8)).toBe(location);
+    expect(withDocumentEndOnText(location, 8, endsInText)).toBe(location);
+  });
+
+  it('leaves one past the end alone on a text that is not the last in the document', () => {
+    const location = { jsonPath: '$.content[2].content[1]', offset: 9 };
+    const followed: Usj = {
+      ...endsInText,
+      content: [...endsInText.content, { type: 'para', marker: 'p', content: ['God said'] }],
+    };
+
+    expect(withDocumentEndOnText(location, 8, followed)).toBe(location);
   });
 });
 // #region resolveNoteVerseRef

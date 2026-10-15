@@ -152,19 +152,40 @@ export function correctEditorUsjVersion(editorUsj: Usj): Usj {
   return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
 }
 
+/** Whether `jsonPath` names the very last item of `usj`: the last item at every level. */
+function isFinalItemOfDocument(usj: Usj, jsonPath: string): boolean {
+  const indexes = Array.from(jsonPath.matchAll(/content\[(\d+)\]/g), (match) => Number(match[1]));
+  if (indexes.length === 0) return false;
+  let { content }: { content?: MarkerContent[] } = usj;
+  return indexes.every((index) => {
+    if (!content || index !== content.length - 1) return false;
+    const item = content[index];
+    content = typeof item === 'string' ? undefined : item.content;
+    return true;
+  });
+}
+
 /**
  * A selection location on a text node of `textLength` characters, brought onto that text. The end
  * of the document is spelled on the document's last text as one past the text's end (see
  * `UsjDocumentLocation`), and a caret there sits at the end of that text, so that offset becomes
- * the text's length. Every other location is returned as is — including an offset further past the
- * end, which no location spells and which a caller should treat as the defect it is.
+ * the text's length. Every other location is returned as is — including that offset on any other
+ * text, or an offset further past the end, neither of which a location spells and which a caller
+ * should treat as the defect it is.
  *
  * @param location The location, as the editor reported it.
  * @param textLength The length of the text node the location resolved to.
+ * @param usj The document the location addresses.
  * @returns `location`, with the document-end offset brought onto the end of the text.
  */
-export function withDocumentEndOnText<T extends object>(location: T, textLength: number): T {
+export function withDocumentEndOnText<T extends object>(
+  location: T,
+  textLength: number,
+  usj: Usj,
+): T {
   if (!('offset' in location) || location.offset !== textLength + 1) return location;
+  if (!('jsonPath' in location) || typeof location.jsonPath !== 'string') return location;
+  if (!isFinalItemOfDocument(usj, location.jsonPath)) return location;
   return { ...location, offset: textLength };
 }
 
