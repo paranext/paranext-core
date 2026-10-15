@@ -46,8 +46,8 @@ export function describeHiddenContent(items: HiddenContentItem[]): string {
 
 /**
  * The confirmation shown when an edit in a view that hides figures, sidebars, and the like would
- * remove some (PT-4703). Confirming deletes; the other button skips over the hidden content for a
- * Backspace or Delete at the caret, and keeps it (cancelling the edit) for anything else.
+ * remove some. Confirming deletes. The other button is labelled for what the editor will do on
+ * "keep": skip over the hidden content when the request says it can, otherwise cancel the edit.
  */
 export function buildHiddenContentDeleteConfirm(
   request: HiddenContentDeleteRequest,
@@ -59,7 +59,7 @@ export function buildHiddenContentDeleteConfirm(
       markers: describeHiddenContent(request.items),
     }),
     okLabel: DELETE_KEY,
-    cancelLabel: request.action === 'replaceSelection' ? KEEP_KEY : SKIP_KEY,
+    cancelLabel: request.canSkip ? SKIP_KEY : KEEP_KEY,
     isDestructive: true,
     isModal: true,
   };

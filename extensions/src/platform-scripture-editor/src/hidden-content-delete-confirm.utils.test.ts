@@ -30,7 +30,7 @@ describe('buildHiddenContentDeleteConfirm', () => {
   it('names the hidden content in the prompt and makes deleting the destructive choice', () => {
     expect(
       buildHiddenContentDeleteConfirm(
-        { items: [{ tag: 'figure', marker: 'fig' }], action: 'deleteBackward' },
+        { items: [{ tag: 'figure', marker: 'fig' }], action: 'deleteBackward', canSkip: true },
         localizedStrings,
       ),
     ).toEqual({
@@ -43,17 +43,26 @@ describe('buildHiddenContentDeleteConfirm', () => {
     });
   });
 
-  it('offers to skip over the content for a delete at the caret', () => {
+  it('offers to skip over the content when the editor can skip it', () => {
     const { cancelLabel } = buildHiddenContentDeleteConfirm(
-      { items: [{ tag: 'sidebar', marker: 'esb' }], action: 'deleteForward' },
+      { items: [{ tag: 'sidebar', marker: 'esb' }], action: 'deleteForward', canSkip: true },
       localizedStrings,
     );
     expect(cancelLabel).toBe('%webView_platformScriptureEditor_hiddenContentDelete_skip%');
   });
 
+  it('offers to keep the content for a caret delete the editor would cancel', () => {
+    // A word or line delete that reaches hidden content further along: "keep" cancels it.
+    const { cancelLabel } = buildHiddenContentDeleteConfirm(
+      { items: [{ tag: 'figure', marker: 'fig' }], action: 'deleteBackward', canSkip: false },
+      localizedStrings,
+    );
+    expect(cancelLabel).toBe('%webView_platformScriptureEditor_hiddenContentDelete_keep%');
+  });
+
   it('offers to keep the content for an edit over a selection', () => {
     const { cancelLabel } = buildHiddenContentDeleteConfirm(
-      { items: [{ tag: 'figure', marker: 'fig' }], action: 'replaceSelection' },
+      { items: [{ tag: 'figure', marker: 'fig' }], action: 'replaceSelection', canSkip: false },
       localizedStrings,
     );
     expect(cancelLabel).toBe('%webView_platformScriptureEditor_hiddenContentDelete_keep%');
@@ -64,6 +73,7 @@ describe('createHiddenContentDeleteHandler', () => {
   const request: HiddenContentDeleteRequest = {
     items: [{ tag: 'figure', marker: 'fig' }],
     action: 'deleteBackward',
+    canSkip: true,
   };
 
   it('deletes only when the user confirms', async () => {
