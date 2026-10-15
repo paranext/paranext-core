@@ -1,5 +1,7 @@
 import {
   Button,
+  ERROR_POPOVER_STRING_KEYS,
+  ErrorPopover,
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
   Progress,
@@ -28,7 +30,7 @@ import {
   makeProjectSelectorCustomData,
 } from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
-import { Fragment, useCallback, useId, useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import {
   CHECK_SCOPE_FILTER_STRINGS,
   CheckInfo,
@@ -51,14 +53,80 @@ export const CHECKS_SIDE_PANEL_STRING_KEYS = Object.freeze([
   // Shared ProjectSelector keys — every ProjectSelector in the app resolves the same block, then
   // the caller merges its own placeholder/ariaLabel on top.
   ...PROJECT_SELECTOR_STRING_KEYS,
+  // The popover that shows a failed check's raw error message
+  ...ERROR_POPOVER_STRING_KEYS,
 ] as const);
 
 /**
  * Ids of the checks that fail with a Paratext 9 message naming a settings location (Quotation
- * rules). Other checks' failures carry no such location, so the Paratext 9 hint is limited to
- * these.
+ * rules). Other checks' failures carry no such location, so only these show their messages inline
+ * when they need setup.
  */
 const QUOTATION_CHECK_IDS: readonly string[] = ['Quotation', 'QuotationTypes'];
+
+/** Props for {@link CheckErrorBlock}. */
+type CheckErrorBlockProps = {
+  /** Display name of the check that could not run. */
+  checkName: string;
+  /** The distinct failure messages of the check. */
+  messages: string[];
+  /** Whether the check reports that it still needs setup. */
+  needsSetup: boolean;
+  /** Whether the check is a quotation check, whose setup lives in Paratext 9 only. */
+  isQuotationCheck: boolean;
+  /** Localized strings for the panel. */
+  localizedStrings: LanguageStrings;
+};
+
+/**
+ * The explanation of one check that could not run. A quotation check that needs setup shows its
+ * Paratext 9 messages, which name the settings to change there. Any other failure shows a short
+ * line and keeps the raw messages behind a "View error" popover.
+ */
+function CheckErrorBlock({
+  checkName,
+  messages,
+  needsSetup,
+  isQuotationCheck,
+  localizedStrings,
+}: CheckErrorBlockProps) {
+  const lineId = useId();
+
+  if (needsSetup && isQuotationCheck) {
+    return (
+      <div className="tw:flex tw:flex-col tw:gap-1">
+        <p className="tw:font-light">
+          {formatReplacementString(
+            localizedStrings['%webView_checksSidePanel_checkCouldNotRun_needsSetupInParatext9%'],
+            { checkName },
+          )}
+        </p>
+        {messages.map((message) => (
+          <p key={message} className="tw:font-light tw:whitespace-pre-line">
+            {message}
+          </p>
+        ))}
+      </div>
+    );
+  }
+
+  const lineKey = needsSetup
+    ? '%webView_checksSidePanel_checkCouldNotRun_needsSetup%'
+    : '%webView_checksSidePanel_checkCouldNotRun_unexpectedError%';
+
+  return (
+    <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-center tw:gap-2">
+      <p id={lineId} className="tw:font-light">
+        {formatReplacementString(localizedStrings[lineKey], { checkName })}
+      </p>
+      <ErrorPopover errorDetails={messages.join('\n\n')} localizedStrings={localizedStrings}>
+        <Button variant="link" className="tw:h-auto tw:p-0" aria-describedby={lineId}>
+          {localizedStrings['%settings_errorMessages_viewError%']}
+        </Button>
+      </ErrorPopover>
+    </div>
+  );
+}
 
 /** A project (or resource) the user can select to run checks against. */
 export type ChecksSidePanelProject = ProjectOption & {
@@ -307,6 +375,16 @@ export function ChecksSidePanel({
     () => jobStatusReport.checkErrors ?? [],
     [jobStatusReport.checkErrors],
   );
+  // One group per failed check, in the order the checks first appear, holding its distinct messages
+  const checkErrorGroups = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    checkErrors.forEach((checkError) => {
+      const messages = groups.get(checkError.checkId);
+      if (!messages) groups.set(checkError.checkId, [checkError.message]);
+      else if (!messages.includes(checkError.message)) messages.push(checkError.message);
+    });
+    return [...groups].map(([checkId, messages]) => ({ checkId, messages }));
+  }, [checkErrors]);
   // A check that failed with several different messages is named once
   const couldNotRunNames = useMemo(
     () =>
@@ -510,33 +588,18 @@ export function ChecksSidePanel({
                 className={areErrorDetailsShown ? 'tw:flex tw:flex-col tw:gap-1' : 'tw:hidden'}
               >
                 {areErrorDetailsShown &&
-                  checkErrors.map((checkError) => (
-                    <Fragment key={`${checkError.checkId}-${checkError.message}`}>
-                      <p className="tw:font-light tw:whitespace-pre-line">
-                        {formatReplacementString(
-                          localizedStrings['%webView_checksSidePanel_checkCouldNotRun_detail%'],
-                          {
-                            checkName: getCheckDisplayName(
-                              checkError.checkId,
-                              getLocalizedCheckDescription,
-                            ),
-                            message: checkError.message,
-                          },
-                        )}
-                      </p>
-                      {/* Only a quotation check that needs setup has settings to point to in Paratext 9 */}
-                      {QUOTATION_CHECK_IDS.includes(checkError.checkId) &&
-                        checksInfo.find((check) => check.checkId === checkError.checkId)
-                          ?.setupStatus === 'setupRequired' && (
-                          <p className="tw:font-light">
-                            {
-                              localizedStrings[
-                                '%webView_checksSidePanel_checkCouldNotRun_paratext9Hint%'
-                              ]
-                            }
-                          </p>
-                        )}
-                    </Fragment>
+                  checkErrorGroups.map((group) => (
+                    <CheckErrorBlock
+                      key={group.checkId}
+                      checkName={getCheckDisplayName(group.checkId, getLocalizedCheckDescription)}
+                      messages={group.messages}
+                      needsSetup={
+                        checksInfo.find((check) => check.checkId === group.checkId)?.setupStatus ===
+                        'setupRequired'
+                      }
+                      isQuotationCheck={QUOTATION_CHECK_IDS.includes(group.checkId)}
+                      localizedStrings={localizedStrings}
+                    />
                   ))}
               </div>
             </div>

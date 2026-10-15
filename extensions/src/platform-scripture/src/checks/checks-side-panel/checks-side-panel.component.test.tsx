@@ -82,8 +82,21 @@ function stubLocalizedStrings(keys: readonly LocalizeKey[]): LanguageStrings {
       strings[key] = 'Couldn’t run: {checkNames}';
       return;
     }
-    if (key === '%webView_checksSidePanel_checkCouldNotRun_detail%') {
-      strings[key] = '{checkName}: {message}';
+    // The per-check lines need real format strings so their `{checkName}` placeholder gets filled
+    if (key === '%webView_checksSidePanel_checkCouldNotRun_needsSetupInParatext9%') {
+      strings[key] = '{checkName} needs setup in Paratext 9:';
+      return;
+    }
+    if (key === '%webView_checksSidePanel_checkCouldNotRun_needsSetup%') {
+      strings[key] = '{checkName} needs setup.';
+      return;
+    }
+    if (key === '%webView_checksSidePanel_checkCouldNotRun_unexpectedError%') {
+      strings[key] = '{checkName}: An error occurred.';
+      return;
+    }
+    if (key === '%settings_errorMessages_viewError%') {
+      strings[key] = 'View error';
       return;
     }
     strings[key] =
@@ -109,7 +122,7 @@ const LAST_USED_GROUPING_LABEL = localizedValueFor('%projectSelector_grouping_la
 
 const SHOW_DETAILS_LABEL = '%webView_checksSidePanel_checkCouldNotRun_showDetails%';
 const HIDE_DETAILS_LABEL = '%webView_checksSidePanel_checkCouldNotRun_hideDetails%';
-const PARATEXT_9_HINT_LABEL = '%webView_checksSidePanel_checkCouldNotRun_paratext9Hint%';
+const VIEW_ERROR_LABEL = 'View error';
 
 const JOB_STATUS_REPORT: CheckJobStatusReport = {
   jobId: '',
@@ -315,19 +328,24 @@ describe('checks that could not run', () => {
     const toggle = screen.getByRole('button', { name: SHOW_DETAILS_LABEL });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText(/Quotes settings are invalid for project zzz6\./)).toBeNull();
-    expect(screen.queryByText(PARATEXT_9_HINT_LABEL)).toBeNull();
+    expect(screen.queryByText(/needs setup/)).toBeNull();
+    expect(screen.queryByRole('button', { name: VIEW_ERROR_LABEL })).toBeNull();
   });
 
-  it('shows each check’s message after clicking Show details, with the hint under a setup-required check only', async () => {
+  it('explains a setup-required Quotation failure with the Paratext 9 message and no popover', async () => {
     const user = setupUser();
     render(
       <ChecksSidePanel
         {...buildProps({
           hasActiveJob: true,
-          jobStatusReport: REPORT_WITH_ERRORS,
+          jobStatusReport: {
+            ...JOB_STATUS_REPORT,
+            checkErrors: [
+              { checkId: 'Quotation', message: 'Quotes settings are invalid for project zzz6.' },
+            ],
+          },
           checksInfo: [
             { checkId: 'Quotation', checkName: 'Quotations', setupStatus: 'setupRequired' },
-            { checkId: 'registered-gone', checkName: 'registered-gone', setupStatus: 'ready' },
           ],
           getLocalizedCheckDescription: (checkId) => (checkId === 'Quotation' ? 'Quotations' : ''),
         })}
@@ -336,43 +354,16 @@ describe('checks that could not run', () => {
 
     await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
 
-    const quotationLine = screen.getByText(
-      'Quotations: Quotes settings are invalid for project zzz6.',
-    );
-    const unregisteredLine = screen.getByText('registered-gone: Check is not registered');
-    expect(screen.getAllByText(PARATEXT_9_HINT_LABEL)).toHaveLength(1);
-    // The hint sits directly under the failed check that needs setup, not under the ready one
-    expect(quotationLine.nextElementSibling).toHaveTextContent(PARATEXT_9_HINT_LABEL);
-    expect(unregisteredLine.nextElementSibling).toBeNull();
-    const hideToggle = screen.getByRole('button', { name: HIDE_DETAILS_LABEL });
-    expect(hideToggle).toHaveAttribute('aria-expanded', 'true');
-    const detailsId = hideToggle.getAttribute('aria-controls');
-    expect(detailsId).toBeTruthy();
-    expect(document.getElementById(detailsId ?? '')).toContainElement(unregisteredLine);
-
-    await user.click(hideToggle);
-    expect(screen.queryByText('registered-gone: Check is not registered')).toBeNull();
+    const disclaimer = screen.getByText('Quotations needs setup in Paratext 9:');
+    const message = screen.getByText('Quotes settings are invalid for project zzz6.');
+    expect(disclaimer).toBeInTheDocument();
+    // The message sits beneath the disclaimer, in the same block
+    expect(disclaimer.parentElement).toContainElement(message);
+    expect(screen.queryByRole('button', { name: VIEW_ERROR_LABEL })).toBeNull();
+    expect(screen.queryByText(/An error occurred/)).toBeNull();
   });
 
-  it('shows no Paratext 9 hint when the failed check is ready or its setup is unknown', async () => {
-    const user = setupUser();
-    render(
-      <ChecksSidePanel
-        {...buildProps({
-          hasActiveJob: true,
-          jobStatusReport: REPORT_WITH_ERRORS,
-          checksInfo: [{ checkId: 'Quotation', checkName: 'Quotations', setupStatus: 'ready' }],
-        })}
-      />,
-    );
-
-    await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
-
-    expect(screen.getByText(/^Quotation: Quotes settings are invalid/)).toBeInTheDocument();
-    expect(screen.queryByText(PARATEXT_9_HINT_LABEL)).toBeNull();
-  });
-
-  it('shows the Paratext 9 hint under a setup-required Quotation types failure too', async () => {
+  it('treats a setup-required Quotation types failure the same way', async () => {
     const user = setupUser();
     render(
       <ChecksSidePanel
@@ -395,10 +386,12 @@ describe('checks that could not run', () => {
 
     await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
 
-    expect(screen.getAllByText(PARATEXT_9_HINT_LABEL)).toHaveLength(1);
+    expect(screen.getByText('QuotationTypes needs setup in Paratext 9:')).toBeInTheDocument();
+    expect(screen.getByText('Not enabled')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: VIEW_ERROR_LABEL })).toBeNull();
   });
 
-  it('shows no Paratext 9 hint under a setup-required check that is not a quotation check', async () => {
+  it('offers the message of another setup-required check in a popover, not inline', async () => {
     const user = setupUser();
     render(
       <ChecksSidePanel
@@ -406,10 +399,10 @@ describe('checks that could not run', () => {
           hasActiveJob: true,
           jobStatusReport: {
             ...JOB_STATUS_REPORT,
-            checkErrors: [{ checkId: 'Characters', message: 'Inventory is empty' }],
+            checkErrors: [{ checkId: 'References', message: 'Reference inventory is empty' }],
           },
           checksInfo: [
-            { checkId: 'Characters', checkName: 'Characters', setupStatus: 'setupRequired' },
+            { checkId: 'References', checkName: 'References', setupStatus: 'setupRequired' },
           ],
         })}
       />,
@@ -417,8 +410,212 @@ describe('checks that could not run', () => {
 
     await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
 
-    expect(screen.getByText(/^Characters: Inventory is empty/)).toBeInTheDocument();
-    expect(screen.queryByText(PARATEXT_9_HINT_LABEL)).toBeNull();
+    expect(screen.getByText('References needs setup.')).toBeInTheDocument();
+    expect(screen.queryByText(/needs setup in Paratext 9/)).toBeNull();
+    expect(screen.queryByText('Reference inventory is empty')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: VIEW_ERROR_LABEL }));
+
+    expect(await screen.findByText('Reference inventory is empty')).toBeInTheDocument();
+  });
+
+  it('keeps the raw message of a ready check out of the panel until View error is clicked', async () => {
+    const user = setupUser();
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: {
+            ...JOB_STATUS_REPORT,
+            checkErrors: [{ checkId: 'Capitalization', message: 'NullReferenceException at X.Y' }],
+          },
+          checksInfo: [
+            { checkId: 'Capitalization', checkName: 'Capitalization', setupStatus: 'ready' },
+          ],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
+
+    // Positive control: the details are expanded and the generic line is on screen
+    expect(screen.getByText('Capitalization: An error occurred.')).toBeInTheDocument();
+    expect(screen.queryByText('NullReferenceException at X.Y')).toBeNull();
+    expect(screen.queryByText(/needs setup/)).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: VIEW_ERROR_LABEL }));
+
+    expect(await screen.findByText('NullReferenceException at X.Y')).toBeInTheDocument();
+  });
+
+  it('points the View error button at its own line', async () => {
+    const user = setupUser();
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: {
+            ...JOB_STATUS_REPORT,
+            checkErrors: [
+              { checkId: 'Capitalization', message: 'First failure' },
+              { checkId: 'RepeatedWord', message: 'Second failure' },
+            ],
+          },
+          checksInfo: [
+            { checkId: 'Capitalization', checkName: 'Capitalization', setupStatus: 'ready' },
+          ],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
+
+    const viewErrorButtons = screen.getAllByRole('button', { name: VIEW_ERROR_LABEL });
+    expect(viewErrorButtons).toHaveLength(2);
+    const lineIds = viewErrorButtons.map((button) => button.getAttribute('aria-describedby'));
+    expect(new Set(lineIds).size).toBe(2);
+    expect(document.getElementById(lineIds[0] ?? '')).toHaveTextContent(
+      'Capitalization: An error occurred.',
+    );
+    expect(document.getElementById(lineIds[1] ?? '')).toHaveTextContent(
+      'RepeatedWord: An error occurred.',
+    );
+  });
+
+  it('takes the error branch for a check with no setup info', async () => {
+    const user = setupUser();
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: {
+            ...JOB_STATUS_REPORT,
+            checkErrors: [{ checkId: 'registered-gone', message: 'Check is not registered' }],
+          },
+          checksInfo: [],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
+
+    expect(screen.getByText('registered-gone: An error occurred.')).toBeInTheDocument();
+    expect(screen.queryByText('Check is not registered')).toBeNull();
+    expect(screen.getByRole('button', { name: VIEW_ERROR_LABEL })).toBeInTheDocument();
+  });
+
+  it('takes the error branch for a check that does not apply', async () => {
+    const user = setupUser();
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: {
+            ...JOB_STATUS_REPORT,
+            checkErrors: [{ checkId: 'QuotationTypes', message: 'Not applicable' }],
+          },
+          checksInfo: [
+            {
+              checkId: 'QuotationTypes',
+              checkName: 'Quotation types',
+              setupStatus: 'notApplicable',
+            },
+          ],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
+
+    expect(screen.getByText('QuotationTypes: An error occurred.')).toBeInTheDocument();
+    expect(screen.queryByText(/needs setup/)).toBeNull();
+  });
+
+  it('shows one block per check, with every distinct message in its popover', async () => {
+    const user = setupUser();
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: {
+            ...JOB_STATUS_REPORT,
+            checkErrors: [
+              { checkId: 'Capitalization', message: 'First failure' },
+              { checkId: 'Capitalization', message: 'Second failure' },
+              { checkId: 'Capitalization', message: 'First failure' },
+            ],
+          },
+          checksInfo: [
+            { checkId: 'Capitalization', checkName: 'Capitalization', setupStatus: 'ready' },
+          ],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
+
+    expect(screen.getAllByText('Capitalization: An error occurred.')).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: VIEW_ERROR_LABEL }));
+    const popover = await screen.findByRole('dialog');
+    expect(popover).toHaveTextContent('First failure');
+    expect(popover).toHaveTextContent('Second failure');
+    expect(popover.textContent?.match(/First failure/g)).toHaveLength(1);
+  });
+
+  it('lists the distinct Paratext 9 messages of one setup-required Quotation check', async () => {
+    const user = setupUser();
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: {
+            ...JOB_STATUS_REPORT,
+            checkErrors: [
+              { checkId: 'Quotation', message: 'First failure' },
+              { checkId: 'Quotation', message: 'Second failure' },
+            ],
+          },
+          checksInfo: [
+            { checkId: 'Quotation', checkName: 'Quotations', setupStatus: 'setupRequired' },
+          ],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
+
+    expect(screen.getAllByText('Quotation needs setup in Paratext 9:')).toHaveLength(1);
+    expect(screen.getByText('First failure')).toBeInTheDocument();
+    expect(screen.getByText('Second failure')).toBeInTheDocument();
+  });
+
+  it('collapses the details again after Hide details', async () => {
+    const user = setupUser();
+    render(
+      <ChecksSidePanel
+        {...buildProps({
+          hasActiveJob: true,
+          jobStatusReport: REPORT_WITH_ERRORS,
+          checksInfo: [
+            { checkId: 'Quotation', checkName: 'Quotations', setupStatus: 'setupRequired' },
+            { checkId: 'registered-gone', checkName: 'registered-gone', setupStatus: 'ready' },
+          ],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: SHOW_DETAILS_LABEL }));
+
+    const hideToggle = screen.getByRole('button', { name: HIDE_DETAILS_LABEL });
+    expect(hideToggle).toHaveAttribute('aria-expanded', 'true');
+    const detailsId = hideToggle.getAttribute('aria-controls');
+    expect(detailsId).toBeTruthy();
+    expect(document.getElementById(detailsId ?? '')).toContainElement(
+      screen.getByText('registered-gone: An error occurred.'),
+    );
+
+    await user.click(hideToggle);
+    expect(screen.queryByText('registered-gone: An error occurred.')).toBeNull();
   });
 
   it('keeps the error details container in the document, hidden, while collapsed', async () => {
