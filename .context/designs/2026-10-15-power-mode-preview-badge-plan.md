@@ -15,7 +15,7 @@
 - Localize key: `%userProfile_interfaceMode_power_previewBadge%`. en: `"Preview"`, es: `"Preliminar"`.
 - Never edit an existing localize key or value (Localization Guide).
 - `Badge` `variant="outline"`, `className="user-profile-popover-text-3xs tw:h-4 tw:px-1.5"`, `data-testid="user-profile-interface-mode-power-preview-badge"`.
-- Wrapper row classes: `user-profile-popover-baseline-row tw:flex tw:flex-wrap tw:gap-1.5`. The first is a new raw CSS class (`align-items: baseline`) in `user-profile-popover.component.css`.
+- Wrapper row classes: `user-profile-popover-label-row tw:flex tw:flex-wrap`. The first is a new raw CSS class in `user-profile-popover.component.css` (`align-items: baseline; column-gap: 6px; row-gap: 2px`).
 - Renderer code gets no Tailwind processing: use only `tw:` classes already rendered in `user-profile-popover.component.tsx` (every class above qualifies).
 - No edits under `lib/platform-bible-react/src/components/shadcn-ui/`.
 - Verification commands: `npm run lint` and `npm test`. Skip `npm run typecheck` (too slow; lint + build are enough).
@@ -125,7 +125,7 @@ In `user-profile-popover.component.tsx`:
 3. In the Power `ToggleGroupItem` (`value="power"`), replace the label `<span>` (the one rendering `%userProfile_interfaceMode_power_label%`) with:
 
 ```tsx
-            <span className="user-profile-popover-baseline-row tw:flex tw:flex-wrap tw:gap-1.5">
+            <span className="user-profile-popover-label-row tw:flex tw:flex-wrap">
               <span
                 className={cn(
                   'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
@@ -157,10 +157,13 @@ Leave the description `<span>` and the whole Simple item unchanged.
 5. In `user-profile-popover.component.css`, add after the `.user-profile-popover-text-3xs` rule:
 
 ```css
-/* Lines a row's children up on their text baseline, so a badge taller than the label beside it
-   still reads on the label's line. A raw class for the same reason as the font sizes above. */
-.user-profile-popover-baseline-row {
+/* A label with a badge beside it. Baseline alignment keeps a badge that is taller than the label's
+   line on the label's text line; the small row gap keeps a badge that wraps under a long label as
+   close to it as the description below. Raw CSS for the same reason as the font sizes above. */
+.user-profile-popover-label-row {
   align-items: baseline;
+  column-gap: 6px;
+  row-gap: 2px;
 }
 ```
 
@@ -213,7 +216,7 @@ Expected in all four: an outlined pill reading "Preview" sits right after "Power
 - [ ] **Step 3: Screenshot Spanish**
 
 Switch the interface language to Español from the popover's language pills (accept the restart prompt), open the popover in Power mode, and screenshot it.
-Expected: "Preliminar" either fits after "Modo avanzado" or wraps onto its own line under it. It must not overflow the card or get clipped. Switch the language back to English afterwards.
+Expected: "Preliminar" either fits after "Modo avanzado" or wraps onto its own line under it, about as close to the label as the description is. It must not overflow the card or get clipped. Switch the language back to English afterwards.
 
 - [ ] **Step 4: If the badge renders unstyled**
 

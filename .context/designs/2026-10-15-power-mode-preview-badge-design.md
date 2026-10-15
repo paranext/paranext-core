@@ -22,7 +22,7 @@ Conditions for approval (from the ticket):
 | D1 | The badge sits **inline after the "Power mode" label**, on the label's line. | Chosen over a top-right corner placement: the two cards are narrow (`w-80` popover split in two), so an inline badge that can wrap handles long translations better. |
 | D2 | **`Badge` `variant="outline"`** from `platform-bible-react`, unmodified. | The app's existing badge, so no shadcn edit. Outline is neutral in both themes and stays readable on the selected card's `bg-accent`; a filled `secondary` pill would blend into it. |
 | D3 | **Shrink the badge** to sit with the 11px label: `user-profile-popover-text-3xs` (10px) and `tw:h-4 tw:px-1.5`. | Badge's built-in `text-xs`/`h-5` would be bigger than the label it annotates. Renderer code gets no Tailwind processing (see the comment at the top of `user-profile-popover.component.css`), so the overrides use only classes this popover already renders (`tw:h-4`, `tw:px-1.5`) plus its existing raw CSS size class. `cn` merges with the `tw` prefix, so `tw:h-4` replaces Badge's `tw:h-5`. |
-| D4 | Wrap the label and the badge in a **`tw:flex tw:flex-wrap tw:gap-1.5`** row, **baseline-aligned** through a new raw CSS class `user-profile-popover-baseline-row` (`align-items: baseline`). | `flex-wrap` lets the badge drop under the label when a translation is too long for the card (Spanish "Modo avanzado" + "Preliminar" doesn't fit), instead of overflowing. Baseline rather than center alignment: the 16px badge is taller than the label's line, so centering the boxes left "Preview" visibly off the "Power mode" text line (seen in the HTML mockup); baseline puts both texts on one line. The alignment is a raw class, like the file's existing font sizes, because `tw:items-baseline` is not used anywhere in this popover and so isn't known to be in the shipped stylesheet. The three `tw:` classes are already used in this file. |
+| D4 | Wrap the label and the badge in a **`tw:flex tw:flex-wrap`** row with a new raw CSS class `user-profile-popover-label-row`: **baseline-aligned**, 6px column gap, **2px row gap**. | `flex-wrap` lets the badge drop under the label when a translation is too long for the card (Spanish "Modo avanzado" + "Preliminar" doesn't fit), instead of overflowing. Baseline rather than center alignment: the 16px badge is taller than the label's line, so centering the boxes left "Preview" visibly off the "Power mode" text line (seen in the HTML mockup); baseline puts both texts on one line. The 2px row gap matches the card's label-to-description gap; a single `tw:gap-1.5` put 6px between the label and a wrapped badge, which looked detached (also seen in the mockup). Alignment and gaps are a raw class, like the file's existing font sizes, because `tw:items-baseline`, `tw:gap-x-*` and `tw:gap-y-*` are not used anywhere in this popover and so aren't known to be in the shipped stylesheet. `tw:flex` and `tw:flex-wrap` are already used in this file. |
 | D5 | One **new localize key** `%userProfile_interfaceMode_power_previewBadge%`: en "Preview", es "Preliminar". No existing key changes. | "Preliminar" reads as an early-version status, where "Vista previa" in software usually means a document or print preview; it is also shorter for the narrow card. The Localization Guide forbids editing existing strings. The key follows the existing `userProfile_interfaceMode_power_*` prefix convention. |
 | D6 | The badge shows **whichever mode is selected**, and it is plain text with no tooltip. | The ticket asks for it "in both Simple and Power". The badge text joins the toggle's accessible name ("Power mode Preview Full Paratext interface…"), so screen-reader users hear it with no extra ARIA. |
 
@@ -38,7 +38,7 @@ All changes are in `src/renderer/components/user-profile-popover/` and `assets/l
 - In the Power `ToggleGroupItem`, replace the label `<span>` with:
 
 ```tsx
-<span className="user-profile-popover-baseline-row tw:flex tw:flex-wrap tw:gap-1.5">
+<span className="user-profile-popover-label-row tw:flex tw:flex-wrap">
   <span
     className={cn(
       'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
@@ -64,10 +64,13 @@ The Simple item and the description `<span>` are unchanged.
 Add after the `.user-profile-popover-text-3xs` rule:
 
 ```css
-/* Lines a row's children up on their text baseline, so a badge taller than the label beside it
-   still reads on the label's line. A raw class for the same reason as the font sizes above. */
-.user-profile-popover-baseline-row {
+/* A label with a badge beside it. Baseline alignment keeps a badge that is taller than the label's
+   line on the label's text line; the small row gap keeps a badge that wraps under a long label as
+   close to it as the description below. Raw CSS for the same reason as the font sizes above. */
+.user-profile-popover-label-row {
   align-items: baseline;
+  column-gap: 6px;
+  row-gap: 2px;
 }
 ```
 
