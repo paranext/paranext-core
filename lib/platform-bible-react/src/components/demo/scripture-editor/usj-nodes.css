@@ -2516,8 +2516,11 @@
   border-style: none;
 }
 
-.usfm .table-row > .opening,
-.usfm .table-row > .marker {
+/* The head piece only: a row glyph an annotation cuts into pieces (`data-piece-continuation` on
+   every piece after the first, displayAnnotations.index.ts) keeps the one gap the uncut glyph has,
+   in front of it, rather than one in front of every piece. */
+.usfm .table-row > .opening:not([data-piece-continuation]),
+.usfm .table-row > .marker:not([data-piece-continuation]) {
   padding-inline-start: 0.28em;
 }
 
