@@ -245,7 +245,8 @@ internal class ParatextProjectSendReceiveService(
     /// (<see cref="ScrText.IsProjectShared"/>).
     /// One batched request. Callers do not start a lookup while a sync is known to be active, but a
     /// sync may start while a lookup runs: the lookup must tolerate that, and a result that
-    /// overlapped a sync is superseded by a lookup after that sync ends.
+    /// overlapped a sync is superseded by a lookup after that sync ends. It runs unattended on a
+    /// timer, so it must not write project data (no project file, setting or license update).
     /// <para>
     /// Scaffolding: public Platform.Bible cannot reach the Send/Receive server, so this returns no
     /// entries here. The Paratext 10 patch replaces the body with the repository source's batched

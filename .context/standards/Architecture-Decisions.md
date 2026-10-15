@@ -8352,13 +8352,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   when the next sync begins, so the second pass rechecks the same projects as the first.
 
   The poller adds one server request per 5 minutes per installation plus one per sync, and ⬇️ can
-  lag the server by up to the poll interval. In Studio the lookup goes through the Paratext
-  registry, which rewrites a project's license file and reloads the project (and saves its settings
-  if its registry id changed) outside the Send/Receive write gate when the license the registry
-  returns differs from the one on disk, or the one on disk is revoked or cannot be verified — the
-  same as the user-opened shared-project list. A check for projects with current, valid licenses
-  writes nothing; a project whose license the registry keeps returning revoked can be rewritten and
-  reloaded on every check.
+  lag the server by up to the poll interval. The lookup runs unattended, so it must not write
+  project data. In Studio it therefore lists the server's repositories using the licenses already on
+  disk instead of asking the Paratext registry: the registry's license pass (used by the
+  user-opened shared-project list and by every sync) rewrites a project's license file and reloads
+  the project whenever the license on disk is revoked or cannot be verified, which on a 5-minute
+  timer would repeat for such a project all day. The cost is that a project whose license was
+  granted after its last license fetch is left out of the lookup — never ⬇️ — until Home or a sync
+  fetches it.
   ⬇️ compares tip ids only, so a project restored from
   a backup that carries a stale last-synced tip reads as ⬇️ until its next sync, and a project
   with no last-synced tip at all is never ⬇️. Public core carries an always-empty `toReceive`, and
