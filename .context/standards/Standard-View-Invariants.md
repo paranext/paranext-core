@@ -386,21 +386,24 @@ container plus a content index and never `$` plus one:
 4. A root point between two blocks is the start of the next block.
 
 The editor still accepts the older container-and-index shapes from a host. The full rule set, with
-an example of each tricky position, is on the location model (`usj-reader-writer.model.ts`) and in
-the editor repo's invariants. Rationale:
+an example of each tricky position, is on the location model (`UsjDocumentLocation` in
+`@eten-tech-foundation/scripture-utilities`, re-exported by `platform-bible-utils`) and in the editor
+repo's invariants. Rationale:
 `adr-usj-locations-have-one-spelling` in [`Architecture-Decisions.md`](Architecture-Decisions.md).
 
-**`ContentJsonPath` must be widened in lock-step across both repos.** `platform-bible-utils`
-(`src/scripture/usj-reader-writer.model.ts`) and the editor's
-`@eten-tech-foundation/scripture-utilities`
+**The USJ document-location types have one declaration, owned by the editor package.**
+`ContentJsonPath`, `PropertyJsonPath`, `UsjDocumentLocation` and its seven member location types are
+declared in `@eten-tech-foundation/scripture-utilities`
 (`packages/utilities/src/converters/usj/usj-document-location.model.ts` in the `scripture-editors`
-repo) each declare their own copy. Locations cross in both directions — core passes its locations
-into the editor's `EditorRef` API and stores the editor's reports in its own types
-(`documentLocation: change.start` in `platform-scripture-editor.web-view.tsx`) — so widening either
-copy alone fails typecheck in the other repo: core's own depth test catches a change to core's copy,
-and a change to the editor's copy alone fails core's typecheck once core stages that editor build.
-Keep the two declarations, and their depth tests, mirrored. `PropertyJsonPath` has a catch-all
-`` `$.${string}` `` member, so its depth members document shapes rather than bound them.
+repo, with its depth test beside it). `platform-bible-utils` re-exports them from
+`src/scripture/usj-reader-writer.model.ts` rather than declaring its own, so core and the editor
+always agree on what a location is. Widening `ContentJsonPath` (or changing any of these types)
+happens in the editor package; core picks it up when it stages that editor build. The seven member
+types are `interface`s, so a location value is not assignable to an index-signature type such as
+`Record<string, unknown>`. `PropertyJsonPath` has a catch-all `` `$.${string}` `` member, so its
+depth members document shapes rather than bound them. Rationale:
+`adr-usj-location-types-come-from-scripture-utilities` in
+[`Architecture-Decisions.md`](Architecture-Decisions.md).
 
 Rationale and history: `adr-editor-positions-are-settled-coordinates` in
 [`Architecture-Decisions.md`](Architecture-Decisions.md).
