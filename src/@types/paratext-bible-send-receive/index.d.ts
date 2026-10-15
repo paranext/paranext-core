@@ -578,11 +578,11 @@ declare module 'papi-shared-types' {
      *   persistent surface), when the mode is unknown or its read failed (the indicator may not be
      *   mounted, and two surfaces beat none), or while something covers the indicator.
      *
-     *   Callers: `main/startup-tasks.ts` passes `true` (it only calls this in Simple mode);
-     *   `syncOnProjectSwitch` in `platform-scripture-editor` passes `true` only for a known
-     *   `'simple'` mode; the first-run sync-consent step passes `false` because the wizard covers
-     *   the indicator. The Send/Receive extension's `syncOpenProjects` and auto-sync engine do not
-     *   pass it yet.
+     *   Callers omit the argument rather than passing `false`: an implementation that predates this
+     *   parameter rejects a two-argument call, so omitting it keeps every toast-keeping call
+     *   working against it. The current callers are listed in `adr-sync-surface-per-interface-mode`
+     *   (`.context/standards/Architecture-Decisions.md`). The Send/Receive extension's
+     *   `syncOpenProjects` and auto-sync engine do not pass it yet.
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10)
      * @throws When another Send/Receive is already in progress — rejects fail-fast rather than

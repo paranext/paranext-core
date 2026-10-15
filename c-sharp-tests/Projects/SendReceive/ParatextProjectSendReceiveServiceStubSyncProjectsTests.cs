@@ -50,16 +50,47 @@ namespace TestParanextDataProvider.Projects.SendReceive
 
         // The arguments core's callers actually send: `syncProjects(undefined)` from callers that do
         // not pass the flag (e.g. the Send/Receive extension), `syncProjects(undefined, true)` from
-        // the startup sync (undefined serializes as null), and an explicit id list with `false`.
+        // the startup sync (undefined serializes as null), and an explicit id list from the project
+        // switch, with `true` in Simple mode and without the flag otherwise. A caller that keeps the
+        // toast omits the flag rather than sending `false`.
         private static readonly object?[][] s_wireArgumentShapes =
         [
             [null],
             [null, true],
-            [new[] { "PROJ1" }, false],
+            [new[] { "PROJ1" }],
+            [new[] { "PROJ1" }, true],
         ];
 
         [TestCaseSource(nameof(s_wireArgumentShapes))]
         public async Task SyncProjects_BindsEveryCallerArgumentShapeOverJsonRpc(object?[] args)
+        {
+            int? bindingErrorCode = await InvokeOverJsonRpcAsync(args);
+
+            Assert.That(
+                bindingErrorCode,
+                Is.Null,
+                $"syncProjects did not bind {args.Length} argument(s)"
+            );
+        }
+
+        // Negative control: proves the harness above can see a binding failure at all, so its
+        // passing cases are evidence rather than a test that cannot fail.
+        [Test]
+        public async Task SyncProjects_RejectsAnArgumentShapeItDoesNotDeclare()
+        {
+            int? bindingErrorCode = await InvokeOverJsonRpcAsync([null, true, "unexpected"]);
+
+            Assert.That(bindingErrorCode, Is.Not.Null);
+        }
+
+        /// <summary>
+        /// Invokes the registered <c>syncProjects</c> handler over a real <see cref="JsonRpc"/> pair
+        /// and returns the JSON-RPC error code if the call failed to BIND (no overload accepts the
+        /// arguments), or <see langword="null"/> if it bound. The stub's body either throws
+        /// PlatformUnimplementedException (Release) or runs the DEBUG placeholder; both count as
+        /// bound.
+        /// </summary>
+        private async Task<int?> InvokeOverJsonRpcAsync(object?[] args)
         {
             Delegate handler = await GetRegisteredSyncProjectsAsync();
             (Stream serverStream, Stream clientStream) = FullDuplexStream.CreatePair();
@@ -79,23 +110,25 @@ namespace TestParanextDataProvider.Projects.SendReceive
             );
             client.StartListening();
 
-            // The stub's body either throws PlatformUnimplementedException (Release) or runs the
-            // DEBUG placeholder; both are fine. Only a BINDING failure fails this test.
             try
             {
                 await client
                     .InvokeAsync(SyncProjectsWireName, args)
                     .WaitAsync(TimeSpan.FromSeconds(30));
             }
-            catch (RemoteInvocationException ex)
+            // StreamJsonRpc reports an argument count no overload accepts as a
+            // RemoteMethodNotFoundException, which is NOT a RemoteInvocationException.
+            catch (RemoteMethodNotFoundException ex)
             {
-                Assert.That(
-                    ex.ErrorCode,
-                    Is.Not.EqualTo((int)JsonRpcErrorCode.InvalidParams)
-                        .And.Not.EqualTo((int)JsonRpcErrorCode.MethodNotFound),
-                    $"syncProjects did not bind {args.Length} argument(s): {ex.Message}"
-                );
+                return (int)ex.ErrorCode;
             }
+            catch (RemoteInvocationException ex)
+                when (ex.ErrorCode == (int)JsonRpcErrorCode.InvalidParams)
+            {
+                return ex.ErrorCode;
+            }
+            catch (RemoteInvocationException) { }
+            return null;
         }
     }
 }

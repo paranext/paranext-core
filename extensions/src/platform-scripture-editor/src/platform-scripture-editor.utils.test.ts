@@ -2425,11 +2425,9 @@ describe('syncOnProjectSwitch', () => {
 
     await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'power');
 
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      'paratextBibleSendReceive.syncProjects',
-      ['proj-incoming'],
-      false,
-    );
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-incoming',
+    ]);
   });
 
   it('keeps the progress toast for the incoming sync when the mode is unknown', async () => {
@@ -2437,11 +2435,9 @@ describe('syncOnProjectSwitch', () => {
 
     await syncOnProjectSwitch(papi, 'proj-incoming', undefined, undefined);
 
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      'paratextBibleSendReceive.syncProjects',
-      ['proj-incoming'],
-      false,
-    );
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-incoming',
+    ]);
   });
 
   it('leaves the outgoing sendReceiveProjects call unchanged in Simple mode', async () => {
@@ -2660,11 +2656,9 @@ describe('finalizeProjectSwitch', () => {
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      'paratextBibleSendReceive.syncProjects',
-      ['proj-1'],
-      false,
-    );
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-1',
+    ]);
   });
 
   it('still syncs, with the progress toast, when the mode read rejects', async () => {
@@ -2673,11 +2667,9 @@ describe('finalizeProjectSwitch', () => {
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      'paratextBibleSendReceive.syncProjects',
-      ['proj-1'],
-      false,
-    );
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-1',
+    ]);
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('platform.interfaceMode'));
   });
 

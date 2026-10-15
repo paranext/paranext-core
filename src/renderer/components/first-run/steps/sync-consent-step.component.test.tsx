@@ -142,10 +142,6 @@ describe('SyncConsentStep', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sync' }));
 
     await waitFor(() => expect(onNext).toHaveBeenCalled());
-    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
-      'paratextBibleSendReceive.syncProjects',
-      undefined,
-      false,
-    );
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects');
   });
 });

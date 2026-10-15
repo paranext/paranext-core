@@ -226,12 +226,10 @@ internal class ParatextProjectSendReceiveService(
     /// </param>
     /// <param name="suppressProgressNotification">
     /// When <see langword="true"/>, do not show the persistent in-progress toast (the one carrying
-    /// Cancel) for this sync. Failure, role-change and watchdog toasts still show: callers that pass
-    /// this may raise no Send/Receive claim, so those toasts are their only failure surface — which
-    /// is what makes this narrower than <c>sendReceiveProjects</c>' <c>suppressNotification</c>.
-    /// Defaults to <see langword="false"/>. Callers pass it only when they know the interface mode is
-    /// Simple, where the toolbar sync indicator is the sync's persistent surface instead, and not
-    /// while something covers the toolbar indicator (e.g. the first-run wizard).
+    /// Cancel) for this sync; failure, role-change and watchdog toasts still show. Defaults to
+    /// <see langword="false"/>. When to pass it is part of the TypeScript contract: see
+    /// <c>paratextBibleSendReceive.syncProjects</c> in
+    /// <c>src/@types/paratext-bible-send-receive/index.d.ts</c>.
     /// In-process C# callers must pass both arguments: <c>PapiClient</c>'s in-process dispatch
     /// (<c>DynamicInvoke</c>) does not fill optional defaults, so only JSON-RPC callers may omit it.
     /// An implementation MUST NOT honor it unless it also raises <see cref="SyncActivityChanged"/>

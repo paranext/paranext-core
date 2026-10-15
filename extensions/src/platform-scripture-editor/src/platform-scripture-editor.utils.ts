@@ -1492,7 +1492,9 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * `interfaceMode` is the caller's read of `platform.interfaceMode` (`undefined` when that read
  * failed). The incoming sync suppresses the dotnet progress toast only for a known `'simple'`,
  * where the toolbar sync indicator is its surface; any other value keeps the toast, since the
- * indicator may not be mounted. The outgoing `sendReceiveProjects` keeps its toast: its
+ * indicator may not be mounted. The flag is sent only when it is `true`: a dotnet `SyncProjects`
+ * that predates the parameter rejects a two-argument call, so omitting it keeps the toast-keeping
+ * cases working against that backend. The outgoing `sendReceiveProjects` keeps its toast: its
  * `suppressNotification` would also hide the failure toast, which is this claimless sync's only
  * failure surface.
  */
@@ -1503,11 +1505,18 @@ export async function syncOnProjectSwitch(
   interfaceMode: SettingTypes['platform.interfaceMode'] | undefined,
 ): Promise<void> {
   try {
-    await papi.commands.sendCommand(
-      'paratextBibleSendReceive.syncProjects',
-      [incomingProjectId],
-      interfaceMode === 'simple',
-    );
+    // Mode change mid-sync: intentionally not handled. The flag is fixed for the run, and the
+    // toolbar indicator mounts only in Simple mode, so switching to Power while a suppressed sync
+    // runs leaves it with no progress surface until it ends. Accepted in
+    // `adr-sync-surface-per-interface-mode`.
+    if (interfaceMode === 'simple')
+      await papi.commands.sendCommand(
+        'paratextBibleSendReceive.syncProjects',
+        [incomingProjectId],
+        true,
+      );
+    else
+      await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
   } catch (e) {
     papi.logger.warn(
       `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,

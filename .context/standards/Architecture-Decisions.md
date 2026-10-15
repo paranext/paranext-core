@@ -7358,9 +7358,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   parameter and not `sendReceiveProjects`' broader `suppressNotification`. A caller suppresses only
   when it knows the mode is exactly `'simple'`; unknown, a failed read, Power, or a covered
   indicator keeps the toast, because the indicator mounts only for a known Simple mode and two
-  surfaces beat none. Today: `main/startup-tasks.ts` passes `true`; `syncOnProjectSwitch` passes
-  `true` only for a known `'simple'`; the first-run consent step passes `false` (the wizard covers
-  the indicator). An implementation must not honor the flag without also raising the sync-activity
+  surfaces beat none. Callers send the flag only when it is `true` and otherwise omit it, so a call
+  that keeps the toast still binds to a `SyncProjects` that predates the parameter. Today:
+  `main/startup-tasks.ts` passes `true`; `syncOnProjectSwitch` passes `true` only for a known
+  `'simple'` and omits it otherwise; the first-run consent step omits it (the wizard covers the
+  indicator). An implementation must not honor the flag without also raising the sync-activity
   signal for the run.
 - **Alternatives:** **Cache the mode in the dotnet process** — rejected for the reasons above. **A
   core `protected virtual` hook the patch overrides** (`ShouldShowPersistentSyncToast`) — removed:
@@ -7371,7 +7373,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** Core's `syncProjects` declaration leads the upstream copy in
   `paratext-bible-internal-extensions`, which must add the parameter before its callers can pass it.
   This change and the patch that implements the flag must merge together: Studio builds core `main`
-  unpinned, and a one-parameter `SyncProjects` rejects the two-argument call. Accepted costs: a
+  unpinned, and a one-parameter `SyncProjects` rejects the two-argument Simple-mode calls. Accepted
+  costs: a
   mode change mid-sync is not reconciled (Simple→Power leaves that sync with no persistent surface;
   Power→Simple shows both); the outgoing `sendReceiveProjects` half of a project switch still shows
   both in Simple mode; the Send/Receive extension's `syncOpenProjects` and auto-sync engine still

@@ -171,14 +171,8 @@ namespace TestParanextDataProvider
         /// websocket the base client would use) and returns its result. Lets a test assert what a
         /// registered command handler returns without a live PAPI connection.
         /// </summary>
-        public object? InvokeRequestHandler(string requestType, params object?[] args)
-        {
-            if (!_localMethods.TryGetValue(requestType, out var handler))
-                throw new InvalidOperationException(
-                    $"No handler registered for request type \"{requestType}\""
-                );
-            return handler.DynamicInvoke(args);
-        }
+        public object? InvokeRequestHandler(string requestType, params object?[] args) =>
+            GetRequestHandler(requestType).DynamicInvoke(args);
 
         /// <summary>
         /// Test-only accessor for the delegate a request type was registered with, so a test can
