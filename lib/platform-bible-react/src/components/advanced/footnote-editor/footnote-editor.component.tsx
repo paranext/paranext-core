@@ -1294,14 +1294,19 @@ export default function FootnoteEditor({
       runMarkerPaletteSession({
         items,
         // The kind decides how a commit APPLIES — wrap the selected text, or land at the caret.
-        // It no longer decides anything about focus: every marker palette focuses its list.
+        // It decides nothing about focus: every marker palette focuses its list.
         kind: hasTextSelection ? 'selection' : 'backslash',
-        // Space COMMITS (like Enter) when the typed filter names a NOTE marker in the stylesheet.
-        // This palette's own list offers note-INTERNAL markers, but the filter is whatever the user
-        // typed: `\f` here materializes a NESTED `\f ` literal, and the Tier-2 tokenizer absorbs
-        // the following word into it as a caller just as it does in body text. Decided from the
-        // stylesheet rather than from the offered items for exactly that reason.
-        isNoteMarker: (marker) => isNoteMarker(options.styleInfo, marker),
+        // The Space note rule: when the typed filter names a NOTE marker in the stylesheet, Space
+        // commits that marker if this list OFFERS it and inserts NOTHING if it does not. This
+        // popover's list offers note-INTERNAL markers only, so a typed `\f` always takes the second
+        // branch — which is the point of the rule here: materializing it would make a NESTED `\f `
+        // literal, and the Tier-2 tokenizer would absorb the following word into it as a caller
+        // just as it does in body text. Decided from the stylesheet rather than from the offered
+        // items for exactly that reason.
+        // Same stylesheet the items come from: while the data provider is loading, or after it
+        // errors, `styleInfo` is undefined and the list is built from the default, so reading the
+        // raw value here would turn the rule off exactly when it is needed.
+        isNoteMarker: (marker) => isNoteMarker(options.styleInfo ?? defaultStyleInfo, marker),
         sessionCounterRef: paletteSessionCounter,
         setSession: setPaletteSession,
         clearSessionIfCurrent: clearPaletteSession,
@@ -1363,16 +1368,16 @@ export default function FootnoteEditor({
     return true;
   }, [openMarkerPalette, options.styleInfo]);
 
-  /**
-   * Routes ONE key through the open session — the single implementation behind both entry points:
-   * this popover's capture-phase listener (used while the editor holds focus) and the keys the
-   * palette forwards back (used while the palette holds focus). Two entry points, one semantics.
-   */
   useMarkerPaletteCompositionClose({
     isSessionOpen: useCallback(() => !!paletteSession.current, []),
     dismiss: useCallback(() => markerPalette?.dismiss(), [markerPalette]),
   });
 
+  /**
+   * Routes ONE key through the open session — the single implementation behind both entry points:
+   * this popover's capture-phase listener (used while the editor holds focus) and the keys the
+   * palette forwards back (used while the palette holds focus). Two entry points, one semantics.
+   */
   const runPaletteSessionKey = useCallback(
     (event: MarkerPaletteKeyEvent) => {
       if (!markerPalette) return;

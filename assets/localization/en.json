@@ -362,6 +362,7 @@
   "%overlay_aria_commandPaletteList%": "Command palette results",
   "%overlay_aria_commandPaletteNoResults%": "No results",
   "%overlay_aria_commandPaletteOpened%": "Command palette opened",
+  "%overlay_aria_commandPaletteResultCount%": "{count} results",
   "%overlay_aria_contextMenuOpened%": "Context menu opened",
   "%overlay_aria_dialogOpened%": "{title} dialog opened",
   "%overlay_aria_popoverOpened%": "Popover opened",

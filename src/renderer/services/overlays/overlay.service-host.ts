@@ -248,7 +248,9 @@ async function announceLocalizedToScreenReader(
  * Refreshed at open so a language change is picked up by the next palette; until the resolve lands
  * (or if it yields nothing), announcements fall back to the per-call path.
  */
-let paletteAnnounceStrings: { noResults: string; highlightedItem: string } | undefined;
+let paletteAnnounceStrings:
+  | { noResults: string; highlightedItem: string; resultCount: string }
+  | undefined;
 
 /** Kicks off (fire-and-forget) the per-open resolution backing {@link paletteAnnounceStrings}. */
 function refreshPaletteAnnounceStrings(): void {
@@ -258,13 +260,15 @@ function refreshPaletteAnnounceStrings(): void {
       localizeKeys: [
         '%overlay_aria_commandPaletteNoResults%',
         '%overlay_aria_commandPaletteHighlightedItem%',
+        '%overlay_aria_commandPaletteResultCount%',
       ],
     })
     .then((strings) => {
       const noResults = strings['%overlay_aria_commandPaletteNoResults%'];
       const highlightedItem = strings['%overlay_aria_commandPaletteHighlightedItem%'];
-      if (noResults !== undefined && highlightedItem !== undefined)
-        paletteAnnounceStrings = { noResults, highlightedItem };
+      const resultCount = strings['%overlay_aria_commandPaletteResultCount%'];
+      if (noResults !== undefined && highlightedItem !== undefined && resultCount !== undefined)
+        paletteAnnounceStrings = { noResults, highlightedItem, resultCount };
       return undefined;
     })
     .catch(() => undefined); // the per-call fallback keeps announcing (raw keys at worst)
@@ -292,34 +296,56 @@ let lastAnnouncedPaletteState:
  * element — so without this, a screen reader user hears the palette open and then nothing about
  * what it went on to show.
  *
+ * A list-focused palette has a focused listbox and so speaks its own highlight; it passes
+ * `announceHighlightedItem: false` and uses this for the empty case and the match count, which
+ * `aria-activedescendant` cannot express.
+ *
  * @param overlayId The command palette overlay the state belongs to
  * @param filteredItems The items currently matching the palette's filter text
  * @param selectedIndex The highlighted item's index within `filteredItems`
+ * @param announceHighlightedItem Whether the highlighted item is spoken here. False when the
+ *   palette focuses its own list, which announces the highlight through `aria-activedescendant`
  */
 function announceCommandPaletteState(
   overlayId: string,
   filteredItems: CommandPaletteItem[],
   selectedIndex: number,
+  announceHighlightedItem: boolean,
 ): void {
   const highlightedItem = filteredItems[selectedIndex];
+  // The highlight is part of the de-dupe key only when the highlight is what gets spoken. For a
+  // list-focused palette it is not, so keying on it would make every arrow key a "change" and
+  // repeat the match count over the top of the next keystroke.
+  const announcedItemId = announceHighlightedItem ? highlightedItem?.id : undefined;
   const previous = lastAnnouncedPaletteState;
   if (
     previous &&
     previous.overlayId === overlayId &&
-    previous.highlightedItemId === highlightedItem?.id &&
+    previous.highlightedItemId === announcedItemId &&
     previous.itemCount === filteredItems.length
   )
     return;
 
   lastAnnouncedPaletteState = {
     overlayId,
-    highlightedItemId: highlightedItem?.id,
+    highlightedItemId: announcedItemId,
     itemCount: filteredItems.length,
   };
 
   if (filteredItems.length === 0) {
     if (paletteAnnounceStrings) announceToScreenReader(paletteAnnounceStrings.noResults);
     else announceLocalizedToScreenReader('%overlay_aria_commandPaletteNoResults%');
+    return;
+  }
+  if (!announceHighlightedItem) {
+    // The listbox speaks the highlighted item itself; the COUNT has no other voice.
+    const countReplacers = { count: `${filteredItems.length}` };
+    if (paletteAnnounceStrings)
+      announceToScreenReader(
+        formatReplacementString(paletteAnnounceStrings.resultCount, countReplacers),
+      );
+    else
+      announceLocalizedToScreenReader('%overlay_aria_commandPaletteResultCount%', countReplacers);
     return;
   }
   if (!highlightedItem) return;
@@ -987,13 +1013,23 @@ async function updateCommandPalette(
 
   // Re-read the entry for the index the store clamped, rather than clamping a second time here.
   const updatedEntry = getActiveCommandPalette(webViewId);
-  // PASSIVE palettes only. This live region exists because a passive palette focuses nothing, so
-  // its `aria-activedescendant` cannot speak. A list-focused palette DOES focus the listbox that
-  // carries it, so the highlight is already announced the standard way — announcing again here
-  // speaks every marker twice, and the second utterance talks over the next keystroke. The two
-  // come from different channels, so the de-dupe inside the announcer cannot suppress it.
-  if (updatedEntry?.request.passive)
-    announceCommandPaletteState(updatedEntry.id, filteredItems, updatedEntry.selectedIndex);
+  // A PASSIVE palette focuses nothing, so its `aria-activedescendant` cannot speak and every part
+  // of the state has to come from here.
+  //
+  // A LIST-FOCUSED palette DOES focus the listbox that carries it, so the highlighted item is
+  // already announced the standard way and saying it again speaks every marker twice, with the
+  // second utterance over the next keystroke — the two come from different channels, so the
+  // announcer's own de-dupe cannot suppress it. But `aria-activedescendant` has nothing to say
+  // when the filter matches NOTHING: without the empty case here, a user who types a marker that
+  // does not exist hears silence and then an Enter that does nothing. The match count has no
+  // other voice either. So list-focused palettes announce everything EXCEPT the highlight.
+  if (updatedEntry && (updatedEntry.request.passive || updatedEntry.request.focusTarget === 'list'))
+    announceCommandPaletteState(
+      updatedEntry.id,
+      filteredItems,
+      updatedEntry.selectedIndex,
+      !!updatedEntry.request.passive,
+    );
 }
 
 /**

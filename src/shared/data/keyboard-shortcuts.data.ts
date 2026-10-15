@@ -350,8 +350,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // materializes the typed marker; with nothing typed it closes and inserts nothing. Over a
     // selection it wraps only on an exact (case-insensitive) match and otherwise closes without
     // touching the selection. The one exception: a filter naming a NOTE marker in the stylesheet
-    // commits like Enter instead, because a materialized `\f ` literal would absorb the word after
-    // it as the new note's caller.
+    // commits THAT note marker when the list offers it and inserts nothing when it does not,
+    // because a materialized `\f ` literal would absorb the word after it as the new note's
+    // caller.
     keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },

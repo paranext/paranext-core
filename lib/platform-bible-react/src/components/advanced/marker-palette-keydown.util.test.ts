@@ -512,7 +512,10 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.commitItem).toHaveBeenCalledExactlyOnceWith('f');
     expect(driver.commit).not.toHaveBeenCalled();
     expect(driver.commitTyped).not.toHaveBeenCalled();
-    expect(driver.dismiss).not.toHaveBeenCalled();
+    // The overlay is the table's to close after an EDITOR-side commit: `commitItem` applies through
+    // the editor and leaves the palette up. Without this the palette only closes if something else
+    // happens to move focus, and when nothing does it sits over an ended session.
+    expect(driver.dismiss).toHaveBeenCalledOnce();
   });
 
   it('Space commits the TYPED note, not whatever the user arrowed onto', () => {
@@ -665,12 +668,11 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.update).toHaveBeenCalledWith({ filterText: 'q' });
   });
 
-  it('enter session: nothing lands and the palette stays open — the pending split is not committed', () => {
-    // Unlike 'backslash', which can let an unrelated key land while dismissing because nothing is
-    // pending for it, 'enter' holds the user's paragraph split: the web view claims the Enter and
-    // withholds the split until the palette commits, so a key that landed would also discard the
-    // paragraph break. Same requirement 'selection' has, where a landing key would replace the
-    // wrapped text — except that dismissing is destructive here too, so the key is ignored.
+  it('enter session: an unrelated key neither lands nor closes the palette', () => {
+    // A key that cannot narrow a marker name is not palette input: it is claimed, so nothing
+    // reaches the document, and the session stays open. Paratext 9's
+    // `MarkerDropdownControl.IsMarkerCharacter` behaves the same way. The rule is kind-independent;
+    // asserting it per kind is what would catch a per-kind exception creeping back in.
     ['.', ',', '(', '?', '/', 'é', 'ñ', 'п', 'ArrowLeft', 'Home', 'Delete'].forEach((key) => {
       const driver = makeDriver();
       const state = session('enter', 'q');

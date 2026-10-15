@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type MutableRefObject, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, type MutableRefObject, type RefObject } from 'react';
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { EditorContentSnapshot } from '@/components/advanced/marker-palette-change-guard.util';
 import { clearPaletteSessionIfCurrent } from '@/components/advanced/marker-palette-keydown.util';
@@ -10,7 +10,7 @@ export interface UseMarkerPaletteSessionWritersOptions<TItem extends { marker: s
   sessionRef: MutableRefObject<MarkerPaletteOpenSession<TItem> | undefined>;
   /** The editor whose settle clocks are suspended for the life of a session. */
   editorRef: RefObject<EditorRef | null>;
-  /** The change-guard baseline, cleared whenever the session changes. */
+  /** The change-guard baseline, cleared as each new session starts. */
   baselineRef: MutableRefObject<EditorContentSnapshot | undefined>;
 }
 
@@ -33,8 +33,18 @@ export interface UseMarkerPaletteSessionWritersOptions<TItem extends { marker: s
  * document would otherwise reformat under a palette that is still open, in the one flow where a
  * palette is replaced rather than closed.
  *
+ * THE BASELINE IS CLEARED AS A SESSION STARTS, NEVER AS ONE ENDS. The commit paths end the session
+ * and ask the change guard afterwards — the spine clears before reading
+ * `hasEditorChangedSinceFocus` and the key router clears on `'ended'` — so clearing on the way out
+ * would leave the guard with no baseline to compare against and nothing would ever be refused. A
+ * baseline that outlives its session is harmless: it is only read while a session is open, and the
+ * next session replaces it.
+ *
  * Also resumes on unmount, so an editor torn down mid-session does not leave its own clocks
- * suspended for whatever is rendered next.
+ * suspended for whatever is rendered next. That resume goes through the editor captured when the
+ * suspension was issued, not through `editorRef`: React nulls a ref during the unmount commit,
+ * before passive cleanups run, so a cleanup reading the ref would find nothing and silently do
+ * nothing.
  */
 export function useMarkerPaletteSessionWriters<TItem extends { marker: string }>({
   sessionRef,
@@ -44,14 +54,17 @@ export function useMarkerPaletteSessionWriters<TItem extends { marker: string }>
   setSession: (session: MarkerPaletteOpenSession<TItem> | undefined) => void;
   clearSessionIfCurrent: (token: number) => void;
 } {
+  const suspendedEditorRef = useRef<EditorRef | undefined>(undefined);
+
   const setSession = useCallback(
     (session: MarkerPaletteOpenSession<TItem> | undefined) => {
       sessionRef.current = session;
-      // A baseline outlives nothing: it describes the editor as THIS session's palette took focus,
-      // so carrying it into the next one would compare against a document two edits old and refuse
-      // a commit the user did choose.
-      baselineRef.current = undefined;
-      editorRef.current?.setMarkerSettleSuspended(!!session);
+      // A baseline describes the editor as THIS session's palette took focus, so a new session
+      // starts without one. See the note on clearing in this hook's doc.
+      if (session) baselineRef.current = undefined;
+      const editor = editorRef.current ?? undefined;
+      suspendedEditorRef.current = session ? editor : undefined;
+      editor?.setMarkerSettleSuspended(!!session);
     },
     [sessionRef, baselineRef, editorRef],
   );
@@ -60,17 +73,17 @@ export function useMarkerPaletteSessionWriters<TItem extends { marker: string }>
     (token: number) => {
       clearPaletteSessionIfCurrent(sessionRef, token);
       if (sessionRef.current) return;
-      baselineRef.current = undefined;
+      suspendedEditorRef.current = undefined;
       editorRef.current?.setMarkerSettleSuspended(false);
     },
-    [sessionRef, baselineRef, editorRef],
+    [sessionRef, editorRef],
   );
 
   useEffect(
     () => () => {
-      editorRef.current?.setMarkerSettleSuspended(false);
+      suspendedEditorRef.current?.setMarkerSettleSuspended(false);
     },
-    [editorRef],
+    [],
   );
 
   return { setSession, clearSessionIfCurrent };

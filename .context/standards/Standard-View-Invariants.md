@@ -85,8 +85,10 @@ text.
 | modifier and lock keys (Shift, CapsLock, …)                      | passed through: they are how a marker gets typed                                                                                                |
 | everything else — punctuation, accented Latin, non-Latin scripts, `Dead`, Delete, Left/Right/Home/End/PageUp/PageDown | IGNORED: claimed, so nothing reaches the text, and the palette stays open (P9's `IsMarkerCharacter`) |
 
-`\f` specifically commits like Enter on Space, emergently: `\f ` tokenizes to the full note. An
-unknown marker settles as typed at a caret, and cannot be committed from the list.
+Space on a typed NOTE marker is the one exception: it commits THAT marker when the list offers it,
+and inserts nothing when it does not, because `\f ` left to materialize would tokenize into the full
+note and absorb the following word as its caller. An unknown marker settles as typed at a caret, and
+cannot be committed from the list.
 
 ### 3.1 Letters and digits come from the typed character, with the physical key as fallback
 

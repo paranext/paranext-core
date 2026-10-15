@@ -1,5 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runMarkerPaletteSession } from './marker-palette-session.util';
+import { renderHook } from '@testing-library/react';
+import type { EditorRef } from '@eten-tech-foundation/platform-editor';
+import {
+  captureEditorContentSnapshot,
+  hasEditorChanged,
+  type EditorContentSnapshot,
+} from './marker-palette-change-guard.util';
+import {
+  runMarkerPaletteSession,
+  type MarkerPaletteOpenSession,
+} from './marker-palette-session.util';
+import { useMarkerPaletteSessionWriters } from './use-marker-palette-session-writers.hook';
 
 type Item = { marker: string };
 
@@ -168,8 +179,8 @@ describe('runMarkerPaletteSession — the Space note rule', () => {
 
   it('is carried by an ENTER session, not only a backslash one', () => {
     // A materialized `\f ` literal does the same harm wherever it lands, and the Enter palette is
-    // one of the places it used to land: its source is paragraph markers, so it never offers a
-    // note, and the exception was previously attached to `'backslash'` sessions only.
+    // one of the places it can land: its source is paragraph markers, so it never offers a note,
+    // which is exactly when the rule has to come from the stylesheet instead of the list.
     expect(sessionFor('enter')?.isNoteMarker?.('f')).toBe(true);
   });
 
@@ -181,5 +192,114 @@ describe('runMarkerPaletteSession — the Space note rule', () => {
     // Space over a selection is the wrap commit, with no typed literal to except. The gate lives
     // in the forwarding table rather than here, so the spine stays a plain carrier.
     expect(sessionFor('selection')?.isNoteMarker?.('f')).toBe(true);
+  });
+});
+
+/** An editor ref exposing only what {@link useMarkerPaletteSessionWriters} reaches. */
+function stubEditorRef() {
+  // `setMarkerSettleSuspended` is the only member these writers call, so nothing else is ever read
+  // and building a full `EditorRef` would be dozens of unused stubs.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return { current: { setMarkerSettleSuspended: vi.fn() } as unknown as EditorRef };
+}
+
+describe('runMarkerPaletteSession — the change guard with the REAL session writers', () => {
+  it('refuses a highlighted commit when the editor changed under the open palette', async () => {
+    // The spine ENDS the session before it asks the guard, and the guard's baseline is owned by the
+    // writers. A stubbed `clearSessionIfCurrent` cannot show whether that ordering is safe — the
+    // suite above stubs it, so a writer that dropped the baseline on the way out would still look
+    // correct there while leaving the guard permanently blind. This runs the real writers.
+    let content: unknown = { usj: 'before' };
+    const readContent = () => content;
+    const readCaret = () => undefined;
+
+    const sessionRef: { current: MarkerPaletteOpenSession<Item> | undefined } = {
+      current: undefined,
+    };
+    const baselineRef: { current: EditorContentSnapshot | undefined } = { current: undefined };
+    const editorRef = stubEditorRef();
+
+    const { result } = renderHook(() =>
+      useMarkerPaletteSessionWriters<Item>({ sessionRef, editorRef, baselineRef }),
+    );
+
+    const applyItem = vi.fn();
+    let resolveShow: (id: string | undefined) => void = () => {};
+    const showPromise = new Promise<string | undefined>((resolve) => {
+      resolveShow = resolve;
+    });
+
+    runMarkerPaletteSession<Item>({
+      items: [{ marker: 'q1' }],
+      kind: 'enter',
+      sessionCounterRef: { current: 0 },
+      setSession: result.current.setSession,
+      clearSessionIfCurrent: result.current.clearSessionIfCurrent,
+      runSessionKey: () => {},
+      show: () => showPromise,
+      restoreSelectionIfLost: () => {},
+      hasEditorChangedSinceFocus: () =>
+        hasEditorChanged(baselineRef.current, captureEditorContentSnapshot(readContent, readCaret)),
+      focusEditor: () => {},
+      applyItem,
+      onShowError: () => {},
+    });
+
+    // Focus leaves the editor for the palette — where the focus-out hook takes the baseline.
+    baselineRef.current = captureEditorContentSnapshot(readContent, readCaret);
+    // Something edits the document while the palette is open.
+    content = { usj: 'after' };
+
+    resolveShow('q1');
+    await settle(showPromise);
+
+    expect(applyItem).not.toHaveBeenCalled();
+  });
+
+  it('still applies a highlighted commit when nothing changed', async () => {
+    // The other half of the same wiring: a baseline that survives the session ending must not
+    // refuse an ordinary commit.
+    const content = { usj: 'unchanged' };
+    const readContent = () => content;
+    const readCaret = () => undefined;
+
+    const sessionRef: { current: MarkerPaletteOpenSession<Item> | undefined } = {
+      current: undefined,
+    };
+    const baselineRef: { current: EditorContentSnapshot | undefined } = { current: undefined };
+    const editorRef = stubEditorRef();
+
+    const { result } = renderHook(() =>
+      useMarkerPaletteSessionWriters<Item>({ sessionRef, editorRef, baselineRef }),
+    );
+
+    const applyItem = vi.fn();
+    let resolveShow: (id: string | undefined) => void = () => {};
+    const showPromise = new Promise<string | undefined>((resolve) => {
+      resolveShow = resolve;
+    });
+
+    runMarkerPaletteSession<Item>({
+      items: [{ marker: 'q1' }],
+      kind: 'enter',
+      sessionCounterRef: { current: 0 },
+      setSession: result.current.setSession,
+      clearSessionIfCurrent: result.current.clearSessionIfCurrent,
+      runSessionKey: () => {},
+      show: () => showPromise,
+      restoreSelectionIfLost: () => {},
+      hasEditorChangedSinceFocus: () =>
+        hasEditorChanged(baselineRef.current, captureEditorContentSnapshot(readContent, readCaret)),
+      focusEditor: () => {},
+      applyItem,
+      onShowError: () => {},
+    });
+
+    baselineRef.current = captureEditorContentSnapshot(readContent, readCaret);
+
+    resolveShow('q1');
+    await settle(showPromise);
+
+    expect(applyItem).toHaveBeenCalledWith({ marker: 'q1' });
   });
 });

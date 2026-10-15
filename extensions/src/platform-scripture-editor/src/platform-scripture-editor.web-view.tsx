@@ -987,17 +987,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const editorRef = useRef<EditorRef | null>(null);
 
   /**
-   * The ONLY writers of {@link paletteSession}. The editor stays fully editable for the life of a
-   * session: nothing can land in it while the palette holds focus, and making it non-editable
-   * instead blurred it, which put the user's keys on the page body and lost the caret.
-   */
-  /**
-   * The ONLY writers of {@link paletteSession}, and the only place marker settling is suspended and
-   * resumed. The editor stays fully editable for the life of a session: nothing can land in it
-   * while the palette holds focus, and making it non-editable instead blurred it, which put the
-   * user's keys on the page body and lost the caret.
-   */
-  /**
    * Whether the editor changed under the open palette. ONE function for both consumers of it: the
    * session spine, which asks before a highlighted commit, and the key router, which asks before
    * each TYPED commit.
@@ -1359,9 +1348,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // read-only note is just as unable to commit.
     //
     // Unconditional, with nothing tracked: `dismissCommandPalette` already returns immediately
-    // when no palette is active for this web view. Tracking it with a boolean instead was wrong —
-    // on the `\` reopen path the REPLACED palette's ABORTED rejection cleared the flag after the
-    // replacement had already set it, leaving it false while a palette was open and focused.
+    // when no palette is active for this web view. A boolean could not track it correctly anyway —
+    // on the `\` reopen path the REPLACED palette's ABORTED rejection lands after the replacement
+    // has already set the flag, which would clear it while a palette is open and focused.
     papi.overlays.dismissCommandPalette(webViewId).catch((error) => {
       logger.warn(`Error dismissing footnote marker palette: ${getErrorMessage(error)}`);
     });
@@ -2432,7 +2421,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // marker this palette does not offer is absent from that list exactly when the rule
         // matters — the Enter palette's source is paragraph markers, and a `\` palette at some
         // carets offers no notes either.
-        isNoteMarker: (marker) => isNoteMarker(styleInfo, marker),
+        // Same stylesheet the items come from: while the data provider is loading, or after it
+        // errors, `styleInfo` is undefined and the list is built from the default. Reading the raw
+        // value here would turn the rule off exactly when the default list is offering `f`, and
+        // `\` `f` Space would write the raw `\f ` literal this rule exists to prevent.
+        isNoteMarker: (marker) => isNoteMarker(styleInfo ?? defaultStyleInfo, marker),
         sessionCounterRef: paletteSessionCounter,
         setSession: setPaletteSession,
         clearSessionIfCurrent: clearPaletteSession,
@@ -2524,6 +2517,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return true;
   }, [openMarkerPalette, styleInfo]);
 
+  useMarkerPaletteCompositionClose({
+    isSessionOpen: useCallback(() => !!paletteSession.current, []),
+    dismiss: dismissPaletteSessionIfOpen,
+    target: window,
+  });
+
   /**
    * Routes ONE key through the open session — the single implementation behind both entry points:
    * this web view's capture-phase listener (used while the editor holds focus) and the keys the
@@ -2536,12 +2535,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * `dismiss()` right after each, resolving the show promise `undefined` — which
    * openMarkerPalette's `.then` treats as a dismissal, so nothing double-applies.
    */
-  useMarkerPaletteCompositionClose({
-    isSessionOpen: useCallback(() => !!paletteSession.current, []),
-    dismiss: dismissPaletteSessionIfOpen,
-    target: window,
-  });
-
   const runPaletteSessionKey = useCallback(
     (event: MarkerPaletteKeyEvent) => {
       // A read-only editor cannot take a commit: every commit method throws in read-only mode.
@@ -2759,7 +2752,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }
           // The trigger never lands, whatever the selection shape — typing filters the palette,
           // not the document. In capture phase the claim keeps Lexical from ever seeing the `\`.
-          // Every kind opens the same way now: focus goes to the palette's LIST.
+          // Every kind opens the same way: focus goes to the palette's LIST.
           // Claimed only when a palette actually opens: with nothing to offer, the `\` is an
           // ordinary character and must still reach the document.
           if (openMarkerPaletteAtCaret()) {
@@ -4072,17 +4065,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // update for this chapter — which is why this lives here rather than in the key table. The
       // guard reads false until the palette has taken focus and a baseline exists, and the session
       // is already cleared by the time a palette's own commit lands here, so neither self-triggers.
-      if (
-        paletteSession.current &&
-        hasEditorChanged(
-          paletteBaselineSnapshotRef.current,
-          captureEditorContentSnapshot(
-            () => editorRef.current?.getUsj(),
-            () => editorRef.current?.getSelection(),
-          ),
-        )
-      )
-        dismissPaletteSessionIfOpen();
+      if (paletteSession.current && hasEditorChangedSinceFocus()) dismissPaletteSessionIfOpen();
       // Capture the current chapter's save fn and chapter key into the debounce payload so a
       // pending trailing save always targets the chapter this content was typed in.
       //
@@ -4188,6 +4171,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [
       closeFootnoteEditor,
       dismissPaletteSessionIfOpen,
+      hasEditorChangedSinceFocus,
       openNoteEditorOnNewNote,
       publishLiveEditorUsjIfNotesChanged,
       saveUsjToPdpDebounced,

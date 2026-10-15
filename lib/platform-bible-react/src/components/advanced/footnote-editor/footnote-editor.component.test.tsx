@@ -882,13 +882,12 @@ describe('FootnoteEditor marker palette wiring', () => {
     }
 
     it('leaves the popover editor EDITABLE for the life of a session', () => {
-      // Making it non-editable instead blurred it, which put the user's keys on the page body and
-      // lost the caret — the fallout this design removes. Nothing can land in the editor anyway
-      // while the palette holds focus.
+      // Making it non-editable would blur it, putting the user's keys on the page body and losing
+      // the caret. Nothing can land in the editor anyway while the palette holds focus.
       const { editorInput, markerPalette } = openListFocusedSession();
       const editableBefore = editorInput.getAttribute('contenteditable');
       expect(markerPalette.show).toHaveBeenCalled();
-      // Never disabled while the session is open — the lock used to set this to 'false' here.
+      // Never disabled while the session is open.
       expect(editorInput.getAttribute('contenteditable')).not.toBe('false');
       expect(editorInput.getAttribute('contenteditable')).toBe(editableBefore);
 
@@ -931,8 +930,8 @@ describe('FootnoteEditor marker palette wiring', () => {
     });
 
     it('does NOT cancel a paste — the editor is never made non-editable', () => {
-      // Paste blocking was part of the input lock. With the palette holding focus a paste goes to
-      // the palette, not the editor, so there is nothing to block; a paste that does reach the
+      // With the palette holding focus a paste goes to the palette, not the editor, so there is
+      // nothing to block; a paste that does reach the
       // editor (only possible before the palette has focus) is handled by closing the palette
       // rather than by disabling the editor.
       const { editorInput } = openListFocusedSession();

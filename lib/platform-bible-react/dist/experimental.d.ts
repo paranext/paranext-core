@@ -1135,7 +1135,8 @@ export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
  *   commits the marker the user literally typed, `*` commits it as a CLOSING marker, and `\`
  *   commits and immediately reopens the palette so `\qt-s\qt-e` is one flow.
  * - `'enter'` — the Enter-split menu at a collapsed caret, for choosing the marker of the paragraph
- *   the split creates. Its only commit is the highlighted item (Enter or Tab). Forwarded, so the
+ *   the split creates. Enter and Tab commit the highlighted item, and it shares every other commit
+ *   key with `'backslash'`: Space, `*` and `\` run in any non-selection session. Forwarded, so the
  *   table owns its filter characters, Backspace and arrows; nothing it accepts may reach the
  *   document.
  * - `'selection'` — the selection-wrap palette, opened with text selected. EVERY non-chord key is
@@ -1190,7 +1191,8 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
 	 * Commit the marker the user literally TYPED (the session filter), with the palette's Space
 	 * semantics: materialize the literal through the editor (`EditorRef.commitTypedMarker`) and let
 	 * the marker-edit engine resolve it — open span `closed="false"` for an inline marker, unknown
-	 * settles as typed. Only invoked for a `'backslash'` session's Space.
+	 * settles as typed. Invoked for a NON-SELECTION session's Space (`'backslash'` or `'enter'`),
+	 * when the typed filter does not name a note marker.
 	 */
 	commitTyped(typed: string): void;
 	/**
@@ -1199,9 +1201,9 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
 	 * terminating space (`EditorRef.commitTypedMarker` with `trailingSpace: false`) — and then open a
 	 * NEW palette session at the resulting caret, for the backslash the user just pressed. The
 	 * session owner performs both halves, so the reopened session goes through its normal open path
-	 * and gets the same ranking, search bar and zero-match rules as any other. Only invoked for a
-	 * `'backslash'` session's `\` with a NON-EMPTY filter; an empty one has nothing to commit and the
-	 * backslash is left to land as an ordinary character.
+	 * and gets the same ranking, search bar and zero-match rules as any other. Invoked for a
+	 * NON-SELECTION session's `\` (`'backslash'` or `'enter'`) with a NON-EMPTY filter; an empty one
+	 * has nothing to commit and the backslash is left to land as an ordinary character.
 	 */
 	commitTypedAndReopen(typed: string): void;
 	/**
@@ -1209,7 +1211,8 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
 	 * applied through the editor (`EditorRef.commitTypedCloser`). `\` + `typed` + `*` lands at the
 	 * caret with no terminating space and no opening glyph, and the marker-edit engine resolves it:
 	 * against a matching open span it becomes that span's real closer, otherwise it settles as an
-	 * unmatched closer, flagged as typed. Only invoked for a `'backslash'` session's `*`.
+	 * unmatched closer, flagged as typed. Invoked for a NON-SELECTION session's `*` (`'backslash'` or
+	 * `'enter'`).
 	 */
 	commitTypedCloser(typed: string): void;
 	/**
@@ -1217,8 +1220,9 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
 	 * Space commit, where the marker is whatever was literally typed (an exact match against the
 	 * offered entries, ignoring case and the `+` nesting prefix on both sides), not whatever is
 	 * highlighted. The session owner applies it through the editor
-	 * (`EditorRef.applyMarkerMenuSelection`, `trigger: "backslash"`). Only invoked for a
-	 * `'selection'` session's Space.
+	 * (`EditorRef.applyMarkerMenuSelection`, `trigger: "backslash"`). Invoked for a `'selection'`
+	 * session's Space, and by the Space note rule when a non-selection session's list offers the note
+	 * marker that was typed.
 	 */
 	commitItem(marker: string): void;
 }
@@ -1278,8 +1282,7 @@ export declare function resolveFilterCharacter(event: MarkerPaletteKeyEvent): st
  * one appears. Read this before concluding the hand-kept sync below is load-bearing: it is
  * insurance, not routing.
  *
- * Every kind claims the SAME set. The per-kind parameter this once took is gone; the function now
- * takes none.
+ * Every kind claims the SAME set, which is why this takes no parameters.
  */
 export declare function getMarkerPaletteClaimedKeys(): string[];
 /**
@@ -1617,7 +1620,7 @@ export interface UseMarkerPaletteSessionWritersOptions<TItem extends {
 	sessionRef: React$1.MutableRefObject<MarkerPaletteOpenSession<TItem> | undefined>;
 	/** The editor whose settle clocks are suspended for the life of a session. */
 	editorRef: React$1.RefObject<EditorRef | null>;
-	/** The change-guard baseline, cleared whenever the session changes. */
+	/** The change-guard baseline, cleared as each new session starts. */
 	baselineRef: React$1.MutableRefObject<EditorContentSnapshot | undefined>;
 }
 /**
@@ -1639,8 +1642,18 @@ export interface UseMarkerPaletteSessionWritersOptions<TItem extends {
  * document would otherwise reformat under a palette that is still open, in the one flow where a
  * palette is replaced rather than closed.
  *
+ * THE BASELINE IS CLEARED AS A SESSION STARTS, NEVER AS ONE ENDS. The commit paths end the session
+ * and ask the change guard afterwards — the spine clears before reading
+ * `hasEditorChangedSinceFocus` and the key router clears on `'ended'` — so clearing on the way out
+ * would leave the guard with no baseline to compare against and nothing would ever be refused. A
+ * baseline that outlives its session is harmless: it is only read while a session is open, and the
+ * next session replaces it.
+ *
  * Also resumes on unmount, so an editor torn down mid-session does not leave its own clocks
- * suspended for whatever is rendered next.
+ * suspended for whatever is rendered next. That resume goes through the editor captured when the
+ * suspension was issued, not through `editorRef`: React nulls a ref during the unmount commit,
+ * before passive cleanups run, so a cleanup reading the ref would find nothing and silently do
+ * nothing.
  */
 export declare function useMarkerPaletteSessionWriters<TItem extends {
 	marker: string;
