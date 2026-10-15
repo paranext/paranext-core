@@ -288,6 +288,23 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         var completedItems = 0;
         void AdvanceProgress() => job.PercentComplete = 100 * ++completedItems / itemsToComplete;
 
+        // Adds the check's results for the range to the job, unless they are not ready
+        bool TryCollectResults(CheckForProject check, InputRange range)
+        {
+            var collected = false;
+            check.AccessResults(
+                range.Start.BookNum,
+                recorder =>
+                {
+                    if (!recorder.ResultsReady)
+                        return;
+                    job.AllResults.AddRange(recorder.GetResultsInRange(range));
+                    collected = true;
+                }
+            );
+            return collected;
+        }
+
         // Computed once per job and check: cheap, and settings changes apply from the next job on
         var setupStatesByCheckAndProject = new Dictionary<(string, string), CheckSetupState?>();
         CheckSetupState? SetupStateFor(string checkId, string projectId)
@@ -390,18 +407,24 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                     }
 
                     var check = _checkCache.GetCheck(checkId, range.ProjectId);
-                    check.AccessResults(
-                        range.Start.BookNum,
-                        recorder =>
-                        {
-                            if (!recorder.ResultsReady)
-                                throw new Exception(
-                                    $"Check {checkId} did not complete running properly."
-                                );
-                            job.AllResults.AddRange(recorder.GetResultsInRange(range));
-                            AdvanceProgress();
-                        }
-                    );
+                    // An edit to the book clears its results in the background (the TextChanged
+                    // handler in CheckCache), which can land after this check ran and before its
+                    // results are read here. Run it once more so the job delivers results for the
+                    // current text. If another edit clears them again, the check is left out of
+                    // this job without an error: each edit tells consumers to run their checks again.
+                    if (!TryCollectResults(check, range))
+                    {
+                        var rerunFailures = _checkCache.RunChecksForProject(
+                            range,
+                            [checkId],
+                            denials
+                        );
+                        foreach (var (failedCheckId, exception) in rerunFailures)
+                            RecordCheckFailure(job, failedCheckId, range.ProjectId, exception);
+                        if (rerunFailures.Count == 0)
+                            TryCollectResults(check, range);
+                    }
+                    AdvanceProgress();
                 }
             }
 
