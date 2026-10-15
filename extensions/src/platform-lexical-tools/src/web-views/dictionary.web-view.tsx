@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
+import { useLocalizedStrings } from '@papi/frontend/react';
 import papi, { logger } from '@papi/frontend';
 import { WebViewProps } from '@papi/core';
 import { useTabIconSelection, type TabIconUrls } from 'platform-bible-react';
@@ -60,26 +60,19 @@ globalThis.webViewComponent = function DictionaryWebView({
 
   // #endregion
 
-  // #region Tab tooltip (Simple mode only; see main.ts for why Power mode must not gain one)
-
-  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
-  const isPowerMode = useMemo(() => {
-    if (isPlatformError(interfaceModePossiblyError)) {
-      logger.warn(`Error getting interface mode: ${getErrorMessage(interfaceModePossiblyError)}`);
-      return false;
-    }
-    return interfaceModePossiblyError === 'power';
-  }, [interfaceModePossiblyError]);
-
-  // `main.ts` resolves the tooltip once, when the tab opens/reloads; this keeps it current when the
-  // interface language changes afterward, which doesn't reload the tab.
+  // `main.ts` resolves the tooltip once, when the tab opens/reloads; this effect keeps it current
+  // afterward too, since a locale change doesn't reload the tab. Set unconditionally (no Power/Simple
+  // gate), matching main.ts's own tooltip field: `PlatformTabTitle` already suppresses a tooltip
+  // that merely repeats the visible title unless the tab is icon-only.
+  //
+  // `useLocalizedStrings` seeds every key to itself both while loading and on a provider error
+  // (use-localized-strings-hook.ts) — so the guard compares against the key itself, not a truthy
+  // check, to tell "really resolved" apart from either sentinel case.
   useEffect(() => {
-    const resolvedTitle = localizedStrings[DICTIONARY_TITLE_KEY];
-    if (!resolvedTitle) return;
-    updateWebViewDefinition({ tooltip: isPowerMode ? undefined : resolvedTitle });
-  }, [localizedStrings, isPowerMode, updateWebViewDefinition]);
-
-  // #endregion
+    const resolvedTooltip = localizedStrings[DICTIONARY_TITLE_KEY];
+    if (resolvedTooltip === DICTIONARY_TITLE_KEY) return;
+    updateWebViewDefinition({ tooltip: resolvedTooltip });
+  }, [localizedStrings, updateWebViewDefinition]);
 
   const onSelectOccurrence = useCallback(
     (scrRefOfOccurrence: SerializedVerseRef) => {

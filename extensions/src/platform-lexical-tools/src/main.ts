@@ -107,31 +107,31 @@ const dictionaryWebViewProvider: IWebViewProvider = {
 
     const title = DICTIONARY_TITLE_KEY;
     // `PlatformTabTitle` resolves a `%...%` title itself (live, on locale change), but it renders
-    // `tooltip` verbatim with no such resolution — so the tooltip needs an already-resolved string,
-    // not the raw key `title` carries. This is only the tooltip's INITIAL value for a fresh/reloaded
-    // tab; the web view keeps it current on a subsequent interface-language change (see
-    // dictionary.web-view.tsx), since `getWebView` doesn't re-run just because a setting changed.
-    const resolvedTitle = await papi.localization.getLocalizedString({ localizeKey: title });
+    // `tooltip` verbatim with no such resolution, so the tooltip has to arrive already localized.
+    // This is only the tab's INITIAL tooltip, for a fresh/reloaded tab, since `getWebView` doesn't
+    // re-run just because a setting changed; dictionary.web-view.tsx's own effect keeps it current
+    // on a subsequent interface-language change.
+    const tooltip = await papi.localization.getLocalizedString({ localizeKey: title });
 
     return {
       ...savedWebView,
       title,
       content: dictionaryWebViewReact,
       styles: tailwindCssStyles,
-      shouldShowToolbar: true,
+      shouldShowToolbar: interfaceMode === 'power',
       projectId,
-      // Mirrors the title so the tab's name is discoverable on hover once Simple mode shrinks it to
-      // icon-only — matches Comments'/Find's existing tooltip convention. Gated on Simple mode: Power
-      // mode never had a tooltip here and must not gain one now (this panel is reachable in Power
-      // mode too).
-      tooltip: interfaceMode === 'simple' ? resolvedTitle : savedWebView.tooltip,
+      // Set unconditionally rather than gated on Simple mode: `PlatformTabTitle` already
+      // suppresses a tooltip that merely repeats the visible title unless the tab is icon-only, so
+      // a mode gate here would only re-implement that suppression one layer further out — and if
+      // Power mode ever did collapse to icon-only, this keeps working with no change.
+      tooltip,
       // In Simple mode this is the pinned Column 3 tab, forced onto scroll group 0 to stay
-      // verse-synced with the Scripture editor (also forced to 0 there) regardless of which editor
-      // last invoked `openDictionary` — matches Bible Texts/Commentaries/Comments' own forcing.
+      // verse-synced with the Scripture editor.
       scrollGroupScrRef: interfaceMode === 'simple' ? 0 : getWebViewOptions.editorScrollGroupId,
       // Shown in both Power and Simple mode (product decision) — see dictionary.web-view.tsx for
       // the live theme/selection-adaptive swap, likewise unconditional.
       iconUrl: 'papi-extension://platformLexicalTools/assets/book-a.svg',
+      // TODO(PT-4405) move this per-mode computation into the renderer.
       isClosable: interfaceMode === 'power',
     };
   },
