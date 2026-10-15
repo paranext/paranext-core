@@ -43,6 +43,10 @@ public class TextSearchingTraceListener : TraceListener
 
     public override void WriteLine(string? message) => Search(message);
 
+    /// <summary>
+    /// <c>true</c> once a considered trace contained the text to find. Latches on the first match
+    /// and never resets; create a new listener to search again.
+    /// </summary>
     public bool FoundText { get; private set; }
 
     private void Search(string? message)

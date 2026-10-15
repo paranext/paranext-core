@@ -9,9 +9,12 @@ namespace TestParanextDataProvider;
 [ExcludeFromCodeCoverage]
 public class FixtureSetup
 {
+    // Unique per test run: the folder is deleted in teardown, so two runs sharing one folder
+    // (two developer sessions, or an IDE run beside a CLI run) would delete each other's
+    // fixture files mid-run and fail at random.
     private static readonly string s_testFolder = Path.Combine(
         Path.GetTempPath(),
-        "Platform.Bible.Tests"
+        $"Platform.Bible.Tests-{Guid.NewGuid():N}"
     );
 
     public static string TestFolderPath => s_testFolder;
