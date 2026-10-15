@@ -17,8 +17,9 @@ internal interface IProjectStreamManager
     /// subdirectories in its name - but a symbolic link or junction to a directory is not followed,
     /// while a link that is a file is listed like any other file, since
     /// <see cref="GetDataStream"/> reads through it. Every name returned is one
-    /// <see cref="GetDataStream"/> reads back; a stored item it would refuse is left out. Creates
-    /// nothing: if the path does not exist, returns an empty array.
+    /// <see cref="GetDataStream"/> accepts, and a stored item it would refuse is left out; one it
+    /// accepts but cannot read, such as a resource entry that fails to decrypt, is listed and reads
+    /// as absent. Creates nothing: if the path does not exist, returns an empty array.
     /// </summary>
     /// <param name="underPath">
     /// Path to enumerate under, relative to the project, using '/' or the platform's separator. Null

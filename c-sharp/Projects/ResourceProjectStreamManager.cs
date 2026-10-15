@@ -15,6 +15,7 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
 {
     private readonly ProjectFileManager _fileManager;
     private readonly string? _archivePath;
+    private readonly bool _entriesMustBeEncrypted;
 
     /// <param name="fileManager">
     /// The resource's own file manager. Every read goes through it, so it applies the same
@@ -27,10 +28,20 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
     /// manager lists one directory at a time and finds a directory only through the files directly
     /// in it, so it cannot reach a file whose parent directories hold nothing else.
     /// </param>
-    public ResourceProjectStreamManager(ProjectFileManager fileManager, string? archivePath)
+    /// <param name="entriesMustBeEncrypted">
+    /// Whether <paramref name="fileManager"/> refuses an entry that is not encrypted. ParatextData's
+    /// zipped file manager does exactly when it was given a password provider, and keeps that
+    /// private, so the caller states it.
+    /// </param>
+    public ResourceProjectStreamManager(
+        ProjectFileManager fileManager,
+        string? archivePath,
+        bool entriesMustBeEncrypted
+    )
     {
         _fileManager = fileManager;
         _archivePath = archivePath;
+        _entriesMustBeEncrypted = entriesMustBeEncrypted;
     }
 
     public void Initialize()
@@ -50,11 +61,19 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
         // no data
         if (_archivePath == null)
             throw new FileNotFoundException("The resource's archive could not be located");
+        // Which entries a read can reach is decided here from the entries' own flags, mirroring the
+        // file manager's rule, rather than by opening each one through the file manager: its read
+        // locks the archive before decrypting and never unlocks it if decrypting fails (an entry
+        // encrypted with another password, or a corrupt one), which would block every later read
+        // of the resource. So such an entry is listed, and reads as absent.
         List<string> entryNames;
         using (ZipFile archive = new(_archivePath))
             entryNames =
             [
-                .. archive.Cast<ZipEntry>().Where(entry => entry.IsFile).Select(e => e.Name),
+                .. archive
+                    .Cast<ZipEntry>()
+                    .Where(entry => entry.IsFile && (entry.IsCrypted || !_entriesMustBeEncrypted))
+                    .Select(entry => entry.Name),
             ];
 
         return
@@ -63,7 +82,7 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
                 // Case-insensitive because the file manager's lookups are, so this lists exactly
                 // the entries a read under the same prefix finds
                 .Where(name => name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                .Where(name => ProjectStreamNames.IsValid(name) && CanRead(name))
+                .Where(ProjectStreamNames.IsValid)
                 .Select(name => name[prefix.Length..])
                 .Order(StringComparer.Ordinal),
         ];
@@ -85,7 +104,8 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
         catch (FileNotFoundException)
         {
             // The file manager refuses an entry it cannot verify (an unencrypted entry in an
-            // encrypted resource), so it is not part of the resource, and listing omits it too
+            // encrypted resource), which listing omits too, and one it cannot decrypt or read,
+            // which listing includes (see GetExistingDataStreamNames). Either is no data.
             return null;
         }
     }
@@ -93,23 +113,6 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
     public bool DeleteDataStream(string streamName)
     {
         throw new InvalidOperationException("Resource projects are read-only");
-    }
-
-    /// <summary>
-    /// Whether <see cref="GetDataStream"/> can read the entry, decided by the file manager itself so
-    /// the listing cannot disagree with a read.
-    /// </summary>
-    private bool CanRead(string entryName)
-    {
-        try
-        {
-            using var _ = _fileManager.OpenFileForByteRead(entryName);
-            return true;
-        }
-        catch (FileNotFoundException)
-        {
-            return false;
-        }
     }
 
     private static string GetEntryNameFromStreamName(string streamName)

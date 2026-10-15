@@ -525,8 +525,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     /// <summary>
     /// Where an extension's data lives, relative to the project. Listing and reading both compose
-    /// their stream names from this, which is what makes every name
-    /// <see cref="ListExtensionDataQualifiers"/> returns readable by
+    /// their stream names from this, which is what makes each name
+    /// <see cref="ListExtensionDataQualifiers"/> returns refer to the same document when passed to
     /// <see cref="GetExtensionData"/> — change the layout here and both sides move together.
     ///
     /// It deliberately validates nothing. The callers' checks differ — see
@@ -587,7 +587,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         ProjectDetails projectDetails
     ) =>
         scrText.IsResourceProject
-            ? new ResourceProjectStreamManager(scrText.FileManager, GetResourceArchivePath(scrText))
+            ? new ResourceProjectStreamManager(
+                scrText.FileManager,
+                GetResourceArchivePath(scrText),
+                // PlatformScrTextCollection gives every resource a DblResourcePasswordProvider,
+                // and a file manager given a password provider refuses unencrypted entries. Were
+                // that to change, this would only under-list, never list an entry a read refuses.
+                entriesMustBeEncrypted: true
+            )
             : new RawDirectoryProjectStreamManager(projectDetails);
 
     /// <summary>

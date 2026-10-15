@@ -97,8 +97,8 @@ namespace TestParanextDataProvider.Projects
             // cannot verify, so it is not part of the resource and the listing must agree
             var streamManager = CreateStreamManager(
                 [
-                    ($"{ExtensionPath}/sealed.json", "sealed", true),
-                    ($"{ExtensionPath}/loose.json", "loose", false),
+                    ($"{ExtensionPath}/sealed.json", "sealed", ArchivePassword),
+                    ($"{ExtensionPath}/loose.json", "loose", null),
                 ],
                 passwordProtected: true
             );
@@ -114,6 +114,39 @@ namespace TestParanextDataProvider.Projects
                     Is.EqualTo("sealed")
                 );
                 Assert.That(streamManager.GetDataStream($"{ExtensionPath}/loose.json"), Is.Null);
+            });
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_EntryThatCannotBeDecrypted_LeavesTheArchiveUnlocked()
+        {
+            var streamManager = CreateStreamManager(
+                [
+                    ($"{ExtensionPath}/sealed.json", "sealed", ArchivePassword),
+                    ($"{ExtensionPath}/foreign.json", "foreign", "another password"),
+                ],
+                passwordProtected: true
+            );
+
+            // Encrypted, so the file manager's rule admits it and it is listed, though it was
+            // encrypted with a password that is not this resource's
+            var streamNames = streamManager.GetExistingDataStreamNames(ExtensionPath);
+
+            // A file manager read that fails to decrypt locks the archive and never unlocks it, so
+            // a listing that opened entries would leave a read from any other thread waiting
+            // forever
+            var readElsewhere = Task.Run(
+                () => ReadStream(streamManager, $"{ExtensionPath}/sealed.json")
+            );
+            Assert.That(
+                readElsewhere.Wait(TimeSpan.FromSeconds(10)),
+                Is.True,
+                "A read from another thread was blocked"
+            );
+            Assert.Multiple(() =>
+            {
+                Assert.That(streamNames, Is.EqualTo(new[] { "foreign.json", "sealed.json" }));
+                Assert.That(readElsewhere.Result, Is.EqualTo("sealed"));
             });
         }
 
@@ -142,12 +175,13 @@ namespace TestParanextDataProvider.Projects
         public void GetExistingDataStreamNames_ArchiveMissing_Throws()
         {
             var fileManager = CreateFileManager(
-                [("Settings.xml", "", false)],
+                [("Settings.xml", "", null)],
                 passwordProtected: false
             );
             var streamManager = new ResourceProjectStreamManager(
                 fileManager,
-                Path.Join(_folder.Path, "missing.p8z")
+                Path.Join(_folder.Path, "missing.p8z"),
+                entriesMustBeEncrypted: false
             );
 
             // An unreachable resource is a failure, not a resource with no data
@@ -160,10 +194,14 @@ namespace TestParanextDataProvider.Projects
         public void GetExistingDataStreamNames_ArchiveNotLocated_Throws()
         {
             var fileManager = CreateFileManager(
-                [($"{ExtensionPath}/mine.json", "mine", false)],
+                [($"{ExtensionPath}/mine.json", "mine", null)],
                 passwordProtected: false
             );
-            var streamManager = new ResourceProjectStreamManager(fileManager, archivePath: null);
+            var streamManager = new ResourceProjectStreamManager(
+                fileManager,
+                archivePath: null,
+                entriesMustBeEncrypted: false
+            );
 
             // Reported as an unreachable resource, the same as a missing archive, rather than as a
             // resource with no data
@@ -216,29 +254,35 @@ namespace TestParanextDataProvider.Projects
             IEnumerable<(string Name, string Contents)> entries
         ) =>
             CreateStreamManager(
-                entries.Select(entry => (entry.Name, entry.Contents, false)),
+                entries.Select(entry => (entry.Name, entry.Contents, (string?)null)),
                 passwordProtected: false
             );
 
         private ResourceProjectStreamManager CreateStreamManager(
-            IEnumerable<(string Name, string Contents, bool Encrypted)> entries,
+            IEnumerable<(string Name, string Contents, string? Password)> entries,
             bool passwordProtected
         )
         {
             var fileManager = CreateFileManager(entries, passwordProtected);
-            return new ResourceProjectStreamManager(fileManager, ArchivePath);
+            // A file manager given a password provider refuses unencrypted entries
+            return new ResourceProjectStreamManager(
+                fileManager,
+                ArchivePath,
+                entriesMustBeEncrypted: passwordProtected
+            );
         }
 
         private ProjectFileManager CreateFileManager(
-            IEnumerable<(string Name, string Contents, bool Encrypted)> entries,
+            IEnumerable<(string Name, string Contents, string? Password)> entries,
             bool passwordProtected
         )
         {
             using (ZipOutputStream archive = new(File.Create(ArchivePath)))
             {
-                foreach (var (name, contents, encrypted) in entries)
+                // Each entry is encrypted with its own password, or not at all when it has none
+                foreach (var (name, contents, password) in entries)
                 {
-                    archive.Password = encrypted ? ArchivePassword : null;
+                    archive.Password = password;
                     archive.PutNextEntry(new ZipEntry(name));
                     var bytes = Encoding.UTF8.GetBytes(contents);
                     archive.Write(bytes, 0, bytes.Length);
