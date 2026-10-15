@@ -1069,9 +1069,8 @@ global.webViewComponent = function CommentListWebView({
         // delivery failure (`selectRange` resolves once the message is posted to the editor, and
         // the tab can close between this callback being handed to the list and the click, leaving
         // a revoked proxy whose property read throws synchronously). It moves this list's own
-        // scroll group, which was copied once when the list opened. An editor refusing the
-        // position is only logged in the web view.
-        // TODO: report editor refusals back to the host so this fallback can cover them.
+        // scroll group, which was copied once when the list opened. If the editor cannot place the
+        // exact range, it still moves to the range's verse itself, so nothing more is needed here.
         try {
           editorWebViewController
             .selectRange({ start: location, end: location })

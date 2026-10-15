@@ -594,9 +594,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
             // The fallback covers a conversion failure in `convertScriptureRangeToEditorRange` or
             // a delivery failure (`selectRange` resolves once the message is posted to the editor,
             // and a closed tab leaves a revoked proxy). It moves this panel's own scroll group,
-            // which was copied once when the panel opened. An editor refusing the position is only
-            // logged in the web view.
-            // TODO: report editor refusals back to the host so this fallback can cover them.
+            // which was copied once when the panel opened. If the editor cannot place the exact
+            // range, it still moves to the range's verse itself, so nothing more is needed here.
             setScrRef(selectedResult.verseRef);
           },
         );
