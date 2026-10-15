@@ -306,7 +306,8 @@ const MARKER_NAME_PATH = '.marker';
  * @param caret The editor's caret when the save was made, if it had one.
  * @param content The document's top-level content, in the coordinates `caret` addresses.
  * @param placements Where each item of `content` ended up in the repaired document.
- * @param chapterLineIndex Where in `content` the stored chapter marker stood, if it is known.
+ * @param chapterLineIndex Where in `content` what is left of the stored chapter line stands, if it
+ *   is known.
  */
 function caretInMovedText(
   caret: SelectionRange | undefined,
@@ -389,8 +390,8 @@ function toRepairResult(
  * @param usj The chapter document as the editor holds it.
  * @param expectedChapterNum The chapter that document is supposed to be.
  * @param caret The editor's caret, if it has one; see {@link caretInMovedText}.
- * @param chapterLineIndex Where in the document's content the stored chapter marker stood, if it is
- *   known; see {@link caretInMovedText}.
+ * @param chapterLineIndex Where in the document's content what is left of the stored chapter line
+ *   stands, if it is known; see {@link caretInMovedText}.
  */
 export function repairChapterMarkers(
   usj: Usj,
@@ -570,6 +571,21 @@ function isStoredChapterWithoutItsMarker(usjFromEditor: Usj, usjFromPdp: Usj | u
 }
 
 /**
+ * Whether the editor's line at `index`, where the stored chapter marker stood, is what is left of
+ * that chapter line: the line changed in place, so the stored line after it is still the one after
+ * it. A selection from the chapter line into the paragraph below it, typed over, removes the
+ * chapter line and leaves that paragraph at `index` instead, and a caret there counts only the
+ * paragraph's own text.
+ */
+function isChapterLineChangedInPlace(usjFromEditor: Usj, usjFromPdp: Usj, index: number): boolean {
+  const lineAfter = (usj: Usj): Usj => ({
+    ...usj,
+    content: usj.content.slice(index + 1, index + 2),
+  });
+  return areUsjContentsEqualExceptWhitespace(lineAfter(usjFromPdp), lineAfter(usjFromEditor));
+}
+
+/**
  * Decides what a chapter save should write and whether the editor's own document must be corrected
  * first.
  *
@@ -604,18 +620,21 @@ export function prepareUsjForChapterSave(
 
   const isMarkerDeleted = isStoredChapterWithoutItsMarker(usjFromEditor, usjFromPdp);
   // The line the stored marker stood on is what is left of it, unless the marker was deleted
-  // outright and the text after it moved up into its place.
+  // outright, or the chapter line merged into the paragraph below it, and the text after it moved
+  // up into its place.
   const storedChapterIndex = usjFromPdp?.content.findIndex(isChapterObject) ?? -1;
+  const chapterLineIndex =
+    !usjFromPdp ||
+    isMarkerDeleted ||
+    storedChapterIndex < 0 ||
+    !isChapterLineChangedInPlace(usjFromEditor, usjFromPdp, storedChapterIndex)
+      ? undefined
+      : storedChapterIndex;
   const {
     usj: repaired,
     didRepair,
     caretTarget,
-  } = repairChapterMarkers(
-    usjFromEditor,
-    expectedChapterNum,
-    caret,
-    isMarkerDeleted || storedChapterIndex < 0 ? undefined : storedChapterIndex,
-  );
+  } = repairChapterMarkers(usjFromEditor, expectedChapterNum, caret, chapterLineIndex);
   // A restored marker always goes at the start (chapter 1, which may lack one, is never restored).
   const restoredMarkerCaret = caretAfterChapterNumber(
     [0],

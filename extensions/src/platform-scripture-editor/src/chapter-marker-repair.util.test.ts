@@ -493,6 +493,31 @@ describe('prepareUsjForChapterSave', () => {
       expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
     });
 
+    // A selection from the chapter line into the paragraph below, typed over, deletes the chapter
+    // line and leaves that paragraph where the line stood; a caret in it counts only its own text.
+    it.each([1, 2, 3, 5])(
+      'does not count a paragraph the chapter line merged into as the chapter line (offset %i)',
+      (offset) => {
+        const verse = { type: 'verse', marker: 'v', number: '1' };
+        const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
+          usjOf(para('p', 'abhad a relative'), para('p', 'next')),
+          usjOf(
+            chapter('2', { sid: 'RUT 2' }),
+            { type: 'para', marker: 'p', content: [verse, 'Naomi had a relative'] },
+            para('p', 'next'),
+          ),
+          2,
+          caretInLine(offset),
+        );
+        expect(repairedUsj?.content).toEqual([
+          chapter('2'),
+          para('p', 'abhad a relative'),
+          para('p', 'next'),
+        ]);
+        expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
+      },
+    );
+
     it('uses the usual caret when the caret was not in the moved text', () => {
       const { caretTarget } = prepareUsjForChapterSave(usjOf('c 2', para('p', 'body')), stored, 2, {
         start: { jsonPath: '$.content[1].content[0]', offset: 2 },
