@@ -46,7 +46,7 @@
   "%extensionHostStopped_restartExtensions%": "Restart service",
   "%extensionHostStopped_restarting%": "Restarting the service. This can take a moment…",
   "%extensionHostStopped_restartUnconfirmedTitle%": "The service may not have restarted",
-  "%extensionHostStopped_title%": "A {productName} service on this computer has stopped working",
+  "%extensionHostStopped_title%": "A {%product_name%} service on this computer has stopped working",
   "%firstRun_button_back%": "Back",
   "%firstRun_button_continueWithoutFinishingSetup%": "Continue without finishing setup",
   "%firstRun_button_continueWithoutRegistration%": "Continue without registration",

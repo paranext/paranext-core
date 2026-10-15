@@ -53,7 +53,7 @@ type Story = StoryObj<typeof ExtensionHostStoppedBannerPresentational>;
 const ARGS = {
   phase: 'stopped' as const,
   title: formatReplacementString(ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_TITLE_KEY], {
-    productName: ENGLISH_FALLBACKS[PRODUCT_NAME_KEY],
+    '%product_name%': ENGLISH_FALLBACKS[PRODUCT_NAME_KEY],
   }),
   message: ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY],
   restartExtensionsLabel: ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY],

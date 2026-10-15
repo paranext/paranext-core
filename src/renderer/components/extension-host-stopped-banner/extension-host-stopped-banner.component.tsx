@@ -43,7 +43,7 @@ export const EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY =
 export const EXTENSION_HOST_STOPPED_DISMISS_KEY =
   '%extensionHostStopped_dismiss%' satisfies LocalizeKey;
 /**
- * The app's name, filled into the title's `{productName}` by `formatReplacementString`, so the
+ * The app's name, filled into the title's `{%product_name%}` by `formatReplacementString`, so the
  * banner names whichever product this build is. Fetched with the rest rather than hardcoded, as the
  * connection-lost overlay does.
  */
@@ -87,7 +87,7 @@ export const LOCALIZED_STRING_KEYS: ExtensionHostStoppedKey[] = [
  */
 export const ENGLISH_FALLBACKS: { [K in ExtensionHostStoppedKey]: string } = {
   [EXTENSION_HOST_STOPPED_TITLE_KEY]:
-    'A {productName} service on this computer has stopped working',
+    'A {%product_name%} service on this computer has stopped working',
   [EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY]:
     'It lost contact with the rest of the app. Editing and most tabs will not respond until it is restarted.',
   [EXTENSION_HOST_STOPPED_MESSAGE_CRASHED_KEY]:
@@ -343,10 +343,10 @@ export function ExtensionHostStoppedBanner() {
       );
       message = text(EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY);
     } else {
-      // The title carries `{productName}`; filled in here from localization, or from the English
+      // The title carries `{%product_name%}`; filled in here from localization, or from the English
       // fallback, so neither path shows the raw placeholder.
       title = formatReplacementString(text(EXTENSION_HOST_STOPPED_TITLE_KEY), {
-        productName: text(PRODUCT_NAME_KEY),
+        '%product_name%': text(PRODUCT_NAME_KEY),
       });
       message =
         notice.phase === 'restarting'

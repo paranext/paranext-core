@@ -210,7 +210,7 @@ describe('ExtensionHostStoppedBanner', () => {
       {
         ...UNRESOLVED,
         [EXTENSION_HOST_STOPPED_TITLE_KEY]:
-          'Un servicio de {productName} en este equipo ha dejado de funcionar',
+          'Un servicio de {%product_name%} en este equipo ha dejado de funcionar',
         [PRODUCT_NAME_KEY]: 'Paratext 10',
       },
       false,
@@ -222,7 +222,7 @@ describe('ExtensionHostStoppedBanner', () => {
     expect(banner).toHaveTextContent(
       'Un servicio de Paratext 10 en este equipo ha dejado de funcionar',
     );
-    expect(banner).not.toHaveTextContent('{productName}');
+    expect(banner).not.toHaveTextContent('{%product_name%}');
   });
 
   it('puts the English product name into the English title when nothing has resolved', () => {
@@ -233,7 +233,7 @@ describe('ExtensionHostStoppedBanner', () => {
     expect(banner).toHaveTextContent(
       'A Platform.Bible service on this computer has stopped working',
     );
-    expect(banner).not.toHaveTextContent('{productName}');
+    expect(banner).not.toHaveTextContent('{%product_name%}');
   });
 
   it('sends the restart command and stays in the restarting state after the command settles', async () => {
