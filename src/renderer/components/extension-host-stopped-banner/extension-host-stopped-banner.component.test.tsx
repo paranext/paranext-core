@@ -31,6 +31,7 @@ import {
   EXTENSION_HOST_STOPPED_TITLE_KEY,
   ExtensionHostStoppedBanner,
   LOCALIZED_STRING_KEYS,
+  PRODUCT_NAME_KEY,
   RESTART_READY_FALLBACK_MS,
 } from './extension-host-stopped-banner.component';
 
@@ -81,6 +82,9 @@ function layOut(element: HTMLElement, height: number) {
       .forEach((observer) => observer.resize()),
   );
 }
+
+/** The English title as the user reads it, with the English product name filled in. */
+const ENGLISH_TITLE = 'A Platform.Bible service on this computer has stopped working';
 
 /** What `useLocalizedStrings` returns while loading: the raw keys themselves. */
 const UNRESOLVED = Object.fromEntries(LOCALIZED_STRING_KEYS.map((key) => [key, key]));
@@ -148,7 +152,7 @@ describe('ExtensionHostStoppedBanner', () => {
     stop('lost-connection');
 
     const banner = screen.getByRole('status');
-    expect(banner).toHaveTextContent(ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_TITLE_KEY]);
+    expect(banner).toHaveTextContent(ENGLISH_TITLE);
     expect(banner).toHaveTextContent(
       ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY],
     );
@@ -171,7 +175,7 @@ describe('ExtensionHostStoppedBanner', () => {
     stop('crashed');
 
     const banner = screen.getByRole('status');
-    expect(banner).toHaveTextContent(ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_TITLE_KEY]);
+    expect(banner).toHaveTextContent(ENGLISH_TITLE);
     expect(banner).toHaveTextContent(ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_MESSAGE_CRASHED_KEY]);
     expect(banner).not.toHaveTextContent('%some_other_key%');
   });
@@ -189,14 +193,47 @@ describe('ExtensionHostStoppedBanner', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([
       {
         ...UNRESOLVED,
-        [EXTENSION_HOST_STOPPED_TITLE_KEY]: 'Las extensiones han dejado de funcionar',
+        [EXTENSION_HOST_STOPPED_MESSAGE_CRASHED_KEY]: 'Se detuvo de forma inesperada.',
       },
       false,
     ]);
     render(<ExtensionHostStoppedBanner />);
     stop('crashed');
 
-    expect(screen.getByRole('status')).toHaveTextContent('Las extensiones han dejado de funcionar');
+    expect(screen.getByRole('status')).toHaveTextContent('Se detuvo de forma inesperada.');
+  });
+
+  // The title names the product, which differs between builds, so it comes from localization like
+  // every other product-named string.
+  it('puts the resolved product name into the title, never the placeholder', () => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([
+      {
+        ...UNRESOLVED,
+        [EXTENSION_HOST_STOPPED_TITLE_KEY]:
+          'Un servicio de {productName} en este equipo ha dejado de funcionar',
+        [PRODUCT_NAME_KEY]: 'Paratext 10',
+      },
+      false,
+    ]);
+    render(<ExtensionHostStoppedBanner />);
+    stop('crashed');
+
+    const banner = screen.getByRole('status');
+    expect(banner).toHaveTextContent(
+      'Un servicio de Paratext 10 en este equipo ha dejado de funcionar',
+    );
+    expect(banner).not.toHaveTextContent('{productName}');
+  });
+
+  it('puts the English product name into the English title when nothing has resolved', () => {
+    render(<ExtensionHostStoppedBanner />);
+    stop('crashed');
+
+    const banner = screen.getByRole('status');
+    expect(banner).toHaveTextContent(
+      'A Platform.Bible service on this computer has stopped working',
+    );
+    expect(banner).not.toHaveTextContent('{productName}');
   });
 
   it('sends the restart command and stays in the restarting state after the command settles', async () => {
@@ -576,7 +613,7 @@ describe('ExtensionHostStoppedBanner', () => {
   });
 
   describe('button emphasis', () => {
-    it('makes Restart extensions the primary action while extensions are down', () => {
+    it('makes Restart service the primary action while the service is down', () => {
       render(<ExtensionHostStoppedBanner />);
       stop('crashed');
 

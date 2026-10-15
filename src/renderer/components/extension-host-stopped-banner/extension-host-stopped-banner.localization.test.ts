@@ -4,7 +4,15 @@ import { resolve } from 'node:path';
 import {
   ENGLISH_FALLBACKS,
   LOCALIZED_STRING_KEYS,
+  PRODUCT_NAME_KEY,
 } from './extension-host-stopped-banner.component';
+
+/**
+ * The keys that must carry a translation in every shipped locale. `%product_name%` is excluded: it
+ * is a proper noun that only `en.json` defines, and every other locale resolves it through the
+ * fallback chain, as for the connection-lost overlay.
+ */
+const KEYS_REQUIRING_TRANSLATION = LOCALIZED_STRING_KEYS.filter((key) => key !== PRODUCT_NAME_KEY);
 
 const LOCALIZATION_DIR = resolve(__dirname, '../../../../assets/localization');
 
@@ -13,8 +21,8 @@ function readStrings(fileName: string): { [key: string]: unknown } {
 }
 
 /** Keys whose value is missing, empty, or the key itself (what the service returns when missing). */
-function findUnusableKeys(strings: { [key: string]: unknown }) {
-  return LOCALIZED_STRING_KEYS.filter((key) => {
+function findUnusableKeys(strings: { [key: string]: unknown }, keys = LOCALIZED_STRING_KEYS) {
+  return keys.filter((key) => {
     const value = strings[key];
     return typeof value !== 'string' || value.length === 0 || value === key;
   });
@@ -26,7 +34,7 @@ describe('ExtensionHostStoppedBanner localization keys', () => {
   });
 
   it('has a non-empty Spanish translation for every key', () => {
-    expect(findUnusableKeys(readStrings('es.json'))).toEqual([]);
+    expect(findUnusableKeys(readStrings('es.json'), KEYS_REQUIRING_TRANSLATION)).toEqual([]);
   });
 
   // The fallbacks are the copy the user reads when the extension host dies before localization has

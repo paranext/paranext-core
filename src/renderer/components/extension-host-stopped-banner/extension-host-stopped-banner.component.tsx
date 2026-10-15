@@ -1,6 +1,6 @@
 import { Alert, AlertDescription, AlertTitle, Button, cn } from 'platform-bible-react';
 import { resolveLocalizedString } from 'platform-bible-react/experimental';
-import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
+import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react';
 import { FocusEvent, ReactElement, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
@@ -42,6 +42,12 @@ export const EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY =
   '%extensionHostStopped_restartUnconfirmedTitle%' satisfies LocalizeKey;
 export const EXTENSION_HOST_STOPPED_DISMISS_KEY =
   '%extensionHostStopped_dismiss%' satisfies LocalizeKey;
+/**
+ * The app's name, filled into the title's `{productName}` by `formatReplacementString`, so the
+ * banner names whichever product this build is. Fetched with the rest rather than hardcoded, as the
+ * connection-lost overlay does.
+ */
+export const PRODUCT_NAME_KEY = '%product_name%' satisfies LocalizeKey;
 
 const BANNER_TEST_ID = 'extension-host-stopped-banner';
 
@@ -56,7 +62,8 @@ export type ExtensionHostStoppedKey =
   | typeof EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY
   | typeof EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY
   | typeof EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY
-  | typeof EXTENSION_HOST_STOPPED_DISMISS_KEY;
+  | typeof EXTENSION_HOST_STOPPED_DISMISS_KEY
+  | typeof PRODUCT_NAME_KEY;
 
 /** Exported so the localization-parity test asserts against the list the component reads. */
 export const LOCALIZED_STRING_KEYS: ExtensionHostStoppedKey[] = [
@@ -70,6 +77,7 @@ export const LOCALIZED_STRING_KEYS: ExtensionHostStoppedKey[] = [
   EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY,
   EXTENSION_HOST_STOPPED_RESTARTING_KEY,
   EXTENSION_HOST_STOPPED_TITLE_KEY,
+  PRODUCT_NAME_KEY,
 ];
 
 /**
@@ -78,19 +86,21 @@ export const LOCALIZED_STRING_KEYS: ExtensionHostStoppedKey[] = [
  * so a stop before localization has answered would otherwise render a literal `%key%`.
  */
 export const ENGLISH_FALLBACKS: { [K in ExtensionHostStoppedKey]: string } = {
-  [EXTENSION_HOST_STOPPED_TITLE_KEY]: 'Extensions have stopped working',
+  [EXTENSION_HOST_STOPPED_TITLE_KEY]:
+    'A {productName} service on this computer has stopped working',
   [EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY]:
-    'Extensions lost contact with the rest of the app. Editing and most tabs will not respond until extensions are restarted.',
+    'It lost contact with the rest of the app. Editing and most tabs will not respond until it is restarted.',
   [EXTENSION_HOST_STOPPED_MESSAGE_CRASHED_KEY]:
-    'Extensions stopped unexpectedly. Editing and most tabs will not respond until extensions are restarted.',
-  [EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY]: 'Restart extensions',
+    'It stopped unexpectedly. Editing and most tabs will not respond until it is restarted.',
+  [EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY]: 'Restart service',
   [EXTENSION_HOST_STOPPED_RESTART_APP_KEY]: 'Restart app',
-  [EXTENSION_HOST_STOPPED_RESTARTING_KEY]: 'Restarting extensions. This can take a moment…',
-  [EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY]: 'Extensions restarted',
+  [EXTENSION_HOST_STOPPED_RESTARTING_KEY]: 'Restarting the service. This can take a moment…',
+  [EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY]: 'Service restarted',
   [EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY]:
     'If anything still does not respond, restart the app.',
-  [EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY]: 'Extensions may not have restarted',
+  [EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY]: 'The service may not have restarted',
   [EXTENSION_HOST_STOPPED_DISMISS_KEY]: 'Dismiss',
+  [PRODUCT_NAME_KEY]: 'Platform.Bible',
 };
 
 /**
@@ -124,13 +134,15 @@ type Props = {
 };
 
 /**
- * A strip across the top of the window, below the toolbar, saying extensions have stopped and
- * offering the ways back. Deliberately NOT a scrim and NOT a dialog: everything main provides
- * (menus, window management, the restart commands themselves) still works in this state, so
- * blocking the window would take away controls that work. The user is told, not fenced in.
+ * A strip across the top of the window, below the toolbar, saying the extension host has stopped
+ * and offering the ways back. The copy calls it "a service on this computer" and never names
+ * extensions or the extension host, which mean nothing to most users. Deliberately NOT a scrim and
+ * NOT a dialog: everything main provides (menus, window management, the restart commands
+ * themselves) still works in this state, so blocking the window would take away controls that work.
+ * The user is told, not fenced in.
  *
- * Three phases. `stopped` alarms (destructive tone, Restart extensions + Restart app). `restarting`
- * keeps the alarm tone with Restart extensions disabled while the new process comes up; Restart app
+ * Three phases. `stopped` alarms (destructive tone, Restart service + Restart app). `restarting`
+ * keeps the alarm tone with Restart service disabled while the new process comes up; Restart app
  * stays enabled, because an app restart is always safe and is the way out if the new extension host
  * never comes up. `restarted` stays up, calmer (default tone, Restart app + Dismiss): a restart
  * does not heal every part of a window, so a banner that vanished could leave things quietly dead,
@@ -331,7 +343,11 @@ export function ExtensionHostStoppedBanner() {
       );
       message = text(EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY);
     } else {
-      title = text(EXTENSION_HOST_STOPPED_TITLE_KEY);
+      // The title carries `{productName}`; filled in here from localization, or from the English
+      // fallback, so neither path shows the raw placeholder.
+      title = formatReplacementString(text(EXTENSION_HOST_STOPPED_TITLE_KEY), {
+        productName: text(PRODUCT_NAME_KEY),
+      });
       message =
         notice.phase === 'restarting'
           ? text(EXTENSION_HOST_STOPPED_RESTARTING_KEY)

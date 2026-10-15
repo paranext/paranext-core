@@ -8,7 +8,7 @@ import type {
  *
  * - `stopped`: the extension host stopped without being asked to; the banner alarms and offers both
  *   restarts.
- * - `restarting`: the user pressed Restart extensions and the new process has not reported itself
+ * - `restarting`: the user pressed Restart service and the new process has not reported itself
  *   started yet. `platform.restartExtensionHost` settles at fork time, long before the new process
  *   can serve anything (about a minute in a dev build), so the banner waits for
  *   `platform.onDidStartExtensionHost` or its own fallback timer, not for the command.
