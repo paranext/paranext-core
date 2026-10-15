@@ -214,7 +214,11 @@ internal class DblResourcesDataProvider(
         if (!RegistrationInfo.DefaultUser.IsValid)
             throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
 
-        TextSearchingTraceListener traceListener = new("REST ProtocolError = 401");
+        // The whole fetch runs synchronously on this thread (core's ProgressUtils implementation
+        // invokes ParatextData's progress actions inline), so a 401 traced by an unrelated REST
+        // call on another thread must not be mistaken for this user's invalid registration.
+        TextSearchingTraceListener traceListener =
+            new("REST ProtocolError = 401", currentThreadOnly: true);
         Trace.Listeners.Add(traceListener);
         try
         {
