@@ -1801,10 +1801,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       // A caret at the end of the document is spelled one past the end of the last text; it sits
       // at the end of that text, which is where the comment anchors.
-      const startTextDocumentLocation = withDocumentEndOnText(selection.start, startNode.length);
+      const startTextDocumentLocation = withDocumentEndOnText(
+        selection.start,
+        startNode.length,
+        editorUsjCorrected,
+      );
       const endTextDocumentLocation = withDocumentEndOnText(
         selection.end ?? selection.start,
         startNode.length,
+        editorUsjCorrected,
       );
       annotationRange.start = { ...startTextDocumentLocation };
       annotationRange.end = { ...endTextDocumentLocation };
