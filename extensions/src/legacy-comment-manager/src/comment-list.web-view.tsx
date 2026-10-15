@@ -1031,10 +1031,17 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp],
   );
 
+  // Counts clicks so a failure that arrives late can tell whether the user has since clicked
+  // another thread.
+  const verseRefClickCountRef = useRef(0);
+
   const handleVerseRefClick = useCallback(
     (thread: LegacyCommentThread) => {
       const { verseRef } = VerseRef.tryParse(thread.verseRef ?? '');
       if (!verseRef.valid) return;
+
+      verseRefClickCountRef.current += 1;
+      const clickCount = verseRefClickCountRef.current;
 
       // This view is causing the upcoming scroll-group change; a click inside the list must never
       // scroll the list, so record the reference for the sync-scroll hook to swallow.
@@ -1042,27 +1049,35 @@ global.webViewComponent = function CommentListWebView({
 
       if (editorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
-        const location = {
-          verseRef: verseRef.toJSON(),
-          offset: Math.max(0, (thread.comments[0]?.startPosition ?? 0) - 1),
-        };
-        // Wrapped rather than left floating: `selectRange` rejects when the editor cannot resolve
-        // the location, and the tab can close between this callback being handed to the list and
-        // the user clicking, leaving a revoked proxy whose property read throws synchronously. Fall
-        // back to the verse the way the branch below does when there is no editor to ask, so the
-        // click still moves the editor instead of doing nothing.
-        try {
-          editorWebViewController.selectRange({ start: location, end: location })?.catch((e) => {
-            logger.warn(
-              `Comment list: failed to select the comment's range in the editor: ${getErrorMessage(e)}`,
-            );
-            setScrRef(verseRef.toJSON());
-          });
-        } catch (e) {
+        // `startPosition` is the USFM offset of the comment's first character from the verse's own
+        // backslash, which is what the editor expects. It is -1 when the comment has no position.
+        const offset = Math.max(0, thread.comments[0]?.startPosition ?? 0);
+        const location = { verseRef: verseRef.toJSON(), offset };
+        // Only fall back for the latest click: a slow failure for an earlier thread would
+        // otherwise jump the scroll group back to it, away from the one the user is now reading.
+        const fallBackToVerse = (e: unknown) => {
           logger.warn(
-            `Comment list: could not ask the editor to select the comment's range: ${getErrorMessage(e)}`,
+            `Comment list: failed to select the comment's range in the editor: ${getErrorMessage(e)}`,
           );
+          if (verseRefClickCountRef.current !== clickCount) return;
+          // Recorded again so the sync-scroll hook swallows this change too; it is also caused by
+          // a click inside this list.
+          recordSelfInitiatedNavigation(thread.verseRef);
           setScrRef(verseRef.toJSON());
+        };
+        // The fallback covers a conversion failure in `convertScriptureRangeToEditorRange` or a
+        // delivery failure (`selectRange` resolves once the message is posted to the editor, and
+        // the tab can close between this callback being handed to the list and the click, leaving
+        // a revoked proxy whose property read throws synchronously). It moves this list's own
+        // scroll group, which was copied once when the list opened. An editor refusing the
+        // position is only logged in the web view.
+        // TODO: report editor refusals back to the host so this fallback can cover them.
+        try {
+          editorWebViewController
+            .selectRange({ start: location, end: location })
+            .catch(fallBackToVerse);
+        } catch (e) {
+          fallBackToVerse(e);
         }
       } else {
         setScrRef(verseRef.toJSON());

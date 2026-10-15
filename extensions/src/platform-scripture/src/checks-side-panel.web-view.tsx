@@ -587,12 +587,16 @@ global.webViewComponent = function ChecksSidePanelWebView({
             }),
           (e) => {
             logger.warn(`Checks: failed to select result in editor: ${getErrorMessage(e)}`);
-            // Only fall back for the result still selected. A slow rejection for a result the user
-            // has already arrowed past would otherwise jump the editor back to it, away from the
-            // one they are now reading.
+            // Only fall back for the result still selected. A slow failure for a result the user
+            // has since replaced with another selection would otherwise jump the scroll group
+            // back to it, away from the one they are now reading.
             if (lastSelectRequestIdRef.current !== id) return;
-            // The editor could not select the range, so fall back to the verse the way the branch
-            // below does when there is no editor to ask.
+            // The fallback covers a conversion failure in `convertScriptureRangeToEditorRange` or
+            // a delivery failure (`selectRange` resolves once the message is posted to the editor,
+            // and a closed tab leaves a revoked proxy). It moves this panel's own scroll group,
+            // which was copied once when the panel opened. An editor refusing the position is only
+            // logged in the web view.
+            // TODO: report editor refusals back to the host so this fallback can cover them.
             setScrRef(selectedResult.verseRef);
           },
         );
