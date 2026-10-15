@@ -898,17 +898,18 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     that document, and only when the editor held DOM focus at push-back time — an unfocused editor
     has no claim on the shared document selection, and the editor itself skips selection
     reconciliation when it loads content unfocused.
-  - The target is just past the corrected chapter number; failing that, the boundary a removed
-    marker occupied; failing that, the surviving marker. A RESTORED marker (the document had none)
-    is the exception: its caret goes to the end of the document's text
-    (`CARET_AT_DOCUMENT_END`), applied by focusing the editor with no selection, which Lexical
-    resolves to the root's end. A restore is reached by typing into a chapter with no marker at all
-    — in Power mode, a chapter the book has not reached yet — so the user was typing at the end,
-    and keys typed into the new marker would become part of the chapter number for the next repair
-    to correct away. It is also reached by deleting the marker of a chapter with text (backspacing
-    the chapter line away); when that deletion is the ONLY difference from the stored chapter, the
-    user was working on the chapter line, so the caret goes back to just past the restored number
-    instead (`prepareUsjForChapterSave`).
+  - A caret in a line the repair only moved stays at the same place in that line (see "what is
+    left of the chapter line" below). Otherwise the target is just past the corrected chapter
+    number; failing that, the boundary a removed marker occupied; failing that, the surviving
+    marker. A RESTORED marker (the document had none) is the exception: its caret goes to the end
+    of the document's text (`CARET_AT_DOCUMENT_END`), applied by focusing the editor with no
+    selection, which Lexical resolves to the root's end. A restore is reached by typing into a
+    chapter with no marker at all — in Power mode, a chapter the book has not reached yet — so the
+    user was typing at the end, and keys typed into the new marker would become part of the chapter
+    number for the next repair to correct away. It is also reached by deleting the marker of a
+    chapter with text (backspacing the chapter line away); when that deletion is the ONLY
+    difference from the stored chapter, the user was working on the chapter line, so the caret goes
+    back to just past the restored number instead (`prepareUsjForChapterSave`).
   - **The push-back has to load, and the caret is placed whatever selection the load leaves.** A
     marker edit reaches the editor's node state only when it settles, so correcting one still in
     progress — a number just backspaced out of the glyph — hands the editor a document equal to its
@@ -921,13 +922,29 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     (`setUsj(usj, { force: true })`, `scripture-editors` `packages/platform/src/editor/Editor.tsx`).
     A load can leave a stray browser selection where the replaced text was, so an existing selection
     is not taken to be the user's caret.
-  - **The target is computed from the repair, never carried across from the pre-repair selection.**
-    `EditorRef.getSelection()` addresses the LIVE tree while the repair works on `getUsj()`'s
-    SETTLED document, and the two differ for exactly the gesture that matters: a `\c` typed under
-    the caret is still a pending literal in the live tree while the settled document already holds a
-    chapter node. A captured path is therefore in the wrong coordinate system, whereas a target
-    computed from the repair is in the right one, because the editor is about to load precisely that
-    document.
+  - **The target is computed from the repair, not carried across from the pre-repair selection,
+    except inside a line the repair only moved.** `EditorRef.getSelection()` addresses the LIVE tree
+    while the repair works on `getUsj()`'s SETTLED document, and the two differ for exactly the
+    gesture that matters: a `\c` typed under the caret is still a pending literal in the live tree
+    while the settled document already holds a chapter node. A captured path is therefore in the
+    wrong coordinate system, whereas a target computed from the repair is in the right one, because
+    the editor is about to load precisely that document.
+  - **The exception: what is left of the chapter line keeps the live caret**
+    (`caretInMovedText` in `chapter-marker-repair.util.ts`, ranked ahead of every target above).
+    When the chapter line's bytes stop being a chapter marker (`\ 2` once the `c` is deleted, `\sc 2`
+    once an `s` is typed into it) or text is typed ahead of the marker, the repair restores the
+    marker above that line and moves the line down whole, and the user is still typing in it — a
+    computed target cannot know where. The live caret's coordinates hold there because the
+    mismatch is confined to that one line and is known: the save normally runs while the line is
+    still a chapter glyph on screen, so the caret counts the whole line, marker and all (`\s|c 2`),
+    and is mapped to the same character of what the line settles into (its marker name or its text);
+    a caret read after the line settled is already in those coordinates. So it is read only on the
+    top-level line where the stored marker stood, and only when that line changed in place — the
+    stored line after it is still next. A chapter line merged into the paragraph below it (a
+    selection from the chapter line into that paragraph, typed over) leaves that paragraph in its
+    place, and a caret there counts only the paragraph's own text, so it is not read this way. A
+    caret anywhere else is never carried across: a caret in another paragraph's text is addressed
+    exactly as one counting a chapter line is, so the two cannot be told apart.
 - **Alternatives:**
   - **Apply the repair as OT delta ops (`EditorRef.applyUpdate`) instead of `setUsj`** — rejected
     for now, though it would keep the history (no load, so no `CLEAR_HISTORY_COMMAND`). A chapter is
