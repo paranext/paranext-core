@@ -376,4 +376,92 @@ internal class CheckRunnerJobTests : PapiTestBase
     }
 
     #endregion
+
+    #region Edits during a job
+
+    private const string InitializeHookCheckId = "TestInitializeHookCheck";
+
+    /// <summary>
+    /// Creates a runner whose jobs can run <paramref name="earlierCheckId"/> and then
+    /// <see cref="InitializeHookCheck"/>. The hook check's settings are marked changed, so a job
+    /// re-initializes it after the earlier check has finished the book and before the job reads
+    /// the earlier check's results back.
+    /// </summary>
+    private (
+        CheckRunner Runner,
+        InitializeHookCheck HookCheck,
+        CheckForProject EarlierCheck
+    ) CreateRunnerWithHookCheckAfter(string earlierCheckId)
+    {
+        var hookCheck = new InitializeHookCheck();
+        ScriptureCheckBase Create(string checkId, ChecksDataSource dataSource) =>
+            checkId == InitializeHookCheckId
+                ? hookCheck
+                : CheckFactory.CreateCheck(checkId, dataSource);
+        var runner = CreateRunner(Create);
+        var cacheField =
+            typeof(CheckRunner).GetField(
+                "_checkCache",
+                BindingFlags.NonPublic | BindingFlags.Instance
+            ) ?? throw new MissingFieldException(nameof(CheckRunner), "_checkCache");
+        var cache = (CheckCache)cacheField.GetValue(runner)!;
+        cache.GetCheck(InitializeHookCheckId, _projectId).SettingsChanged = true;
+        return (runner, hookCheck, cache.GetCheck(earlierCheckId, _projectId));
+    }
+
+    private static bool AreResultsReady(CheckForProject check, int bookNum)
+    {
+        var ready = false;
+        check.AccessResults(bookNum, recorder => ready = recorder.ResultsReady);
+        return ready;
+    }
+
+    [Test]
+    public void ProcessCheckJob_TextChangeDuringJob_DoesNotErrorTheWholeJob()
+    {
+        var (runner, hookCheck, repeatedWordCheck) = CreateRunnerWithHookCheckAfter(
+            s_repeatedWordCheckId
+        );
+        var editClearedFinishedCheck = false;
+        // The book is edited after the repeated-word check has finished it. The edit goes through
+        // the project's real TextChanged handler, which clears that check's results for the book
+        // in the background; the hook waits until it has.
+        hookCheck.OnInitialize = () =>
+        {
+            PutBook(1, "In the the beginning God");
+            editClearedFinishedCheck = SpinWait.SpinUntil(
+                () => !AreResultsReady(repeatedWordCheck, 1),
+                TimeSpan.FromSeconds(5)
+            );
+        };
+
+        var (final, results) = RunJob(runner, [s_repeatedWordCheckId, InitializeHookCheckId], 1);
+
+        // The edit really landed between the finished check's run and the job reading it back
+        Assert.That(editClearedFinishedCheck, Is.True);
+        Assert.That(final.Status, Is.EqualTo(CheckJobStatus.Completed), final.Error);
+        Assert.That(final.Error, Is.Null);
+        Assert.That(final.CheckErrors, Is.Null.Or.Empty);
+        // The cleared check is run again, so its results for the edited text still arrive
+        Assert.That(
+            results.Where(r => r.CheckId == s_repeatedWordCheckId).Select(r => r.ItemText),
+            Has.Some.Contains("the")
+        );
+    }
+
+    [Test]
+    public void ProcessCheckJob_CheckReinitializedDuringJobWithoutTextChange_Completes()
+    {
+        var (runner, hookCheck, _) = CreateRunnerWithHookCheckAfter(s_repeatedWordCheckId);
+        var hookRan = false;
+        hookCheck.OnInitialize = () => hookRan = true;
+
+        var (final, results) = RunJob(runner, [s_repeatedWordCheckId, InitializeHookCheckId], 1);
+
+        Assert.That(hookRan, Is.True);
+        Assert.That(final.Status, Is.EqualTo(CheckJobStatus.Completed), final.Error);
+        Assert.That(results.Where(r => r.CheckId == s_repeatedWordCheckId), Is.Not.Empty);
+    }
+
+    #endregion
 }
