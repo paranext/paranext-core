@@ -310,8 +310,8 @@ describe("the web view unmounts the React roots of its iframe's documents", () =
     expect(unmountMiddleRoot).toHaveBeenCalledTimes(1);
     expect(unmountFirstRoot).toHaveBeenCalledTimes(1);
     expect(unmountLastRoot).not.toHaveBeenCalled();
-    // The middle document never loaded, so it never saw `pagehide` or `unload`; that is not a
-    // missing unload to warn about
+    // The middle document never loaded, so it never saw `pagehide` and may never see `unload`;
+    // that is not a missing unload to warn about
     expect(mocks.loggerWarn).not.toHaveBeenCalled();
   });
 

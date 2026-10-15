@@ -2,10 +2,10 @@
  * A React web view's iframe keeps its element when the web view is reloaded: only its `srcdoc`
  * changes, so the iframe navigates to a new document. React is shared from the renderer
  * (`window.React = window.parent.React`), so the root the replaced document created lives on in the
- * renderer unless that document's bootstrap unmounts it. A root left mounted keeps its PAPI
- * subscriptions and keeps rendering, and its hooks are bound to the iframe's `window`, which now
- * resolves to the REPLACEMENT document's globals — undefined while that document is still loading,
- * which `WebViewErrorBoundary` reports as "crashed while rendering".
+ * renderer unless something unmounts it. A root left mounted keeps its PAPI subscriptions and keeps
+ * rendering, and its hooks are bound to the iframe's `window`, which now resolves to the
+ * REPLACEMENT document's globals — undefined while that document is still loading, which
+ * `WebViewErrorBoundary` reports as "crashed while rendering".
  *
  * Which render lands in that loading window is a matter of timing, so the crash itself cannot be
  * forced. What is deterministic is the leak: the replaced document's root container stays populated
