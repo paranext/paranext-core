@@ -1,9 +1,9 @@
 /**
  * Power-mode counterpart to `comments-panel-content-zoom.spec.ts`'s "the tab menu drives the same
- * ladder as the wheel" step: the tab context menu's real "Zoom in" / "Zoom out" / "Reset zoom to
- * default" items are a generic dock-tab feature (`platform-tab-title.component.tsx`,
- * `tab-menu.util.ts`), not something the Comments panel's Simple-mode Column 3 placement grants it
- * — so the same ladder must hold wherever the panel's web view is opened.
+ * ladder as the wheel" step: the tab context menu's real "Zoom in" / "Zoom out" / "Zoom reset"
+ * items are a generic dock-tab feature (`platform-tab-title.component.tsx`, `tab-menu.util.ts`),
+ * not something the Comments panel's Simple-mode Column 3 placement grants it — so the same ladder
+ * must hold wherever the panel's web view is opened.
  *
  * `comments-panel-content-zoom.spec.ts` cannot itself run in Power mode: it is built on
  * `comment.fixture`, which hardcodes `platform.interfaceMode: 'simple'` with no override (see
@@ -95,7 +95,7 @@ test.describe('Comments panel content zoom in Power mode', () => {
       await expect.poll(() => readFactor(panelFrame, '')).toBe(1.1);
 
       await tab.click({ button: 'right' });
-      await mainPage.getByRole('menuitem', { name: 'Reset zoom to default' }).click();
+      await mainPage.getByRole('menuitem', { name: 'Zoom reset' }).click();
       await expect.poll(() => readFactor(panelFrame, '')).toBe(1);
     });
   });

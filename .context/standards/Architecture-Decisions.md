@@ -3035,6 +3035,53 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`2026-09-02-pt-4286-mode-switch-spec.md`); amends nothing in
   `adr-primary-window-owns-app-lifetime`, which it depends on for the primary role.
 
+## adr-internet-services-gate: Platform.Bible gates Send/Receive and DBL access on the saved internet setting
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** The Internet & connectivity settings offer "Disable access to some Bible translation
+  services", which saves ParatextData's `InternetUse.VpnRequired` to the machine-wide
+  `InternetSettings.xml` and says it disables the Registry, Send/Receive, and the Digital Bible
+  Library. ParatextData does not do that: `RESTClient.VerifyUri` → `InternetAccess.VerifySafety`
+  blocks only when the effective `InternetAccess.Status` is `Disabled`, and `Status` resolves
+  `VpnRequired` by geolocating the machine's public IP against `CountryStatuses.xml` — `Disabled`
+  where the country is marked `blocked` or cannot be determined, `Enabled` everywhere else. So from
+  most locations the setting blocked nothing, and DBL resources still downloaded. Product direction
+  (PT-4590, 2026-09-18) is to keep the options PT10 offers today and make this one do what it says;
+  "sensitive locations" and "Disable all internet access" stay unavailable.
+- **Decision:** Add a Platform.Bible-side gate, `InternetServicesGate` (`c-sharp/Users/`), that reads
+  the saved value (`InternetAccess.RawStatus`) and refuses when it is `VpnRequired` or `Disabled`.
+  Every C# entry point that reaches Send/Receive or the DBL calls `ThrowIfBlocked` first. In core
+  that is the DBL catalog fetch and install in `DblResourcesDataProvider`. Send/Receive is
+  implemented only in the Paratext 10 Studio patch (core's `ParatextProjectSendReceiveService`
+  commands are stubs that throw `PlatformUnimplementedException`), so the patch calls the gate in
+  each of its Send/Receive entry points. Registry traffic happens inside those two services, so it is
+  covered by the same calls. `ThrowIfBlocked` localizes its message with a blocking papi round trip,
+  so callers invoke it from their `Task.Run` worker, never on the JSON-RPC dispatch thread. The
+  rejection is a localized message ending in the `(INTERNET_SERVICES_BLOCKED)` sentinel (the
+  `(SR_EDIT_BLOCKED)` pattern), and `isErrorMessageAboutParatextBlockingInternetAccess` matches it
+  alongside ParatextData's own message, so the existing "internet access is disabled" message and its
+  link to the setting cover both.
+- **Alternatives:** **Relabel `VpnRequired` to say it only blocks in sensitive locations, and leave
+  enforcement to ParatextData** — rejected by product: it keeps a setting whose purpose most users
+  cannot use, and turns the fix into documenting the gap. **Save `Disabled` when the user picks this
+  option** — rejected: a co-installed Paratext 9 reads the same file and would switch to "Disable
+  ALL Internet use", and the option would then block ParatextData's other internet uses too, not
+  just these services. **Wrap core's `syncProjects` / `breakSyncLock` registrations in the gate** —
+  rejected: the Studio patch replaces the whole registration block as well as the method bodies, so
+  the wrapper broke the patch without gating anything, and core's stubs reach no server.
+- **Consequences:** PT10 and a co-installed Paratext 9 now treat `VpnRequired` differently: PT10
+  blocks these services everywhere, while PT9 keeps its location-dependent behavior. Send/Receive is
+  blocked only once the Studio patch calls the gate in `syncProjects`, `sendReceiveProjects`,
+  `getSharedProjects`, `breakSyncLock`, and its scheduled session sync; core cannot enforce it. A DBL
+  resource cannot be removed while the setting is on unless the catalog already loaded this session,
+  because removal looks the resource up in the catalog — the same limitation as being offline. The
+  setting governs ParatextData-backed services only — network use by the Node and Chromium
+  processes (extension host, renderers) is not covered. Automatic syncs that hit the gate fail the
+  way other automatic-sync failures do: logged, with no user-facing error.
+- **Source:** PT-4590. ParatextData's internals above were read from decompiled ParatextData
+  9.5.0.24, which this repo consumes as a binary package.
+
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
 - **Formerly:** ADR-0018
@@ -3678,7 +3725,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-menu-shortcut-hints-joined-from-catalog: Menu shortcut hints are joined from the keyboard shortcuts catalog by the menu data service
 
 - **Date:** 2026-09-11
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-25 (see the note at the end)
 - **Context:** Menus should show the keyboard shortcut for a command. Shortcuts are handled in three
   unrelated places (main-process `before-input-event`, `useHotkeys`, per-web-view handlers), and the
   only per-OS display strings live in the hand-maintained catalog. The menu that most needs hints —
@@ -3711,6 +3758,26 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `getLocalizeKeyForPhysicalKey`, and routing them there is follow-up work (PT-4629).
 - **Source:** PT-4532 (parent PT-4530); sourcing hints in the menu data service was agreed during
   implementation, 2026-09-11.
+- **Amended 2026-09-25 (PT-4585, PR #2865 review):** three parts of the decision above changed.
+  (1) **Same-command exception.** A chord the main process handles regardless of focus may still
+  carry a `command` when that main-process handler runs the same command the menu item does — the
+  macOS View menu's content-zoom accelerators run `platform.webViewContentZoomIn`/`Out`/`Reset`, the
+  commands of the `content-zoom-*` entries. The hint then names the command the chord runs, though
+  not necessarily in the same tab: the View menu zooms the focused window's last focused tab, the tab
+  menu its own tab. (2) **Explicit allowlist.** The chord-clash check in
+  `keyboard-shortcuts.data.test.ts` (`findMainProcessChordClashes`) still rejects a chord shared with
+  a different main-process entry, and now also rejects any main-process location of an entry's own
+  unless `SAME_COMMAND_MAIN_PROCESS_LOCATIONS` lists it for that entry id and its current `command`
+  — so a focus-blind chord such as `reference-history-back` still cannot gain a `command` silently,
+  and an allowlisted entry loses its allowance if its `command` changes. (3) **Hand-built menus
+  share the chord.** A menu built in extension code, outside the menu data service, can now show a
+  hint: the chord lives in `platform-bible-utils` (`CONTENT_ZOOM_IN/OUT/RESET_SHORTCUT` in
+  `content-zoom.util.ts`), and both the catalog entry's `keys` and the menu read it from there, so
+  they cannot drift (as of 2026-09-25, the Text Collection's zoom items are the one such menu).
+  Rejected for (3): restating the chord as a literal in the extension and pinning it with a core
+  test that reads the extension's source file — it caught a changed string but not a hint on the
+  wrong item, and made restating look like the pattern to follow. Consequence: a chord shared this
+  way is a `platform-bible-utils` export, so changing it rebuilds that package's `dist`.
 
 ## adr-menus-always-available-gate-at-submission: Menus stay always-available; back ends gate at submission. Writers of mutable shared state are DataProviders, not NetworkObjects
 
@@ -4290,6 +4357,60 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   emits module manifests, which is what lets `externalExtensions` become `itemized: true`; PT-4560
   is the static-asset half of the same shape and does not cover it.
 - **Source:** the `paratext-10-studio` notices design of 2026-09-04.
+
+## adr-one-reference-scroll-hook-parameterized-by-verse-anchor: The Text Collection has one reference-scroll controller, parameterized by how a verse is found
+
+- **Date:** 2026-09-16
+- **Status:** Accepted
+- **Context:** The Text Collection's chapter surfaces — the chapter-context split pane, a chapter
+  column, the single-resource full-width view — rendered a whole chapter and never scrolled to the
+  scroll group's verse (PT-4543, duplicate PT-4170). Verse mode needs no scroll, because
+  `sliceUsjToVerse` has already reduced the cell to the reference's verse. Two candidate
+  implementations already existed: the aligned grid's controller (now
+  `use-reference-scroll.hook.ts`, formerly `use-aligned-reference-scroll.hook.ts`) and an older
+  settle loop in `resource-text-panel.component.tsx`. The two layouts expose different verse anchors: the editor's block-verse layout wraps each verse in a
+  placed element carrying `data-verse-start`, and is emitted only under `BLOCK_VERSE_VIEW_MODE`,
+  while the inline layout emits a bare `span[data-marker="v"][data-number]`.
+- **Decision:** One hook serves both layouts, with what the layouts disagree on injected: the verse
+  lookup as a `VerseTargetFinder`, the "can the reader already see it" test as a
+  `TargetVisibilityTest`, and the room left above the target as `leadInPx`. The aligned grid passes
+  `findVerseBlockForVerse` and keeps the defaults — `isBlockInPortView`, whose any-part-showing rule
+  is right for a whole verse block, and no lead-in — so its scroll behavior is unchanged. A chapter
+  cell passes `findVerseMarkerForVerse`, `isMarkerFullyInPortView` and `VERSE_NUMBER_SCROLL_OFFSET`,
+  because its target is a zero-content `\v` marker span: any-part-showing would count a marker
+  clipped at the bottom edge as visible while the reader sees a verse number and none of its verse,
+  and the leave-a-visible-verse-alone rule would then decline to scroll. A chapter cell also passes
+  an echo latch (`publishedScrRefRef`): a click deep inside a long verse publishes a verse whose
+  marker is above the fold, so the visibility test alone would scroll the clicked text away. The
+  grid needs no latch, because a clicked block is by construction still on screen. Plus an
+  `isEnabled` flag so a view that is scrolled by an ancestor can
+  keep the hook call unconditional while reading no geometry. The port math is shared without a
+  per-layout branch because `getFirstVisibleY` looks the resource-name header up *inside* the port:
+  a chapter cell's header is the port's sibling and so contributes nothing, while the aligned grid's
+  sticky headers are descendants of its port and are counted.
+- **Alternatives:** (a) *A second hand-rolled loop for chapter mode* — rejected: two scroll
+  implementations in one directory, diverging on the rules that took a review round to get right.
+  (b) *Extract the settle loop from `resource-text-panel.component.tsx`* — rejected: it has no
+  reader stand-down, does not re-check as content arrives, cannot tell a browser `scrollTop` clamp
+  on content shrink from the reader, animates its hidden-tab catch-up where the rule requires an
+  instant consume, and records success on `scrollToVerse`'s return value even when
+  `findScrollContainer` found no overflowing container — so a short port silently skips the scroll
+  and never retries. (c) *Scroll via `scrollToVerse`* — only its selector transfers; its
+  `findScrollContainer`/`getTopWithinScrollContainer`/`behavior: 'smooth'` math is superseded by an
+  explicit port and `scrollPortToBlock`. (d) *Fork `isBlockInPortView` on target height* instead
+  of injecting the visibility test — rejected: it silently gives the Grid view containment
+  semantics too, so a partly visible block the reader clicked would jump to the top.
+- **Consequences:** Adding a third Text Collection layout means writing a finder, not a scroll
+  controller. The header-outside-the-port adjacency is now load-bearing — moving
+  `[data-cell-header]` inside `[data-cell-content]` would offset every chapter-mode scroll by the
+  header's height. Two tests pin it: `reference-scroll.utils.test.ts` covers the port math for a
+  header outside the port, and `resource-cell-view.component.test.tsx` asserts the rendered cell
+  really does keep `[data-cell-header]` out of `[data-cell-content]` — the arithmetic alone would
+  stay green if the markup moved. The reference panel still
+  runs the older settle loop; converging it onto this hook is deliberately deferred rather than
+  widening this change into a file #2781 does not touch. Revisit if a layout ever needs a genuinely
+  different scroll *policy* rather than a different anchor or visibility test.
+- **Source:** PT-4543.
 
 ## adr-offered-interface-languages-allowlist: The interface languages offered to users are an explicit allowlist, not a coverage rule
 

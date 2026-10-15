@@ -33,6 +33,10 @@ const DOM_CONTRACT = {
     'the editor’s "start typing" prompt, hidden so a read-only grid never invites edits',
 };
 
+// The chapter cells' scroll target (`span[data-marker="v"][data-number]`) is not checked here: those
+// names appear on nearly every editor node, so a bundle search could never fail. It is pinned by
+// `chapter-verse-marker.contract.test.tsx`, which renders the real editor instead.
+
 /** Exports `resource-cell.component.tsx` imports to ask for the block-verse layout. */
 const API_CONTRACT = {
   BLOCK_VERSE_VIEW_MODE: 'names the view mode that wraps each verse in a placeable block',

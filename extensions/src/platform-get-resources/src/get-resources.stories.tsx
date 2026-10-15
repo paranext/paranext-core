@@ -331,3 +331,19 @@ export const RemoveError: Story = {
     }),
   ],
 };
+
+/**
+ * An install refused by the "Disable access to some Bible translation services" setting. The
+ * component shows the message that points at the setting instead of the raw error. (In the app, the
+ * web view also raises a notification that opens the setting; this story renders only the
+ * component, so no notification appears.)
+ */
+export const BlockedByInternetSettings: Story = {
+  decorators: [
+    createDecorator({
+      onInstallOrRemoveResource: rejectingMock(
+        'Internet access is disabled in “Internet & connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)',
+      ),
+    }),
+  ],
+};

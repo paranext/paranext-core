@@ -39,7 +39,7 @@ const zoomOutItem: OverlayContextMenuItem = {
 const resetZoomItem: OverlayContextMenuItem = {
   type: 'item',
   id: 'platform.webViewContentZoomReset',
-  label: 'Reset zoom',
+  label: 'Zoom reset',
 };
 
 const CONTRIBUTED = [floatItem, moveToNewWindowItem, moveToWindowSubmenu];
