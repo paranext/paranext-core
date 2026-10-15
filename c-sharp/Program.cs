@@ -74,6 +74,20 @@ public static class Program
 
             var paratextProjects = new LocalParatextProjects(papi);
 
+            // The persisted settings below read from the settings service, which the extension host
+            // can still be starting. Reading too soon throws and ends this process. Starting with
+            // empty values instead would let the next save wipe what is stored.
+            if (
+                !await SettingsService.WaitForSettingAsync<SerializableStringDictionary>(
+                    papi,
+                    Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
+                    TimeSpan.FromSeconds(60),
+                    TimeSpan.FromMilliseconds(250)
+                )
+            )
+                Console.Error.WriteLine("The settings service did not answer before the timeout");
+            StartupTiming.Mark("settings-wait-end");
+
             // Adapted from Paratext's `Program.StaticInitialization`
             ParatextDataSettings.Initialize(new PersistedParatextDataSettings(papi));
             PtxUtilsDataSettings.Initialize(new PersistedPtxUtilsSettings(papi));
