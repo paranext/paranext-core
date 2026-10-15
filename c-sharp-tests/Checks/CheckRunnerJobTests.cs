@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
@@ -447,6 +448,43 @@ internal class CheckRunnerJobTests : PapiTestBase
             results.Where(r => r.CheckId == s_repeatedWordCheckId).Select(r => r.ItemText),
             Has.Some.Contains("the")
         );
+    }
+
+    [Test]
+    public void ProcessCheckJob_TextChangeThenStopDuringJob_DoesNotRunClearedChecksAgain()
+    {
+        var (runner, hookCheck, repeatedWordCheck) = CreateRunnerWithHookCheckAfter(
+            s_repeatedWordCheckId
+        );
+        var editClearedFinishedCheck = false;
+        // As when a consumer abandons the job because of the edit: the stop request arrives once
+        // the edit has cleared the finished check's results
+        hookCheck.OnInitialize = () =>
+        {
+            PutBook(1, "In the the beginning God");
+            editClearedFinishedCheck = SpinWait.SpinUntil(
+                () => !AreResultsReady(repeatedWordCheck, 1),
+                TimeSpan.FromSeconds(5)
+            );
+            foreach (var job in ActiveJobs(runner))
+                job.StopRequested = true;
+        };
+
+        var (final, results) = RunJob(runner, [s_repeatedWordCheckId, InitializeHookCheckId], 1);
+
+        Assert.That(editClearedFinishedCheck, Is.True);
+        Assert.That(final.Status, Is.EqualTo(CheckJobStatus.Stopped), final.Error);
+        Assert.That(results.Where(r => r.CheckId == s_repeatedWordCheckId), Is.Empty);
+    }
+
+    private static IEnumerable<CheckJobStatus> ActiveJobs(CheckRunner runner)
+    {
+        var jobsField =
+            typeof(CheckRunner).GetField(
+                "_activeCheckJobsByJobId",
+                BindingFlags.NonPublic | BindingFlags.Instance
+            ) ?? throw new MissingFieldException(nameof(CheckRunner), "_activeCheckJobsByJobId");
+        return ((ConcurrentDictionary<string, CheckJobStatus>)jobsField.GetValue(runner)!).Values;
     }
 
     [Test]

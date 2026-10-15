@@ -398,32 +398,53 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                     failedCheckIds.Add(failedCheckId);
                 }
 
+                // An edit to the book clears its results in the background (the TextChanged
+                // handler in CheckCache), which can land after a check ran and before its results
+                // are read here; one edit clears every check that has already run the book. Those
+                // checks run once more, together, so the job still delivers their results. If
+                // another edit clears them again, they are left out of this job without an error:
+                // each edit tells consumers to run their checks again.
+                var clearedCheckIds = new List<string>();
                 foreach (var checkId in checkIdsToRun)
                 {
-                    if (failedCheckIds.Contains(checkId))
-                    {
+                    if (
+                        failedCheckIds.Contains(checkId)
+                        || TryCollectResults(_checkCache.GetCheck(checkId, range.ProjectId), range)
+                    )
                         AdvanceProgress();
-                        continue;
-                    }
+                    else
+                        clearedCheckIds.Add(checkId);
+                }
 
-                    var check = _checkCache.GetCheck(checkId, range.ProjectId);
-                    // An edit to the book clears its results in the background (the TextChanged
-                    // handler in CheckCache), which can land after this check ran and before its
-                    // results are read here. Run it once more so the job delivers results for the
-                    // current text. If another edit clears them again, the check is left out of
-                    // this job without an error: each edit tells consumers to run their checks again.
-                    if (!TryCollectResults(check, range))
-                    {
-                        var rerunFailures = _checkCache.RunChecksForProject(
-                            range,
-                            [checkId],
-                            denials
+                if (clearedCheckIds.Count == 0)
+                    continue;
+                // A job abandoned because of the edit must not hold up the one replacing it
+                if (job.StopRequested)
+                    break;
+
+                var rerunFailedCheckIds = new HashSet<string>();
+                foreach (
+                    var (failedCheckId, exception) in _checkCache.RunChecksForProject(
+                        range,
+                        clearedCheckIds,
+                        denials
+                    )
+                )
+                {
+                    RecordCheckFailure(job, failedCheckId, range.ProjectId, exception);
+                    rerunFailedCheckIds.Add(failedCheckId);
+                }
+                foreach (var checkId in clearedCheckIds)
+                {
+                    if (
+                        !rerunFailedCheckIds.Contains(checkId)
+                        && !TryCollectResults(_checkCache.GetCheck(checkId, range.ProjectId), range)
+                    )
+                        Console.WriteLine(
+                            $"Check {checkId} on project {range.ProjectId} was left out of job "
+                                + $"{jobId}: an edit cleared its results for book "
+                                + $"{range.Start.BookNum} again while it ran"
                         );
-                        foreach (var (failedCheckId, exception) in rerunFailures)
-                            RecordCheckFailure(job, failedCheckId, range.ProjectId, exception);
-                        if (rerunFailures.Count == 0)
-                            TryCollectResults(check, range);
-                    }
                     AdvanceProgress();
                 }
             }
