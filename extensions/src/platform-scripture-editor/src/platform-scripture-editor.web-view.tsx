@@ -1017,6 +1017,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * some of them run after an await, by when a render may have started the load.
    */
   const isChapterLoadingRef = useRef(false);
+  /** {@link isChapterLoadingRef} as a stable getter, for the menus and the bar that build edits. */
+  const isChapterLoading = useCallback(() => isChapterLoadingRef.current, []);
 
   /**
    * Ends the open marker-palette session the way the keydown table's Escape branch does — clear the
@@ -1808,8 +1810,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         isStructureProtected,
         notifyStructureProtected,
         restoreEditorSelection,
+        isChapterLoading,
       ),
-    [localizedStrings, isStructureProtected, notifyStructureProtected, restoreEditorSelection],
+    [
+      localizedStrings,
+      isStructureProtected,
+      notifyStructureProtected,
+      restoreEditorSelection,
+      isChapterLoading,
+    ],
   );
 
   const insertCommentAtCurrentSelection = useCallback(() => {
@@ -2352,9 +2361,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         notifyStructureProtected,
         restoreEditorSelection,
         contextMarker,
+        isChapterLoading,
       ),
     [
       contextMarker,
+      isChapterLoading,
       localizedStrings,
       isStructureProtected,
       notifyStructureProtected,
@@ -5120,6 +5131,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   isSyncBlocked={isSyncBlocked}
                   // Snapshotted into version history before a removal; absent means no snapshot.
                   projectId={projectId}
+                  isChapterLoading={isChapterLoading}
                   // The same direction the editor itself is given below. The marker menu portals to
                   // `document.body`, outside that `dir` element, so it can only mirror its alignment for
                   // an RTL project if the direction is handed to it explicitly.

@@ -36,6 +36,12 @@ export type CharacterMarkerBarProps = {
    * removal still works, matching the insert-footnote path.
    */
   projectId?: string;
+  /**
+   * Reports whether another chapter is loading, during which the editor still shows the chapter
+   * being left and an edit would be dropped. Picking or removing a marker does nothing while it
+   * returns `true`. Omitting it never blocks.
+   */
+  isChapterLoading?: () => boolean;
 };
 
 /**
@@ -69,6 +75,7 @@ export function CharacterMarkerBar({
   textDirection,
   localizedStrings,
   projectId,
+  isChapterLoading,
 }: CharacterMarkerBarProps) {
   // Read for its re-render side effect; the value itself is not needed here.
   useEditorSelectionVersion();
@@ -78,6 +85,7 @@ export function CharacterMarkerBar({
     projectId,
     isSyncBlocked,
     localizedStrings,
+    isChapterLoading,
   });
 
   const characterMarkerState = useCharacterMarkerState({
@@ -87,6 +95,7 @@ export function CharacterMarkerBar({
     contextMarker,
     localizedStrings,
     removeCharacterMarker,
+    isChapterLoading,
   });
 
   // See the note above: the control's index signature is keyed by `string`, not `LocalizeKey`, so

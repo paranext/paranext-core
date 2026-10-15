@@ -2747,6 +2747,24 @@ describe('generateParagraphMenuListItems', () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
+  it('while a chapter is loading: action does not call formatPara or restore the selection', () => {
+    const { ref, formatPara } = makeMockEditorRef();
+    const restoreSelection = vi.fn();
+    const items = generateParagraphMenuListItems(
+      ref,
+      {},
+      false,
+      vi.fn(),
+      restoreSelection,
+      () => true,
+    );
+
+    items[0].action?.();
+
+    expect(formatPara).not.toHaveBeenCalled();
+    expect(restoreSelection).not.toHaveBeenCalled();
+  });
+
   // Equality, not spot checks: a partial-match assertion would miss both a marker silently dropped
   // from the offered set and an extra one silently added.
   it("offers exactly selectableParagraphMarkers' markers, matching neither more nor fewer", () => {
