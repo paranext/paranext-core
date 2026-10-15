@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using StreamJsonRpc;
 
 namespace Paranext.DataProvider.Services;
 
@@ -154,13 +155,17 @@ internal static class SettingsService
 
     /// <summary>
     /// Waits until the settings service answers a read of the setting with a value. The extension
-    /// host brings the settings service up after this process starts, and a read sent before then
-    /// fails at once instead of waiting for it.
+    /// host brings the settings service up after this process starts, and main gives up on a request
+    /// whose handler isn't registered after about 9 seconds. Retries only while the service isn't
+    /// answering yet: no handler, a request timeout, or a <see langword="null"/> answer (see
+    /// <see cref="GetSettingAsync"/>). <paramref name="timeout"/> bounds when retrying stops, not a
+    /// read already in flight.
     /// </summary>
     /// <returns>
     /// <see langword="false"/> when <paramref name="timeout"/> passes or the client disconnects
     /// first.
     /// </returns>
+    /// <exception cref="Exception">Any other failure of a read, as thrown by the read.</exception>
     public static async Task<bool> WaitForSettingAsync<T>(
         PapiClient papiClient,
         string key,
@@ -180,6 +185,7 @@ internal static class SettingsService
                 reason = "no value returned";
             }
             catch (Exception ex)
+                when (ex is RemoteMethodNotFoundException or OperationCanceledException)
             {
                 reason = ex.Message;
             }

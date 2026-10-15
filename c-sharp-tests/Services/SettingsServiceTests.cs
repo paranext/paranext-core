@@ -1,5 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using Nerdbank.Streams;
+using StreamJsonRpc;
 using TestParanextDataProvider;
 
 namespace Paranext.DataProvider.Services.Tests;
@@ -93,18 +95,90 @@ public class SettingsServiceTests
         Assert.That(await waitTask, Is.True);
     }
 
-    [Test]
-    public async Task WaitForSettingAsync_ReadThrowsUntilTimeout_ReturnsFalse()
+    /// <summary>
+    /// Answers each request with the next scripted outcome, repeating the last one: an exception to
+    /// throw or a value to return. Stands in for main's answers, which DummyPapiClient's local
+    /// handlers can't produce.
+    /// </summary>
+    private sealed class ScriptedPapiClient(params object?[] outcomes) : DummyPapiClient
     {
-        // DummySettingsService throws for a setting it has no value for
+        public int Attempts { get; private set; }
+
+        public override Task<T?> SendRequestAsync<T>(
+            string requestType,
+            IReadOnlyList<object?>? requestContents
+        )
+            where T : default
+        {
+            var outcome = outcomes[Math.Min(Attempts, outcomes.Length - 1)];
+            Attempts++;
+            return outcome is Exception ex
+                ? Task.FromException<T?>(ex)
+                : Task.FromResult((T?)outcome);
+        }
+    }
+
+    /// <summary>A real one: its constructor isn't public, so ask a peer for a missing method.</summary>
+    private static RemoteMethodNotFoundException MethodNotFound()
+    {
+        var (clientStream, serverStream) = FullDuplexStream.CreatePair();
+        using var server = JsonRpc.Attach(serverStream);
+        using var client = JsonRpc.Attach(clientStream);
+        return Assert.ThrowsAsync<RemoteMethodNotFoundException>(
+            () => client.InvokeAsync("missing")
+        )!;
+    }
+
+    [Test]
+    public async Task WaitForSettingAsync_NoHandlerThenTimeoutThenValue_ReturnsTrue()
+    {
+        using var client = new ScriptedPapiClient(
+            MethodNotFound(),
+            new OperationCanceledException(),
+            15
+        );
+
         var answered = await SettingsService.WaitForSettingAsync<int?>(
-            _client,
-            "missingSetting",
+            client,
+            "testNum",
+            TimeSpan.FromSeconds(5),
+            s_retryDelay
+        );
+
+        Assert.That(answered, Is.True);
+        Assert.That(client.Attempts, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task WaitForSettingAsync_NoHandlerUntilTimeout_ReturnsFalse()
+    {
+        using var client = new ScriptedPapiClient(MethodNotFound());
+
+        var answered = await SettingsService.WaitForSettingAsync<int?>(
+            client,
+            "testNum",
             TimeSpan.FromMilliseconds(100),
             s_retryDelay
         );
 
         Assert.That(answered, Is.False);
+    }
+
+    [Test]
+    public void WaitForSettingAsync_ReadFailsOtherwise_ThrowsWithoutRetrying()
+    {
+        using var client = new ScriptedPapiClient(new InvalidOperationException("broken"), 15);
+
+        Assert.ThrowsAsync<InvalidOperationException>(
+            () =>
+                SettingsService.WaitForSettingAsync<int?>(
+                    client,
+                    "testNum",
+                    TimeSpan.FromSeconds(5),
+                    s_retryDelay
+                )
+        );
+        Assert.That(client.Attempts, Is.EqualTo(1));
     }
 
     [Test]
