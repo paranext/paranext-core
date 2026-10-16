@@ -239,6 +239,7 @@ import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
 } from './sync-blocked-banner.component';
+import { createHiddenContentDeleteHandler } from './hidden-content-delete-confirm.utils';
 
 /**
  * Pass-through wrapper for the editor inside {@link InPortal}. `react-reverse-portal`'s `InPortal`
@@ -268,6 +269,12 @@ const EDITOR_LOAD_DELAY_TIME = 200;
 const PDP_SAVE_DEBOUNCE_MS = 700;
 
 const FOOTNOTES_ZOOM_AREA_LABEL_KEY: LocalizeKey = '%webView_footnoteList_header%';
+
+/** Asks before an edit removes a figure, sidebar, or other content the view hides. */
+const handleHiddenContentDelete = createHiddenContentDeleteHandler(
+  (localizeKey) => papi.localization.getLocalizedString({ localizeKey }),
+  (confirmOptions) => papi.dialogs.showDialog('platform.confirm', confirmOptions),
+);
 
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...COMMENT_EDITOR_STRING_KEYS,
@@ -1953,6 +1960,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     () => ({
       isReadonly: isReadOnlyEffective,
       structureProtectionMode,
+      onHiddenContentDelete: handleHiddenContentDelete,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
