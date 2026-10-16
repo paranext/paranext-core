@@ -332,6 +332,27 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `SelectContent` that only mounted alongside items — so a user with no local project metadata can
   reach Home through it after all. The controlled-`open` state that closed the dropdown by hand is
   gone with it: `ProjectSelector` closes its own popover when the footer row is activated.
+- **Amended 2026-09-30 (PT-3182, Home type filter; supersedes the scoping mechanics of the
+  2026-09-18 amendment):** projects-only is no longer a fixed scope but the starting value of a
+  type filter (All / Paratext Projects / Resources) the user can change in Home. The
+  `platformGetResources.openHome(shouldShowProjectsOnly)` signature is unchanged; only `true` sets
+  the preset, because the macOS native menubar passes each menu item's group key as the command's
+  first argument. The filter lives in the web view's `state` as `projectResourceFilter`, and Home
+  writes the user's changes back to it. It is no longer "a property of the launch, not of the tab":
+  `buildHomeWebViewState` replaces it only when an opener passes a preset and otherwise keeps it,
+  because the provider also runs for window moves, extension reloads and layout restores, and a
+  visible, one-click filter is not the trap the invisible scope was. The reload rule is one-way
+  (`shouldReloadHomeForFilterPreset`, replacing `shouldReloadHomeForProjectsOnly`): the command
+  reloads an open Home only when it asks for a specific filter Home is not showing, and an open
+  with no preset raises Home showing whatever filter it last had — including a preset, which
+  therefore persists until the user changes it. The accepted cost is that "More projects…" on a
+  Home the user has widened still rebuilds the iframe, dropping its search and any in-progress
+  send/receive UI state. Pushing the preset into the open Home instead
+  (`papi.webViewProviders.postMessageToWebView`) would avoid that, but Home reads its starting
+  filter once, so it would need a message handler of its own; not worth it for that case. Note
+  that the reload applies the preset only because every provider run gives the iframe a new
+  `srcNonce`, which remounts it: if web views ever keep their nonce across reloads, Home would keep
+  showing its old filter while its `state` says otherwise, and this has to be revisited.
 
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 

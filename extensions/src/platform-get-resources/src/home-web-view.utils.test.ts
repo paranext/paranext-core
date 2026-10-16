@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SavedWebViewDefinition } from '@papi/core';
-import { buildHomeWebViewState, shouldReloadHomeForProjectsOnly } from './home-web-view.utils';
+import { buildHomeWebViewState, shouldReloadHomeForFilterPreset } from './home-web-view.utils';
 
 const savedHome = (state?: Record<string, unknown>): SavedWebViewDefinition => ({
   id: 'home1',
@@ -9,58 +9,71 @@ const savedHome = (state?: Record<string, unknown>): SavedWebViewDefinition => (
 });
 
 /*
- * `shouldShowProjectsOnly` is a launch parameter, not durable state, and it rides in the persisted
- * web view `state` — so the rule that matters is the scrub: an open that does not ask for a
- * projects-only view must clear one the previous open left behind, including on a layout restore,
- * which calls the provider with no options at all.
+ * The provider runs whenever Home is built, and most of those builds — moving Home to a new window,
+ * an extension reload, a layout restore — pass no preset. So only an opener's preset may change the
+ * filter; without one, the filter Home last had stays.
  */
 describe('buildHomeWebViewState', () => {
-  it('scopes the view when the caller asks for projects only', () => {
-    expect(buildHomeWebViewState(savedHome(), { shouldShowProjectsOnly: true })).toEqual({
-      shouldShowProjectsOnly: true,
+  it('presets the filter the caller asks for', () => {
+    expect(
+      buildHomeWebViewState(savedHome(), { initialProjectResourceFilter: 'paratextProject' }),
+    ).toEqual({ projectResourceFilter: 'paratextProject' });
+  });
+
+  it("keeps the user's filter when rebuilt without a preset", () => {
+    expect(buildHomeWebViewState(savedHome({ projectResourceFilter: 'resource' }), {})).toEqual({
+      projectResourceFilter: 'resource',
     });
   });
 
-  it('clears a projects-only view left by a previous open', () => {
-    expect(buildHomeWebViewState(savedHome({ shouldShowProjectsOnly: true }), {})).toEqual({
-      shouldShowProjectsOnly: false,
-    });
+  it("replaces the user's filter with an opener's preset", () => {
+    expect(
+      buildHomeWebViewState(savedHome({ projectResourceFilter: 'resource' }), {
+        initialProjectResourceFilter: 'paratextProject',
+      }),
+    ).toEqual({ projectResourceFilter: 'paratextProject' });
   });
 
   it('keeps every other key the saved state carries', () => {
     expect(
       buildHomeWebViewState(savedHome({ somethingElse: 'keep me' }), {
-        shouldShowProjectsOnly: true,
+        initialProjectResourceFilter: 'resource',
       }),
-    ).toEqual({ somethingElse: 'keep me', shouldShowProjectsOnly: true });
+    ).toEqual({ somethingElse: 'keep me', projectResourceFilter: 'resource' });
+  });
+
+  it('drops the projects-only flag that older saved layouts carry', () => {
+    expect(buildHomeWebViewState(savedHome({ shouldShowProjectsOnly: true }), {})).toEqual({});
   });
 });
 
 /*
  * Reusing an already-open Home brings its tab to the front without calling the provider, so fresh
- * options never reach it — a reload is the only way in. It is also the expensive way in, so it has
- * to be limited to the case where the scoping actually differs.
+ * options never reach it — a reload is the only way in. It is also the expensive way in, and drops
+ * the user's search, so it is limited to an opener asking for a specific filter Home is not showing.
  */
-describe('shouldReloadHomeForProjectsOnly', () => {
-  it('reloads a full Home that is being asked for a projects-only view', () => {
-    expect(shouldReloadHomeForProjectsOnly(savedHome(), true)).toBe(true);
+describe('shouldReloadHomeForFilterPreset', () => {
+  it('reloads an unfiltered Home that is being asked for projects only', () => {
+    expect(shouldReloadHomeForFilterPreset(savedHome(), 'paratextProject')).toBe(true);
   });
 
-  it('reloads a projects-only Home that is being opened from a normal entry point', () => {
-    // The symmetric case, and the one that keeps the scoping tied to the launch path: without it,
-    // a Home opened once from "More projects…" hides resources for the rest of its life.
+  it('reloads a Home the user changed when "More projects…" asks for projects again', () => {
+    // Launched on projects, then switched to everything by the user. The launch preset alone would
+    // say nothing changed, and "More projects…" would raise a list full of resources.
     expect(
-      shouldReloadHomeForProjectsOnly(savedHome({ shouldShowProjectsOnly: true }), false),
+      shouldReloadHomeForFilterPreset(
+        savedHome({ projectResourceFilter: 'all' }),
+        'paratextProject',
+      ),
     ).toBe(true);
   });
 
-  it('leaves an already projects-only Home alone', () => {
-    expect(shouldReloadHomeForProjectsOnly(savedHome({ shouldShowProjectsOnly: true }), true)).toBe(
-      false,
-    );
-  });
-
-  it('leaves an already full Home alone', () => {
-    expect(shouldReloadHomeForProjectsOnly(savedHome(), false)).toBe(false);
+  it('leaves a Home already showing the asked-for filter alone', () => {
+    expect(
+      shouldReloadHomeForFilterPreset(
+        savedHome({ projectResourceFilter: 'paratextProject' }),
+        'paratextProject',
+      ),
+    ).toBe(false);
   });
 });

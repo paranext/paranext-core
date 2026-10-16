@@ -244,6 +244,7 @@ describe('metadataToLocalProjectInfo', () => {
           fullName: 'Full Name',
           language: 'en',
           isPublished: true,
+          isEditable: false,
         }),
       ),
     ).toEqual({
@@ -252,16 +253,19 @@ describe('metadataToLocalProjectInfo', () => {
       fullName: 'Full Name',
       language: 'en',
       isPublished: true,
+      isEditable: false,
     });
   });
 
-  it('falls back the name to the id, and leaves fullName absent, when both are unset', () => {
+  it('falls back the name to the id, and leaves fullName and isEditable absent, when unset', () => {
     expect(metadataToLocalProjectInfo(makeMetadata({ id: 'proj-id-only' }))).toEqual({
       projectId: 'proj-id-only',
       name: 'proj-id-only',
       fullName: undefined,
       language: '',
       isPublished: false,
+      // Passed through as absent: "absent means editable" is decided once, where Home reads it.
+      isEditable: undefined,
     });
   });
 
