@@ -44,6 +44,12 @@ export type UseCharacterMarkerStateOptions = {
    * TODO(PT-4394): wire this to `EditorRef.replaceCharacterMarker`.
    */
   changeCharacterMarker?: (fromMarker: string, toMarker: string) => void;
+  /**
+   * Reports whether another chapter is loading, during which the editor still shows the chapter
+   * being left and an edit would be dropped. Picking a marker does nothing while it returns `true`.
+   * Omitting it never blocks.
+   */
+  isChapterLoading?: () => boolean;
 };
 
 /** The control props this hook derives. Placement and sync state stay the caller's business. */
@@ -103,6 +109,7 @@ function buildMarkerMenuItems(
     | 'blockMarker'
     | 'changeCharacterMarker'
     | 'removeCharacterMarker'
+    | 'isChapterLoading'
   > & {
     currentMarker: string | undefined;
     coverage: CharacterMarkerCoverage | undefined;
@@ -114,6 +121,7 @@ function buildMarkerMenuItems(
     blockMarker,
     changeCharacterMarker,
     removeCharacterMarker,
+    isChapterLoading,
     currentMarker,
     coverage,
   } = options;
@@ -130,6 +138,7 @@ function buildMarkerMenuItems(
       coverage,
       changeCharacterMarker,
       removeCharacterMarker,
+      isChapterLoading,
     },
   );
 }
@@ -149,6 +158,7 @@ export function useCharacterMarkerState({
   localizedStrings,
   removeCharacterMarker,
   changeCharacterMarker,
+  isChapterLoading,
 }: UseCharacterMarkerStateOptions): CharacterMarkerState {
   const [coverage, setCoverage] = useState<CharacterMarkerCoverage | undefined>(undefined);
 
@@ -217,6 +227,7 @@ export function useCharacterMarkerState({
         blockMarker,
         changeCharacterMarker,
         removeCharacterMarker,
+        isChapterLoading,
         currentMarker,
         coverage,
       }),
@@ -227,6 +238,7 @@ export function useCharacterMarkerState({
       currentMarker,
       changeCharacterMarker,
       removeCharacterMarker,
+      isChapterLoading,
       coverage,
     ],
   );

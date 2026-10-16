@@ -64,6 +64,9 @@ import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
  *   focus, run just before inserting. The menu focuses its own search input, so without this the
  *   insert can find no selection to act on
  * @param parentMarker The current parent marker which is used to determine which markers to include
+ * @param isChapterLoading Reports whether another chapter is loading, during which the editor still
+ *   shows the chapter being left and an edit would be dropped. A pick only closes the menu while it
+ *   returns `true`. Omitting it never blocks.
  * @returns The list of inline marker menu items
  */
 export function generateInlineMarkerMenuListItems(
@@ -74,6 +77,7 @@ export function generateInlineMarkerMenuListItems(
   notifyStructureProtected: () => void,
   restoreSelection?: () => void,
   parentMarker?: string,
+  isChapterLoading?: () => boolean,
 ): MarkerMenuItem[] {
   if (!parentMarker) return [];
 
@@ -91,6 +95,10 @@ export function generateInlineMarkerMenuListItems(
             localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
           isDisallowed,
           action: () => {
+            if (isChapterLoading?.()) {
+              closeMarkersMenu();
+              return;
+            }
             // Defense-in-depth: unreachable while the menu renders `isDisallowed` items as
             // disabled `CommandItem`s (a disabled cmdk item never fires `onSelect`). Kept as a
             // second layer of protection in case that disabled rendering is ever loosened or the
