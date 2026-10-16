@@ -48,6 +48,7 @@ import {
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
+import type { SettingTypes } from 'papi-shared-types';
 import type { MutableRefObject } from 'react';
 // import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
 // import from the editor package drags its React-bundling dist into the main bundle, breaking
@@ -1470,8 +1471,9 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 
 /**
  * Fire-and-forget helper that syncs the incoming project first, then the outgoing one. Each sync is
- * independently error-isolated so a failure in one doesn't block the other. Only called in simple
- * mode after a replace-tab project switch.
+ * independently error-isolated so a failure in one doesn't block the other. Called after a
+ * Simple-mode replace-tab project switch, and by `finalizeProjectSwitch` after a Power -> Simple
+ * mode switch — by which time the user may be back in Power mode.
  *
  * Uses `paratextBibleSendReceive.syncProjects` for the incoming project because it also pulls
  * connected resources and translation partners (deep sync). Uses the shallower
@@ -1486,14 +1488,35 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * a project ID (Home, New Tab, the title-bar picker) takes that flag from `platform.isEditable`, so
  * an `Editable=F` project is synced here but not when its window closes or the app quits
  * (PT-4786).
+ *
+ * `interfaceMode` is the caller's read of `platform.interfaceMode` (`undefined` when that read
+ * failed). The incoming sync suppresses the dotnet progress toast only for a known `'simple'`,
+ * where the toolbar sync indicator is its surface; any other value keeps the toast, since the
+ * indicator may not be mounted. The flag is sent only when it is `true`: a dotnet `SyncProjects`
+ * that predates the parameter rejects a two-argument call, so omitting it keeps the toast-keeping
+ * cases working against that backend. The outgoing `sendReceiveProjects` keeps its toast: its
+ * `suppressNotification` would also hide the failure toast, which is this claimless sync's only
+ * failure surface.
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,
   incomingProjectId: string,
   outgoingProjectId: string | undefined,
+  interfaceMode: SettingTypes['platform.interfaceMode'] | undefined,
 ): Promise<void> {
   try {
-    await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
+    // Mode change mid-sync: intentionally not handled. The flag is fixed for the run, and the
+    // toolbar indicator mounts only in Simple mode, so switching to Power while a suppressed sync
+    // runs leaves it with no progress surface until it ends. Accepted in
+    // `adr-sync-surface-per-interface-mode`.
+    if (interfaceMode === 'simple')
+      await papi.commands.sendCommand(
+        'paratextBibleSendReceive.syncProjects',
+        [incomingProjectId],
+        true,
+      );
+    else
+      await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
   } catch (e) {
     papi.logger.warn(
       `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
@@ -1530,10 +1553,9 @@ export async function syncOnProjectSwitch(
  * back to Power mode. Mirrors `open()`'s own `needsOverlay` block (main.ts): the sync is
  * fire-and-forget (`syncOnProjectSwitch` already catches its own errors, and awaiting it here would
  * delay the shared-layout apply and `recordProjectOpened` by however long a deep Send/Receive
- * takes, with `recordProjectOpened` never running at all if the user quits mid-sync); and
- * `applyForProject` re-checks `platform.interfaceMode` fresh immediately before running, since
- * applying while no longer in Simple mode would wrongly manipulate the Power layout instead of
- * being a no-op.
+ * takes, with `recordProjectOpened` never running at all if the user quits mid-sync); and the mode
+ * is read fresh here, once, before the sync, since applying while no longer in Simple mode would
+ * wrongly manipulate the Power layout instead of being a no-op.
  *
  * @param papi Backend PAPI instance.
  * @param projectId The project now showing in the Scripture Editor.
@@ -1545,10 +1567,21 @@ export async function finalizeProjectSwitch(
   projectId: string,
   applyForProject: ((projectId: string) => Promise<void>) | undefined,
 ): Promise<void> {
+  // Read once, before the sync, so the sync and the Simple-only block below agree on the mode. A
+  // failed read leaves `undefined`: the sync then keeps its progress toast and the Simple-only block
+  // is skipped, the same as for Power.
+  let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+  try {
+    interfaceMode = await papi.settings.get('platform.interfaceMode');
+  } catch (e) {
+    papi.logger.warn(
+      `finalizeProjectSwitch: could not read platform.interfaceMode for ${projectId}; syncing with the progress toast: ${getErrorMessage(e)}`,
+    );
+  }
   // There's no outgoing project here since this replaces the whole Simple layout, not one editor
   // tab within it.
-  syncOnProjectSwitch(papi, projectId, undefined);
-  if ((await papi.settings.get('platform.interfaceMode')) === 'simple') {
+  syncOnProjectSwitch(papi, projectId, undefined, interfaceMode);
+  if (interfaceMode === 'simple') {
     // Normally a no-op: `runProjectBoundSimpleSwitch` (`src/renderer/services/
     // web-view.service-shard.ts`) bakes `projectId` into every merged supplement tab with
     // `applyProjectIdToTabs` before this runs, so the Text Collection arrives already bound and

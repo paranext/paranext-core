@@ -282,9 +282,18 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
   // what that syncs — it is not always every locally-known project. The C# S/R command registers
   // asynchronously during startup; `sendCommand` will wait (with retry on missing handler) until
   // it's available or times out.
+  //
+  // `true` suppresses the dotnet progress toast: this branch only runs once the mode is known to be
+  // 'simple' (re-checked after the readiness wait), where the toolbar sync indicator is this sync's
+  // persistent surface.
+  //
+  // Mode change mid-sync: intentionally not handled. The flag is fixed for the run, and the
+  // indicator mounts only in Simple mode, so switching to Power while this runs leaves it with no
+  // progress surface until it ends (failure toasts are not suppressed). Accepted in
+  // `adr-sync-surface-per-interface-mode`; reconciling it needs a renderer or signal change.
   logger.debug('Startup sync starting');
   try {
-    await commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined);
+    await commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined, true);
     logger.debug('Startup sync complete');
   } catch (e) {
     logger.warn(

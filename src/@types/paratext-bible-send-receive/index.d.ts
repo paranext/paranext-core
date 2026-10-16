@@ -290,7 +290,8 @@ declare module 'paratext-bible-send-receive' {
    * Two core paths are on the invisible side today, both worth knowing before relying on this for a
    * startup status:
    *
-   * - **Simple mode startup sync** (`main/startup-tasks.ts`) calls `syncProjects` directly.
+   * - **Simple mode startup sync** (`main/startup-tasks.ts`) calls `syncProjects` directly, with its
+   *   progress toast suppressed — `onSyncActivityChanged` is its surface.
    * - **The picker's per-project sync** (`syncOnProjectSwitch` in `platform-scripture-editor`) calls
    *   `syncProjects`/`sendReceiveProjects` directly.
    *
@@ -453,8 +454,9 @@ declare module 'papi-shared-types' {
      * several.
      *
      * @param projectIds Ids of projects to send/receive
-     * @param suppressNotification When `true`, the dotnet process skips its own progress toast (the
-     *   caller — e.g. the open S/R dialog — shows its own progress + Cancel). Defaults to `false`.
+     * @param suppressNotification When `true`, the caller owns all sync feedback: the dotnet
+     *   process skips its progress toast and its failure and role-change toasts (e.g. the open S/R
+     *   dialog shows its own progress, Cancel and results). Defaults to `false`.
      * @returns S/R results
      */
     'paratextBibleSendReceive.sendReceiveProjects': (
@@ -562,13 +564,32 @@ declare module 'papi-shared-types' {
      *       every shared project in the account, trading completeness for performance.
      *   - An empty array is a no-op.
      *
+     * @param suppressProgressNotification When `true`, the dotnet process does not show its
+     *   persistent in-progress toast (the one carrying Cancel) for this sync. Failure, role-change
+     *   and watchdog toasts still show: a caller that passes this may raise no Send/Receive claim,
+     *   so those toasts are its only failure surface. Narrower than `sendReceiveProjects`'
+     *   `suppressNotification`, which also hides them. Defaults to `false`.
+     *
+     *   Pass it only when the caller knows the interface mode is `'simple'`: the toolbar sync
+     *   indicator is then the sync's persistent surface, and the toast as well would give one sync
+     *   two cancellable surfaces. Do not pass it in Power mode (the toast is that mode's only
+     *   persistent surface), when the mode is unknown or its read failed (the indicator may not be
+     *   mounted, and two surfaces beat none), or while something covers the indicator.
+     *
+     *   Callers omit the argument rather than passing `false`: an implementation that predates this
+     *   parameter rejects a two-argument call, so omitting it keeps every toast-keeping call
+     *   working against it. The current callers are listed in `adr-sync-surface-per-interface-mode`
+     *   (`.context/standards/Architecture-Decisions.md`).
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10)
      * @throws When another Send/Receive is already in progress — rejects fail-fast rather than
      *   queuing behind it — and for ordinary failure conditions such as an unregistered user or a
      *   lost server connection.
      */
-    'paratextBibleSendReceive.syncProjects': (projectIds?: string[]) => Promise<void>;
+    'paratextBibleSendReceive.syncProjects': (
+      projectIds?: string[],
+      suppressProgressNotification?: boolean,
+    ) => Promise<void>;
     /**
      * Runs the Send/Receive sync scheduled for a session boundary ("On startup/shutdown") for the
      * projects the user scheduled for that boundary. The extension owns the schedule, running the

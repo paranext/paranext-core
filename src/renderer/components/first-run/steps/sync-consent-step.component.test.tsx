@@ -2,10 +2,15 @@ import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { sendCommand } from '@shared/services/command.service';
 import { SyncConsentStep } from './sync-consent-step.component';
 
 vi.mock('@renderer/services/first-run-store', () => ({
   isDemoMode: vi.fn(() => false),
+}));
+
+vi.mock('@shared/services/command.service', () => ({
+  sendCommand: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
@@ -126,5 +131,17 @@ describe('SyncConsentStep', () => {
     await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
     await screen.findByText(/fail/i);
     expect(onNext).not.toHaveBeenCalled();
+  });
+
+  it('syncs through the backend with the progress toast kept when no onSync is injected', async () => {
+    // The first-run wizard covers the toolbar sync indicator for this whole sync, so the dotnet
+    // progress toast is its visible progress and must not be suppressed.
+    const onNext = vi.fn();
+    render(<SyncConsentStep onNext={onNext} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sync' }));
+
+    await waitFor(() => expect(onNext).toHaveBeenCalled());
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects');
   });
 });

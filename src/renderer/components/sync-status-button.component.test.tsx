@@ -1256,9 +1256,10 @@ describe('SyncStatusButton — sync state events', () => {
 });
 
 describe('SyncStatusButton — sync progress', () => {
-  // Simple mode suppresses the persistent C# toast in favour of this indicator, so whatever the
-  // toast used to carry has to be reachable here or the capability is simply lost: the project being
-  // synced, how far along it is, and — the one that matters most on a bad connection —
+  // Core's direct sync callers (the startup and project-switch syncs) suppress the persistent C#
+  // toast in Simple mode in favour of this indicator, so whatever the toast carries has to be
+  // reachable here or the capability is simply lost: the project being synced, how far along it is,
+  // and — the one that matters most on a bad connection —
   // ParatextData's "Connection to server lost. Retrying…".
   it('shows the item and percent for determinate progress', async () => {
     const fireProgress = captureSyncProgressEvent();
