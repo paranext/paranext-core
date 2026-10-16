@@ -11,7 +11,7 @@ test('a live engine rebuilds its themes when contributions resync', async () => 
 
   await resyncContributions([]);
 
-  expect(engine.allThemeFamiliesById).not.toBe(initialThemes);
+  expect(await engine.getAllThemes()).toHaveProperty('paratext');
   expect(notifyUpdateSpy).toHaveBeenCalledWith('*');
   await engine.dispose();
 });
