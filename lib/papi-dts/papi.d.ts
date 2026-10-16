@@ -12032,11 +12032,16 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      *
      * Set this when an exact, predictable match list matters more than forgiving lookup — marker
      * palettes do, because the rendered list participates in commit semantics (typing a marker and
-     * pressing Space must agree byte-for-byte with what is displayed). Palettes with
-     * {@link CommandPaletteRequest.keyForwarding} and passive palettes always match by containment
-     * regardless of this option: their filtered list is resolved by the HOST (commits and forwarded
-     * keys are answered from it), and the host's filter must agree exactly with what is on screen —
-     * cmdk's scorer is not reimplemented host-side.
+     * pressing Space must agree byte-for-byte with what is displayed).
+     *
+     * Some palettes match host-side regardless of this option, because their filtered list is
+     * resolved by the HOST — commits and forwarded keys are answered from it, so the host's filter
+     * must agree exactly with what is on screen, and cmdk's scorer is not reimplemented host-side.
+     * Which rule they get depends on the palette:
+     *
+     * - `passive`, or {@link CommandPaletteRequest.focusTarget} `'list'` — label PREFIX match, mirroring
+     *   PT9's marker dropdown.
+     * - {@link CommandPaletteRequest.keyForwarding} WITHOUT `'list'` focus — containment.
      */
     disableFuzzyMatching?: boolean;
     /**
@@ -12075,6 +12080,36 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * shown, so matching always runs against the same label text the palette displays.
      */
     passive?: boolean;
+    /**
+     * Which element inside the palette takes keyboard focus when it opens. Defaults to `'input'` —
+     * the palette's search box, which owns the query and the arrow-key highlight itself.
+     *
+     * `'list'` focuses the palette's result list instead and renders the search box read-only,
+     * showing the host-driven {@link IOverlayService.updateCommandPalette} filter text exactly as
+     * {@link CommandPaletteRequest.passive} does. The requester keeps ownership of every key semantic:
+     * EVERY keydown the palette receives is handed to {@link PaletteKeyForwarding.onKey}, not only the
+     * keys named in {@link PaletteKeyForwarding.keys}, so one table decides what each key means.
+     *
+     * It also changes how the list MATCHES, for the same reason `passive` does: the host resolves the
+     * filtered list, so matching moves host-side and becomes a label PREFIX match rather than cmdk's
+     * fuzzy scoring or containment. A consumer adopting `'list'` for the focus behavior alone gets
+     * that change too.
+     *
+     * @remarks
+     * Focusing something that cannot be edited is what keeps composed input out: an IME or a dead key
+     * starts composing in any focused text box, no matter what the palette cancels, which would put
+     * candidate text in the palette and — once a composition is under way — out of reach of per-key
+     * rules. With focus on the list, no composition starts and a dead key arrives as an ordinary
+     * keydown.
+     *
+     * Ignored when `passive` is true, which takes no focus at all.
+     *
+     * `'list'` REQUIRES {@link CommandPaletteRequest.keyForwarding} (unless `passive`), and a request
+     * without it is rejected. A list-focused palette drives nothing itself: its filter renders
+     * read-only and it handles no key but Escape, so with no requester answering for the keys there
+     * is no way to type, navigate or commit.
+     */
+    focusTarget?: 'input' | 'list';
     /**
      * Keys the REQUESTING session claims while this palette is open, and where to send them.
      *
@@ -14479,6 +14514,7 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
   import { type PaletteFilterMode } from 'platform-bible-react/experimental';
   import type {
     CommandPaletteItem,
+    CommandPaletteRequest,
     PaletteSearchField,
   } from 'renderer/services/overlays/overlay.service-model';
   /**
@@ -14488,6 +14524,24 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
    * identity (marker palettes) opt into `['label']` per request instead.
    */
   export const DEFAULT_PALETTE_SEARCH_FIELDS: readonly PaletteSearchField[];
+  /**
+   * Whether the REQUESTER resolves this palette's filtered list rather than the palette resolving it
+   * itself — true for a passive palette and for one that focuses its list.
+   *
+   * Both render a read-only search box over a host-supplied filter and answer commits from the
+   * requester's own list, so both must match HOST-SIDE rather than through cmdk: reimplementing
+   * cmdk's fuzzy scorer is the only way the two lists could otherwise agree, and a disagreement
+   * commits an item the user cannot see. That host-side rule is {@link PaletteFilterMode} `'passive'`
+   * — a label PREFIX match, mirroring PT9's marker dropdown. Derived in one place so the palette's
+   * display and the host's commit resolution can never drift apart.
+   */
+  export function isHostDrivenPalette(
+    request: Pick<CommandPaletteRequest, 'passive' | 'focusTarget'>,
+  ): boolean;
+  /** The {@link PaletteFilterMode} a request's palette filters by. */
+  export function getPaletteFilterMode(
+    request: Pick<CommandPaletteRequest, 'passive' | 'focusTarget'>,
+  ): PaletteFilterMode;
   /**
    * Filters command palette items by matching `filterText` against each item's text, with
    * per-{@link PaletteFilterMode} semantics and the request's `searchFields` deciding which fields
