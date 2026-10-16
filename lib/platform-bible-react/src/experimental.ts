@@ -103,6 +103,7 @@ export {
   stripMarkerNestingPrefix,
   type PaletteFilterMode,
 } from './components/advanced/marker-palette-filter.util';
+export { isEditorContextMenuOpenFor } from './components/advanced/editor-context-menu.util';
 export {
   default as NavigationHistoryButtons,
   NAVIGATION_HISTORY_BUTTONS_STRING_KEYS,
@@ -110,6 +111,14 @@ export {
   type NavigationHistoryButtonsLocalizedStrings,
   type NavigationHistoryItem,
 } from './components/advanced/navigation-history-buttons/navigation-history-buttons.component';
+export {
+  default as BaseOrModelTextExplanation,
+  BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS,
+} from './components/advanced/base-or-model-text-explanation/base-or-model-text-explanation.component';
+export type {
+  BaseOrModelTextExplanationLocalizedStrings,
+  BaseOrModelTextExplanationProps,
+} from './components/advanced/base-or-model-text-explanation/base-or-model-text-explanation.component';
 export {
   default as InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
@@ -124,3 +133,4 @@ export {
   DEVELOPER_SECTION_STRING_KEYS,
 } from './components/advanced/developer-section/developer-section.component';
 export type { DeveloperSectionProps } from './components/advanced/developer-section/developer-section.component';
+export { ShortcutKeys, type ShortcutKeysProps } from './components/basics/shortcut-keys.component';

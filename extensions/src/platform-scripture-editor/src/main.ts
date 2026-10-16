@@ -17,6 +17,8 @@ import {
 } from 'platform-bible-utils';
 import {
   EditorDecorations,
+  EditorMessageInsertCommentAtSelection,
+  EditorMessageInsertTextualNoteAtSelection,
   SelectionChangeEvent,
   EditorWebViewMessage,
   OpenEditorOptions,
@@ -164,61 +166,44 @@ async function openPlatformResourceViewer(
   return open(true, projectId, existingTabIdToReplace, options);
 }
 
+/**
+ * Paratext 9's `UpdateInsertMenuItems` (`TextForm.cs`) shows footnote, cross-reference, and end
+ * note only when the project is not a resource project and not Study Bible additions, and enables
+ * them only with book text and a view that allows note insertion. Platform.Bible keeps all three
+ * Insert items always available instead and gates at submission — see
+ * `adr-menus-always-available-gate-at-submission` in Architecture-Decisions.md; the submission-time
+ * check itself is the web view's read-only/sync-blocked guard in `insertNoteAtCurrentSelection`,
+ * the one callback all three insert kinds share. The comment editor opener reaches the web view the
+ * same way but is handled there by its own `insertCommentAtCurrentSelection`.
+ *
+ * @param method The controller method to invoke: one of the three textual-note inserters or the
+ *   comment editor opener — all take no arguments and resolve once requested.
+ */
+async function requestEditorInsert(
+  method:
+    | EditorMessageInsertTextualNoteAtSelection['method']
+    | EditorMessageInsertCommentAtSelection['method'],
+  webViewId: string | undefined,
+): Promise<void> {
+  logger.debug(`Requesting ${method} on WebView ${webViewId}`);
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.[method]();
+}
+
 async function insertFootnoteAtSelection(webViewId: string | undefined): Promise<void> {
-  logger.debug('Inserting footnote...');
-
-  if (!webViewId) {
-    throw new Error('No WebView ID provided!');
-  }
-
-  const webViewController = await papi.webViews.getWebViewController(
-    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-    webViewId,
-  );
-
-  if (!webViewController) {
-    throw new Error('No web view controller found!');
-  }
-
-  await webViewController.insertFootnoteAtSelection();
+  return requestEditorInsert('insertFootnoteAtSelection', webViewId);
 }
 
 async function insertCrossReferenceAtSelection(webViewId: string | undefined): Promise<void> {
-  logger.debug('Inserting cross-reference...');
+  return requestEditorInsert('insertCrossReferenceAtSelection', webViewId);
+}
 
-  if (!webViewId) {
-    throw new Error('No WebView ID provided!');
-  }
-
-  const webViewController = await papi.webViews.getWebViewController(
-    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-    webViewId,
-  );
-
-  if (!webViewController) {
-    throw new Error('No web view controller found!');
-  }
-
-  await webViewController.insertCrossReferenceAtSelection();
+async function insertEndnoteAtSelection(webViewId: string | undefined): Promise<void> {
+  return requestEditorInsert('insertEndnoteAtSelection', webViewId);
 }
 
 async function insertCommentAtSelection(webViewId: string | undefined): Promise<void> {
-  logger.debug('Inserting project comment...');
-
-  if (!webViewId) {
-    throw new Error('No WebView ID provided!');
-  }
-
-  const webViewController = await papi.webViews.getWebViewController(
-    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-    webViewId,
-  );
-
-  if (!webViewController) {
-    throw new Error('No web view controller found!');
-  }
-
-  await webViewController.insertCommentAtSelection();
+  return requestEditorInsert('insertCommentAtSelection', webViewId);
 }
 
 /** Function to prompt for a project or use the one passed in and open it in the editor */
@@ -517,11 +502,6 @@ async function toggleFootnotesPane(webViewId: string | undefined): Promise<void>
   await controller?.toggleFootnotesPaneVisibility();
 }
 
-async function toggleFootnotesAutoShow(webViewId: string | undefined): Promise<void> {
-  const controller = await getScriptureEditorController(webViewId);
-  await controller?.toggleFootnotesAutoShow();
-}
-
 async function changeFootnotesPaneLocation(webViewId: string | undefined): Promise<void> {
   const controller = await getScriptureEditorController(webViewId);
   await controller?.changeFootnotesPaneLocation();
@@ -664,6 +644,17 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
     let firstSelectionAsync:
       | AsyncVariable<ScriptureRangeUsjVerseRefChapterLocation | undefined>
       | undefined;
+    /** Posts an insert-note-at-selection message of the given kind to this editor's web view. */
+    async function postInsertNoteMessage(
+      method: EditorMessageInsertTextualNoteAtSelection['method'],
+    ): Promise<void> {
+      const message: EditorWebViewMessage = { method };
+      await papi.webViewProviders.postMessageToWebView(
+        currentWebViewDefinition.id,
+        webViewNonce,
+        message,
+      );
+    }
     return {
       async selectRange(range) {
         try {
@@ -763,28 +754,6 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           throw new Error(message);
         }
       },
-      async toggleFootnotesAutoShow() {
-        try {
-          logger.debug(
-            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to toggleFootnotesAutoShow`,
-          );
-          if (!currentWebViewDefinition.projectId)
-            throw new Error(`webViewDefinition.projectId is empty!`);
-
-          const message: EditorWebViewMessage = {
-            method: 'toggleFootnotesAutoShow',
-          };
-          await papi.webViewProviders.postMessageToWebView(
-            currentWebViewDefinition.id,
-            webViewNonce,
-            message,
-          );
-        } catch (e) {
-          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running toggleFootnotesAutoShow! ${getErrorMessage(e)}`;
-          logger.warn(message);
-          throw new Error(message);
-        }
-      },
       async changeFootnotesPaneLocation(): Promise<'bottom' | 'trailing'> {
         try {
           logger.debug(
@@ -815,26 +784,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           throw new Error(message);
         }
       },
-      async insertFootnoteAtSelection() {
-        const message: EditorWebViewMessage = {
-          method: 'insertFootnoteAtSelection',
-        };
-        await papi.webViewProviders.postMessageToWebView(
-          currentWebViewDefinition.id,
-          webViewNonce,
-          message,
-        );
-      },
-      async insertCrossReferenceAtSelection() {
-        const message: EditorWebViewMessage = {
-          method: 'insertCrossReferenceAtSelection',
-        };
-        await papi.webViewProviders.postMessageToWebView(
-          currentWebViewDefinition.id,
-          webViewNonce,
-          message,
-        );
-      },
+      insertFootnoteAtSelection: () => postInsertNoteMessage('insertFootnoteAtSelection'),
+      insertCrossReferenceAtSelection: () =>
+        postInsertNoteMessage('insertCrossReferenceAtSelection'),
+      insertEndnoteAtSelection: () => postInsertNoteMessage('insertEndnoteAtSelection'),
       async insertCommentAtSelection() {
         const { projectId } = currentWebViewDefinition;
         if (!projectId) {
@@ -1078,9 +1031,12 @@ function createResourceTextPanelProvider(
       currentResourceTextPanelProjectIds.delete(webViewType);
       // Re-read every call so mode changes are picked up at open/replace/restore time.
       const interfaceMode = await papi.settings.get('platform.interfaceMode');
-      // Intentionally does not force scrollGroupScrRef in simple mode. Bible texts and
-      // commentaries are read-only reference panels that navigate independently; they are
-      // not scroll-synced with the scripture editor in simple mode.
+      // Deliberately leaves `scrollGroupScrRef` alone rather than pinning it to 0 in simple mode
+      // the way the editor and the Text Collection do. These panels inherit whatever the saved
+      // layout carries, and an absent value resolves to scroll group 0
+      // (`use-scroll-group-scr-ref.hook.ts`), so a saved layout that names no group does follow the
+      // shared reference in simple mode. A saved layout that names a different group keeps it,
+      // which is the behavior pinning would take away.
       return {
         ...savedWebView,
         title,
@@ -1181,8 +1137,29 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             name: 'webViewId',
             required: false,
             summary:
-              'The ID of the web view tied to the project that we are inserting the footnote',
-            schema: { type: 'null' },
+              'The ID of the web view tied to the project that we are inserting the cross-reference',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+  const insertEndnotePromise = papi.commands.registerCommand(
+    'platformScriptureEditor.insertEndnoteAtSelection',
+    insertEndnoteAtSelection,
+    {
+      method: {
+        summary: 'Insert an endnote into the project at the given selection in the editor',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that we are inserting the endnote',
+            schema: { type: 'string' },
           },
         ],
         result: {
@@ -1310,29 +1287,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             name: 'webViewId',
             required: false,
             summary: 'The ID of the WebView to toggle the footnotes pane for',
-            schema: { type: 'string' },
-          },
-        ],
-        result: {
-          name: 'return value',
-          schema: { type: 'null' },
-        },
-      },
-    },
-  );
-
-  const toggleFootnotesAutoShowPromise = papi.commands.registerCommand(
-    'platformScriptureEditor.toggleFootnotesAutoShow',
-    toggleFootnotesAutoShow,
-    {
-      method: {
-        summary:
-          'Toggle the footnotes-pane auto-show/hide setting (default off; diverges from PT9, whose pane visibility is manual and persistent)',
-        params: [
-          {
-            name: 'webViewId',
-            required: false,
-            summary: 'The ID of the WebView to toggle the footnotes auto-show setting for',
             schema: { type: 'string' },
           },
         ],
@@ -1645,10 +1599,10 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openPlatformResourceViewerPromise,
     await changeScriptureViewPromise,
     await toggleFootnotesPanePromise,
-    await toggleFootnotesAutoShowPromise,
     await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,
     await insertCrossReferencePromise,
+    await insertEndnotePromise,
     await insertCommentPromise,
     await annotationStyleDataProviderPromise,
     await modelTextPanelWebViewProviderPromise,

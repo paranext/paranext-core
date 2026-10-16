@@ -221,8 +221,21 @@ export type MergedProjectInfo = {
   isSendReceivable: boolean;
   isLocallyAvailable?: boolean;
   editedStatus?: EditedStatus;
+  /**
+   * Whether the project has changes to send to the server or to receive from it, per
+   * {@link HomeProps.unsyncedProjectIds}.
+   */
+  hasUnsyncedChanges?: boolean;
   lastSendReceiveDate?: string;
 };
+
+/**
+ * Whether a project is out of step with the server: the shared-project list reports it as edited
+ * (`editedStatus`), or it is in the live set of projects with changes to send or receive. A marked
+ * row shows the dot and, when it can be synced, offers Sync before Open.
+ */
+const isEdited = (project: MergedProjectInfo) =>
+  project.editedStatus === 'edited' || !!project.hasUnsyncedChanges;
 
 export type HomeProps = {
   /**
@@ -265,6 +278,12 @@ export type HomeProps = {
   showGetResourcesButton?: boolean;
   /** Whether a send/receive operation is in progress. */
   isSendReceiveInProgress?: boolean;
+  /**
+   * Normalized (upper-cased) IDs of the projects with changes to send or receive, the union of the
+   * two sets `paratextBibleSendReceive.getUnsyncedChanges` returns. Listed projects are marked and
+   * offer Sync first.
+   */
+  unsyncedProjectIds?: readonly string[];
   /** Whether loading local projects is in progress. */
   isLoadingLocalProjects?: boolean;
   /**
@@ -332,6 +351,7 @@ export function Home({
   onGetStarted,
   showGetResourcesButton = true,
   isSendReceiveInProgress = false,
+  unsyncedProjectIds,
   isLoadingLocalProjects = false,
   remoteProjectsState = 'absent',
   initialProjectResourceFilter = 'all',
@@ -460,6 +480,7 @@ export function Home({
           isSendReceivable: true,
           isLocallyAvailable: !!localProject,
           editedStatus: sharedProject.editedStatus,
+          hasUnsyncedChanges: unsyncedProjectIds?.includes(projectId.toUpperCase()),
           lastSendReceiveDate: sharedProject.lastSendReceiveDate,
         });
       });
@@ -477,12 +498,13 @@ export function Home({
           isEditable: project.isEditable,
           isSendReceivable: false,
           isLocallyAvailable: true,
+          hasUnsyncedChanges: unsyncedProjectIds?.includes(project.projectId.toUpperCase()),
         });
       }
     });
 
     return newMergedProjectInfo;
-  }, [localProjectsInfo, sharedProjectsInfo]);
+  }, [localProjectsInfo, sharedProjectsInfo, unsyncedProjectIds]);
 
   const [textFilter, setTextFilter] = useState<string>('');
   const [projectResourceFilter, setProjectResourceFilter] = useState<ProjectResourceFilterValue>(
@@ -722,8 +744,11 @@ export function Home({
         <TooltipTrigger className={TOOLTIP_TRIGGER_BUTTON_CLASS}>
           <span className="tw:flex tw:flex-row tw:items-center tw:gap-4">
             <span className="tw:flex tw:flex-row tw:items-center tw:gap-2">
-              {project.editedStatus === 'edited' && (
-                <span className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]" />
+              {isEdited(project) && (
+                <span
+                  data-testid="home-project-unsynced-dot"
+                  className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]"
+                />
               )}
               <span role="img" aria-label={label} className="tw:flex tw:items-center">
                 <Icon className="tw:pr-0" size={18} aria-hidden />
@@ -1007,13 +1032,11 @@ export function Home({
                                 !project.isLocallyAvailable,
                             })}
                           >
-                            <TableCell
-                              className={cn({ 'tw:ps-2': project.editedStatus === 'edited' })}
-                            >
+                            <TableCell className={cn({ 'tw:ps-2': isEdited(project) })}>
                               <div
                                 className={cn(
                                   'tw:flex tw:flex-row tw:items-center tw:gap-4 tw:ps-2',
-                                  { 'tw:ps-0': project.editedStatus === 'edited' },
+                                  { 'tw:ps-0': isEdited(project) },
                                 )}
                               >
                                 {renderNameWithDetails(project)}
@@ -1021,12 +1044,12 @@ export function Home({
                                 <div className="tw:grow tw:hidden tw:max-[300px]:!flex">
                                   <div className="tw:grow" />
                                   <HomeItemDropdownMenu ellipsisButtonClassName="tw:h-6">
-                                    {(!project.isLocallyAvailable ||
-                                      project.editedStatus === 'edited') && (
-                                      <DropdownMenuItem asChild>
-                                        {syncOrGetButton(project, true)}
-                                      </DropdownMenuItem>
-                                    )}
+                                    {project.isSendReceivable &&
+                                      (!project.isLocallyAvailable || isEdited(project)) && (
+                                        <DropdownMenuItem asChild>
+                                          {syncOrGetButton(project, true)}
+                                        </DropdownMenuItem>
+                                      )}
                                     {project.isLocallyAvailable && (
                                       <DropdownMenuItem asChild>
                                         {openButton(project, true)}
@@ -1050,13 +1073,13 @@ export function Home({
                             <TableCell className="tw:max-[300px]:hidden">
                               <div className="tw:flex tw:justify-between tw:items-center">
                                 {project.isSendReceivable &&
-                                (!project.isLocallyAvailable || project.editedStatus === 'edited')
+                                (!project.isLocallyAvailable || isEdited(project))
                                   ? syncOrGetButton(project)
                                   : openButton(project)}
                                 {project.isSendReceivable && project.isLocallyAvailable && (
                                   <HomeItemDropdownMenu>
                                     <DropdownMenuItem asChild>
-                                      {project.editedStatus === 'edited'
+                                      {isEdited(project)
                                         ? openButton(project, true)
                                         : syncOrGetButton(project, true)}
                                     </DropdownMenuItem>

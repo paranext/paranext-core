@@ -3,6 +3,7 @@ using System.Text.Json;
 using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Services;
+using Paranext.DataProvider.Users;
 using Paratext.Data;
 using Paratext.Data.Archiving;
 using Paratext.Data.Users;
@@ -208,6 +209,8 @@ internal class DblResourcesDataProvider(
     /// </summary>
     private void FetchResourcesCore()
     {
+        InternetServicesGate.ThrowIfBlocked(PapiClient);
+
         if (!RegistrationInfo.DefaultUser.IsValid)
             throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
 
@@ -674,6 +677,9 @@ internal class DblResourcesDataProvider(
                 return;
             }
         }
+
+        // The catalog may have loaded before the internet setting changed, so check again here
+        InternetServicesGate.ThrowIfBlocked(PapiClient);
 
         // Install()'s bool is not a verdict on the install. Its only `true` assignment is inside
         // InternalInstall's loop over the bundle's `*.font` entries, so a bundle carrying no font

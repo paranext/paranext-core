@@ -1,10 +1,10 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.1.6
+version: 1.1.7
 status: active
 created: 2026-03-04
-last_updated: 2026-09-24
+last_updated: 2026-10-02
 ---
 
 # Extension Development Guide
@@ -245,12 +245,16 @@ Never use editable content in list item keys:
 {items.map(item => <Input key={item.id} value={item.name} />)}
 ```
 
+### Saving on Teardown
+
+Flush pending work (a debounced save, a draft) in a `pagehide` listener, and in an effect's unmount cleanup as well. When a web view reloads (for example on `reloadWebView`), the platform unmounts the replaced document's React root on that document's `unload`, after every `pagehide` listener has run and while the old document is still current, so a `pagehide` listener that your effect cleanup removes still fires. An `unload` listener added in an effect also runs before that unmount, but `pagehide` is the flush point to rely on. Closing the web view's panel or moving its tab within the window also runs your `pagehide` and `unload` listeners before the root unmounts, but there the document is already being discarded, and the platform's own unmount of the root (the close-time cleanup and `handleLoadIframe` in `web-view.component.tsx`) can run after the iframe has been removed, so asynchronous work that an unmount cleanup starts is not guaranteed to finish: flush from `pagehide`. A window or app close may run no unmount, or skip `pagehide`, so pair the `pagehide` listener with `beforeunload`. `use-comment-drafts.hook.ts` (`legacy-comment-manager`) does both.
+
 ### Opening WebViews with Layouts
 
 When opening a WebView via `papi.webViews.openWebView()`, you can specify how it displays using the `layout` option:
 
 - `'tab'` (default): Opens as a tab within the current dock panel.
-- `'panel'`: Opens as a panel adjacent to the active tab (specify `direction` to control placement: `'left'`, `'right'`, `'bottom'`, `'top'`, etc.).
+- `'panel'`: Opens beside the tab group of `targetTabId`'s tab, or, when no `targetTabId` is given (or it is not in this window), beside the tab group of the tab most recently opened as a `'tab'` or re-opened in this window, else of the first tab in it (specify `direction` to control placement: `'left'`, `'right'`, `'bottom'`, `'top'`, etc.). When the target's tab group is docked, the tab is added, as its active tab, to the tab group directly on the requested side instead of a new group being created, if that group can take it: it sits beside the target's group (a group touching it only at a corner does not count), has at least one tab, holds the same kind of tab, is not one of Simple mode's fixed columns, and is at least as wide (as tall for `'top'` and `'bottom'`) as a new group beside the target would be. Otherwise a new group opens beside the target's group. When the target's tab group is floating or maximized, the tab opens as a new group at the reading-end edge of the dock area (the right, or the left in a right-to-left UI), and a floating target that would cover that group is moved aside. A target in another application window is placed by these same rules in that window. `'left'` and `'right'` are mirrored in a right-to-left UI.
 - `'float'`: Opens as a floating window; can specify `floatSize` and `position`: `'cascade'` or `'center'`.
 - `'window'` **(experimental)**: Opens in its own application window. In Simple mode—which is single-window by design—this degrades to `'tab'`.
 - `'replace-tab'`: Replaces an existing tab (requires `targetTabId`).
@@ -500,3 +504,4 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.4   | 2026-09-23 | Pop-ups stay at interface scale: replace "Pop-ups follow their area" and the `papi.overlays` scaling note with one rule; `ContentZoomAreaProvider`, the pop-up attribute and `EditorOptions.contextMenuContainer` are gone. |
 | 1.1.5   | 2026-09-23 | "Content Zoom": mark the project text, not a content root — per-element markers sharing one id, `as="span"`, `ContentZoomTextProvider` / `useContentZoomTextProps`. |
 | 1.1.6   | 2026-09-24 | "Content Zoom": the area `label` and the zoom scope attribute (both experimental), pointing to Component-Builder-Patterns; the Text Collection grid is the reference, with one `resource-<id>` area per resource. |
+| 1.1.7   | 2026-10-02 | Add "Saving on Teardown" under WebViews: flush in a `pagehide` listener and in the unmount cleanup; a reload unmounts the root on `unload`, after the web view's own `pagehide` listeners; a panel close or tab move runs `pagehide` too, but the root can unmount after the iframe is gone, so `pagehide` is the flush point. |

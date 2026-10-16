@@ -29,6 +29,27 @@ const EXPECTED_MENU_HINTS: Record<
     hints: { darwin: '⌥⌘M', win32: 'Ctrl+Shift+N', linux: 'Ctrl+Shift+N' },
     menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
   },
+  'platform.webViewContentZoomIn': {
+    hints: { darwin: '⌘=', win32: 'Ctrl++', linux: 'Ctrl++' },
+    menus: [
+      'platform: defaultWebViewTabMenu',
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu',
+    ],
+  },
+  'platform.webViewContentZoomOut': {
+    hints: { darwin: '⌘-', win32: 'Ctrl+-', linux: 'Ctrl+-' },
+    menus: [
+      'platform: defaultWebViewTabMenu',
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu',
+    ],
+  },
+  'platform.webViewContentZoomReset': {
+    hints: { darwin: '⌘0', win32: 'Ctrl+0', linux: 'Ctrl+0' },
+    menus: [
+      'platform: defaultWebViewTabMenu',
+      'platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu',
+    ],
+  },
 };
 
 const entriesWithCommand = rootKeyboardShortcuts.filter((entry) => entry.command);
@@ -42,6 +63,69 @@ function getOsTaggedChords(entry: KeyboardShortcutEntry): string[] {
   return OPERATING_SYSTEMS.flatMap((os) =>
     splitShortcutAlternatives(entry.keys[os]).map((chord) => `${os}:${chord}`),
   );
+}
+
+/**
+ * Entries whose `command` may keep a chord that the main process also handles, with the command the
+ * main-process handler runs and the main-process locations allowed for it.
+ * `platform-macos-menubar.data.ts` binds the macOS View menu's accelerators to that command, so the
+ * menu hint names the command the chord runs (though not necessarily in the same tab: the View menu
+ * zooms the focused window's last focused tab). `web-view.service-router.ts` implements the
+ * command; it is not a key handler.
+ */
+type SameCommandMainProcessHandler = { command: string; locations: string[] };
+
+const CONTENT_ZOOM_MAIN_PROCESS_LOCATIONS = [
+  'src/main/platform-macos-menubar.data.ts',
+  'src/main/services/web-view.service-router.ts',
+];
+
+const SAME_COMMAND_MAIN_PROCESS_LOCATIONS: Record<string, SameCommandMainProcessHandler> = {
+  'content-zoom-in': {
+    command: 'platform.webViewContentZoomIn',
+    locations: CONTENT_ZOOM_MAIN_PROCESS_LOCATIONS,
+  },
+  'content-zoom-out': {
+    command: 'platform.webViewContentZoomOut',
+    locations: CONTENT_ZOOM_MAIN_PROCESS_LOCATIONS,
+  },
+  'content-zoom-reset': {
+    command: 'platform.webViewContentZoomReset',
+    locations: CONTENT_ZOOM_MAIN_PROCESS_LOCATIONS,
+  },
+};
+
+/**
+ * Every way an entry with a `command` could show a menu hint for a chord the main process claims
+ * for something else: a chord it shares with a different main-process entry, or a main-process
+ * location of its own that `sameCommandLocations` does not allow for that entry.
+ */
+function findMainProcessChordClashes(
+  entries: KeyboardShortcutEntry[],
+  sameCommandHandlers: Record<string, SameCommandMainProcessHandler>,
+): string[] {
+  const mainProcessEntries = entries.filter(isHandledInMainProcess);
+  return entries
+    .filter((entry) => entry.command)
+    .flatMap((entry) => {
+      const handler = sameCommandHandlers[entry.id];
+      // An allowance covers only the command it names, so changing the entry's `command` revokes it
+      const allowed = handler?.command === entry.command ? handler.locations : [];
+      const ownClashes = entry.locations
+        .filter((location) => location.startsWith(MAIN_PROCESS_LOCATION_PREFIX))
+        .filter((location) => !allowed.includes(location))
+        .map((location) => `${entry.id} is handled in the main process at ${location}`);
+      const chords = getOsTaggedChords(entry);
+      const otherClashes = mainProcessEntries
+        .filter((other) => other !== entry)
+        .flatMap((other) => {
+          const otherChords = new Set(getOsTaggedChords(other));
+          return chords
+            .filter((chord) => otherChords.has(chord))
+            .map((chord) => `${entry.id} ${chord} is also handled by ${other.id}`);
+        });
+      return [...ownClashes, ...otherClashes];
+    });
 }
 
 /**
@@ -108,17 +192,115 @@ describe('keyboard shortcuts catalog', () => {
     );
   });
 
-  it('no command shares a chord with a main-process entry', () => {
+  it('no command shares a chord with a main-process handler that runs something else', () => {
     // TODO(PT-4143): revisit once main-process chords stop claiming keys regardless of focus.
     // Misses different spellings of the same keys (`Ctrl+Down` for `Ctrl+↓`) and main-process
     // handlers that match more loosely than their entry (e.g. F12 with any modifier).
-    const mainProcessChords = new Set(
-      rootKeyboardShortcuts.filter(isHandledInMainProcess).flatMap(getOsTaggedChords),
+    expect(rootKeyboardShortcuts.filter(isHandledInMainProcess).length).toBeGreaterThan(0);
+    expect(
+      findMainProcessChordClashes(rootKeyboardShortcuts, SAME_COMMAND_MAIN_PROCESS_LOCATIONS),
+    ).toEqual([]);
+  });
+
+  it.each(Object.entries(SAME_COMMAND_MAIN_PROCESS_LOCATIONS))(
+    '%s, allowed to share a chord with its own main-process handler, runs that command there',
+    (id, handler) => {
+      const entry = rootKeyboardShortcuts.find((candidate) => candidate.id === id);
+      expect(entry?.command).toBe(handler.command);
+      expect(entry?.locations).toEqual(expect.arrayContaining(handler.locations));
+    },
+  );
+});
+
+describe('findMainProcessChordClashes', () => {
+  function fixtureEntry(overrides: Partial<KeyboardShortcutEntry>): KeyboardShortcutEntry {
+    return {
+      id: 'fixture',
+      purpose: 'Fixture',
+      category: 'Fixture',
+      context: 'Fixture',
+      keys: { macOS: '⌘X', windows: 'Ctrl+X', linux: 'Ctrl+X' },
+      locations: ['src/renderer/fixture.ts'],
+      ...overrides,
+    };
+  }
+
+  it('reports a command whose chord a DIFFERENT main-process entry handles', () => {
+    const entries = [
+      fixtureEntry({ id: 'menu-entry', command: 'platform.webViewContentZoomIn' }),
+      fixtureEntry({ id: 'main-entry', locations: ['src/main/fixture.ts'] }),
+    ];
+    expect(findMainProcessChordClashes(entries, {})).toEqual(
+      expect.arrayContaining(['menu-entry windows:Ctrl+X is also handled by main-entry']),
     );
-    expect(mainProcessChords.size).toBeGreaterThan(0);
-    entriesWithCommand.forEach((entry) =>
-      getOsTaggedChords(entry).forEach((chord) => expect(mainProcessChords).not.toContain(chord)),
-    );
+  });
+
+  it('reports a command whose own main-process location is not on the allowlist', () => {
+    const entries = [
+      fixtureEntry({
+        id: 'menu-entry',
+        command: 'platform.webViewContentZoomIn',
+        locations: ['src/renderer/fixture.ts', 'src/main/fixture.ts'],
+      }),
+    ];
+    expect(findMainProcessChordClashes(entries, {})).toEqual([
+      'menu-entry is handled in the main process at src/main/fixture.ts',
+    ]);
+  });
+
+  it('accepts a command whose own main-process location is on the allowlist for that entry', () => {
+    const entries = [
+      fixtureEntry({
+        id: 'menu-entry',
+        command: 'platform.webViewContentZoomIn',
+        locations: ['src/renderer/fixture.ts', 'src/main/fixture.ts'],
+      }),
+    ];
+    expect(
+      findMainProcessChordClashes(entries, {
+        'menu-entry': {
+          command: 'platform.webViewContentZoomIn',
+          locations: ['src/main/fixture.ts'],
+        },
+      }),
+    ).toEqual([]);
+  });
+
+  it('reports an allowlisted main-process location once the entry runs a different command', () => {
+    const entries = [
+      fixtureEntry({
+        id: 'menu-entry',
+        command: 'platform.webViewContentZoomOut',
+        locations: ['src/main/fixture.ts'],
+      }),
+    ];
+    expect(
+      findMainProcessChordClashes(entries, {
+        'menu-entry': {
+          command: 'platform.webViewContentZoomIn',
+          locations: ['src/main/fixture.ts'],
+        },
+      }),
+    ).toEqual(['menu-entry is handled in the main process at src/main/fixture.ts']);
+  });
+
+  it('still reports a DIFFERENT main-process entry when the command is on the allowlist', () => {
+    const entries = [
+      fixtureEntry({
+        id: 'menu-entry',
+        command: 'platform.webViewContentZoomIn',
+        locations: ['src/main/fixture.ts'],
+      }),
+      fixtureEntry({ id: 'main-entry', locations: ['src/main/other.ts'] }),
+    ];
+    expect(
+      findMainProcessChordClashes(entries, {
+        'menu-entry': {
+          command: 'platform.webViewContentZoomIn',
+          locations: ['src/main/fixture.ts'],
+        },
+      }),
+    ).toEqual(expect.arrayContaining(['menu-entry windows:Ctrl+X is also handled by main-entry']));
   });
 });
 

@@ -1,3 +1,8 @@
+import {
+  CONTENT_ZOOM_IN_SHORTCUT,
+  CONTENT_ZOOM_OUT_SHORTCUT,
+  CONTENT_ZOOM_RESET_SHORTCUT,
+} from 'platform-bible-utils';
 import type { KeyboardShortcutEntry } from '@shared/data/keyboard-shortcuts.model';
 
 /**
@@ -234,7 +239,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // The macOS View menu binds ⌘= (what it renders) and, through a hidden duplicate item, ⇧⌘= —
     // which is how a Mac reports ⌘+. The in-view and window-chrome handlers also accept `=`, the
     // numpad `+`, and any Shift state.
-    keys: { macOS: '⌘=', windows: 'Ctrl++', linux: 'Ctrl++' },
+    keys: CONTENT_ZOOM_IN_SHORTCUT,
     locations: [
       'src/shared/models/content-zoom.model.ts',
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
@@ -242,6 +247,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'src/main/platform-macos-menubar.data.ts',
       'src/main/services/web-view.service-router.ts',
     ],
+    command: 'platform.webViewContentZoomIn',
   },
   {
     id: 'content-zoom-out',
@@ -251,7 +257,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a later focus move or any key other than a modifier pressed on its own or a zoom chord); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
     // The handler also accepts the numpad `-` key. Shift is accepted too, which is what puts this
     // chord within reach on AZERTY and Czech layouts, where the top-row key is shifted.
-    keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
+    keys: CONTENT_ZOOM_OUT_SHORTCUT,
     locations: [
       'src/shared/models/content-zoom.model.ts',
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
@@ -259,6 +265,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'src/main/platform-macos-menubar.data.ts',
       'src/main/services/web-view.service-router.ts',
     ],
+    command: 'platform.webViewContentZoomOut',
   },
   {
     id: 'content-zoom-reset',
@@ -271,7 +278,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // reports itself as Insert and is left to Chromium's legacy Copy chord. Shift is accepted too,
     // which is what puts this chord within reach on AZERTY and Czech layouts, where the top-row key
     // is shifted.
-    keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
+    keys: CONTENT_ZOOM_RESET_SHORTCUT,
     locations: [
       'src/shared/models/content-zoom.model.ts',
       'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
@@ -279,6 +286,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'src/main/platform-macos-menubar.data.ts',
       'src/main/services/web-view.service-router.ts',
     ],
+    command: 'platform.webViewContentZoomReset',
   },
   {
     id: 'content-zoom-wheel',
@@ -327,12 +335,14 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-markers-menu',
-    purpose: 'Open the inline markers menu',
+    purpose:
+      'Open the inline markers menu. Does nothing while the editor’s right-click menu is open, in every view',
     category: 'Editing',
     context: 'Scripture editor web view',
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
       'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
     ],
   },
@@ -341,7 +351,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the marker typed in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
+      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
     // Space commits what was TYPED, not the highlighted entry: at a collapsed caret it materializes
     // the typed marker; over a selection it wraps only on an exact (case-insensitive) match and
     // otherwise closes without touching the selection. (The Enter-triggered paragraph menu is a
@@ -355,7 +365,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the highlighted entry in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
+      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
     // Enter and Tab are one commit gesture, matching the editor package's own menus. Over a
     // zero-match filter both are claimed no-ops (PT9 parity — the menu stays open). Enter also
     // commits the Enter-triggered paragraph menu — normally through the overlay's own input, and
@@ -369,7 +379,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Move the highlight and widen or narrow the typed filter in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
+      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
     // Arrow keys move the highlighted entry; Backspace widens the typed filter, or closes the
     // menu when nothing is typed. Marker characters (letters, digits, `+`, `-`) narrow it.
     keys: {
@@ -384,7 +394,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit a closing marker from the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
+      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
     // The counterpart to Space's opening-marker commit: commits the typed marker's closing form
     // with no terminating space. Over a non-collapsed selection the selected content is replaced,
     // which is what typing a closing marker by hand has always done. Not offered in the
@@ -397,7 +407,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the typed marker and immediately open the markers menu again',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
+      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
     // Commits like Space but without the terminating space, then reopens for the backslash just
     // pressed, so a paired marker is one continuous flow. With nothing typed there is nothing to
     // commit and the backslash lands as an ordinary character.
@@ -440,7 +450,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-insert-comment',
-    purpose: 'Insert a comment at the selection',
+    purpose:
+      'Insert a comment at the selection. Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
     context: 'Scripture editor web view',
     // Ctrl+Shift+N first (not code order) so the menu hint shows it
@@ -451,6 +462,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
     command: 'platformScriptureEditor.insertCommentAtSelection',
   },
@@ -459,7 +471,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   // here yet. A new `command` also needs its row in `EXPECTED_MENU_HINTS`.
   {
     id: 'scripture-insert-footnote',
-    purpose: 'Insert a footnote at the selection (Standard view, editable)',
+    purpose:
+      'Insert a footnote at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃T (not ⌘T) to match the handler in
@@ -468,11 +481,13 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⌃T', windows: 'Ctrl+T', linux: 'Ctrl+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
   },
   {
     id: 'scripture-insert-cross-reference',
-    purpose: 'Insert a cross-reference at the selection (Standard view, editable)',
+    purpose:
+      'Insert a cross-reference at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃⇧T (not ⌘⇧T) to match the handler in
@@ -481,6 +496,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⌃⇧T', windows: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
   },
   {
@@ -519,17 +535,48 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'scripture-editor-context-menu',
+    purpose:
+      'Open the editor’s own right-click menu (Cut/Copy/Paste and the Insert footnote/cross-reference/comment/endnote items). While open, the menu holds the keyboard: it is the only keyboard mode on screen, and every other key does nothing until the menu is dismissed or its highlighted item runs',
+    category: 'Menus',
+    // Not a shortcut this repo registers: the browser raises `contextmenu` inside the editor,
+    // which the editor package's `ContextMenuPlugin` (`@eten-tech-foundation/platform-editor`)
+    // turns into the menu — no in-repo handler exists for the open gesture itself. `locations`
+    // names where this repo supplies the menu's own items and reads its open state instead.
+    //
+    // Right-click only, on every platform: Shift+F10 and the Menu key also raise `contextmenu`,
+    // but a keyboard-invoked one always targets the content-editable ROOT (there is no click point
+    // to aim at a descendant), and `ContextMenuPlugin` ignores a `contextmenu` event whose target
+    // IS the editor root — the same check that keeps a right-click on empty editor space from
+    // opening the menu. Opening it by keyboard would need the editor package to special-case a
+    // keyboard-invoked `contextmenu` event.
+    context: 'Scripture editor web view (main text and the footnote editor popover)',
+    keys: {
+      macOS: '— (no equivalent)',
+      windows: '— (no equivalent)',
+      linux: '— (no equivalent)',
+    },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+      'lib/platform-bible-react/src/components/advanced/editor-context-menu.util.ts',
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+    ],
+  },
+  {
     id: 'scripture-paragraph-markers-menu',
     purpose:
-      'In Standard view, open the paragraph markers menu to split the paragraph. In other views, creates a new paragraph marker whose style matches the current paragraph marker style.',
+      'In Standard view, open the paragraph markers menu to split the paragraph. In other views, creates a new paragraph marker whose style matches the current paragraph marker style. While the editor’s right-click menu is open, that menu owns Enter instead: it invokes the highlighted item, or does nothing.',
     category: 'Editing',
     context: 'Scripture editor web view',
     // Enter is claimed in EVERY modifier state, matching PT9's KeyPressEditHandler (no modifier
     // check): any modifier chord with Enter — including Shift+Enter, which would otherwise insert
     // a soft line break with no USFM representation — opens the same menu.
+    // Not claimed while the editor's right-click context menu is open: that menu owns Enter for as
+    // long as it is up (see `isEditorContextMenuOpen`).
     keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
   },
   // The editor's arrow-key caret movement (verse hops, note boundaries, the two caret stops
@@ -628,13 +675,15 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'footnote-markers-menu',
-    purpose: 'Open the inline markers menu in the footnote editor',
+    purpose:
+      'Open the inline markers menu in the footnote editor. Does nothing while the popover’s own right-click menu is open',
     category: 'Editing',
     context: 'Footnote editor',
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
       'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
+      'lib/platform-bible-react/src/components/advanced/editor-context-menu.util.ts',
     ],
   },
   {
@@ -656,6 +705,77 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-close-editor',
+    purpose: 'Stop editing the open note in the footnotes pane, keeping the edits',
+    category: 'Editing',
+    // The pane's row editor applies its edits live, so there is nothing to discard - Escape is its
+    // explicit dismissal, and it hands focus back to the note's row.
+    context:
+      "Footnotes pane, in the note row editor or on its own controls (not while the editor's right-click menu is open)",
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-move-between-notes',
+    purpose: 'Move to the previous/next note in the footnotes pane',
+    category: 'Navigation',
+    // Arrow navigation runs only for keystrokes that originate on the list or on a read-only row.
+    // The row being edited hosts a real editor that owns its own arrow keys, and so do that
+    // editor's overlays, which are portalled out of the pane but still bubble their React events
+    // through the list.
+    context: 'Footnotes pane, from the list or a note row',
+    keys: {
+      macOS: '↑ / ↓',
+      windows: '↑ / ↓',
+      linux: '↑ / ↓',
+    },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-move-between-rows',
+    purpose: 'Move to the previous/next note row in the footnotes pane',
+    category: 'Navigation',
+    // Every row is its own tab stop rather than the list being one, so Tab walks the notes.
+    context: 'Footnotes pane',
+    keys: {
+      macOS: '⇥ / ⇧⇥',
+      windows: 'Tab / Shift+Tab',
+      linux: 'Tab / Shift+Tab',
+    },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-open-note',
+    purpose: 'Open the focused note for editing, or select it where the pane does not edit',
+    category: 'Editing',
+    context: 'Footnotes pane, on a note row',
+    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-select-note',
+    purpose:
+      'Select the focused note in the footnotes pane without opening it, closing a note open for editing in another row',
+    category: 'Selection',
+    context: 'Footnotes pane, on a note row',
+    keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
   },
   {

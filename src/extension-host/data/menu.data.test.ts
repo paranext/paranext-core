@@ -145,7 +145,7 @@ describe('defaultWebViewTabMenu zoom group', () => {
     expect(groups['platform.tabZoom'].order).toBeLessThan(groups['platform.tabWindow'].order);
   });
 
-  test('orders the zoom items zoom in, zoom out, reset zoom, wired to the shared command names', () => {
+  test('orders the zoom items zoom in, zoom out, zoom reset, wired to the shared command names', () => {
     const zoomItems = menuDataObject.defaultWebViewTabMenu.items
       .filter((item) => item.group === 'platform.tabZoom')
       .sort((a, b) => a.order - b.order);

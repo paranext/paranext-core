@@ -4836,11 +4836,35 @@ declare module 'shared/models/docking-framework.model' {
     | 'move'
     | 'active'
     | 'update';
-  /** Information about a panel */
+  /**
+   * Information about a panel: a tab opened beside the tab group holding `targetTabId`. When no
+   * `targetTabId` is given (or it is not in this window), the tab opens beside the tab group of the
+   * tab most recently opened as a `'tab'` or re-opened in this window, else of the first tab in it.
+   *
+   * When the target's tab group is docked, the tab is added, as its active tab, to the tab group
+   * directly on the `direction` side instead of a new group being created, if that group can take it:
+   * it sits beside the target's group (a group touching it only at a corner does not count), has at
+   * least one tab, holds the same kind of tab, is not one of Simple mode's fixed columns, and is at
+   * least as wide (as tall for `top` and `bottom`) as a new group beside the target would be.
+   * Otherwise the tab opens as a new group beside the target's group.
+   *
+   * When the target's tab group is floating or maximized, the tab opens as a new group at the
+   * reading-end edge of the dock area (the right, or the left in a right-to-left UI), whichever
+   * `direction` was asked for, and a floating target that would cover that group is moved aside.
+   * `left` and `right` are mirrored in a right-to-left UI. A target in another application window is
+   * placed by these same rules in the window that holds it.
+   */
   interface PanelLayout {
     type: 'panel';
+    /**
+     * The side of the target's tab group to open on, in reading order: `right` is the reading-end
+     * side, which is the left in a right-to-left UI
+     */
     direction?: PanelDirection;
-    /** If undefined, it will add in the `direction` relative to the previously added tab. */
+    /**
+     * If undefined (or not in this window), the panel is placed relative to the tab most recently
+     * opened as a `'tab'` or re-opened in this window, else the first tab in it.
+     */
     targetTabId?: string;
   }
   interface ReplaceTabLayout {
@@ -5538,26 +5562,6 @@ declare module 'shared/models/network-object-status.service-model' {
     ) => Promise<NetworkObjectDetails>;
   }
   export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';
-}
-declare module 'shared/utils/cached-initializer' {
-  /**
-   * Creates a function that runs an asynchronous initializer at most once, caching the promise so
-   * concurrent and subsequent calls share the same initialization attempt. If the initializer fails,
-   * the cached promise is cleared so the next call starts a fresh attempt instead of failing forever
-   * with the same error. This is useful for initializing access to a resource that may not be
-   * available yet, like a network object owned by a process that is still starting up.
-   *
-   * Note that calls that awaited the failed attempt all reject with its error; only calls arriving
-   * after the rejection settles retry. The initializer must therefore be safe to run again after a
-   * failure, e.g. it should not leave partial registrations behind.
-   *
-   * @param initializer Asynchronous function that performs the initialization
-   * @returns Function that returns the cached initialization promise, starting a new initialization
-   *   attempt if there is no cached promise
-   */
-  export function createCachedInitializer<T = void>(
-    initializer: () => Promise<T>,
-  ): () => Promise<T>;
 }
 declare module 'shared/services/network-object-status.service' {
   import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
@@ -7365,18 +7369,18 @@ declare module 'shared/models/notification.service-model' {
     secondaryClickCommand?: keyof CommandHandlers;
     /**
      * Optional command to run if the user dismisses the notification themselves - by swiping/dragging
-     * it away, or by clicking the close button (if the host ever enables one). Sent no arguments
-     * other than the notification id, like {@link clickCommand}:
+     * it away, or by clicking the close button that a notification with no time limit shows. Sent no
+     * arguments other than the notification id, like {@link clickCommand}:
      *
      * - NotificationId: The ID of the notification that was dismissed
      *
      * The command handler should have the type signature {@link NotificationClickCommandHandler}.
      *
      * IMPORTANT: this fires when the user dismisses the notification themselves (swiping/dragging it
-     * away, or clicking a close button if the host ever enables one) AND when the notification
-     * auto-closes because its `duration` elapsed - a timeout is treated as an implicit dismissal, so
-     * a must-answer toast that times out still runs this command instead of vanishing silently. It
-     * does NOT fire when the notification is dismissed programmatically via
+     * away, or clicking the close button of a notification with no time limit) AND when the
+     * notification auto-closes because its `duration` elapsed - a timeout is treated as an implicit
+     * dismissal, so a must-answer toast that times out still runs this command instead of vanishing
+     * silently. It does NOT fire when the notification is dismissed programmatically via
      * {@link INotificationService.dismiss}, nor when the user clicks {@link clickCommand} /
      * {@link secondaryClickCommand}. Use this to treat a swipe-away (or timeout) as an explicit
      * decision - e.g. pairing it with a "postpone" command lets a two-button, must-answer-style toast
@@ -7435,7 +7439,9 @@ declare module 'shared/models/notification.service-model' {
     notificationId?: string | number;
     /**
      * Optional duration in milliseconds for how long the notification is displayed. To make the
-     * notification show indefinitely, specify a `duration` of `0` or less.
+     * notification show indefinitely, specify a `duration` of `0` or less. Such a notification gets a
+     * close button, so it can be closed without a mouse, unless it is not user-dismissible (see
+     * {@link dismissible}, which also says when `false` is ignored).
      *
      * When omitted, duration is computed from message length (minimum 10 seconds, maximum 35
      * seconds).
@@ -7501,6 +7507,35 @@ declare module 'shared/models/notification.service-model' {
    * @experimental
    */
   export const NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS: NetworkObjectDocumentation;
+}
+declare module 'shared/utils/paratext-error-notification.util' {
+  import { PlatformNotification } from 'shared/models/notification.service-model';
+  /**
+   * One id for every internet-block notification: a single block fails every subscription that
+   * reaches the network, and without a shared id each one would raise its own identical
+   * notification.
+   *
+   * `internet-block-notification.utils.ts` in the platform-get-resources extension sends the same
+   * message under this same literal, so a block noticed there and here shows once. The two cannot
+   * import each other across the extension boundary, so they are kept in step by hand; the tests
+   * beside each pin the value.
+   *
+   * @experimental This export is unstable and may change shape or disappear without notice
+   */
+  export const INTERNET_BLOCKED_NOTIFICATION_ID = 'platform.internetBlocked';
+  /**
+   * Builds the notification for a ParatextData failure the user can do something about — internet
+   * blocked, or a registration that is no longer valid — with an action that opens the setting
+   * responsible. Anything else gets no notification: its message describes ParatextData internals,
+   * and there is nothing for the user to act on.
+   *
+   * @param exception The error, or its message, to classify
+   * @returns The notification to send, or `undefined` if the error is not one the user can act on
+   * @experimental This export is unstable and may change shape or disappear without notice
+   */
+  export function constructParatextErrorNotification(
+    exception: unknown,
+  ): PlatformNotification | undefined;
 }
 declare module 'shared/services/notification.service' {
   import { type INotificationService } from 'shared/models/notification.service-model';
@@ -10926,9 +10961,11 @@ declare module 'shared/services/localization.service-model' {
      */
     getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
     /**
-     * Get a collection of known user-interface languages
+     * Get the interface languages to list in language pickers: a curated subset of the languages that
+     * have a locale file. Any loaded language can still be set in `platform.interfaceLanguage` and
+     * renders; it just isn't listed here.
      *
-     * @returns All user-interface languages
+     * @returns The offered user-interface languages, keyed by raw locale tag
      */
     getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
     /**
@@ -10938,8 +10975,8 @@ declare module 'shared/services/localization.service-model' {
      */
     retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
     /**
-     * Get the interface languages that have setup-dialog localizations (used by the first-run
-     * language picker). A language qualifies when it has ≥90% of the English setup-dialog
+     * Get the interface languages offered in the first-run language picker. A language qualifies when
+     * it is offered (see `getAvailableInterfaceLanguages`) and has ≥90% of the English setup-dialog
      * (`%firstRun_*%`) keys.
      *
      * @returns Qualifying user-interface languages, keyed by raw locale tag

@@ -406,6 +406,59 @@ export async function setWindowWidth(
   ]);
 }
 
+/** Sub-pixel layout rounding shows up as a 1px difference that is not a real height mismatch. */
+const WINDOW_HEIGHT_SETTLE_TOLERANCE_PX = 1;
+
+/** Budget for the renderer to lay out at a height the OS has already granted. */
+const WINDOW_HEIGHT_SETTLE_TIMEOUT_MS = 20_000;
+
+/**
+ * Shortens (or grows) the real OS window's height and waits until the renderer has actually laid
+ * out at the new height.
+ *
+ * The height counterpart to {@link setWindowWidth} — see its doc comment for why a real OS resize
+ * (never `page.setViewportSize()`) is required: that call applies a CDP emulation override that
+ * sets `innerHeight` directly, bypassing whatever floor Electron would otherwise enforce and
+ * letting a spec assert against a height a user could never reach.
+ *
+ * Electron clamps the request to the window's `minimumSize` height, so the settled height is read
+ * back from the window rather than assumed, and the poll compares against THAT.
+ */
+export async function setWindowHeight(
+  electronApp: ElectronApplication,
+  page: Page,
+  height: number,
+): Promise<void> {
+  await closeDevTools(electronApp);
+
+  const settledHeight = await electronApp.evaluate(({ BrowserWindow }, requestedHeight) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
+    // timeout and then fail with a height mismatch, hiding the actual cause.
+    if (!win) throw new Error('No Electron window to resize');
+    if (win.isMaximized()) win.unmaximize();
+
+    const [width, outerHeight] = win.getSize();
+    // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
+    // reading the size back immediately after it returns the height the window still has, not the
+    // one it is moving to. The target is derived instead — the request clamped by the window's own
+    // minimum height (main.ts sets no explicit `minHeight`, so this is Electron's own default),
+    // converted from outer to content height by the frame delta, since the renderer's `innerHeight`
+    // measures the content box.
+    const frameDelta = outerHeight - win.getContentSize()[1];
+    const target = Math.max(requestedHeight, win.getMinimumSize()[1]) - frameDelta;
+
+    win.setSize(width, requestedHeight);
+    return target;
+  }, height);
+
+  await expect
+    .poll(async () => Math.abs((await page.evaluate(() => window.innerHeight)) - settledHeight), {
+      timeout: WINDOW_HEIGHT_SETTLE_TIMEOUT_MS,
+    })
+    .toBeLessThanOrEqual(WINDOW_HEIGHT_SETTLE_TOLERANCE_PX);
+}
+
 /**
  * Budget for a wait that gates on a cold app launch — extension host activation, PDP factory
  * registration, the settings data provider's first read.
