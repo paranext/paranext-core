@@ -494,7 +494,7 @@ export function ResourceTextPanel({
       highlightedVerseElement?.classList.remove('highlighted');
     };
     // The rule wants `scrRef` itself, but this effect is keyed on the three fields that decide where
-    // to scroll. `useWebViewScrollGroupScrRef` hands back a fresh object whenever the scroll group
+    // to scroll. `useScrollGroupScrRef` hands back a fresh object whenever the scroll group
     // publishes, including for a reference that did not change, so depending on the object would
     // restart the settle loop on updates that cannot move the target.
     // eslint-disable-next-line react-hooks/exhaustive-deps
