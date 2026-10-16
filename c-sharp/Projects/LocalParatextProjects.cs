@@ -30,10 +30,10 @@ internal class LocalParatextProjects : IDisposable
     /// <summary>
     /// Network event fired when the set of available projects changes (a project is added or
     /// removed) or when a project's display metadata (name/fullName/language/languageTag/isEditable)
-    /// changes. Consumers (the project picker, Home, New Tab) refetch cheap project metadata when it
+    /// changes. Consumers (the project picker, Home, New Tab, the Scripture editor's no-projects
+    /// guidance and default-project picker) refetch project metadata or re-run their checks when it
     /// fires. Keep identical to the `platform.onDidChangeProjects` string the TS consumers subscribe
-    /// to via `getNetworkEvent` (renderer `use-project-picker-data.hook.ts` and the get-resources
-    /// `use-local-projects.hook.ts`).
+    /// to; search the TypeScript for `'platform.onDidChangeProjects'` to find them all.
     /// </summary>
     public const string PROJECTS_CHANGED_EVENT_TYPE = "platform.onDidChangeProjects";
 
@@ -77,7 +77,7 @@ internal class LocalParatextProjects : IDisposable
 
     /// <summary>
     /// Debounce window for coalescing a burst of <see cref="NotifyProjectsChanged"/> calls into a
-    /// single emitted event. Every consumer does a full metadata refetch per event, so collapsing a
+    /// single emitted event. Consumers refetch project metadata per event, so collapsing a
     /// burst (e.g. the inline setting-write notify plus the watcher catching that same on-disk write,
     /// or several display-setting writes in a row) avoids redundant refetch storms.
     /// </summary>
@@ -731,6 +731,11 @@ internal class LocalParatextProjects : IDisposable
         }
     }
 
+    /// <summary>
+    /// Installs the sample WEB project. The Scripture editor's `use-project-presence.hook.ts`
+    /// relies on this running whenever no projects are found, and on the sample's fixed ID (its
+    /// `assets/WEB/Settings.xml` GUID), to tell a user with no projects of their own.
+    /// </summary>
     private void SetUpSampleProject()
     {
         string projectName = "WEB";
