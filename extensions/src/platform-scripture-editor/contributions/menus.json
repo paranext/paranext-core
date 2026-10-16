@@ -345,7 +345,7 @@
             "localizeNotes": "Scripture editor top menu (Simple) > Tools > Dictionary — brings the Dictionary tab in the third column to the front",
             "group": "platformScriptureEditor.simpleToolsPanels",
             "order": 3,
-            "command": "platformLexicalTools.showDictionaryPanel"
+            "command": "platformLexicalTools.openDictionary"
           },
           {
             "label": "%webView_platformScriptureEditor_showCommentsPanel%",

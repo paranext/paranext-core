@@ -104,7 +104,7 @@ const EDITOR_MENUS_PATH = resolve(
 const TAB_FOR_COMMAND: Record<string, string> = {
   'platformScriptureEditor.showBibleTextsPanel': 'platformScriptureEditor.bibleTexts',
   'platformScriptureEditor.showCommentariesPanel': 'platformScriptureEditor.commentaries',
-  'platformLexicalTools.showDictionaryPanel': 'platformLexicalTools.dictionary',
+  'platformLexicalTools.openDictionary': 'platformLexicalTools.dictionary',
   'legacyCommentManager.showCommentListPanel': 'legacyCommentManager.commentListPanel',
   'platformScriptureEditor.showTextCollectionPanel': 'platformScriptureEditor.scriptureTextGrid',
   'platformScripture.openFind': 'platformScripture.find',

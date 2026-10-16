@@ -31,8 +31,13 @@ const mocks = vi.hoisted(() => {
   return {
     registeredCommands,
     getCapturedWebViewProvider: () => capturedWebViewProvider,
-    openWebView: vi.fn(async () => 'wv-1'),
-    getOpenWebViewDefinition: vi.fn(async () => undefined),
+    // Explicit return-type annotations, so that vi.fn() does not lock the mock to exactly
+    // `string` or `undefined` and every `.mockResolvedValueOnce(...)` call passes typecheck.
+    openWebView: vi.fn(async (): Promise<string | undefined> => 'wv-1'),
+    getOpenWebViewDefinition: vi.fn(
+      async (): Promise<{ projectId?: string; scrollGroupScrRef?: number } | undefined> =>
+        undefined,
+    ),
     registerCommand: vi.fn(registerCommandImpl),
     registerCommandImpl,
     registerWebViewProvider: vi.fn(registerWebViewProviderImpl),
@@ -98,78 +103,117 @@ describe('platform lexical tools main.ts activation', () => {
     mocks.registerWebViewProvider.mockImplementation(mocks.registerWebViewProviderImpl);
   });
 
-  it('showDictionaryPanel raises an open Dictionary tab without reloading it', async () => {
-    await activate(makeContext());
-    mocks.openWebView.mockResolvedValueOnce('dictionary-tab');
-    const handler = mocks.registeredCommands.get('platformLexicalTools.showDictionaryPanel');
-    expect(handler).toBeDefined();
-
-    await expect(handler?.('editor-1')).resolves.toBe('dictionary-tab');
-
-    expect(mocks.openWebView).toHaveBeenLastCalledWith(
-      'platformLexicalTools.dictionary',
-      undefined,
-      {
-        existingId: '?',
-        createNewIfNotFound: false,
-        bringToFront: true,
-      },
-    );
-    expect(mocks.getOpenWebViewDefinition).not.toHaveBeenCalled();
-  });
-
-  it("showDictionaryPanel opens a Dictionary tab for the editor's project when none is open", async () => {
-    await activate(makeContext());
-    mocks.openWebView.mockResolvedValueOnce(undefined).mockResolvedValueOnce('new-dictionary-tab');
-    mocks.getOpenWebViewDefinition.mockResolvedValueOnce({
-      projectId: 'project-1',
-      scrollGroupScrRef: 2,
+  describe('openDictionary in Simple mode', () => {
+    beforeEach(() => {
+      vi.mocked(papi.settings.get).mockResolvedValue('simple');
     });
-    const handler = mocks.registeredCommands.get('platformLexicalTools.showDictionaryPanel');
 
-    await expect(handler?.('editor-1')).resolves.toBe('new-dictionary-tab');
+    it('raises an open Dictionary tab without reloading it, instead of creating a duplicate', async () => {
+      await activate(makeContext());
+      mocks.openWebView.mockResolvedValueOnce('dictionary-tab');
+      const handler = mocks.registeredCommands.get('platformLexicalTools.openDictionary');
+      expect(handler).toBeDefined();
 
-    expect(mocks.getOpenWebViewDefinition).toHaveBeenCalledWith('editor-1');
-    expect(mocks.openWebView).toHaveBeenLastCalledWith(
-      'platformLexicalTools.dictionary',
-      { type: 'tab' },
-      { projectId: 'project-1', editorWebViewId: 'editor-1', editorScrollGroupId: 2 },
-    );
+      await expect(handler?.('editor-1')).resolves.toBe('dictionary-tab');
+
+      // Ensure that the existing Dictionary tab is raised/reused.
+      expect(mocks.openWebView).toHaveBeenLastCalledWith(
+        'platformLexicalTools.dictionary',
+        undefined,
+        {
+          existingId: '?',
+          createNewIfNotFound: false,
+          bringToFront: true,
+        },
+      );
+      expect(mocks.getOpenWebViewDefinition).not.toHaveBeenCalled();
+    });
+
+    it('does not create a new tab when the pinned Dictionary tab cannot be found', async () => {
+      await activate(makeContext());
+      mocks.openWebView.mockResolvedValueOnce(undefined);
+      const handler = mocks.registeredCommands.get('platformLexicalTools.openDictionary');
+
+      await expect(handler?.('editor-1')).resolves.toBeUndefined();
+
+      // No fallback creation: Simple mode's Dictionary is the one pinned, non-closable Column 3
+      // tab, defined by the static Simple layout, so it should always already be open. A missing
+      // probe result is not an invitation to open a second, permanently-stuck tab outside the
+      // 3-column layout.
+      expect(mocks.openWebView).toHaveBeenCalledTimes(1);
+      expect(mocks.getOpenWebViewDefinition).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('pinned Dictionary tab'));
+    });
   });
 
-  it('showDictionaryPanel opens an unlabeled Dictionary tab when the editor web view cannot be resolved', async () => {
-    await activate(makeContext());
-    mocks.openWebView.mockResolvedValueOnce(undefined).mockResolvedValueOnce('new-dictionary-tab');
-    // getOpenWebViewDefinition is documented to throw when no window claimed the web view and some
-    // window could not be asked — that must degrade to "no project id", not reject the command.
-    mocks.getOpenWebViewDefinition.mockRejectedValueOnce(new Error('no window answered'));
-    const handler = mocks.registeredCommands.get('platformLexicalTools.showDictionaryPanel');
+  describe('openDictionary in Power mode', () => {
+    beforeEach(() => {
+      vi.mocked(papi.settings.get).mockResolvedValue('power');
+    });
 
-    await expect(handler?.('editor-1')).resolves.toBe('new-dictionary-tab');
+    it('opens a new tab per call, even when one is already open', async () => {
+      await activate(makeContext());
+      // 'editor-1' + scrollGroupScrRef: 2 model a REAL triggering editor on a non-default scroll
+      // group, and in Power mode that value does flow all the way through to the new tab's own
+      // scrollGroupScrRef (unlike Simple mode, which forces 0 regardless). This is a resolution/
+      // pass-through test, not a description of what the shipped UI actually does: the Power-mode
+      // main-menu item is the only current entry point, it's a top-level Platform-menu command, and
+      // handleMenuCommand (platform-bible-menu.commands.ts) sends `undefined` for every top-menu
+      // invocation — it never supplies a real editorWebViewId. So, calling openDictionary with a
+      // real editor id (as this test does) only happens via a direct command call (papi-client, or
+      // another extension), never by clicking the menu item. Clicking the existing menu item always
+      // opens a tab that defaults to group 0 ("A").
+      mocks.getOpenWebViewDefinition.mockResolvedValueOnce({
+        projectId: 'project-1',
+        scrollGroupScrRef: 2,
+      });
+      mocks.openWebView.mockResolvedValueOnce('second-dictionary-tab');
+      const handler = mocks.registeredCommands.get('platformLexicalTools.openDictionary');
 
-    expect(mocks.openWebView).toHaveBeenLastCalledWith(
-      'platformLexicalTools.dictionary',
-      { type: 'tab' },
-      { projectId: undefined, editorWebViewId: 'editor-1', editorScrollGroupId: undefined },
-    );
-    // Distinguishes this from the plain not-found path, which degrades to the same "no project id"
-    // outcome without logging anything.
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-1'));
-  });
+      await expect(handler?.('editor-1')).resolves.toBe('second-dictionary-tab');
 
-  it('showDictionaryPanel opens an unlabeled Dictionary tab when no triggering editor is given', async () => {
-    await activate(makeContext());
-    mocks.openWebView.mockResolvedValueOnce(undefined).mockResolvedValueOnce('new-dictionary-tab');
-    const handler = mocks.registeredCommands.get('platformLexicalTools.showDictionaryPanel');
+      expect(mocks.getOpenWebViewDefinition).toHaveBeenCalledWith('editor-1');
+      // No reuse probe at all in Power mode: each call opens its own tab.
+      expect(mocks.openWebView).toHaveBeenLastCalledWith(
+        'platformLexicalTools.dictionary',
+        { type: 'tab' },
+        { projectId: 'project-1', editorWebViewId: 'editor-1', editorScrollGroupId: 2 },
+      );
+    });
 
-    await expect(handler?.(undefined)).resolves.toBe('new-dictionary-tab');
+    it('opens a Dictionary tab with no project when the editor web view cannot be resolved', async () => {
+      await activate(makeContext());
+      mocks.openWebView.mockResolvedValueOnce('new-dictionary-tab');
+      // getOpenWebViewDefinition is documented to throw when no window claimed the web view and
+      // some window could not be asked — that must degrade to "no project id", not reject the
+      // command.
+      mocks.getOpenWebViewDefinition.mockRejectedValueOnce(new Error('no window answered'));
+      const handler = mocks.registeredCommands.get('platformLexicalTools.openDictionary');
 
-    expect(mocks.getOpenWebViewDefinition).not.toHaveBeenCalled();
-    expect(mocks.openWebView).toHaveBeenLastCalledWith(
-      'platformLexicalTools.dictionary',
-      { type: 'tab' },
-      { projectId: undefined, editorWebViewId: undefined, editorScrollGroupId: undefined },
-    );
+      await expect(handler?.('editor-1')).resolves.toBe('new-dictionary-tab');
+
+      expect(mocks.openWebView).toHaveBeenLastCalledWith(
+        'platformLexicalTools.dictionary',
+        { type: 'tab' },
+        { projectId: undefined, editorWebViewId: 'editor-1', editorScrollGroupId: undefined },
+      );
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-1'));
+    });
+
+    it('opens a Dictionary tab with no project when no triggering editor is given', async () => {
+      await activate(makeContext());
+      mocks.openWebView.mockResolvedValueOnce('new-dictionary-tab');
+      const handler = mocks.registeredCommands.get('platformLexicalTools.openDictionary');
+
+      await expect(handler?.(undefined)).resolves.toBe('new-dictionary-tab');
+
+      expect(mocks.getOpenWebViewDefinition).not.toHaveBeenCalled();
+      expect(mocks.openWebView).toHaveBeenLastCalledWith(
+        'platformLexicalTools.dictionary',
+        { type: 'tab' },
+        { projectId: undefined, editorWebViewId: undefined, editorScrollGroupId: undefined },
+      );
+    });
   });
 
   describe('getWebView', () => {

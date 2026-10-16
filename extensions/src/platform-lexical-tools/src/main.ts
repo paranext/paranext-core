@@ -26,9 +26,9 @@ export interface DictionaryWebViewOptions extends OpenWebViewOptions {
 
 /**
  * Resolves the project and scroll group a Dictionary tab opened from `editorWebViewId` should use.
- * Degrades to an unlabeled, default-scroll-group tab rather than rejecting when the editor's
- * definition can't be resolved — the request still opens a usable tab, just without a known
- * project.
+ * Degrades to a tab with no project, on the default scroll group, rather than rejecting when the
+ * editor's definition can't be resolved — the request still opens a usable tab, just without an
+ * associated project.
  */
 async function resolveDictionaryWebViewOptions(
   editorWebViewId: string | undefined,
@@ -63,17 +63,18 @@ const RAISE_EXISTING_DICTIONARY_TAB_ONLY: OpenWebViewOptions = {
 };
 
 /**
- * Brings the Dictionary tab to the front, the way clicking it would. An open tab is raised, never
- * reloaded, so its current lookup survives. If no tab is open, opens one for the editor's project.
+ * Brings the pinned Dictionary tab to the front, the way clicking it would. An open tab is raised,
+ * never reloaded, so its current lookup survives.
  *
- * This implements the `platformLexicalTools.showDictionaryPanel` command.
+ * This is `openDictionary`'s Simple-mode behavior: Simple mode's Dictionary is the one pinned,
+ * non-closable Column 3 tab, defined by the static Simple layout, so it should always already be
+ * open. Deliberately does NOT fall back to creating one if the probe can't find it — that tab would
+ * land outside the 3-column layout while still being forced non-closable (Simple mode), i.e. a
+ * second, permanently-stuck tab, which is worse than reporting that none was found.
  *
- * @param editorWebViewId The scripture editor the request came from
- * @returns The Dictionary web view's ID, or `undefined` if it couldn't be shown
+ * @returns The Dictionary web view's ID, or `undefined` if the pinned tab could not be found
  */
-async function showDictionaryPanel(
-  editorWebViewId: string | undefined,
-): Promise<string | undefined> {
+async function raiseOrOpenDictionaryPanel(): Promise<string | undefined> {
   const existingId = await papi.webViews.openWebView(
     DICTIONARY_WEB_VIEW_TYPE,
     undefined,
@@ -81,12 +82,10 @@ async function showDictionaryPanel(
   );
   if (existingId) return existingId;
 
-  const dictionaryWebViewOptions = await resolveDictionaryWebViewOptions(editorWebViewId);
-  return papi.webViews.openWebView(
-    DICTIONARY_WEB_VIEW_TYPE,
-    { type: 'tab' },
-    dictionaryWebViewOptions,
+  logger.warn(
+    'Could not find the pinned Dictionary tab in Simple mode; not creating a second, non-closable tab outside the 3-column layout.',
   );
+  return undefined;
 }
 
 const dictionaryWebViewProvider: IWebViewProvider = {
@@ -161,43 +160,31 @@ export async function activate(context: ExecutionActivationContext) {
     dictionaryWebViewProvider,
   );
 
+  // Opens a Dictionary tab. In Power mode, this creates a new tab per call, allowing each one to
+  // independently track a different scroll group via its own toolbar selector. In Simple mode,
+  // this raises the pinned Column 3 tab instead of opening a duplicate.
   const openDictionaryCommandPromise = papi.commands.registerCommand(
     'platformLexicalTools.openDictionary',
     async (editorWebViewId: string | undefined) => {
-      let projectId;
-      let editorScrollGroupId;
+      const interfaceMode = await papi.settings.get('platform.interfaceMode');
+      if (interfaceMode === 'simple') return raiseOrOpenDictionaryPanel();
 
-      if (editorWebViewId) {
-        const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(editorWebViewId);
-        projectId = webViewDefinition?.projectId;
-        editorScrollGroupId = webViewDefinition?.scrollGroupScrRef;
-      }
-      const dictionaryWebViewOptions: DictionaryWebViewOptions = {
-        projectId,
-        editorWebViewId,
-        editorScrollGroupId,
-      };
+      const dictionaryWebViewOptions = await resolveDictionaryWebViewOptions(editorWebViewId);
       return papi.webViews.openWebView(
         DICTIONARY_WEB_VIEW_TYPE,
-        {
-          type: 'tab',
-        },
+        { type: 'tab' },
         dictionaryWebViewOptions,
       );
     },
-  );
-
-  const showDictionaryPanelCommandPromise = papi.commands.registerCommand(
-    'platformLexicalTools.showDictionaryPanel',
-    showDictionaryPanel,
     {
       method: {
-        summary: 'Bring the Dictionary tab to the front, opening it if it is not open',
+        summary:
+          'Open the Dictionary tab. In Simple mode, brings the pinned tab to the front; in Power mode, opens a new tab.',
         params: [
           {
             name: 'editorWebViewId',
             required: false,
-            summary: 'The scripture editor whose project a newly opened tab shows',
+            summary: 'The scripture editor whose project is associated with a newly opened tab',
             schema: { type: 'string' },
           },
         ],
@@ -241,7 +228,6 @@ export async function activate(context: ExecutionActivationContext) {
   context.registrations.add(
     await dictionaryWebViewProviderPromise,
     await openDictionaryCommandPromise,
-    await showDictionaryPanelCommandPromise,
     lexicalReferenceTextManager,
     lexicalReferenceService,
     await lexicalReferencePdpefPromise,

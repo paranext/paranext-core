@@ -693,23 +693,15 @@ declare module 'papi-shared-types' {
 declare module 'papi-shared-types' {
   export interface CommandHandlers {
     /**
-     * Opens the dictionary web view
+     * In Simple mode, brings the one pinned (column 3) Dictionary tab to the front. In Power mode,
+     * opens a new Dictionary tab, so multiple Dictionary tabs can each independently track a
+     * different scroll group.
      *
      * @param editorWebViewId - The id of the editor web view the user opened the dictionary from
-     * @returns WebView id for new Dictionary WebView or `undefined` if not created
+     * @returns WebView id for the Dictionary WebView, or `undefined` if it couldn't be shown
      */
     'platformLexicalTools.openDictionary': (
       editorWebViewId: string | undefined,
-    ) => Promise<string | undefined>;
-    /**
-     * Brings the Dictionary tab to the front. If it isn't open, opens it for the editor's project.
-     * An open tab is raised, never reloaded, so it keeps its state.
-     *
-     * @param editorWebViewId The scripture editor whose project a newly opened tab shows
-     * @returns The Dictionary web view's ID, or `undefined` if it couldn't be shown
-     */
-    'platformLexicalTools.showDictionaryPanel': (
-      editorWebViewId?: string,
     ) => Promise<string | undefined>;
   }
 }
