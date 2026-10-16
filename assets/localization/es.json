@@ -765,6 +765,7 @@
   "%userProfile_header_notRegistered%": "No registrado",
   "%userProfile_interfaceMode_power_description%": "Interfaz completa de Paratext con todos los paneles y herramientas",
   "%userProfile_interfaceMode_power_label%": "Modo avanzado",
+  "%userProfile_interfaceMode_power_previewBadge%": "Vista previa",
   "%userProfile_interfaceMode_simple_description%": "Interfaz simplificada para enfocarse en la traducción",
   "%userProfile_interfaceMode_simple_label%": "Modo simplificado",
   "%userProfile_language%": "Idioma",
