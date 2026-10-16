@@ -97,6 +97,7 @@ function renderHomeList({
   localProjectsInfo = [],
   sharedProjectsInfo = {},
   initialProjectResourceFilter = 'all',
+  isProjectResourceFilterLocked = false,
   onProjectResourceFilterChange,
   showGetResourcesButton = true,
   isLoadingLocalProjects = false,
@@ -107,6 +108,7 @@ function renderHomeList({
   localProjectsInfo?: LocalProjectInfo[];
   sharedProjectsInfo?: SharedProjectsInfo;
   initialProjectResourceFilter?: ProjectResourceFilterValue;
+  isProjectResourceFilterLocked?: boolean;
   onProjectResourceFilterChange?: (filter: ProjectResourceFilterValue) => void;
   showGetResourcesButton?: boolean;
   isLoadingLocalProjects?: boolean;
@@ -121,6 +123,7 @@ function renderHomeList({
       sharedProjectsInfo={sharedProjectsInfo}
       remoteProjectsState={remoteProjectsState}
       initialProjectResourceFilter={initialProjectResourceFilter}
+      isProjectResourceFilterLocked={isProjectResourceFilterLocked}
       onProjectResourceFilterChange={onProjectResourceFilterChange}
       showGetResourcesButton={showGetResourcesButton}
       isLoadingLocalProjects={isLoadingLocalProjects}
@@ -396,6 +399,95 @@ describe('Home project/resource filter', () => {
       .map((row) => within(row).queryAllByRole('cell')[0]?.textContent ?? '')
       .filter((text) => text !== '');
   }
+
+  /*
+   * Simple mode's Home lists only Paratext projects, with no filter to change (Sebastian's decision
+   * on PT-3182). Resources are left out of Home there, not filtered: nothing counts them or reports
+   * them hidden.
+   */
+  describe('when locked to projects, as in Simple mode', () => {
+    const CLEAR_SEARCH = enString('%resources_clearSearch%');
+    const ITEMS = enString('%resources_items%');
+
+    it('lists only projects, and offers no filter', () => {
+      renderHomeList({
+        localProjectsInfo: [RESOURCE, PROJECT],
+        isProjectResourceFilterLocked: true,
+      });
+
+      expect(screen.queryByText('Local Project')).not.toBeNull();
+      expect(screen.queryByText('Published Resource')).toBeNull();
+      expect(screen.queryByRole('button', { name: new RegExp(`^${FILTER_BY}`) })).toBeNull();
+    });
+
+    it('locks out even a resources filter the user chose before', () => {
+      renderHomeList({
+        localProjectsInfo: [RESOURCE, PROJECT],
+        initialProjectResourceFilter: 'resource',
+        isProjectResourceFilterLocked: true,
+      });
+
+      expect(listedShortNames()).toEqual(['LCL']);
+    });
+
+    it('counts projects alone', () => {
+      renderHomeList({
+        localProjectsInfo: [RESOURCE, PROJECT],
+        isProjectResourceFilterLocked: true,
+      });
+
+      // Not "1 of 2": the resource is not part of Home, so nothing is hidden.
+      expect(screen.queryByText(`1 ${ITEMS}`)).not.toBeNull();
+    });
+
+    it('treats a Home with only resources installed as empty', () => {
+      renderHomeList({ localProjectsInfo: [RESOURCE], isProjectResourceFilterLocked: true });
+
+      expect(screen.queryByText(NOTHING_HERE)).not.toBeNull();
+    });
+
+    it('clears only the search, having no type filter to clear', async () => {
+      const onProjectResourceFilterChange = vi.fn();
+      renderHomeList({
+        localProjectsInfo: [RESOURCE, PROJECT],
+        isProjectResourceFilterLocked: true,
+        onProjectResourceFilterChange,
+      });
+      const user = userEvent.setup();
+      await user.type(screen.getByRole('textbox'), 'zzz');
+
+      // On screen, and in the live region that announces it.
+      expect(screen.queryAllByText(NO_PARATEXT_PROJECTS_FOUND).length).toBeGreaterThan(0);
+      expect(screen.queryByRole('button', { name: CLEAR_FILTERS })).toBeNull();
+      await user.click(screen.getByRole('button', { name: CLEAR_SEARCH }));
+
+      expect(listedShortNames()).toEqual(['LCL']);
+      expect(onProjectResourceFilterChange).not.toHaveBeenCalled();
+    });
+
+    it('brings back the filter the user chose once unlocked, as on switching to Power mode', () => {
+      const { rerender } = renderHomeList({
+        localProjectsInfo: [RESOURCE, PROJECT],
+        initialProjectResourceFilter: 'resource',
+        isProjectResourceFilterLocked: true,
+      });
+
+      rerender(
+        <Home
+          headerContent={undefined}
+          localProjectsInfo={[RESOURCE, PROJECT]}
+          sharedProjectsInfo={{}}
+          remoteProjectsState="loaded"
+          initialProjectResourceFilter="resource"
+          isProjectResourceFilterLocked={false}
+          localizedStringsWithLoadingState={[EN_STRINGS, false]}
+        />,
+      );
+
+      expect(listedShortNames()).toEqual(['PUB']);
+      expect(screen.queryByRole('button', { name: new RegExp(`^${FILTER_BY}`) })).not.toBeNull();
+    });
+  });
 
   it('lists resources alongside projects by default', () => {
     renderHomeList({ localProjectsInfo: [RESOURCE, PROJECT] });

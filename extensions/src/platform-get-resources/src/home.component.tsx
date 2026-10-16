@@ -281,6 +281,12 @@ export type HomeProps = {
    * change to it does not move a filter the user may already have changed.
    */
   initialProjectResourceFilter?: ProjectResourceFilterValue;
+  /**
+   * Lists only Paratext projects, with no type filter to change. Simple mode's Home does this: it
+   * leaves resources out entirely, so its counts and empty states are about projects alone. The
+   * filter the user chose is kept, and comes back if this is turned off.
+   */
+  isProjectResourceFilterLocked?: boolean;
   /** Called with the new filter each time the user changes it, including through Clear Filters. */
   onProjectResourceFilterChange?: (filter: ProjectResourceFilterValue) => void;
   /** Array of local project information, containing projects and resources. */
@@ -312,6 +318,7 @@ export type HomeProps = {
  * @param {isLoadingLocalProjects} - Whether loading local projects is in progress.
  * @param {remoteProjectsState} - What is known about the send/receive server's half of the list.
  * @param {initialProjectResourceFilter} - Which items the type filter starts on.
+ * @param {isProjectResourceFilterLocked} - Lists only Paratext projects, with no type filter.
  * @param {onProjectResourceFilterChange} - Called with the new filter each time the user changes
  *   it.
  * @param {localProjectsInfo} - Array of local project information, containing projects and
@@ -335,6 +342,7 @@ export function Home({
   isLoadingLocalProjects = false,
   remoteProjectsState = 'absent',
   initialProjectResourceFilter = 'all',
+  isProjectResourceFilterLocked = false,
   onProjectResourceFilterChange = () => {},
   localProjectsInfo = NO_LOCAL_PROJECTS,
   sharedProjectsInfo = NO_SHARED_PROJECTS,
@@ -485,15 +493,26 @@ export function Home({
   }, [localProjectsInfo, sharedProjectsInfo]);
 
   const [textFilter, setTextFilter] = useState<string>('');
-  const [projectResourceFilter, setProjectResourceFilter] = useState<ProjectResourceFilterValue>(
-    initialProjectResourceFilter,
+  const [chosenProjectResourceFilter, setChosenProjectResourceFilter] =
+    useState<ProjectResourceFilterValue>(initialProjectResourceFilter);
+  const projectResourceFilter: ProjectResourceFilterValue = isProjectResourceFilterLocked
+    ? 'paratextProject'
+    : chosenProjectResourceFilter;
+  // The items Home lists at all. A locked filter leaves resources out of Home rather than filtering
+  // them, so nothing counts or reports them as hidden.
+  const homeItems = useMemo(
+    () =>
+      isProjectResourceFilterLocked
+        ? mergedProjectInfo.filter((project) => !project.isPublished)
+        : mergedProjectInfo,
+    [mergedProjectInfo, isProjectResourceFilterLocked],
   );
   const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT_CONFIG);
   const changeProjectResourceFilter = (filter: ProjectResourceFilterValue) => {
     // Re-picking the checked option would otherwise write the same value through to the web view's
     // state, which saves the layout for nothing.
-    if (filter === projectResourceFilter) return;
-    setProjectResourceFilter(filter);
+    if (isProjectResourceFilterLocked || filter === chosenProjectResourceFilter) return;
+    setChosenProjectResourceFilter(filter);
     onProjectResourceFilterChange(filter);
   };
 
@@ -506,8 +525,7 @@ export function Home({
   );
 
   const filteredProjects = useMemo(() => {
-    if (!mergedProjectInfo) return [];
-    return mergedProjectInfo.filter((project) => {
+    return homeItems.filter((project) => {
       if (!isShownByProjectResourceFilter(projectResourceFilter, project.isPublished)) return false;
       const filter = textFilter.toLowerCase();
       return (
@@ -516,7 +534,7 @@ export function Home({
         project.language.toLowerCase().includes(filter)
       );
     });
-  }, [mergedProjectInfo, textFilter, projectResourceFilter]);
+  }, [homeItems, textFilter, projectResourceFilter]);
 
   // Only send/receive rows have an activity, so the column exists only while one is listed.
   const hasActivityColumn = filteredProjects.some((project) => project.isSendReceivable);
@@ -583,14 +601,15 @@ export function Home({
     });
   }, [filteredProjects, effectiveSortConfig]);
 
-  const isTypeFiltered = projectResourceFilter !== 'all';
+  // A filter the user applied, and so can clear: a locked one is not.
+  const isTypeFiltered = !isProjectResourceFilterLocked && projectResourceFilter !== 'all';
   // The bundled WEB sample — a project, not the DBL resource that can share its short name — is the
   // only item the type filter lists, and no search hides it.
   const isOnlyWebSampleListed =
     filteredAndSortedProjects.length === 1 &&
     filteredAndSortedProjects[0].name === BUNDLED_SAMPLE_PROJECT_SHORT_NAME &&
     !filteredAndSortedProjects[0].isPublished &&
-    mergedProjectInfo.filter((project) =>
+    homeItems.filter((project) =>
       isShownByProjectResourceFilter(projectResourceFilter, project.isPublished),
     ).length === 1;
 
@@ -635,7 +654,7 @@ export function Home({
   const [filteredToNothingAnnouncement, setFilteredToNothingAnnouncement] = useState('');
   if (!isLoading && !isLocalizedStringsLoading) {
     let settledAnnouncement = '';
-    if (mergedProjectInfo.length > 0 && filteredAndSortedProjects.length === 0)
+    if (homeItems.length > 0 && filteredAndSortedProjects.length === 0)
       settledAnnouncement =
         missingServerHalfTitleText && !isAskingForResources
           ? `${noFilterResultsText}\n${missingServerHalfTitleText}`
@@ -657,10 +676,10 @@ export function Home({
   };
 
   let itemCountText = `${filteredAndSortedProjects.length} ${itemsText}`;
-  if (!isLocalizedStringsLoading && filteredAndSortedProjects.length !== mergedProjectInfo.length)
+  if (!isLocalizedStringsLoading && filteredAndSortedProjects.length !== homeItems.length)
     itemCountText = formatReplacementString(countOfTotalText, {
       count: filteredAndSortedProjects.length,
-      total: mergedProjectInfo.length,
+      total: homeItems.length,
     });
 
   const handleSort = (key: SortConfig['key']) => {
@@ -860,13 +879,15 @@ export function Home({
                   placeholder={filterInputText}
                 />
               </div>
-              <ProjectResourceFilter
-                value={projectResourceFilter}
-                onChange={changeProjectResourceFilter}
-                options={projectResourceFilterOptions}
-                localizedAllText={filterAllText}
-                localizedFilterByValueText={filterByValueText}
-              />
+              {!isProjectResourceFilterLocked && (
+                <ProjectResourceFilter
+                  value={projectResourceFilter}
+                  onChange={changeProjectResourceFilter}
+                  options={projectResourceFilterOptions}
+                  localizedAllText={filterAllText}
+                  localizedFilterByValueText={filterByValueText}
+                />
+              )}
             </div>
           </div>
           {showGetResourcesButton && (
@@ -925,7 +946,7 @@ export function Home({
              * Nothing to list at all, as opposed to filters that hid everything: the two need
              * different messages, and only the second offers to clear the filters.
              */}
-            {mergedProjectInfo.length === 0 ? (
+            {homeItems.length === 0 ? (
               <div className="tw:flex-grow tw:h-full tw:border tw:border-muted tw:rounded-lg tw:p-6 tw:text-center tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-1">
                 <Label className="tw:text-muted-foreground">{noProjectsText}</Label>
                 {canAdviseJoiningProject && (
