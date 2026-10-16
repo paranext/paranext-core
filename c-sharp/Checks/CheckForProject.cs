@@ -55,7 +55,9 @@ internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, 
     {
         lock (_lock)
         {
-            _recordersByBookNum[bookNum].ClearResults();
+            // A check that has never run on this book has no results for it to clear
+            if (_recordersByBookNum.TryGetValue(bookNum, out var recorder))
+                recorder.ClearResults();
         }
     }
 

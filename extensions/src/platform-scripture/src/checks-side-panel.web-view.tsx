@@ -28,7 +28,7 @@ import {
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { projectNamesFromMetadata } from './project-names.util';
-import { CheckInfo, CheckScopes, ProjectOption } from './checks-side-panel.utils';
+import { buildChecksInfo, CheckInfo, CheckScopes, ProjectOption } from './checks-side-panel.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
 import {
   ChecksSidePanel,
@@ -526,17 +526,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
     }
 
     const fetchChecksInfo = async () => {
-      const promises = availableChecks.map(async (check) => {
-        const isSetup = await checkAggregator.isCheckSetupForProject(check.checkId, projectId);
-        return {
-          checkId: check.checkId,
-          checkName: getLocalizedCheckDescription(check.checkId),
-          isSetup,
-          setUpLink: undefined, // TODO: Add setUpLink when available from backend
-        };
-      });
-      const results = await Promise.all(promises);
-      setChecksInfo(results);
+      setChecksInfo(
+        await buildChecksInfo(
+          availableChecks,
+          (checkId) => checkAggregator.lookUpCheckSetupStatus(checkId, projectId),
+          getLocalizedCheckDescription,
+        ),
+      );
     };
 
     fetchChecksInfo();

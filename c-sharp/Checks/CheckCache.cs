@@ -28,10 +28,17 @@ internal sealed class CheckCache
     private readonly List<string> _allCheckIds;
     private readonly PapiClient _papiClient;
 
-    public CheckCache(List<string> allCheckIds, PapiClient papiClient)
+    private readonly Func<string, ChecksDataSource, ScriptureCheckBase> _createCheck;
+
+    public CheckCache(
+        List<string> allCheckIds,
+        PapiClient papiClient,
+        Func<string, ChecksDataSource, ScriptureCheckBase>? createCheck = null
+    )
     {
         _allCheckIds = allCheckIds;
         _papiClient = papiClient;
+        _createCheck = createCheck ?? CheckFactory.CreateCheck;
 
         // When inventory data is changed, there is no way from the ScrText or Settings objects
         // to be notified of the change. So we have to listen for file changes in the project
@@ -87,21 +94,15 @@ internal sealed class CheckCache
             _ =>
             {
                 var dataSource = GetChecksDataSource(projectId);
-                return new CheckForProject(
-                    CheckFactory.CreateCheck(checkId, dataSource),
-                    checkId,
-                    projectId
-                );
+                return new CheckForProject(_createCheck(checkId, dataSource), checkId, projectId);
             }
         );
     }
 
-    public IEnumerable<CheckForProject> GetChecks(IEnumerable<string> checkIds, string projectId)
-    {
-        return checkIds.Select((id) => GetCheck(id, projectId));
-    }
-
-    public void RunChecksForProject(
+    /// <returns>
+    /// The checks that threw, each with its exception. The other checks still ran and have results.
+    /// </returns>
+    public List<(string CheckId, Exception Exception)> RunChecksForProject(
         InputRange range,
         IEnumerable<string> checkIds,
         ErrorMessageDenials denials
@@ -110,28 +111,59 @@ internal sealed class CheckCache
         var projectId = range.ProjectId;
         var bookNum = range.Start.BookNum;
 
-        // Text has to be tokenized for the checks before the checks can run
-        var enabledChecksForProject = GetChecks(checkIds, projectId);
+        // A check that cannot be created or that throws must not cost the other checks their
+        // results. Its recorder is left not ready, so the next job runs it again.
+        var failures = new List<(string CheckId, Exception Exception)>();
+        var checksToRun = new List<(string checkId, CheckForProject check)>();
         CheckDataFormat neededDataFormat = 0;
-        foreach (var check in enabledChecksForProject)
-            neededDataFormat |= check.Check.NeededFormat;
+        foreach (var checkId in checkIds)
+        {
+            try
+            {
+                var check = GetCheck(checkId, projectId);
+                neededDataFormat |= check.Check.NeededFormat;
+                checksToRun.Add((checkId, check));
+            }
+            catch (Exception ex)
+            {
+                failures.Add((checkId, ex));
+            }
+        }
 
+        // Text has to be tokenized for the checks before the checks can run.
         // "GetText" will tokenize the text for checks to use
         // "0" chapter number means all chapters
         var dataSource = GetChecksDataSource(projectId);
         dataSource.GetText(bookNum, 0, neededDataFormat);
 
-        foreach (var checkId in checkIds)
+        foreach (var (checkId, check) in checksToRun)
         {
-            var check = GetCheck(checkId, projectId);
-            if (check.SettingsChanged)
+            try
             {
-                check.SettingsChanged = false;
-                check.Check.Initialize(dataSource);
-                check.ClearResults();
+                if (check.SettingsChanged)
+                {
+                    // Cleared before Initialize so a settings change that lands during Initialize
+                    // is not lost. A failed Initialize leaves the flag set so the next job retries.
+                    check.SettingsChanged = false;
+                    try
+                    {
+                        check.Check.Initialize(dataSource);
+                        check.ClearResults();
+                    }
+                    catch
+                    {
+                        check.SettingsChanged = true;
+                        throw;
+                    }
+                }
+                check.Run(dataSource, bookNum, denials);
             }
-            check.Run(dataSource, bookNum, denials);
+            catch (Exception ex)
+            {
+                failures.Add((checkId, ex));
+            }
         }
+        return failures;
     }
 
     private ChecksDataSource GetChecksDataSource(string projectId)
