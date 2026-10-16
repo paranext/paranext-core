@@ -31,9 +31,11 @@ beforeAll(() => {
 
 const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_Enabled_2%': 'Unrestricted',
-  '%paratextRegistration_description_internetUse_option_Enabled_details%': 'Desc Enabled sentinel',
+  '%paratextRegistration_description_internetUse_option_Enabled_details_2%':
+    'Desc Enabled sentinel',
   '%paratextRegistration_description_internetUse_option_VpnRequired_2%': 'Disable access sentinel',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_details%': 'Desc VPN sentinel',
+  '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%':
+    'Desc VPN sentinel',
   '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable ALL sentinel',
   '%paratextRegistration_description_internetUse_option_Disabled_details%':
     'Desc Disabled sentinel',

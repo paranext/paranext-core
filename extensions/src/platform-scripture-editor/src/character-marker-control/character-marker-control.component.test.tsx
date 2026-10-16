@@ -44,8 +44,7 @@ const STRINGS = {
   '%webView_platformScriptureEditor_characterMarkerControl_label_format%':
     '{marker} - {description}',
   '%markerMenu_searchPlaceholder_character%': 'Search to change character style.',
-  '%webView_platformScriptureEditor_syncEditBlocked_banner%':
-    'Editing paused — Send/Receive in progress',
+  '%webView_platformScriptureEditor_syncEditBlocked_banner_2%': 'Editing paused — sync in progress',
   '%markerMenu_searchPlaceholder%': 'Type a style or search.',
 };
 
@@ -149,7 +148,7 @@ describe('CharacterMarkerControl — disabled states', () => {
 
     expect(screen.getByRole('button')).toBeDisabled();
     // The wrapper carries the explanation because a disabled button cannot host its own tooltip.
-    expect(screen.getByLabelText('Editing paused — Send/Receive in progress')).toBeInTheDocument();
+    expect(screen.getByLabelText('Editing paused — sync in progress')).toBeInTheDocument();
   });
 
   it('disables the button with the no-markers tooltip when the item list is empty', () => {

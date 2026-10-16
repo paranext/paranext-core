@@ -2082,8 +2082,8 @@ export function ManageBooksDialog({
       case 'allShared':
         return fmtTemplate(
           t(
-            '%manageBooks_delete_confirmBodyAllShared%',
-            'All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. The project itself will not be deleted. This cannot be undone.',
+            '%manageBooks_delete_confirmBodyAllShared_2%',
+            'All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next sync. The project itself will not be deleted. This cannot be undone.',
           ),
           dest,
         );
@@ -2098,8 +2098,8 @@ export function ManageBooksDialog({
       case 'partialShared':
         return fmtTemplate(
           t(
-            '%manageBooks_delete_confirmBodySharedSendReceive%',
-            '{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. This cannot be undone.',
+            '%manageBooks_delete_confirmBodySharedSendReceive_2%',
+            '{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next sync. This cannot be undone.',
           ),
           n,
           dest,

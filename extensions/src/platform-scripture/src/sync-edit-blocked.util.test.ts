@@ -51,7 +51,7 @@ describe('notifySyncEditBlocked', () => {
     // The literal key (not the util's own constant) so this fails if the key ever drifts from
     // the entry contributed in contributions/localizedStrings.json.
     expect(mockSend).toHaveBeenCalledWith({
-      message: '%webView_platformScripture_error_syncEditBlocked%',
+      message: '%webView_platformScripture_error_syncEditBlocked_2%',
       severity: 'warning',
     });
     expect(mockLoggerWarn).not.toHaveBeenCalled();

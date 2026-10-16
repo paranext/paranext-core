@@ -5,11 +5,11 @@ import { useCallback, useState } from 'react';
 
 /** Banner text plus the reused general Cancel label. */
 export const SYNC_BLOCKED_BANNER_STRING_KEYS: LocalizeKey[] = [
-  '%webView_platformScriptureEditor_syncEditBlocked_banner%',
+  '%webView_platformScriptureEditor_syncEditBlocked_banner_2%',
   '%general_cancel%',
 ];
 
-const BANNER_TEXT_KEY: LocalizeKey = '%webView_platformScriptureEditor_syncEditBlocked_banner%';
+const BANNER_TEXT_KEY: LocalizeKey = '%webView_platformScriptureEditor_syncEditBlocked_banner_2%';
 const CANCEL_KEY: LocalizeKey = '%general_cancel%';
 
 /**
@@ -33,9 +33,9 @@ type Props = {
 
 /**
  * Slim, non-covering banner shown across the top of the Scripture editor pane while an automatic
- * (scheduled) Send/Receive is syncing this project. It states that editing is paused, shows live
- * sync progress, and offers a single-shot Cancel that requests the Send/Receive extension to cancel
- * the running sync (the bottom-right progress toast has its own Cancel too).
+ * (scheduled) sync is running on this project. It states that editing is paused, shows live sync
+ * progress, and offers a single-shot Cancel that requests the Send/Receive extension to cancel the
+ * running sync (the bottom-right progress toast has its own Cancel too).
  *
  * This mounts only while blocking (the editor renders it conditionally), so its progress
  * subscription and single-shot Cancel state reset cleanly for each blocking episode — no explicit

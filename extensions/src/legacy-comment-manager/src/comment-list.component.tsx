@@ -41,16 +41,13 @@ export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
   ...Object.values(scopeFilterToLabelKey),
   '%no_comments%',
   '%no_comments_match_filter%',
-  '%webView_legacyCommentManager_syncEditBlocked_notice%',
+  '%webView_legacyCommentManager_syncEditBlocked_notice_2%',
   '%comment_filter_current_user_unavailable%',
   '%comment_filter_retry_current_user%',
 ] as const;
 
-/**
- * Slim "editing paused during Send/Receive" notice text shown while this project's sync blocks
- * edits.
- */
-const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice%';
+/** Slim "editing paused during sync" notice text shown while this project's sync blocks edits. */
+const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice_2%';
 
 /**
  * `id` of the sticky header (the editing-paused notice, when shown, plus the filter toolbar). The
@@ -95,9 +92,9 @@ export type CommentListPanelProps = Pick<
   /** Called when the scope filter changes. */
   onScopeFilterChange: (filter: ScopeFilter) => void;
   /**
-   * Whether this project's automatic Send/Receive is currently blocking edits. When true, a slim
-   * "editing paused" notice is shown above the list; the write affordances are disabled separately
-   * by the web view via the capability callbacks. Defaults to `false`.
+   * Whether this project's automatic sync is currently blocking edits. When true, a slim "editing
+   * paused" notice is shown above the list; the write affordances are disabled separately by the
+   * web view via the capability callbacks. Defaults to `false`.
    */
   isSyncBlocked?: boolean;
   /**
@@ -300,7 +297,7 @@ export function CommentListPanel({
         id={COMMENT_LIST_STICKY_HEADER_ELEMENT_ID}
         className="tw:sticky tw:top-0 tw:z-10 tw:shrink-0"
       >
-        {/* Slim, non-covering notice shown while this project's automatic Send/Receive is blocking
+        {/* Slim, non-covering notice shown while this project's automatic sync is blocking
             edits. Only the write affordances are disabled (by the web view's gated capability
             callbacks); filtering/reading comments stays fully usable. */}
         {isSyncBlocked && (

@@ -23,6 +23,7 @@ const MOCK_FILES: { [uri: string]: string } = {
   'resources://assets/localization/en.json': `{
     "%some_localization_key%": "This is the English text for %some_localization_key%.",
     "%general_button_submit%": "Submit",
+    "%general_button_submit_2%": "Submit now",
     "%firstRun_title%": "Set up",
     "%firstRun_button_next%": "Next",
     "%firstRun_button_back%": "Back"
@@ -54,6 +55,9 @@ const MOCK_FILES: { [uri: string]: string } = {
     },
     "%submit%": {
       "fallbackKey": "%yes%"
+    },
+    "%general_button_submit_2%": {
+      "fallbackKey": "%general_button_submit%"
     }
   }`,
 };
@@ -138,6 +142,17 @@ test('Correct localized values returned to match array of localizeKeys', async (
     '%general_button_submit%': 'Soumettre',
     '%some_localization_key%': 'Ceci est le texte en français pour %some_localization_key%.',
   });
+});
+
+test('resolves a key missing in the current language through its fallbackKey in that language before falling back to English', async () => {
+  // fr has no %general_button_submit_2% but has its fallbackKey %general_button_submit%; English
+  // has the requested key itself ("Submit now"), which must not win over the fr fallbackKey.
+  const response = await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%general_button_submit_2%',
+    locales: ['fr'],
+  });
+  expect(response).toEqual('Soumettre');
+  expect(response).not.toEqual('Submit now');
 });
 
 test('Key returned with localizeKey that does not exist', async () => {
