@@ -23,7 +23,7 @@ class ThemeDataDataProviderEngine
   /** @param allThemeFamiliesById All Theme Data available to the application. */
   constructor(public allThemeFamiliesById: ThemeFamiliesByIdExpanded) {
     super();
-    onDidResyncContributions(() => this.rebuildThemes());
+    this.unsubscribeOnDidResyncContributions = onDidResyncContributions(() => this.rebuildThemes());
   }
 
   async rebuildThemes(): Promise<void> {
