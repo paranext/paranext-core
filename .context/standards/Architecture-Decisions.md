@@ -4668,9 +4668,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   text such as HEB+GRK, which has no path of its own, its Old Testament text's), keeping only those
   that file manager's rule admits (an encrypted resource's unencrypted entries are refused on read,
   so they are not listed). It decides that from the entries' flags rather than by opening them,
-  because a file manager read that fails to decrypt locks the archive and never unlocks it; an
-  entry that fails to decrypt is therefore listed and reads as absent. `setExtensionData` refuses a
-  resource before taking the write lock.
+  so an entry that cannot be decrypted is listed, and reading it throws rather than reading as
+  empty. A file manager read that fails to decrypt locks the archive and never unlocks it, so a
+  read first opens the entry on an archive of its own, which has no lock, and hands the file
+  manager only an entry that opens. `setExtensionData` refuses a resource before taking the write
+  lock.
 - **Alternatives:** *Optional on the engine, required on the consumer, inside `platform.base`* —
   the shape the PR first took, superseded before merge: a member optional to implement but required
   to call cannot be reasoned about from either side, and it is discovered by failure, because the

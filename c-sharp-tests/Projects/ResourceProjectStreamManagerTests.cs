@@ -91,10 +91,10 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void EncryptedResource_UnencryptedEntry_IsNeitherListedNorRead()
+        public void EncryptedResource_UnencryptedEntry_IsNotListedAndThrowsOnRead()
         {
             // The file manager refuses an unencrypted entry in an encrypted resource as one it
-            // cannot verify, so it is not part of the resource and the listing must agree
+            // cannot verify, so it is not part of the resource: not listed, and not read as empty
             var streamManager = CreateStreamManager(
                 [
                     ($"{ExtensionPath}/sealed.json", "sealed", ArchivePassword),
@@ -113,7 +113,9 @@ namespace TestParanextDataProvider.Projects
                     ReadStream(streamManager, $"{ExtensionPath}/sealed.json"),
                     Is.EqualTo("sealed")
                 );
-                Assert.That(streamManager.GetDataStream($"{ExtensionPath}/loose.json"), Is.Null);
+                Assert.Throws<InvalidDataException>(
+                    () => streamManager.GetDataStream($"{ExtensionPath}/loose.json")
+                );
             });
         }
 
@@ -151,6 +153,63 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void GetDataStream_EntryThatCannotBeDecrypted_ThrowsAndLeavesTheArchiveUnlocked()
+        {
+            var streamManager = CreateStreamManager(
+                [
+                    ($"{ExtensionPath}/sealed.json", "sealed", ArchivePassword),
+                    ($"{ExtensionPath}/foreign.json", "foreign", "another password"),
+                ],
+                passwordProtected: true
+            );
+
+            // Read on a thread of its own, as a request would be: a lock the file manager leaked
+            // there would block every other thread, which a read on this same thread would not show
+            Exception? foreignFailure = null;
+            Thread foreignRead =
+                new(() =>
+                {
+                    try
+                    {
+                        streamManager.GetDataStream($"{ExtensionPath}/foreign.json");
+                    }
+                    catch (Exception e)
+                    {
+                        foreignFailure = e;
+                    }
+                });
+            foreignRead.Start();
+            Assert.That(
+                foreignRead.Join(TimeSpan.FromSeconds(10)),
+                Is.True,
+                "The read never ended"
+            );
+
+            string? sealedContents = null;
+            Thread sealedRead =
+                new(
+                    () => sealedContents = ReadStream(streamManager, $"{ExtensionPath}/sealed.json")
+                )
+                {
+                    IsBackground = true,
+                };
+            sealedRead.Start();
+
+            Assert.Multiple(() =>
+            {
+                // Throws rather than reading as empty, which a caller could not tell from an empty
+                // or absent document
+                Assert.That(foreignFailure, Is.InstanceOf<InvalidDataException>());
+                Assert.That(
+                    sealedRead.Join(TimeSpan.FromSeconds(10)),
+                    Is.True,
+                    "A read from another thread was blocked"
+                );
+                Assert.That(sealedContents, Is.EqualTo("sealed"));
+            });
+        }
+
+        [Test]
         public void GetExistingDataStreamNames_NameGetDataStreamRefuses_IsNotListed()
         {
             var streamManager = CreateStreamManager(
@@ -181,7 +240,7 @@ namespace TestParanextDataProvider.Projects
             var streamManager = new ResourceProjectStreamManager(
                 fileManager,
                 Path.Join(_folder.Path, "missing.p8z"),
-                entriesMustBeEncrypted: false
+                passwordProvider: null
             );
 
             // An unreachable resource is a failure, not a resource with no data
@@ -200,7 +259,7 @@ namespace TestParanextDataProvider.Projects
             var streamManager = new ResourceProjectStreamManager(
                 fileManager,
                 archivePath: null,
-                entriesMustBeEncrypted: false
+                passwordProvider: null
             );
 
             // Reported as an unreachable resource, the same as a missing archive, rather than as a
@@ -264,11 +323,11 @@ namespace TestParanextDataProvider.Projects
         )
         {
             var fileManager = CreateFileManager(entries, passwordProtected);
-            // A file manager given a password provider refuses unencrypted entries
+            // The same provider the file manager was given, as the PDP passes it
             return new ResourceProjectStreamManager(
                 fileManager,
                 ArchivePath,
-                entriesMustBeEncrypted: passwordProtected
+                passwordProtected ? new FixedPasswordProvider() : null
             );
         }
 

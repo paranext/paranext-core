@@ -15,33 +15,34 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
 {
     private readonly ProjectFileManager _fileManager;
     private readonly string? _archivePath;
-    private readonly bool _entriesMustBeEncrypted;
+    private readonly IZippedResourcePasswordProvider? _passwordProvider;
 
     /// <param name="fileManager">
-    /// The resource's own file manager. Every read goes through it, so it applies the same
-    /// decryption, and the same refusal of an encrypted resource's unencrypted entries, as every
-    /// other read of the resource.
+    /// The resource's own file manager. Every read of an entry's data goes through it, so it applies
+    /// the same decryption as every other read of the resource.
     /// </param>
     /// <param name="archivePath">
     /// The archive <paramref name="fileManager"/> reads, or null when it cannot be determined, in
-    /// which case listing fails as for a missing archive. Opened only to list entry names: the file
-    /// manager lists one directory at a time and finds a directory only through the files directly
-    /// in it, so it cannot reach a file whose parent directories hold nothing else.
+    /// which case listing and reading fail as for a missing archive. Opened directly to list entry
+    /// names, since the file manager lists one directory at a time and finds a directory only
+    /// through the files directly in it, so it cannot reach a file whose parent directories hold
+    /// nothing else; and to check an entry opens before the file manager reads it (see
+    /// <see cref="GetDataStream"/>).
     /// </param>
-    /// <param name="entriesMustBeEncrypted">
-    /// Whether <paramref name="fileManager"/> refuses an entry that is not encrypted. ParatextData's
-    /// zipped file manager does exactly when it was given a password provider, and keeps that
-    /// private, so the caller states it.
+    /// <param name="passwordProvider">
+    /// The password provider <paramref name="fileManager"/> was given, or null if none. ParatextData
+    /// keeps it private, so the caller passes it again. With one, the file manager refuses any entry
+    /// that is not encrypted, and decrypts the rest with its password; these checks do the same.
     /// </param>
     public ResourceProjectStreamManager(
         ProjectFileManager fileManager,
         string? archivePath,
-        bool entriesMustBeEncrypted
+        IZippedResourcePasswordProvider? passwordProvider
     )
     {
         _fileManager = fileManager;
         _archivePath = archivePath;
-        _entriesMustBeEncrypted = entriesMustBeEncrypted;
+        _passwordProvider = passwordProvider;
     }
 
     public void Initialize()
@@ -56,23 +57,17 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
             ? ""
             : $"{GetEntryNameFromStreamName(underPath).TrimEnd('/')}/";
 
-        // A missing archive, or one that cannot be located, throws FileNotFoundException, which is
-        // the answer wanted: the resource itself is unreachable, which is not the same as having
-        // no data
-        if (_archivePath == null)
-            throw new FileNotFoundException("The resource's archive could not be located");
         // Which entries a read can reach is decided here from the entries' own flags, mirroring the
-        // file manager's rule, rather than by opening each one through the file manager: its read
-        // locks the archive before decrypting and never unlocks it if decrypting fails (an entry
-        // encrypted with another password, or a corrupt one), which would block every later read
-        // of the resource. So such an entry is listed, and reads as absent.
+        // file manager's rule, rather than by opening each one: opening is what can fail, and it
+        // costs an open per entry. So an entry that cannot be decrypted (encrypted with another
+        // password, or corrupt) is listed, and GetDataStream throws for it.
         List<string> entryNames;
-        using (ZipFile archive = new(_archivePath))
+        using (ZipFile archive = OpenArchive())
             entryNames =
             [
                 .. archive
                     .Cast<ZipEntry>()
-                    .Where(entry => entry.IsFile && (entry.IsCrypted || !_entriesMustBeEncrypted))
+                    .Where(entry => entry.IsFile && (entry.IsCrypted || _passwordProvider == null))
                     .Select(entry => entry.Name),
             ];
 
@@ -88,32 +83,66 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
         ];
     }
 
+    /// <exception cref="InvalidDataException">
+    /// The entry exists but cannot be read: it is not encrypted in a resource whose entries must
+    /// be, or it cannot be decrypted or opened.
+    /// </exception>
     public Stream? GetDataStream(string streamName, bool createIfNotExists = false)
     {
         if (createIfNotExists)
             throw new InvalidOperationException("Resource projects are read-only");
 
         var entryName = GetEntryNameFromStreamName(streamName);
-        if (!_fileManager.Exists(entryName))
-            return null;
 
-        try
+        // The file manager locks its archive before opening an entry and never unlocks it if
+        // opening fails, which would block every later read of the resource from other threads.
+        // So the entry is opened here first, on an archive with no lock, using the password
+        // provider the file manager was given and the rule it applies, and the file manager is
+        // handed only an entry that opens. Its read then happens inside a using, so data found
+        // corrupt partway through still releases the lock.
+        // TODO: drop this check once we consume a ParatextData with ubsicap/Paratext#678
+        using (ZipFile archive = OpenArchive())
         {
-            return new MemoryStream(_fileManager.ReadAllBytes(entryName), writable: false);
+            // Case-insensitive, like the file manager's lookup
+            ZipEntry? entry = archive.GetEntry(entryName);
+            if (entry == null || !entry.IsFile)
+                return null;
+            if (_passwordProvider != null && !entry.IsCrypted)
+                throw new InvalidDataException($"'{streamName}' cannot be verified");
+            try
+            {
+                using var _ = archive.GetInputStream(entry);
+            }
+            catch (ZipException e)
+            {
+                throw new InvalidDataException($"'{streamName}' cannot be read", e);
+            }
         }
-        catch (FileNotFoundException)
-        {
-            // The file manager refuses an entry it cannot verify (an unencrypted entry in an
-            // encrypted resource), which listing omits too, and one it cannot decrypt or read,
-            // which listing includes (see GetExistingDataStreamNames). Either is no data.
-            return null;
-        }
+
+        return new MemoryStream(_fileManager.ReadAllBytes(entryName), writable: false);
     }
 
     public bool DeleteDataStream(string streamName)
     {
         throw new InvalidOperationException("Resource projects are read-only");
     }
+
+    /// <summary>
+    /// The archive the file manager reads, opened on its own so nothing done with it takes the
+    /// file manager's lock.
+    /// </summary>
+    /// <exception cref="FileNotFoundException">
+    /// The archive is missing or could not be located: the resource itself is unreachable, which
+    /// is not the same as having no data.
+    /// </exception>
+    private ZipFile OpenArchive() =>
+        new(
+            _archivePath
+                ?? throw new FileNotFoundException("The resource's archive could not be located")
+        )
+        {
+            Password = _passwordProvider?.GetPassword(),
+        };
 
     private static string GetEntryNameFromStreamName(string streamName)
     {

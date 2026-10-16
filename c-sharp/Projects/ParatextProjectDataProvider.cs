@@ -6,6 +6,7 @@ using System.Xml.Linq;
 using System.Xml.XPath;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.NetworkObjects.Documentation;
+using Paranext.DataProvider.Projects.DigitalBibleLibrary;
 using Paranext.DataProvider.Projects.SendReceive;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
@@ -590,10 +591,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ? new ResourceProjectStreamManager(
                 scrText.FileManager,
                 GetResourceArchivePath(scrText),
-                // PlatformScrTextCollection gives every resource a DblResourcePasswordProvider,
-                // and a file manager given a password provider refuses unencrypted entries. Were
-                // that to change, this would only under-list, never list an entry a read refuses.
-                entriesMustBeEncrypted: true
+                // What PlatformScrTextCollection gives every resource's file manager, so this
+                // manager's checks use the file manager's password and rule
+                passwordProvider: new DblResourcePasswordProvider()
             )
             : new RawDirectoryProjectStreamManager(projectDetails);
 

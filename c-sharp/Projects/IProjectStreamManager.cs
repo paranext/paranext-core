@@ -18,8 +18,8 @@ internal interface IProjectStreamManager
     /// while a link that is a file is listed like any other file, since
     /// <see cref="GetDataStream"/> reads through it. Every name returned is one
     /// <see cref="GetDataStream"/> accepts, and a stored item it would refuse is left out; one it
-    /// accepts but cannot read, such as a resource entry that fails to decrypt, is listed and reads
-    /// as absent. Creates nothing: if the path does not exist, returns an empty array.
+    /// accepts but cannot read, such as a resource entry that fails to decrypt, is listed, and
+    /// reading it throws. Creates nothing: if the path does not exist, returns an empty array.
     /// </summary>
     /// <param name="underPath">
     /// Path to enumerate under, relative to the project, using '/' or the platform's separator. Null
@@ -51,6 +51,9 @@ internal interface IProjectStreamManager
     /// and <paramref name="createIfNotExists"/> is false
     /// </returns>
     /// <exception cref="ArgumentException"><paramref name="streamName"/> is not valid.</exception>
+    /// <exception cref="InvalidDataException">
+    /// The stream exists but cannot be read, such as a resource entry that cannot be decrypted.
+    /// </exception>
     Stream? GetDataStream(string streamName, bool createIfNotExists = false);
 
     /// <summary>
