@@ -105,6 +105,27 @@ type WebViewCleanup = {
   unmountRoot: () => void;
 };
 
+/**
+ * The React root a web view's bootstrap created in one document of its iframe, as the bootstrap
+ * reports it to the renderer. The root renders through the renderer's React, so it outlives the
+ * document that created it unless something in the renderer unmounts it.
+ */
+export type RegisteredWebViewRoot = {
+  /** Unmount the root. Calling it again after the root is unmounted does nothing. */
+  unmountRoot: () => void;
+  /**
+   * The document the root was created in. The renderer hands the root to the web view whose iframe
+   * is showing this document.
+   */
+  document: Document;
+  /**
+   * Whether the document has run its `unload` handlers. The bootstrap sets it from an `unload`
+   * listener it adds when it creates the root, so a root whose loaded document is gone while this
+   * is still `false` was not unmounted by the document itself.
+   */
+  hasUnloaded: boolean;
+};
+
 // `declare global` augmentation requires `var` declarations; they cannot be `const`/`let`.
 /* eslint-disable vars-on-top, no-var */
 declare global {
@@ -123,6 +144,9 @@ declare global {
   var SillsdevScripture: SillsdevScriptureType;
   // Web view cleanup functions for iframe content
   var webViewCleanup: WebViewCleanup;
+  // Called by each React web view's bootstrap with the root it created, so the web view component
+  // can unmount the root once its document is replaced
+  var registerWebViewRootById: (webViewId: string, root: RegisteredWebViewRoot) => void;
 }
 /* eslint-enable */
 

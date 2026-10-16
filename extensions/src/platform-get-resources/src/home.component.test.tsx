@@ -10,6 +10,7 @@ import {
   type LocalProjectInfo,
   type RemoteProjectsState,
 } from './home.component';
+import { parseUnsyncedProjectIds } from './home-unsynced.util';
 
 /*
  * `onSendReceiveProject`'s contract is that a rejection surfaces to the user: the prop's TSDoc says
@@ -77,6 +78,7 @@ function renderHomeList({
   shouldShowProjectsOnly = false,
   showGetResourcesButton = true,
   isLoadingLocalProjects = false,
+  unsyncedProjectIds,
 }: {
   remoteProjectsState?: RemoteProjectsState;
   localProjectsInfo?: LocalProjectInfo[];
@@ -84,6 +86,7 @@ function renderHomeList({
   shouldShowProjectsOnly?: boolean;
   showGetResourcesButton?: boolean;
   isLoadingLocalProjects?: boolean;
+  unsyncedProjectIds?: readonly string[];
 } = {}) {
   return render(
     <Home
@@ -94,6 +97,7 @@ function renderHomeList({
       shouldShowProjectsOnly={shouldShowProjectsOnly}
       showGetResourcesButton={showGetResourcesButton}
       isLoadingLocalProjects={isLoadingLocalProjects}
+      unsyncedProjectIds={unsyncedProjectIds}
       localizedStringsWithLoadingState={[EN_STRINGS, false]}
     />,
   );
@@ -341,5 +345,103 @@ describe('Home projects-only view', () => {
     });
 
     expect(screen.queryByText('Shared Project')).not.toBeNull();
+  });
+});
+
+describe('Home unsynced changes marker', () => {
+  const LOCAL_COPY: LocalProjectInfo = {
+    projectId: PROJECT_ID,
+    isPublished: false,
+    fullName: 'Shared Project',
+    name: 'SHR',
+    language: 'en',
+  };
+
+  it('marks a downloaded project listed as having unsynced changes and offers Sync first', () => {
+    renderHomeList({
+      sharedProjectsInfo: SHARED_PROJECTS,
+      localProjectsInfo: [LOCAL_COPY],
+      unsyncedProjectIds: [PROJECT_ID.toUpperCase()],
+    });
+
+    expect(screen.queryByTestId('home-project-unsynced-dot')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open' })).toBeNull();
+  });
+
+  it('marks a project listed only for changes to receive the same way', () => {
+    renderHomeList({
+      sharedProjectsInfo: SHARED_PROJECTS,
+      localProjectsInfo: [LOCAL_COPY],
+      // The web view merges the send and receive sets into this one list.
+      unsyncedProjectIds: parseUnsyncedProjectIds({ toSend: [], toReceive: [PROJECT_ID] }) ?? [],
+    });
+
+    expect(screen.queryByTestId('home-project-unsynced-dot')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open' })).toBeNull();
+  });
+
+  it('shows no marker and offers Open first when no project has unsynced changes', () => {
+    renderHomeList({
+      sharedProjectsInfo: SHARED_PROJECTS,
+      localProjectsInfo: [LOCAL_COPY],
+      unsyncedProjectIds: [],
+    });
+
+    expect(screen.queryByTestId('home-project-unsynced-dot')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sync' })).toBeNull();
+  });
+
+  it('marks a local-only project but keeps Open as its action', () => {
+    renderHomeList({
+      localProjectsInfo: [{ ...LOCAL_COPY, projectId: 'localOnly1', name: 'LOC' }],
+      unsyncedProjectIds: ['LOCALONLY1'],
+    });
+
+    expect(screen.queryByTestId('home-project-unsynced-dot')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open' })).not.toBeNull();
+  });
+
+  /*
+   * Both layouts are in the DOM (CSS decides which one shows). The narrow layout's menu trigger
+   * comes first in a row, ahead of the wide layout's own trigger.
+   */
+  function openNarrowRowMenu(projectName: string) {
+    const row = screen.getByText(projectName).closest('tr');
+    if (!row) throw new Error(`No table row was rendered for ${projectName}`);
+    const menuTrigger = row.querySelector('button[aria-haspopup="menu"]');
+    if (!menuTrigger) throw new Error('The narrow layout row menu button was not rendered');
+    // jsdom has no PointerEvent, so the trigger is opened with its keyboard path instead.
+    fireEvent.keyDown(menuTrigger, { key: 'Enter' });
+  }
+
+  it('offers no Sync in the narrow row menu of a local-only project listed as unsynced', async () => {
+    renderHomeList({
+      localProjectsInfo: [{ ...LOCAL_COPY, projectId: 'localOnly1', name: 'LOC' }],
+      unsyncedProjectIds: ['LOCALONLY1'],
+    });
+
+    openNarrowRowMenu('LOC');
+
+    await screen.findByRole('menuitem', { name: 'Open' });
+    expect(screen.queryByRole('menuitem', { name: 'Sync' })).toBeNull();
+  });
+
+  it('offers Sync before Open in the narrow row menu of a shared project listed as unsynced', async () => {
+    renderHomeList({
+      sharedProjectsInfo: SHARED_PROJECTS,
+      localProjectsInfo: [LOCAL_COPY],
+      unsyncedProjectIds: [PROJECT_ID.toUpperCase()],
+    });
+
+    openNarrowRowMenu('SHR');
+
+    await screen.findByRole('menuitem', { name: 'Open' });
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Sync',
+      'Open',
+    ]);
   });
 });

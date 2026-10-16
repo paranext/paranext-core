@@ -85,12 +85,6 @@ export function useData(): unknown {
             undefined,
             mock.isLoading,
           ];
-        if (mock && dataType === 'AvailableInterfaceLanguages')
-          return (_selector: undefined, def: Record<string, LanguageInfo>): LanguageDataTuple => [
-            mock.availableLanguages ?? def,
-            undefined,
-            false,
-          ];
         return (_selector: unknown, def: unknown): [unknown, undefined, boolean] => [
           def,
           undefined,

@@ -1,11 +1,10 @@
 import { dataProviderService } from '@shared/services/data-provider.service';
-import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import {
   IThemeDataService,
   themeDataServiceObjectToProxy,
   themeDataServiceProviderName,
 } from '@shared/services/theme-data.service-model';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
+import { createCachedInitializer, createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 let dataProvider: IThemeDataService | undefined;
 

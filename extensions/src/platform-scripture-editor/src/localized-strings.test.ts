@@ -3,6 +3,7 @@ import path from 'path';
 import { describe, expect, it } from 'vitest';
 
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
+import { INSERT_CONTEXT_MENU_STRING_KEYS } from './platform-scripture-editor.web-view.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.const';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
@@ -268,6 +269,39 @@ describe.each([...MODEL_TEXT_PANEL_STRING_KEYS])('model text panel label %s', (k
   });
 });
 
+// These shipped keys explain the model text alone, a narrower meaning than the empty state's Base
+// and Model explanation, so they keep their values and are retired rather than reworded
+// (Localization-Guide.md, "Existing Strings Are Immutable").
+describe('retired model-text-only empty state strings', () => {
+  const retiredKeys = [
+    '%webView_modelTextPanel_emptyState_prompt%',
+    '%webView_modelTextPanel_emptyState_moreInfo_body%',
+  ];
+
+  it.each(retiredKeys)('%s is no longer requested by the panel', (key) => {
+    expect(MODEL_TEXT_PANEL_STRING_KEYS).not.toContain(key);
+  });
+
+  it.each(retiredKeys)('%s carries a deprecation notice', (key) => {
+    expect(metadata?.[key]?.deprecationInfo?.message).toMatch(/\S/);
+  });
+
+  it('keeps the shipped English and Spanish values', () => {
+    expect(localizedStrings.en['%webView_modelTextPanel_emptyState_prompt%']).toBe(
+      'No model text selected. Pick one to display a reference translation alongside your project.',
+    );
+    expect(localizedStrings.en['%webView_modelTextPanel_emptyState_moreInfo_body%']).toBe(
+      "The model text is the text you are translating from (your reference/source). If you are not the project admin you can choose one, but your admin will usually choose it, and the admin's choice is what's displayed. If you will be the only person on this project, you'll need to choose it yourself.",
+    );
+    expect(localizedStrings.es['%webView_modelTextPanel_emptyState_prompt%']).toBe(
+      'Ningún texto modelo seleccionado. Elija uno para mostrar una traducción de referencia junto a su proyecto.',
+    );
+    expect(localizedStrings.es['%webView_modelTextPanel_emptyState_moreInfo_body%']).toBe(
+      'El texto modelo es el texto desde el cual usted traduce (su referencia o fuente). Si no es el administrador del proyecto, puede elegir uno, pero normalmente lo elegirá su administrador, y se muestra la elección del administrador. Si usted será la única persona en este proyecto, deberá elegirlo usted mismo.',
+    );
+  });
+});
+
 // The Scripture Text Grid cell's status and action labels, likewise driven off the component's own
 // exported key list.
 describe.each([...RESOURCE_CELL_STRING_KEYS])('resource cell label %s', (key) => {
@@ -311,7 +345,7 @@ describe('Text Collection per-resource zoom strings', () => {
   it('keeps the shipped English and Spanish values', () => {
     expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomIn%']).toBe('Zoom in');
     expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomOut%']).toBe('Zoom out');
-    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_resetZoom%']).toBe('Reset zoom');
+    expect(localizedStrings.en['%webView_scriptureTextGrid_cell_resetZoom%']).toBe('Zoom reset');
     expect(localizedStrings.en['%webView_scriptureTextGrid_cell_zoomOptions%']).toBe(
       'Zoom options for {resourceName}',
     );
@@ -536,5 +570,25 @@ describe.each(['en', 'es'] as const)('editor Project menu labels in %s', (locale
   const keys = menuLocalizeKeys();
   it.each(keys)('%s is defined', (key) => {
     expect(allKeys(locale).has(key)).toBe(true);
+  });
+});
+
+// The editor context menu's insert items, driven off createInsertContextMenuItems's own exported
+// key list so a title it can produce is always covered here, in both directions: a key the builder
+// asks for and this file drops would render a blank row with the parity test in
+// platform-scripture-editor.web-view.utils.test.ts still green (it only ever sees the STUB strings
+// it builds its own titles from), and a Spanish value left equal to English would pass every other
+// check silently.
+describe.each([...INSERT_CONTEXT_MENU_STRING_KEYS])('insert context-menu label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });

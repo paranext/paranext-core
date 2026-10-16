@@ -5,20 +5,45 @@
 // already used by `scripture-pane.test.tsx` and `use-editor-pdp-sync.hook.test.ts`.
 import { describe, it, expect, vi } from 'vitest';
 import { MutableRefObject } from 'react';
-import type { EditorRef, SelectionRange } from '@eten-tech-foundation/platform-editor';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import type {
+  DeltaOpInsertNoteEmbed,
+  EditorRef,
+  SelectionRange,
+} from '@eten-tech-foundation/platform-editor';
 import { isBlockMarker, isLocalizeKey } from 'platform-bible-utils';
 import {
+  CONTEXT_MENU_ACTION_TO_NOTE_KIND,
+  createInsertContextMenuItems,
+  flushRowEditsThenSave,
   generateInlineMarkerMenuListItems,
   getChapterKey,
+  INSERT_CONTEXT_MENU_STRING_KEYS,
+  insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
+  nextEditingNoteOps,
+  noteKindForCtrlTChord,
+  NOTE_INSERT_CONFIG,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
-  resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
+  returnFocusToScriptureTextIfDocumentFocused,
+  shouldSkipNoteInsert,
   shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
-  type FootnotesPaneAutoVisibilityInput,
 } from './platform-scripture-editor.web-view.utils';
+import { EDITOR_OWNERSHIP_WINDOW_MS } from './use-editor-pdp-sync.hook';
+
+// insertNoteAtCurrentSelectionCore logs its read-only/no-editor skip through `logger.debug`; the
+// shared `@papi/frontend` mock exports no `logger`, so the skip path needs its own, same as
+// use-open-find-shortcut.hook.test.ts. Hoisted so the vi.mock factory below can reference it (the
+// factory is hoisted above imports).
+const { loggerDebug } = vi.hoisted(() => ({ loggerDebug: vi.fn() }));
+vi.mock('@papi/frontend', () => ({
+  default: {},
+  logger: { debug: loggerDebug },
+}));
 
 /** Build a mock editor ref exposing a spy for the method the generator calls. */
 function makeMockEditorRef() {
@@ -249,76 +274,6 @@ describe('getChapterKey', () => {
   });
 });
 
-describe('resolveFootnotesPaneAutoVisibility', () => {
-  const GENESIS_1 = 'GEN|1';
-  const GENESIS_2 = 'GEN|2';
-
-  /** Auto-show on, current chapter has notes, no manual override in play. */
-  const AUTO_SHOWING: FootnotesPaneAutoVisibilityInput = {
-    isAutoShowEnabled: true,
-    chapterHasNotes: true,
-    manualOverrideChapterKey: undefined,
-    currentChapterKey: GENESIS_1,
-  };
-
-  it('shows the pane when the chapter has notes', () => {
-    expect(resolveFootnotesPaneAutoVisibility(AUTO_SHOWING)).toBe(true);
-  });
-
-  it('hides the pane when the chapter has no notes', () => {
-    expect(resolveFootnotesPaneAutoVisibility({ ...AUTO_SHOWING, chapterHasNotes: false })).toBe(
-      false,
-    );
-  });
-
-  it('has no opinion while auto-show is off, so the pane keeps whatever the user set', () => {
-    expect(
-      resolveFootnotesPaneAutoVisibility({ ...AUTO_SHOWING, isAutoShowEnabled: false }),
-    ).toBeUndefined();
-    expect(
-      resolveFootnotesPaneAutoVisibility({
-        ...AUTO_SHOWING,
-        isAutoShowEnabled: false,
-        chapterHasNotes: false,
-      }),
-    ).toBeUndefined();
-  });
-
-  it('lets a manual show/hide in the current chapter win over the auto decision', () => {
-    // The user hid the pane in a chapter that HAS notes: auto would show it, and must not.
-    expect(
-      resolveFootnotesPaneAutoVisibility({
-        ...AUTO_SHOWING,
-        manualOverrideChapterKey: GENESIS_1,
-      }),
-    ).toBeUndefined();
-    // ...and the mirror image: shown by hand in a chapter with no notes, auto must not hide it.
-    expect(
-      resolveFootnotesPaneAutoVisibility({
-        ...AUTO_SHOWING,
-        chapterHasNotes: false,
-        manualOverrideChapterKey: GENESIS_1,
-      }),
-    ).toBeUndefined();
-  });
-
-  it('resumes the auto decision once a chapter change leaves the override behind', () => {
-    const overriddenInPreviousChapter: FootnotesPaneAutoVisibilityInput = {
-      ...AUTO_SHOWING,
-      manualOverrideChapterKey: GENESIS_1,
-      currentChapterKey: GENESIS_2,
-    };
-
-    expect(resolveFootnotesPaneAutoVisibility(overriddenInPreviousChapter)).toBe(true);
-    expect(
-      resolveFootnotesPaneAutoVisibility({
-        ...overriddenInPreviousChapter,
-        chapterHasNotes: false,
-      }),
-    ).toBe(false);
-  });
-});
-
 describe('restoreSelectionIfLost', () => {
   const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
 
@@ -450,6 +405,71 @@ describe('resolveEditingSessionActivity', () => {
     });
     expect(activity).toEqual({ isActive: true, isNoteSessionStale: true });
   });
+
+  // The pane's row editor saves as it goes, so it claims the text on the Scripture editor's terms:
+  // focus in the pane plus an edit there within the ownership window. Holding updates back any
+  // longer makes this view push its older copy of the chapter over another view's edit or a
+  // Send/Receive merge.
+  describe('a footnotes-pane session', () => {
+    const paneSessionInput = {
+      hasPaletteSession: false,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: NOW,
+      nowMs: NOW,
+    };
+
+    it('holds updates back while the pane has focus and was edited within the window', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: { hasFocus: true, lastEditAtMs: NOW - (EDITOR_OWNERSHIP_WINDOW_MS - 1) },
+      });
+      expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
+    });
+
+    it('lets updates through once the last edit is as old as the window', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: { hasFocus: true, lastEditAtMs: NOW - EDITOR_OWNERSHIP_WINDOW_MS },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    it('lets updates through while focus is outside the pane, however recent the edit', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: { hasFocus: false, lastEditAtMs: NOW },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    it('lets updates through for a row that was opened but never edited', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        paneSession: { hasFocus: true, lastEditAtMs: undefined },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    // The update a quiet pane session lets through ends the session itself, so there is nothing
+    // for the popover's staleness reaper to clean up.
+    it('is never reported stale, whatever the popover clock says', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        noteSessionRefreshedAtMs: NOW - STALE_NOTE_EDITING_SESSION_MS - 1,
+        paneSession: { hasFocus: false, lastEditAtMs: undefined },
+      });
+      expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+    });
+
+    it('still defers to an open palette session', () => {
+      const activity = resolveEditingSessionActivity({
+        ...paneSessionInput,
+        hasPaletteSession: true,
+        paneSession: { hasFocus: false, lastEditAtMs: undefined },
+      });
+      expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
+    });
+  });
 });
 
 describe('markerMenuItemsToResolvedPaletteItems', () => {
@@ -543,5 +563,435 @@ describe('parseCallerSequenceSetting', () => {
   it('keeps multi-character and non-Latin callers verbatim', () => {
     expect(parseCallerSequenceSetting('๑ ๒ ๓')).toEqual(['๑', '๒', '๓']);
     expect(parseCallerSequenceSetting('aa bb')).toEqual(['aa', 'bb']);
+  });
+});
+
+describe('returnFocusToScriptureTextIfDocumentFocused', () => {
+  function makeEditor() {
+    return { selectAfterNote: vi.fn(), focus: vi.fn() };
+  }
+
+  // A popover closed from another view must not pull focus into this editor: the user's typing
+  // would then be saved into this text instead of the one they are typing in.
+  it('does nothing while the document does not have focus', () => {
+    const editor = makeEditor();
+    const restoreSelection = vi.fn();
+
+    returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, 2, {
+      hasFocus: () => false,
+    });
+    returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, undefined, {
+      hasFocus: () => false,
+    });
+
+    expect(editor.selectAfterNote).not.toHaveBeenCalled();
+    expect(restoreSelection).not.toHaveBeenCalled();
+    expect(editor.focus).not.toHaveBeenCalled();
+  });
+
+  it('restores the caret, then focuses, when no note is given', () => {
+    const editor = makeEditor();
+    const calls: string[] = [];
+    const restoreSelection = vi.fn(() => calls.push('restore'));
+    editor.focus.mockImplementation(() => calls.push('focus'));
+
+    returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, undefined, {
+      hasFocus: () => true,
+    });
+
+    expect(calls).toEqual(['restore', 'focus']);
+    expect(editor.selectAfterNote).not.toHaveBeenCalled();
+  });
+
+  it('puts the caret just past the given note, then focuses', () => {
+    const editor = makeEditor();
+    const calls: string[] = [];
+    editor.selectAfterNote.mockImplementation(() => calls.push('selectAfterNote'));
+    editor.focus.mockImplementation(() => calls.push('focus'));
+    const restoreSelection = vi.fn();
+
+    returnFocusToScriptureTextIfDocumentFocused(editor, restoreSelection, 2, {
+      hasFocus: () => true,
+    });
+
+    expect(editor.selectAfterNote).toHaveBeenCalledWith(2);
+    expect(calls).toEqual(['selectAfterNote', 'focus']);
+    expect(restoreSelection).not.toHaveBeenCalled();
+  });
+});
+
+describe('flushRowEditsThenSave', () => {
+  /** A save debouncer whose pending state the row editor's flush can change, like the real one. */
+  function makeSave(initiallyPending: boolean) {
+    let pending = initiallyPending;
+    const flushedPromise = Promise.resolve();
+    const save = {
+      schedule: () => {
+        pending = true;
+      },
+      isPending: () => pending,
+      flush: vi.fn(() => {
+        if (!pending) return undefined;
+        pending = false;
+        return flushedPromise;
+      }),
+    };
+    return { save, flushedPromise };
+  }
+
+  it("lands the row editor's pending edits before flushing the save", () => {
+    const { save, flushedPromise } = makeSave(true);
+    const calls: string[] = [];
+    const rowEditor = { flushPendingEdits: vi.fn(() => calls.push('row')) };
+    save.flush.mockImplementationOnce(() => {
+      calls.push('save');
+      return flushedPromise;
+    });
+
+    const result = flushRowEditsThenSave(rowEditor, save);
+
+    expect(calls).toEqual(['row', 'save']);
+    expect(result).toBe(flushedPromise);
+  });
+
+  // The row's pending keystrokes are what schedules the save, so it was not pending beforehand.
+  it("flushes the save the row editor's edits scheduled when none was pending yet", () => {
+    const { save, flushedPromise } = makeSave(false);
+    const rowEditor = { flushPendingEdits: vi.fn(() => save.schedule()) };
+
+    const result = flushRowEditsThenSave(rowEditor, save);
+
+    expect(save.flush).toHaveBeenCalledOnce();
+    expect(result).toBe(flushedPromise);
+  });
+
+  it('returns undefined when nothing was pending anywhere', () => {
+    const { save } = makeSave(false);
+
+    expect(flushRowEditsThenSave(undefined, save)).toBeUndefined();
+    expect(save.flush).not.toHaveBeenCalled();
+  });
+
+  it('flushes a pending save when no row session is open', () => {
+    const { save, flushedPromise } = makeSave(true);
+
+    expect(flushRowEditsThenSave(undefined, save)).toBe(flushedPromise);
+  });
+});
+
+describe('nextEditingNoteOps', () => {
+  function noteOp(text: string): DeltaOpInsertNoteEmbed {
+    return {
+      insert: { note: { style: 'f', caller: '+', contents: { ops: [{ insert: text }] } } },
+    };
+  }
+
+  // The row editor's own apply re-keys the note. Its array must keep its identity, or the mounted
+  // row editor reloads mid-typing; and it must hold the new op, or a row editor remounted
+  // mid-session loads the note as it was when the session opened, losing the session's edits.
+  it('refreshes the same array in place when the row editor re-keyed the note', () => {
+    const editingNoteOps = [noteOp('as opened')];
+    const edited = noteOp('as edited');
+
+    const next = nextEditingNoteOps(editingNoteOps, edited, {
+      action: 'rekey',
+      reloadRowEditor: false,
+    });
+
+    expect(next).toBe(editingNoteOps);
+    expect(next?.[0]).toBe(edited);
+  });
+
+  it('hands out a fresh array when the note changed from elsewhere', () => {
+    const editingNoteOps = [noteOp('as opened')];
+    const changed = noteOp('changed in the text');
+
+    const next = nextEditingNoteOps(editingNoteOps, changed, {
+      action: 'follow-note',
+      reloadRowEditor: true,
+    });
+
+    expect(next).not.toBe(editingNoteOps);
+    expect(next).toEqual([changed]);
+  });
+
+  it('leaves the array alone when the note only moved', () => {
+    const opened = noteOp('as opened');
+    const editingNoteOps = [opened];
+
+    const next = nextEditingNoteOps(editingNoteOps, noteOp('as opened'), {
+      action: 'follow-note',
+      reloadRowEditor: false,
+    });
+
+    expect(next).toBe(editingNoteOps);
+    expect(next?.[0]).toBe(opened);
+  });
+
+  it('leaves the array alone when the note did not resolve', () => {
+    const editingNoteOps = [noteOp('as opened')];
+
+    expect(
+      nextEditingNoteOps(editingNoteOps, undefined, { action: 'rekey', reloadRowEditor: false }),
+    ).toBe(editingNoteOps);
+  });
+});
+
+describe('NOTE_INSERT_CONFIG', () => {
+  // Per-kind, not aggregate: a table iterated in bulk can't tell a cross-wired entry (e.g. the
+  // endnote kind reusing the footnote's marker or commit-message key) from a correct one. Each
+  // case pins its OWN kind's fields against the other two kinds' values, so a swap fails here.
+  it.each([
+    ['insertFootnoteAtSelection', 'f', '%versionHistoryCommit_beforeInsertFootnote%'],
+    ['insertCrossReferenceAtSelection', 'x', '%versionHistoryCommit_beforeInsertCrossReference%'],
+    ['insertEndnoteAtSelection', 'fe', '%versionHistoryCommit_beforeInsertEndnote%'],
+  ] as const)(
+    '%s maps to marker %s and commit-message key %s',
+    (kind, marker, commitMessageKey) => {
+      expect(NOTE_INSERT_CONFIG[kind].marker).toBe(marker);
+      expect(NOTE_INSERT_CONFIG[kind].commitMessageKey).toBe(commitMessageKey);
+    },
+  );
+
+  it('gives each kind a distinct marker, commit-message key, and edit description', () => {
+    const configs = Object.values(NOTE_INSERT_CONFIG);
+    const markers = configs.map((config) => config.marker);
+    const commitMessageKeys = configs.map((config) => config.commitMessageKey);
+    const editDescriptions = configs.map((config) => config.editDescription);
+
+    expect(new Set(markers).size).toBe(configs.length);
+    expect(new Set(commitMessageKeys).size).toBe(configs.length);
+    expect(new Set(editDescriptions).size).toBe(configs.length);
+  });
+});
+
+describe('shouldSkipNoteInsert', () => {
+  it('skips when there is no mounted editor', () => {
+    expect(shouldSkipNoteInsert(false, false)).toBe(true);
+  });
+
+  it('skips when the editor is read-only', () => {
+    expect(shouldSkipNoteInsert(true, true)).toBe(true);
+  });
+
+  it('does not skip with a mounted, writable editor', () => {
+    expect(shouldSkipNoteInsert(true, false)).toBe(false);
+  });
+});
+
+describe('insertNoteAtCurrentSelectionCore', () => {
+  // Resolves every kind's commit-message key to a traceable `LOC:<key>` string, same convention as
+  // the localized-strings stub further down this file.
+  const localizedStrings = Object.fromEntries(
+    Object.values(NOTE_INSERT_CONFIG).map((config) => [
+      config.commitMessageKey,
+      `LOC:${config.commitMessageKey}`,
+    ]),
+  );
+
+  /** A fresh pair of spies plus a shared call log, so ORDER between them is observable. */
+  function makeDeps() {
+    const calls: string[] = [];
+    const insertMarker = vi.fn((marker: string) => {
+      calls.push(`insertMarker:${marker}`);
+    });
+    const commitSnapshot = vi.fn(async (message: string) => {
+      calls.push(`commitSnapshot:${message}`);
+    });
+    return { calls, insertMarker, commitSnapshot };
+  }
+
+  // Falsifiability: this must go RED if the read-only check is deleted or moved below the
+  // snapshot.
+  it('skips both the snapshot and the marker insert when read-only', async () => {
+    const { calls, insertMarker, commitSnapshot } = makeDeps();
+    await insertNoteAtCurrentSelectionCore(
+      'insertFootnoteAtSelection',
+      true,
+      true,
+      insertMarker,
+      commitSnapshot,
+      localizedStrings,
+    );
+    expect(calls).toEqual([]);
+    expect(commitSnapshot).not.toHaveBeenCalled();
+    expect(insertMarker).not.toHaveBeenCalled();
+  });
+
+  it('skips both the snapshot and the marker insert with no mounted editor', async () => {
+    const { calls, insertMarker, commitSnapshot } = makeDeps();
+    await insertNoteAtCurrentSelectionCore(
+      'insertFootnoteAtSelection',
+      false,
+      false,
+      insertMarker,
+      commitSnapshot,
+      localizedStrings,
+    );
+    expect(calls).toEqual([]);
+    expect(commitSnapshot).not.toHaveBeenCalled();
+    expect(insertMarker).not.toHaveBeenCalled();
+  });
+
+  it('commits the snapshot with the kind’s commit message BEFORE inserting the marker when editable', async () => {
+    const { calls, insertMarker, commitSnapshot } = makeDeps();
+    await insertNoteAtCurrentSelectionCore(
+      'insertEndnoteAtSelection',
+      true,
+      false,
+      insertMarker,
+      commitSnapshot,
+      localizedStrings,
+    );
+    expect(calls).toEqual([
+      `commitSnapshot:LOC:${NOTE_INSERT_CONFIG.insertEndnoteAtSelection.commitMessageKey}`,
+      `insertMarker:${NOTE_INSERT_CONFIG.insertEndnoteAtSelection.marker}`,
+    ]);
+  });
+});
+
+describe('CONTEXT_MENU_ACTION_TO_NOTE_KIND', () => {
+  // Per-action, not aggregate: a table iterated in bulk can't tell a cross-wired entry (e.g. the
+  // footnote action mapped to the endnote kind) from a correct one, since every kind still appears
+  // somewhere in the table either way.
+  it.each([
+    ['insertFootnote', 'insertFootnoteAtSelection'],
+    ['insertCrossReference', 'insertCrossReferenceAtSelection'],
+    ['insertEndnote', 'insertEndnoteAtSelection'],
+  ] as const)('%s maps to %s', (action, kind) => {
+    expect(CONTEXT_MENU_ACTION_TO_NOTE_KIND[action]).toBe(kind);
+  });
+
+  it('maps each action to a distinct kind', () => {
+    const kinds = Object.values(CONTEXT_MENU_ACTION_TO_NOTE_KIND);
+    expect(new Set(kinds).size).toBe(kinds.length);
+  });
+});
+
+describe('noteKindForCtrlTChord', () => {
+  it('maps Ctrl+T (no Shift) to the footnote kind', () => {
+    expect(noteKindForCtrlTChord(false)).toBe('insertFootnoteAtSelection');
+  });
+
+  it('maps Ctrl+Shift+T to the cross-reference kind', () => {
+    expect(noteKindForCtrlTChord(true)).toBe('insertCrossReferenceAtSelection');
+  });
+});
+
+describe('createInsertContextMenuItems', () => {
+  // Parity contract: the context menu must offer exactly the Insert-menu inserts, in menu order.
+  // Read the Insert menu straight from the contribution so a menus.json change without a
+  // context-menu twin fails this test.
+  const menusJson = JSON.parse(
+    readFileSync(join(__dirname, '../contributions/menus.json'), 'utf8'),
+  );
+  const { groups, items: topMenuItems } =
+    menusJson.webViewMenus['platformScriptureEditor.react'].topMenu;
+  // Taken from the Insert COLUMN rather than the one group in it today: keyed on the group name, a
+  // second group added to that column would put an item in the Insert menu with no context-menu
+  // twin and leave this guard green.
+  const insertGroupOrders = new Map<string, number>(
+    Object.entries(groups)
+      .filter(([, group]) => group.column === 'platformScriptureEditor.insert')
+      .map(([name, group]): [string, number] => [name, group.order]),
+  );
+  const insertMenuItems: {
+    label: string;
+    group: string;
+    order: number;
+    hiddenInterfaceModes?: string[];
+  }[] = topMenuItems
+    .filter((item: { group: string }) => insertGroupOrders.has(item.group))
+    .sort(
+      (a: { group: string; order: number }, b: { group: string; order: number }) =>
+        (insertGroupOrders.get(a.group) ?? 0) - (insertGroupOrders.get(b.group) ?? 0) ||
+        a.order - b.order,
+    );
+
+  const makeActions = () => ({
+    insertFootnote: vi.fn(),
+    insertCrossReference: vi.fn(),
+    insertEndnote: vi.fn(),
+    insertComment: vi.fn(),
+  });
+
+  // Localized-strings stub: key -> `LOC:<key>` so titles are traceable to keys.
+  const strings = Object.fromEntries(
+    insertMenuItems.map((item) => [item.label, `LOC:${item.label}`]),
+  );
+
+  const ENABLED = { isReadOnly: false, canUserCreateComments: true, isSyncBlocked: false };
+
+  it('offers exactly the Insert-menu items, localized, in the same order', () => {
+    const items = createInsertContextMenuItems(strings, makeActions(), ENABLED);
+    expect(items.map((i) => i.title)).toEqual(insertMenuItems.map((i) => `LOC:${i.label}`));
+  });
+
+  // The builder and the web view's localized-strings list must ask for the SAME keys — a key
+  // present in one and not the other resolves to `undefined` and renders a blank row. Asserting
+  // against the exported list (rather than the menus.json labels above) catches that drift
+  // directly: every title this builder can produce must resolve through one of these keys.
+  it('resolves every title through a key in INSERT_CONTEXT_MENU_STRING_KEYS', () => {
+    const keyedStrings = Object.fromEntries(
+      INSERT_CONTEXT_MENU_STRING_KEYS.map((key) => [key, key]),
+    );
+    const items = createInsertContextMenuItems(keyedStrings, makeActions(), ENABLED);
+    items.forEach((item) => {
+      expect(INSERT_CONTEXT_MENU_STRING_KEYS).toContain(item.title);
+    });
+  });
+
+  // createInsertContextMenuItems takes no interface-mode input, so it cannot honor a per-mode
+  // hide: an Insert-column item hidden from Simple mode's top menu would still show up here. The
+  // parity test above compares labels/order only and would pass vacuously in that case, so pin the
+  // gap directly rather than leaving it latent.
+  it('has no Insert-column item declaring hiddenInterfaceModes, since the builder cannot honor it', () => {
+    const itemsWithHiddenModes = insertMenuItems.filter(
+      (item) => item.hiddenInterfaceModes?.length,
+    );
+    expect(itemsWithHiddenModes).toEqual([]);
+  });
+
+  it('disables note inserts when read-only and the comment insert per permission', () => {
+    const readOnly = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      isReadOnly: true,
+    });
+    expect(readOnly.map((i) => !!i.isDisabled)).toEqual([true, true, true, false]);
+    const noCommentPermission = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      canUserCreateComments: false,
+    });
+    expect(noCommentPermission.map((i) => !!i.isDisabled)).toEqual([false, false, false, true]);
+  });
+
+  // A sync freeze reaches the note inserts through the editor's own read-only state, so only the
+  // comment insert — which does not go through the editor — needs the flag directly.
+  it('disables the comment insert while sync-blocked', () => {
+    const syncBlocked = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      isSyncBlocked: true,
+    });
+    expect(syncBlocked.map((i) => !!i.isDisabled)).toEqual([false, false, false, true]);
+  });
+
+  // Per-item, not aggregate: calling every item's onSelect and counting each action's TOTAL calls
+  // passes under any permutation of the item-to-action mapping — it cannot tell "Insert footnote"
+  // wired to insertCrossReference from the correct wiring. Asserting ONE item's onSelect against
+  // every action's call count catches exactly that cross-wiring.
+  it.each([
+    [0, 'insertFootnote'],
+    [1, 'insertCrossReference'],
+    [2, 'insertEndnote'],
+    [3, 'insertComment'],
+  ] as const)('item %i runs ONLY its own action (%s)', (index, actionName) => {
+    const actions = makeActions();
+    const items = createInsertContextMenuItems(strings, actions, ENABLED);
+    items[index].onSelect();
+    (['insertFootnote', 'insertCrossReference', 'insertEndnote', 'insertComment'] as const).forEach(
+      (name) => {
+        expect(actions[name]).toHaveBeenCalledTimes(name === actionName ? 1 : 0);
+      },
+    );
   });
 });

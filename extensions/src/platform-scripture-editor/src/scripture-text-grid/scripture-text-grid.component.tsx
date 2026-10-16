@@ -27,6 +27,8 @@ type ScriptureTextGridProps = {
   resources: GridResource[];
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
+  /** Whether this web view is showing; owned by the web view, which explains why. */
+  isViewVisible: boolean;
   /** Accessible name for the list/group region (the web view passes the localized tab title). */
   ariaLabel?: string;
   /**
@@ -96,6 +98,7 @@ export function ScriptureTextGrid({
   resources,
   scrRef,
   setScrRef,
+  isViewVisible,
   ariaLabel,
   viewMode = 'verse',
   chapterContext,
@@ -246,12 +249,13 @@ export function ScriptureTextGrid({
         <div role="status" aria-live="polite" className="tw:sr-only">
           {reorderAnnouncement}
         </div>
-        <AlignedGrid scrRef={scrRef} ariaLabel={ariaLabel}>
+        <AlignedGrid scrRef={scrRef} isViewVisible={isViewVisible} ariaLabel={ariaLabel}>
           {resources.map((resource) => (
             <ResourceColumn
               key={resource.resourceId}
               resource={resource}
               scrRef={scrRef}
+              isViewVisible={isViewVisible}
               setScrRef={setScrRef}
               cellViewMode="aligned"
               className="tw:min-w-0"
@@ -272,6 +276,16 @@ export function ScriptureTextGrid({
   //
   // `data-resource-id` identifies the resource from any element inside the cell, and
   // `data-project-id` lets a focused element be traced back to the resource holding the caret.
+  //
+  // This wrapper deliberately does NOT scroll, and the flex chain down to the cell is load-bearing.
+  // The reference scroll drives the CELL's content box (`contentRef` in `ResourceCell`), and that
+  // box only becomes a scroll port when an ancestor constrains the cell's height:
+  // `ResourceCellView`'s root is `flex flex-col` with no height of its own, so it takes one only as
+  // a stretched flex item. Scrolling here instead would leave that box unable to overflow, and a
+  // scroll-group move would silently do nothing on this surface alone. The inner wrapper must stay a
+  // row for the same reason: stretching on its cross axis is what gives the cell its height. The
+  // chapter-context split below uses the same height chain; the chapter row reaches the same end
+  // with `overflow-y-hidden`.
   const [onlyResource] = resources;
   if (resources.length === 1 && onlyResource) {
     const onlyZoomArea = resourceZoomAreaOf(onlyResource.resourceId);
@@ -283,17 +297,25 @@ export function ScriptureTextGrid({
         data-project-id={onlyResource.projectId}
         data-resource-id={onlyResource.resourceId}
         data-platform-content-zoom-scope={onlyZoomArea}
-        className="tw:h-full tw:min-h-0 tw:overflow-auto"
+        className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:overflow-hidden"
       >
-        <ResourceCell
-          resourceRef={onlyResource}
-          zoomArea={onlyZoomArea}
-          zoom={zoom}
-          zoomMenuLabels={zoomMenuLabels}
-          scrRef={scrRef}
-          setScrRef={setScrRef}
-          viewMode="chapter"
-        />
+        {/* `[&>*]:flex-1` reaches the cell's own root, which is a shrink-to-fit item on this row's
+            main axis and takes no `className` of its own. Without it the header band and a short
+            `[data-cell-placeholder]` hug the inline start at the message's width instead of
+            spanning the pane; prose hides it, so it shows only in the downloading/unavailable/
+            failed/empty states. */}
+        <div className="tw:flex tw:min-h-0 tw:flex-1 tw:[&>*]:flex-1">
+          <ResourceCell
+            resourceRef={onlyResource}
+            zoomArea={onlyZoomArea}
+            zoom={zoom}
+            zoomMenuLabels={zoomMenuLabels}
+            scrRef={scrRef}
+            setScrRef={setScrRef}
+            isViewVisible={isViewVisible}
+            viewMode="chapter"
+          />
+        </div>
       </div>
     );
   }
@@ -328,12 +350,14 @@ export function ScriptureTextGrid({
         <div role="status" aria-live="polite" className="tw:sr-only">
           {reorderAnnouncement}
         </div>
-        {resources.map((resource) => (
+        {resources.map((resource, orderIndex) => (
           <ResourceColumn
             key={resource.resourceId}
             resource={resource}
             scrRef={scrRef}
             setScrRef={setScrRef}
+            isViewVisible={isViewVisible}
+            orderIndex={orderIndex}
             cellViewMode="chapter"
             className="tw:flex tw:min-w-3xs tw:flex-1 tw:shrink-0"
             reorder={buildReorder(resource)}
@@ -433,6 +457,7 @@ export function ScriptureTextGrid({
               zoomMenuLabels={zoomMenuLabels}
               scrRef={scrRef}
               setScrRef={setScrRef}
+              isViewVisible={isViewVisible}
               viewMode={viewMode}
               showDragHandle={reorder ? true : undefined}
               reorderHandleLabel={reorder?.handleLabel}
@@ -491,6 +516,7 @@ export function ScriptureTextGrid({
                 zoomMenuLabels={zoomMenuLabels}
                 scrRef={scrRef}
                 setScrRef={setScrRef}
+                isViewVisible={isViewVisible}
                 viewMode="chapter"
               />
             </div>

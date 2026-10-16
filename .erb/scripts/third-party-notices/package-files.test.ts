@@ -6,6 +6,7 @@ import {
   declaredLicenseField,
   isLicenseTextFileName,
   isNoticeFileName,
+  readCreditFiles,
   readNugetLicenseFiles,
   readPackageNotices,
 } from './package-files';
@@ -159,5 +160,44 @@ describe('readNugetLicenseFiles', () => {
         text: 'MICROSOFT SOFTWARE LICENSE TERMS\nMICROSOFT .NET LIBRARY',
       },
     ]);
+  });
+});
+
+describe('readCreditFiles', () => {
+  it('reads a file by its path inside the package folder', () => {
+    const dir = packageDir({});
+    fs.mkdirSync(path.join(dir, 'lib', 'zlib'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'lib', 'zlib', 'README'), 'Copyright:\r\n(C) 1995 A\r\n');
+    expect(readCreditFiles(dir, ['lib/zlib/README'])).toStrictEqual({
+      'lib/zlib/README': 'Copyright:\n(C) 1995 A',
+    });
+  });
+
+  it('reports a missing file, and never reads outside the package folder', () => {
+    const outside = packageDir({ SECRET: 'Copyright (C) 1995 A' });
+    const dir = packageDir({});
+    const escape = path.relative(dir, path.join(outside, 'SECRET'));
+    const absolute = path.join(outside, 'SECRET');
+    expect(readCreditFiles(dir, ['missing', escape, absolute])).toStrictEqual({
+      missing: undefined,
+      [escape]: undefined,
+      [absolute]: undefined,
+    });
+  });
+
+  it('reports a directory, or a path running through a file, as unreadable', () => {
+    // A slip in the policy entry - pako's reason names "every file under lib/zlib/" - must reach
+    // `applyException`, which names the path, rather than abort the run with a bare EISDIR.
+    const dir = packageDir({ LICENSE: 'Copyright (C) 1995 A' });
+    fs.mkdirSync(path.join(dir, 'lib'));
+    expect(readCreditFiles(dir, ['lib', 'LICENSE/x'])).toStrictEqual({
+      lib: undefined,
+      'LICENSE/x': undefined,
+    });
+  });
+
+  it('reads nothing without a folder or a list of paths', () => {
+    expect(readCreditFiles(undefined, ['README'])).toStrictEqual({});
+    expect(readCreditFiles(packageDir({ README: 'x' }), 'README')).toStrictEqual({});
   });
 });

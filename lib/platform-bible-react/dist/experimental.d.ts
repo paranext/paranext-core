@@ -1381,6 +1381,24 @@ export declare function filterAndRankPaletteItems<T extends {
 	label: string;
 }>(items: readonly T[], filterText: string | undefined, mode: PaletteFilterMode): T[];
 /**
+ * Whether ONE editor's own right-click context menu (`ContextMenuPlugin`) is open, scoped to that
+ * editor rather than to the document as a whole.
+ *
+ * The menu itself renders through a `ReactDOM.createPortal` to `document.body`, and every
+ * `ContextMenuPlugin` instance on the page — the main Standard-view editor and the footnote-editor
+ * popover each mount their own — shares the same portal classes
+ * (`.typeahead-popover.auto-embed-menu`), so a bare `document.querySelector` for that class cannot
+ * tell whose menu is open. The editor package instead marks the FOCUSED editor's own root with
+ * `aria-controls="editor-context-menu"` for exactly as long as its menu stays open (removed again
+ * on close), which is the one signal that is genuinely per-editor.
+ */
+/**
+ * @param editorRoot The editor's own DOM root (the `.editor-input` element the menu marks), or a
+ *   container that contains it. `undefined`/`null` (editor not yet mounted) answers `false`.
+ * @returns Whether THIS editor's right-click context menu is open.
+ */
+export declare function isEditorContextMenuOpenFor(editorRoot: Element | null | undefined): boolean;
+/**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
  * localized strings and pass them into the localizedStrings prop of this component.
@@ -1443,6 +1461,46 @@ export type NavigationHistoryButtonsProps = {
  * arrow icons, and tooltip shortcut hints), matching Paratext 9.
  */
 export declare function NavigationHistoryButtons({ canGoBack, canGoForward, backItems, forwardItems, onNavigate, localizedStrings, showKeyboardShortcuts, className, variant, groupClassName, showDivider, }: NavigationHistoryButtonsProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The keys this explanation reads. They are defined by the platform-scripture-editor extension (its
+ * Model Text panel shows the same explanation in its empty state), so every consumer resolves them
+ * from there.
+ *
+ * Each `...Term` key is the bold lead-in to the definition or note that follows it, and carries its
+ * own punctuation so a translator controls it.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS: readonly [
+	"%webView_modelTextPanel_emptyState_baseOrModel_intro%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_admin%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%",
+	"%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%"
+];
+/** @experimental This export is unstable and may change shape or disappear without notice */
+export type BaseOrModelTextExplanationLocalizedStrings = {
+	[key in (typeof BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS)[number]]?: string;
+};
+/** @experimental This export is unstable and may change shape or disappear without notice */
+export type BaseOrModelTextExplanationProps = {
+	/** Localized strings; pass strings resolved from `BASE_OR_MODEL_TEXT_EXPLANATION_STRING_KEYS`. */
+	localizedStrings?: BaseOrModelTextExplanationLocalizedStrings;
+	/** Class name for the wrapper, so each surface owns its width, alignment and wrapping. */
+	className?: string;
+};
+/**
+ * What Base and Model texts are, who chooses one, and the copyright caveat, as five paragraphs with
+ * each term in bold beside what it introduces. Shown behind a "More info" disclosure by both the
+ * Model Text panel's empty state and the Team layout dialog, which each own their own toggle; one
+ * component so the two can never explain Base and Model differently.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function BaseOrModelTextExplanation({ localizedStrings, className, }: BaseOrModelTextExplanationProps): import("react/jsx-runtime").JSX.Element;
 /**
  * How the app is permitted to use the internet. Local alias — identical string literals to the
  * extension's `InternetUse` type, defined here so platform-bible-react does not depend on the
@@ -1510,6 +1568,34 @@ export type DeveloperSectionProps = {
 };
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare function DeveloperSection({ localizedStrings, selectedServer, onServerChange, disabled, }: DeveloperSectionProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Props for {@link ShortcutKeys}.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ShortcutKeysProps = {
+	/**
+	 * One already-resolved keyboard shortcut hint to render as keycaps — a single key combination,
+	 * such as a menu item's `shortcut` string. Not a raw keyboard shortcuts catalog `keys` string:
+	 * that may hold several `/`-separated alternatives or a no-equivalent marker, neither of which
+	 * this component parses.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	hint: string;
+};
+/**
+ * Renders a keyboard shortcut hint as keycaps: a single key is a lone {@link Kbd}, while a
+ * combination puts every key in its own `Kbd` inside a `KbdGroup`. The Windows/Linux `+` renders as
+ * plain text between the keycaps rather than as part of one; macOS symbols sit adjacent with
+ * nothing between them.
+ *
+ * It does not detect the operating system: it follows the spelling of the hint it is given, so the
+ * caller picks the spelling for the user's OS (e.g. `isMacOs() ? '⌘Z' : 'Ctrl+Z'`).
+ *
+ * @experimental This component is unstable and may change or disappear without notice
+ */
+export declare function ShortcutKeys({ hint }: ShortcutKeysProps): import("react/jsx-runtime").JSX.Element;
 
 export {
 	ALL_BOOK_IDS,
