@@ -118,6 +118,18 @@ port it is handed; an intercepted port gives an extension no capability it does 
 through `window.papi`. The renderer itself opens no WebSocket to port 8876;
 `blockWebSocketsToPapiNetwork` still stops extension code from doing so.
 
+### Paratext Registry access tokens
+
+The `paratextRegistryToken` elevated privilege hands extensions Paratext Registry access tokens
+made from the user's registration code. The code stays in the C# data provider. The extension host
+checks the caller's `paratextRegistryTokenResources` before forwarding a request on
+`paratextRegistryToken:getAccessToken`, a request type extension code can't reach directly. Tokens
+carry read scopes only, expire after the Registry-set lifetime (currently 20 minutes), and are valid
+only at the named service. Local processes on the unauthenticated PAPI WebSocket can also call that
+request type; they already run as the user and can read the user's Paratext data directly, so this
+adds no new exposure. Rationale: `adr-registry-tokens-via-elevated-privilege` in
+`Architecture-Decisions.md`.
+
 ---
 
 ## Security Best Practices
