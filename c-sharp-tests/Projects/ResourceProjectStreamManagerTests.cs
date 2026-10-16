@@ -185,11 +185,22 @@ namespace TestParanextDataProvider.Projects
                 "The read never ended"
             );
 
+            // Caught here too: an exception left unhandled on a thread of its own would end the
+            // whole test run rather than fail this test
             string? sealedContents = null;
+            Exception? sealedFailure = null;
             Thread sealedRead =
-                new(
-                    () => sealedContents = ReadStream(streamManager, $"{ExtensionPath}/sealed.json")
-                )
+                new(() =>
+                {
+                    try
+                    {
+                        sealedContents = ReadStream(streamManager, $"{ExtensionPath}/sealed.json");
+                    }
+                    catch (Exception e)
+                    {
+                        sealedFailure = e;
+                    }
+                })
                 {
                     IsBackground = true,
                 };
@@ -205,6 +216,7 @@ namespace TestParanextDataProvider.Projects
                     Is.True,
                     "A read from another thread was blocked"
                 );
+                Assert.That(sealedFailure, Is.Null);
                 Assert.That(sealedContents, Is.EqualTo("sealed"));
             });
         }
