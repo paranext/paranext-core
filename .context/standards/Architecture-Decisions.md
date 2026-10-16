@@ -916,8 +916,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Status:** Accepted, amended 2026-09-18 — the Text Collection's follow gate is now decided by
   project kind (`platform.isPublished`), not editability, and the editor's gate on Find's re-point
   is removed, so Find follows every editor-column switch.
-- **Context:** Simple mode's Column 3 holds exactly five panels — Bible Texts, Commentaries,
-  Comments, the Text Collection, and Find — pinned by `shipped-simple-layout-order.test.ts`. A
+- **Context:** Simple mode's Column 3 holds a fixed set of panels, pinned by
+  `shipped-simple-layout-order.test.ts`. A
   project switch re-pointed three of them explicitly (`openOrUpdateRelatedPanels` sends two
   `openResourceText` calls and `openCommentListPanel`; its fourth command, `openModelText`, targets
   the **Column 1** Model Text panel, not Column 3 — see `simple-layout.data.ts`) plus Find
@@ -933,7 +933,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   silently corrected itself.
 - **Decision:** Every Column 3 panel is **told** its project by the switch; none infers one. The Text
   Collection is re-pointed by `updateRelatedTextCollectionPanel`, called directly from
-  `openOrUpdateRelatedPanels` (same module, so no command indirection is needed — unlike the four
+  `openOrUpdateRelatedPanels` (same module, so no command indirection is needed — unlike the
   command-driven panels, whose handlers live in `main.ts` for Model Text and the two resource
   panels, in `legacy-comment-manager` for Comments, and in `platform-scripture` for Find). There are **two** switch paths and both must call it:
   the editor-column switch via `openOrUpdateRelatedPanels`, and the Power→Simple mode switch via

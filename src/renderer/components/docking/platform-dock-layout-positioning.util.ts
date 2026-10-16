@@ -103,6 +103,7 @@ const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
   [SCRIPTURE_EDITOR_WEBVIEW_TYPE]: HEADLESS_GROUP,
   'platformScriptureEditor.bibleTexts': TAB_GROUP_RESOURCES,
   'platformScriptureEditor.commentaries': TAB_GROUP_RESOURCES,
+  'platformLexicalTools.dictionary': TAB_GROUP_RESOURCES,
   'legacyCommentManager.commentListPanel': TAB_GROUP_RESOURCES,
   'platformScriptureEditor.scriptureTextGrid': TAB_GROUP_RESOURCES,
   'platformScripture.find': TAB_GROUP_RESOURCES,
@@ -123,10 +124,10 @@ const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
  * (e.g. opened freely in Power mode, where they aren't confined to a fixed column) — gets the
  * default `TAB_GROUP`, matching pre-existing behavior.
  *
- * Reading `isClosable` here is what makes six providers across three extensions each compute
- * `isClosable: interfaceMode === 'power'` for themselves. PT-4405 centralizes it: the two halves
- * needed to decide pinning already live in this module and `readCachedInterfaceMode()`, so the
- * renderer can derive it for any webViewType in {@link FIXED_LAYOUT_WEBVIEW_GROUPS} and the per-
+ * Reading `isClosable` here is what makes various providers across multiple extensions each compute
+ * `isClosable: interfaceMode === 'power'` for themselves. TODO(PT-4405) centralizes it: the two
+ * halves needed to decide pinning already live in this module and `readCachedInterfaceMode()`, so
+ * the renderer can derive it for any webViewType in {@link FIXED_LAYOUT_WEBVIEW_GROUPS} and the per-
  * provider copies can go away.
  */
 export function getTabGroup(tabInfo: TabInfo): string {
