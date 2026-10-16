@@ -132,10 +132,15 @@ PAPI WebSocket can call that request type for any resource registered with the R
 
 - Local processes already run as the user and can read the user's Paratext data directly, so they
   gain nothing new.
-- A web page open in the user's browser can also connect to `ws://localhost:8876`, because the
-  listener does not check the handshake's `Origin` header. Such a page can already call every other
-  PAPI method, but this is the first one whose result works off the machine. WebSocket hardening,
-  including checking origin, is open work in PT-2893.
+- A web page open in the user's browser can also connect to `ws://localhost:8876`. Connections are
+  not authenticated, so the server can't tell such a page from Platform.Bible's own processes. The
+  page can already call every other PAPI method, but this is the first one whose result works off
+  the machine.
+
+Rejecting browser connections is not the fix: browser clients are legitimate too.
+`platform.openDeveloperDocumentationUrl` opens the OpenRPC playground against this WebSocket, and
+developers test PAPI calls from browsers. Authenticating the clients the main process launches, so
+that sensitive request types like this one can be limited to them, is open work in PT-2893.
 
 Rationale: `adr-registry-tokens-via-elevated-privilege` in `Architecture-Decisions.md`.
 
