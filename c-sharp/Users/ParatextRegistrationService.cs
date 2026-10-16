@@ -11,8 +11,7 @@ namespace Paranext.DataProvider.Users;
 /// </summary>
 internal class ParatextRegistrationService(
     PapiClient papiClient,
-    InternetSettingsDataProvider internetSettingsDataProvider,
-    RegistryAccessTokenService registryAccessTokenService
+    InternetSettingsDataProvider internetSettingsDataProvider
 )
 {
     #region Constructors, consts, and fields
@@ -82,8 +81,6 @@ internal class ParatextRegistrationService(
     private PapiClient PapiClient { get; } = papiClient;
     private InternetSettingsDataProvider InternetSettingsDataProvider { get; } =
         internetSettingsDataProvider;
-    private RegistryAccessTokenService RegistryAccessTokenService { get; } =
-        registryAccessTokenService;
 
     /// <summary>
     /// Returns information about user's current Paratext Registry user information in ParatextData.dll
@@ -215,8 +212,6 @@ internal class ParatextRegistrationService(
 
             // Actually change the registration info
             RegistrationInfo.ChangeRegistrationData(newRegistrationData);
-            // Tokens minted with the previous registration must not be handed out for the new one.
-            RegistryAccessTokenService.ClearCache();
 
             // registration code may have changed, so reset the registry server with the new user data
             Paratext.Data.RegistryServerAccess.RegistryServer.Default?.ResetServer(

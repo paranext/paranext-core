@@ -189,7 +189,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 - Always pass `scope`. Only the five read scopes in `RegistryReadScope` are allowed.
 - Failures reject with a `PlatformError`. Branch on its `code`:
   - `UNAUTHENTICATED`: offer `paratextRegistration.showParatextRegistration`.
-  - `FAILED_PRECONDITION`: the user turned internet access off.
+  - `FAILED_PRECONDITION`: the user turned internet access off, or Internet Settings require a VPN
+    in this location and none is connected.
   - `UNAVAILABLE`: retry later.
   - `INVALID_ARGUMENT` or `PERMISSION_DENIED`: a configuration bug in the extension or the
     Registry.

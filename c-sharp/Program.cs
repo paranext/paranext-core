@@ -108,8 +108,7 @@ public static class Program
             );
             var paratextRegistrationService = new ParatextRegistrationService(
                 papi,
-                internetSettingsDataProvider,
-                registryAccessTokenService
+                internetSettingsDataProvider
             );
             var checklistNetworkObject = new ChecklistNetworkObject(papi);
             var manageBooksService = new ManageBooksService(

@@ -62,7 +62,8 @@ export type ParatextRegistryToken = {
    * - `INVALID_ARGUMENT`: a scope is not allowed, or the Registry rejected the request (for example,
    *   the resource is not registered with this Registry)
    * - `UNAUTHENTICATED`: the user has no valid registration, or the Registry did not accept it
-   * - `FAILED_PRECONDITION`: the user turned internet access off
+   * - `FAILED_PRECONDITION`: the user turned internet access off, or Internet Settings require a VPN
+   *   in this location and none is connected
    * - `UNAVAILABLE`: the Registry could not be reached or did not return a usable token; retrying
    *   later may help
    *

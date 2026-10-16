@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -44,10 +46,6 @@ internal sealed class RegistryAccessTokenService(
     private readonly Dictionary<string, CachedToken> _cache = [];
     private readonly Dictionary<string, Task<RegistryAccessTokenResult>> _inFlight = [];
 
-    // Part of every cache key. ClearCache bumps it, so a request that started before the change
-    // can neither be joined by later callers nor cache its token.
-    private int _generation;
-
     private PapiClient PapiClient { get; } = papiClient;
 
     public async Task InitializeAsync()
@@ -58,19 +56,6 @@ internal sealed class RegistryAccessTokenService(
                 GetAccessTokenAsync
             )
         );
-    }
-
-    /// <summary>
-    /// Drops every cached token. Call when the registration changes, so tokens minted with the
-    /// previous registration are not handed out for the new one.
-    /// </summary>
-    public void ClearCache()
-    {
-        lock (_lock)
-        {
-            _generation++;
-            _cache.Clear();
-        }
     }
 
     /// <summary>
@@ -87,15 +72,19 @@ internal sealed class RegistryAccessTokenService(
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        string? disallowed = scopes.FirstOrDefault(s => !AllowedScopes.Contains(s));
-        if (disallowed != null)
-            return Fail(
-                extensionName,
-                resource,
-                PlatformErrorCodes.InvalidArgument,
-                $"Scope '{disallowed}' is not allowed. Allowed scopes: "
-                    + $"{string.Join(", ", AllowedScopes.Order(StringComparer.Ordinal))}."
-            );
+        // The wire can deliver null entries whatever the parameter's annotation says.
+        foreach (string? candidate in scopes)
+        {
+            if (candidate is null || !AllowedScopes.Contains(candidate))
+                return Fail(
+                    extensionName,
+                    resource,
+                    PlatformErrorCodes.InvalidArgument,
+                    $"Scope {(candidate is null ? "null" : $"'{candidate}'")} is not allowed. "
+                        + "Allowed scopes: "
+                        + $"{string.Join(", ", AllowedScopes.Order(StringComparer.Ordinal))}."
+                );
+        }
         if (string.IsNullOrWhiteSpace(resource))
             return Fail(
                 extensionName,
@@ -118,7 +107,9 @@ internal sealed class RegistryAccessTokenService(
                 extensionName,
                 resource,
                 PlatformErrorCodes.FailedPrecondition,
-                "Internet access is turned off in Internet Settings."
+                user.IsVpnRequired
+                    ? "Internet Settings require a VPN in this location, and none is connected."
+                    : "Internet access is turned off in Internet Settings."
             );
         if (!user.IsConnected)
             return Fail(
@@ -131,11 +122,13 @@ internal sealed class RegistryAccessTokenService(
         Task<RegistryAccessTokenResult> request;
         lock (_lock)
         {
+            // The code's fingerprint makes a new registration code a new key, so a token minted with
+            // the previous code is never handed out, or joined while in flight, after a change.
             string key = string.Join(
                 '\n',
-                _generation,
                 user.RegistryUrl,
                 user.UserName,
+                Fingerprint(user.RegistrationCode),
                 resource,
                 string.Join(' ', scopes)
             );
@@ -148,14 +141,7 @@ internal sealed class RegistryAccessTokenService(
                 request = existing;
             else
             {
-                request = FetchAndCacheAsync(
-                    key,
-                    _generation,
-                    extensionName,
-                    user,
-                    resource,
-                    scopes
-                );
+                request = FetchAndCacheAsync(key, extensionName, user, resource, scopes);
                 _inFlight[key] = request;
             }
         }
@@ -164,7 +150,6 @@ internal sealed class RegistryAccessTokenService(
 
     private async Task<RegistryAccessTokenResult> FetchAndCacheAsync(
         string key,
-        int generation,
         string extensionName,
         RegistryUserSnapshot user,
         string resource,
@@ -190,7 +175,7 @@ internal sealed class RegistryAccessTokenService(
         lock (_lock)
         {
             _inFlight.Remove(key);
-            if (result.IsSuccess && generation == _generation)
+            if (result.IsSuccess)
                 _cache[key] = new CachedToken(
                     result.AccessToken!,
                     DateTimeOffset.FromUnixTimeMilliseconds(result.ExpiresAt!.Value)
@@ -198,6 +183,10 @@ internal sealed class RegistryAccessTokenService(
         }
         return result;
     }
+
+    // Keeps the registration code itself out of the long-lived cache keys.
+    private static string Fingerprint(string registrationCode) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(registrationCode)));
 
     /// <remarks>A class rather than a record, so no generated <c>ToString</c> can print the token.</remarks>
     private sealed class CachedToken(string accessToken, DateTimeOffset expiresAt)

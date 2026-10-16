@@ -13,6 +13,7 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
     private const string RESOURCE = "https://assistant-dev.example.org";
     private const string OTHER_RESOURCE = "https://other.example.org";
     private const string CANARY_CODE = "CANARY-REGISTRATION-CODE-7f3a";
+    private const string OTHER_CANARY_CODE = "CANARY-REGISTRATION-CODE-b20c";
     private const string CANARY_TOKEN = "CANARY-ACCESS-TOKEN-91bd";
     private static readonly DateTimeOffset s_t0 = new(2026, 10, 16, 12, 0, 0, TimeSpan.Zero);
 
@@ -55,6 +56,7 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         _capturedOut.Dispose();
         _capturedError.Dispose();
         Assert.That(logged, Does.Not.Contain(CANARY_CODE));
+        Assert.That(logged, Does.Not.Contain(OTHER_CANARY_CODE));
         Assert.That(logged, Does.Not.Contain(CANARY_TOKEN));
     }
 
@@ -171,6 +173,24 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         Assert.That(_tokenClient.PostCount, Is.Zero);
     }
 
+    // JavaScript `[undefined]` arrives as `[null]`.
+    private static readonly string?[][] s_scopesWithANullEntry =
+    [
+        [null],
+        [null, "orgs:read"],
+    ];
+
+    [TestCaseSource(nameof(s_scopesWithANullEntry))]
+    public async Task NullScopeEntry_FailsWithInvalidArgumentWithoutCallingTheRegistry(
+        string?[] scope
+    )
+    {
+        var result = await _service.GetAccessTokenAsync("assistant", RESOURCE, scope!);
+
+        AssertFailure(result, PlatformErrorCodes.InvalidArgument);
+        Assert.That(_tokenClient.PostCount, Is.Zero);
+    }
+
     [TestCase("")]
     [TestCase("   ")]
     public async Task BlankResource_FailsWithInvalidArgumentWithoutCallingTheRegistry(
@@ -197,8 +217,31 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
     {
         _userContext.Snapshot = ValidUser(isInternetDisabled: true);
 
-        AssertFailure(await Get(), PlatformErrorCodes.FailedPrecondition);
+        var result = await Get();
+
+        AssertFailure(result, PlatformErrorCodes.FailedPrecondition);
+        Assert.That(result.Message, Does.Contain("turned off").And.Not.Contain("VPN"));
         Assert.That(_tokenClient.PostCount, Is.Zero);
+    }
+
+    [Test]
+    public async Task VpnRequiredButNotConnected_FailsWithFailedPreconditionNamingTheVpn()
+    {
+        _userContext.Snapshot = ValidUser(isInternetDisabled: true, isVpnRequired: true);
+
+        var result = await Get();
+
+        AssertFailure(result, PlatformErrorCodes.FailedPrecondition);
+        Assert.That(result.Message, Does.Contain("VPN").And.Not.Contain("turned off"));
+        Assert.That(_tokenClient.PostCount, Is.Zero);
+    }
+
+    [Test]
+    public async Task VpnRequiredInAnUnrestrictedLocation_GetsAToken()
+    {
+        _userContext.Snapshot = ValidUser(isVpnRequired: true);
+
+        Assert.That((await Get()).AccessToken, Is.EqualTo(CANARY_TOKEN));
     }
 
     [Test]
@@ -411,13 +454,16 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
     }
 
     [Test]
-    public async Task ClearCache_ForcesANewRequest()
+    public async Task RegistrationCodeChange_ForTheSameUser_GetsANewToken()
     {
         await Get();
-        _service.ClearCache();
+        _userContext.Snapshot = ValidUser(registrationCode: OTHER_CANARY_CODE);
         await Get();
 
-        Assert.That(_tokenClient.PostCount, Is.EqualTo(2));
+        Assert.That(
+            _tokenClient.Posts.Select(post => post.RegistrationCode),
+            Is.EqualTo(new[] { CANARY_CODE, OTHER_CANARY_CODE })
+        );
     }
 
     [Test]
@@ -430,7 +476,7 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
 
         Task<RegistryAccessTokenResult> inFlight = Get();
         await WaitForPostsAsync(1);
-        _service.ClearCache();
+        _userContext.Snapshot = ValidUser(registrationCode: OTHER_CANARY_CODE);
         gate.SetResult(TokenResponse("token-from-old-registration", 1200));
 
         // The caller that asked before the change still gets its answer...
@@ -451,7 +497,7 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
 
         Task<RegistryAccessTokenResult> before = Get();
         await WaitForPostsAsync(1);
-        _service.ClearCache();
+        _userContext.Snapshot = ValidUser(registrationCode: OTHER_CANARY_CODE);
         Task<RegistryAccessTokenResult> after = Get();
         gate.SetResult(TokenResponse("token-from-old-registration", 1200));
 
@@ -499,23 +545,27 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         Assert.That(result.ErrorCode, Is.EqualTo(expectedCode));
         Assert.That(result.Message, Is.Not.Empty);
         Assert.That(result.Message, Does.Not.Contain(CANARY_CODE));
+        Assert.That(result.Message, Does.Not.Contain(OTHER_CANARY_CODE));
         Assert.That(result.Message, Does.Not.Contain(CANARY_TOKEN));
     }
 
     private static RegistryUserSnapshot ValidUser(
         bool isRegistered = true,
         bool isInternetDisabled = false,
+        bool isVpnRequired = false,
         bool isConnected = true,
         string userName = "Test User",
+        string registrationCode = CANARY_CODE,
         string registryUrl = "https://registry-dev.paratext.org"
     ) =>
         new()
         {
             IsRegistered = isRegistered,
             UserName = userName,
-            RegistrationCode = CANARY_CODE,
+            RegistrationCode = registrationCode,
             RegistryUrl = registryUrl,
             IsInternetDisabled = isInternetDisabled,
+            IsVpnRequired = isVpnRequired,
             IsConnected = isConnected,
         };
 
