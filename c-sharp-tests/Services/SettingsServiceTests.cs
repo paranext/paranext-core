@@ -60,41 +60,6 @@ public class SettingsServiceTests
 
     private static readonly TimeSpan s_retryDelay = TimeSpan.FromMilliseconds(10);
 
-    [Test]
-    public async Task WaitForSettingAsync_SettingHasValue_ReturnsTrue()
-    {
-        _settingsService.AddSettingValue("testNum", 15);
-
-        var answered = await SettingsService.WaitForSettingAsync<int?>(
-            _client,
-            "testNum",
-            TimeSpan.FromSeconds(5),
-            s_retryDelay
-        );
-
-        Assert.That(answered, Is.True);
-    }
-
-    [Test]
-    public async Task WaitForSettingAsync_ServiceRegistersWhileWaiting_ReturnsTrue()
-    {
-        using var client = new DummyPapiClient();
-        var waitTask = SettingsService.WaitForSettingAsync<int?>(
-            client,
-            "testNum",
-            TimeSpan.FromSeconds(5),
-            s_retryDelay
-        );
-        await Task.Delay(s_retryDelay * 5);
-        Assert.That(waitTask.IsCompleted, Is.False);
-
-        var settingsService = new DummySettingsService(client);
-        settingsService.AddSettingValue("testNum", 15);
-        await settingsService.RegisterDataProviderAsync();
-
-        Assert.That(await waitTask, Is.True);
-    }
-
     /// <summary>
     /// Answers each request with the next scripted outcome, repeating the last one: an exception to
     /// throw or a value to return. Stands in for main's answers, which DummyPapiClient's local
@@ -130,6 +95,42 @@ public class SettingsServiceTests
     }
 
     [Test]
+    public async Task WaitForSettingAsync_SettingHasValue_ReturnsTrue()
+    {
+        _settingsService.AddSettingValue("testNum", 15);
+
+        var answered = await SettingsService.WaitForSettingAsync<int?>(
+            _client,
+            "testNum",
+            TimeSpan.FromSeconds(5),
+            s_retryDelay
+        );
+
+        Assert.That(answered, Is.True);
+    }
+
+    [Test]
+    public async Task WaitForSettingAsync_ServiceRegistersWhileWaiting_ReturnsTrue()
+    {
+        using var client = new DummyPapiClient();
+        var waitTask = SettingsService.WaitForSettingAsync<int?>(
+            client,
+            "testNum",
+            TimeSpan.FromSeconds(5),
+            s_retryDelay
+        );
+        // Long enough for several unanswered reads, so the wait is known to be retrying.
+        await Task.Delay(s_retryDelay * 5);
+        Assert.That(waitTask.IsCompleted, Is.False);
+
+        var settingsService = new DummySettingsService(client);
+        settingsService.AddSettingValue("testNum", 15);
+        await settingsService.RegisterDataProviderAsync();
+
+        Assert.That(await waitTask, Is.True);
+    }
+
+    [Test]
     public async Task WaitForSettingAsync_NoHandlerThenTimeoutThenValue_ReturnsTrue()
     {
         using var client = new ScriptedPapiClient(
@@ -162,6 +163,7 @@ public class SettingsServiceTests
         );
 
         Assert.That(answered, Is.False);
+        Assert.That(client.Attempts, Is.GreaterThan(1));
     }
 
     [Test]
@@ -184,26 +186,27 @@ public class SettingsServiceTests
     [Test]
     public async Task WaitForSettingAsync_ReadReturnsNullUntilTimeout_ReturnsFalse()
     {
-        _settingsService.AddSettingValue("nullSetting", null!);
+        using var client = new ScriptedPapiClient([null]);
 
         var answered = await SettingsService.WaitForSettingAsync<string>(
-            _client,
-            "nullSetting",
+            client,
+            "testString",
             TimeSpan.FromMilliseconds(100),
             s_retryDelay
         );
 
         Assert.That(answered, Is.False);
+        Assert.That(client.Attempts, Is.GreaterThan(1));
     }
 
     [Test]
-    public void WaitForSettingAsync_ClientDisconnected_ReturnsFalseWithoutWaitingForTimeout()
+    public void WaitForSettingAsync_AlreadyDisconnected_ReturnsFalseWithoutWaitingForTimeout()
     {
         _client.Dispose();
 
         var waitTask = SettingsService.WaitForSettingAsync<int?>(
             _client,
-            "missingSetting",
+            "testNum",
             TimeSpan.FromMinutes(10),
             s_retryDelay
         );
