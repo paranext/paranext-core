@@ -1,33 +1,29 @@
-import { Mock, vi } from 'vitest';
+import { vi } from 'vitest';
+import { resyncContributions } from '@extension-host/services/contribution.service';
 import { testingThemeDataService } from '@extension-host/services/theme-data.service-host';
 
-const mocks = vi.hoisted(() => {
-  const unsubscribers: Mock[] = [];
-  return { unsubscribers };
+const { implementThemeDataDataProviderEngine } = testingThemeDataService;
+
+test('a live engine rebuilds its themes when contributions resync', async () => {
+  const initialThemes = {};
+  const engine = implementThemeDataDataProviderEngine(initialThemes);
+  const notifyUpdateSpy = vi.spyOn(engine, 'notifyUpdate');
+
+  await resyncContributions([]);
+
+  expect(engine.allThemeFamiliesById).not.toBe(initialThemes);
+  expect(notifyUpdateSpy).toHaveBeenCalledWith('*');
+  await engine.dispose();
 });
 
-// Wraps the real event so each subscription's unsubscriber can be observed
-vi.mock('@extension-host/services/contribution.service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@extension-host/services/contribution.service')>();
-  return {
-    ...actual,
-    onDidResyncContributions: (callback: () => Promise<void>) => {
-      const unsubscribe = vi.fn(actual.onDidResyncContributions(callback));
-      mocks.unsubscribers.push(unsubscribe);
-      return unsubscribe;
-    },
-  };
-});
-
-test('dispose unsubscribes from contribution resyncs', async () => {
-  const engine = testingThemeDataService.implementThemeDataDataProviderEngine({});
-  expect(mocks.unsubscribers).toHaveLength(1);
+test('a disposed engine ignores contribution resyncs', async () => {
+  const initialThemes = {};
+  const engine = implementThemeDataDataProviderEngine(initialThemes);
+  const notifyUpdateSpy = vi.spyOn(engine, 'notifyUpdate');
 
   await expect(engine.dispose()).resolves.toBe(true);
-  expect(mocks.unsubscribers[0]).toHaveBeenCalledTimes(1);
+  await resyncContributions([]);
 
-  // A second dispose has nothing left to unsubscribe
-  await expect(engine.dispose()).resolves.toBe(true);
-  expect(mocks.unsubscribers[0]).toHaveBeenCalledTimes(1);
+  expect(engine.allThemeFamiliesById).toBe(initialThemes);
+  expect(notifyUpdateSpy).not.toHaveBeenCalled();
 });
