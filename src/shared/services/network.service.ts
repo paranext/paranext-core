@@ -236,12 +236,9 @@ export async function initialize(): Promise<void> {
         `A subscriber threw while being told a process disconnected, taking ${clientDisconnect.removedMethodNames.length} methods with it; the rest were still told: ${error}`,
     );
 
-    // TODO(main-renderer-shutdown-relay): `onDidDisconnectClient` above fires only in main, so a
-    // renderer never learns that the extension host went away — its own socket is still alive, and
-    // `onDidLoseConnection` below is deliberately local. Telling a renderer needs a main→renderer
-    // network event carrying that case, plus wording of its own ("extensions have stopped working"
-    // is a different claim than "you are disconnected"). Deferred with the two other sites this
-    // marker names; see `adr-connection-lost-is-renderer-local`.
+    // `onDidDisconnectClient` above fires only in main. A renderer learns that the extension host
+    // went away from main's `platform.onDidStopExtensionHost` network event instead (see
+    // `extension-host-lifecycle.model.ts`); `onDidLoseConnection` below is deliberately local.
     unsubscribeFromConnectionLost = relayWhileUp(
       jsonRpc.onDidLoseConnection,
       connectionLostEmitter,

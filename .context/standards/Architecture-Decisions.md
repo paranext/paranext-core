@@ -1519,7 +1519,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     is greppable rather than living only in this log — a slug rather than a `PT-XXXX` for the same
     reason `TODO(main-renderer-shutdown-relay)` above is one.
 
-- **Amended 2026-09-24 (PT-1641):** With the renderer on a MessagePort (`adr-renderer-papi-transport-is-messageport`), an OS suspend no longer trips this banner; its remaining normal trigger is main closing the port on purpose without a close frame, or a port that dies with main. The per-window port main now holds is the natural carrier for the `main-renderer-shutdown-relay` deferral above; wiring it is still a separate ticket.
+- **Amended 2026-09-24 (PT-1641):** With the renderer on a MessagePort (`adr-renderer-papi-transport-is-messageport`), an OS suspend no longer trips this banner; its remaining normal trigger is main closing the port on purpose without a close frame, or a port that dies with main. The per-window port main now holds is the natural carrier for the `main-renderer-shutdown-relay` deferral above; wiring it is still a separate ticket. (Since wired; see the 2026-10-14 amendment below.)
+- **Amended 2026-10-14 (PT-4599):** The relay the "one follow-up closes three" bullet above waited
+  for exists: `platform.onDidStopExtensionHost` and `platform.onWillShutDown`
+  (`adr-extension-host-exits-on-lost-connection`). Sites 1 (extension-host disconnect) and 2
+  (quit-time latch) are closed; site 3 (main's accelerators and the document-level hotkeys behind
+  the scrim) is PT-4851, because that one runs the other way — main must notice this window's port
+  dying, since the window cannot tell it. The `TODO(main-renderer-shutdown-relay)` slug is gone from
+  the code.
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
 
@@ -2293,6 +2300,89 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4111 design + implementation. (The original design note lives under gitignored
   `docs/superpowers/specs/`, so it is not a citable reference — the reasoning is reproduced here
   precisely because that path is not readable from the repo.)
+
+## adr-extension-host-exits-on-lost-connection: The extension host exits when its connection to main dies; main relays the stop to every window, and the user restarts it
+
+- **Date:** 2026-10-14
+- **Status:** Accepted
+- **Context:** PT-4599. Twice in September 2026 the extension host's WebSocket to main closed
+  (code 1006) while the extension host process kept running. Nothing in the extension host
+  reacted: `network.service` relays `onDidLoseConnection` but no extension-host code subscribed,
+  every later request threw "Tried to send payload while not connected", and the renderer, whose
+  own link to main was healthy, showed nothing. Main's only liveness signal for the child was the
+  process `exit` event, which only logged. The three `TODO(main-renderer-shutdown-relay)` sites
+  from `adr-connection-lost-is-renderer-local` named this gap, the quit-time false positive of the
+  connection-lost latch, and the keyboard accelerators leaking past that overlay.
+- **Decision:** (1) The extension host subscribes to `onDidLoseConnection` after its network
+  service initializes and ends itself through the existing graceful-shutdown path with a dedicated
+  exit code (`EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE`). (2) Main's child-process `exit` handler
+  classifies the exit (`classifyExtensionHostExit`): a stop main requested, or any stop during app
+  shutdown, is silent; anything else is announced on the `@experimental` network event
+  `platform.onDidStopExtensionHost` with a `reason` of `'lost-connection'` or `'crashed'` and
+  nothing else on the wire. (3) Main also emits `platform.onWillShutDown` from `before-quit`,
+  once per process. On an explicit quit (Cmd+Q, the Quit menu item, `platform.quit`,
+  `platform.restart`) it goes out before any window is destroyed. A close-all from the primary
+  window's close button and closing the last window on Windows and Linux reach `before-quit` only
+  after every window is gone, so it is emitted then and no window sees it (other peers, such as the
+  extension host, still do); those windows' ports were closed cleanly (1001) before they were
+  destroyed, so they need no hint. Main also
+  answers `platform.getExtensionHostStoppedState` for a window that was not listening when the
+  stop happened. (4) The extension host emits
+  `platform.onDidStartExtensionHost` once its extensions have initialized: `restartExtensionHost`
+  settles at fork time (about 30 ms live), roughly a minute before a dev-build host can serve
+  anything, so the command is not a readiness signal. That event ends any outstanding stop notice
+  in every window, whichever window pressed Restart, so a restart whose command was rejected but
+  whose fork went ahead, or a restart pressed in another window, cannot leave a stale alarm.
+  (5) Each renderer subscribes at launch (`extension-host-stopped-service.ts`) into an
+  import-free store; a startup-mounted, non-blocking banner offers `platform.restartExtensionHost`
+  and `platform.restart`. It sits in flow between the toolbar and the dock and publishes its
+  measured height in a CSS variable the dock's top inset adds, so the dock shrinks instead of
+  having its top row of tabs covered. While restarting only Restart extensions is disabled: an app
+  restart is always safe and is the way out if the new host never comes up. A stop that arrives
+  while restarting brings the alarm back, since it can only be the new host dying before it
+  announced its start. The banner waits for the start event (90 s fallback; a fallback restart is
+  shown as "Extensions may not have restarted", never as a confirmed restart), and then stays up
+  in a calmer state with Restart app and Dismiss, because a restart does not heal every part of a
+  window: in
+  the live check every settings subscription opened before the restart stayed dead in main and the
+  renderer (interface mode, zoom factor, request timeout, web view titles), while the editor,
+  scroll sync, project picker, navigation and Find all healed. Recovery is user-pressed; nothing
+  restarts automatically.
+- **Alternatives:** (A) Keep the zombie process and have main match the disconnecting peer's name
+  against the forked pid: covers only the zombie case, not a crash, and needs peer identity on
+  `RpcClientDisconnectEvent`. (B, chosen) above. (C) An in-band control frame on the per-window
+  MessagePort: no PAPI surface, but medium-risk changes in transport code for the same user-visible
+  result. In-process reconnect was rejected for this release: besides the `RpcClient` gaps now
+  owned by PT-4495, it would have to replay every registration the extension host made against a
+  main that already broadcast their disposal; a fresh process does that for free. Automatic
+  restart was rejected because renderer healing after a restart is known to be incomplete
+  (#2853), so a silent restart could leave half-working UI with no signal. A blocking scrim was
+  rejected because everything main hosts still works in this state.
+- **Consequences:** The extension host now has a deliberate exit path besides the graceful-shutdown
+  message. Its exit code is 70, outside Node's own codes (1–13) and the 128+ signal range. When the
+  loss is what starts the graceful shutdown, a 5 s watchdog bounds it, because main is not waiting
+  for this exit; the watchdog keeps the event loop alive, so a shutdown hung on a promise still
+  ends with 70 rather than a 0 main would call a crash. The graceful shutdown runs once per
+  process, and a loss during a shutdown main requested joins it rather than starting another. Main
+  bounds that requested stop with its own, much shorter hard-kill, so the loss arms only a 30 s
+  backstop there: it fires only when main itself is gone (it quit right after the shutdown message,
+  or crashed) and a `deactivate` hangs, which would otherwise orphan the extension host. Main has
+  already marked that stop as requested, so its exit code is not reported. An extension host whose
+  first connect to main fails exits with `EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE` (1), which main
+  reports as a crash. Main distinguishes requested from unexpected stops with a module flag set in
+  `waitForExtensionHost` and cleared on the next fork, plus `isAppShuttingDown()`, and it
+  classifies only the exit of the current child: a child it hard-killed or replaced exited for a
+  stop main asked for, however late that exit arrives. Three new
+  `@experimental` network events and one `@experimental` command; every peer receives the events,
+  only renderers listen. The banner's `role="status"` live region is always mounted, empty until
+  there is a notice, because a live region inserted together with its content is generally not
+  announced by screen readers. Healing main's and the renderer's settings subscriptions after a
+  restart is NOT done here; PT-4807 (the shared service wrappers keep a disposed extension-host
+  provider cached) owns it, and the banner's restarted state and Restart app are the mitigation. The quit-time relay is best effort: delivery over the port is asynchronous and
+  the window may be destroyed first, which was already the situation, so it can only suppress a
+  false alarm. Marker sites 1 and 2 of `adr-connection-lost-is-renderer-local` are closed; site 3
+  (accelerators behind the overlay) is PT-4851 and needs main to notice a window's port dying on
+  its own. The `TODO(PT-4435)` reconnect markers are re-homed on PT-4495.
 
 ## adr-find-follows-editor-to-read-only: Find follows the editor onto read-only resources, with replace withheld
 
@@ -6151,6 +6241,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** Take the renderer-to-main link off Chromium's network stack. Each window asks main for an Electron `MessageChannelMain` port through the preload (`src/main/preload.ts`, channels `electronAPI:papi.*`); main's `papi-port-broker.service` answers only while the window has no open port (one live channel per window) and only requests from the window's page frame, which a same-origin web view can still drive through the bridge, and serves its end through `RpcWebSocketListener.acceptLocalClient` as `renderer:<windowId>`; the page's `MessagePortWebSocket` presents the other end as the DOM `WebSocket` `RpcClient` already uses (`web-socket.factory.ts` selects it when the bridge exists). Mojo pipes observe no power events (no `PowerMonitor` reference anywhere in `mojo/core`; Chromium's own suspend broadcast to the network service travels over Mojo during the transition). Close intent travels in an in-band close frame (`PAPI_PORT_CLOSE_FRAME_TYPE`) because a port close carries no code; a port that closes with no frame is 1006, so `isCleanCloseEvent` and the connection-lost banner work unchanged. The `ws` server on 8876 stays for the extension host, .NET, e2e fixtures and tooling.
 - **Alternatives:** Reconnect after resume: a state machine on a link guaranteed to fail, needing a replay of every registration after main has already announced the window's death, plus the four blockers `adr-renderer-websocket-suspend-disconnect` records; both Electron reporters did this and still had trouble on Windows. Plain `ipcRenderer`/`ipcMain` channels: survive sleep too, but have no per-connection close signal and copy every payload through the context bridge; a port maps one-to-one onto the per-socket `RpcServer`. WebTransport over QUIC: escapes the TCP observer, but QUIC's idle timeout (30 s by default) expires during any real sleep, Node 22 has no HTTP/3 server, and it requires a certificate even on loopback. `powerSaveBlocker`: cannot stop a user-initiated sleep and drains the battery. A Chromium flag: none exists.
 - **Consequences:** Main has two accept paths (`onClientConnect` for `ws`, `acceptLocalClient` for ports) sharing `serveClient`. The renderer's connection is no longer observable from outside the process (`lsof`/`netstat` on 8876 show two clients, not three). The renderer-side `MessagePort` `close` event exists only because Electron force-enables Chromium's `MessagePortCloseEvent` feature (upstream status `test` in M142, `shell/renderer/renderer_client_base.cc`); an Electron upgrade that dropped it would turn a main-side port close into silence in the page, which the manual sleep/close checks would show. Same-origin web views can reach `window.top.electronAPI.papi.requestPort()`; the broker answers only while the window has no open port and the adapter keeps its first port, so the worst an extension can do is nothing it could not already do through `window.papi`. `ServerSocketLike`, `IRpcLocalClientAcceptor`, `acceptLocalClient` and the `papi-port.model` shapes are `@experimental`. Tightening the renderer CSP now that the page itself opens no WebSocket is a follow-up, pending a review of web views' own WebSocket use. The per-window port is also the natural carrier for the deferred `main-renderer-shutdown-relay`; not done here.
+- **Amended 2026-10-14 (PT-4599):** The per-window port now carries the relay deferred above:
+  `platform.onDidStopExtensionHost` and `platform.onWillShutDown`
+  (`adr-extension-host-exits-on-lost-connection`).
 - **Source:** PT-1641; design by Matt Lyons (2026-09-10) with corrections recorded in the PRD folder; verified on Windows by sleep test before merge (log excerpt in the PR).
 
 ## adr-renderer-registers-no-names: Renderer platform code registers no command or request names; routers call shard methods

@@ -36,6 +36,10 @@ export type {
 } from '@shared/models/docking-framework.model';
 export type { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
 export type {
+  ExtensionHostStoppedEvent,
+  ExtensionHostStopReason,
+} from '@shared/models/extension-host-lifecycle.model';
+export type {
   HandleUri,
   RegisterUriHandler,
   UriHandler,

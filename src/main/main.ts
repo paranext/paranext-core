@@ -25,6 +25,12 @@ import path from 'path';
 import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
 import { announceAppWindowInput, startAppWindowInputEvent } from '@main/app-window-input.util';
+import {
+  announceAppWillShutDown,
+  announceExtensionHostStopped,
+  startLifecycleEvents,
+} from '@main/lifecycle-events.util';
+import { registerExtensionHostStoppedStateCommand } from '@main/extension-host-stopped-state.command';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
 import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
@@ -421,6 +427,22 @@ async function main() {
   // the gestures that dismiss transient overlays
   await startAppWindowInputEvent();
 
+  // Register the lifecycle events, then forward the extension host service's unexpected stops to
+  // every window. Subscribed before the extension host is started further down, so the very first
+  // process is covered too.
+  await startLifecycleEvents();
+  extensionHostService.onDidStopUnexpectedly(announceExtensionHostStopped);
+  // Registered this early so a window that connects while main is still starting up can already ask
+  // whether the extension host stopped; a later registration would answer it "no handler". A failure
+  // costs only that catch-up, so it is logged rather than aborting startup.
+  try {
+    await registerExtensionHostStoppedStateCommand();
+  } catch (error) {
+    logger.error(
+      `Failed to register platform.getExtensionHostStoppedState; windows opened after a stop will not show the notice: ${getErrorMessage(error)}`,
+    );
+  }
+
   // Register the focused-window-id event so the `focus`/`blur` handlers wired up per window below
   // can announce every change made through `setFocusedWindowId`/`removeWindow`
   await startFocusedWindowIdEvent();
@@ -642,6 +664,9 @@ async function main() {
   // handler's graceful shutdown has already started.
   app.on('before-quit', () => {
     markQuitRequested();
+    // Before any window is destroyed, so a window can read its own connection dying a moment later
+    // as the quit it is, rather than as a failure. Best effort; see the event's doc.
+    announceAppWillShutDown();
   });
 
   // #region Set up the protocol client to receive navigation to this app's URI scheme

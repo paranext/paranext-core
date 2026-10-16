@@ -6,7 +6,12 @@ import {
   commandLineArgumentsAliases,
 } from '@node/utils/command-line.util';
 import { logger } from '@shared/services/logger.service';
-import { AsyncVariable, debounce, waitForDuration } from 'platform-bible-utils';
+import {
+  AsyncVariable,
+  debounce,
+  PlatformEventEmitter,
+  waitForDuration,
+} from 'platform-bible-utils';
 import { ChildProcess, ChildProcessByStdio, fork } from 'child_process';
 import { app } from 'electron';
 import { PathLike } from 'fs';
@@ -15,6 +20,9 @@ import path from 'path';
 import { Readable } from 'stream';
 import { watch as chokidarWatch, FSWatcher } from 'chokidar';
 import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
+import { isAppShuttingDown } from '@main/services/shutdown-latch.service';
+import { classifyExtensionHostExit } from '@main/services/extension-host-exit.util';
+import { ExtensionHostStoppedEvent } from '@shared/models/extension-host-lifecycle.model';
 
 let processInstanceCounter = 0;
 // Resolves to the current process instance counter value for debug logging purposes
@@ -22,6 +30,19 @@ let processLifetimeVariable: AsyncVariable<number> | undefined;
 let extensionHost: ChildProcess | ChildProcessByStdio<null, Readable, Readable> | undefined;
 /** The watcher that restarts the extension host when files change. Only relevant in dev */
 let extensionHostWatcher: FSWatcher | undefined;
+/**
+ * Set while main is deliberately stopping the extension host — a restart, or the dev-mode file
+ * watcher — so the `exit` handler knows not to report that stop. Cleared when the next process is
+ * forked.
+ */
+let isStopRequested = false;
+/** Announces an exit main did not ask for. See {@link classifyExtensionHostExit}. */
+const unexpectedStopEmitter = new PlatformEventEmitter<ExtensionHostStoppedEvent>();
+/**
+ * The most recent unexpected stop, kept until the next process is forked, so a window that was not
+ * listening when it happened (opened later, or still starting) can ask for it.
+ */
+let lastUnexpectedStop: ExtensionHostStoppedEvent | undefined;
 
 function createNewProcessLifetimeVariable(): void {
   if (processLifetimeVariable)
@@ -62,6 +83,7 @@ function logProcessInfo(message: unknown) {
  *   anymore without further intervention
  */
 async function waitForExtensionHost(maxWaitTimeInMS: number, shouldCloseWatcher = true) {
+  isStopRequested = true;
   if (shouldCloseWatcher) {
     extensionHostWatcher?.close();
     extensionHostWatcher = undefined;
@@ -155,7 +177,13 @@ function connectToExtensionHostProcess() {
     extensionHost.stdout.on('data', logProcessInfo);
   }
 
-  extensionHost.once('exit', (code, signal) => {
+  const child = extensionHost;
+  child.once('exit', (code, signal) => {
+    // A child that is no longer the current one was hard-killed (`hardKillExtensionHost`, reached
+    // through `kill()` or a requested stop that ran out of time), which drops the reference before
+    // the exit arrives. Its exit belongs to a stop main asked for, however late it arrives, and the
+    // requested-stop flag below need not describe it: `kill()` does not set that flag.
+    const isCurrentChild = extensionHost === child;
     if (signal) {
       logger.info(`'exit' event: extension host process terminated with signal ${signal}`);
     } else {
@@ -165,6 +193,23 @@ function connectToExtensionHostProcess() {
     extensionHost?.stdout?.removeListener('data', logProcessInfo);
     extensionHost = undefined;
     resolveProcessLifetimeVariable();
+
+    // The cleanup above is safe for a stale child too: no newer child can exist yet, because
+    // `createNewProcessLifetimeVariable` refuses to fork until this exit has resolved the lifetime,
+    // so clearing `extensionHost` and resolving the lifetime touch only this child's state.
+    if (!isCurrentChild) return;
+    const unexpectedStop = classifyExtensionHostExit({
+      code,
+      signal,
+      isStopRequested,
+      isAppShuttingDown: isAppShuttingDown(),
+    });
+    if (!unexpectedStop) return;
+    logger.error(
+      `Extension host stopped unexpectedly (${unexpectedStop.reason}); telling the windows so the user can restart it`,
+    );
+    lastUnexpectedStop = unexpectedStop;
+    unexpectedStopEmitter.emit(unexpectedStop);
   });
 }
 
@@ -192,7 +237,11 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
   if (isRestarting) sharedArgs.push(commandLineArgumentsAliases[CommandLineArgs.DidRestart][0]);
 
   function startExtensionHostInternal() {
+    // Throws, and so forks nothing, while the previous process is not cleaned up; the flags below
+    // still describe that previous process until a new one is actually forked.
     createNewProcessLifetimeVariable();
+    isStopRequested = false;
+    lastUnexpectedStop = undefined;
 
     const extensionHostEntryPath = app.isPackaged
       ? path.join(__dirname, '../extension-host/extension-host.js')
@@ -282,6 +331,10 @@ export const extensionHostService = {
   kill: hardKillExtensionHost,
   waitForClose: waitForExtensionHost,
   restart: restartExtensionHost,
+  /** Fires when the extension host exits without main asking it to. Not fired during app shutdown. */
+  onDidStopUnexpectedly: unexpectedStopEmitter.event,
+  /** The most recent unexpected stop, or `undefined` once a new process has been forked since */
+  getLastUnexpectedStop: () => lastUnexpectedStop,
 };
 
 export default extensionHostService;
