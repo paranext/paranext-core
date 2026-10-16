@@ -9,6 +9,7 @@ import {
   IRegisteredWebViewProvider,
 } from '@shared/models/web-view-provider.model';
 import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
+import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import { networkObjectService, overrideDispose } from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
@@ -155,25 +156,76 @@ async function registerWebViewProvider(
   return disposableWebViewProvider;
 }
 
+/** How long a single arm of {@link networkObjectStatusService.waitForNetworkObject} waits. */
+const PROVIDER_WAIT_ARM_MS = 20000;
+
+/**
+ * Total time {@link waitForWebViewProviderPatiently} spends re-arming the wait before giving up —
+ * comfortably past the ~28s worst-case cold-start activation time observed in practice, with room
+ * as more extensions get bundled. See the retry-decision write-up this implements.
+ */
+const PATIENT_PROVIDER_WAIT_TOTAL_MS = 2 * 60 * 1000;
+
+/**
+ * Re-arms the bounded wait on timeout, up to {@link PATIENT_PROVIDER_WAIT_TOTAL_MS} total, for a
+ * webview provider whose owning extension may still be activating.
+ *
+ * Used only for the tab-restore path (a saved or baked-into-the-default-layout tab materializing):
+ * the tab already visually exists, so waiting quietly longer while its provider catches up is
+ * exactly right. A fresh `openWebView()` request keeps the single fast-failing
+ * {@link PROVIDER_WAIT_ARM_MS} wait instead — silently resolving minutes later would be bad UX for
+ * an action the user is actively waiting on.
+ */
+async function waitForWebViewProviderPatiently(
+  webViewProviderObjectId: string,
+): Promise<NetworkObjectDetails> {
+  const deadline = Date.now() + PATIENT_PROVIDER_WAIT_TOTAL_MS;
+  // Re-arming is the point: each arm is the same bounded wait, retried until it resolves or the
+  // total budget above is spent.
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      // Sequential by construction — each arm starts only once the previous one has timed out.
+      // eslint-disable-next-line no-await-in-loop
+      return await networkObjectStatusService.waitForNetworkObject(
+        { id: webViewProviderObjectId },
+        PROVIDER_WAIT_ARM_MS,
+      );
+    } catch (e) {
+      // Budget spent: let this arm's rejection propagate exactly as the one-shot wait's would,
+      // just later — same error shape, same caller-side handling.
+      if (Date.now() >= deadline) throw e;
+    }
+  }
+}
+
 /**
  * Get a web view provider that has previously been set up
  *
  * @param webViewType Type of webview provider to get
+ * @param shouldWaitPatiently Whether to keep re-arming the wait for up to
+ *   {@link PATIENT_PROVIDER_WAIT_TOTAL_MS} if the provider's extension is still activating, instead
+ *   of failing after the first {@link PROVIDER_WAIT_ARM_MS}. Set this only for a tab-restore
+ *   request; leave it `false` (the default) for a fresh `openWebView()` request. Defaults to
+ *   `false`
  * @returns Web view provider with the given name if one exists, undefined otherwise
  */
 async function getWebViewProvider(
   webViewType: string,
+  shouldWaitPatiently = false,
 ): Promise<IRegisteredWebViewProvider | undefined> {
   await initialize();
 
   // Get the object id for this web view provider name
   const webViewProviderObjectId = getWebViewProviderObjectId(webViewType);
 
-  await networkObjectStatusService.waitForNetworkObject(
-    { id: webViewProviderObjectId },
-    // Wait up to 20 seconds for the web view provider to appear
-    20000,
-  );
+  if (shouldWaitPatiently) await waitForWebViewProviderPatiently(webViewProviderObjectId);
+  else
+    await networkObjectStatusService.waitForNetworkObject(
+      { id: webViewProviderObjectId },
+      // Wait up to 20 seconds for the web view provider to appear
+      PROVIDER_WAIT_ARM_MS,
+    );
 
   const webViewProvider =
     await networkObjectService.get<IRegisteredWebViewProvider>(webViewProviderObjectId);

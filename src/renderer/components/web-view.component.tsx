@@ -86,12 +86,24 @@ const CROSS_ORIGIN_REMOVE_EVENT_LISTENER_ERROR_REGEX =
  * Tell the web view service to load the web view with the provided information. Used to retrieve
  * web view content and to reload the web view when the extension service reloads
  *
+ * Both callers (`loadWebViewTab` restoring a saved/baked tab, and the
+ * `platform.onDidReloadExtensions` handler below) are the extension-still-activating race this
+ * product's serial extension-host startup can hit, not a user action — so this passes
+ * `reloadWebView`'s patient-wait flag, re-arming the provider wait instead of failing after the
+ * first 20 seconds. An explicit user-initiated reload (the error boundary, or a PAPI-triggered one)
+ * goes through `reloadWebView` directly instead of through here, and keeps the fast failure.
+ *
  * @param data Web view definition to load
  */
 async function retrieveWebViewContent(webViewType: string, id: string): Promise<void> {
-  const loadedId = await reloadWebView(webViewType, id, {
-    bringToFront: false,
-  });
+  const loadedId = await reloadWebView(
+    webViewType,
+    id,
+    {
+      bringToFront: false,
+    },
+    true,
+  );
 
   if (!loadedId) {
     // Two very different answers arrive as the same `undefined`, and the dock tells them apart. A
