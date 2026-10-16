@@ -79,7 +79,6 @@ vi.mock('@papi/backend', () => ({
 import { UnsubscriberAsyncList } from 'platform-bible-utils';
 import papi, { logger } from '@papi/backend';
 import { activate } from './main';
-import { DICTIONARY_TITLE_KEY } from './utils/dictionary.utils';
 /* eslint-enable import/first */
 
 function makeContext() {
@@ -245,7 +244,7 @@ describe('platform lexical tools main.ts activation', () => {
       expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('interface mode'));
     });
 
-    it('falls back to the raw key as the tooltip when resolving the localized string rejects', async () => {
+    it('falls back to no tooltip when resolving the localized string rejects', async () => {
       vi.mocked(papi.settings.get).mockResolvedValueOnce('power');
       vi.mocked(papi.localization.getLocalizedString).mockRejectedValueOnce(
         new Error('localization service unavailable'),
@@ -253,9 +252,9 @@ describe('platform lexical tools main.ts activation', () => {
 
       // getWebView's real return type is a large union; narrowing to the one field this test checks.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const webView = (await getCapturedWebView()) as { tooltip: string };
+      const webView = (await getCapturedWebView()) as { tooltip: string | undefined };
 
-      expect(webView.tooltip).toBe(DICTIONARY_TITLE_KEY);
+      expect(webView.tooltip).toBeUndefined();
       expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('tooltip'));
     });
   });

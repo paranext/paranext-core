@@ -120,12 +120,17 @@ const dictionaryWebViewProvider: IWebViewProvider = {
       // This is only the tab's INITIAL tooltip, for a fresh/reloaded tab, since `getWebView` doesn't
       // re-run just because a setting changed; dictionary.web-view.tsx's own effect keeps it current
       // on a subsequent interface-language change.
-      papi.localization.getLocalizedString({ localizeKey: title }).catch((e): string => {
-        logger.warn(
-          `Could not resolve the Dictionary tooltip; falling back to the raw key: ${getErrorMessage(e)}`,
-        );
-        return title;
-      }),
+      papi.localization
+        .getLocalizedString({ localizeKey: title })
+        .catch((e): string | undefined => {
+          logger.warn(
+            `Could not resolve the Dictionary tooltip; showing no tooltip until it resolves: ${getErrorMessage(e)}`,
+          );
+          // Falls back to no tooltip rather than the raw `%...%` key: `PlatformTabTitle` renders a
+          // tooltip verbatim with no localization of its own, so a raw key would show on hover until
+          // the web view mounts and its own effect resolves the real string.
+          return undefined;
+        }),
     ]);
 
     return {
