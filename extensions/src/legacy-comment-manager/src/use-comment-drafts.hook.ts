@@ -177,25 +177,22 @@ export function useCommentDrafts({
     });
   }, [drafts, debouncedSaveDrafts]);
 
-  // Flush (not cancel) on unmount, so a debounced write that hasn't fired yet -- e.g. the user
-  // typed and then immediately closed this panel or the app -- is never lost.
+  // Flush (not cancel) on teardown, so a debounced write that hasn't fired yet -- e.g. the user
+  // typed and then immediately switched project, closed this panel, or closed the app -- is never
+  // lost. The listeners flush before any unmount of this React root:
   //
-  // Unmount cleanup ALONE does not reach either teardown path that actually matters for a web
-  // view, so `pagehide`/`beforeunload` listeners below carry the real weight:
+  // - Project switch: `openCommentListPanel` calls `reloadWebView`, so the iframe navigates to a
+  //   new `srcDoc` document. The web view bootstrap unmounts this root only on the old document's
+  //   `unload`, after every `pagehide` listener has run.
+  // - Panel close: the renderer removes the iframe inside its own React commit, which fires
+  //   `pagehide` synchronously, before the renderer's deferred unmount.
+  // - Window/app close: the renderer and every iframe in it go away with no React unmount at all,
+  //   and a window destroyed outright can skip `pagehide`, so `beforeunload` is the pair for this
+  //   path, matching the pairing `platform-scripture-editor.web-view.tsx` uses for its own teardown
+  //   flush.
   //
-  // - Panel close / project switch: `web-view.component.tsx` renders this web view's content via
-  //   `srcDoc`, and `openCommentListPanel` calls `reloadWebView` on every project switch. Each
-  //   reload regenerates the nonce baked into `content`, so the iframe's `srcDoc` changes and the
-  //   iframe navigates to a brand-new document -- the PARENT `WebView` component never unmounts,
-  //   so this React root (and its effect cleanups) never runs.
-  // - Window/app close: destroys the renderer, and every iframe in it, the same way -- again with
-  //   no React unmount in between.
-  //
-  // `pagehide` fires on the iframe's own window whenever ITS document is being torn down, whether
-  // that's the iframe navigating to a new `srcDoc` or the whole renderer going away, so it covers
-  // both paths. `beforeunload` is the belt-and-suspenders pair for the real-window-close path.
-  // Matches the pairing `platform-scripture-editor.web-view.tsx` already uses for its own
-  // teardown flush.
+  // The unmount cleanup flushes as well, for an unmount that tears no document down; after a
+  // `pagehide` flush it has nothing left to write.
   useEffect(() => {
     const flush = () => debouncedSaveDrafts.flush();
     window.addEventListener('pagehide', flush);
