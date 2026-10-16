@@ -10050,7 +10050,7 @@ declare module 'shared/models/paratext-registry-token-privilege.model' {
   /**
    * The read-only Paratext Registry scopes Platform.Bible requests on an extension's behalf. The
    * Registry would issue write scopes to a registration-code caller too; Platform.Bible never asks
-   * for them.
+   * for them. Keep in sync with `AllowedScopes` in `c-sharp/Users/RegistryAccessTokenService.cs`.
    */
   export type RegistryReadScope =
     | 'projects.members:read'
@@ -10102,14 +10102,16 @@ declare module 'shared/models/paratext-registry-token-privilege.model' {
      * Gets an access token for `request.resource`. Tokens are cached, so call this before each
      * request to the service instead of storing the token.
      *
-     * Rejects with a `PlatformError`. Its `code` says why:
+     * Rejects with a `PlatformError`. Its `code` says why; its `message` is an English diagnostic for
+     * logs, so show users your own localized text based on the `code`:
      *
      * - `PERMISSION_DENIED`: `resource` is not in the manifest's `paratextRegistryTokenResources`
      * - `INVALID_ARGUMENT`: a scope is not allowed, or the Registry rejected the request (for example,
      *   the resource is not registered with this Registry)
      * - `UNAUTHENTICATED`: the user has no valid registration, or the Registry did not accept it
-     * - `FAILED_PRECONDITION`: the user turned internet access off, or Internet Settings require a VPN
-     *   in this location and none is connected
+     * - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: internet access is
+     *   off, or "Disable access to some Bible translation services" is selected and this computer's
+     *   location is restricted or could not be determined
      * - `UNAVAILABLE`: the Registry could not be reached or did not return a usable token; retrying
      *   later may help
      *
@@ -13267,12 +13269,6 @@ declare module '@papi/core' {
     UriHandler,
   } from 'shared/models/handle-uri-privilege.model';
   export type {
-    ParatextRegistryToken,
-    RegistryAccessToken,
-    RegistryAccessTokenRequest,
-    RegistryReadScope,
-  } from 'shared/models/paratext-registry-token-privilege.model';
-  export type {
     ExtensionIdentifier,
     HashValues,
     InstalledExtensions,
@@ -13294,6 +13290,12 @@ declare module '@papi/core' {
     SingleMethodDocumentation,
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
+  export type {
+    ParatextRegistryToken,
+    RegistryAccessToken,
+    RegistryAccessTokenRequest,
+    RegistryReadScope,
+  } from 'shared/models/paratext-registry-token-privilege.model';
   export type {
     ExtensionDataEnumerationProjectDataTypes,
     ExtensionDataListScope,

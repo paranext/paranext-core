@@ -1113,6 +1113,7 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
     createProcess: undefined,
     manageExtensions: undefined,
     handleUri: undefined,
+    // Returns undefined unless the manifest declares the privilege and lists resources
     paratextRegistryToken: createParatextRegistryToken(manifest),
   };
   if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.CreateProcess)) {

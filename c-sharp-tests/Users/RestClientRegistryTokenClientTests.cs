@@ -3,12 +3,15 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using Paranext.DataProvider.Users;
+using Paratext.Data;
 
 namespace TestParanextDataProvider.Users;
 
 /// <summary>
-/// Runs <see cref="RestClientRegistryTokenClient"/> against a local HTTP listener. ParatextData treats
-/// 127.0.0.1 as a local address, so these requests never consult the user's internet-access setting.
+/// Runs <see cref="RestClientRegistryTokenClient"/> against a local HTTP listener. ParatextData checks
+/// the machine's internet setting before every request, even one to localhost, so these tests are
+/// skipped where that setting blocks requests. The listener uses <c>localhost</c> because Windows
+/// lets a non-administrator listen there but not on <c>127.0.0.1</c>.
 /// </summary>
 [TestFixture]
 [ExcludeFromCodeCoverage]
@@ -24,14 +27,17 @@ internal class RestClientRegistryTokenClientTests
     [SetUp]
     public void SetUp()
     {
-        _registryUrl = $"http://127.0.0.1:{GetFreePort()}";
+        if (InternetAccess.Status == InternetUse.Disabled)
+            Assert.Ignore("This machine's internet setting blocks every ParatextData request.");
+
+        _registryUrl = $"http://localhost:{GetFreePort()}";
         _listener = new HttpListener();
         _listener.Prefixes.Add(_registryUrl + "/");
         _listener.Start();
     }
 
     [TearDown]
-    public void TearDown() => _listener.Close();
+    public void TearDown() => _listener?.Close();
 
     [Test]
     public async Task PostsTheJsonBodyToTheTokenEndpointWithBasicAuth()

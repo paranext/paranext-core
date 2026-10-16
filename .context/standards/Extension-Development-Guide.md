@@ -187,10 +187,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 - Each `resource` must match an entry in `paratextRegistryTokenResources` exactly (a trailing slash
   makes a different identifier), and a Registry sysadmin must have registered it with the Registry.
 - Always pass `scope`. Only the five read scopes in `RegistryReadScope` are allowed.
-- Failures reject with a `PlatformError`. Branch on its `code`:
+- Failures reject with a `PlatformError`. Branch on its `code`. Its `message` is an English
+  diagnostic for logs, so show users your own localized text based on the `code`:
   - `UNAUTHENTICATED`: offer `paratextRegistration.showParatextRegistration`.
-  - `FAILED_PRECONDITION`: the user turned internet access off, or Internet Settings require a VPN
-    in this location and none is connected.
+  - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: internet access is
+    off, or "Disable access to some Bible translation services" is selected and this computer's
+    location is restricted or could not be determined.
   - `UNAVAILABLE`: retry later.
   - `INVALID_ARGUMENT` or `PERMISSION_DENIED`: a configuration bug in the extension or the
     Registry.

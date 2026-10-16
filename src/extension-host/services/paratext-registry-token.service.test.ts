@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PERMISSION_DENIED, UNAUTHENTICATED } from 'platform-bible-utils';
+import { INVALID_ARGUMENT, PERMISSION_DENIED, UNAUTHENTICATED } from 'platform-bible-utils';
 import { createParatextRegistryToken } from '@extension-host/services/paratext-registry-token.service';
 import { REGISTRY_TOKEN_REQUEST_TYPE } from '@node/services/paratext-registry-token.service-model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
@@ -75,6 +75,11 @@ describe('createParatextRegistryToken', () => {
     expect(mocks.warn).toHaveBeenCalled();
   });
 
+  it('sends the request type the C# handler registers', () => {
+    // RegistryAccessTokenService registers this literal; a rename on either side breaks the call
+    expect(REGISTRY_TOKEN_REQUEST_TYPE).toBe('paratextRegistryToken:getAccessToken');
+  });
+
   it('returns a frozen getter', () => {
     expect(Object.isFrozen(createParatextRegistryToken(manifestWith([RESOURCE])))).toBe(true);
   });
@@ -121,6 +126,19 @@ describe('createParatextRegistryToken', () => {
     await expect(token?.getAccessToken({ resource })).rejects.toMatchObject({
       code: PERMISSION_DENIED,
     });
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a string', 'projects.members:read'],
+    ['an object', { 0: 'projects.members:read' }],
+  ])('rejects a scope that is %s with INVALID_ARGUMENT without sending', async (_label, scope) => {
+    const token = createParatextRegistryToken(manifestWith([RESOURCE]));
+
+    await expect(
+      // @ts-expect-error ts(2322) - untyped JavaScript callers can pass a scope that is not a list
+      token?.getAccessToken({ resource: RESOURCE, scope }),
+    ).rejects.toMatchObject({ code: INVALID_ARGUMENT });
     expect(mocks.request).not.toHaveBeenCalled();
   });
 

@@ -220,19 +220,26 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         var result = await Get();
 
         AssertFailure(result, PlatformErrorCodes.FailedPrecondition);
-        Assert.That(result.Message, Does.Contain("turned off").And.Not.Contain("VPN"));
+        Assert.That(
+            result.Message,
+            Does.Contain("turned off").And.Not.Contain("Bible translation services")
+        );
         Assert.That(_tokenClient.PostCount, Is.Zero);
     }
 
     [Test]
-    public async Task VpnRequiredButNotConnected_FailsWithFailedPreconditionNamingTheVpn()
+    public async Task VpnRequiredInARestrictedLocation_FailsWithFailedPreconditionNamingTheSetting()
     {
         _userContext.Snapshot = ValidUser(isInternetDisabled: true, isVpnRequired: true);
 
         var result = await Get();
 
         AssertFailure(result, PlatformErrorCodes.FailedPrecondition);
-        Assert.That(result.Message, Does.Contain("VPN").And.Not.Contain("turned off"));
+        Assert.That(
+            result.Message,
+            Does.Contain("Disable access to some Bible translation services")
+                .And.Not.Contain("turned off")
+        );
         Assert.That(_tokenClient.PostCount, Is.Zero);
     }
 

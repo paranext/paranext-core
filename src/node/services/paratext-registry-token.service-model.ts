@@ -3,7 +3,7 @@ import { serializeRequestType } from '@shared/utils/util';
 import type { RegistryAccessToken } from '@shared/models/paratext-registry-token-privilege.model';
 
 /** Prefix on requests that mint Paratext Registry access tokens */
-export const CATEGORY_PARATEXT_REGISTRY_TOKEN = 'paratextRegistryToken';
+const CATEGORY_PARATEXT_REGISTRY_TOKEN = 'paratextRegistryToken';
 
 /**
  * Serialized request type the C# data provider handles to mint a Paratext Registry access token.

@@ -1,4 +1,4 @@
-import { newPlatformError, PERMISSION_DENIED } from 'platform-bible-utils';
+import { INVALID_ARGUMENT, newPlatformError, PERMISSION_DENIED } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { ElevatedPrivilegeNames } from '@shared/models/elevated-privilege-names.model';
@@ -12,6 +12,14 @@ import {
   REGISTRY_TOKEN_REQUEST_TYPE,
   RegistryAccessTokenWireResult,
 } from '@node/services/paratext-registry-token.service-model';
+
+function isNonEmptyStringList(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((entry) => typeof entry === 'string' && entry.length > 0)
+  );
+}
 
 /**
  * Builds the `paratextRegistryToken` elevated privilege for one extension, or returns `undefined`
@@ -31,19 +39,13 @@ export function createParatextRegistryToken(
     return undefined;
 
   const declared: unknown = manifest.paratextRegistryTokenResources;
-  const isValidList =
-    Array.isArray(declared) &&
-    declared.length > 0 &&
-    declared.every((resource) => typeof resource === 'string' && resource.length > 0);
-  if (!isValidList) {
+  if (!isNonEmptyStringList(declared)) {
     logger.warn(
       `Extension '${manifest.name}' declares the ${ElevatedPrivilegeNames.ParatextRegistryToken} privilege but no valid paratextRegistryTokenResources (a non-empty list of non-empty strings), so it gets no Registry tokens`,
     );
     return undefined;
   }
-  const allowedResources: readonly string[] = Object.freeze(
-    declared.filter((resource): resource is string => typeof resource === 'string'),
-  );
+  const allowedResources: readonly string[] = Object.freeze([...declared]);
 
   const paratextRegistryToken: ParatextRegistryToken = {
     async getAccessToken({
@@ -54,6 +56,13 @@ export function createParatextRegistryToken(
         throw newPlatformError(
           `Extension '${manifest.name}' did not list '${resource}' in paratextRegistryTokenResources`,
           PERMISSION_DENIED,
+        );
+      // Untyped JavaScript callers can pass anything; C# checks each entry but not the list shape
+      const requestedScope: unknown = scope ?? [];
+      if (!Array.isArray(requestedScope))
+        throw newPlatformError(
+          `Extension '${manifest.name}' passed a scope that is not a list`,
+          INVALID_ARGUMENT,
         );
 
       const result = await networkService.request<

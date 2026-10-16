@@ -26,7 +26,8 @@ internal sealed class RegistryAccessTokenService(
 
     /// <summary>
     /// The only scopes this service requests. The Registry would also issue write scopes to a
-    /// registration-code caller, so read-only is enforced here.
+    /// registration-code caller, so read-only is enforced here. Keep in sync with
+    /// <c>RegistryReadScope</c> in <c>src/shared/models/paratext-registry-token-privilege.model.ts</c>.
     /// </summary>
     public static readonly IReadOnlySet<string> AllowedScopes = new HashSet<string>(
         StringComparer.Ordinal
@@ -102,14 +103,19 @@ internal sealed class RegistryAccessTokenService(
                 "There is no valid Paratext registration. The user must register before a Registry "
                     + "access token can be issued."
             );
+        // Follows ParatextData's own rule for direct Registry calls such as registration: refuse
+        // only when the effective status is Disabled. InternetServicesGate's stricter saved-setting
+        // check covers Send/Receive and the DBL, not every Registry call.
         if (user.IsInternetDisabled)
             return Fail(
                 extensionName,
                 resource,
                 PlatformErrorCodes.FailedPrecondition,
                 user.IsVpnRequired
-                    ? "Internet Settings require a VPN in this location, and none is connected."
-                    : "Internet access is turned off in Internet Settings."
+                    ? "\"Disable access to some Bible translation services\" is selected in Internet & "
+                        + "connectivity settings, and this computer's location is restricted or "
+                        + "could not be determined."
+                    : "Internet access is turned off in Internet & connectivity settings."
             );
         if (!user.IsConnected)
             return Fail(

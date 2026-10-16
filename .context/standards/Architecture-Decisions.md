@@ -6270,7 +6270,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`src/extension-host/services/paratext-registry-token.service.ts`) hands a getter only to
   extensions that declare the `paratextRegistryToken` elevated privilege and list the services in
   `paratextRegistryTokenResources` (exact match), following the `handleUri` pattern. C# requests
-  only the five `:read` scopes. Failures come back from C# as a result object and become
+  only the five `:read` scopes. It follows ParatextData's internet rule for direct Registry calls,
+  as registration does: it refuses only when the effective `InternetAccess.Status` is `Disabled`.
+  `InternetServicesGate`'s saved-setting check, which also refuses "Disable access to some Bible
+  translation services", is for Send/Receive and the DBL, so it doesn't apply here. Failures come
+  back from C# as a result object and become
   `PlatformError` codes in the extension host, because C# codes don't cross the RPC boundary yet
   (PT-4750).
 - **Alternatives:** An open `paratextRegistration.*` command: every extension could impersonate the
