@@ -97,9 +97,18 @@ public static class Program
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var internetSettingsDataProvider = new InternetSettingsDataProvider(papi);
             var dblResources = new DblResourcesDataProvider(papi, paratextProjects);
+            // Initialized in the critical barrier below so it is serving before extension activation:
+            // a privileged extension may request a token from its activate().
+            var registryAccessTokenService = new RegistryAccessTokenService(
+                papi,
+                new ParatextDataRegistryUserContext(),
+                new RestClientRegistryTokenClient(),
+                () => DateTimeOffset.UtcNow
+            );
             var paratextRegistrationService = new ParatextRegistrationService(
                 papi,
-                internetSettingsDataProvider
+                internetSettingsDataProvider,
+                registryAccessTokenService
             );
             var checklistNetworkObject = new ChecklistNetworkObject(papi);
             var manageBooksService = new ManageBooksService(
@@ -175,6 +184,7 @@ public static class Program
                 paratextPublishedFactory.InitializeAsync(),
                 versificationConversionService.InitializeAsync(),
                 paratextRegistrationService.InitializeAsync(),
+                registryAccessTokenService.InitializeAsync(),
                 paratextSendReceiveService.InitializeAsync(),
                 dblResources.RegisterDataProviderAsync(),
                 sendReceiveBlockNotifierService.InitializeAsync(),

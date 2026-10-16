@@ -1,0 +1,589 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using Paranext.DataProvider;
+using Paranext.DataProvider.JsonUtils;
+using Paranext.DataProvider.Users;
+
+namespace TestParanextDataProvider.Users;
+
+[TestFixture]
+[ExcludeFromCodeCoverage]
+internal class RegistryAccessTokenServiceTests : PapiTestBase
+{
+    private const string RESOURCE = "https://assistant-dev.example.org";
+    private const string OTHER_RESOURCE = "https://other.example.org";
+    private const string CANARY_CODE = "CANARY-REGISTRATION-CODE-7f3a";
+    private const string CANARY_TOKEN = "CANARY-ACCESS-TOKEN-91bd";
+    private static readonly DateTimeOffset s_t0 = new(2026, 10, 16, 12, 0, 0, TimeSpan.Zero);
+
+    private DateTimeOffset _now;
+    private FakeUserContext _userContext = null!;
+    private FakeTokenClient _tokenClient = null!;
+    private RegistryAccessTokenService _service = null!;
+    private TextWriter _originalOut = null!;
+    private TextWriter _originalError = null!;
+    private StringWriter _capturedOut = null!;
+    private StringWriter _capturedError = null!;
+
+    [SetUp]
+    public override async Task TestSetupAsync()
+    {
+        await base.TestSetupAsync();
+        // Safe because no [Parallelizable] exists anywhere in c-sharp-tests.
+        _originalOut = Console.Out;
+        _originalError = Console.Error;
+        _capturedOut = new StringWriter();
+        _capturedError = new StringWriter();
+        Console.SetOut(_capturedOut);
+        Console.SetError(_capturedError);
+
+        _now = s_t0;
+        _userContext = new FakeUserContext();
+        _tokenClient = new FakeTokenClient();
+        _service = new RegistryAccessTokenService(Client, _userContext, _tokenClient, () => _now);
+        await _service.InitializeAsync();
+    }
+
+    [TearDown]
+    public override void TestTearDown()
+    {
+        Console.SetOut(_originalOut);
+        Console.SetError(_originalError);
+        base.TestTearDown();
+        // Every test doubles as a check that nothing secret reached the log.
+        string logged = _capturedOut.ToString() + _capturedError.ToString();
+        _capturedOut.Dispose();
+        _capturedError.Dispose();
+        Assert.That(logged, Does.Not.Contain(CANARY_CODE));
+        Assert.That(logged, Does.Not.Contain(CANARY_TOKEN));
+    }
+
+    #region Request and response
+
+    [Test]
+    public void InitializeAsync_RegistersTheRequestType()
+    {
+        Assert.That(Client.IsHandlerRegistered(RegistryAccessTokenService.REQUEST_TYPE), Is.True);
+        Assert.That(
+            RegistryAccessTokenService.REQUEST_TYPE,
+            Is.EqualTo("paratextRegistryToken:getAccessToken")
+        );
+    }
+
+    [Test]
+    public async Task Handler_ReturnsTokenAndExpiryFromTheRegistry()
+    {
+        var result = await (Task<RegistryAccessTokenResult>)
+            Client.InvokeRequestHandler(
+                RegistryAccessTokenService.REQUEST_TYPE,
+                "assistant",
+                RESOURCE,
+                new[] { "projects.members:read" }
+            )!;
+
+        Assert.That(result.AccessToken, Is.EqualTo(CANARY_TOKEN));
+        Assert.That(result.ExpiresAt, Is.EqualTo(s_t0.AddSeconds(1200).ToUnixTimeMilliseconds()));
+        Assert.That(result.ErrorCode, Is.Null);
+        // Positive control for the TearDown canary sweep: the capture does see this service's log.
+        Assert.That(_capturedOut.ToString(), Does.Contain("Issued a Registry access token"));
+    }
+
+    [Test]
+    public async Task Request_PostsClientCredentialsWithBasicAuthAndSortedScopes()
+    {
+        await Get(["projects.members:read", "orgs:read"]);
+
+        PostedRequest post = _tokenClient.Posts.Single();
+        Assert.That(post.RegistryUrl, Is.EqualTo("https://registry-dev.paratext.org"));
+        Assert.That(post.UserName, Is.EqualTo("Test User"));
+        Assert.That(post.RegistrationCode, Is.EqualTo(CANARY_CODE));
+        using JsonDocument body = JsonDocument.Parse(post.JsonBody);
+        Assert.That(
+            body.RootElement.GetProperty("grant_type").GetString(),
+            Is.EqualTo("client_credentials")
+        );
+        Assert.That(body.RootElement.GetProperty("resource").GetString(), Is.EqualTo(RESOURCE));
+        Assert.That(
+            body.RootElement.GetProperty("scope").GetString(),
+            Is.EqualTo("orgs:read projects.members:read")
+        );
+    }
+
+    [Test]
+    public async Task Request_LeavesScopeOutWhenNoneRequested()
+    {
+        await Get([]);
+        await _service.GetAccessTokenAsync("assistant", OTHER_RESOURCE, null);
+
+        foreach (PostedRequest post in _tokenClient.Posts)
+        {
+            using JsonDocument body = JsonDocument.Parse(post.JsonBody);
+            Assert.That(body.RootElement.TryGetProperty("scope", out _), Is.False);
+        }
+    }
+
+    [Test]
+    public void Result_SerializesOnlyTheMembersOfItsShape()
+    {
+        var options = SerializationOptions.CreateSerializationOptions();
+
+        string success = JsonSerializer.Serialize(
+            RegistryAccessTokenResult.Success("t", s_t0),
+            options
+        );
+        string failure = JsonSerializer.Serialize(
+            RegistryAccessTokenResult.Failure(PlatformErrorCodes.Unavailable, "m"),
+            options
+        );
+
+        Assert.That(
+            success,
+            Is.EqualTo($$"""{"accessToken":"t","expiresAt":{{s_t0.ToUnixTimeMilliseconds()}}}""")
+        );
+        Assert.That(failure, Is.EqualTo("""{"errorCode":"UNAVAILABLE","message":"m"}"""));
+    }
+
+    [Test]
+    public void Result_ToStringNeverIncludesTheToken()
+    {
+        Assert.That(
+            RegistryAccessTokenResult.Success(CANARY_TOKEN, s_t0).ToString(),
+            Does.Not.Contain(CANARY_TOKEN)
+        );
+    }
+
+    #endregion
+
+    #region Failures
+
+    [TestCase("projects:write")]
+    [TestCase("projects")]
+    [TestCase("data_access")]
+    [TestCase("openid")]
+    public async Task DisallowedScope_FailsWithInvalidArgumentWithoutCallingTheRegistry(
+        string scope
+    )
+    {
+        var result = await Get(["orgs:read", scope]);
+
+        AssertFailure(result, PlatformErrorCodes.InvalidArgument);
+        Assert.That(result.Message, Does.Contain(scope));
+        Assert.That(_tokenClient.PostCount, Is.Zero);
+    }
+
+    [TestCase("")]
+    [TestCase("   ")]
+    public async Task BlankResource_FailsWithInvalidArgumentWithoutCallingTheRegistry(
+        string resource
+    )
+    {
+        var result = await _service.GetAccessTokenAsync("assistant", resource, ["orgs:read"]);
+
+        AssertFailure(result, PlatformErrorCodes.InvalidArgument);
+        Assert.That(_tokenClient.PostCount, Is.Zero);
+    }
+
+    [Test]
+    public async Task NotRegistered_FailsWithUnauthenticatedWithoutCallingTheRegistry()
+    {
+        _userContext.Snapshot = ValidUser(isRegistered: false);
+
+        AssertFailure(await Get(), PlatformErrorCodes.Unauthenticated);
+        Assert.That(_tokenClient.PostCount, Is.Zero);
+    }
+
+    [Test]
+    public async Task InternetTurnedOff_FailsWithFailedPreconditionWithoutCallingTheRegistry()
+    {
+        _userContext.Snapshot = ValidUser(isInternetDisabled: true);
+
+        AssertFailure(await Get(), PlatformErrorCodes.FailedPrecondition);
+        Assert.That(_tokenClient.PostCount, Is.Zero);
+    }
+
+    [Test]
+    public async Task NoConnection_FailsWithUnavailableWithoutCallingTheRegistry()
+    {
+        _userContext.Snapshot = ValidUser(isConnected: false);
+
+        AssertFailure(await Get(), PlatformErrorCodes.Unavailable);
+        Assert.That(_tokenClient.PostCount, Is.Zero);
+    }
+
+    [Test]
+    public async Task Registry400_FailsWithInvalidArgumentNamingTheRegistryError()
+    {
+        _tokenClient.Default = () =>
+            Task.FromResult(
+                new RegistryTokenHttpResponse(
+                    400,
+                    """{"error":"invalid_target","error_description":"unknown resource"}"""
+                )
+            );
+
+        var result = await Get();
+
+        AssertFailure(result, PlatformErrorCodes.InvalidArgument);
+        Assert.That(result.Message, Does.Contain("invalid_target").And.Contain("unknown resource"));
+    }
+
+    [Test]
+    public async Task Registry400WithoutJson_FailsWithInvalidArgument()
+    {
+        _tokenClient.Default = () =>
+            Task.FromResult(new RegistryTokenHttpResponse(400, "Bad Request"));
+
+        var result = await Get();
+
+        AssertFailure(result, PlatformErrorCodes.InvalidArgument);
+        Assert.That(result.Message, Does.Contain("HTTP 400"));
+    }
+
+    [TestCase(401)]
+    [TestCase(403)]
+    public async Task RegistryRefusesTheRegistration_FailsWithUnauthenticated(int status)
+    {
+        _tokenClient.Default = () => Task.FromResult(new RegistryTokenHttpResponse(status, ""));
+
+        AssertFailure(await Get(), PlatformErrorCodes.Unauthenticated);
+    }
+
+    [TestCase(404)]
+    [TestCase(500)]
+    [TestCase(503)]
+    public async Task OtherRegistryStatus_FailsWithUnavailable(int status)
+    {
+        _tokenClient.Default = () => Task.FromResult(new RegistryTokenHttpResponse(status, ""));
+
+        var result = await Get();
+
+        AssertFailure(result, PlatformErrorCodes.Unavailable);
+        Assert.That(result.Message, Does.Contain($"HTTP {status}"));
+    }
+
+    [TestCase("<html>captive portal</html>")]
+    [TestCase("[]")]
+    [TestCase("{}")]
+    [TestCase("""{"access_token":"t"}""")]
+    [TestCase("""{"access_token":"","expires_in":1200}""")]
+    [TestCase("""{"access_token":"t","expires_in":"1200"}""")]
+    [TestCase("""{"access_token":"t","expires_in":0}""")]
+    public async Task UnreadableTokenResponse_FailsWithUnavailable(string body)
+    {
+        _tokenClient.Default = () => Task.FromResult(new RegistryTokenHttpResponse(200, body));
+
+        AssertFailure(await Get(), PlatformErrorCodes.Unavailable);
+    }
+
+    [Test]
+    public async Task ClientException_FailsWithUnavailableWithoutItsText()
+    {
+        _tokenClient.Default = () =>
+            throw new InvalidOperationException($"socket error while sending {CANARY_CODE}");
+
+        var result = await Get();
+
+        AssertFailure(result, PlatformErrorCodes.Unavailable);
+        Assert.That(result.Message, Does.Not.Contain("socket error"));
+        Assert.That(
+            _capturedOut.ToString(),
+            Does.Contain(nameof(InvalidOperationException)).And.Not.Contain("socket error")
+        );
+    }
+
+    #endregion
+
+    #region Caching
+
+    [Test]
+    public async Task SecondCall_ReusesTheCachedToken()
+    {
+        var first = await Get();
+        _now = s_t0.AddSeconds(600);
+        var second = await Get();
+
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(1));
+        Assert.That(second, Is.EqualTo(first));
+    }
+
+    [Test]
+    public async Task TokenWithExactlyTwoMinutesLeft_IsStillReused()
+    {
+        await Get();
+        _now = s_t0.AddSeconds(1200 - 120);
+        await Get();
+
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task TokenWithLessThanTwoMinutesLeft_IsReplaced()
+    {
+        await Get();
+        _now = s_t0.AddSeconds(1200 - 119);
+        var second = await Get();
+
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(2));
+        Assert.That(second.ExpiresAt, Is.EqualTo(_now.AddSeconds(1200).ToUnixTimeMilliseconds()));
+    }
+
+    [Test]
+    public async Task DifferentResourceOrScopes_GetTheirOwnTokens()
+    {
+        await Get(["orgs:read"]);
+        await Get(["orgs:read"], OTHER_RESOURCE);
+        await Get(["projects:read"]);
+
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task ScopeOrderAndDuplicates_ShareOneToken()
+    {
+        await Get(["projects:read", "orgs:read", "orgs:read"]);
+        await Get(["orgs:read", "projects:read"]);
+
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(1));
+        using JsonDocument body = JsonDocument.Parse(_tokenClient.Posts.Single().JsonBody);
+        Assert.That(
+            body.RootElement.GetProperty("scope").GetString(),
+            Is.EqualTo("orgs:read projects:read")
+        );
+    }
+
+    [Test]
+    public async Task DifferentUserOrRegistry_GetTheirOwnTokens()
+    {
+        await Get();
+        _userContext.Snapshot = ValidUser(userName: "Another User");
+        await Get();
+        _userContext.Snapshot = ValidUser(registryUrl: "https://registry.paratext.org");
+        await Get();
+
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task ConcurrentCallers_ShareOneRequest()
+    {
+        var gate = new TaskCompletionSource<RegistryTokenHttpResponse>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        _tokenClient.Default = () => gate.Task;
+
+        Task<RegistryAccessTokenResult> first = Get();
+        Task<RegistryAccessTokenResult> second = Get();
+        await WaitForPostsAsync(1);
+        gate.SetResult(TokenResponse(CANARY_TOKEN, 1200));
+        RegistryAccessTokenResult[] results = await Task.WhenAll(first, second);
+
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(1));
+        Assert.That(results[0].AccessToken, Is.EqualTo(CANARY_TOKEN));
+        Assert.That(results[1], Is.EqualTo(results[0]));
+    }
+
+    [Test]
+    public async Task FailedRequest_IsNotCached()
+    {
+        _tokenClient.Responses.Enqueue(
+            () => Task.FromResult(new RegistryTokenHttpResponse(500, ""))
+        );
+
+        AssertFailure(await Get(), PlatformErrorCodes.Unavailable);
+        var second = await Get();
+
+        Assert.That(second.AccessToken, Is.EqualTo(CANARY_TOKEN));
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task UnreadableSuccessResponse_IsNotCached()
+    {
+        _tokenClient.Responses.Enqueue(
+            () => Task.FromResult(new RegistryTokenHttpResponse(200, "<html>portal</html>"))
+        );
+
+        AssertFailure(await Get(), PlatformErrorCodes.Unavailable);
+        var second = await Get();
+
+        Assert.That(second.AccessToken, Is.EqualTo(CANARY_TOKEN));
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task ClearCache_ForcesANewRequest()
+    {
+        await Get();
+        _service.ClearCache();
+        await Get();
+
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task RegistrationChangeDuringARequest_DoesNotCacheTheOldToken()
+    {
+        var gate = new TaskCompletionSource<RegistryTokenHttpResponse>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        _tokenClient.Responses.Enqueue(() => gate.Task);
+
+        Task<RegistryAccessTokenResult> inFlight = Get();
+        await WaitForPostsAsync(1);
+        _service.ClearCache();
+        gate.SetResult(TokenResponse("token-from-old-registration", 1200));
+
+        // The caller that asked before the change still gets its answer...
+        Assert.That((await inFlight).AccessToken, Is.EqualTo("token-from-old-registration"));
+        // ...but it is not handed to anyone asking after the change.
+        var next = await Get();
+        Assert.That(next.AccessToken, Is.EqualTo(CANARY_TOKEN));
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task RegistrationChangeDuringARequest_LaterCallersStartANewRequest()
+    {
+        var gate = new TaskCompletionSource<RegistryTokenHttpResponse>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        _tokenClient.Responses.Enqueue(() => gate.Task);
+
+        Task<RegistryAccessTokenResult> before = Get();
+        await WaitForPostsAsync(1);
+        _service.ClearCache();
+        Task<RegistryAccessTokenResult> after = Get();
+        gate.SetResult(TokenResponse("token-from-old-registration", 1200));
+
+        Assert.That((await after).AccessToken, Is.EqualTo(CANARY_TOKEN));
+        Assert.That((await before).AccessToken, Is.EqualTo("token-from-old-registration"));
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task RegistryLifetimeShorterThanTheReuseMargin_ReturnsTheTokenAndRefetchesNextTime()
+    {
+        _tokenClient.Default = () => Task.FromResult(TokenResponse(CANARY_TOKEN, 60));
+
+        var first = await Get();
+        await Get();
+
+        Assert.That(first.AccessToken, Is.EqualTo(CANARY_TOKEN));
+        Assert.That(first.ExpiresAt, Is.EqualTo(s_t0.AddSeconds(60).ToUnixTimeMilliseconds()));
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(2));
+    }
+
+    #endregion
+
+    #region Helpers
+
+    private async Task WaitForPostsAsync(int count)
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+        while (_tokenClient.PostCount < count)
+        {
+            if (DateTime.UtcNow > deadline)
+                Assert.Fail($"Expected {count} token request(s), saw {_tokenClient.PostCount}");
+            await Task.Delay(10);
+        }
+    }
+
+    private Task<RegistryAccessTokenResult> Get(
+        string[]? scope = null,
+        string resource = RESOURCE
+    ) => _service.GetAccessTokenAsync("assistant", resource, scope ?? ["projects.members:read"]);
+
+    private static void AssertFailure(RegistryAccessTokenResult result, string expectedCode)
+    {
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorCode, Is.EqualTo(expectedCode));
+        Assert.That(result.Message, Is.Not.Empty);
+        Assert.That(result.Message, Does.Not.Contain(CANARY_CODE));
+        Assert.That(result.Message, Does.Not.Contain(CANARY_TOKEN));
+    }
+
+    private static RegistryUserSnapshot ValidUser(
+        bool isRegistered = true,
+        bool isInternetDisabled = false,
+        bool isConnected = true,
+        string userName = "Test User",
+        string registryUrl = "https://registry-dev.paratext.org"
+    ) =>
+        new()
+        {
+            IsRegistered = isRegistered,
+            UserName = userName,
+            RegistrationCode = CANARY_CODE,
+            RegistryUrl = registryUrl,
+            IsInternetDisabled = isInternetDisabled,
+            IsConnected = isConnected,
+        };
+
+    private static RegistryTokenHttpResponse TokenResponse(string token, int expiresIn) =>
+        new(
+            200,
+            $$"""{"access_token":"{{token}}","token_type":"Bearer","expires_in":{{expiresIn}}}"""
+        );
+
+    private sealed record PostedRequest(
+        string RegistryUrl,
+        string UserName,
+        string RegistrationCode,
+        string JsonBody
+    );
+
+    private sealed class FakeUserContext : IRegistryUserContext
+    {
+        public RegistryUserSnapshot Snapshot { get; set; } = ValidUser();
+
+        // Completes synchronously, so a call runs straight through to its in-flight request and
+        // concurrency tests are deterministic.
+        public Task<RegistryUserSnapshot> GetSnapshotAsync() => Task.FromResult(Snapshot);
+    }
+
+    private sealed class FakeTokenClient : IRegistryTokenClient
+    {
+        private readonly List<PostedRequest> _posts = [];
+
+        public Func<Task<RegistryTokenHttpResponse>> Default { get; set; } =
+            () => Task.FromResult(TokenResponse(CANARY_TOKEN, 1200));
+
+        public Queue<Func<Task<RegistryTokenHttpResponse>>> Responses { get; } = new();
+
+        public IReadOnlyList<PostedRequest> Posts
+        {
+            get
+            {
+                lock (_posts)
+                    return [.. _posts];
+            }
+        }
+
+        public int PostCount
+        {
+            get
+            {
+                lock (_posts)
+                    return _posts.Count;
+            }
+        }
+
+        public Task<RegistryTokenHttpResponse> PostTokenRequestAsync(
+            string registryUrl,
+            string userName,
+            string registrationCode,
+            string jsonBody
+        )
+        {
+            Func<Task<RegistryTokenHttpResponse>> respond;
+            lock (_posts)
+            {
+                _posts.Add(new PostedRequest(registryUrl, userName, registrationCode, jsonBody));
+                respond = Responses.Count > 0 ? Responses.Dequeue() : Default;
+            }
+            return respond();
+        }
+    }
+
+    #endregion
+}
