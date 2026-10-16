@@ -193,6 +193,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   - `UNAVAILABLE`: retry later.
   - `INVALID_ARGUMENT` or `PERMISSION_DENIED`: a configuration bug in the extension or the
     Registry.
+  - No `code` (for example, the request timed out): treat it like `UNAVAILABLE`.
 
 ---
 

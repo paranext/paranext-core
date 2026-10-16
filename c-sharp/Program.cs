@@ -97,8 +97,9 @@ public static class Program
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var internetSettingsDataProvider = new InternetSettingsDataProvider(papi);
             var dblResources = new DblResourcesDataProvider(papi, paratextProjects);
-            // Initialized in the critical barrier below so it is serving before extension activation:
-            // a privileged extension may request a token from its activate().
+            // Initialized in the critical barrier below. Extension activation doesn't wait for that
+            // barrier, so a token request sent from an extension's activate() before this handler
+            // registers relies on the caller's requestWithRetry (about 10 seconds).
             var registryAccessTokenService = new RegistryAccessTokenService(
                 papi,
                 new ParatextDataRegistryUserContext(),

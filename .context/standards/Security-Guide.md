@@ -125,10 +125,19 @@ made from the user's registration code. The code stays in the C# data provider. 
 checks the caller's `paratextRegistryTokenResources` before forwarding a request on
 `paratextRegistryToken:getAccessToken`, a request type extension code can't reach directly. Tokens
 carry read scopes only, expire after the Registry-set lifetime (currently 20 minutes), and are valid
-only at the named service. Local processes on the unauthenticated PAPI WebSocket can also call that
-request type; they already run as the user and can read the user's Paratext data directly, so this
-adds no new exposure. Rationale: `adr-registry-tokens-via-elevated-privilege` in
-`Architecture-Decisions.md`.
+only at the named service.
+
+The C# handler does not check the allowlist itself, so anything that can reach the unauthenticated
+PAPI WebSocket can call that request type for any resource registered with the Registry:
+
+- Local processes already run as the user and can read the user's Paratext data directly, so they
+  gain nothing new.
+- A web page open in the user's browser can also connect to `ws://localhost:8876`, because the
+  listener does not check the handshake's `Origin` header. Such a page can already call every other
+  PAPI method, but this is the first one whose result works off the machine. WebSocket hardening,
+  including checking origin, is open work in PT-2893.
+
+Rationale: `adr-registry-tokens-via-elevated-privilege` in `Architecture-Decisions.md`.
 
 ---
 

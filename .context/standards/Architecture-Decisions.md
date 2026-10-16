@@ -6283,8 +6283,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   with the Registry and is listed in the consuming extension's manifest, with no Platform.Bible
   change. The gate is only as strong as extension review, as with `createProcess` and `handleUri`.
   Local processes on the loopback WebSocket can also call the request type; they already run as the
-  user and can read the user's Paratext data directly. Revisit when PT-4750 lands (throw codes
-  instead of returning them), or if a consent prompt becomes necessary.
+  user and can read the user's Paratext data directly. So can a web page in the user's browser,
+  because the WebSocket does not check the handshake's `Origin` (open work in PT-2893); unlike the
+  other PAPI methods such a page can call, this one returns a credential that works off the
+  machine. Revisit when PT-4750 lands (throw codes instead of returning them), when the WebSocket
+  checks origin, or if a consent prompt becomes necessary.
 - **Source:** PT-4865 (design spec attached there).
 
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path

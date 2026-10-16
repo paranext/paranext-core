@@ -10102,7 +10102,7 @@ declare module 'shared/models/paratext-registry-token-privilege.model' {
      * Gets an access token for `request.resource`. Tokens are cached, so call this before each
      * request to the service instead of storing the token.
      *
-     * Rejects with a `PlatformError` whose `code` says why:
+     * Rejects with a `PlatformError`. Its `code` says why:
      *
      * - `PERMISSION_DENIED`: `resource` is not in the manifest's `paratextRegistryTokenResources`
      * - `INVALID_ARGUMENT`: a scope is not allowed, or the Registry rejected the request (for example,
@@ -10111,6 +10111,9 @@ declare module 'shared/models/paratext-registry-token-privilege.model' {
      * - `FAILED_PRECONDITION`: the user turned internet access off
      * - `UNAVAILABLE`: the Registry could not be reached or did not return a usable token; retrying
      *   later may help
+     *
+     * Other failures, such as a request that times out, reject without a `code`. Treat them like
+     * `UNAVAILABLE`.
      *
      * @param request The service to get a token for and the scopes the token should carry
      * @returns The token and when it expires
