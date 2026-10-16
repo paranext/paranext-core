@@ -445,7 +445,7 @@ describe.each([...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS])(
   },
 );
 
-// The confirmation asked before an edit removes content the view does not show: its title, prompt,
+// The confirmation shown before an edit removes content the view does not show: its title, prompt,
 // and buttons.
 describe.each([...HIDDEN_CONTENT_DELETE_STRING_KEYS])('hidden content delete label %s', (key) => {
   it('has an English label', () => {

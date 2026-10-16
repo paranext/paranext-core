@@ -13,9 +13,9 @@ const SKIP_KEY: LocalizeKey = '%webView_platformScriptureEditor_hiddenContentDel
 const KEEP_KEY: LocalizeKey = '%webView_platformScriptureEditor_hiddenContentDelete_keep%';
 
 /**
- * Localization keys the hidden-content confirmation shows. The dialog service localizes the title
- * and button keys itself; the handler looks up the prompt when it asks, since it fills in
- * `{markers}`.
+ * Localization keys the hidden-content confirmation shows (checked in every shipped language by
+ * localized-strings.test.ts). The dialog service localizes the title and button keys itself; the
+ * handler looks up the prompt when it asks, since it fills in `{markers}`.
  */
 export const HIDDEN_CONTENT_DELETE_STRING_KEYS = Object.freeze([
   TITLE_KEY,
@@ -32,23 +32,28 @@ export type HiddenContentDeleteConfirmOptions = {
   okLabel: LocalizeKey;
   cancelLabel: LocalizeKey;
   isDestructive: true;
-  /** Modal, so nothing else can happen in the editor while the edit is held. */
+  /**
+   * Modal, so the user must answer before doing anything else: the editor holds the edit and
+   * refuses other edits until the question settles, and a floating dialog tab could be left open
+   * indefinitely.
+   */
   isModal: true;
 };
 
 /**
- * Names hidden constructs the way the user would meet them in USFM: by marker (`\fig`, `\esb`), or
- * by USJ type when a construct has no marker of its own. Each name appears once.
+ * Names hidden constructs by their USFM marker (`\fig`, `\esb`), falling back to the construct's
+ * USJ type name, unprefixed, when it has no marker of its own. Each name appears once.
  */
-export function describeHiddenContent(items: HiddenContentItem[]): string {
+export function describeHiddenContent(items: readonly HiddenContentItem[]): string {
   const names = items.map(({ tag, marker }) => (marker ? `\\${marker}` : tag));
   return [...new Set(names)].join(', ');
 }
 
 /**
  * The confirmation shown when an edit in a view that hides figures, sidebars, and the like would
- * remove some. Confirming deletes. The other button is labelled for what the editor will do on
- * "keep": skip over the hidden content when the request says it can, otherwise cancel the edit.
+ * remove some. Confirming deletes. The other button reads "Skip over" when the request's `canSkip`
+ * is true ("keep" moves the caret past the hidden content), and "Don't delete" otherwise ("keep"
+ * cancels the edit, leaving the text unchanged).
  */
 export function buildHiddenContentDeleteConfirm(
   request: HiddenContentDeleteRequest,
@@ -68,7 +73,9 @@ export function buildHiddenContentDeleteConfirm(
 
 /**
  * The editor's `onHiddenContentDelete`: asks with `confirm` and deletes only on an explicit yes.
- * Cancelling, dismissing, or a failed lookup or dialog all keep the content.
+ * Cancelling, dismissing, or a failed lookup or dialog all keep the content. When the request can
+ * skip, "keep" moves the caret past the hidden content, so a failure skips without asking (and is
+ * logged).
  *
  * @param localize - Looks up a localized string in the user's current language, e.g.
  *   `papi.localization.getLocalizedString({ localizeKey })`. Called each time it asks, so the
