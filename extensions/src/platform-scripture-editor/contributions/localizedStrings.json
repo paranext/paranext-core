@@ -558,7 +558,7 @@
       "%webView_platformScriptureEditor_error_syncEditBlocked%": "La edición está pausada mientras se realiza un Enviar/Recibir automático. Su cambio no se guardó.",
       "%webView_platformScriptureEditor_hiddenContentDelete_delete%": "Eliminar",
       "%webView_platformScriptureEditor_hiddenContentDelete_keep%": "No eliminar",
-      "%webView_platformScriptureEditor_hiddenContentDelete_prompt%": "Su edición eliminaría contenido que esta vista no puede mostrar ({markers}). Está oculto aquí, pero forma parte de su texto.",
+      "%webView_platformScriptureEditor_hiddenContentDelete_prompt%": "Su cambio eliminaría contenido que esta vista no puede mostrar ({markers}). Está oculto aquí, pero forma parte de su texto.",
       "%webView_platformScriptureEditor_hiddenContentDelete_skip%": "Saltar",
       "%webView_platformScriptureEditor_hiddenContentDelete_title%": "¿Eliminar contenido oculto?",
       "%webView_platformScriptureEditor_info%": "Información",
