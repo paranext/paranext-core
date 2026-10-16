@@ -178,7 +178,9 @@ public static class Program
             );
 
             StartupTiming.Mark("init-barrier-start");
-            // Critical path: everything the renderer needs to list projects and open an editor.
+            // Critical path: everything the renderer needs to list projects and open an editor, plus
+            // the Registry token handler, so it registers early for extensions that call it from
+            // activate().
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 paratextPublishedFactory.InitializeAsync(),

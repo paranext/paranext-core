@@ -3,6 +3,7 @@ import { INVALID_ARGUMENT, PERMISSION_DENIED, UNAUTHENTICATED } from 'platform-b
 import { createParatextRegistryToken } from '@extension-host/services/paratext-registry-token.service';
 import { REGISTRY_TOKEN_REQUEST_TYPE } from '@node/services/paratext-registry-token.service-model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
+import { REGISTRY_READ_SCOPES } from '@shared/models/paratext-registry-token-privilege.model';
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), warn: vi.fn() }));
 
@@ -80,6 +81,18 @@ describe('createParatextRegistryToken', () => {
     expect(REGISTRY_TOKEN_REQUEST_TYPE).toBe('paratextRegistryToken:getAccessToken');
   });
 
+  it('lists the scopes the C# handler allows', () => {
+    // RegistryAccessTokenService.AllowedScopes is pinned to the same list, so a scope added on only
+    // one side breaks one of the two tests
+    expect([...REGISTRY_READ_SCOPES].sort()).toEqual([
+      'orgs:read',
+      'projects.members:read',
+      'projects.progress:read',
+      'projects:read',
+      'users.org:read',
+    ]);
+  });
+
   it('returns a frozen getter', () => {
     expect(Object.isFrozen(createParatextRegistryToken(manifestWith([RESOURCE])))).toBe(true);
   });
@@ -132,6 +145,7 @@ describe('createParatextRegistryToken', () => {
   it.each([
     ['a string', 'projects.members:read'],
     ['an object', { 0: 'projects.members:read' }],
+    ['a list with a number entry', ['projects.members:read', 42]],
   ])('rejects a scope that is %s with INVALID_ARGUMENT without sending', async (_label, scope) => {
     const token = createParatextRegistryToken(manifestWith([RESOURCE]));
 

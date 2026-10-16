@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Paranext.DataProvider;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Users;
@@ -69,6 +70,26 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         Assert.That(
             RegistryAccessTokenService.REQUEST_TYPE,
             Is.EqualTo("paratextRegistryToken:getAccessToken")
+        );
+    }
+
+    [Test]
+    public void AllowedScopes_AreTheFiveReadScopes()
+    {
+        // REGISTRY_READ_SCOPES in src/shared/models/paratext-registry-token-privilege.model.ts pins
+        // the same list, so a scope added on only one side breaks one of the two tests.
+        Assert.That(
+            RegistryAccessTokenService.AllowedScopes,
+            Is.EquivalentTo(
+                new[]
+                {
+                    "projects.members:read",
+                    "projects:read",
+                    "projects.progress:read",
+                    "orgs:read",
+                    "users.org:read",
+                }
+            )
         );
     }
 
@@ -257,6 +278,33 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         _userContext.Snapshot = ValidUser(isConnected: false);
 
         AssertFailure(await Get(), PlatformErrorCodes.Unavailable);
+        Assert.That(_tokenClient.PostCount, Is.Zero);
+    }
+
+    [Test]
+    public async Task SnapshotThatNeverCompletes_FailsWithUnavailableWithoutCallingTheRegistry()
+    {
+        _userContext.Pending = new TaskCompletionSource<RegistryUserSnapshot>().Task;
+        var service = new RegistryAccessTokenService(
+            Client,
+            _userContext,
+            _tokenClient,
+            () => _now,
+            TimeSpan.FromMilliseconds(50)
+        );
+
+        Task<RegistryAccessTokenResult> call = service.GetAccessTokenAsync(
+            "assistant",
+            RESOURCE,
+            ["projects.members:read"]
+        );
+
+        Assert.That(
+            await Task.WhenAny(call, Task.Delay(TimeSpan.FromSeconds(5))),
+            Is.SameAs(call),
+            "The request should stop waiting for the snapshot"
+        );
+        AssertFailure(await call, PlatformErrorCodes.Unavailable);
         Assert.That(_tokenClient.PostCount, Is.Zero);
     }
 
@@ -526,6 +574,90 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         Assert.That(_tokenClient.PostCount, Is.EqualTo(2));
     }
 
+    [Test]
+    public async Task TokensThatCanNoLongerBeHandedOut_AreDroppedOnTheNextRequest()
+    {
+        await Get();
+        _now = s_t0.AddSeconds(600);
+        await Get(resource: OTHER_RESOURCE);
+        // RESOURCE's token now has 119 seconds left, so it can't be handed out; OTHER_RESOURCE's can.
+        _now = s_t0.AddSeconds(1200 - 119);
+        await Get(resource: OTHER_RESOURCE);
+
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(2));
+        Assert.That(_service.CachedTokenCount, Is.EqualTo(1));
+    }
+
+    #endregion
+
+    #region Handout log
+
+    [Test]
+    public async Task CachedTokenForAnotherExtension_IsLoggedUnderThatExtensionsName()
+    {
+        await Get();
+        await _service.GetAccessTokenAsync("other-extension", RESOURCE, ["projects.members:read"]);
+
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(1));
+        Assert.That(_capturedOut.ToString(), Does.Contain("extension 'other-extension'"));
+    }
+
+    [Test]
+    public async Task JoinedRequestFromAnotherExtension_IsLoggedUnderThatExtensionsName()
+    {
+        var gate = new TaskCompletionSource<RegistryTokenHttpResponse>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        _tokenClient.Default = () => gate.Task;
+
+        Task<RegistryAccessTokenResult> first = Get();
+        Task<RegistryAccessTokenResult> joined = _service.GetAccessTokenAsync(
+            "other-extension",
+            RESOURCE,
+            ["projects.members:read"]
+        );
+        await WaitForPostsAsync(1);
+        gate.SetResult(TokenResponse(CANARY_TOKEN, 1200));
+        await Task.WhenAll(first, joined);
+
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(1));
+        Assert.That(_capturedOut.ToString(), Does.Contain("extension 'other-extension'"));
+    }
+
+    [Test]
+    public async Task RepeatedCallsFromOneExtension_LogItsHandoutOnce()
+    {
+        await Get();
+        await Get();
+        await Get();
+
+        Assert.That(
+            Regex.Matches(_capturedOut.ToString(), "to extension 'assistant'").Count,
+            Is.EqualTo(1)
+        );
+    }
+
+    [Test]
+    public async Task ConcurrentCallsFromOneExtension_LogItsHandoutOnce()
+    {
+        var gate = new TaskCompletionSource<RegistryTokenHttpResponse>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        _tokenClient.Default = () => gate.Task;
+
+        Task<RegistryAccessTokenResult> first = Get();
+        Task<RegistryAccessTokenResult> joined = Get();
+        await WaitForPostsAsync(1);
+        gate.SetResult(TokenResponse(CANARY_TOKEN, 1200));
+        await Task.WhenAll(first, joined);
+
+        Assert.That(_tokenClient.PostCount, Is.EqualTo(1));
+        Assert.That(
+            Regex.Matches(_capturedOut.ToString(), "to extension 'assistant'").Count,
+            Is.EqualTo(1)
+        );
+    }
+
     #endregion
 
     #region Helpers
@@ -593,9 +725,13 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
     {
         public RegistryUserSnapshot Snapshot { get; set; } = ValidUser();
 
-        // Completes synchronously, so a call runs straight through to its in-flight request and
-        // concurrency tests are deterministic.
-        public Task<RegistryUserSnapshot> GetSnapshotAsync() => Task.FromResult(Snapshot);
+        /// <summary>When set, returned in place of <see cref="Snapshot"/>.</summary>
+        public Task<RegistryUserSnapshot>? Pending { get; set; }
+
+        // Completes synchronously unless Pending is set, so a call runs straight through to its
+        // in-flight request and concurrency tests are deterministic.
+        public Task<RegistryUserSnapshot> GetSnapshotAsync() =>
+            Pending ?? Task.FromResult(Snapshot);
     }
 
     private sealed class FakeTokenClient : IRegistryTokenClient

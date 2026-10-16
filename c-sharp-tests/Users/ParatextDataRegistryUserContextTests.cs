@@ -57,4 +57,40 @@ internal class ParatextDataRegistryUserContextTests
         Assert.That(snapshot.IsInternetDisabled, Is.EqualTo(expectedInternetDisabled));
         Assert.That(snapshot.IsVpnRequired, Is.EqualTo(expectedVpnRequired));
     }
+
+    [Test]
+    public async Task GetSnapshotAsync_WaitsForAReadInProgressBeforeStartingAnother()
+    {
+        using var firstStarted = new ManualResetEventSlim();
+        using var secondStarted = new ManualResetEventSlim();
+        using var finishFirst = new ManualResetEventSlim();
+        int reads = 0;
+        var context = new ParatextDataRegistryUserContext(() =>
+        {
+            if (Interlocked.Increment(ref reads) == 1)
+            {
+                firstStarted.Set();
+                finishFirst.Wait(TimeSpan.FromSeconds(5));
+            }
+            else
+                secondStarted.Set();
+            return ParatextDataRegistryUserContext.CreateSnapshot(
+                new ParatextUser("Test User", MADE_UP_CODE),
+                REGISTRY_URL,
+                InternetUse.Enabled,
+                InternetUse.Enabled,
+                isConnected: true
+            );
+        });
+
+        Task<RegistryUserSnapshot> first = context.GetSnapshotAsync();
+        Assert.That(firstStarted.Wait(TimeSpan.FromSeconds(5)), Is.True);
+        Task<RegistryUserSnapshot> second = context.GetSnapshotAsync();
+
+        Assert.That(secondStarted.Wait(TimeSpan.FromMilliseconds(500)), Is.False);
+        finishFirst.Set();
+        await Task.WhenAll(first, second);
+        // Positive control: the second read does run once the first finishes.
+        Assert.That(secondStarted.IsSet, Is.True);
+    }
 }

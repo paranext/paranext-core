@@ -19,7 +19,8 @@ internal sealed class RegistryAccessTokenService(
     PapiClient papiClient,
     IRegistryUserContext userContext,
     IRegistryTokenClient tokenClient,
-    Func<DateTimeOffset> utcNow
+    Func<DateTimeOffset> utcNow,
+    TimeSpan? snapshotTimeout = null
 )
 {
     public const string REQUEST_TYPE = "paratextRegistryToken:getAccessToken";
@@ -43,11 +44,29 @@ internal sealed class RegistryAccessTokenService(
     /// <summary>A cached token is handed out only while at least this much of its lifetime remains.</summary>
     public static readonly TimeSpan MinimumRemainingLifetime = TimeSpan.FromSeconds(120);
 
+    /// <summary>
+    /// How long a request waits for the registration and internet state before failing with
+    /// <see cref="PlatformErrorCodes.Unavailable"/>. With the token request's own timeout in
+    /// <see cref="RestClientRegistryTokenClient"/>, this keeps the whole answer under the 30-second
+    /// default PAPI request timeout.
+    /// </summary>
+    public static readonly TimeSpan SnapshotTimeout = TimeSpan.FromSeconds(8);
+
+    private readonly TimeSpan _snapshotTimeout = snapshotTimeout ?? SnapshotTimeout;
     private readonly object _lock = new();
     private readonly Dictionary<string, CachedToken> _cache = [];
     private readonly Dictionary<string, Task<RegistryAccessTokenResult>> _inFlight = [];
 
     private PapiClient PapiClient { get; } = papiClient;
+
+    internal int CachedTokenCount
+    {
+        get
+        {
+            lock (_lock)
+                return _cache.Count;
+        }
+    }
 
     public async Task InitializeAsync()
     {
@@ -94,7 +113,21 @@ internal sealed class RegistryAccessTokenService(
                 "A resource identifier is required."
             );
 
-        RegistryUserSnapshot user = await userContext.GetSnapshotAsync();
+        RegistryUserSnapshot user;
+        try
+        {
+            user = await userContext.GetSnapshotAsync().WaitAsync(_snapshotTimeout);
+        }
+        catch (TimeoutException)
+        {
+            return Fail(
+                extensionName,
+                resource,
+                PlatformErrorCodes.Unavailable,
+                "Checking the Internet & connectivity settings, including this computer's location, "
+                    + "took too long."
+            );
+        }
         if (!user.IsRegistered)
             return Fail(
                 extensionName,
@@ -125,34 +158,88 @@ internal sealed class RegistryAccessTokenService(
                 "There is no internet connection."
             );
 
+        // The code's fingerprint makes a new registration code a new key, so a token minted with
+        // the previous code is never handed out, or joined while in flight, after a change.
+        string key = string.Join(
+            '\n',
+            user.RegistryUrl,
+            user.UserName,
+            Fingerprint(user.RegistrationCode),
+            resource,
+            string.Join(' ', scopes)
+        );
         Task<RegistryAccessTokenResult> request;
+        bool joined = false;
         lock (_lock)
         {
-            // The code's fingerprint makes a new registration code a new key, so a token minted with
-            // the previous code is never handed out, or joined while in flight, after a change.
-            string key = string.Join(
-                '\n',
-                user.RegistryUrl,
-                user.UserName,
-                Fingerprint(user.RegistrationCode),
-                resource,
-                string.Join(' ', scopes)
-            );
-            if (
-                _cache.TryGetValue(key, out CachedToken? cached)
-                && cached.ExpiresAt - utcNow() >= MinimumRemainingLifetime
-            )
+            PruneCache();
+            if (_cache.TryGetValue(key, out CachedToken? cached))
+            {
+                // Once per extension per token, so the log names every extension holding a token
+                // without a line per call.
+                if (cached.AddRecipient(extensionName))
+                    LogHandout(reused: true, extensionName, resource, scopes, cached.ExpiresAt);
                 return RegistryAccessTokenResult.Success(cached.AccessToken, cached.ExpiresAt);
+            }
             if (_inFlight.TryGetValue(key, out Task<RegistryAccessTokenResult>? existing))
+            {
                 request = existing;
+                joined = true;
+            }
             else
             {
                 request = FetchAndCacheAsync(key, extensionName, user, resource, scopes);
                 _inFlight[key] = request;
             }
         }
-        return await request;
+
+        RegistryAccessTokenResult result = await request;
+        if (joined && result.IsSuccess)
+        {
+            lock (_lock)
+            {
+                if (
+                    !_cache.TryGetValue(key, out CachedToken? cached)
+                    || cached.AddRecipient(extensionName)
+                )
+                    LogHandout(
+                        reused: true,
+                        extensionName,
+                        resource,
+                        scopes,
+                        DateTimeOffset.FromUnixTimeMilliseconds(result.ExpiresAt!.Value)
+                    );
+            }
+        }
+        return result;
     }
+
+    // Caller holds _lock. Also drops tokens minted for a previous user, registration code or
+    // Registry, whose keys are never looked up again.
+    private void PruneCache()
+    {
+        DateTimeOffset now = utcNow();
+        List<string> unusable = _cache
+            .Where(entry => entry.Value.ExpiresAt - now < MinimumRemainingLifetime)
+            .Select(entry => entry.Key)
+            .ToList();
+        foreach (string key in unusable)
+            _cache.Remove(key);
+    }
+
+    private static void LogHandout(
+        bool reused,
+        string extensionName,
+        string resource,
+        string[] scopes,
+        DateTimeOffset expiresAt
+    ) =>
+        Console.WriteLine(
+            $"{(reused ? "Handed an already-issued" : "Issued a")} Registry access token to extension "
+                + $"'{extensionName}' for resource '{resource}' "
+                + $"(scopes: {(scopes.Length == 0 ? "none" : string.Join(' ', scopes))}), "
+                + $"expiring {expiresAt:O}"
+        );
 
     private async Task<RegistryAccessTokenResult> FetchAndCacheAsync(
         string key,
@@ -184,7 +271,8 @@ internal sealed class RegistryAccessTokenService(
             if (result.IsSuccess)
                 _cache[key] = new CachedToken(
                     result.AccessToken!,
-                    DateTimeOffset.FromUnixTimeMilliseconds(result.ExpiresAt!.Value)
+                    DateTimeOffset.FromUnixTimeMilliseconds(result.ExpiresAt!.Value),
+                    extensionName
                 );
         }
         return result;
@@ -194,11 +282,24 @@ internal sealed class RegistryAccessTokenService(
     private static string Fingerprint(string registrationCode) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(registrationCode)));
 
-    /// <remarks>A class rather than a record, so no generated <c>ToString</c> can print the token.</remarks>
-    private sealed class CachedToken(string accessToken, DateTimeOffset expiresAt)
+    /// <remarks>
+    /// A class rather than a record, so no generated <c>ToString</c> can print the token. Only touched
+    /// while holding <c>_lock</c>.
+    /// </remarks>
+    private sealed class CachedToken(
+        string accessToken,
+        DateTimeOffset expiresAt,
+        string firstRecipient
+    )
     {
+        private readonly HashSet<string> _recipients =
+            new(StringComparer.Ordinal) { firstRecipient };
+
         public string AccessToken { get; } = accessToken;
         public DateTimeOffset ExpiresAt { get; } = expiresAt;
+
+        /// <returns>Whether <paramref name="extensionName"/> had not received this token before.</returns>
+        public bool AddRecipient(string extensionName) => _recipients.Add(extensionName);
     }
 
     private async Task<RegistryAccessTokenResult> RequestTokenAsync(
@@ -251,11 +352,7 @@ internal sealed class RegistryAccessTokenService(
                         "The Paratext Registry returned an unreadable token response."
                     );
                 DateTimeOffset expiresAt = sentAt.AddSeconds(expiresInSeconds);
-                Console.WriteLine(
-                    $"Issued a Registry access token to extension '{extensionName}' for resource "
-                        + $"'{resource}' (scopes: {(scopes.Length == 0 ? "none" : string.Join(' ', scopes))}), "
-                        + $"expiring {expiresAt:O}"
-                );
+                LogHandout(reused: false, extensionName, resource, scopes, expiresAt);
                 return RegistryAccessTokenResult.Success(accessToken, expiresAt);
             case 400:
                 return Fail(

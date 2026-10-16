@@ -5,11 +5,34 @@ using PtxUtils;
 namespace Paranext.DataProvider.Users;
 
 /// <summary>Reads the registration and internet state from ParatextData.</summary>
-internal sealed class ParatextDataRegistryUserContext : IRegistryUserContext
+/// <param name="readSnapshot">
+/// Reads the state. The parameterless constructor reads it from ParatextData.
+/// </param>
+internal sealed class ParatextDataRegistryUserContext(Func<RegistryUserSnapshot> readSnapshot)
+    : IRegistryUserContext
 {
-    // Off the calling thread: when the internet setting is VpnRequired, InternetAccess.Status looks up
-    // the user's country over the network before answering.
-    public Task<RegistryUserSnapshot> GetSnapshotAsync() => Task.Run(ReadSnapshot);
+    // InternetAccess.Status is process-wide and not safe to read concurrently: while one thread's
+    // once-a-minute location lookup is running, another thread's read treats the location as
+    // unknown, and so as restricted.
+    private static readonly SemaphoreSlim s_readGate = new(1, 1);
+
+    public ParatextDataRegistryUserContext()
+        : this(ReadSnapshot) { }
+
+    public async Task<RegistryUserSnapshot> GetSnapshotAsync()
+    {
+        await s_readGate.WaitAsync();
+        try
+        {
+            // Off the calling thread: when the internet setting is VpnRequired, InternetAccess.Status
+            // looks up the user's country over the network before answering.
+            return await Task.Run(readSnapshot);
+        }
+        finally
+        {
+            s_readGate.Release();
+        }
+    }
 
     private static RegistryUserSnapshot ReadSnapshot() =>
         CreateSnapshot(

@@ -1,14 +1,21 @@
 /**
+ * Every {@link RegistryReadScope}, as a list. Keep in sync with `AllowedScopes` in
+ * `c-sharp/Users/RegistryAccessTokenService.cs`; a test on each side pins the same scopes.
+ */
+export const REGISTRY_READ_SCOPES = Object.freeze([
+  'projects.members:read',
+  'projects:read',
+  'projects.progress:read',
+  'orgs:read',
+  'users.org:read',
+] as const);
+
+/**
  * The read-only Paratext Registry scopes Platform.Bible requests on an extension's behalf. The
  * Registry would issue write scopes to a registration-code caller too; Platform.Bible never asks
- * for them. Keep in sync with `AllowedScopes` in `c-sharp/Users/RegistryAccessTokenService.cs`.
+ * for them.
  */
-export type RegistryReadScope =
-  | 'projects.members:read'
-  | 'projects:read'
-  | 'projects.progress:read'
-  | 'orgs:read'
-  | 'users.org:read';
+export type RegistryReadScope = (typeof REGISTRY_READ_SCOPES)[number];
 
 /** What an extension asks for when it requests a Paratext Registry access token */
 export type RegistryAccessTokenRequest = {
@@ -66,8 +73,9 @@ export type ParatextRegistryToken = {
    * - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: internet access is
    *   off, or "Disable access to some Bible translation services" is selected and this computer's
    *   location is restricted or could not be determined
-   * - `UNAVAILABLE`: the Registry could not be reached or did not return a usable token; retrying
-   *   later may help
+   * - `UNAVAILABLE`: there is no internet connection, checking the Internet & connectivity settings
+   *   took too long, or the Registry could not be reached or did not return a usable token;
+   *   retrying later may help
    *
    * Other failures, such as a request that times out, reject without a `code`. Treat them like
    * `UNAVAILABLE`.

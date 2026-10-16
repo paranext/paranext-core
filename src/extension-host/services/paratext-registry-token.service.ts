@@ -1,4 +1,9 @@
-import { INVALID_ARGUMENT, newPlatformError, PERMISSION_DENIED } from 'platform-bible-utils';
+import {
+  INVALID_ARGUMENT,
+  isString,
+  newPlatformError,
+  PERMISSION_DENIED,
+} from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { ElevatedPrivilegeNames } from '@shared/models/elevated-privilege-names.model';
@@ -57,18 +62,19 @@ export function createParatextRegistryToken(
           `Extension '${manifest.name}' did not list '${resource}' in paratextRegistryTokenResources`,
           PERMISSION_DENIED,
         );
-      // Untyped JavaScript callers can pass anything; C# checks each entry but not the list shape
+      // Untyped JavaScript callers can pass anything. C# checks which scopes are allowed, but a
+      // non-string entry fails to bind on the C# side and would reject without a code.
       const requestedScope: unknown = scope ?? [];
-      if (!Array.isArray(requestedScope))
+      if (!Array.isArray(requestedScope) || !requestedScope.every(isString))
         throw newPlatformError(
-          `Extension '${manifest.name}' passed a scope that is not a list`,
+          `Extension '${manifest.name}' passed a scope that is not a list of strings`,
           INVALID_ARGUMENT,
         );
 
       const result = await networkService.request<
         [string, string, string[]],
         RegistryAccessTokenWireResult
-      >(REGISTRY_TOKEN_REQUEST_TYPE, manifest.name, resource, scope ?? []);
+      >(REGISTRY_TOKEN_REQUEST_TYPE, manifest.name, resource, requestedScope);
       if ('errorCode' in result) throw newPlatformError(result.message, result.errorCode);
       return { accessToken: result.accessToken, expiresAt: result.expiresAt };
     },
