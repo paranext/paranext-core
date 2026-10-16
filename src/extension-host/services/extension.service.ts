@@ -65,6 +65,7 @@ import { CreateProcess } from '@shared/models/create-process-privilege.model';
 import { wrappedFork, wrappedSpawn } from '@extension-host/services/create-process.service';
 import os from 'os';
 import { resyncContributions } from '@extension-host/services/contribution.service';
+import { createParatextRegistryToken } from '@extension-host/services/paratext-registry-token.service';
 import {
   HandleUri,
   RegisterUriHandler,
@@ -1112,6 +1113,7 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
     createProcess: undefined,
     manageExtensions: undefined,
     handleUri: undefined,
+    paratextRegistryToken: createParatextRegistryToken(manifest),
   };
   if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.CreateProcess)) {
     const createProcess: CreateProcess = {
@@ -1722,4 +1724,5 @@ export async function shutdown() {
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingExtensionService = {
   parseManifest,
+  prepareElevatedPrivileges,
 };

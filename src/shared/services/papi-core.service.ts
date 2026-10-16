@@ -41,6 +41,12 @@ export type {
   UriHandler,
 } from '@shared/models/handle-uri-privilege.model';
 export type {
+  ParatextRegistryToken,
+  RegistryAccessToken,
+  RegistryAccessTokenRequest,
+  RegistryReadScope,
+} from '@shared/models/paratext-registry-token-privilege.model';
+export type {
   ExtensionIdentifier,
   HashValues,
   InstalledExtensions,
