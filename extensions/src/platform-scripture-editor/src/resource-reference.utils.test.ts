@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReference } from 'platform-scripture';
-import { getRefLabel, isSameResource } from './resource-reference.utils';
+import { getRefLabel } from './resource-reference.utils';
 
 const dblResources: DblResourceData[] = [
   {
@@ -81,40 +81,5 @@ describe('getRefLabel', () => {
       source: 'admin',
     };
     expect(getRefLabel(ref, dblResources)).toBe('');
-  });
-});
-
-describe('isSameResource', () => {
-  it('matches DBL references whatever the casing of their entry UID', () => {
-    expect(
-      isSameResource(
-        { type: 'dblResource', name: 'BYZ', id: 'UID-BYZ' },
-        { type: 'dblResource', name: 'Byzantine', id: 'uid-byz' },
-      ),
-    ).toBe(true);
-  });
-
-  it('matches project references by exact id', () => {
-    expect(
-      isSameResource(
-        { type: 'project', name: 'A', id: 'p1' },
-        { type: 'project', name: 'B', id: 'p1' },
-      ),
-    ).toBe(true);
-    expect(
-      isSameResource(
-        { type: 'project', name: 'A', id: 'p1' },
-        { type: 'project', name: 'A', id: 'P1' },
-      ),
-    ).toBe(false);
-  });
-
-  it('never matches references of different kinds, even with the same id', () => {
-    expect(
-      isSameResource(
-        { type: 'dblResource', name: 'X', id: 'x' },
-        { type: 'project', name: 'X', id: 'x' },
-      ),
-    ).toBe(false);
   });
 });

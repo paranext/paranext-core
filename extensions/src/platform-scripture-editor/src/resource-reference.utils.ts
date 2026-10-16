@@ -78,16 +78,6 @@ export function getRefLabel(ref: ResourceReference, dblResourcesList: DblResourc
 }
 
 /**
- * The row id of a project reference to the given project — see {@link getResourceReferenceRowId}.
- *
- * @param projectId The project's id
- * @returns The namespaced row id
- */
-export function getProjectRowId(projectId: string): string {
-  return `project:${projectId}`;
-}
-
-/**
  * A stable identity for a resource reference, for use as a React key, a radio-group value, or a
  * persisted selection. Namespaced by reference kind because a DBL entry UID and a project ID are
  * drawn from different spaces and could otherwise collide.
@@ -97,7 +87,7 @@ export function getProjectRowId(projectId: string): string {
  */
 export function getResourceReferenceRowId(reference: ResourceReference): string {
   if (isDblResourceReference(reference)) return `dbl:${reference.id}`;
-  if (isProjectReference(reference)) return getProjectRowId(reference.id);
+  if (isProjectReference(reference)) return `project:${reference.id}`;
   const name = 'name' in reference && reference.name ? reference.name : '';
   return `${reference.type}:${name}`;
 }
@@ -113,21 +103,4 @@ export function getResourceReferenceRowId(reference: ResourceReference): string 
 export function getResourceReferenceBareId(reference: ResourceReference): string | undefined {
   if (isDblResourceReference(reference) || isProjectReference(reference)) return reference.id;
   return undefined;
-}
-
-/**
- * Whether two references name the same resource. A DBL entry UID is compared case-insensitively:
- * its casing differs by source (the catalog whitelist stores it upper-case, the commentary
- * whitelist lower-case), so a team list and the catalog can spell the same entry differently.
- *
- * @param a A reference
- * @param b Another reference
- * @returns `true` if both are DBL references to the same entry, or project references to the same
- *   project
- */
-export function isSameResource(a: ResourceReference, b: ResourceReference): boolean {
-  if (isDblResourceReference(a) && isDblResourceReference(b))
-    return a.id.toLowerCase() === b.id.toLowerCase();
-  if (isProjectReference(a) && isProjectReference(b)) return a.id === b.id;
-  return false;
 }

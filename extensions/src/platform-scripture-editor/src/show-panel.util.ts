@@ -96,11 +96,6 @@ export async function showOrCreateTab(
   return papi.webViews.openWebView(webViewType, { type: 'tab' }, newTabOptions);
 }
 
-/** Tells the user a tab they asked for could not be shown. Self-catching, like {@link warnUser}. */
-export function warnTabCouldNotOpen(): Promise<void> {
-  return warnUser(TAB_COULD_NOT_OPEN_KEY);
-}
-
 /**
  * {@link showOrCreateTab} for a panel that shows the editor's project, warning the user instead of
  * throwing when the tab cannot be shown.

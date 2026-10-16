@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   sendCommand: vi.fn<(command: string, ...args: unknown[]) => Promise<unknown>>(
     async () => undefined,
   ),
-  getSetting: vi.fn(async (): Promise<unknown> => 'power'),
   recordProjectOpened: vi.fn(async () => undefined),
   notify: vi.fn(async () => 'notification-1'),
 }));
@@ -12,7 +11,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@papi/frontend', () => ({
   default: {
     commands: { sendCommand: mocks.sendCommand },
-    settings: { get: mocks.getSetting },
     notifications: { send: mocks.notify },
     dataProviders: {
       get: vi.fn(async () => ({ recordProjectOpened: mocks.recordProjectOpened })),
@@ -29,73 +27,13 @@ import { openHomeItem } from './open-home-item';
 const commandsSent = () => mocks.sendCommand.mock.calls.map((call: unknown[]) => call[0]);
 
 /*
- * Simple mode's middle column only ever shows the project, so a resource opened from Home goes to
- * its reference tab, added to the user's own list. Power mode keeps opening resources in their own
- * viewer.
+ * Home opens a resource in its viewer and a project in the Scripture editor, and tells the user
+ * itself when either fails — no command it calls does.
  */
 describe('openHomeItem', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.sendCommand.mockImplementation(async (command) =>
-      command === 'platformScriptureEditor.showResourceInReferencePanel'
-        ? { status: 'openElsewhere' }
-        : undefined,
-    );
-    mocks.getSetting.mockImplementation(async () => 'power');
-  });
-
-  it('shows a resource in its reference tab in Simple mode', async () => {
-    mocks.getSetting.mockImplementation(async () => 'simple');
-    mocks.sendCommand.mockImplementation(async () => ({
-      status: 'shown',
-      webViewId: 'bible-texts-tab',
-    }));
-
-    await openHomeItem('resource-1', true);
-
-    expect(mocks.sendCommand).toHaveBeenCalledWith(
-      'platformScriptureEditor.showResourceInReferencePanel',
-      'resource-1',
-    );
-    expect(commandsSent()).not.toContain('platformScriptureEditor.openResourceViewer');
-  });
-
-  it('opens the resource viewer when no project is open to add the resource to', async () => {
-    mocks.getSetting.mockImplementation(async () => 'simple');
-
-    await openHomeItem('resource-1', true);
-
-    expect(commandsSent()).toEqual([
-      'platformScriptureEditor.showResourceInReferencePanel',
-      'platformScriptureEditor.openResourceViewer',
-    ]);
-  });
-
-  it('opens nothing else, and adds no warning, when the reference tab could not be shown', async () => {
-    // The command has told the user; replacing their project would be the one thing worse.
-    mocks.getSetting.mockImplementation(async () => 'simple');
-    mocks.sendCommand.mockImplementationOnce(async () => ({ status: 'notShown' }));
-
-    await openHomeItem('resource-1', true);
-
-    expect(commandsSent()).toEqual(['platformScriptureEditor.showResourceInReferencePanel']);
-    expect(mocks.notify).not.toHaveBeenCalled();
-  });
-
-  it('warns the user when the reference tab command cannot be reached', async () => {
-    // The editor extension not loaded yet, say: the command never told the user.
-    mocks.getSetting.mockImplementation(async () => 'simple');
-    mocks.sendCommand.mockImplementationOnce(async () => {
-      throw new Error('No handler for platformScriptureEditor.showResourceInReferencePanel');
-    });
-
-    await openHomeItem('resource-1', true);
-
-    expect(mocks.notify).toHaveBeenCalledWith(
-      expect.objectContaining({ severity: 'warning', message: '%resources_couldNotOpen%' }),
-    );
-    // The resource viewer is the same extension's, so it could not be reached either.
-    expect(commandsSent()).toEqual(['platformScriptureEditor.showResourceInReferencePanel']);
+    mocks.sendCommand.mockImplementation(async () => undefined);
   });
 
   it('warns the user when a project cannot be opened', async () => {
@@ -130,25 +68,13 @@ describe('openHomeItem', () => {
     await expect(openHomeItem('project-1', false)).resolves.toBeUndefined();
   });
 
-  it('opens a resource in its viewer in Power mode', async () => {
+  it('opens a resource in its viewer', async () => {
     await openHomeItem('resource-1', true);
 
     expect(commandsSent()).toEqual(['platformScriptureEditor.openResourceViewer']);
   });
 
-  it('opens a resource in its viewer when the interface mode cannot be read', async () => {
-    mocks.getSetting.mockImplementation(async () => {
-      throw new Error('settings unavailable');
-    });
-
-    await openHomeItem('resource-1', true);
-
-    expect(commandsSent()).toEqual(['platformScriptureEditor.openResourceViewer']);
-  });
-
-  it('opens a project in the Scripture editor in Simple mode and remembers it', async () => {
-    mocks.getSetting.mockImplementation(async () => 'simple');
-
+  it('opens a project in the Scripture editor and remembers it', async () => {
     await openHomeItem('project-1', false);
 
     expect(commandsSent()).toEqual(['platformScriptureEditor.openScriptureEditor']);

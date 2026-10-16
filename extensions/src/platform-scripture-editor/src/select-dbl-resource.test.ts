@@ -84,19 +84,6 @@ describe('selectDblResource', () => {
       });
     });
 
-    it('deduplicates an existing entry whose uid is cased differently', async () => {
-      const getUserList = vi.fn().mockResolvedValue(makeUserList(['UID-B', 'uid-other']));
-      await selectTextConnection(RESOURCE_B, getUserList, setUserList, undefined, onSelect);
-
-      expect(setUserList).toHaveBeenCalledWith({
-        dataVersion: '1.0.0',
-        items: [
-          { type: 'dblResource', name: 'Resource B', id: 'uid-b' },
-          { type: 'dblResource', name: 'name-uid-other', id: 'uid-other' },
-        ],
-      });
-    });
-
     it('uses DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion when getUserList returns undefined', async () => {
       const getUserList = vi.fn().mockResolvedValue(undefined);
       await selectTextConnection(RESOURCE_A, getUserList, setUserList, undefined, onSelect);

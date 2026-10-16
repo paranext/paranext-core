@@ -2,42 +2,11 @@ import papi, { logger } from '@papi/frontend';
 import { getErrorMessage } from 'platform-bible-utils';
 
 /**
- * Whether the app is in Simple mode, read when it is needed so a mode switch is never missed. An
- * unreadable setting counts as Power mode, which opens the resource the way Home always has.
- */
-async function isSimpleMode(): Promise<boolean> {
-  try {
-    return (await papi.settings.get('platform.interfaceMode')) === 'simple';
-  } catch (e) {
-    logger.warn(`Home could not read the interface mode: ${getErrorMessage(e)}`);
-    return false;
-  }
-}
-
-/**
- * Opens a resource from Home.
- *
- * Simple mode's middle column only ever shows the project, so there a resource goes to its
- * reference tab instead — Bible texts or Commentaries — and is added to this user's own list for
- * the project that tab shows unless the team's list has it. It opens in the resource viewer only
- * when no project is open, and so there is nothing in that column to replace, or when it is of a
- * kind neither tab lists. If the tab could not be shown, nothing else is opened in its place.
+ * Opens a resource from Home, in the resource viewer.
  *
  * @param projectId The resource's local project id
- * @throws If the resource could not be opened and the user has not been told
  */
 async function openResource(projectId: string): Promise<void> {
-  if (await isSimpleMode()) {
-    // The command never rejects, so a rejection means it was not reached (the editor extension is
-    // not loaded yet, say); that propagates, and the user is told. The resource viewer belongs to
-    // the same extension, so it is no fallback.
-    const result = await papi.commands.sendCommand(
-      'platformScriptureEditor.showResourceInReferencePanel',
-      projectId,
-    );
-    // `notShown`: the command has told the user, and nothing else should open in the tab's place.
-    if (result.status !== 'openElsewhere') return;
-  }
   await papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId);
 }
 
