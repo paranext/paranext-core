@@ -255,19 +255,19 @@ describe('a failed reload of an open web view', () => {
 
 describe('options a reload is given', () => {
   test("reach the provider, including keys the reload options don't declare", async () => {
-    // Providers take data for the one build they are asked for through these options — Home, the
-    // filter to start on — so a reload that dropped the keys it does not know would leave them
-    // showing the wrong thing, with nothing failing.
+    // Providers take data for the one build they are asked for through these options — the
+    // reference panels a resource to select, Home a filter to start on — so a reload that dropped
+    // the keys it does not know would leave them showing the wrong thing, with nothing failing.
     const { shard } = await shardOverDockRecordingAdds();
     const getWebView = await primeProvider();
 
     await shard.reloadWebView('test.type', 'open-view', {
       bringToFront: true,
-      initialProjectResourceFilter: 'paratextProject',
+      selectedResourceId: 'dbl:uid-byz',
     });
 
     expect(getWebView.mock.calls[0][1]).toEqual(
-      expect.objectContaining({ initialProjectResourceFilter: 'paratextProject' }),
+      expect.objectContaining({ selectedResourceId: 'dbl:uid-byz' }),
     );
   });
 });

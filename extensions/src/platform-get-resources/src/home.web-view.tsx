@@ -343,21 +343,6 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
 
   const [interfaceLanguages] = useSetting('platform.interfaceLanguage', defaultInterfaceLanguages);
 
-  // Simple mode's Home lists only Paratext projects, with no filter to change. Until the mode is
-  // known the list waits, rather than flash the other mode's items. An unreadable mode counts as
-  // Simple: a Simple-mode user offered resources could open one over their project.
-  const [interfaceMode, , , isInterfaceModeLoading] = useSetting(
-    'platform.interfaceMode',
-    'simple',
-  );
-  const isProjectResourceFilterLocked = useMemo(() => {
-    if (isPlatformError(interfaceMode)) {
-      logger.warn('Failed to load setting: platform.interfaceMode', interfaceMode);
-      return true;
-    }
-    return interfaceMode !== 'power';
-  }, [interfaceMode]);
-
   const uiLocales = useMemo(() => {
     if (isPlatformError(interfaceLanguages)) {
       logger.warn('Failed to load setting: platform.interfaceLanguage', interfaceLanguages);
@@ -391,10 +376,9 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       onGetStarted={getStarted}
       showGetResourcesButton={showGetResourcesButton}
       isSendReceiveInProgress={isSendReceiveInProgress}
-      isLoadingLocalProjects={isLoadingLocalProjects || isInterfaceModeLoading}
+      isLoadingLocalProjects={isLoadingLocalProjects}
       remoteProjectsState={remoteProjectsState}
       initialProjectResourceFilter={projectResourceFilter}
-      isProjectResourceFilterLocked={isProjectResourceFilterLocked}
       onProjectResourceFilterChange={setProjectResourceFilter}
       localProjectsInfo={localProjectsInfo}
       sharedProjectsInfo={sharedProjectsInfo}

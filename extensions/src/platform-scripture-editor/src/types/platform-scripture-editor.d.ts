@@ -90,6 +90,21 @@ declare module 'platform-scripture-editor' {
    */
   export type AnnotationAction = 'clicked' | TypedMarkRemovalCause;
 
+  /** How `platformScriptureEditor.showResourceInReferencePanel` ended. */
+  export type ShowResourceInReferencePanelResult =
+    /** The resource is shown, in the tab with this web view ID */
+    | { status: 'shown'; webViewId: string }
+    /**
+     * The tab could not be shown, or not in time. The user has been told, and the resource should
+     * not be opened some other way.
+     */
+    | { status: 'notShown' }
+    /**
+     * Neither reference tab is showing a project to add the resource to, or the resource is of a
+     * kind neither tab lists (source-language, enhanced or XML resources). Open it some other way.
+     */
+    | { status: 'openElsewhere' };
+
   /**
    * Handler function for annotation interactions. To handle annotation interactions, register a
    * command with this type and pass the command's name to the editor WebViewController with
@@ -719,6 +734,7 @@ declare module 'papi-shared-types' {
     OpenEditorOptions,
     PlatformScriptureEditorWebViewController,
     SelectionChangeEvent,
+    ShowResourceInReferencePanelResult,
   } from 'platform-scripture-editor';
   import type { ResourceType } from 'platform-bible-utils';
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
@@ -930,6 +946,24 @@ declare module 'papi-shared-types' {
       resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
       projectId?: string,
     ) => Promise<string | undefined>;
+    /**
+     * Shows a locally-installed resource in the tab for its kind — Commentaries for commentaries,
+     * Bible texts for Bible texts and for resources the catalog does not describe — and brings that
+     * tab to the front. Unless the team's list already has it, the resource is added to the current
+     * user's personal list for the project the tab shows. It is shown but not added when that
+     * cannot be settled safely (the team's list or the resource's catalog entry cannot be read
+     * yet). The team's list is never written.
+     *
+     * Decides within 20 seconds of the request, waiting behind another show included, whether to go
+     * ahead: a show that has not got as far as saving by then is dropped, and the user told. One
+     * that has started saving runs to completion, however long the save and the tab's reload take.
+     *
+     * @param resourceProjectId The local project id of the resource to show
+     * @returns How the show ended. Never rejects, so a rejection means the command was not reached.
+     */
+    'platformScriptureEditor.showResourceInReferencePanel': (
+      resourceProjectId: string,
+    ) => Promise<ShowResourceInReferencePanelResult>;
     /**
      * Brings the Bible texts tab to the front. If it isn't open, opens it for the editor's project.
      * An open tab is raised, never reloaded, so it keeps its state.

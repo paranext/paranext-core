@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentType } from 'react';
 
@@ -11,10 +11,8 @@ import type { ComponentType } from 'react';
  * made; these cover the decision.
  */
 
-const { mockSendCommand, interfaceModeSetting } = vi.hoisted(() => ({
+const { mockSendCommand } = vi.hoisted(() => ({
   mockSendCommand: vi.fn(async (): Promise<unknown> => undefined),
-  /** What `platform.interfaceMode` answers; `value` unset answers with the caller's default. */
-  interfaceModeSetting: { value: undefined as unknown, isLoading: false },
 }));
 
 vi.mock('@papi/frontend', () => ({
@@ -34,11 +32,7 @@ vi.mock('@papi/frontend/react', () => ({
     false,
   ],
   useDataProvider: vi.fn(() => undefined),
-  useSetting: vi.fn((key: string, defaultValue: unknown) =>
-    key === 'platform.interfaceMode' && interfaceModeSetting.value !== undefined
-      ? [interfaceModeSetting.value, vi.fn(), vi.fn(), interfaceModeSetting.isLoading]
-      : [defaultValue, vi.fn(), vi.fn(), false],
-  ),
+  useSetting: vi.fn((_key: string, defaultValue: unknown) => [defaultValue, vi.fn(), false]),
 }));
 
 vi.mock('platform-bible-react', async (importOriginal) => {
@@ -67,14 +61,10 @@ vi.mock('./home.component', async (importOriginal) => {
     Home: ({
       remoteProjectsState,
       initialProjectResourceFilter,
-      isProjectResourceFilterLocked,
-      isLoadingLocalProjects,
       onProjectResourceFilterChange,
     }: {
       remoteProjectsState?: string;
       initialProjectResourceFilter?: string;
-      isProjectResourceFilterLocked?: boolean;
-      isLoadingLocalProjects?: boolean;
       onProjectResourceFilterChange?: (filter: string) => void;
     }) => {
       // The real Home reads its initial filter once, into state, so a value that only arrives after
@@ -86,8 +76,6 @@ vi.mock('./home.component', async (importOriginal) => {
           data-testid="home"
           data-remote-state={String(remoteProjectsState)}
           data-initial-filter={String(filterAtMount)}
-          data-filter-locked={String(isProjectResourceFilterLocked)}
-          data-loading={String(isLoadingLocalProjects)}
         >
           <button type="button" onClick={() => onProjectResourceFilterChange?.('resource')}>
             filter to resources
@@ -135,9 +123,6 @@ vi.mock('platform-bible-utils', async (importOriginal) => {
 // against the mock boundaries above.
 // eslint-disable-next-line import/first
 import './home.web-view';
-// Must follow the vi.mock() calls, as above: `platform-bible-utils` is partly mocked.
-// eslint-disable-next-line import/first
-import { newPlatformError } from 'platform-bible-utils';
 
 /**
  * Stands in for the real `useWebViewState`, which reads the key out of the web view definition's
@@ -360,54 +345,5 @@ describe('HomeWebView filter preset', () => {
     fireEvent.click(screen.getByRole('button', { name: 'filter to resources' }));
 
     expect(setState).toHaveBeenCalledWith('projectResourceFilter', 'resource');
-  });
-});
-
-/*
- * Simple mode's Home lists only Paratext projects, with no filter to change (Sebastian's decision on
- * PT-3182). The web view is what knows the mode, so it decides; Home only follows.
- */
-describe('Home filter by interface mode', () => {
-  /** Answers `platform.interfaceMode` as given. */
-  function interfaceModeIs(mode: unknown, isLoading = false) {
-    interfaceModeSetting.value = mode;
-    interfaceModeSetting.isLoading = isLoading;
-  }
-
-  afterEach(() => {
-    interfaceModeIs(undefined);
-  });
-
-  it('locks Home to projects in Simple mode', () => {
-    interfaceModeIs('simple');
-    const HomeWebView = getHomeWebView();
-    render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
-
-    expect(screen.getByTestId('home')).toHaveAttribute('data-filter-locked', 'true');
-  });
-
-  it('leaves the filter to the user in Power mode', () => {
-    interfaceModeIs('power');
-    const HomeWebView = getHomeWebView();
-    render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
-
-    expect(screen.getByTestId('home')).toHaveAttribute('data-filter-locked', 'false');
-  });
-
-  it('keeps the list waiting until the mode is known, rather than flash the wrong items', () => {
-    interfaceModeIs('simple', true);
-    const HomeWebView = getHomeWebView();
-    render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
-
-    expect(screen.getByTestId('home')).toHaveAttribute('data-loading', 'true');
-  });
-
-  it('locks Home to projects when the mode cannot be read', () => {
-    // Offered resources, a Simple-mode user could open one over their project.
-    interfaceModeIs(newPlatformError('settings unavailable'));
-    const HomeWebView = getHomeWebView();
-    render(<HomeWebView useWebViewState={makeUseWebViewState({})} />);
-
-    expect(screen.getByTestId('home')).toHaveAttribute('data-filter-locked', 'true');
   });
 });
