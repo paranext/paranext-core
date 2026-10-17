@@ -1,10 +1,10 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.1.7
+version: 1.1.8
 status: active
 created: 2026-03-04
-last_updated: 2026-10-02
+last_updated: 2026-10-16
 ---
 
 # Extension Development Guide
@@ -132,6 +132,81 @@ rather than registering a copy per instance. For richer per-instance interaction
 controller** (see [WebViews](#webviews)), which already exists for that need: it is a network object
 per web view, so its methods are addressed to a specific instance without any global name per
 instance.
+
+### Elevated privileges
+
+Some capabilities are handed only to extensions that ask for them in `manifest.json`'s
+`elevatedPrivileges`. Each arrives on the activation context as `context.elevatedPrivileges.<name>`,
+which is `undefined` when the extension didn't declare it, or when it runs on a Platform.Bible that
+predates the privilege.
+
+| Privilege               | Gives                                                     | Extra manifest field             |
+| ----------------------- | --------------------------------------------------------- | -------------------------------- |
+| `createProcess`         | Spawn and fork child processes                            | -                                |
+| `manageExtensions`      | Install, enable and disable extensions                    | -                                |
+| `handleUri`             | Receive URIs the operating system routes to the extension | -                                |
+| `paratextRegistryToken` | Paratext Registry access tokens for named services        | `paratextRegistryTokenResources` |
+
+#### Paratext Registry access tokens
+
+An extension that needs to identify the user to another Paratext service, such as the Translator's
+Assistant server, gets a short-lived Registry access token made from the user's existing
+registration. The registration code never leaves Platform.Bible, and the token is valid only at the
+service it names.
+
+```json
+{
+  "elevatedPrivileges": ["paratextRegistryToken"],
+  "paratextRegistryTokenResources": [
+    "https://assistant.example.org",
+    "https://assistant-dev.example.org"
+  ]
+}
+```
+
+```typescript
+import type { ParatextRegistryToken } from '@papi/core';
+
+// Call this before each request to the service; the token is cached. The resource is resolved
+// every time because the user can switch Registry server while Platform.Bible runs.
+async function getAssistantAccessToken(registryToken: ParatextRegistryToken): Promise<string> {
+  // Match the Registry this Platform.Bible talks to: registry-dev needs the dev identifier.
+  const registryUrl = await papi.commands.sendCommand('paratextRegistration.getParatextRegistryUrl');
+  const resource = registryUrl.includes('registry-dev')
+    ? 'https://assistant-dev.example.org'
+    : 'https://assistant.example.org';
+
+  const { accessToken } = await registryToken.getAccessToken({
+    resource,
+    scope: ['projects.members:read'],
+  });
+  return accessToken;
+}
+
+export async function activate(context: ExecutionActivationContext): Promise<void> {
+  const registryToken = context.elevatedPrivileges.paratextRegistryToken;
+  if (!registryToken) return; // Not declared, or an older Platform.Bible
+
+  const accessToken = await getAssistantAccessToken(registryToken);
+  // Send `Authorization: Bearer ${accessToken}`. Never log the token.
+}
+```
+
+- Each `resource` must match an entry in `paratextRegistryTokenResources` exactly (a trailing slash
+  makes a different identifier), and a Registry sysadmin must have registered it with the Registry.
+- Always pass `scope`. Only the five read scopes in `RegistryReadScope` are allowed.
+- Failures reject with a `PlatformError`. Branch on its `code`. Its `message` is an English
+  diagnostic for logs, so show users your own localized text based on the `code`:
+  - `UNAUTHENTICATED`: offer `paratextRegistration.showParatextRegistration`.
+  - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: internet access is
+    off, or "Disable access to some Bible translation services" is selected and this computer's
+    location is restricted or could not be determined.
+  - `UNAVAILABLE`: retry later.
+  - `INVALID_ARGUMENT` or `PERMISSION_DENIED`: a configuration bug in the extension or the
+    Registry. A resource stored from before the user switched Registry server also gets
+    `INVALID_ARGUMENT` from the new Registry when only the other Registry has it registered, so
+    resolve the resource again before each request.
+  - No `code` (for example, the request timed out): treat it like `UNAVAILABLE`.
 
 ---
 
@@ -505,3 +580,4 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | 1.1.5   | 2026-09-23 | "Content Zoom": mark the project text, not a content root — per-element markers sharing one id, `as="span"`, `ContentZoomTextProvider` / `useContentZoomTextProps`. |
 | 1.1.6   | 2026-09-24 | "Content Zoom": the area `label` and the zoom scope attribute (both experimental), pointing to Component-Builder-Patterns; the Text Collection grid is the reference, with one `resource-<id>` area per resource. |
 | 1.1.7   | 2026-10-02 | Add "Saving on Teardown" under WebViews: flush in a `pagehide` listener and in the unmount cleanup; a reload unmounts the root on `unload`, after the web view's own `pagehide` listeners; a panel close or tab move runs `pagehide` too, but the root can unmount after the iframe is gone, so `pagehide` is the flush point. |
+| 1.1.8   | 2026-10-16 | "Elevated privileges": the privilege table and the `paratextRegistryToken` privilege for Paratext Registry access tokens. |

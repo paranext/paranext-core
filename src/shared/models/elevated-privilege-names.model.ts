@@ -7,4 +7,5 @@ export enum ElevatedPrivilegeNames {
   CreateProcess = 'createProcess',
   ManageExtensions = 'manageExtensions',
   HandleUri = 'handleUri',
+  ParatextRegistryToken = 'paratextRegistryToken',
 }

@@ -118,6 +118,32 @@ port it is handed; an intercepted port gives an extension no capability it does 
 through `window.papi`. The renderer itself opens no WebSocket to port 8876;
 `blockWebSocketsToPapiNetwork` still stops extension code from doing so.
 
+### Paratext Registry access tokens
+
+The `paratextRegistryToken` elevated privilege hands extensions Paratext Registry access tokens
+made from the user's registration code. The code stays in the C# data provider. The extension host
+checks the caller's `paratextRegistryTokenResources` before forwarding a request on
+`paratextRegistryToken:getAccessToken`, a request type extension code can't reach directly. Tokens
+carry read scopes only, expire after the Registry-set lifetime (currently 20 minutes), and are valid
+only at the named service.
+
+The C# handler does not check the allowlist itself, so anything that can reach the unauthenticated
+PAPI WebSocket can call that request type for any resource registered with the Registry:
+
+- Local processes already run as the user and can read the user's Paratext data directly, so they
+  gain nothing new.
+- A web page open in the user's browser can also connect to `ws://localhost:8876`. Connections are
+  not authenticated, so the server can't tell such a page from Platform.Bible's own processes. The
+  page can already call every other PAPI method, but this is the first one whose result works off
+  the machine.
+
+Rejecting browser connections is not the fix: browser clients are legitimate too.
+`platform.openDeveloperDocumentationUrl` opens the OpenRPC playground against this WebSocket, and
+developers test PAPI calls from browsers. Authenticating the clients the main process launches, so
+that sensitive request types like this one can be limited to them, is open work in PT-2893.
+
+Rationale: `adr-registry-tokens-via-elevated-privilege` in `Architecture-Decisions.md`.
+
 ---
 
 ## Security Best Practices

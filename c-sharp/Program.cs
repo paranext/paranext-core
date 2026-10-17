@@ -97,6 +97,15 @@ public static class Program
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var internetSettingsDataProvider = new InternetSettingsDataProvider(papi);
             var dblResources = new DblResourcesDataProvider(papi, paratextProjects);
+            // Initialized in the critical barrier below. Extension activation doesn't wait for that
+            // barrier, so a token request sent from an extension's activate() before this handler
+            // registers relies on the caller's requestWithRetry (about 10 seconds).
+            var registryAccessTokenService = new RegistryAccessTokenService(
+                papi,
+                new ParatextDataRegistryUserContext(),
+                new RestClientRegistryTokenClient(),
+                () => DateTimeOffset.UtcNow
+            );
             var paratextRegistrationService = new ParatextRegistrationService(
                 papi,
                 internetSettingsDataProvider
@@ -169,12 +178,15 @@ public static class Program
             );
 
             StartupTiming.Mark("init-barrier-start");
-            // Critical path: everything the renderer needs to list projects and open an editor.
+            // Critical path: everything the renderer needs to list projects and open an editor, plus
+            // the Registry token handler, so it registers early for extensions that call it from
+            // activate().
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 paratextPublishedFactory.InitializeAsync(),
                 versificationConversionService.InitializeAsync(),
                 paratextRegistrationService.InitializeAsync(),
+                registryAccessTokenService.InitializeAsync(),
                 paratextSendReceiveService.InitializeAsync(),
                 dblResources.RegisterDataProviderAsync(),
                 sendReceiveBlockNotifierService.InitializeAsync(),

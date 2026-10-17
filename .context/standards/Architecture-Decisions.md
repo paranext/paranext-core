@@ -6251,6 +6251,53 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4325 (registration reminder dot), sub-task of PT-4323; retry-cost evidence from
   `requestWithRetry` and `MAX_REQUEST_ATTEMPTS` in `src/shared/data/rpc.model.ts`.
 
+## adr-registry-tokens-via-elevated-privilege: Extensions get Paratext Registry access tokens only through an elevated privilege with a manifest resource allowlist
+
+- **Date:** 2026-10-16
+- **Status:** Accepted
+- **Context:** The Translator's Assistant extension needs to identify the user to the Assistant
+  server. Our users are not technical enough for an OAuth sign-in or a general credential API, and
+  what services need is the existing registration turned into a token. The Registry already issues
+  audience-bound tokens: `POST /api8/token` with Basic auth (username and registration code),
+  `grant_type=client_credentials` and an RFC 8707 `resource` returns a token whose only audience is
+  that resource (ptreg PRs #514, #527). Only the C# data provider holds the registration code. PAPI
+  commands are callable by every extension, and the PAPI WebSocket is unauthenticated
+  (`src/main/services/rpc-websocket-listener.ts`).
+- **Decision:** C# (`c-sharp/Users/RegistryAccessTokenService.cs`) mints and caches the tokens, so
+  the registration code never leaves that process. It handles
+  `paratextRegistryToken:getAccessToken`, a request type outside the `command:` category that
+  extension code can't reach. The extension host
+  (`src/extension-host/services/paratext-registry-token.service.ts`) hands a getter only to
+  extensions that declare the `paratextRegistryToken` elevated privilege and list the services in
+  `paratextRegistryTokenResources` (exact match), following the `handleUri` pattern. C# requests
+  only the five `:read` scopes. It follows ParatextData's internet rule for direct Registry calls,
+  as registration does: it refuses only when the effective `InternetAccess.Status` is `Disabled`.
+  `InternetServicesGate`'s saved-setting check, which also refuses "Disable access to some Bible
+  translation services", is for Send/Receive and the DBL, so it doesn't apply here. Failures come
+  back from C# as a result object and become
+  `PlatformError` codes in the extension host, because C# codes don't cross the RPC boundary yet
+  (PT-4750).
+- **Alternatives:** An open `paratextRegistration.*` command: every extension could impersonate the
+  user to every registered service. A one-time user-consent prompt: the extra step we want to avoid,
+  though it can be layered on later. The OAuth browser flow: users don't know their Registry login.
+  The signed `userinfo` JWT: no `exp`, `aud` or scopes. Plain `client_credentials` without
+  `resource`: a token usable at the Registry, and refused in production. Handing the registration
+  code to the extension or the service: exposes a long-lived credential.
+- **Consequences:** A new service that wants Platform.Bible users' identity registers a resource
+  with the Registry and is listed in the consuming extension's manifest, with no Platform.Bible
+  change. The gate is only as strong as extension review, as with `createProcess` and `handleUri`.
+  Local processes on the loopback WebSocket can also call the request type; they already run as the
+  user and can read the user's Paratext data directly. So can a web page in the user's browser,
+  because WebSocket connections are not authenticated and the server can't tell a page from
+  Platform.Bible's own processes; unlike the other PAPI methods such a page can call, this one
+  returns a credential that works off the machine. Rejecting browser connections is not the answer,
+  since browser clients are legitimate (the OpenRPC playground that
+  `platform.openDeveloperDocumentationUrl` opens, and browser-based PAPI testing). Authenticating
+  the clients the main process launches, so sensitive request types can be limited to them, is open
+  work in PT-2893. Revisit when PT-4750 lands (throw codes instead of returning them), when the
+  WebSocket authenticates its clients, or if a consent prompt becomes necessary.
+- **Source:** PT-4865 (design spec attached there).
+
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path
 
 - **Date:** 2026-09-04
