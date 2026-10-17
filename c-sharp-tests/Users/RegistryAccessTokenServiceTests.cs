@@ -309,6 +309,27 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
     }
 
     [Test]
+    public async Task SnapshotThatThrows_FailsWithUnavailableAndLogsTheRequest()
+    {
+        _userContext.Pending = Task.FromException<RegistryUserSnapshot>(
+            new ApplicationException($"undefined server type near {CANARY_CODE}")
+        );
+
+        var result = await Get();
+
+        AssertFailure(result, PlatformErrorCodes.Unavailable);
+        Assert.That(result.Message, Does.Not.Contain("undefined server type"));
+        Assert.That(_tokenClient.PostCount, Is.Zero);
+        Assert.That(
+            _capturedOut.ToString(),
+            Does.Contain("extension 'assistant'")
+                .And.Contain($"resource '{RESOURCE}'")
+                .And.Contain(nameof(ApplicationException))
+                .And.Not.Contain("undefined server type")
+        );
+    }
+
+    [Test]
     public async Task Registry400_FailsWithInvalidArgumentNamingTheRegistryError()
     {
         _tokenClient.Default = () =>

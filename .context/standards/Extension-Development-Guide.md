@@ -165,21 +165,29 @@ service it names.
 ```
 
 ```typescript
-export async function activate(context: ExecutionActivationContext): Promise<void> {
-  const registryToken = context.elevatedPrivileges.paratextRegistryToken;
-  if (!registryToken) return; // Not declared, or an older Platform.Bible
+import type { ParatextRegistryToken } from '@papi/core';
 
+// Call this before each request to the service; the token is cached. The resource is resolved
+// every time because the user can switch Registry server while Platform.Bible runs.
+async function getAssistantAccessToken(registryToken: ParatextRegistryToken): Promise<string> {
   // Match the Registry this Platform.Bible talks to: registry-dev needs the dev identifier.
   const registryUrl = await papi.commands.sendCommand('paratextRegistration.getParatextRegistryUrl');
   const resource = registryUrl.includes('registry-dev')
     ? 'https://assistant-dev.example.org'
     : 'https://assistant.example.org';
 
-  // Call this before each request to the service; it is cached.
   const { accessToken } = await registryToken.getAccessToken({
     resource,
     scope: ['projects.members:read'],
   });
+  return accessToken;
+}
+
+export async function activate(context: ExecutionActivationContext): Promise<void> {
+  const registryToken = context.elevatedPrivileges.paratextRegistryToken;
+  if (!registryToken) return; // Not declared, or an older Platform.Bible
+
+  const accessToken = await getAssistantAccessToken(registryToken);
   // Send `Authorization: Bearer ${accessToken}`. Never log the token.
 }
 ```
@@ -195,7 +203,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     location is restricted or could not be determined.
   - `UNAVAILABLE`: retry later.
   - `INVALID_ARGUMENT` or `PERMISSION_DENIED`: a configuration bug in the extension or the
-    Registry.
+    Registry. A resource stored from before the user switched Registry server also gets
+    `INVALID_ARGUMENT` from the new Registry when only the other Registry has it registered, so
+    resolve the resource again before each request.
   - No `code` (for example, the request timed out): treat it like `UNAVAILABLE`.
 
 ---

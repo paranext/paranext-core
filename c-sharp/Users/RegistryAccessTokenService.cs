@@ -128,6 +128,17 @@ internal sealed class RegistryAccessTokenService(
                     + "took too long."
             );
         }
+        catch (Exception ex)
+        {
+            // Only the type name is logged, as for a failed Registry request.
+            return Fail(
+                extensionName,
+                resource,
+                PlatformErrorCodes.Unavailable,
+                "Could not read the Paratext registration or Internet & connectivity settings.",
+                ex.GetType().Name
+            );
+        }
         if (!user.IsRegistered)
             return Fail(
                 extensionName,
@@ -175,8 +186,9 @@ internal sealed class RegistryAccessTokenService(
             PruneCache();
             if (_cache.TryGetValue(key, out CachedToken? cached))
             {
-                // Once per extension per token, so the log names every extension holding a token
-                // without a line per call.
+                // Once per extension name per token, without a line per call. The name is a request
+                // argument this service does not authenticate, so the log records each name that
+                // requests claim, not a verified holder.
                 if (cached.AddRecipient(extensionName))
                     LogHandout(reused: true, extensionName, resource, scopes, cached.ExpiresAt);
                 return RegistryAccessTokenResult.Success(cached.AccessToken, cached.ExpiresAt);

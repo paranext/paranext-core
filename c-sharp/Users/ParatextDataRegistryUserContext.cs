@@ -11,8 +11,10 @@ namespace Paranext.DataProvider.Users;
 internal sealed class ParatextDataRegistryUserContext(Func<RegistryUserSnapshot> readSnapshot)
     : IRegistryUserContext
 {
-    // InternetAccess.Status is process-wide and not safe to read concurrently: while one thread's
-    // once-a-minute location lookup is running, another thread's read treats the location as
+    // Serializes this class's own reads only. InternetAccess.Status is process-wide and not safe to
+    // read concurrently: while one thread's once-a-minute location lookup is running, any other
+    // thread's read, including readers outside this class such as
+    // ParatextProjectSendReceiveService and PlatformScrTextCollection, treats the location as
     // unknown, and so as restricted.
     private static readonly SemaphoreSlim s_readGate = new(1, 1);
 

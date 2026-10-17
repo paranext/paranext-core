@@ -10118,9 +10118,9 @@ declare module 'shared/models/paratext-registry-token-privilege.model' {
      * - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: internet access is
      *   off, or "Disable access to some Bible translation services" is selected and this computer's
      *   location is restricted or could not be determined
-     * - `UNAVAILABLE`: there is no internet connection, checking the Internet & connectivity settings
-     *   took too long, or the Registry could not be reached or did not return a usable token;
-     *   retrying later may help
+     * - `UNAVAILABLE`: there is no internet connection, reading the registration or the Internet &
+     *   connectivity settings failed or took too long, or the Registry could not be reached or did
+     *   not return a usable token; retrying later may help
      *
      * Other failures, such as a request that times out, reject without a `code`. Treat them like
      * `UNAVAILABLE`.
