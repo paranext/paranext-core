@@ -35,7 +35,7 @@ beforeAll(() => {
   };
 });
 
-const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice%';
+const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice_2%';
 const SYNC_BLOCKED_NOTICE_TEXT = 'Editing is paused while this project syncs.';
 
 type LocalizedStringsFile = {

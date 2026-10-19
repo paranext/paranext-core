@@ -187,6 +187,7 @@
       "%webView_platformScriptureEditor_bookNotAvailable_readOnlyTooltip%": "This project is read-only. Books cannot be added.",
       "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%": "This book is not part of this project. Ask your project administrator to add it.",
       "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%": "Books cannot be added while an automatic Send/Receive is in progress.",
+      "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%": "Books cannot be added while an automatic sync is in progress.",
       "%webView_platformScriptureEditor_bookNotAvailable_title%": "Book not in this project",
       "%webView_platformScriptureEditor_characterMarkerControl_ariaLabel%": "Character marker",
       "%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%": "{name}: {value}",
@@ -215,6 +216,7 @@
       "%webView_platformScriptureEditor_error_selectionContainsMarkers%": "Invalid selection. Selected text must be a simple word or phrase with no markers.",
       "%webView_platformScriptureEditor_error_structureProtected%": "Structure is locked. Paragraph and verse markers cannot be changed.",
       "%webView_platformScriptureEditor_error_syncEditBlocked%": "Editing is paused while an automatic Send/Receive is in progress. Your change was not saved.",
+      "%webView_platformScriptureEditor_error_syncEditBlocked_2%": "Editing is paused while an automatic sync is in progress. Your change was not saved.",
       "%webView_platformScriptureEditor_info%": "Info",
       "%webView_platformScriptureEditor_insert%": "Insert",
       "%webView_platformScriptureEditor_insertCommentAtSelection%": "Insert comment",
@@ -255,6 +257,7 @@
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Unlock structure for project",
       "%webView_platformScriptureEditor_switchScriptureView%": "Switch Scripture view",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Editing paused — Send/Receive in progress",
+      "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": "Editing paused — sync in progress",
       "%webView_platformScriptureEditor_tabCouldNotOpen%": "That tab couldn't be opened. Please try again.",
       "%webView_platformScriptureEditor_teamLayout_ariaLabel%": "Edit team layout",
       "%webView_platformScriptureEditor_textCollectionNotOpen%": "Text collection isn't available, so there's no tab to show.",
@@ -524,6 +527,7 @@
       "%webView_platformScriptureEditor_bookNotAvailable_readOnlyTooltip%": "Este proyecto es de solo lectura. No se pueden añadir libros.",
       "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%": "Este libro no forma parte de este proyecto. Pida al administrador del proyecto que lo añada.",
       "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%": "No se pueden añadir libros mientras se realiza un Enviar/Recibir automático.",
+      "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%": "No se pueden añadir libros mientras se realiza una sincronización automática.",
       "%webView_platformScriptureEditor_bookNotAvailable_title%": "Libro no incluido en este proyecto",
       "%webView_platformScriptureEditor_characterMarkerControl_ariaLabel%": "Marcador de carácter",
       "%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%": "{name}: {value}",
@@ -552,6 +556,7 @@
       "%webView_platformScriptureEditor_error_selectionContainsMarkers%": "Selección inválida. El texto seleccionado debe ser una palabra o frase simple sin marcadores.",
       "%webView_platformScriptureEditor_error_structureProtected%": "La estructura está bloqueada. Los marcadores de párrafo y versículo no se pueden cambiar.",
       "%webView_platformScriptureEditor_error_syncEditBlocked%": "La edición está pausada mientras se realiza un Enviar/Recibir automático. Su cambio no se guardó.",
+      "%webView_platformScriptureEditor_error_syncEditBlocked_2%": "La edición está pausada mientras se realiza una sincronización automática. Su cambio no se guardó.",
       "%webView_platformScriptureEditor_info%": "Información",
       "%webView_platformScriptureEditor_insert%": "Insertar",
       "%webView_platformScriptureEditor_insertCommentAtSelection%": "Insertar comentario",
@@ -592,6 +597,7 @@
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Desbloquear estructura para el proyecto",
       "%webView_platformScriptureEditor_switchScriptureView%": "Cambiar vista de escrituras",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Edición pausada — Enviar/Recibir en curso",
+      "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": "Edición pausada — sincronización en curso",
       "%webView_platformScriptureEditor_tabCouldNotOpen%": "No se pudo abrir esa pestaña. Inténtelo de nuevo.",
       "%webView_platformScriptureEditor_teamLayout_ariaLabel%": "Editar el diseño del equipo",
       "%webView_platformScriptureEditor_textCollectionNotOpen%": "La colección de textos no está disponible, así que no hay ninguna pestaña que mostrar.",
@@ -1203,8 +1209,26 @@
         "message": "The empty state now explains both Base and Model texts rather than the model text alone. The new key is %webView_modelTextPanel_emptyState_baseOrModel_prompt%."
       }
     },
+    "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%"
+    },
     "%webView_platformScriptureEditor_error_bookNotFoundProject%": {
       "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%"
+    },
+    "%webView_platformScriptureEditor_error_syncEditBlocked%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_error_syncEditBlocked_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_error_syncEditBlocked_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_error_syncEditBlocked%"
     },
     "%webView_platformScriptureEditor_insert%": {
       "fallbackKey": "%Paratext.EditMenu.ListForm.insertToolStripMenuItem.Text%"
@@ -1250,6 +1274,15 @@
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
       "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
+    },
+    "%webView_platformScriptureEditor_syncEditBlocked_banner%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_syncEditBlocked_banner_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_syncEditBlocked_banner%"
     }
   }
 }

@@ -7958,6 +7958,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   this entry closes, in `~/Desktop/PT-4557-followup-close-button-discards-staged-edits.md`.
 - **Source:** PT-4557; design-document comment (Sebastian); PR #2835 review (findings 2, 5, 7, 8, 25; round 3 A1, A2, A3).
 
+## adr-terminology-rename-forward-fallback: A user-visible term is renamed with a new key that falls back to the old one; old keys and values stay
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Context:** Renaming a term users see — "Send/Receive" becoming "sync" was the first product-wide
+  case — touches many localized strings at once. Localized values are immutable: third-party
+  extensions and translators may still reference an old key, and an old value stays correct for
+  anyone who has not adopted the new term. The localization lookup
+  (`getLocalizedString` → `findLocalizationForFallbackLanguageAndOrKey` in
+  `src/extension-host/services/localization.service-host.ts`) returns a key's own value in the first
+  interface language that has strings, then that key's `fallbackKey` in the same language, then the
+  key across the remaining interface languages and English, then the `fallbackKey` across those,
+  then the bare key.
+- **Decision:** Each renamed string gets a NEW key carrying the new wording in every language the
+  old key has a value in. The new key's metadata has `fallbackKey` pointing at the OLD key, every
+  consumer switches to the new key, and the old key's metadata gets `deprecationInfo` recording that
+  it was superseded and naming the new key. The old key and all its values stay. This is the one
+  replacement recipe in the Localization Guide ("If a String Needs Replacement", with "Renaming
+  Terminology Users See" as its worked example). It is the house pattern for `fallbackKey` — a key
+  borrowing an existing key's translations, most often a Paratext 10 key falling back to its
+  Paratext 9 counterpart.
+- **Alternatives:** **(a) Edit the values in place** — rejected: it breaks value immutability, and
+  the change is invisible to translators and to anyone holding the old value. **(b) A `fallbackKey`
+  on the OLD key pointing at the new one** — rejected: the lookup reads a key's `fallbackKey` only in
+  a language where the key itself has no value, and the old key has a value in every language the
+  new key has, so that `fallbackKey` never fires.
+- **Consequences:** A new value dropped from a language silently shows the old wording through the
+  fallback rather than failing visibly, so shipped-file tests pin the new keys' values. The forward
+  fallback reaches only the user's first interface language that has strings: for a second interface
+  language the new key's value from a later interface language, or English, wins over the old translation, because the key is looked up across the remaining languages
+  before the `fallbackKey` is. Any `fallbackKey` elsewhere that targets the old key (an older key
+  with no value of its own resolving through it) must be re-pointed at the new key, or that key
+  keeps showing the old wording.
+- **Source:** PT-4810.
+
 ## adr-text-collection-resources-are-zoom-areas: Each Text Collection resource is its own content zoom area; a click scope and an area label let the platform target and name it
 
 - **Date:** 2026-09-24
