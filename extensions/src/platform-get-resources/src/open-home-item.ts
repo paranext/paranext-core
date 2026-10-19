@@ -28,9 +28,9 @@ async function isSimpleMode(): Promise<boolean> {
  */
 async function openResource(projectId: string): Promise<void> {
   if (await isSimpleMode()) {
-    // The command never rejects, so a rejection means it was not reached (the editor extension is
-    // not loaded yet, say); that propagates, and the user is told. The resource viewer belongs to
-    // the same extension, so it is no fallback.
+    // The command itself never rejects, so a rejection means it was not reached (the editor
+    // extension is not loaded yet, say) or PAPI's request timeout elapsed first; that propagates,
+    // and the user is told. The resource viewer belongs to the same extension, so it is no fallback.
     const result = await papi.commands.sendCommand(
       'platformScriptureEditor.showResourceInReferencePanel',
       projectId,

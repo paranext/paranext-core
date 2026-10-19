@@ -1,7 +1,13 @@
 {
   "metadata": {
     "%resources_filterInput%": {
-      "fallbackKey": "%resources_searchByNameOrLanguage%"
+      "deprecationInfo": {
+        "date": "2026-10-19",
+        "message": "Superseded by %resources_filterInput_searchPlaceholder%."
+      }
+    },
+    "%resources_filterInput_searchPlaceholder%": {
+      "fallbackKey": "%resources_filterInput%"
     }
   },
   "localizedStrings": {
@@ -13,7 +19,7 @@
       "%resources_activity_tooltip%": "Last synchronized",
       "%resources_any_language%": "Any",
       "%resources_any_type%": "Any",
-      "%resources_clearFilters%": "Clear Filters",
+      "%resources_clearFilters%": "Clear filters",
       "%resources_clearSearch%": "Clear Search",
       "%resources_couldNotOpen%": "That couldn't be opened. Please try again.",
       "%resources_dialog_subtitle%": "Add resources to Home",
@@ -22,6 +28,8 @@
       "%resources_filterBy%": "Filter by",
       "%resources_filterByValue%": "Filter by: {filter}",
       "%resources_filter_all%": "All",
+      "%resources_filterInput%": "Search by name, language, type",
+      "%resources_filterInput_searchPlaceholder%": "Search by name or language",
       "%resources_shortNameText%": "Name",
       "%resources_fullName%": "Full Name",
       "%resources_get%": "Get",
@@ -46,14 +54,13 @@
       "%resources_open%": "Open",
       "%resources_paratextProjectReadOnly_tooltip%": "Paratext project (read-only)",
       "%resources_paratextProject_tooltip%": "Paratext project",
-      "%resources_paratextProjects_label%": "Paratext Projects",
+      "%resources_paratextProjects_label%": "Paratext projects",
       "%resources_providerNotReady%": "Resources aren't ready yet. Please try again in a moment.",
       "%resources_remove%": "Remove",
       "%resources_resource_tooltip%": "Resource",
       "%resources_resources_label%": "Resources",
       "%resources_results%": "results",
       "%resources_retry%": "Try again",
-      "%resources_searchByNameOrLanguage%": "Search by name or language",
       "%resources_searchedFor%": "Searched for",
       "%resources_serverProjectsUnavailable_title%": "Can't list projects from the sync server",
       "%resources_serverUnreachable_description%": "Showing only the projects already on your computer.",
@@ -96,6 +103,8 @@
       "%resources_filterBy%": "Filtrar por",
       "%resources_filterByValue%": "Filtrar por: {filter}",
       "%resources_filter_all%": "Todos",
+      "%resources_filterInput%": "Buscar por nombre, idioma, tipo",
+      "%resources_filterInput_searchPlaceholder%": "Buscar por nombre o idioma",
       "%resources_shortNameText%": "Nombre",
       "%resources_fullName%": "Nombre completo",
       "%resources_get%": "Obtener",
@@ -127,7 +136,6 @@
       "%resources_resources_label%": "Recursos",
       "%resources_results%": "resultados",
       "%resources_retry%": "Reintentar",
-      "%resources_searchByNameOrLanguage%": "Buscar por nombre o idioma",
       "%resources_searchedFor%": "Buscado:",
       "%resources_serverProjectsUnavailable_title%": "No se pueden listar los proyectos del servidor de sincronización",
       "%resources_serverUnreachable_description%": "Mostrando solo los proyectos que ya están en su computadora.",

@@ -87,7 +87,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_paratextProjects_label%',
   '%resources_resource_tooltip%',
   '%resources_resources_label%',
-  '%resources_searchByNameOrLanguage%',
+  '%resources_filterInput_searchPlaceholder%',
   '%resources_searchedFor%',
   '%resources_serverProjectsUnavailable_title%',
   '%resources_serverUnreachable_description%',
@@ -371,7 +371,7 @@ export function Home({
   const clearSearchText: string = getLocalizedString('%resources_clearSearch%');
   const filterAllText: string = getLocalizedString('%resources_filter_all%');
   const filterByValueText: string = getLocalizedString('%resources_filterByValue%');
-  const filterInputText: string = getLocalizedString('%resources_searchByNameOrLanguage%');
+  const filterInputText: string = getLocalizedString('%resources_filterInput_searchPlaceholder%');
   const shortNameText: string = getLocalizedString('%resources_shortNameText%');
   const fullNameText: string = getLocalizedString('%resources_fullName%');
   const getText: string = getLocalizedString('%resources_get%');

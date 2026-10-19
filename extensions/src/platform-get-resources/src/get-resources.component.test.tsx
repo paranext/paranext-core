@@ -482,11 +482,11 @@ describe('GetResources search box', () => {
     // The search matches name and language only; the type filter is the control for type.
     expect(screen.getByRole('textbox')).toHaveAttribute(
       'placeholder',
-      '%resources_searchByNameOrLanguage%',
+      '%resources_filterInput_searchPlaceholder%',
     );
     // The wording itself, not just the key: it must not promise a search by type.
     expect(
-      localizedStringsContribution.localizedStrings.en['%resources_searchByNameOrLanguage%'],
+      localizedStringsContribution.localizedStrings.en['%resources_filterInput_searchPlaceholder%'],
     ).not.toMatch(/type/i);
   });
 });

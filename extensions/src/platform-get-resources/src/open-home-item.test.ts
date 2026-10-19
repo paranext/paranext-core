@@ -164,7 +164,7 @@ describe('openHomeItem', () => {
 
 /*
  * Get Resources lists resources too, and its Open must not replace the project in Simple mode's
- * middle column any more than Home's does (PT-4813).
+ * middle column any more than Home's does.
  */
 describe('openResourceFrom', () => {
   beforeEach(() => {

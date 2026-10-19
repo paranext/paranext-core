@@ -966,7 +966,9 @@ declare module 'papi-shared-types' {
      * that has started saving runs to completion, however long the save and the tab's reload take.
      *
      * @param resourceProjectId The local project id of the resource to show
-     * @returns How the show ended. Never rejects, so a rejection means the command was not reached.
+     * @returns How the show ended. The command itself never rejects: a rejection means it was not
+     *   reached, or PAPI's request timeout (`platform.requestTimeout`) elapsed first — a show that
+     *   has started saving can run past it.
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platformScriptureEditor.showResourceInReferencePanel': (

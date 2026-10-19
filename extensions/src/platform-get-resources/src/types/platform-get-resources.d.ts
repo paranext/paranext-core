@@ -213,9 +213,11 @@ declare module 'papi-shared-types' {
      * a `DblResourceReference` so the resource is loadable without a catalog entry.
      *
      * @returns Synthetic resource entries for locally-installed non-DBL resources. Also returns
-     *   `[]` when the C# data provider has not registered its projects yet or the lookup threw —
-     *   callers cannot distinguish those from a genuine "no local non-DBL resources" result, so a
-     *   caller that needs a retry or loading affordance must get that signal from elsewhere.
+     *   `[]` when the C# data provider has not registered its projects yet — callers cannot
+     *   distinguish that from a genuine "no local non-DBL resources" result, so a caller that needs
+     *   a retry or loading affordance must get that signal from elsewhere.
+     * @throws When the local projects could not be read. A failed catalog does not throw: the list
+     *   is then built without it.
      */
     'platformGetResources.getLocalNonDblResources': () => Promise<DblResourceData[]>;
 

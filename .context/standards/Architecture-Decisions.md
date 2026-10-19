@@ -347,7 +347,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   with no preset raises Home showing whatever filter it last had — including a preset, which
   therefore persists until the user changes it. The accepted cost is that "More projects…" on a
   Home the user has widened still rebuilds the iframe, dropping its search and any in-progress
-  send/receive UI state. Pushing the preset into the open Home instead
+  send/receive UI state: a Get or Sync started from it loses its progress indicator, and its
+  "Sync failed" alert and internet-block notice are never shown (they were to be sent from the
+  replaced iframe), while Get and Sync are enabled again although the sync is still running. Pushing the preset into the open Home instead
   (`papi.webViewProviders.postMessageToWebView`) would avoid that, but Home reads its starting
   filter once, so it would need a message handler of its own; not worth it for that case. Note
   that the reload applies the preset only because every provider run gives the iframe a new
@@ -7386,6 +7388,38 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   as a local literal — and is now bound to a shared constant; see
   `adr-window-min-width-shared-constant`.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
+
+## adr-simple-mode-resource-opens-to-reference-tab: In Simple mode a resource opened from Home goes to its reference tab and the user's own list
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Context:** Simple mode's middle column only ever shows the project (Ian, PT-3182, 2026-10-12),
+  but Home and Get Resources opened a resource with `platformScriptureEditor.openResourceViewer`,
+  which in Simple mode replaces that project. The Bible texts and Commentaries tabs list the texts
+  of the project they show — the team's list (a project setting, synced by Send/Receive) merged
+  with each user's personal list — plus every downloaded resource.
+- **Decision:** A new command, `platformScriptureEditor.showResourceInReferencePanel` (experimental),
+  owned by the editor extension that owns those tabs, and called by `platform-get-resources` for
+  Home's and Get Resources' Open in Simple mode. It picks the tab by the resource's kind (Commentaries
+  for commentaries, Bible texts otherwise), adds the resource to the user's *personal* list for the
+  project that tab shows — never to the team's list, and not when the team's list already has it,
+  the tab is showing a resource rather than a project, or the reference's kind can't be confirmed —
+  and selects it by reloading the tab with the row id in the reload options, which `reloadWebView`
+  forwards to the provider (`ResourceTextPanelOptions`). Shows run one at a time, and each has 20 s
+  from the request to reach the point of saving: past that it is dropped and the user warned, so the
+  caller hears how it ended before PAPI's request timeout. It answers with a status: `shown`,
+  `notShown` (the user has been told; open nothing else), or `openElsewhere` (no project open, or a
+  kind neither tab lists — source-language, enhanced, XML), on which the caller opens the viewer.
+- **Alternatives:** **Add it to the project's (team) list** — rejected: every teammate would see
+  one user's pick. **Show it without saving** — rejected by Ian: an opened text should stay
+  available to that user. **Lock Simple-mode Home to projects only** — the fallback Sebastian
+  defined in case this didn't land; not needed once it did. **A pending-selection slot in module
+  state**, as `currentResourceTextPanelProjectIds` is — rejected: reload options carry the value to
+  the one build it was asked for.
+- **Consequences:** The personal list is per project (`UserSettings-{user}.xml`); "available in any
+  project" comes from the tabs listing every downloaded resource. A show reloads the tab unless it
+  already shows the resource, which discards anything in progress in it (PT-4510). An open early in
+  a launch can wait on the catalog's installed-flag sync and be dropped at the deadline.
 
 ## adr-simple-mode-tab-menu-offers-zoom-only: Simple mode's tab menu is the platform's own contributed menu, narrowed to the content-zoom group
 

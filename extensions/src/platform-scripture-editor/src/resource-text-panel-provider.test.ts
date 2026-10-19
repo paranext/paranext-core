@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SavedWebViewDefinition } from '@papi/core';
+import { createResourceTextPanelProvider } from './main';
 import type { ResourceTextPanelOptions } from './show-resource-in-panel.util';
 
 // `main.ts` pulls in webpack-only `?inline` imports that only resolve under webpack — stub them so
-// the module loads.
+// the module loads. Vitest hoists these above the imports, wherever they are written.
 vi.mock('./platform-scripture-editor.web-view.scss?inline', () => ({ default: '' }));
 vi.mock('./platform-scripture-editor.web-view?inline', () => ({ default: '' }));
 vi.mock('./model-text-panel.web-view.scss?inline', () => ({ default: '' }));
@@ -20,11 +21,6 @@ vi.mock('@papi/backend', () => ({
   WebViewFactory: vi.fn(),
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
-
-// vi.mock must appear before the imports it mocks so Vitest can hoist it; eslint's import/first
-// rule cannot model this Vitest-specific hoisting requirement.
-// eslint-disable-next-line import/first
-import { createResourceTextPanelProvider } from './main';
 
 const savedPanel = (webViewType: string): SavedWebViewDefinition => ({
   id: 'panel-1',

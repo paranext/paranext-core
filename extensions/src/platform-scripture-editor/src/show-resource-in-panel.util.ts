@@ -4,6 +4,7 @@ import { doesCatalogRowCoverProject, getErrorMessage } from 'platform-bible-util
 import type { DblResourceData, ResourceType } from 'platform-bible-utils';
 import type { DblResourceReference, ProjectReference, ResourceReference } from 'platform-scripture';
 import type { ShowResourceInReferencePanelResult } from 'platform-scripture-editor';
+import type { DblResourceCatalog } from 'platform-get-resources';
 import {
   getResourceReferenceRowId,
   isProjectReference,
@@ -91,27 +92,35 @@ async function findCatalogEntry(resourceProjectId: string): Promise<CatalogLooku
   } catch (e) {
     logger.warn(`Could not refresh resource flags before reading: ${getErrorMessage(e)}`);
   }
-  const [dblResult, localResult] = await Promise.allSettled([
-    papi.commands.sendCommand('platformGetResources.getCachedResources'),
-    papi.commands.sendCommand('platformGetResources.getLocalNonDblResources'),
-  ]);
-  if (dblResult.status === 'rejected')
-    logger.warn(`Could not read the DBL resource catalog: ${getErrorMessage(dblResult.reason)}`);
-  if (localResult.status === 'rejected')
-    logger.warn(
-      `Could not read the locally-installed resources: ${getErrorMessage(localResult.reason)}`,
-    );
+  let catalog: DblResourceCatalog | undefined;
+  try {
+    catalog = await papi.commands.sendCommand('platformGetResources.getCachedResources');
+  } catch (e) {
+    logger.warn(`Could not read the DBL resource catalog: ${getErrorMessage(e)}`);
+  }
+  const coversResource = (candidate: DblResourceData) =>
+    doesCatalogRowCoverProject(candidate, resourceProjectId);
+  let entry = catalog?.status === 'available' ? catalog.resources.find(coversResource) : undefined;
 
-  const catalog = dblResult.status === 'fulfilled' ? dblResult.value : undefined;
-  const dblEntries = catalog?.status === 'available' ? catalog.resources : [];
-  const localEntries = localResult.status === 'fulfilled' ? localResult.value : [];
-  const entry = [...dblEntries, ...localEntries].find((candidate) =>
-    doesCatalogRowCoverProject(candidate, resourceProjectId),
-  );
+  // The locally-installed list is read only when the catalog does not cover the resource: reading
+  // it waits on a second sync of the installed flags, for an answer the catalog already gave.
+  let wasLocalListRead = true;
+  if (!entry) {
+    try {
+      const localEntries = await papi.commands.sendCommand(
+        'platformGetResources.getLocalNonDblResources',
+      );
+      entry = localEntries.find(coversResource);
+    } catch (e) {
+      wasLocalListRead = false;
+      logger.warn(`Could not read the locally-installed resources: ${getErrorMessage(e)}`);
+    }
+  }
+
   const isCatalogKnown =
     catalog?.status === 'available' ||
     (catalog?.status === 'unavailable' && catalog.reason === 'notConfigured');
-  const isKindKnown = !!entry || localResult.status === 'fulfilled';
+  const isKindKnown = !!entry || wasLocalListRead;
   return {
     entry,
     isKindKnown,
@@ -166,20 +175,21 @@ async function getTeamReferences(projectId: string): Promise<ResourceReference[]
 }
 
 /**
- * Whether a panel's project is a project the user's list can belong to. In Simple mode the
- * reference panels follow whatever the middle column opens, which can be a resource opened in its
- * viewer; a list saved there would belong to that resource, not to any project the user works in.
+ * What a panel's project is. In Simple mode the reference panels follow whatever the middle column
+ * opens, which can be a resource opened in its viewer; a list saved there would belong to that
+ * resource, not to any project the user works in.
  *
  * @param projectId The panel's project id
- * @returns `true` only when the project is known not to be a published resource
+ * @returns `'project'` for a project the user's list can belong to, `'resource'` for a published
+ *   resource, or `'unknown'` if that could not be read
  */
-async function isTranslationProject(projectId: string): Promise<boolean> {
+async function getPanelProjectKind(projectId: string): Promise<'project' | 'resource' | 'unknown'> {
   try {
     const projectSettings = await papi.projectDataProviders.get('platform.base', projectId);
-    return (await projectSettings.getSetting('platform.isPublished')) === false;
+    return (await projectSettings.getSetting('platform.isPublished')) ? 'resource' : 'project';
   } catch (e) {
     logger.warn(`Could not tell whether ${projectId} is a resource: ${getErrorMessage(e)}`);
-    return false;
+    return 'unknown';
   }
 }
 
@@ -317,9 +327,9 @@ async function showResourceNow(
   // Already on the team's list, the resource is available to this user too, and is selected under
   // the team's own reference — which may spell its DBL entry UID in other casing than the catalog,
   // or name the resource by its project rather than its DBL entry.
-  const [teamReferences, isPanelOnTranslationProject] = await Promise.all([
+  const [teamReferences, panelProjectKind] = await Promise.all([
     getTeamReferences(panel.projectId),
-    isTranslationProject(panel.projectId),
+    getPanelProjectKind(panel.projectId),
   ]);
   const teamReference = teamReferences?.find(
     (item) =>
@@ -335,9 +345,9 @@ async function showResourceNow(
 
   // Not saved when the team's list is unknown, as that could save a copy of the team's own
   // reference, nor when the reference's kind is uncertain (see `isReferenceKindKnown`), nor when the
-  // panel is showing a resource rather than a project (see `isTranslationProject`). The panel still
+  // panel is showing a resource rather than a project (see `getPanelProjectKind`). The panel still
   // lists the resource among the downloaded ones, so it is shown either way.
-  if (teamReferences && !teamReference && isReferenceKindKnown && isPanelOnTranslationProject) {
+  if (teamReferences && !teamReference && isReferenceKindKnown && panelProjectKind === 'project') {
     try {
       const textConnections = await papi.projectDataProviders.get(
         'platformScripture.textConnectionSettings',
@@ -347,6 +357,8 @@ async function showResourceNow(
         reference,
         () => textConnections.getUserReferencedProjectsAndResources(),
         (list) => textConnections.setUserReferencedProjectsAndResources(list),
+        // The same resource named by its project, as the team-list lookup above also matches.
+        (item) => isProjectReference(item) && item.id === resourceProjectId,
       );
     } catch (e) {
       logger.warn(
@@ -355,24 +367,36 @@ async function showResourceNow(
     }
   } else if (!teamReference) {
     let reason = "the team's list could not be read";
-    if (!isPanelOnTranslationProject) reason = 'the tab is showing a resource, not a project';
+    if (panelProjectKind === 'resource') reason = 'the tab is showing a resource, not a project';
+    else if (panelProjectKind === 'unknown') reason = "the tab's project could not be read";
     else if (teamReferences) reason = 'its catalog entry could not be confirmed';
     logger.info(
       `Not adding resource ${resourceProjectId} to the personal list of ${panel.projectId}: ${reason}`,
     );
   }
 
-  // No `projectId`: the panel keeps whichever project it shows by the time the reload lands, which
-  // a project switch during this show may have changed.
-  const reloadOptions: ResourceTextPanelOptions = {
-    bringToFront: true,
-    selectedResourceId: getResourceReferenceRowId(selectedReference),
-  };
+  const selectedResourceId = getResourceReferenceRowId(selectedReference);
+  const reloadOptions: ResourceTextPanelOptions = { bringToFront: true, selectedResourceId };
   let shownWebViewId: string | undefined;
   try {
-    shownWebViewId = await papi.webViews.reloadWebView(webViewType, panel.id, reloadOptions);
+    shownWebViewId =
+      panel.state?.selectedResourceId === selectedResourceId
+        ? // Already showing it: raised, not reloaded, so it keeps its scroll position and anything
+          // in progress in it.
+          await papi.webViews.openWebView(webViewType, undefined, {
+            existingId: panel.id,
+            createNewIfNotFound: false,
+            bringToFront: true,
+          })
+        : // No `projectId`: the provider then uses the project of the definition as it stands when
+          // the reload starts — normally the one found above, though a project switch that lands in
+          // the same moment can race it.
+          //
+          // The reload discards anything in progress in the tab, including a resource its picker
+          // is installing before it adds it to the list (PT-4510).
+          await papi.webViews.reloadWebView(webViewType, panel.id, reloadOptions);
   } catch (e) {
-    return failToShow(progress, `Could not reload the ${webViewType} tab: ${getErrorMessage(e)}`);
+    return failToShow(progress, `Could not show the ${webViewType} tab: ${getErrorMessage(e)}`);
   }
   // The tab went away between finding it and reloading it.
   if (!shownWebViewId)
@@ -435,7 +459,9 @@ export function showResourceInReferencePanel(
       return showResourceNow(resourceProjectId, progress);
     })
     .then((webViewId): ShowResourceInReferencePanelResult => {
-      progress.settle();
+      // Abandoned while it finished: the user was told the tab could not be opened, so nothing may
+      // open in its place now.
+      if (!progress.settle()) return NOT_SHOWN;
       return webViewId ? { status: 'shown', webViewId } : { status: 'openElsewhere' };
     })
     .catch(async (e): Promise<ShowResourceInReferencePanelResult> => {
@@ -460,8 +486,11 @@ export function showResourceInReferencePanel(
       resolve(NOT_SHOWN);
     }, SHOW_DEADLINE_MS);
   });
-  // The deadline only ever resolves for a show it abandoned, so this waits out a committed show.
+  // The deadline only ever resolves for a show it abandoned, so the caller's answer waits out a
+  // committed show. The next show waits for this one to end, or to be abandoned — and then still for
+  // the show before it, which may be one that committed and is still saving.
   const answered = Promise.race([show, deadline]);
-  previousShow = answered;
+  const waitedFor = previousShow;
+  previousShow = Promise.race([show, deadline.then(() => waitedFor)]);
   return answered.finally(() => clearTimeout(deadlineTimer));
 }

@@ -2,24 +2,13 @@ import type { EffectiveResourceReference, ResourceReference } from 'platform-scr
 import type { DblResourceData, ResourceType } from 'platform-bible-utils';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@papi/frontend', () => ({ default: {}, logger: { warn: vi.fn() } }));
-
-// vi.mock must appear before the imports it mocks so Vitest can hoist it; eslint's import/first
-// rule cannot model this Vitest-specific hoisting requirement.
-// eslint-disable-next-line import/first
 import { buildPickerResources, type DownloadedResource } from './downloaded-resources.utils';
-// vi.mock must appear before the imports it mocks so Vitest can hoist it; eslint's import/first
-// rule cannot model this Vitest-specific hoisting requirement.
-// eslint-disable-next-line import/first
 import { getResourceReferenceRowId, isSameResource } from './resource-reference.utils';
-// vi.mock must appear before the imports it mocks so Vitest can hoist it; eslint's import/first
-// rule cannot model this Vitest-specific hoisting requirement.
-// eslint-disable-next-line import/first
 import { findSelectedRow, resolveResourceSelection } from './resource-selection.utils';
-// vi.mock must appear before the imports it mocks so Vitest can hoist it; eslint's import/first
-// rule cannot model this Vitest-specific hoisting requirement.
-// eslint-disable-next-line import/first
 import { toResourceReference } from './select-dbl-resource';
+
+// Hoisted above the imports by Vitest, wherever it is written.
+vi.mock('@papi/frontend', () => ({ default: {}, logger: { warn: vi.fn() } }));
 
 /*
  * `showResourceInReferencePanel` (extension host) picks the row the panel should select, and the

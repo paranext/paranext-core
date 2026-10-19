@@ -341,6 +341,9 @@ async function getCachedResources(): Promise<DblResourceCatalog> {
  * Convention: each synthetic entry uses `dblEntryUid === projectId` to mark it as non-DBL so that
  * callers (e.g. `selectTextConnection`) can create a `ProjectReference` instead of a
  * `DblResourceReference` when the user selects one.
+ *
+ * Rejects when the local projects could not be read, so a caller can tell that apart from there
+ * being none. The catalog failing does not stop it: the list is then built without it.
  */
 async function getLocalNonDblResources(): Promise<DblResourceData[]> {
   try {
@@ -350,17 +353,23 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
     // `cachedResources` afterwards, so a resource already on disk is excluded as a DBL entry rather
     // than emitted a second time as a synthetic non-DBL one.
     await ensureInstalledFlagsSynced();
-    // An absent catalog means one has never been fetched on this profile (a fetched catalog is
-    // persisted and reloaded on activation), so there is nothing for these projects to duplicate
-    // and no reason to withhold them. Suppressing them here would hide side-loaded resources from
-    // exactly the offline, never-connected users most likely to have them.
-    const dblCatalog = cachedResources ?? [];
+  } catch (error: unknown) {
+    logger.warn(
+      `Building local non-DBL resources without the catalog, which failed: ${getErrorMessage(error)}`,
+    );
+  }
+  // An absent catalog means one has never been fetched on this profile (a fetched catalog is
+  // persisted and reloaded on activation), or it just failed, so there is nothing for these
+  // projects to duplicate and no reason to withhold them. Suppressing them here would hide
+  // side-loaded resources from exactly the offline, never-connected users most likely to have them.
+  const dblCatalog = cachedResources ?? [];
 
+  try {
     const allMetadata = await getLocalProjectMetadata();
     return buildLocalNonDblResources(allMetadata, dblCatalog);
   } catch (error: unknown) {
     logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
-    return [];
+    throw error;
   }
 }
 

@@ -97,6 +97,23 @@ describe('selectDblResource', () => {
       });
     });
 
+    it("keeps the earlier entry's other fields, such as its Text collection flag", async () => {
+      const getUserList = vi.fn().mockResolvedValue({
+        dataVersion: '1.0.0',
+        items: [
+          { type: 'dblResource', name: 'old name', id: 'uid-b', isInTextCollectionForUser: true },
+        ],
+      });
+      await selectTextConnection(RESOURCE_B, getUserList, setUserList, undefined, onSelect);
+
+      expect(setUserList).toHaveBeenCalledWith({
+        dataVersion: '1.0.0',
+        items: [
+          { type: 'dblResource', name: 'Resource B', id: 'uid-b', isInTextCollectionForUser: true },
+        ],
+      });
+    });
+
     it('uses DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion when getUserList returns undefined', async () => {
       const getUserList = vi.fn().mockResolvedValue(undefined);
       await selectTextConnection(RESOURCE_A, getUserList, setUserList, undefined, onSelect);

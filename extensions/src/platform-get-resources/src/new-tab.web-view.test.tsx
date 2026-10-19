@@ -48,7 +48,6 @@ async function renderNewTab() {
 
 /*
  * Home ignores a failed open beyond letting the item be opened again, so New Tab reports its own.
- * Before it did, a failed open left New Tab on its loading screen with nothing said or logged.
  */
 describe('New Tab opening a project', () => {
   beforeEach(() => {

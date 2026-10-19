@@ -183,6 +183,8 @@ function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactE
       args={{
         localProjectsInfo: onlyWebProjectList,
         headerContent: <CardTitle>Only the web project</CardTitle>,
+        // The getting-started prompt this story exists for shows only where there is a handler.
+        onGetStarted: () => alertCommand('platform.openWindow', { url: GET_STARTED_URL }),
       }}
     />
   );

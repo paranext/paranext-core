@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
     getOpenWebViewDefinition: vi.fn(async (): Promise<unknown> => undefined),
     reloadWebView: vi.fn(async (): Promise<string | undefined> => 'wv-1'),
     dataProvidersGet: vi.fn(),
+    getMetadataForAllProjects: vi.fn(async (): Promise<unknown[]> => []),
     readUserData: vi.fn(),
     writeUserData: vi.fn(),
     projectsChangedHandlers,
@@ -35,7 +36,7 @@ vi.mock('@papi/backend', () => ({
     },
     dataProviders: { get: mocks.dataProvidersGet },
     storage: { readUserData: mocks.readUserData, writeUserData: mocks.writeUserData },
-    projectLookup: { getMetadataForAllProjects: vi.fn(async () => []) },
+    projectLookup: { getMetadataForAllProjects: mocks.getMetadataForAllProjects },
     network: {
       getNetworkEvent: vi.fn(() => (handler: () => void) => {
         mocks.projectsChangedHandlers.add(handler);
@@ -96,6 +97,12 @@ async function activateWithFreshModule() {
 async function getCachedResources() {
   const handler = mocks.registeredCommands.get('platformGetResources.getCachedResources');
   if (!handler) throw new Error('getCachedResources was not registered');
+  return handler();
+}
+
+async function getLocalNonDblResources() {
+  const handler = mocks.registeredCommands.get('platformGetResources.getLocalNonDblResources');
+  if (!handler) throw new Error('getLocalNonDblResources was not registered');
   return handler();
 }
 
@@ -389,5 +396,53 @@ describe('Home web view provider', () => {
 
     // `home.web-view.tsx` reads `useWebViewState('projectResourceFilter', …)`.
     expect(webView.state?.projectResourceFilter).toBe('paratextProject');
+  });
+});
+
+/*
+ * The reference panels and the Simple-mode open tell "could not read the installed resources" apart
+ * from "there are none" by whether this rejects: guessing a commentary to be a Bible text would show
+ * an unrelated text in its place.
+ */
+describe('platformGetResources.getLocalNonDblResources', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.registeredCommands.clear();
+    mocks.projectsChangedHandlers.clear();
+    mocks.readUserData.mockResolvedValue(undefined);
+    mocks.writeUserData.mockResolvedValue(undefined);
+    mocks.dataProvidersGet.mockResolvedValue(provider);
+    provider.recomputeDblResourcesInstallStatus.mockResolvedValue({});
+    mocks.getMetadataForAllProjects.mockResolvedValue([]);
+  });
+
+  afterEach(async () => {
+    await registrations.runAllUnsubscribers();
+    vi.restoreAllMocks();
+  });
+
+  it('lists a side-loaded resource even when the catalog cannot be fetched', async () => {
+    provider.getDblResources.mockRejectedValue(new Error('offline'));
+    mocks.getMetadataForAllProjects.mockResolvedValue([
+      { id: 'VULGP83', name: 'VULGP83', isEditable: false },
+    ]);
+    await activateWithFreshModule();
+    // The failed fetch retries with delays; let them pass rather than wait them out.
+    vi.useFakeTimers();
+    try {
+      const resources = getLocalNonDblResources();
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      await expect(resources).resolves.toEqual([expect.objectContaining({ projectId: 'VULGP83' })]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects when the local projects cannot be read', async () => {
+    mocks.getMetadataForAllProjects.mockRejectedValue(new Error('project lookup failed'));
+    await activateWithFreshModule();
+
+    await expect(getLocalNonDblResources()).rejects.toThrow('project lookup failed');
   });
 });

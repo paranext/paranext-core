@@ -1,6 +1,7 @@
 import type {
   DblResourceReference,
   ProjectReference,
+  ResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
 import { DblResourceData } from 'platform-bible-utils';
@@ -23,24 +24,35 @@ export function toResourceReference(
 }
 
 /**
- * Puts a reference first in the current user's personal text connections, removing any earlier copy
- * of it however its DBL entry UID is cased (see `isSameResource`). The project-level (shared)
- * settings are never written here — only the Team layout dialog writes those.
+ * Puts a reference first in the current user's personal text connections, replacing any earlier
+ * copy of it however its DBL entry UID is cased (see `isSameResource`). The copy's other fields —
+ * whether it is in the user's Text collection, data the list round-trips — carry over, so moving a
+ * resource to the front changes nothing else about it. The project-level (shared) settings are
+ * never written here — only the Team layout dialog writes those.
  *
  * @param reference The reference to add
  * @param getUserTextConnections Function to retrieve the local user's text connections
  * @param setUserTextConnections Function to set the local user's text connections
+ * @param isAlsoSameResource Optional further test for an earlier copy, for one that names the same
+ *   resource under another kind of reference (by its project rather than its DBL entry, say)
  */
 export async function addToUserTextConnections(
   reference: DblResourceReference | ProjectReference,
   getUserTextConnections: () => Promise<ResourceReferenceList | undefined>,
   setUserTextConnections: (list: ResourceReferenceList) => Promise<unknown>,
+  isAlsoSameResource: (item: ResourceReference) => boolean = () => false,
 ): Promise<void> {
   const rawUserList = await getUserTextConnections();
   const rawUserItems = rawUserList?.items ?? [];
+  const isEarlierCopy = (item: ResourceReference) =>
+    isSameResource(item, reference) || isAlsoSameResource(item);
+  const earlierCopy = rawUserItems.find(isEarlierCopy);
   await setUserTextConnections({
     dataVersion: rawUserList?.dataVersion ?? DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion,
-    items: [reference, ...rawUserItems.filter((item) => !isSameResource(item, reference))],
+    items: [
+      { ...earlierCopy, ...reference },
+      ...rawUserItems.filter((item) => !isEarlierCopy(item)),
+    ],
   });
 }
 

@@ -179,7 +179,7 @@ describe('Home localized string keys', () => {
 
     // The search matches name and language only; the type filter beside it is the control for type.
     const placeholder = screen.getByRole('textbox').getAttribute('placeholder') ?? '';
-    expect(placeholder).toBe(enString('%resources_searchByNameOrLanguage%'));
+    expect(placeholder).toBe(enString('%resources_filterInput_searchPlaceholder%'));
     // The wording itself, not just the key: it must not promise a search by type.
     expect(placeholder).not.toMatch(/type/i);
   });

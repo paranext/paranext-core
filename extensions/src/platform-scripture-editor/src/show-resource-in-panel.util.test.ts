@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   sendCommand: vi.fn(),
   getAllOpenWebViewDefinitions: vi.fn(),
   reloadWebView: vi.fn(),
+  openWebView: vi.fn(),
   getMetadataForProject: vi.fn(),
   getPdp: vi.fn(),
   getUserList: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('@papi/backend', () => ({
     webViews: {
       getAllOpenWebViewDefinitions: mocks.getAllOpenWebViewDefinitions,
       reloadWebView: mocks.reloadWebView,
+      openWebView: mocks.openWebView,
     },
     projectLookup: { getMetadataForProject: mocks.getMetadataForProject },
     projectDataProviders: { get: mocks.getPdp },
@@ -495,6 +497,86 @@ describe('showResourceInReferencePanel', () => {
     expect(mocks.setUserList).not.toHaveBeenCalled();
   });
 
+  it("keeps the rest of the user's earlier copy, such as its Text collection flag", async () => {
+    // Opening a resource moves it to the front of the user's list; it must not also drop it from
+    // their Text collection.
+    savedUserList = {
+      dataVersion: '1',
+      items: [{ type: 'dblResource', name: 'BYZ', id: 'uid-byz', isInTextCollectionForUser: true }],
+    };
+
+    await showResourceInReferencePanel('byz-project');
+
+    expect(savedUserList.items).toEqual([
+      { type: 'dblResource', name: 'BYZ', id: 'uid-byz', isInTextCollectionForUser: true },
+    ]);
+  });
+
+  it("replaces the user's copy that names the resource by its project", async () => {
+    // Named by its project when it was picked before the catalog had loaded; kept, the tab would
+    // list the resource twice.
+    savedUserList = {
+      dataVersion: '1',
+      items: [{ type: 'project', name: 'BYZ', id: 'byz-project', isInTextCollectionForUser: true }],
+    };
+
+    await showResourceInReferencePanel('byz-project');
+
+    expect(savedUserList.items).toEqual([
+      { type: 'dblResource', name: 'BYZ', id: 'uid-byz', isInTextCollectionForUser: true },
+    ]);
+  });
+
+  it('reads the locally-installed resources only when the catalog does not cover the resource', async () => {
+    await showResourceInReferencePanel('byz-project');
+
+    const commands = mocks.sendCommand.mock.calls.map((call: unknown[]) => call[0]);
+    expect(commands).not.toContain('platformGetResources.getLocalNonDblResources');
+  });
+
+  it('raises the tab, without reloading it, when it already shows the resource', async () => {
+    // A reload would lose the tab's scroll position and anything in progress in it.
+    mocks.getAllOpenWebViewDefinitions.mockResolvedValue([
+      { ...OPEN_PANELS[0], state: { selectedResourceId: 'dbl:uid-byz' } },
+      OPEN_PANELS[1],
+    ]);
+    mocks.openWebView.mockResolvedValue('bible-texts-tab');
+
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
+      SHOWN_IN_BIBLE_TEXTS,
+    );
+
+    expect(mocks.reloadWebView).not.toHaveBeenCalled();
+    expect(mocks.openWebView).toHaveBeenCalledWith(
+      BIBLE_TEXTS,
+      undefined,
+      expect.objectContaining({ existingId: 'bible-texts-tab', bringToFront: true }),
+    );
+  });
+
+  it("shows but does not save a resource when the tab's project cannot be told apart", async () => {
+    // Whether the tab shows a project or a resource is unknown, so the list may not be a project's.
+    mocks.getPdp.mockImplementation(async (projectInterface: string) =>
+      projectInterface === 'platform.base'
+        ? {
+            getSetting: async (key: string) => {
+              if (key === 'platform.isPublished') throw new Error('setting unavailable');
+              return teamList;
+            },
+          }
+        : {
+            getUserReferencedProjectsAndResources: mocks.getUserList,
+            setUserReferencedProjectsAndResources: mocks.setUserList,
+          },
+    );
+
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
+      SHOWN_IN_BIBLE_TEXTS,
+    );
+
+    expect(mocks.setUserList).not.toHaveBeenCalled();
+  });
+
   describe('when a show takes too long', () => {
     // A caller waits at most PAPI's request timeout. Past the deadline it has been answered, so the
     // show must not then go on to save or change the tab behind the user's back.
@@ -673,6 +755,58 @@ describe('showResourceInReferencePanel', () => {
       await releaseHeld();
 
       expect(mocks.error).toHaveBeenCalledWith(expect.stringContaining('byz-project'));
+      expect(mocks.notify).toHaveBeenCalledTimes(1);
+    });
+
+    it('waits for a show that committed, even once the show between them was abandoned', async () => {
+      // Two shows saving at once would race over the same personal list.
+      mocks.setUserList.mockImplementation(() => holdUntilReleased(true));
+      const first = showResourceInReferencePanel('byz-project');
+      await vi.advanceTimersByTimeAsync(0);
+      held.splice(0).forEach((release) => release());
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mocks.setUserList).toHaveBeenCalledTimes(1);
+      const second = showResourceInReferencePanel('byz-project');
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
+      await expect(second).resolves.toEqual(NOT_SHOWN);
+
+      const third = showResourceInReferencePanel('byz-project');
+      await vi.advanceTimersByTimeAsync(0);
+
+      // The first is still saving, so the third has not started.
+      expect(mocks.getAllOpenWebViewDefinitions).toHaveBeenCalledTimes(1);
+      // Released step by step, within the third's own deadline: the first finishes saving, then the
+      // third reaches its own held steps in turn.
+      for (let step = 0; step < 4; step += 1) {
+        held.splice(0).forEach((release) => release());
+        // Each step lets the shows run on to their next hold, so the steps cannot overlap.
+        // eslint-disable-next-line no-await-in-loop
+        await vi.advanceTimersByTimeAsync(0);
+      }
+      await expect(first).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
+      await expect(third).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
+    });
+
+    it('opens nothing elsewhere for a show that finishes while its warning is being sent', async () => {
+      // Told the tab could not be opened, the caller must not then open the viewer as well — even
+      // when the show, stuck until now, finds while that warning is on its way that it should.
+      mocks.getAllOpenWebViewDefinitions.mockImplementation(() =>
+        holdUntilReleased([
+          { id: 'bible-texts-tab', webViewType: BIBLE_TEXTS, projectId: undefined },
+        ]),
+      );
+      mocks.notify.mockImplementation(() => holdUntilReleased('notification-1'));
+      const show = showResourceInReferencePanel('byz-project');
+
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
+      // The tab lookup is released while the deadline's warning is still held.
+      const [releaseLookup, ...stillHeld] = held;
+      held = stillHeld;
+      releaseLookup();
+      await vi.advanceTimersByTimeAsync(0);
+      await releaseHeld();
+
+      await expect(show).resolves.toEqual(NOT_SHOWN);
       expect(mocks.notify).toHaveBeenCalledTimes(1);
     });
   });
