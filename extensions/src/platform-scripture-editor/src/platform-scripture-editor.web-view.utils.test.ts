@@ -27,6 +27,7 @@ import {
   NOTE_INSERT_CONFIG,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
+  isSelectionInChapterLine,
   restoreSelectionIfLost,
   returnFocusToScriptureTextIfDocumentFocused,
   shouldSkipNoteInsert,
@@ -1015,5 +1016,38 @@ describe('createInsertContextMenuItems', () => {
         expect(actions[name]).toHaveBeenCalledTimes(name === actionName ? 1 : 0);
       },
     );
+  });
+});
+
+describe('isSelectionInChapterLine', () => {
+  const caretIn = (html: string, selector: string): Selection | null => {
+    document.body.innerHTML = html;
+    const text = document.querySelector(selector)?.firstChild;
+    const selection = document.getSelection();
+    if (text) selection?.setBaseAndExtent(text, 1, text, 1);
+    return selection;
+  };
+
+  it('is true for a caret in the glyph of a chapter line', () => {
+    expect(
+      isSelectionInChapterLine(
+        caretIn('<p class="chapter" data-marker="c"><span>\\sc 2 </span></p>', 'span'),
+      ),
+    ).toBe(true);
+  });
+
+  it('is false for a caret in a paragraph', () => {
+    expect(
+      isSelectionInChapterLine(
+        caretIn(
+          '<p class="chapter" data-marker="c"><span>\\c 2 </span></p><p data-marker="p">abhad</p>',
+          'p[data-marker="p"]',
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it('is false with no selection', () => {
+    expect(isSelectionInChapterLine(undefined)).toBe(false);
   });
 });

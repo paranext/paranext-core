@@ -143,6 +143,19 @@ export function getChapterKey(
 }
 
 /**
+ * Whether the caret is on a chapter marker's line on screen. The editor renders that line as a
+ * `p.chapter` element (`ChapterNode` in `scripture-editors`), and while the caret is in it, the
+ * caret counts the line's marker bytes as well as its text.
+ *
+ * @param selection The web view document's selection
+ */
+export function isSelectionInChapterLine(selection: Selection | null | undefined): boolean {
+  const anchor = selection?.anchorNode;
+  const element = anchor instanceof Element ? anchor : anchor?.parentElement;
+  return !!element?.closest('p.chapter');
+}
+
+/**
  * Restores an editor's selection from a focus-out snapshot when the live selection has been lost.
  *
  * A mouse click on a marker-palette overlay (rendered OUTSIDE the editor's document) blurs the

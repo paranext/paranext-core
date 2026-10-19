@@ -356,6 +356,7 @@ describe('prepareUsjForChapterSave', () => {
         stored,
         2,
         caretInLine(0),
+        true,
       );
       expect(repairedUsj?.content).toEqual([chapter('2'), 'c 2', para('p', 'body')]);
       expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 0 } });
@@ -374,6 +375,7 @@ describe('prepareUsjForChapterSave', () => {
         stored,
         2,
         caretInLine(4),
+        true,
       );
       expect(repairedUsj?.content).toEqual([chapter('2'), nameless('2 more'), para('p', 'body')]);
       expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 2 } });
@@ -385,6 +387,7 @@ describe('prepareUsjForChapterSave', () => {
         stored,
         2,
         caretInLine(1),
+        true,
       );
       expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 0 } });
     });
@@ -395,6 +398,7 @@ describe('prepareUsjForChapterSave', () => {
         stored,
         2,
         caretInLine(1),
+        true,
       );
       expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1]', offset: 0 } });
     });
@@ -405,6 +409,7 @@ describe('prepareUsjForChapterSave', () => {
         stored,
         2,
         caretInLine(1),
+        true,
       );
       expect(repairedUsj?.content).toEqual([
         chapter('2', { sid: 'GEN 2' }),
@@ -420,6 +425,7 @@ describe('prepareUsjForChapterSave', () => {
         stored,
         2,
         caretInLine(4),
+        true,
       );
       expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 3 } });
     });
@@ -430,6 +436,7 @@ describe('prepareUsjForChapterSave', () => {
         usjOf(ID_GEN, chapter('1'), para('p', 'body')),
         1,
         caretInLine(1),
+        true,
       );
       expect(repairedUsj).toBeUndefined();
       expect(usjToSave?.content).toEqual([ID_GEN, nameless('1'), para('p', 'body')]);
@@ -454,9 +461,20 @@ describe('prepareUsjForChapterSave', () => {
         stored,
         2,
         caretInLine(offset),
+        true,
       );
       expect(repairedUsj?.content).toEqual([chapter('2'), smallCaps, para('p', 'body')]);
       expect(caretTarget).toEqual({ start: expected });
+    });
+
+    it('keeps a caret read after the line settled, in its text', () => {
+      const { caretTarget } = prepareUsjForChapterSave(
+        usjOf(smallCaps, para('p', 'body')),
+        stored,
+        2,
+        caretInLine(1),
+      );
+      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 1 } });
     });
 
     it('keeps a caret read after the line settled, in its marker name', () => {
@@ -477,6 +495,7 @@ describe('prepareUsjForChapterSave', () => {
         stored,
         2,
         caretInLine(3),
+        true,
       );
       expect(caretTarget).toEqual({
         start: { jsonPath: '$.content[1].marker', propertyOffset: 2 },
@@ -539,14 +558,43 @@ describe('prepareUsjForChapterSave', () => {
         expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
       });
 
-      it('uses the usual caret when the paragraph after it changed too', () => {
+      it('keeps the caret when the paragraph after it changed too', () => {
         const { caretTarget } = prepareUsjForChapterSave(
           usjOf(para('p', 'abhad a relative'), para('p', 'next, edited')),
           storedRuth2,
           2,
           caretInLine(2),
         );
-        expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
+        expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 2 } });
+      });
+
+      // Two identical lines after the marker make the merge look, from its neighbours, like the
+      // chapter line changed in place; the caret is still in the merged paragraph's text.
+      it('keeps the caret in its text when the two lines after the marker are the same', () => {
+        const { caretTarget } = prepareUsjForChapterSave(
+          usjOf(para('q2', 'abpraise'), para('q2', 'Selah praise'), para('p', 'next')),
+          usjOf(
+            chapter('2', { sid: 'RUT 2' }),
+            para('q2', 'Selah praise'),
+            para('q2', 'Selah praise'),
+            para('p', 'next'),
+          ),
+          2,
+          caretInLine(2),
+        );
+        expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 2 } });
+      });
+
+      // A caret on a chapter line on screen counts the whole glyph; one that merely sits in a line
+      // whose text starts with the chapter number does not.
+      it('keeps the caret in its text when that text starts with the chapter number', () => {
+        const { caretTarget } = prepareUsjForChapterSave(
+          usjOf(para('p', '2had a relative'), para('p', 'next')),
+          storedRuth2,
+          2,
+          caretInLine(1),
+        );
+        expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 1 } });
       });
     });
 

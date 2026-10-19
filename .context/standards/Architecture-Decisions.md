@@ -939,14 +939,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     still a chapter glyph on screen, so the caret counts the whole line, marker and all (`\s|c 2`),
     and is mapped to the same character of what the line settles into (its marker name or its text);
     a caret read after the line settled is already in those coordinates. So it is read only on the
-    top-level line where the stored marker stood, and only when that line changed in place — the
-    stored line after it is still next. A chapter line merged into the paragraph below it (a
-    selection from the chapter line into that paragraph, typed over) leaves that paragraph in its
-    place, with the line after it being the stored line two after the marker. The repair moves that
-    paragraph down whole and the caret in it counts only the paragraph's own content, so its path is
-    kept as it was with only the paragraph's index changed. A caret anywhere else is never carried
-    across: a caret in another paragraph's text is addressed exactly as one counting a chapter line
-    is, so the two cannot be told apart.
+    top-level line where the stored marker stood, and the glyph arithmetic (`\s|c 2` mapped into
+    the marker name) is applied only while the caret is on a chapter line on screen, read from the
+    web view's DOM selection (`isSelectionInChapterLine`). Off a chapter line the caret addresses
+    the line as the saved document holds it, so its path is kept with only the line's index changed.
+    That covers a line that has already settled, and a chapter line merged into the paragraph below
+    it (a selection from the chapter line into that paragraph, typed over), which leaves that
+    paragraph where the line stood. The decision comes from where the caret is on screen, not from
+    what the lines hold: a caret in a paragraph's text and one counting a chapter glyph have the
+    same address, and comparing the line with its neighbours to tell them apart is fooled by
+    repeated lines, which put the caret inside the paragraph's marker. A caret anywhere else is
+    never carried across.
 - **Alternatives:**
   - **Apply the repair as OT delta ops (`EditorRef.applyUpdate`) instead of `setUsj`** — rejected
     for now, though it would keep the history (no load, so no `CLEAR_HISTORY_COMMAND`). A chapter is
