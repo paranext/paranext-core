@@ -48,6 +48,11 @@ const MOCK_FILES: { [uri: string]: string } = {
     "%general_button_submit%": "Senden",
     "%firstRun_title%": "Einrichten"
   }`,
+  // it has strings but neither submit key, so the first language with data can resolve neither the
+  // key nor its fallbackKey.
+  'resources://assets/localization/it.json': `{
+    "%some_localization_key%": "Testo"
+  }`,
   'resources://assets/localization/metadata.json': `{
     "%yes%": {
       "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",
@@ -152,7 +157,17 @@ test('resolves a key missing in the current language through its fallbackKey in 
     locales: ['fr'],
   });
   expect(response).toEqual('Soumettre');
-  expect(response).not.toEqual('Submit now');
+});
+
+test('a later interface language that translated only the old key does not win over the English new key', async () => {
+  // it has strings but neither key; de has only the old key %general_button_submit%; en has the
+  // new key. The new key is looked up across the remaining languages before the fallbackKey is
+  // tried in them, so English "Submit now" wins over German "Senden".
+  const response = await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%general_button_submit_2%',
+    locales: ['it', 'de'],
+  });
+  expect(response).toEqual('Submit now');
 });
 
 test('Key returned with localizeKey that does not exist', async () => {
@@ -284,7 +299,7 @@ test('getAvailableInterfaceLanguages offers only allowlisted languages', async (
 
 test('every loaded language, offered or not, is reported as loaded once the files are read', async () => {
   const result = await getAllLoadedInterfaceLanguages();
-  expect(Object.keys(result).sort()).toEqual(['de', 'en', 'es', 'fr']);
+  expect(Object.keys(result).sort()).toEqual(['de', 'en', 'es', 'fr', 'it']);
 });
 
 test('a hidden language stored in the setting renders', async () => {
