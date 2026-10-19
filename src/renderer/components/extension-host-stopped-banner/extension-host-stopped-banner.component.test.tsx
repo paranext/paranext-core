@@ -23,7 +23,7 @@ import {
   EXTENSION_HOST_STOPPED_MESSAGE_CRASHED_KEY,
   EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY,
   EXTENSION_HOST_STOPPED_RESTART_APP_KEY,
-  EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY,
+  EXTENSION_HOST_STOPPED_RESTART_SERVICE_KEY,
   EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY,
   EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY,
   EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY,
@@ -89,8 +89,8 @@ const ENGLISH_TITLE = 'A Platform.Bible service on this computer has stopped wor
 /** What `useLocalizedStrings` returns while loading: the raw keys themselves. */
 const UNRESOLVED = Object.fromEntries(LOCALIZED_STRING_KEYS.map((key) => [key, key]));
 
-const RESTART_EXTENSIONS = {
-  name: ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY],
+const RESTART_SERVICE = {
+  name: ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTART_SERVICE_KEY],
 };
 const RESTART_APP = { name: ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTART_APP_KEY] };
 const DISMISS = { name: ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_DISMISS_KEY] };
@@ -156,7 +156,7 @@ describe('ExtensionHostStoppedBanner', () => {
     expect(banner).toHaveTextContent(
       ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY],
     );
-    expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeInTheDocument();
+    expect(screen.getByRole('button', RESTART_SERVICE)).toBeInTheDocument();
     expect(screen.getByRole('button', RESTART_APP)).toBeInTheDocument();
     expect(screen.queryByRole('button', DISMISS)).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -241,7 +241,7 @@ describe('ExtensionHostStoppedBanner', () => {
     render(<ExtensionHostStoppedBanner />);
     stop('lost-connection');
 
-    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+    await userEvent.click(screen.getByRole('button', RESTART_SERVICE));
 
     expect(sendCommand).toHaveBeenCalledWith('platform.restartExtensionHost');
     expect(getExtensionHostNotice()).toEqual({ phase: 'restarting', reason: 'lost-connection' });
@@ -249,7 +249,7 @@ describe('ExtensionHostStoppedBanner', () => {
       ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTARTING_KEY],
     );
     expect(screen.getAllByRole('button')).toHaveLength(2);
-    expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeDisabled();
+    expect(screen.getByRole('button', RESTART_SERVICE)).toBeDisabled();
     // An app restart is always safe, and the way out if the new extension host never comes up.
     expect(screen.getByRole('button', RESTART_APP)).toBeEnabled();
 
@@ -257,7 +257,7 @@ describe('ExtensionHostStoppedBanner', () => {
     await act(async () => restart.resolve());
     expect(getExtensionHostNotice()).toEqual({ phase: 'restarting', reason: 'lost-connection' });
     expect(screen.getAllByRole('button')).toHaveLength(2);
-    expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeDisabled();
+    expect(screen.getByRole('button', RESTART_SERVICE)).toBeDisabled();
     expect(screen.getByRole('button', RESTART_APP)).toBeEnabled();
   });
 
@@ -265,7 +265,7 @@ describe('ExtensionHostStoppedBanner', () => {
     deferredRestart();
     render(<ExtensionHostStoppedBanner />);
     stop('crashed');
-    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+    await userEvent.click(screen.getByRole('button', RESTART_SERVICE));
 
     await userEvent.click(screen.getByRole('button', RESTART_APP));
 
@@ -276,7 +276,7 @@ describe('ExtensionHostStoppedBanner', () => {
     vi.mocked(sendCommand).mockResolvedValue(undefined);
     render(<ExtensionHostStoppedBanner />);
     stop('lost-connection');
-    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+    await userEvent.click(screen.getByRole('button', RESTART_SERVICE));
 
     extensionHostStarts();
 
@@ -291,7 +291,7 @@ describe('ExtensionHostStoppedBanner', () => {
     expect(getExtensionHostNotice()).toEqual({ phase: 'restarted', isConfirmed: true });
     expect(screen.getByRole('button', RESTART_APP)).toBeEnabled();
     expect(screen.getByRole('button', DISMISS)).toBeEnabled();
-    expect(screen.queryByRole('button', RESTART_EXTENSIONS)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', RESTART_SERVICE)).not.toBeInTheDocument();
   });
 
   it('falls back to an unconfirmed restarted state after the timeout if no start announcement comes', async () => {
@@ -299,7 +299,7 @@ describe('ExtensionHostStoppedBanner', () => {
     vi.mocked(sendCommand).mockResolvedValue(undefined);
     render(<ExtensionHostStoppedBanner />);
     stop('crashed');
-    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+    await userEvent.click(screen.getByRole('button', RESTART_SERVICE));
     expect(getExtensionHostNotice()).toEqual({ phase: 'restarting', reason: 'crashed' });
 
     await act(async () => {
@@ -319,7 +319,7 @@ describe('ExtensionHostStoppedBanner', () => {
     );
     expect(screen.getByRole('button', RESTART_APP)).toBeEnabled();
     expect(screen.getByRole('button', DISMISS)).toBeEnabled();
-    expect(screen.queryByRole('button', RESTART_EXTENSIONS)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', RESTART_SERVICE)).not.toBeInTheDocument();
   });
 
   it('a stop while restarting brings the alarm back, and the fallback timer no longer fires', async () => {
@@ -327,7 +327,7 @@ describe('ExtensionHostStoppedBanner', () => {
     vi.mocked(sendCommand).mockResolvedValue(undefined);
     render(<ExtensionHostStoppedBanner />);
     stop('crashed');
-    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+    await userEvent.click(screen.getByRole('button', RESTART_SERVICE));
     expect(getExtensionHostNotice()).toEqual({ phase: 'restarting', reason: 'crashed' });
 
     stop('lost-connection');
@@ -335,7 +335,7 @@ describe('ExtensionHostStoppedBanner', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY],
     );
-    expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeEnabled();
+    expect(screen.getByRole('button', RESTART_SERVICE)).toBeEnabled();
     expect(screen.getByRole('button', RESTART_APP)).toBeEnabled();
 
     await act(async () => {
@@ -343,7 +343,7 @@ describe('ExtensionHostStoppedBanner', () => {
     });
 
     expect(getExtensionHostNotice()).toEqual({ phase: 'stopped', reason: 'lost-connection' });
-    expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeEnabled();
+    expect(screen.getByRole('button', RESTART_SERVICE)).toBeEnabled();
   });
 
   it('disarms the fallback timer when the phase leaves restarting', async () => {
@@ -351,7 +351,7 @@ describe('ExtensionHostStoppedBanner', () => {
     const restart = deferredRestart();
     render(<ExtensionHostStoppedBanner />);
     stop('crashed');
-    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+    await userEvent.click(screen.getByRole('button', RESTART_SERVICE));
     await act(async () => restart.reject(new Error('main did not answer')));
     expect(getExtensionHostNotice()).toEqual({ phase: 'stopped', reason: 'crashed' });
     await act(async () => {
@@ -359,7 +359,7 @@ describe('ExtensionHostStoppedBanner', () => {
     });
 
     vi.mocked(sendCommand).mockResolvedValue(undefined);
-    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+    await userEvent.click(screen.getByRole('button', RESTART_SERVICE));
     await act(async () => {
       vi.advanceTimersByTime(5_000);
     });
@@ -371,7 +371,7 @@ describe('ExtensionHostStoppedBanner', () => {
     vi.mocked(sendCommand).mockResolvedValue(undefined);
     render(<ExtensionHostStoppedBanner />);
     stop('crashed');
-    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+    await userEvent.click(screen.getByRole('button', RESTART_SERVICE));
     extensionHostStarts();
     await waitFor(() => expect(screen.getByRole('button', DISMISS)).toBeInTheDocument());
 
@@ -385,7 +385,7 @@ describe('ExtensionHostStoppedBanner', () => {
     vi.mocked(sendCommand).mockResolvedValue(undefined);
     render(<ExtensionHostStoppedBanner />);
     stop('crashed');
-    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+    await userEvent.click(screen.getByRole('button', RESTART_SERVICE));
     extensionHostStarts();
     await waitFor(() => expect(screen.getByRole('button', DISMISS)).toBeInTheDocument());
 
@@ -394,14 +394,14 @@ describe('ExtensionHostStoppedBanner', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY],
     );
-    expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeEnabled();
+    expect(screen.getByRole('button', RESTART_SERVICE)).toBeEnabled();
   });
 
   it('reverts to the alarm, with both buttons enabled, when the restart command rejects', async () => {
     const restart = deferredRestart();
     render(<ExtensionHostStoppedBanner />);
     stop('lost-connection');
-    await userEvent.click(screen.getByRole('button', RESTART_EXTENSIONS));
+    await userEvent.click(screen.getByRole('button', RESTART_SERVICE));
 
     await act(async () => restart.reject(new Error('main did not answer')));
 
@@ -433,7 +433,7 @@ describe('ExtensionHostStoppedBanner', () => {
 
     await waitFor(() => expect(logger.error).toHaveBeenCalledTimes(1));
     expect(getExtensionHostNotice()).toEqual({ phase: 'stopped', reason: 'crashed' });
-    expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeEnabled();
+    expect(screen.getByRole('button', RESTART_SERVICE)).toBeEnabled();
   });
 
   it('moves a stopped banner to restarted when another window restarts the extension host', () => {
@@ -517,22 +517,22 @@ describe('ExtensionHostStoppedBanner', () => {
       deferredRestart();
       render(<ExtensionHostStoppedBanner />);
       stop('crashed');
-      act(() => screen.getByRole('button', RESTART_EXTENSIONS).focus());
+      act(() => screen.getByRole('button', RESTART_SERVICE).focus());
 
       await userEvent.keyboard('{Enter}');
 
-      expect(screen.getByRole('button', RESTART_EXTENSIONS)).toBeDisabled();
+      expect(screen.getByRole('button', RESTART_SERVICE)).toBeDisabled();
       expect(screen.getByRole('status')).toHaveFocus();
     });
 
     it('moves focus to the strip when the focused button is removed', () => {
       render(<ExtensionHostStoppedBanner />);
       stop('crashed');
-      act(() => screen.getByRole('button', RESTART_EXTENSIONS).focus());
+      act(() => screen.getByRole('button', RESTART_SERVICE).focus());
 
       extensionHostStarts();
 
-      expect(screen.queryByRole('button', RESTART_EXTENSIONS)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', RESTART_SERVICE)).not.toBeInTheDocument();
       expect(screen.getByRole('status')).toHaveFocus();
     });
 
@@ -569,7 +569,7 @@ describe('ExtensionHostStoppedBanner', () => {
     it('still rescues focus when the browser blurs a button as it becomes disabled', () => {
       render(<ExtensionHostStoppedBanner />);
       stop('crashed');
-      const restartExtensions = screen.getByRole('button', RESTART_EXTENSIONS);
+      const restartExtensions = screen.getByRole('button', RESTART_SERVICE);
       act(() => restartExtensions.focus());
 
       // The browser's side of a disabling: the button is disabled and loses focus with nowhere
@@ -586,10 +586,10 @@ describe('ExtensionHostStoppedBanner', () => {
       const hasFocus = vi.spyOn(document, 'hasFocus');
       render(<ExtensionHostStoppedBanner />);
       stop('crashed');
-      act(() => screen.getByRole('button', RESTART_EXTENSIONS).focus());
+      act(() => screen.getByRole('button', RESTART_SERVICE).focus());
 
       hasFocus.mockReturnValue(false);
-      act(() => screen.getByRole('button', RESTART_EXTENSIONS).blur());
+      act(() => screen.getByRole('button', RESTART_SERVICE).blur());
       hasFocus.mockRestore();
       extensionHostStarts();
 
@@ -602,13 +602,25 @@ describe('ExtensionHostStoppedBanner', () => {
       vi.spyOn(document, 'hasFocus').mockReturnValue(true);
       render(<ExtensionHostStoppedBanner />);
       stop('crashed');
-      act(() => screen.getByRole('button', RESTART_EXTENSIONS).focus());
+      act(() => screen.getByRole('button', RESTART_SERVICE).focus());
 
       await userEvent.click(document.body);
       expect(document.body).toHaveFocus();
       extensionHostStarts();
 
       expect(document.body).toHaveFocus();
+    });
+
+    it('does not focus the emptied strip after Dismiss', async () => {
+      render(<ExtensionHostStoppedBanner />);
+      stop('crashed');
+      extensionHostStarts();
+      act(() => screen.getByRole('button', DISMISS).focus());
+
+      await userEvent.keyboard('{Enter}');
+
+      expect(screen.queryByRole('button', DISMISS)).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).not.toHaveFocus();
     });
   });
 
@@ -617,7 +629,7 @@ describe('ExtensionHostStoppedBanner', () => {
       render(<ExtensionHostStoppedBanner />);
       stop('crashed');
 
-      expect(screen.getByRole('button', RESTART_EXTENSIONS)).toHaveAttribute(
+      expect(screen.getByRole('button', RESTART_SERVICE)).toHaveAttribute(
         'data-variant',
         'default',
       );

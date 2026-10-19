@@ -10,6 +10,7 @@ import { BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE } from '@renderer/components/to
 import {
   ALARM_STRIP_ACTIONS_CLASS_NAME,
   ALARM_STRIP_ALERT_CLASS_NAME,
+  ALARM_STRIP_LAYOUT_CLASS_NAME,
 } from '@renderer/components/alarm-strip.util';
 import {
   dismissExtensionHostNotice,
@@ -28,8 +29,8 @@ export const EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY =
   '%extensionHostStopped_messageLostConnection%' satisfies LocalizeKey;
 export const EXTENSION_HOST_STOPPED_MESSAGE_CRASHED_KEY =
   '%extensionHostStopped_messageCrashed%' satisfies LocalizeKey;
-export const EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY =
-  '%extensionHostStopped_restartExtensions%' satisfies LocalizeKey;
+export const EXTENSION_HOST_STOPPED_RESTART_SERVICE_KEY =
+  '%extensionHostStopped_restartService%' satisfies LocalizeKey;
 export const EXTENSION_HOST_STOPPED_RESTART_APP_KEY =
   '%extensionHostStopped_restartApp%' satisfies LocalizeKey;
 export const EXTENSION_HOST_STOPPED_RESTARTING_KEY =
@@ -51,34 +52,32 @@ export const PRODUCT_NAME_KEY = '%product_name%' satisfies LocalizeKey;
 
 const BANNER_TEST_ID = 'extension-host-stopped-banner';
 
-/** Every localization key this component requests. */
-export type ExtensionHostStoppedKey =
-  | typeof EXTENSION_HOST_STOPPED_TITLE_KEY
-  | typeof EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY
-  | typeof EXTENSION_HOST_STOPPED_MESSAGE_CRASHED_KEY
-  | typeof EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY
-  | typeof EXTENSION_HOST_STOPPED_RESTART_APP_KEY
-  | typeof EXTENSION_HOST_STOPPED_RESTARTING_KEY
-  | typeof EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY
-  | typeof EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY
-  | typeof EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY
-  | typeof EXTENSION_HOST_STOPPED_DISMISS_KEY
-  | typeof PRODUCT_NAME_KEY;
-
-/** Exported so the localization-parity test asserts against the list the component reads. */
-export const LOCALIZED_STRING_KEYS: ExtensionHostStoppedKey[] = [
+/**
+ * Every localization key this component requests. Exported so the localization-parity test asserts
+ * against the list the component reads.
+ */
+export const LOCALIZED_STRING_KEYS = [
   EXTENSION_HOST_STOPPED_DISMISS_KEY,
   EXTENSION_HOST_STOPPED_MESSAGE_CRASHED_KEY,
   EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY,
   EXTENSION_HOST_STOPPED_RESTART_APP_KEY,
   EXTENSION_HOST_STOPPED_RESTARTED_MESSAGE_KEY,
   EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY,
-  EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY,
+  EXTENSION_HOST_STOPPED_RESTART_SERVICE_KEY,
   EXTENSION_HOST_STOPPED_RESTART_UNCONFIRMED_TITLE_KEY,
   EXTENSION_HOST_STOPPED_RESTARTING_KEY,
   EXTENSION_HOST_STOPPED_TITLE_KEY,
   PRODUCT_NAME_KEY,
-];
+] as const;
+
+/** One of {@link LOCALIZED_STRING_KEYS}. */
+export type ExtensionHostStoppedKey = (typeof LOCALIZED_STRING_KEYS)[number];
+
+/**
+ * {@link LOCALIZED_STRING_KEYS} as the mutable array `useLocalizedStrings` takes. Made once, so the
+ * hook sees the same array on every render.
+ */
+const LOCALIZED_STRING_KEYS_TO_REQUEST: ExtensionHostStoppedKey[] = [...LOCALIZED_STRING_KEYS];
 
 /**
  * English text shown when a key has no resolved translation, matching `en.json`. The localization
@@ -92,7 +91,7 @@ export const ENGLISH_FALLBACKS: { [K in ExtensionHostStoppedKey]: string } = {
     'It lost contact with the rest of the app. Editing and most tabs will not respond until it is restarted.',
   [EXTENSION_HOST_STOPPED_MESSAGE_CRASHED_KEY]:
     'It stopped unexpectedly. Editing and most tabs will not respond until it is restarted.',
-  [EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY]: 'Restart service',
+  [EXTENSION_HOST_STOPPED_RESTART_SERVICE_KEY]: 'Restart service',
   [EXTENSION_HOST_STOPPED_RESTART_APP_KEY]: 'Restart app',
   [EXTENSION_HOST_STOPPED_RESTARTING_KEY]: 'Restarting the service. This can take a moment…',
   [EXTENSION_HOST_STOPPED_RESTARTED_TITLE_KEY]: 'Service restarted',
@@ -125,7 +124,7 @@ type Props = {
   isRestartConfirmed?: boolean;
   title: string;
   message: string;
-  restartExtensionsLabel: string;
+  restartServiceLabel: string;
   restartAppLabel: string;
   dismissLabel: string;
   onRestartExtensions: () => void;
@@ -157,7 +156,7 @@ export function ExtensionHostStoppedBannerPresentational({
   isRestartConfirmed = true,
   title,
   message,
-  restartExtensionsLabel,
+  restartServiceLabel,
   restartAppLabel,
   dismissLabel,
   onRestartExtensions,
@@ -166,8 +165,6 @@ export function ExtensionHostStoppedBannerPresentational({
 }: Props) {
   const isAlarm = phase !== 'restarted';
   const isRestarting = phase === 'restarting';
-  const calmClassName =
-    'tw:rounded-none tw:border-x-0 tw:bg-transparent tw:px-3 tw:has-[>svg]:grid-cols-[auto_1fr_auto]';
   let icon = <TriangleAlert aria-hidden="true" />;
   if (!isAlarm)
     icon = isRestartConfirmed ? (
@@ -179,7 +176,7 @@ export function ExtensionHostStoppedBannerPresentational({
   // fallback; once they are back, Restart app is the only action left besides Dismiss.
   const restartExtensionsButton = isAlarm ? (
     <Button variant="default" size="sm" disabled={isRestarting} onClick={onRestartExtensions}>
-      {restartExtensionsLabel}
+      {restartServiceLabel}
     </Button>
   ) : undefined;
   const dismissButton = isAlarm ? undefined : (
@@ -194,7 +191,7 @@ export function ExtensionHostStoppedBannerPresentational({
         // Alert's own role="alert" would nest an assertive region inside the polite one; see
         // `overlay-connection-lost.component.tsx`.
         role={undefined}
-        className={isAlarm ? ALARM_STRIP_ALERT_CLASS_NAME : calmClassName}
+        className={isAlarm ? ALARM_STRIP_ALERT_CLASS_NAME : ALARM_STRIP_LAYOUT_CLASS_NAME}
       >
         {icon}
         <AlertTitle>{title}</AlertTitle>
@@ -228,7 +225,7 @@ export function ExtensionHostStoppedBannerPresentational({
 export function ExtensionHostStoppedBanner() {
   const notice = useExtensionHostNotice();
   const isConnectionLost = useIsConnectionLost();
-  const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
+  const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS_TO_REQUEST);
   const phase = notice?.phase;
   // React refs passed to DOM elements must be initialized with null, not undefined.
   // eslint-disable-next-line no-null/no-null
@@ -270,10 +267,12 @@ export function ExtensionHostStoppedBanner() {
   // Only when focus was last inside the strip, so the strip never pulls focus away from elsewhere.
   // Keyed on the phase alone: when the connection-lost state empties the strip with the phase
   // unchanged, focus is deliberately left alone, because that overlay takes over the whole window
-  // and manages focus itself.
+  // and manages focus itself. A dismissed banner leaves nothing in the strip to focus, so focus is
+  // left alone then too.
   useLayoutEffect(() => {
     if (previousPhaseRef.current === phase) return;
     previousPhaseRef.current = phase;
+    if (phase === undefined) return;
     const strip = stripRef.current;
     if (!strip || !hasFocusWithinRef.current) return;
     const active = document.activeElement;
@@ -359,7 +358,7 @@ export function ExtensionHostStoppedBanner() {
         isRestartConfirmed={isRestartConfirmed}
         title={title}
         message={message}
-        restartExtensionsLabel={text(EXTENSION_HOST_STOPPED_RESTART_EXTENSIONS_KEY)}
+        restartServiceLabel={text(EXTENSION_HOST_STOPPED_RESTART_SERVICE_KEY)}
         restartAppLabel={text(EXTENSION_HOST_STOPPED_RESTART_APP_KEY)}
         dismissLabel={text(EXTENSION_HOST_STOPPED_DISMISS_KEY)}
         onRestartExtensions={handleRestartExtensions}

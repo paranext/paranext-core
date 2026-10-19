@@ -1,13 +1,20 @@
 /**
- * Class names for an alarm strip: a full-width `Alert` with the `destructive` variant across the
- * window below the toolbar, with its actions in a third grid column. The connection-lost overlay
- * and the extension-host-stopped banner both use it, so their look and measured contrast cannot
- * drift apart.
+ * Layout class names for a strip-shaped `Alert` across the window below the toolbar, with its
+ * actions in a third grid column, whatever its tone. {@link ALARM_STRIP_ALERT_CLASS_NAME} adds the
+ * alarm colours to it; the extension-host-stopped banner's calm state uses it on its own.
  *
  * A full-width strip rather than a floating card: no rounding, and borders only where the strip
  * meets the content above and below it. `tw:bg-transparent` drops the variant's `tw:bg-card`, so
- * the caller's wrapper must supply an opaque `tw:bg-background` ground; the contrast figures below
- * are measured against it.
+ * the caller's wrapper must supply an opaque `tw:bg-background` ground.
+ */
+export const ALARM_STRIP_LAYOUT_CLASS_NAME =
+  'tw:rounded-none tw:border-x-0 tw:bg-transparent tw:px-3 tw:has-[>svg]:grid-cols-[auto_1fr_auto]';
+
+/**
+ * Class names for an alarm strip: {@link ALARM_STRIP_LAYOUT_CLASS_NAME} on an `Alert` with the
+ * `destructive` variant. The connection-lost overlay and the extension-host-stopped banner both use
+ * it, so their look and measured contrast cannot drift apart. The contrast figures below are
+ * measured against the opaque `tw:bg-background` ground the layout requires of the caller.
  *
  * The text and icon take `diff-deleted` rather than the variant's own `destructive`.
  * `--destructive` is background-grade in the Platform dark theme (`index.css` says so where
@@ -25,8 +32,7 @@
  * These are the screens a user reaches when nothing else in the app works, so reading them cannot
  * depend on the theme.
  */
-export const ALARM_STRIP_ALERT_CLASS_NAME =
-  'tw:rounded-none tw:border-x-0 tw:border-destructive/40 tw:bg-transparent tw:px-3 tw:text-diff-deleted tw:has-[>svg]:grid-cols-[auto_1fr_auto] tw:*:data-[slot=alert-description]:text-diff-deleted/90';
+export const ALARM_STRIP_ALERT_CLASS_NAME = `${ALARM_STRIP_LAYOUT_CLASS_NAME} tw:border-destructive/40 tw:text-diff-deleted tw:*:data-[slot=alert-description]:text-diff-deleted/90`;
 
 /**
  * Class names for the actions column of an alarm strip: the third grid column, spanning the title

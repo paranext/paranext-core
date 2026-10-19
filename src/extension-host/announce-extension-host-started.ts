@@ -6,9 +6,11 @@ import { getErrorMessage, PlatformEventEmitter } from 'platform-bible-utils';
 let startedEmitter: PlatformEventEmitter<undefined> | undefined;
 
 /**
- * Register `platform.onDidStartExtensionHost`. Call right after the network service initializes, so
- * the emitter exists before extensions load. A registration failure is logged and swallowed:
- * windows then fall back to their timer after a restart, which is not worth failing startup over.
+ * Register `platform.onDidStartExtensionHost`. Start it once the network service has initialized
+ * and await it just before {@link announceExtensionHostStarted}, so the registration runs alongside
+ * the rest of startup instead of delaying it. Never rejects: a registration failure is logged and
+ * swallowed, and windows then fall back to their timer after a restart, which is not worth failing
+ * startup over.
  */
 export async function registerExtensionHostStartedEvent(): Promise<void> {
   try {

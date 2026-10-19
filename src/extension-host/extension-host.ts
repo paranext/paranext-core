@@ -113,7 +113,7 @@ process.on('unhandledRejection', (reason) => {
       hasGracefulShutdownStarted,
       exitProcess: (code) => process.exit(code),
     });
-    await registerExtensionHostStartedEvent();
+    const startedEventRegistration = registerExtensionHostStartedEvent();
     // Analytics initialization must not gate extension-host startup — it can take up to
     // ENVIRONMENT_RESOLUTION_TIMEOUT_MS if the Send/Receive server-target lookup is slow.
     // trackEvent()'s `unresolved` queue tolerates this finishing at any point.
@@ -145,6 +145,7 @@ process.on('unhandledRejection', (reason) => {
     // The extension service locks down importing other modules, so be careful what runs after it
     await extensionService.initialize();
     markStartup('extensions-initialized');
+    await startedEventRegistration;
     announceExtensionHostStarted();
     // `process.send` exists only when main forked this process with an IPC channel; run on its own
     // (`npm run start:extension-host`) there is no main restart to tell.

@@ -4589,8 +4589,8 @@ declare module 'shared/models/extension-host-lifecycle.model' {
    *
    * - `'lost-connection'`: the extension host lost its connection to main and ended itself, since it
    *   cannot do anything without that connection.
-   * - `'crashed'`: any other exit main did not request — an uncaught fatal error, an OS signal, an
-   *   out-of-memory kill.
+   * - `'crashed'`: any other exit main did not request — an OS signal, an out-of-memory kill, a native
+   *   crash, or a non-zero exit during startup.
    *
    * @experimental
    */

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   ENGLISH_FALLBACKS,
+  ExtensionHostStoppedKey,
   LOCALIZED_STRING_KEYS,
   PRODUCT_NAME_KEY,
 } from './extension-host-stopped-banner.component';
@@ -21,7 +22,10 @@ function readStrings(fileName: string): { [key: string]: unknown } {
 }
 
 /** Keys whose value is missing, empty, or the key itself (what the service returns when missing). */
-function findUnusableKeys(strings: { [key: string]: unknown }, keys = LOCALIZED_STRING_KEYS) {
+function findUnusableKeys(
+  strings: { [key: string]: unknown },
+  keys: readonly ExtensionHostStoppedKey[] = LOCALIZED_STRING_KEYS,
+) {
   return keys.filter((key) => {
     const value = strings[key];
     return typeof value !== 'string' || value.length === 0 || value === key;

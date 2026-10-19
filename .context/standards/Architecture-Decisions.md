@@ -2330,18 +2330,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   stop happened. (4) The extension host emits
   `platform.onDidStartExtensionHost` once its extensions have initialized: `restartExtensionHost`
   settles at fork time (about 30 ms live), roughly a minute before a dev-build host can serve
-  anything, so the command is not a readiness signal. That event ends any outstanding stop notice
+  anything, so the command is not a readiness signal. Main itself counts a restart as in flight
+  until the new host tells it over the child-process IPC channel that it has started (or it stops
+  unexpectedly, the restart fails, or 90 s pass), and a `platform.restartExtensionHost` call
+  meanwhile joins the running restart instead of stopping the host that is still starting. The
+  start event ends any outstanding stop notice
   in every window, whichever window pressed Restart, so a restart whose command was rejected but
   whose fork went ahead, or a restart pressed in another window, cannot leave a stale alarm.
   (5) Each renderer subscribes at launch (`extension-host-stopped-service.ts`) into an
   import-free store; a startup-mounted, non-blocking banner offers `platform.restartExtensionHost`
   and `platform.restart`. It sits in flow between the toolbar and the dock and publishes its
   measured height in a CSS variable the dock's top inset adds, so the dock shrinks instead of
-  having its top row of tabs covered. While restarting only Restart extensions is disabled: an app
+  having its top row of tabs covered. While restarting only Restart service is disabled: an app
   restart is always safe and is the way out if the new host never comes up. A stop that arrives
   while restarting brings the alarm back, since it can only be the new host dying before it
   announced its start. The banner waits for the start event (90 s fallback; a fallback restart is
-  shown as "Extensions may not have restarted", never as a confirmed restart), and then stays up
+  shown as "The service may not have restarted", never as a confirmed restart), and then stays up
   in a calmer state with Restart app and Dismiss, because a restart does not heal every part of a
   window: in
   the live check every settings subscription opened before the restart stayed dead in main and the
