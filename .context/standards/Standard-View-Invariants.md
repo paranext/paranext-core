@@ -241,15 +241,25 @@ each after a bug. **Do not add another private exclusion; extend the shared one.
 The caret/selection half is unified in the editor repo. The collab half is not yet — the ops stream
 and the delta-doc length side still keep separate predicates.
 
-Two rules follow from that one language, both of which a host has to get right:
+These rules follow from that one language, and a host has to get every one of them right:
 
 **Every public editor position is a SETTLED coordinate.** `getSelection`, `onSelectionChange`,
 `setSelection`, `setAnnotation` and `insertNote` all address the document `getUsj()` returns, never
 the live Lexical tree — the editor does the live↔settled translation once, at its own API boundary.
-So a host may resolve a jsonPath it received from the editor against the USJ it already holds, and a
-path that fails to resolve (or an offset past the node it lands on) is a bug or a race, not an
-expected state. Keep those host-side checks as fail-safes, log them, and do not write code that
+So a host may resolve a jsonPath it received from the editor against the USJ it already holds. Not
+every location is text: a property, closing-marker or attribute location (an empty `\b`'s
+`['marker']`, a line-final verse's `['number']`) is a legitimate caret, so check
+`UsjReaderWriter.isUsjDocumentLocationForTextContent` before resolving a location as text. A TEXT
+path that fails to resolve, or a text offset past the end of its string, is a bug or a race, not an
+expected state — except one past the end of the document's last text, which is the document end
+(rule 3 below). Keep those host-side checks as fail-safes, log them, and do not write code that
 compensates for an expected divergence — there isn't one.
+
+One report is the exception: an update that creates the document's FIRST pending edit and moves the
+selection within itself sends that one `onSelectionChange` report in live coordinates, immediately
+followed by a settled one. So a host that needs a position it can resolve against `getUsj()` at
+that moment calls `getSelection()` (which always answers settled) rather than reusing a cached
+`onSelectionChange` report — `insertCommentAtCurrentSelection` does.
 
 **An annotation may cover display bytes, and the host keeps its anchor.** `setAnnotation` accepts
 a range over a marker glyph, a verse or chapter number, a note caller, or an attribute value
@@ -360,38 +370,47 @@ string `"made"` — ParatextData produces the same USJ from that input. The sett
 before a typed `\c`, `\tr`, `\esb` or `\esbe` that ParatextData trims on save; positions count only
 non-whitespace bytes, so the kept space never moves one.
 
-**A position has one spelling.** Every USFM position has exactly ONE `UsjDocumentLocation`, and
-the editor emits only that one; `UsjReaderWriter.usfmVerseLocationToUsjDocumentLocation` is the
-oracle. `offset` means an index into text only, so a caret with no text beside it is never a
+**A position has one spelling.** Every USFM position has exactly ONE canonical
+`UsjDocumentLocation`; `UsjReaderWriter.usfmVerseLocationToUsjDocumentLocation` is the oracle. One
+alias is allowed: the end of a text string directly followed by a marker or closer may also be
+spelled as that string's `offset` at its length, and the editor reports a caret held at the end of
+the text that way (`{ <text>, offset: 16 }` at the end of `In the beginning` before `\f`, where the
+oracle says the note's own location). So compare two locations by converting them with
+`usjDocumentLocationToUsfmVerseRefVerseLocation`, never by their shape. `offset` means an index into text only, so a caret with no text beside it is never a
 container plus a content index and never `$` plus one:
 
 1. A gap in front of a marker object is that marker's location (`{ jsonPath: <item> }`).
 2. The character after a token with no other home — the space after a marker name, a line's newline
    — is addressed on that token at its length: text `offset: length`, `['marker']` at
-   `propertyOffset: marker.length` (inside an empty `\b`), `closingMarkerOffset` at the closer's
-   length (a paragraph ending in a note is `\f*` at 3).
+   `propertyOffset: marker.length` (inside an empty `\b`), `['number']` at the number's length (a
+   line ending in `\v 1`), `closingMarkerOffset` at the closer's length (a paragraph ending in a
+   note is `\f*` at 3). An `optbreak` has no location inside it, so every position from its start
+   to the end of its line is its own marker location.
 3. The end of the document is one past the final newline, on the last token: rule 2's form plus one.
-   A text offset one past its string's end is therefore legitimate — it is the document end — and
-   the comment-insertion guard brings it onto the text's end (`withDocumentEndOnText`) rather than
+   A text offset one past its string's end is therefore legitimate on the document's last text
+   only — it is the document end — and the comment-insertion guard brings it onto the text's end (`withDocumentEndOnText`) rather than
    treating it as a contract violation.
 4. A root point between two blocks is the start of the next block.
 
 The editor still accepts the older container-and-index shapes from a host. The full rule set, with
-the one shape that has no distinct answer (an `optbreak` ending a line), is on the location model
-(`usj-reader-writer.model.ts`) and in the editor repo's invariants. Rationale:
+an example of each tricky position, is on the location model (`UsjDocumentLocation` in
+`@eten-tech-foundation/scripture-utilities`, re-exported by `platform-bible-utils`) and in the editor
+repo's invariants. Rationale:
 `adr-usj-locations-have-one-spelling` in [`Architecture-Decisions.md`](Architecture-Decisions.md).
 
-**`ContentJsonPath` and `PropertyJsonPath` must be widened in lock-step across both repos.**
-`platform-bible-utils` (`src/scripture/usj-reader-writer.model.ts`) and the editor's
-`@eten-tech-foundation/scripture-utilities`
+**The USJ document-location types have one declaration, owned by the editor package.**
+`ContentJsonPath`, `PropertyJsonPath`, `UsjDocumentLocation` and its seven member location types are
+declared in `@eten-tech-foundation/scripture-utilities`
 (`packages/utilities/src/converters/usj/usj-document-location.model.ts` in the `scripture-editors`
-repo) each declare their own copy, and core assigns its copy into the editor's typed `EditorRef`
-API. Both repos carry a compile-time depth test, so changing CORE's copy alone goes red in core's
-own `npm run typecheck` immediately: narrowing it fails the eight-clause assignment, and widening it
-turns the nine-clause `@ts-expect-error` into an unused-directive error. What nothing catches is
-widening the EDITOR's copy alone — core's narrower type stays assignable into the wider one, so the
-cross-repo assignment keeps type-checking and the two silently drift until core is widened to match.
-Keep the two declarations, and their depth tests, mirrored.
+repo, with its depth test beside it). `platform-bible-utils` re-exports them from
+`src/scripture/usj-reader-writer.model.ts` rather than declaring its own, so core and the editor
+always agree on what a location is. Widening `ContentJsonPath` (or changing any of these types)
+happens in the editor package; core picks it up when it stages that editor build. The seven member
+types are `interface`s, so a location value is not assignable to an index-signature type such as
+`Record<string, unknown>`. `PropertyJsonPath` has a catch-all `` `$.${string}` `` member, so its
+depth members document shapes rather than bound them. Rationale:
+`adr-usj-location-types-come-from-scripture-utilities` in
+[`Architecture-Decisions.md`](Architecture-Decisions.md).
 
 Rationale and history: `adr-editor-positions-are-settled-coordinates` in
 [`Architecture-Decisions.md`](Architecture-Decisions.md).

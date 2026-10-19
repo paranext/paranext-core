@@ -95,13 +95,9 @@ import {
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
   isPlatformError,
-  isString,
-  isWhiteSpace,
   LocalizeKey,
   serialize,
-  USFM_MARKERS_MAP_PARATEXT_3_0,
   usfmMarkers,
-  UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
   BOOKS_PRESENT_DEFAULT,
@@ -197,7 +193,9 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectableParagraphMarkers,
   selectCommentThreadInPanelSafe,
-  withDocumentEndOnText,
+  validateCommentSelection,
+  readCommentRangeText,
+  hasPendingCommentTextChanged,
   shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
 } from './platform-scripture-editor.utils';
@@ -314,6 +312,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // Same reasoning as SYNC_EDIT_BLOCKED_KEY above, for the Edit flyout's blocked-action notice.
   EDIT_ACTION_BLOCKED_KEY,
   '%webView_platformScriptureEditor_error_noTextSelected%',
+  '%webView_platformScriptureEditor_warning_pendingCommentTextChanged%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   '%webView_platformScriptureEditor_error_selectionNotResolved%',
   ...PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
@@ -581,11 +580,38 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   /**
    * Stores the annotation range for the pending comment being created. This is captured when the
    * user initiates comment creation and used to create the annotation highlight and to extract
-   * selection info when saving the comment.
+   * selection info when saving the comment. `anchoredText` is the text the range named when it was
+   * captured; the pending comment is discarded if the settled document stops naming that text.
    */
   const pendingCommentAnnotationRange = useRef<
-    { range: AnnotationRange; verseRef: SerializedVerseRef } | undefined
+    { range: AnnotationRange; verseRef: SerializedVerseRef; anchoredText?: string } | undefined
   >(undefined);
+
+  /** Latest `onCommentEditorCancel`, readable from the editor's change callback defined before it. */
+  const discardPendingCommentRef = useRef<() => void>(() => {});
+
+  /**
+   * A pending comment is saved against its frozen range, so it cannot outlive a change to the text
+   * that range names — local typing or a remote apply. Discards it, with a notice, when `usj` no
+   * longer has the captured text there. Only a pending comment with a captured text pays for the
+   * comparison.
+   */
+  const discardPendingCommentIfAnchorChanged = useRef((usj: Usj) => {
+    const pendingComment = pendingCommentAnnotationRange.current;
+    if (
+      pendingComment?.anchoredText === undefined ||
+      !hasPendingCommentTextChanged(
+        { range: pendingComment.range, anchoredText: pendingComment.anchoredText },
+        correctEditorUsjVersion(usj),
+      )
+    )
+      return;
+    discardPendingCommentRef.current();
+    papi.notifications.send({
+      message: '%webView_platformScriptureEditor_warning_pendingCommentTextChanged%',
+      severity: 'warning',
+    });
+  });
 
   /** Map from annotationId -> info about the annotation that we need to keep to perform some actions */
   const annotationInfoByIdRef = useRef<
@@ -1635,6 +1661,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // editor had not applied yet is overwritten, exactly as the incoming document overwrites the
     // rest of the chapter.
     if (editingNoteKey.current) closeFootnoteEditorRef.current(false);
+    // An external apply never reaches `onUsjChange`, so a pending comment is checked here too.
+    discardPendingCommentIfAnchorChanged.current(usj);
     editorRef.current?.setUsj(usj);
     // A hidden pane is left without a document; showing it fetches the editor's, which is this one
     // from here on (`getUsj()` returns what `setUsj` was just handed).
@@ -1725,7 +1753,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   const insertCommentAtCurrentSelection = useCallback(() => {
-    const selection = currentSelectionRef.current;
+    // The editor's own read flushes pending marker edits, so it is always the settled selection;
+    // the cached ref can lag a change that has not been reported yet.
+    const selection = editorRef.current?.getSelection();
 
     // Comment creation is gated by canUserCreateComments (not read-only), so it must be blocked
     // separately during an automatic Send/Receive. Guarding here covers both the hotkey and the
@@ -1746,144 +1776,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     // Validate that the selection doesn't contain markers, and that there is meaningful content.
     // `selection`'s jsonPaths address the SETTLED document per EditorRef.getSelection's contract
-    // — the same document `getUsj()` returns — so they should always resolve here and
-    // land on a node whose string is the length the offsets below were computed against. A path
-    // that `jsonPathToUsjNodeAndDocumentLocation` cannot resolve at all, or that resolves to a node
-    // shorter than an offset expects, is not a legitimate state; it's a bug or a race. This guard,
-    // and the offset check below, are the fail-safe that turns either case into a warning instead
-    // of a mis-anchored comment or a crash.
+    // — the same document `getUsj()` returns — so they should always resolve here and land on a
+    // node whose string is the length the offsets were computed against. For a TEXT location, a
+    // path that cannot be resolved, or an offset past its node, is a bug or a race, not a legitimate
+    // state (the one exception is one past the end of the document's last text, which is the
+    // document end). The validation turns either case into a warning instead of a mis-anchored
+    // comment or a crash.
     const editorUsj = editorRef.current?.getUsj();
     const editorUsjCorrected = editorUsj ? correctEditorUsjVersion(editorUsj) : undefined;
+    let anchoredText: string | undefined;
     if (editorUsjCorrected) {
-      const usjRW = new UsjReaderWriter(editorUsjCorrected, {
-        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-      });
-
-      let startNodeAndDocumentLocation;
-      let endNodeAndDocumentLocation;
-      try {
-        startNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
-          selection.start.jsonPath,
-        );
-        endNodeAndDocumentLocation = selection.end
-          ? usjRW.jsonPathToUsjNodeAndDocumentLocation(selection.end.jsonPath)
-          : startNodeAndDocumentLocation;
-      } catch (e) {
-        // A path that no longer resolves at all against the settled tree: a warning, not a crash.
-        // Log it — the settled contract says this cannot happen, so a hit here is a defect worth
-        // chasing, not a user mistake, and the notice must not tell the user their selection is at
-        // fault.
-        logger.warn(
-          `Comment insertion: selection jsonPath start=${selection.start.jsonPath} end=${selection.end?.jsonPath ?? selection.start.jsonPath} does not resolve against the settled USJ! ${getErrorMessage(e)}`,
-        );
-        papi.notifications.send({
-          message: '%webView_platformScriptureEditor_error_selectionNotResolved%',
-          severity: 'warning',
-        });
+      const validation = validateCommentSelection(selection, editorUsjCorrected);
+      if ('notice' in validation) {
+        if (validation.warning) logger.warn(validation.warning);
+        papi.notifications.send({ message: validation.notice, severity: 'warning' });
         return;
       }
-
-      const startNode = startNodeAndDocumentLocation?.node;
-      const isStartNodeAString = isString(startNode);
-
-      // Make sure the selection is in a string and doesn't span multiple USJ nodes
-      const selectionHasMarker =
-        !isStartNodeAString ||
-        startNodeAndDocumentLocation?.node !== endNodeAndDocumentLocation?.node;
-
-      if (selectionHasMarker) {
-        papi.notifications.send({
-          message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
-          severity: 'warning',
-        });
-        return;
-      }
-
-      // A caret at the end of the document is spelled one past the end of the last text; it sits
-      // at the end of that text, which is where the comment anchors.
-      const startTextDocumentLocation = withDocumentEndOnText(
-        selection.start,
-        startNode.length,
-        editorUsjCorrected,
-      );
-      const endTextDocumentLocation = withDocumentEndOnText(
-        selection.end ?? selection.start,
-        startNode.length,
-        editorUsjCorrected,
-      );
-      annotationRange.start = { ...startTextDocumentLocation };
-      annotationRange.end = { ...endTextDocumentLocation };
-
-      // If the selection is collapsed (cursor with no range), require a non-whitespace character
-      // on at least one side of the cursor position so the backend code can select the word
-      const isCollapsed =
-        UsjReaderWriter.isUsjDocumentLocationForTextContent(startTextDocumentLocation) &&
-        UsjReaderWriter.isUsjDocumentLocationForTextContent(endTextDocumentLocation) &&
-        startTextDocumentLocation.jsonPath === endTextDocumentLocation.jsonPath &&
-        startTextDocumentLocation.offset === endTextDocumentLocation.offset;
-      // Both offsets are expected to always fit within `startNode` (the check above put both ends
-      // in it), since they come from the same settled document by contract. An offset past its end
-      // means that contract was violated by a bug or a race, not an expected state — proceeding
-      // would anchor the comment past the text (or, collapsed, walk off the end of `startNode`
-      // below), so bail out the same way an unresolvable path already does.
-      const startNodeLength = startNode.length;
-      const offsetPastEnd = [startTextDocumentLocation, endTextDocumentLocation]
-        .map((location) => ('offset' in location ? location.offset : 0))
-        .find((offset) => offset > startNodeLength);
-      if (offsetPastEnd !== undefined) {
-        logger.warn(
-          `Comment insertion: selection offset ${offsetPastEnd} at ${startTextDocumentLocation.jsonPath} is past the end of the settled node (length ${startNodeLength})!`,
-        );
-        papi.notifications.send({
-          message: '%webView_platformScriptureEditor_error_selectionNotResolved%',
-          severity: 'warning',
-        });
-        return;
-      }
-      if (isCollapsed) {
-        if (!('offset' in startTextDocumentLocation)) {
-          papi.notifications.send({
-            message: '%webView_platformScriptureEditor_error_noTextSelected%',
-            severity: 'warning',
-          });
-          return;
-        }
-        const { offset } = startTextDocumentLocation;
-        let charBefore = offset > 0 ? startNode[offset - 1] : '';
-        let charAfter = offset < startNode.length ? startNode[offset] : '';
-        if (
-          (charBefore.length === 0 || isWhiteSpace(charBefore)) &&
-          (charAfter.length === 0 || isWhiteSpace(charAfter))
-        ) {
-          papi.notifications.send({
-            message: '%webView_platformScriptureEditor_error_noTextSelected%',
-            severity: 'warning',
-          });
-          return;
-        }
-
-        // Expand the annotation range to include surrounding non-whitespace characters.
-        // This is a quick and dirty way to do this; the backend will do this properly with the
-        // definition of whitespace according to the project
-        let tempOffset = offset; // Start at the cursor position because that is charAfter
-        while (charAfter.length > 0 && !isWhiteSpace(charAfter)) {
-          charAfter = tempOffset + 1 < startNode.length ? startNode[tempOffset + 1] : '';
-          tempOffset += 1;
-        }
-        annotationRange.end = {
-          ...annotationRange.end,
-          offset: tempOffset,
-        };
-        tempOffset = offset - 1; // Start at the character before the cursor since charBefore is already one step before the offset
-        while (charBefore.length > 0 && !isWhiteSpace(charBefore)) {
-          charBefore = tempOffset > 0 ? startNode[tempOffset - 1] : '';
-          tempOffset -= 1;
-        }
-        annotationRange.start = {
-          ...annotationRange.start,
-          offset: tempOffset + 1, // +1 to move back to the first non-whitespace character
-        };
-      }
+      annotationRange.start = { ...validation.range.start };
+      annotationRange.end = { ...validation.range.end };
+      anchoredText = readCommentRangeText(validation.range, editorUsjCorrected);
     }
 
     // Try to find the selected text element to anchor the popover to. No rendered editor content
@@ -1894,7 +1805,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     const editorContainer = document.querySelector<HTMLElement>('.usfm');
     if (!editorContainer) return;
 
-    pendingCommentAnnotationRange.current = { range: annotationRange, verseRef: scrRef };
+    pendingCommentAnnotationRange.current = {
+      range: annotationRange,
+      verseRef: scrRef,
+      anchoredText,
+    };
 
     // Create a temporary annotation to highlight the selected text
     editorRef.current?.setAnnotation(
@@ -4004,6 +3919,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // the editor's own single commit listener, `handleCommit` in `Editor.tsx`), so it never
       // reaches this callback at all — the source gate is belt-and-braces on top of that.
       if (source === 'local') lastLocalEditTimestamp.current = Date.now();
+      discardPendingCommentIfAnchorChanged.current(usj);
       // Capture the current chapter's save fn and chapter key into the debounce payload so a
       // pending trailing save always targets the chapter this content was typed in.
       //
@@ -4103,6 +4019,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // #endregion Debounced Save Scheduling
 
+  // Looked up once per web view and reused: a lookup per selection change would be a PAPI round
+  // trip each time. Awaited rather than read from a hook so the editor's first reports, made while
+  // the web view is still loading, are not dropped before the controller is found.
+  const webViewControllerPromiseRef = useRef<
+    | ReturnType<typeof papi.webViews.getWebViewController<typeof SCRIPTURE_EDITOR_WEBVIEW_TYPE>>
+    | undefined
+  >(undefined);
+
   /**
    * Handle selection changes in the editor. Updates the local ref and notifies the backend so it
    * can track the current selection and emit events.
@@ -4133,14 +4057,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       // Notify the backend of the selection change via WebViewController method
       try {
-        const webViewController = await papi.webViews.getWebViewController(
-          'platformScriptureEditor.react',
+        webViewControllerPromiseRef.current ??= papi.webViews.getWebViewController(
+          SCRIPTURE_EDITOR_WEBVIEW_TYPE,
           webViewId,
         );
-        if (webViewController) {
-          await webViewController.updateSelectionInternal(scriptureSelection);
-        }
+        const webViewController = await webViewControllerPromiseRef.current;
+        if (webViewController) await webViewController.updateSelectionInternal(scriptureSelection);
+        // Not found yet, so look again next time
+        else webViewControllerPromiseRef.current = undefined;
       } catch (e) {
+        webViewControllerPromiseRef.current = undefined;
         logger.debug(`Failed to notify backend of selection change: ${getErrorMessage(e)}`);
       }
     },
@@ -4286,6 +4212,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
     setShowCommentEditor(false);
   }, []);
+
+  discardPendingCommentRef.current = onCommentEditorCancel;
 
   /** Flag to indicate if a comment submission is in progress so we don't submit multiple times */
   const isSubmittingComment = useRef(false);

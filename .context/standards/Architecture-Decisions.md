@@ -2573,16 +2573,24 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   re-arms on every keystroke and the 700 ms debounced save fires before it, so positions a host
   derives from a save can arrive while the run is still on screen; and a per-editor lookup of the
   view in place of an explicit parameter was rejected as ambient state that lags a view change.
-- **Consequences:** Hosts never see live coordinates — `getSelection`, `onSelectionChange`, and every
-  other public position are guaranteed settled, so `platform-scripture-editor.web-view.tsx`'s
-  unresolvable-path and offset-past-length checks are a fail-safe against a bug or a race, never an
-  expected state. Positions anchored to a snapped-left byte round-trip lossily. `ContentJsonPath` /
-  `PropertyJsonPath` were widened to eight clauses in both `platform-bible-utils` (this repo) and the
-  editor's own copy: real Standard-view nesting (table cell → char → nested char → text is seven
-  clauses) already exceeded the four-clause cap with nothing pending; a scratch-scope remap is a
-  secondary consumer of the same widened bound. The two declarations must be widened in lock-step, or
-  the cross-repo assignment from core's types into the editor's typed API fails to type-check. The
-  live/settled translation runs only while something is pending, scoped per pending settle scope and
+- **Consequences:** Hosts never see live coordinates — `getSelection` and every other public
+  position are guaranteed settled, with one exception: an update that creates the document's first
+  pending edit and moves the selection within itself sends that one `onSelectionChange` report in
+  live coordinates, immediately followed by a settled one, so a host that must resolve a position
+  against `getUsj()` calls `getSelection()` instead of reusing a cached report.
+  `platform-scripture-editor.web-view.tsx`'s unresolvable-path and offset-past-length checks on a
+  TEXT location are a fail-safe against a bug or a race, never an expected state — except one past
+  the end of the document's last text, which is the document end
+  (`adr-usj-locations-have-one-spelling`); property, closing-marker and attribute locations are
+  legitimate positions that are not text. Positions anchored to a snapped-left byte round-trip
+  lossily. `ContentJsonPath` / `PropertyJsonPath` were widened to eight clauses in both
+  `platform-bible-utils` (this repo) and the editor's own copy: real Standard-view nesting already
+  exceeded the four-clause cap with nothing pending (table → row → cell → note → char → nested char
+  → text is seven clauses), and a scratch-scope remap is a secondary consumer of the same widened
+  bound. Locations cross between the repos in both directions, so the two `ContentJsonPath`
+  declarations had to be widened in lock-step or one repo's typecheck failed; there is now one
+  declaration, owned by the editor package (`adr-usj-location-types-come-from-scripture-utilities`).
+  The live/settled translation runs only while something is pending, scoped per pending settle scope and
   memoized on that scope's content, so the identity fast path keeps the common (nothing pending) case
   free. A memoized scope the live tree has since moved on from is rebuilt from the current tree, and
   the rebuild is logged as an error rather than surfaced to a host as a refusal.
@@ -8454,7 +8462,42 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   Paratext 10 patch.
 - **Source:** PT-4558 (PR #2855).
 
-## adr-usj-locations-have-one-spelling: Every USFM position has one USJ location, and the editor emits only that one
+## adr-usj-location-types-come-from-scripture-utilities: `platform-bible-utils` re-exports the USJ document-location types instead of declaring its own copy
+
+- **Date:** 2026-10-15
+- **Status:** Accepted
+- **Context:** `platform-bible-utils` (`src/scripture/usj-reader-writer.model.ts`) and the editor's
+  `@eten-tech-foundation/scripture-utilities`
+  (`packages/utilities/src/converters/usj/usj-document-location.model.ts` in `scripture-editors`)
+  each declared `ContentJsonPath`, `PropertyJsonPath`, `UsjDocumentLocation` and its seven member
+  location types. The copies were identical, member for member, and had to stay that way: locations
+  cross between the repos in both directions (core passes locations into the editor's `EditorRef`
+  and stores the editor's reports in its own types), so a change to either copy alone failed one
+  repo's typecheck. Every change — widening `ContentJsonPath` to eight clauses, documenting the
+  tricky positions and the text-end alias — was written, tested and documented twice.
+  `platform-bible-utils` already depends on the package and re-exports its `Usj` type.
+- **Decision:** The editor package owns the declarations. `usj-reader-writer.model.ts` re-exports
+  the ten types with `export type { … } from '@eten-tech-foundation/scripture-utilities'`, and
+  `platform-bible-utils`' public index keeps exporting the same names, so consumers import them
+  exactly as before. Its own depth test is deleted; the package's
+  `usj-document-location.model.test.ts` covers the bound.
+- **Alternatives:** **Keep the mirrored copies under a lock-step rule** (the previous practice,
+  stated in Standard View invariants) — rejected: it doubles every change and its tests, and nothing
+  but a reviewer's memory kept the TSDoc in step. **Move the declarations into `platform-bible-utils`
+  and have the editor import them** — rejected: `platform-bible-utils` already depends on
+  `scripture-utilities`, so the reverse dependency would be a cycle, and the editor is where
+  locations are produced.
+- **Consequences:** One declaration. `platform-bible-utils`' bundled `.d.ts` imports these types
+  from the editor package, as it already does for `Usj`, so changing them happens in
+  `scripture-editors` and reaches core when core stages that editor build. The package declares the
+  seven member location types as `interface`s where `platform-bible-utils` had `type` aliases with
+  the same members: an interface has no implicit index signature, so a location is no longer
+  assignable to a type like `Record<string, unknown>` (nothing in this repo relied on that). The
+  package's TSDoc on `UsjDocumentLocation` names `UsjLocation` and `UsfmVerseLocation` as code
+  spans, not links, because those types live only in `platform-bible-utils`.
+- **Source:** PT-4370; paranext-core PR #2823, scripture-editors PR paranext/scripture-editors#11.
+
+## adr-usj-locations-have-one-spelling: Every USFM position has one canonical USJ location
 
 - **Date:** 2026-09-23
 - **Status:** Accepted
@@ -8470,20 +8513,26 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   marker name, a line's newline) is addressed on that token at its length (text `offset: length`,
   `['marker']` at the marker's length, `closingMarkerOffset` at the closer's length); the end of the
   document is one past the final newline, on the last token (that form plus one); a root point
-  between blocks is the next block's start. The editor emits only these, and keeps accepting the
-  older container-and-index shapes, resolving each as the location of the gap it names.
+  between blocks is the next block's start. One alias is allowed: the end of a text string directly
+  followed by a marker or closer may also be spelled as that string's `offset` at its length, which
+  is how the editor reports a caret held at the end of the text. The editor emits only these, and
+  keeps accepting the older container-and-index shapes, resolving each as the location of the gap it
+  names. Because of the alias, hosts compare locations through
+  `usjDocumentLocationToUsfmVerseRefVerseLocation`, never by shape.
 - **Alternatives:** **Keep emitting container-and-index as an editor-only convention** — rejected:
   it is a second spelling of positions `UsjReaderWriter` already names, so every host would need its
   own translation. **Define the document end as its own shape** (the root with no offset) —
   rejected: the root location already means the document's start, and the end has a USFM index the
   existing forms can address.
-- **Consequences:** A text offset one past its string's end is legitimate — it is the document end —
-  so host checks that treat any offset past a node as a contract violation must allow exactly that
-  one (`withDocumentEndOnText` in `platform-scripture-editor.utils.ts`). `UsjReaderWriter` itself is
-  unchanged: it accepts offsets past a token's end without bounds checks. One shape has no distinct
-  answer: an `optbreak` ending a line, where every byte after it maps to the optbreak's own marker
-  location. The rules are written on the location model in both repos and in each repo's Standard
-  View invariants.
+- **Consequences:** A text offset one past its string's end is legitimate on the document's last
+  text only — it is the document end — so host checks that treat any offset past a node as a
+  contract violation must allow exactly that one (`withDocumentEndOnText` in
+  `platform-scripture-editor.utils.ts`). `UsjReaderWriter` itself is unchanged: it accepts offsets
+  past a token's end without bounds checks. One shape has no distinct answer: an `optbreak` ending a
+  line, where every byte after it maps to the optbreak's own marker location. The rules, with an
+  example of each tricky position, are written on the location model (`UsjDocumentLocation` in
+  `@eten-tech-foundation/scripture-utilities`, which `platform-bible-utils` re-exports) and in each
+  repo's Standard View invariants.
 - **Source:** PT-3683 (decision comment 19735); scripture-editors PR paranext/scripture-editors#11,
   paranext-core PR #2823.
 

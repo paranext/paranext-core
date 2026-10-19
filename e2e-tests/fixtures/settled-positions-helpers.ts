@@ -4,13 +4,19 @@
  * use. The offsets come from the chapter's own USJ, read from the project data provider that feeds
  * the editor — the offsets a real caller (a checks result, a comment anchor) computes.
  */
-import { type Page } from '@playwright/test';
+import { type FrameLocator, type Locator, type Page, expect } from '@playwright/test';
 import {
   LAUNCH_PHASE_TIMEOUT_MS,
   sendPapiRequestOnce,
   waitForPapiMethodRegistered,
 } from './helpers';
-import { SAMPLE_WEB_PROJECT_ID } from './scripture-editor-helpers';
+import {
+  makeSampleProjectEditable,
+  navigateToolbarBcv,
+  openEditableScriptureEditorForProject,
+  SAMPLE_WEB_PROJECT_ID,
+  waitForHomeTab,
+} from './scripture-editor-helpers';
 
 const WEBSOCKET_PORT = 8876;
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -289,17 +295,16 @@ export async function setScrollGroupRefFromRenderer(
   );
 }
 
-/** The editor's current selection, or undefined while the controller is still waiting for one. */
+/**
+ * The editor's current selection, or undefined while the editor has none. The controller waits for
+ * the editor's first report and gives up with undefined after its own timeout, so a slow first
+ * report is a retry for the caller's poll. Any other error (a torn-down controller, a missing
+ * method) propagates.
+ */
 export async function readEditorSelection(
   editorId: string,
 ): Promise<ReportedSelection | undefined> {
-  try {
-    return await sendToEditorController<ReportedSelection>(editorId, 'getSelection', []);
-  } catch {
-    // The controller blocks its first caller until the editor reports a selection, so a slow
-    // first report is a retry, not a result.
-    return undefined;
-  }
+  return sendToEditorController<ReportedSelection>(editorId, 'getSelection', []);
 }
 
 /**
@@ -314,4 +319,101 @@ export async function setUserSetting(key: string, value: unknown): Promise<void>
     WEBSOCKET_PORT,
     REQUEST_TIMEOUT_MS,
   );
+}
+
+/** The display separator the editor places after a marker glyph, and for a space in a run. */
+export const NBSP = '\u00a0';
+
+/**
+ * John 2:4 is `\wj "Woman, what does that have to do with you and me? My hour has not yet
+ * come."\wj*` — one plain text string, so its settled offsets are the string's own indexes. Chapter
+ * 2 deliberately: a `ScriptureRange` built from USJ document locations carries no verse number, so
+ * the editor extension derives one by walking the loaded chapter's USJ for a book id; only a
+ * chapter-1 USJ carries the `id` marker, so a chapter-2 target exercises that fallback end to end.
+ */
+export const TARGET_REFERENCE = 'John 2:4';
+export const TARGET_VERSE_REF = { book: 'JHN', chapterNum: 2, verseNum: 4 };
+export const TARGET_CHAR_MARKER = 'wj';
+/** Pins the fixture data: drift in the sample project would silently move every offset. */
+export const TARGET_CHAR_TEXT =
+  '\u201cWoman, what does that have to do with you and me? My hour has not yet come.\u201d';
+
+/** What {@link openTargetVerseEditor} resolves to. */
+export interface TargetVerseEditor {
+  editorId: string;
+  editorFrame: FrameLocator;
+  /** The editor's marker-editable input (`.first()`: an open footnote popover carries its own). */
+  editorInput: Locator;
+  /** The chapter's USJ as read once the chapter finished loading. */
+  chapterUsj: UsjDocument;
+  /** JSONPath to the target `\wj` span's text. */
+  jsonPath: string;
+  /** The target `\wj` span's text. */
+  charText: string;
+}
+
+/**
+ * Open an editable Standard view editor on the sample WEB project at {@link TARGET_REFERENCE} and
+ * wait until the chapter is rendered (marker glyphs included) and the controller answers
+ * `setAnnotation`. Reads the chapter USJ only after the chapter finished loading, and checks it
+ * still holds the pinned target text.
+ */
+export async function openTargetVerseEditor(mainPage: Page): Promise<TargetVerseEditor> {
+  await waitForHomeTab(mainPage);
+  await makeSampleProjectEditable();
+  const editorId = await openEditableScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
+  const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
+  await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
+
+  await navigateToolbarBcv(mainPage, TARGET_REFERENCE);
+  const editorInput = editorFrame.locator('.editor-input.marker-editable').first();
+  await expect(editorInput).toBeAttached({ timeout: 60_000 });
+  // Positive control, and the gate that the chapter finished loading before its USJ is read.
+  await expect(editorInput).toContainText(TARGET_CHAR_TEXT, { timeout: 60_000 });
+  // Standard view actually renders the char span's marker glyphs, so the NBSP separator that makes
+  // these coordinates non-trivial is really present.
+  await expect(
+    editorInput.locator(`span.opening[data-marker="${TARGET_CHAR_MARKER}"]`).first(),
+  ).toBeAttached({ timeout: 30_000 });
+
+  const chapterUsj = await getChapterUsj(TARGET_VERSE_REF);
+  const charSpanText = findCharSpanText(chapterUsj.content ?? [], TARGET_CHAR_MARKER);
+  if (!charSpanText)
+    throw new Error(
+      `No \\${TARGET_CHAR_MARKER} char span with plain text content in ${TARGET_REFERENCE}'s USJ`,
+    );
+  expect(charSpanText.text).toBe(TARGET_CHAR_TEXT);
+  await waitForEditorControllerMethod(editorId, 'setAnnotation');
+  return {
+    editorId,
+    editorFrame,
+    editorInput,
+    chapterUsj,
+    jsonPath: charSpanText.jsonPath,
+    charText: charSpanText.text,
+  };
+}
+
+/** The browser's own caret: the node text and offset it sits at, and whether it is collapsed. */
+export interface DomCaret {
+  anchorText: string | undefined;
+  anchorOffset: number | undefined;
+  isCollapsed: boolean | undefined;
+}
+
+/** Read the browser's own selection anchor inside the editor's frame. */
+export async function readDomCaret(editorInput: Locator): Promise<DomCaret> {
+  return editorInput.evaluate((root) => {
+    const sel = root.ownerDocument.getSelection();
+    return {
+      anchorText: sel?.anchorNode?.textContent ?? undefined,
+      anchorOffset: sel?.anchorOffset ?? undefined,
+      isCollapsed: sel?.isCollapsed ?? undefined,
+    };
+  });
+}
+
+/** The text the browser currently highlights inside the editor's frame. */
+export async function readDomSelectedText(editorInput: Locator): Promise<string> {
+  return editorInput.evaluate((root) => root.ownerDocument.getSelection()?.toString() ?? '');
 }

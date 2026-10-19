@@ -383,6 +383,7 @@ describe.each([
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   '%webView_platformScriptureEditor_error_selectionNotResolved%',
+  '%webView_platformScriptureEditor_warning_pendingCommentTextChanged%',
 ])('comment insertion notice %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();
