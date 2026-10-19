@@ -26,7 +26,10 @@ import {
 } from '@node/models/interprocess-messages.model';
 import { isAppShuttingDown } from '@main/services/shutdown-latch.service';
 import { classifyExtensionHostExit } from '@main/services/extension-host-exit.util';
-import { ExtensionHostStoppedEvent } from '@shared/models/extension-host-lifecycle.model';
+import {
+  EXTENSION_HOST_RESTART_READY_TIMEOUT_MS,
+  ExtensionHostStoppedEvent,
+} from '@shared/models/extension-host-lifecycle.model';
 
 let processInstanceCounter = 0;
 // Resolves to the current process instance counter value for debug logging purposes
@@ -49,19 +52,14 @@ const unexpectedStopEmitter = new PlatformEventEmitter<ExtensionHostStoppedEvent
 let lastUnexpectedStop: ExtensionHostStoppedEvent | undefined;
 
 /**
- * How long, from when a restart begins, it counts as in flight if the new extension host never says
- * it has started. Mirrors the fallback after which a window's extension-host-stopped banner stops
- * waiting for the start announcement (`RESTART_READY_FALLBACK_MS`).
- */
-export const RESTART_READY_TIMEOUT_MS = 90_000;
-/**
  * The restart in flight, if any. It resolves once the new process is forked, but stays set until
  * that process says it has started (or stops unexpectedly, the restart fails, or
- * {@link RESTART_READY_TIMEOUT_MS} passes), so a second request — another window's Restart button —
- * joins it instead of stopping a host that is still starting and forking yet another.
+ * {@link EXTENSION_HOST_RESTART_READY_TIMEOUT_MS} passes), so a second request — another window's
+ * Restart button — joins it instead of stopping a host that is still starting and forking yet
+ * another.
  */
 let restartInFlight: Promise<void> | undefined;
-/** Ends {@link restartInFlight} after {@link RESTART_READY_TIMEOUT_MS} */
+/** Ends {@link restartInFlight} after {@link EXTENSION_HOST_RESTART_READY_TIMEOUT_MS} */
 let restartReadyTimer: ReturnType<typeof setTimeout> | undefined;
 
 /**
@@ -75,13 +73,24 @@ function clearRestartGuard(run: Promise<void> | undefined): void {
   restartInFlight = undefined;
 }
 
-/** Records `run` as the restart in flight until one of the ends {@link restartInFlight} lists. */
-function trackRestart(run: Promise<void>): void {
+/**
+ * Starts `restart` and records it as the restart in flight, replacing any earlier one, until one of
+ * the ends {@link restartInFlight} lists. Joining an earlier restart instead is the caller's
+ * choice.
+ *
+ * @returns The running restart; it still rejects for its caller when `restart` fails
+ */
+function beginTrackedRestart(restart: () => Promise<void>): Promise<void> {
+  const run = restart();
   clearTimeout(restartReadyTimer);
   restartInFlight = run;
-  restartReadyTimer = setTimeout(() => clearRestartGuard(run), RESTART_READY_TIMEOUT_MS);
-  // Handles the rejection only to end the guard; whoever started `run` still sees it reject.
+  restartReadyTimer = setTimeout(
+    () => clearRestartGuard(run),
+    EXTENSION_HOST_RESTART_READY_TIMEOUT_MS,
+  );
+  // Handles the rejection only to end the guard; the caller still sees `run` reject.
   run.catch(() => clearRestartGuard(run));
+  return run;
 }
 
 /** The current extension host says it has started, so the restart that forked it is over. */
@@ -172,13 +181,11 @@ function restartExtensionHost(maxWaitTimeInMS: number): Promise<void> {
     logger.info('Extension host restart already in flight; joining it');
     return restartInFlight;
   }
-  const run = (async () => {
+  return beginTrackedRestart(async () => {
     await waitForExtensionHost(maxWaitTimeInMS);
     logger.debug('Extension host closed, restarting now');
     await startExtensionHost(maxWaitTimeInMS, true);
-  })();
-  trackRestart(run);
-  return run;
+  });
 }
 
 function hardKillExtensionHost() {
@@ -239,9 +246,10 @@ function connectToExtensionHostProcess() {
   const child = extensionHost;
   child.on('message', (message) => {
     if (message !== extensionHostStartedMessage) return;
-    // Only the current child's start ends the restart in flight: a child main has since replaced
-    // says nothing about the one now starting.
-    if (extensionHost !== child) return;
+    // Only the start of the child a restart forked ends that restart. A child main has since
+    // replaced, or the current child while main is stopping it (it can finish booting after being
+    // told to shut down), says nothing about the one about to start.
+    if (extensionHost !== child || isStopRequested) return;
     markExtensionHostStarted();
   });
   child.once('exit', (code, signal) => {
@@ -405,9 +413,11 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
     : [];
 
   const restartExtensionHostInternalDevDebounced = debounce(async () => {
-    // Recorded as the restart in flight so a Restart button pressed meanwhile joins it. It does not
-    // join a restart already in flight itself: a further file change restarts again, as nodemon does.
-    const run = (async () => {
+    // Recorded as the restart in flight, the same way `restartExtensionHost` records its own, so a
+    // Restart button pressed meanwhile joins it. Unlike `restartExtensionHost`, the watcher never
+    // joins a restart already in flight: a file change always restarts with the changed code, as
+    // nodemon does, replacing that restart as the one in flight.
+    const run = beginTrackedRestart(async () => {
       await waitForExtensionHost(maxWaitTimeInMS, false);
 
       // If we didn't already set the restarting flag, set it now
@@ -415,8 +425,7 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
         sharedArgs.push(commandLineArgumentsAliases[CommandLineArgs.DidRestart][0]);
 
       startExtensionHostInternal();
-    })();
-    trackRestart(run);
+    });
     try {
       await run;
     } catch (error) {

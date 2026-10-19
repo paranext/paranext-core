@@ -9,6 +9,7 @@ import {
 } from '@shared/models/extension-host-lifecycle.model';
 import { markShuttingDown } from './connection-lost-store';
 import {
+  getExtensionHostNotice,
   markExtensionHostRestarted,
   reportExtensionHostStopped,
 } from './extension-host-stopped-store';
@@ -61,11 +62,15 @@ export function initExtensionHostStoppedService(): () => void {
  *
  * Never rejects: a window that cannot ask is no worse off than before, and the event path still
  * covers any later stop.
+ *
+ * The answer is applied only while the store still has no notice. Once a live event has set one (a
+ * stop, or a start that followed it), that event is newer than the answer, which main may have
+ * given before it.
  */
 export async function catchUpExtensionHostStoppedState(): Promise<void> {
   try {
     const stopped = await sendCommand('platform.getExtensionHostStoppedState');
-    if (stopped) reportExtensionHostStopped(stopped);
+    if (stopped && getExtensionHostNotice() === undefined) reportExtensionHostStopped(stopped);
   } catch (error) {
     logger.warn(
       `Could not ask main whether the extension host is stopped: ${getErrorMessage(error)}`,

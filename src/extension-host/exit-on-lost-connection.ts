@@ -1,6 +1,6 @@
 import { EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE } from '@node/models/interprocess-messages.model';
 import { logger } from '@shared/services/logger.service';
-import { PlatformEvent, Unsubscriber } from 'platform-bible-utils';
+import { getErrorMessage, PlatformEvent, Unsubscriber } from 'platform-bible-utils';
 
 /**
  * How long the graceful shutdown may take on a lost connection before the process exits anyway.
@@ -70,7 +70,7 @@ export function exitExtensionHostOnLostConnection({
     // Deliberately keeps the event loop alive until it fires: if the shutdown hangs on a promise
     // with nothing else pending, an unreferenced timer would let Node exit with code 0, which main
     // would report as a crash rather than a lost connection.
-    setTimeout(
+    const watchdog = setTimeout(
       () => exitProcess(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE),
       isJoiningShutdown
         ? LOST_CONNECTION_JOINED_SHUTDOWN_TIMEOUT_MS
@@ -78,8 +78,15 @@ export function exitExtensionHostOnLostConnection({
     );
     // Not awaited: `runGracefulShutdown` never rejects and always ends with `exitProcess`. If a
     // shutdown is already under way, this joins it, and that shutdown's own exit stands unless the
-    // backstop above fires first.
-    runGracefulShutdown(() => exitProcess(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE));
+    // backstop above fires first. Once the shutdown settles its exit has run, so the watchdog is
+    // disarmed: an `exitProcess` that returns (one that does not end the process at once) must not
+    // be followed by a second exit. While the shutdown hangs, the watchdog stays armed.
+    runGracefulShutdown(() => exitProcess(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE))
+      .finally(() => clearTimeout(watchdog))
+      // Defensive only: `runGracefulShutdown` never rejects.
+      .catch((error) => {
+        logger.error(`Graceful shutdown on a lost connection failed: ${getErrorMessage(error)}`);
+      });
   });
   return unsubscribe;
 }

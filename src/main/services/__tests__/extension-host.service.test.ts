@@ -5,6 +5,7 @@ import {
   extensionHostStartedMessage,
   gracefulShutdownMessage,
 } from '@node/models/interprocess-messages.model';
+import { EXTENSION_HOST_RESTART_READY_TIMEOUT_MS } from '@shared/models/extension-host-lifecycle.model';
 
 const mocks = vi.hoisted(() => ({
   fork: vi.fn(),
@@ -80,12 +81,10 @@ function willFork(...children: FakeExtensionHost[]) {
 /** A fresh copy of the service per test: it keeps the current child and its flags in module state. */
 async function loadService() {
   vi.resetModules();
-  const { extensionHostService, RESTART_READY_TIMEOUT_MS } = await import(
-    '@main/services/extension-host.service'
-  );
+  const { extensionHostService } = await import('@main/services/extension-host.service');
   const onStop = vi.fn();
   extensionHostService.onDidStopUnexpectedly(onStop);
-  return { extensionHostService, onStop, RESTART_READY_TIMEOUT_MS };
+  return { extensionHostService, onStop };
 }
 
 function resetMocksAndGlobals() {
@@ -319,6 +318,26 @@ describe('extensionHostService restart in flight', () => {
     expect(mocks.fork).toHaveBeenCalledTimes(2);
   });
 
+  // The old host can finish booting after it was told to shut down; that says nothing about the host
+  // the restart is about to fork.
+  test('a start announced by the host being stopped does not end the restart', async () => {
+    const first = new FakeExtensionHost(true);
+    const second = new FakeExtensionHost(true);
+    const third = new FakeExtensionHost(true);
+    willFork(first, second, third);
+    const { extensionHostService } = await loadService();
+    await extensionHostService.start(MAX_WAIT_MS);
+    const restarting = extensionHostService.restart(MAX_WAIT_MS);
+    expect(first.shutdownRequestCount).toBe(1);
+
+    first.announceStarted();
+    const joining = extensionHostService.restart(MAX_WAIT_MS);
+    await Promise.all([restarting, joining]);
+
+    expect(first.shutdownRequestCount).toBe(1);
+    expect(mocks.fork).toHaveBeenCalledTimes(2);
+  });
+
   test('a restart after the new host stopped unexpectedly forks again', async () => {
     const first = new FakeExtensionHost(true);
     const second = new FakeExtensionHost(true);
@@ -341,7 +360,7 @@ describe('extensionHostService restart in flight', () => {
     const second = new FakeExtensionHost(true);
     const third = new FakeExtensionHost(true);
     willFork(first, second, third);
-    const { extensionHostService, RESTART_READY_TIMEOUT_MS } = await loadService();
+    const { extensionHostService } = await loadService();
     /** Restart, moving the fake clock along so the graceful shutdown can complete. */
     async function restart() {
       const restarting = extensionHostService.restart(MAX_WAIT_MS);
@@ -352,7 +371,7 @@ describe('extensionHostService restart in flight', () => {
     await restart();
 
     // Just short of the timeout (measured from when the restart began) a restart still joins.
-    await vi.advanceTimersByTimeAsync(RESTART_READY_TIMEOUT_MS - 2 * MAX_WAIT_MS);
+    await vi.advanceTimersByTimeAsync(EXTENSION_HOST_RESTART_READY_TIMEOUT_MS - 2 * MAX_WAIT_MS);
     await restart();
     expect(mocks.fork).toHaveBeenCalledTimes(2);
 

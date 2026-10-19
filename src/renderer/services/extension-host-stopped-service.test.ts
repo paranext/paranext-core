@@ -121,6 +121,27 @@ describe('extension-host-stopped service', () => {
     expect(getExtensionHostNotice()).toBeUndefined();
   });
 
+  // The live events are newer than whatever main answered before they arrived.
+  it('catch-up ignores an answer that arrives after a live event already moved the store', async () => {
+    let answer: (stop: { reason: 'crashed' }) => void = () => {};
+    vi.mocked(sendCommand).mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const teardown = initExtensionHostStoppedService();
+    const catchingUp = catchUpExtensionHostStoppedState();
+    fire(EVENT_NAME_ON_DID_STOP_EXTENSION_HOST, { reason: 'crashed' });
+    fire(EVENT_NAME_ON_DID_START_EXTENSION_HOST);
+    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted', isConfirmed: true });
+
+    answer({ reason: 'crashed' });
+    await catchingUp;
+
+    expect(getExtensionHostNotice()).toEqual({ phase: 'restarted', isConfirmed: true });
+    teardown();
+  });
+
   it('catch-up swallows a failed request', async () => {
     vi.mocked(sendCommand).mockRejectedValue(new Error('main did not answer'));
 

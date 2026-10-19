@@ -6,7 +6,7 @@ import type { Schema } from '@shared/models/openrpc.model';
  * - `'lost-connection'`: the extension host lost its connection to main and ended itself, since it
  *   cannot do anything without that connection.
  * - `'crashed'`: any other exit main did not request — an OS signal, an out-of-memory kill, a native
- *   crash, or a non-zero exit during startup.
+ *   crash, or a non-zero exit during startup — and a restart that could not start a new process.
  *
  * @experimental
  */
@@ -78,6 +78,20 @@ export const EVENT_NAME_ON_DID_STOP_EXTENSION_HOST = 'platform.onDidStopExtensio
  * @experimental
  */
 export const EVENT_NAME_ON_DID_START_EXTENSION_HOST = 'platform.onDidStartExtensionHost';
+
+/**
+ * How long after a restart begins a new extension host may take to announce its start
+ * ({@link EVENT_NAME_ON_DID_START_EXTENSION_HOST}) before it is no longer waited for. A dev build
+ * needs about a minute to transpile and activate extensions; a packaged build is faster.
+ *
+ * Main and the windows share it so they give up at about the same time: main, timing from when the
+ * restart began, stops treating the restart as in flight (a further `platform.restartExtensionHost`
+ * call then starts a new restart instead of joining it), and a window's stopped notice stops
+ * waiting and shows the restart as unconfirmed.
+ *
+ * @experimental
+ */
+export const EXTENSION_HOST_RESTART_READY_TIMEOUT_MS = 90_000;
 
 /**
  * Name of the network event main emits when the app quits. No payload. On an explicit quit (Cmd+Q,

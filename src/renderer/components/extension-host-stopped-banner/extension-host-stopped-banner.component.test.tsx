@@ -17,6 +17,7 @@ import {
   resetConnectionLost,
 } from '@renderer/services/connection-lost-store';
 import { BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE } from '@renderer/components/toolbar-height.util';
+import { EXTENSION_HOST_RESTART_READY_TIMEOUT_MS } from '@shared/models/extension-host-lifecycle.model';
 import {
   ENGLISH_FALLBACKS,
   EXTENSION_HOST_STOPPED_DISMISS_KEY,
@@ -32,7 +33,6 @@ import {
   ExtensionHostStoppedBanner,
   LOCALIZED_STRING_KEYS,
   PRODUCT_NAME_KEY,
-  RESTART_READY_FALLBACK_MS,
 } from './extension-host-stopped-banner.component';
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({ useLocalizedStrings: vi.fn() }));
@@ -303,7 +303,7 @@ describe('ExtensionHostStoppedBanner', () => {
     expect(getExtensionHostNotice()).toEqual({ phase: 'restarting', reason: 'crashed' });
 
     await act(async () => {
-      vi.advanceTimersByTime(RESTART_READY_FALLBACK_MS);
+      vi.advanceTimersByTime(EXTENSION_HOST_RESTART_READY_TIMEOUT_MS);
     });
 
     expect(getExtensionHostNotice()).toEqual({ phase: 'restarted', isConfirmed: false });
@@ -339,7 +339,7 @@ describe('ExtensionHostStoppedBanner', () => {
     expect(screen.getByRole('button', RESTART_APP)).toBeEnabled();
 
     await act(async () => {
-      vi.advanceTimersByTime(RESTART_READY_FALLBACK_MS);
+      vi.advanceTimersByTime(EXTENSION_HOST_RESTART_READY_TIMEOUT_MS);
     });
 
     expect(getExtensionHostNotice()).toEqual({ phase: 'stopped', reason: 'lost-connection' });
@@ -569,13 +569,13 @@ describe('ExtensionHostStoppedBanner', () => {
     it('still rescues focus when the browser blurs a button as it becomes disabled', () => {
       render(<ExtensionHostStoppedBanner />);
       stop('crashed');
-      const restartExtensions = screen.getByRole('button', RESTART_SERVICE);
-      act(() => restartExtensions.focus());
+      const restartService = screen.getByRole('button', RESTART_SERVICE);
+      act(() => restartService.focus());
 
       // The browser's side of a disabling: the button is disabled and loses focus with nowhere
       // particular to go, ahead of the phase change that React then renders.
-      restartExtensions.setAttribute('disabled', '');
-      fireEvent.blur(restartExtensions);
+      restartService.setAttribute('disabled', '');
+      fireEvent.blur(restartService);
       act(() => markExtensionHostRestarting());
 
       expect(screen.getByRole('status')).toHaveFocus();

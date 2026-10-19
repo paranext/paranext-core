@@ -99,6 +99,17 @@ describe('exitExtensionHostOnLostConnection', () => {
     expect(exitProcess).toHaveBeenCalledWith(EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE);
   });
 
+  // A real `process.exit` never returns, but whatever ends the process here, a shutdown that has
+  // finished leaves the watchdog nothing to do.
+  it('disarms the watchdog once the graceful shutdown has finished', async () => {
+    const { lostConnection, exitProcess } = setUp();
+
+    lostConnection.emit();
+    await vi.advanceTimersByTimeAsync(LOST_CONNECTION_SHUTDOWN_TIMEOUT_MS);
+
+    expect(exitProcess).toHaveBeenCalledTimes(1);
+  });
+
   // An unreferenced timer would let Node exit with code 0 when a hung shutdown leaves nothing else
   // pending, and main would report a crash instead of a lost connection.
   it('keeps the event loop alive with its watchdog', () => {

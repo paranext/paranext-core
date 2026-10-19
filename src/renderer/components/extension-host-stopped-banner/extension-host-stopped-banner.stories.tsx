@@ -59,7 +59,7 @@ const ARGS = {
   restartServiceLabel: ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTART_SERVICE_KEY],
   restartAppLabel: ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_RESTART_APP_KEY],
   dismissLabel: ENGLISH_FALLBACKS[EXTENSION_HOST_STOPPED_DISMISS_KEY],
-  onRestartExtensions: () => {},
+  onRestartService: () => {},
   onRestartApp: () => {},
   onDismiss: () => {},
 };

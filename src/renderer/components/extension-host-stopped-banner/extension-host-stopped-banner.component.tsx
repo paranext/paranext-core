@@ -21,7 +21,10 @@ import {
 } from '@renderer/services/extension-host-stopped-store';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
-import type { ExtensionHostStopReason } from '@shared/models/extension-host-lifecycle.model';
+import {
+  EXTENSION_HOST_RESTART_READY_TIMEOUT_MS,
+  type ExtensionHostStopReason,
+} from '@shared/models/extension-host-lifecycle.model';
 
 export const EXTENSION_HOST_STOPPED_TITLE_KEY =
   '%extensionHostStopped_title%' satisfies LocalizeKey;
@@ -102,14 +105,6 @@ export const ENGLISH_FALLBACKS: { [K in ExtensionHostStoppedKey]: string } = {
   [PRODUCT_NAME_KEY]: 'Platform.Bible',
 };
 
-/**
- * How long a restart may stay in the restarting phase without `platform.onDidStartExtensionHost`
- * arriving before the banner gives up waiting and shows the unconfirmed restarted state. A dev
- * build needs about a minute to transpile and activate extensions; a packaged build is faster.
- * Exported for the test.
- */
-export const RESTART_READY_FALLBACK_MS = 90_000;
-
 const MESSAGE_KEY_BY_REASON: { [R in ExtensionHostStopReason]: ExtensionHostStoppedKey } = {
   'lost-connection': EXTENSION_HOST_STOPPED_MESSAGE_LOST_CONNECTION_KEY,
   crashed: EXTENSION_HOST_STOPPED_MESSAGE_CRASHED_KEY,
@@ -127,7 +122,7 @@ type Props = {
   restartServiceLabel: string;
   restartAppLabel: string;
   dismissLabel: string;
-  onRestartExtensions: () => void;
+  onRestartService: () => void;
   onRestartApp: () => void;
   onDismiss: () => void;
 };
@@ -159,7 +154,7 @@ export function ExtensionHostStoppedBannerPresentational({
   restartServiceLabel,
   restartAppLabel,
   dismissLabel,
-  onRestartExtensions,
+  onRestartService,
   onRestartApp,
   onDismiss,
 }: Props) {
@@ -174,8 +169,8 @@ export function ExtensionHostStoppedBannerPresentational({
     );
   // While extensions are down, restarting them is the primary action and restarting the app the
   // fallback; once they are back, Restart app is the only action left besides Dismiss.
-  const restartExtensionsButton = isAlarm ? (
-    <Button variant="default" size="sm" disabled={isRestarting} onClick={onRestartExtensions}>
+  const restartServiceButton = isAlarm ? (
+    <Button variant="default" size="sm" disabled={isRestarting} onClick={onRestartService}>
       {restartServiceLabel}
     </Button>
   ) : undefined;
@@ -199,7 +194,7 @@ export function ExtensionHostStoppedBannerPresentational({
         {/* Not a `ButtonGroup`: that renders a merged, segmented control for related toggles, and
             these are separate, alternative actions. */}
         <div className={cn(ALARM_STRIP_ACTIONS_CLASS_NAME, 'tw:flex tw:gap-2')}>
-          {restartExtensionsButton}
+          {restartServiceButton}
           <Button variant="outline" size="sm" onClick={onRestartApp}>
             {restartAppLabel}
           </Button>
@@ -255,10 +250,14 @@ export function ExtensionHostStoppedBanner() {
   // The fallback for a start announcement that never comes: armed on entering `restarting`,
   // disarmed on leaving it (the normal exit is `extension-host-stopped-service.ts` hearing
   // `platform.onDidStartExtensionHost`), so a late timer cannot move a later state. It records the
-  // restart as unconfirmed, so the banner does not claim a restart it never saw.
+  // restart as unconfirmed, so the banner does not claim a restart it never saw. The budget is the
+  // one main uses to stop treating the restart as in flight.
   useEffect(() => {
     if (phase !== 'restarting') return undefined;
-    const timer = setTimeout(() => markExtensionHostRestarted(false), RESTART_READY_FALLBACK_MS);
+    const timer = setTimeout(
+      () => markExtensionHostRestarted(false),
+      EXTENSION_HOST_RESTART_READY_TIMEOUT_MS,
+    );
     return () => clearTimeout(timer);
   }, [phase]);
 
@@ -302,7 +301,7 @@ export function ExtensionHostStoppedBanner() {
     hasFocusWithinRef.current = false;
   }, []);
 
-  const handleRestartExtensions = useCallback(async () => {
+  const handleRestartService = useCallback(async () => {
     markExtensionHostRestarting();
     try {
       // Settles at fork time, not when the new process is up; the restarting phase outlives it.
@@ -361,7 +360,7 @@ export function ExtensionHostStoppedBanner() {
         restartServiceLabel={text(EXTENSION_HOST_STOPPED_RESTART_SERVICE_KEY)}
         restartAppLabel={text(EXTENSION_HOST_STOPPED_RESTART_APP_KEY)}
         dismissLabel={text(EXTENSION_HOST_STOPPED_DISMISS_KEY)}
-        onRestartExtensions={handleRestartExtensions}
+        onRestartService={handleRestartService}
         onRestartApp={handleRestartApp}
         onDismiss={handleDismiss}
       />
