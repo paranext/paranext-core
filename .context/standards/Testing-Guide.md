@@ -601,9 +601,14 @@ internal abstract class PapiTestBase
 [ExcludeFromCodeCoverage]
 public class FixtureSetup
 {
+    private const string TEST_FOLDER_PREFIX = "Platform.Bible.Tests";
+
+    // Declared before s_testFolder, which reads it: static initializers run in declaration order.
+    public static string RunId { get; } = Guid.NewGuid().ToString("N");
+
     private static readonly string s_testFolder = Path.Combine(
         Path.GetTempPath(),
-        "Platform.Bible.Tests"
+        $"{TEST_FOLDER_PREFIX}-{RunId}"
     );
 
     public static string TestFolderPath => s_testFolder;
@@ -611,8 +616,12 @@ public class FixtureSetup
     [OneTimeSetUp]
     public void RunBeforeAnyTests()
     {
-        if (!Directory.Exists(s_testFolder))
-            Directory.CreateDirectory(s_testFolder);
+        // Best effort: deletes Platform.Bible.Tests and Platform.Bible.Tests-* folders that were
+        // neither created nor modified in the last 24 hours, left by runs that never tore down.
+        DeleteStaleTestFolders(Path.GetTempPath(), DateTime.UtcNow.AddHours(-24));
+
+        Directory.CreateDirectory(s_testFolder);
+        // usfm.sty is copied in with overwrite: true, so setup tolerates an existing folder.
         ParatextGlobals.Initialize(s_testFolder);
     }
 
@@ -622,8 +631,21 @@ public class FixtureSetup
         if (Directory.Exists(s_testFolder))
             Directory.Delete(s_testFolder, true);
     }
+
+    internal static void DeleteStaleTestFolders(string parentDirectory, DateTime cutoffUtc);
 }
 ```
+
+The folder is unique per run, so two runs at once (two sessions, or an IDE run beside a CLI run)
+never delete each other's files in teardown. A test that needs its own temp folder names it
+`Platform.Bible.Tests-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}` (as
+`TestLocalParatextProjectsInTempDir` does), so it is unique per run too and falls under the prefix
+the sweep cleans up if a crashed run leaks it.
+
+No fixture in `c-sharp-tests` is `[Parallelizable]`, so a test may change process-global state
+(`Trace.Listeners`, `Console.Out`/`Console.Error`, a static flag) as long as it restores it, even
+when an assertion fails (`[TearDown]` or `finally`); mark such a fixture `[NonParallelizable]` so it
+stays serial if parallel execution is ever turned on.
 
 ### Test Doubles
 
