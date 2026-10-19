@@ -1,4 +1,9 @@
 using Paranext.DataProvider.Checks;
+using Paratext.Checks;
+using Paratext.Data;
+using Paratext.Data.Checking;
+using PtxUtils;
+using SIL.Scripture;
 
 namespace TestParanextDataProvider.Checks;
 
@@ -37,27 +42,62 @@ internal class CheckForProjectTests
         Assert.That(AreResultsReady(check, 1), Is.True);
     }
 
-    [Test]
-    public void Run_EditAfterTheTextWasReadBeforeTheRunEnds_LeavesResultsNotReady()
+    private static int CountResults(CheckForProject check, int bookNum)
     {
-        var hookCheck = new InitializeHookCheck();
-        var check = new CheckForProject(hookCheck, "TestCheck", "TestProject");
+        var count = 0;
+        check.AccessResults(bookNum, recorder => count = recorder.CheckRunResults.Count);
+        return count;
+    }
+
+    private static CheckForProject CreateCheckThatFindsOneError()
+    {
+        var hookCheck = new InitializeHookCheck
+        {
+            OnRun = recordError =>
+                recordError.RecordError(
+                    new VerseRef(1, 1, 1),
+                    "text",
+                    0,
+                    "message",
+                    CheckType.RepeatedWord,
+                    new Enum<MessageId>("TestMessage")
+                ),
+        };
+        return new CheckForProject(hookCheck, "TestCheck", "TestProject");
+    }
+
+    [Test]
+    public void Run_NoEditSinceTheTextWasRead_KeepsTheResults()
+    {
+        var check = CreateCheckThatFindsOneError();
         var editCount = check.GetEditCount(1);
-        // The edit lands while the check is running on text read before it
-        hookCheck.OnRun = () => check.ClearResultsForBook(1);
 
         check.Run(null!, 1, null!, editCount);
 
+        Assert.That(CountResults(check, 1), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Run_EditAfterTheTextWasReadBeforeTheRunEnds_LeavesNoResultsAndNotReady()
+    {
+        var check = CreateCheckThatFindsOneError();
+        // The check's job reads the book's text, then an edit lands, then the check runs on the
+        // text it read
+        var editCountBeforeTextRead = check.GetEditCount(1);
+        check.ClearResultsForBook(1);
+
+        check.Run(null!, 1, null!, editCountBeforeTextRead);
+
         Assert.That(AreResultsReady(check, 1), Is.False);
+        Assert.That(CountResults(check, 1), Is.EqualTo(0));
     }
 
     [Test]
     public void Run_EditToAnotherBook_DoesNotKeepResultsFromBeingReady()
     {
-        var hookCheck = new InitializeHookCheck();
-        var check = new CheckForProject(hookCheck, "TestCheck", "TestProject");
+        var check = CreateCheckThatFindsOneError();
         var editCount = check.GetEditCount(1);
-        hookCheck.OnRun = () => check.ClearResultsForBook(2);
+        check.ClearResultsForBook(2);
 
         check.Run(null!, 1, null!, editCount);
 
@@ -65,13 +105,14 @@ internal class CheckForProjectTests
     }
 
     [Test]
-    public void ClearResultsForBook_BookTheCheckNeverRan_ChangesTheEditCount()
+    public void Run_EditToABookTheCheckNeverRan_LeavesResultsNotReady()
     {
-        var check = new CheckForProject(new InitializeHookCheck(), "TestCheck", "TestProject");
-        var before = check.GetEditCount(2);
-
+        var check = CreateCheckThatFindsOneError();
+        var editCountBeforeTextRead = check.GetEditCount(2);
         check.ClearResultsForBook(2);
 
-        Assert.That(check.GetEditCount(2), Is.Not.EqualTo(before));
+        check.Run(null!, 2, null!, editCountBeforeTextRead);
+
+        Assert.That(AreResultsReady(check, 2), Is.False);
     }
 }

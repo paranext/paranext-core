@@ -44,11 +44,15 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
     private readonly List<string> _allCheckIds;
     private readonly List<CheckRunnerCheckDetails> _allCheckDetails;
     private readonly ConcurrentDictionary<string, ErrorMessageDenials> _denialsByProjectId = new();
-    internal readonly ConcurrentDictionary<string, CheckJobStatus> _activeCheckJobsByJobId = new();
+    private readonly ConcurrentDictionary<string, CheckJobStatus> _activeCheckJobsByJobId = new();
     private readonly ConcurrentQueue<string> _queuedCheckJobs = new();
-    internal readonly CheckCache _checkCache;
+    private readonly CheckCache _checkCache;
     private readonly Func<string, ChecksDataSource, ScriptureCheckBase> _createCheck;
     private readonly object _runChecksLock = new();
+
+    // Read access for tests that need to reach the runner's checks and jobs
+    internal CheckCache CheckCache => _checkCache;
+    internal IEnumerable<CheckJobStatus> ActiveJobs => _activeCheckJobsByJobId.Values;
 
     #endregion
 

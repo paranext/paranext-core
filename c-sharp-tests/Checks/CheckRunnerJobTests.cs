@@ -102,7 +102,9 @@ internal class CheckRunnerJobTests : PapiTestBase
 
         var results = new List<CheckRunResult>();
         var stopwatch = Stopwatch.StartNew();
-        while (stopwatch.Elapsed < TimeSpan.FromSeconds(30))
+        // Longer than the 30 s waits inside the tests' hooks, so a hook that gives up reports its
+        // own failed assertion instead of this timeout
+        while (stopwatch.Elapsed < TimeSpan.FromSeconds(60))
         {
             var report = runner.RetrieveCheckJobUpdate(jobId, 10_000);
             if (report.NextResults != null)
@@ -117,7 +119,7 @@ internal class CheckRunnerJobTests : PapiTestBase
             }
             Thread.Sleep(20);
         }
-        throw new TimeoutException($"Check job {jobId} did not finish within 30 seconds");
+        throw new TimeoutException($"Check job {jobId} did not finish within 60 seconds");
     }
 
     #endregion
@@ -361,8 +363,8 @@ internal class CheckRunnerJobTests : PapiTestBase
                 ? hookCheck
                 : CheckFactory.CreateCheck(checkId, dataSource);
         var runner = CreateRunner(Create);
-        runner._checkCache.GetCheck(InitializeHookCheckId, _projectId).SettingsChanged = true;
-        return (runner, hookCheck, runner._checkCache.GetCheck(earlierCheckId, _projectId));
+        runner.CheckCache.GetCheck(InitializeHookCheckId, _projectId).SettingsChanged = true;
+        return (runner, hookCheck, runner.CheckCache.GetCheck(earlierCheckId, _projectId));
     }
 
     private static bool AreResultsReady(CheckForProject check, int bookNum)
@@ -423,7 +425,7 @@ internal class CheckRunnerJobTests : PapiTestBase
                 () => !AreResultsReady(repeatedWordCheck, 1),
                 TimeSpan.FromSeconds(30)
             );
-            foreach (var job in runner._activeCheckJobsByJobId.Values)
+            foreach (var job in runner.ActiveJobs)
                 job.StopRequested = true;
         };
 
