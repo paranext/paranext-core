@@ -26,6 +26,7 @@ import {
   initExtensionHostStoppedService,
 } from '@renderer/services/extension-host-stopped-service';
 import {
+  dismissExtensionHostNotice,
   getExtensionHostNotice,
   markExtensionHostRestarting,
   reportExtensionHostStopped,
@@ -139,6 +140,29 @@ describe('extension-host-stopped service', () => {
     await catchingUp;
 
     expect(getExtensionHostNotice()).toEqual({ phase: 'restarted', isConfirmed: true });
+    teardown();
+  });
+
+  // An empty store is not proof that nothing happened: the user may have dismissed a notice the
+  // live events raised while the answer was still on its way.
+  it('catch-up ignores an answer when the stop it reports was already seen and dismissed', async () => {
+    let answer: (stop: { reason: 'crashed' }) => void = () => {};
+    vi.mocked(sendCommand).mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const teardown = initExtensionHostStoppedService();
+    const catchingUp = catchUpExtensionHostStoppedState();
+    fire(EVENT_NAME_ON_DID_STOP_EXTENSION_HOST, { reason: 'crashed' });
+    fire(EVENT_NAME_ON_DID_START_EXTENSION_HOST);
+    dismissExtensionHostNotice();
+    expect(getExtensionHostNotice()).toBeUndefined();
+
+    answer({ reason: 'crashed' });
+    await catchingUp;
+
+    expect(getExtensionHostNotice()).toBeUndefined();
     teardown();
   });
 

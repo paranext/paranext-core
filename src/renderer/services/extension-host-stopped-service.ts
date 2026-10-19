@@ -19,6 +19,13 @@ import {
 // main's lifecycle events.
 
 /**
+ * Whether a live stop or start event has reached this window since it subscribed. The catch-up
+ * answer is older than any such event, and an empty store is not proof that nothing happened: the
+ * user may have dismissed a notice the events raised while the answer was still on its way.
+ */
+let hasHeardLiveEvent = false;
+
+/**
  * Subscribes this window to main's lifecycle events and drives the stores they feed. Call once at
  * app startup. Returns a cleanup function.
  *
@@ -37,10 +44,13 @@ export function initExtensionHostStoppedService(): () => void {
   // No explicit type arguments: the event names are literal types registered in `NetworkEvents`
   // (`papi-shared-types.ts`), so `getNetworkEvent` infers each payload from the name, the same way
   // `overlay.service-host.ts` subscribes to `EVENT_NAME_ON_DID_APP_WINDOW_INPUT`.
+  hasHeardLiveEvent = false;
   const unsubscribeStopped = getNetworkEvent(EVENT_NAME_ON_DID_STOP_EXTENSION_HOST)((event) => {
+    hasHeardLiveEvent = true;
     reportExtensionHostStopped(event);
   });
   const unsubscribeStarted = getNetworkEvent(EVENT_NAME_ON_DID_START_EXTENSION_HOST)(() => {
+    hasHeardLiveEvent = true;
     // A start announcement ends any outstanding stop notice, whichever window asked for the
     // restart; with no notice showing (the first start, a dev-mode restart) it changes nothing.
     markExtensionHostRestarted();
@@ -63,14 +73,15 @@ export function initExtensionHostStoppedService(): () => void {
  * Never rejects: a window that cannot ask is no worse off than before, and the event path still
  * covers any later stop.
  *
- * The answer is applied only while the store still has no notice. Once a live event has set one (a
- * stop, or a start that followed it), that event is newer than the answer, which main may have
- * given before it.
+ * The answer is applied only while no live event has reached this window and the store still has no
+ * notice. A live event (a stop, or a start that followed it) is newer than the answer, which main
+ * may have given before it, even when the user has since dismissed what the event showed.
  */
 export async function catchUpExtensionHostStoppedState(): Promise<void> {
   try {
     const stopped = await sendCommand('platform.getExtensionHostStoppedState');
-    if (stopped && getExtensionHostNotice() === undefined) reportExtensionHostStopped(stopped);
+    if (stopped && !hasHeardLiveEvent && getExtensionHostNotice() === undefined)
+      reportExtensionHostStopped(stopped);
   } catch (error) {
     logger.warn(
       `Could not ask main whether the extension host is stopped: ${getErrorMessage(error)}`,
