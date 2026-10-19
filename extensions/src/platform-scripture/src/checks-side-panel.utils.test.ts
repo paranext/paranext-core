@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { LanguageStrings } from 'platform-bible-utils';
-import { buildChecksInfo, CheckInfo, getCheckTypeSecondaryLabel } from './checks-side-panel.utils';
+import type { CheckResultsInvalidated } from 'platform-scripture';
+import {
+  buildChecksInfo,
+  CheckInfo,
+  getCheckTypeSecondaryLabel,
+  shouldRefreshChecksInfo,
+} from './checks-side-panel.utils';
 
 const STRINGS: LanguageStrings = {
   '%webView_checksSidePanel_checkCouldNotRun%': 'Couldn’t run',
@@ -97,5 +103,31 @@ describe('buildChecksInfo', () => {
       (checkId) => checkId,
     );
     expect(result.map((c) => c.setupStatus)).toEqual(['setupRequired', 'ready']);
+  });
+});
+
+describe('shouldRefreshChecksInfo', () => {
+  const wholeProject: CheckResultsInvalidated = {
+    checkIds: ['Quotation'],
+    projectId: 'P1',
+    scope: 'all',
+  };
+
+  it('refreshes for a whole-project change to this project', () => {
+    expect(shouldRefreshChecksInfo(wholeProject, 'P1')).toBe(true);
+  });
+
+  it('does not refresh for a change to one book', () => {
+    expect(shouldRefreshChecksInfo({ ...wholeProject, scope: 'book', bookId: 'GEN' }, 'P1')).toBe(
+      false,
+    );
+  });
+
+  it('does not refresh for a whole-project change to another project', () => {
+    expect(shouldRefreshChecksInfo({ ...wholeProject, projectId: 'P2' }, 'P1')).toBe(false);
+  });
+
+  it('does not refresh when there is no project', () => {
+    expect(shouldRefreshChecksInfo(wholeProject, undefined)).toBe(false);
   });
 });

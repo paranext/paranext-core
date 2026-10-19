@@ -31,6 +31,7 @@ import {
   CheckScopes,
   defaultCheckRunnerCheckDetails,
   ProjectOption,
+  shouldRefreshChecksInfo,
 } from './checks-side-panel.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
 import {
@@ -431,11 +432,9 @@ global.webViewComponent = function ChecksSidePanelWebView({
     (details: CheckResultsInvalidated) => {
       if (!checkAggregator || !isMountedRef.current) return;
 
-      // A change to the whole project can alter any check's setup status, selected or not (book-scope
-      // changes cannot). This is not debounced or filtered by the selected checks: a later event
-      // would cancel the debounce, and an unselected check's label must refresh too.
-      if (details.scope === 'all' && details.projectId === projectId)
-        setChecksInfoRefreshKey((key) => key + 1);
+      // This is not debounced or filtered by the selected checks: a later event would cancel the
+      // debounce, and an unselected check's label must refresh too.
+      if (shouldRefreshChecksInfo(details, projectId)) setChecksInfoRefreshKey((key) => key + 1);
 
       // Clear any existing timeout
       if (invalidateTimeoutRef.current) {

@@ -358,7 +358,7 @@ class CheckRunnerEngine
               job.totalResultsCount += results.length;
               incrementStepsCompleted();
             } catch (error) {
-              // Logged once per check per job, like the job's own list of check errors
+              // Logged once per check and message in a job, like the job's own list of check errors
               if (addCheckError(job.checkErrors, { checkId, message: getErrorMessage(error) }))
                 logger.warn(
                   `Check ${checkId} could not run on project ${range.projectId}: ${

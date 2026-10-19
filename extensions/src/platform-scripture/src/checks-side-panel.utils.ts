@@ -1,6 +1,7 @@
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import type {
   CheckJobError,
+  CheckResultsInvalidated,
   CheckRunnerCheckDetails,
   CheckSetupState,
   CheckSetupStatus,
@@ -128,6 +129,18 @@ export function getCheckTypeSecondaryLabel(
   if (check.setupStatus === 'setupRequired')
     return localizedStrings['%webView_checksSidePanel_checkRequiresSetup%'];
   return undefined;
+}
+
+/**
+ * Whether an invalidation event means the checks' setup status labels need looking up again for
+ * this project. A change to the whole project can alter any check's setup status, selected or not;
+ * a change to one book cannot.
+ */
+export function shouldRefreshChecksInfo(
+  details: CheckResultsInvalidated,
+  projectId: string | undefined,
+): boolean {
+  return details.scope === 'all' && details.projectId === projectId;
 }
 
 /**

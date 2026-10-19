@@ -150,6 +150,29 @@ describe('extension-host check runner', () => {
     expect(logger.warn).toHaveBeenCalledTimes(1);
   });
 
+  it('logs a check that fails with different messages once per message', async () => {
+    const runner = await checkHostingService.getCheckRunner();
+    const failsPerBook = await register(
+      'fails-per-book',
+      makeCheck('fails-per-book', async (range) => {
+        throw new Error(`boom in ${range.start.book}`);
+      }),
+    );
+    vi.mocked(logger.warn).mockClear();
+
+    const exodusRange = { ...RANGE, start: { ...RANGE.start, book: 'EXO' } };
+    const report = await runToEnd(runner, [failsPerBook], [RANGE, exodusRange, exodusRange]);
+
+    expect(report.checkErrors).toEqual([
+      { checkId: failsPerBook, message: 'boom in GEN' },
+      { checkId: failsPerBook, message: 'boom in EXO' },
+    ]);
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    const warnings = vi.mocked(logger.warn).mock.calls.map(([warning]) => warning);
+    expect(warnings[0]).toContain('boom in GEN');
+    expect(warnings[1]).toContain('boom in EXO');
+  });
+
   it('reports every check as ready because extension-hosted checks have no setup', async () => {
     const runner = await checkHostingService.getCheckRunner();
 

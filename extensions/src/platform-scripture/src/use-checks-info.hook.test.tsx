@@ -118,10 +118,36 @@ describe('useChecksInfo', () => {
     // The first project's lookup, started before the switch, resolves last
     resolveFirstProjectLookup({ status: 'ready' });
     await act(async () => {
-      await Promise.resolve();
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
     });
 
     expect(result.current[0]?.setupStatus).toBe('setupRequired');
+  });
+
+  describe('empties a list that was already populated', () => {
+    const cases: [string, (aggregator: ReturnType<typeof aggregatorWith>) => HookProps][] = [
+      ['the project goes away', (aggregator) => [aggregator, undefined, CHECKS, getName, 0]],
+      [
+        'the available checks become the loading placeholder',
+        (aggregator) => [aggregator, 'P1', [defaultCheckRunnerCheckDetails], getName, 0],
+      ],
+    ];
+
+    it.each(cases)('when %s', async (_name, buildReplacementProps) => {
+      const lookUp = vi.fn<LookUp>(async () => ({ status: 'ready' }));
+      const aggregator = aggregatorWith(lookUp);
+      const initialProps: HookProps = [aggregator, 'P1', CHECKS, getName, 0];
+      const { result, rerender } = renderHook((props: HookProps) => useChecksInfo(...props), {
+        initialProps,
+      });
+      await waitFor(() => expect(result.current).toHaveLength(2));
+
+      rerender(buildReplacementProps(aggregator));
+
+      await waitFor(() => expect(result.current).toEqual([]));
+    });
   });
 
   describe('returns an empty list and looks nothing up', () => {
