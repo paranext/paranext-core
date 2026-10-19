@@ -353,16 +353,15 @@ export function Setting({
           setErrorMessage(localizedStrings['%settings_errorMessages_notWritableYet%']);
           return;
         }
-        if (SYNC_EDIT_BLOCKED_REGEX.test(getErrorMessage(error))) {
+        const errorText = getErrorMessage(error);
+        if (SYNC_EDIT_BLOCKED_REGEX.test(errorText)) {
           // Logged for the same reason as the generic failure below: the notice only reaches a
           // mounted component.
-          logger.warn(
-            `Setting ${settingKey} was rejected by the sync write-gate: ${getErrorMessage(error)}`,
-          );
+          logger.warn(`Setting ${settingKey} was rejected by the sync write-gate: ${errorText}`);
           setErrorMessage(localizedStrings['%settings_errorMessages_syncEditBlocked%']);
           return;
         }
-        const message = `Error changing setting ${settingKey}: ${getErrorMessage(error)}`;
+        const message = `Error changing setting ${settingKey}: ${errorText}`;
         // The error message below only reaches a mounted component, so a failure landing after the
         // settings tab is closed — a rejected write is at least a debounce plus a round trip behind
         // the edit that caused it — would otherwise leave no trace at all.
