@@ -44,9 +44,9 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
     private readonly List<string> _allCheckIds;
     private readonly List<CheckRunnerCheckDetails> _allCheckDetails;
     private readonly ConcurrentDictionary<string, ErrorMessageDenials> _denialsByProjectId = new();
-    private readonly ConcurrentDictionary<string, CheckJobStatus> _activeCheckJobsByJobId = new();
+    internal readonly ConcurrentDictionary<string, CheckJobStatus> _activeCheckJobsByJobId = new();
     private readonly ConcurrentQueue<string> _queuedCheckJobs = new();
-    private readonly CheckCache _checkCache;
+    internal readonly CheckCache _checkCache;
     private readonly Func<string, ChecksDataSource, ScriptureCheckBase> _createCheck;
     private readonly object _runChecksLock = new();
 
@@ -140,7 +140,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         return _allCheckDetails;
     }
 
-    private string BeginCheckJob(CheckJobScope jobScope)
+    internal string BeginCheckJob(CheckJobScope jobScope)
     {
         var job = new CheckJobStatus(jobScope);
         _activeCheckJobsByJobId[job.JobId] = job;
@@ -179,7 +179,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             Console.WriteLine($"Failed to remove check job {jobId} from active jobs");
     }
 
-    private CheckJobStatusReport RetrieveCheckJobUpdate(string jobId, int maxResultsToInclude)
+    internal CheckJobStatusReport RetrieveCheckJobUpdate(string jobId, int maxResultsToInclude)
     {
         var job =
             (_activeCheckJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
@@ -187,7 +187,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         return job.GenerateStatusReport(maxResultsToInclude);
     }
 
-    private CheckSetupState LookUpCheckSetupStatus(string checkId, string projectId)
+    internal CheckSetupState LookUpCheckSetupStatus(string checkId, string projectId)
     {
         ArgumentException.ThrowIfNullOrEmpty(checkId);
         ArgumentException.ThrowIfNullOrEmpty(projectId);
@@ -198,7 +198,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
     }
 
     // A check that does not apply to the project counts as set up: the project has made its choice.
-    private bool IsCheckSetupForProject(string checkId, string projectId) =>
+    internal bool IsCheckSetupForProject(string checkId, string projectId) =>
         LookUpCheckSetupStatus(checkId, projectId).Status != CheckSetupStatus.SetupRequired;
 
     private bool DenyCheckResult(
