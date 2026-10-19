@@ -70,7 +70,7 @@ const STRINGS = {
   // fill the same shared `MarkerMenu` search field.
   '%markerMenu_searchPlaceholder_character%': 'Search to change character style.',
   '%webView_platformScriptureEditor_characterMarkerMenu_removeMarker%': 'Remove character marker',
-  '%webView_platformScriptureEditor_syncEditBlocked_banner%': 'Editing paused',
+  '%webView_platformScriptureEditor_syncEditBlocked_banner_2%': 'Editing paused',
   // `usfmMarkers.bd.description`. The editor web view loads every marker description (see
   // EDITOR_LOCALIZED_STRINGS), so the bar really does have this string available at runtime.
   '%markerMenu_marker_bd_description%': 'Bold',

@@ -105,7 +105,7 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
         // expected there, not a defect. Nothing here changes between the two builds.
         target: '[data-testid="toolbar-sync-area"]',
         title: strings['%toolbar_sync%'] ?? '',
-        description: strings['%onboardingTour_step_sendReceive_description%'] ?? '',
+        description: strings['%onboardingTour_step_sendReceive_description_2%'] ?? '',
         side: 'bottom',
       },
       {

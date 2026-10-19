@@ -64,13 +64,13 @@ describe('notifyEditMenuActionBlocked', () => {
 describe('notifySyncEditBlocked', () => {
   it('sends the resolved sync-blocked message as a warning', async () => {
     const localizedStrings: LanguageStrings = {
-      [SYNC_EDIT_BLOCKED_KEY]: 'Editing is paused for Send/Receive.',
+      [SYNC_EDIT_BLOCKED_KEY]: 'Editing is paused for sync.',
     };
 
     await notifySyncEditBlocked(localizedStrings);
 
     expect(send).toHaveBeenCalledWith({
-      message: 'Editing is paused for Send/Receive.',
+      message: 'Editing is paused for sync.',
       severity: 'warning',
     });
   });
