@@ -82,6 +82,22 @@ export async function openHomeItem(projectId: string, isPublished: boolean): Pro
 }
 
 /**
+ * Opens a resource the way Home does — in Simple mode, in its reference tab — from another view
+ * that lists resources, such as Get Resources. Never rejects: a failure has been logged, and the
+ * user told, by the time this resolves.
+ *
+ * @param where Which view the resource was opened from, for the log
+ * @param projectId The resource's local project id
+ */
+export async function openResourceFrom(where: string, projectId: string): Promise<void> {
+  try {
+    await openResource(projectId);
+  } catch (e) {
+    await reportCouldNotOpen(where, projectId, e);
+  }
+}
+
+/**
  * Logs that an item a user asked to open did not open, and tells them so.
  *
  * @param where Which view the item was opened from, for the log

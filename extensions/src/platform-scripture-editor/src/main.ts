@@ -985,9 +985,8 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
  * type. A Map entry present (even with value `undefined`) means a reload is in progress and the
  * pending value should be used. Absence means no pending value.
  *
- * Used to pass a new projectId through reloadWebView. It predates passing extra data in the reload
- * options themselves, which `reloadWebView` forwards to the provider (see
- * `ResourceTextPanelOptions`); prefer options for new data.
+ * Used to pass a new projectId through reloadWebView. For new data, prefer the reload options
+ * (`ResourceTextPanelOptions`), which `reloadWebView` forwards to the provider.
  */
 const currentResourceTextPanelProjectIds = new Map<string, string | undefined>();
 
@@ -1005,9 +1004,9 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
 
 /**
  * Creates a resource panel web view provider that injects the given resourceType into web view
- * state so the shared component can filter resources appropriately.
+ * state so the shared component can filter resources appropriately. Exported for its tests.
  */
-function createResourceTextPanelProvider(
+export function createResourceTextPanelProvider(
   webViewType: string,
   title: string,
   resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
@@ -1380,6 +1379,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     showResourceInReferencePanel,
     {
       method: {
+        'x-experimental': true,
         summary:
           "Show a resource in the Bible texts or Commentaries tab, adding it to the user's personal list unless the team's list has it",
         params: [

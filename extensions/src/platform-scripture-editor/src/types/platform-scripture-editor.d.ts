@@ -84,7 +84,11 @@ declare module 'platform-scripture-editor' {
    */
   export type AnnotationAction = 'clicked' | TypedMarkRemovalCause;
 
-  /** How `platformScriptureEditor.showResourceInReferencePanel` ended. */
+  /**
+   * How `platformScriptureEditor.showResourceInReferencePanel` ended.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
   export type ShowResourceInReferencePanelResult =
     /** The resource is shown, in the tab with this web view ID */
     | { status: 'shown'; webViewId: string }
@@ -963,6 +967,7 @@ declare module 'papi-shared-types' {
      *
      * @param resourceProjectId The local project id of the resource to show
      * @returns How the show ended. Never rejects, so a rejection means the command was not reached.
+     * @experimental This command is unstable and may change or disappear without notice
      */
     'platformScriptureEditor.showResourceInReferencePanel': (
       resourceProjectId: string,

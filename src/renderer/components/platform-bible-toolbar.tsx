@@ -864,8 +864,8 @@ export function PlatformBibleToolbar() {
 
   // Home lists local projects alongside the send/receive server's projects that are not on this
   // machine yet — the "rest of my projects" this picker cannot reach, since its own list is built
-  // from local metadata only. Projects only: this footer is the way out of a project picker, so the
-  // read-only resources Home otherwise lists are never an answer to it.
+  // from local metadata only. Home starts on Paratext Projects: this footer is the way out of a
+  // project picker, so that is what it asks for, though the user can widen the filter from there.
   const showMoreProjects = useCallback(() => {
     openHome(true);
   }, [openHome]);

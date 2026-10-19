@@ -14,6 +14,7 @@ import {
   ResourceAction,
 } from './get-resources.component';
 import { getInternetBlockedNotification } from './internet-block-notification.utils';
+import { openResourceFrom } from './open-home-item';
 
 type InstallInfo = {
   dblEntryUid: string;
@@ -101,9 +102,10 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const [selectedLanguages, setSelectedLanguages] = useWebViewState<string[]>('languageFilter', []);
 
+  // The same as Home's Open: in Simple mode the middle column keeps the project, and the resource
+  // goes to its reference tab instead.
   const openResource = useCallback(
-    (projectId: string) =>
-      papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId),
+    (projectId: string) => openResourceFrom('Get Resources', projectId),
     [],
   );
 

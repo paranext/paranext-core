@@ -24,7 +24,7 @@ vi.mock('@papi/frontend', () => ({
 // vi.mock must appear before the imports it mocks so Vitest can hoist it; eslint's import/first
 // rule cannot model this Vitest-specific hoisting requirement.
 // eslint-disable-next-line import/first
-import { openHomeItem } from './open-home-item';
+import { openHomeItem, openResourceFrom } from './open-home-item';
 
 const commandsSent = () => mocks.sendCommand.mock.calls.map((call: unknown[]) => call[0]);
 
@@ -159,5 +159,49 @@ describe('openHomeItem', () => {
     await openHomeItem('resource-1', true);
 
     expect(mocks.recordProjectOpened).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * Get Resources lists resources too, and its Open must not replace the project in Simple mode's
+ * middle column any more than Home's does (PT-4813).
+ */
+describe('openResourceFrom', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.sendCommand.mockImplementation(async () => ({
+      status: 'shown',
+      webViewId: 'bible-texts-tab',
+    }));
+  });
+
+  it('shows a resource in its reference tab in Simple mode, as Home does', async () => {
+    mocks.getSetting.mockImplementation(async () => 'simple');
+
+    await openResourceFrom('Get Resources', 'resource-1');
+
+    expect(commandsSent()).toEqual(['platformScriptureEditor.showResourceInReferencePanel']);
+  });
+
+  it('opens a resource in its viewer in Power mode', async () => {
+    mocks.getSetting.mockImplementation(async () => 'power');
+    mocks.sendCommand.mockImplementation(async () => undefined);
+
+    await openResourceFrom('Get Resources', 'resource-1');
+
+    expect(commandsSent()).toEqual(['platformScriptureEditor.openResourceViewer']);
+  });
+
+  it('warns the user, and never rejects, when the resource cannot be opened', async () => {
+    mocks.getSetting.mockImplementation(async () => 'power');
+    mocks.sendCommand.mockImplementation(async () => {
+      throw new Error('viewer unavailable');
+    });
+
+    await expect(openResourceFrom('Get Resources', 'resource-1')).resolves.toBeUndefined();
+
+    expect(mocks.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ severity: 'warning', message: '%resources_couldNotOpen%' }),
+    );
   });
 });

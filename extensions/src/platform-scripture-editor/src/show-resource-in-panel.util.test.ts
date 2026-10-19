@@ -90,6 +90,8 @@ function providerSelection(options: ResourceTextPanelOptions): unknown {
 describe('showResourceInReferencePanel', () => {
   let savedUserList: ResourceReferenceList | undefined;
   let teamList: ResourceReferenceList | undefined;
+  /** Whether the project the panels show is a published resource rather than a project. */
+  let isPanelProjectPublished: boolean;
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -103,9 +105,13 @@ describe('showResourceInReferencePanel', () => {
       return true;
     });
     teamList = undefined;
+    isPanelProjectPublished = false;
     mocks.getPdp.mockImplementation(async (projectInterface: string) =>
       projectInterface === 'platform.base'
-        ? { getSetting: async () => teamList }
+        ? {
+            getSetting: async (key: string) =>
+              key === 'platform.isPublished' ? isPanelProjectPublished : teamList,
+          }
         : {
             getUserReferencedProjectsAndResources: mocks.getUserList,
             setUserReferencedProjectsAndResources: mocks.setUserList,
@@ -278,6 +284,19 @@ describe('showResourceInReferencePanel', () => {
     finishRefresh();
 
     await expect(show).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
+  });
+
+  it('shows but does not save a resource when the tab is showing another resource', async () => {
+    // Simple mode's reference tabs follow the middle column, which may show a resource opened in
+    // its viewer: a list saved there would belong to that resource, not to any project.
+    isPanelProjectPublished = true;
+
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
+      SHOWN_IN_BIBLE_TEXTS,
+    );
+
+    expect(mocks.setUserList).not.toHaveBeenCalled();
+    expect(selectionSeenByProvider).toBe('dbl:uid-byz');
   });
 
   it("selects the team's own copy, without saving another, when the team already has it", async () => {

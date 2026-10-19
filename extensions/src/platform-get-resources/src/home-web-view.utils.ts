@@ -31,9 +31,8 @@ export function buildHomeWebViewState(
   savedWebView: SavedWebViewDefinition,
   options: HomeWebViewOptions,
 ): WebViewDefinition['state'] {
-  // Drops the dead key (see above); `_` is never read.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { shouldShowProjectsOnly: _, ...savedState } = savedWebView.state ?? {};
+  const savedState = { ...savedWebView.state };
+  delete savedState.shouldShowProjectsOnly;
   return options.initialProjectResourceFilter
     ? { ...savedState, projectResourceFilter: options.initialProjectResourceFilter }
     : savedState;

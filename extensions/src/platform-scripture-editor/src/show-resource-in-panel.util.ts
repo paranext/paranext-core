@@ -166,6 +166,24 @@ async function getTeamReferences(projectId: string): Promise<ResourceReference[]
 }
 
 /**
+ * Whether a panel's project is a project the user's list can belong to. In Simple mode the
+ * reference panels follow whatever the middle column opens, which can be a resource opened in its
+ * viewer; a list saved there would belong to that resource, not to any project the user works in.
+ *
+ * @param projectId The panel's project id
+ * @returns `true` only when the project is known not to be a published resource
+ */
+async function isTranslationProject(projectId: string): Promise<boolean> {
+  try {
+    const projectSettings = await papi.projectDataProviders.get('platform.base', projectId);
+    return (await projectSettings.getSetting('platform.isPublished')) === false;
+  } catch (e) {
+    logger.warn(`Could not tell whether ${projectId} is a resource: ${getErrorMessage(e)}`);
+    return false;
+  }
+}
+
+/**
  * The panel a resource of this kind is shown in. Each panel lists only rows of its own type, so a
  * resource of any other type would be selected in a panel that filters it out.
  *
@@ -299,7 +317,10 @@ async function showResourceNow(
   // Already on the team's list, the resource is available to this user too, and is selected under
   // the team's own reference — which may spell its DBL entry UID in other casing than the catalog,
   // or name the resource by its project rather than its DBL entry.
-  const teamReferences = await getTeamReferences(panel.projectId);
+  const [teamReferences, isPanelOnTranslationProject] = await Promise.all([
+    getTeamReferences(panel.projectId),
+    isTranslationProject(panel.projectId),
+  ]);
   const teamReference = teamReferences?.find(
     (item) =>
       isSameResource(item, reference) ||
@@ -313,9 +334,10 @@ async function showResourceNow(
     throw showFailedError(`Gave up showing resource ${resourceProjectId}: out of time`);
 
   // Not saved when the team's list is unknown, as that could save a copy of the team's own
-  // reference, nor when the reference's kind is uncertain (see `isReferenceKindKnown`). The panel
-  // still lists the resource among the downloaded ones, so it is shown either way.
-  if (teamReferences && !teamReference && isReferenceKindKnown) {
+  // reference, nor when the reference's kind is uncertain (see `isReferenceKindKnown`), nor when the
+  // panel is showing a resource rather than a project (see `isTranslationProject`). The panel still
+  // lists the resource among the downloaded ones, so it is shown either way.
+  if (teamReferences && !teamReference && isReferenceKindKnown && isPanelOnTranslationProject) {
     try {
       const textConnections = await papi.projectDataProviders.get(
         'platformScripture.textConnectionSettings',
@@ -332,12 +354,11 @@ async function showResourceNow(
       );
     }
   } else if (!teamReference) {
+    let reason = "the team's list could not be read";
+    if (!isPanelOnTranslationProject) reason = 'the tab is showing a resource, not a project';
+    else if (teamReferences) reason = 'its catalog entry could not be confirmed';
     logger.info(
-      `Not adding resource ${resourceProjectId} to the personal list of project ${panel.projectId}: ${
-        teamReferences
-          ? 'its catalog entry could not be confirmed'
-          : "the team's list could not be read"
-      }`,
+      `Not adding resource ${resourceProjectId} to the personal list of ${panel.projectId}: ${reason}`,
     );
   }
 
