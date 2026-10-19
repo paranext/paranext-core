@@ -62,6 +62,7 @@ export function initExtensionHostStoppedService(): () => void {
     unsubscribeStopped();
     unsubscribeStarted();
     unsubscribeShutDown();
+    hasHeardLiveEvent = false;
   };
 }
 
