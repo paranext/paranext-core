@@ -411,7 +411,9 @@ When a string needs a different value, add a new key; the old key and its values
 1. **Add the NEW key** with the new value in every language the old key has a value in.
 2. **Put `fallbackKey` on the NEW key**, pointing at the OLD key.
 3. **Switch every consumer** to the new key.
-4. **Add `deprecationInfo` to the OLD key's metadata**, recording that it was superseded and naming the new key. The old key and all its values stay.
+4. **Verify the old key has no remaining consumer** in implementation code: the only hits for it should be the strings file and the metadata.
+5. **Re-point any `fallbackKey` that targets the old key** (an older key that has no value of its own and resolves through it) at the new key.
+6. **Add `deprecationInfo` to the OLD key's metadata**, recording that it was superseded and naming the new key. The old key and all its values stay.
 
 ```json
 {
@@ -435,11 +437,13 @@ When a string needs a different value, add a new key; the old key and its values
 }
 ```
 
+The example shows English only for brevity; every language the old key has a value in gets the new key too.
+
 **What this achieves:**
 - A language that has not translated the new key yet shows its old translation (in the user's first interface language that has strings — see [Fallback Chain](#fallback-chain-how-missing-translations-are-handled)).
 - Anyone still requesting the old key — a third-party extension, a translator working from an older export — keeps getting the old text, unchanged.
 
-**Why the `fallbackKey` sits on the new key:** the lookup returns a key's own value before it reads that key's `fallbackKey`, so a `fallbackKey` placed on a key that has its own value never fires. A `fallbackKey` on the OLD key pointing at the new one is therefore not the mechanism for replacing a string — it changes nothing the user sees; `deprecationInfo` is where "superseded by" is recorded, and it only logs a warning when the old key is requested. This forward shape — a newer key falling back to an older one — is also the house pattern for `fallbackKey` across the repo, most often a Paratext 10 key falling back to its Paratext 9 counterpart.
+**Why the `fallbackKey` sits on the new key:** the lookup reads a key's `fallbackKey` only in a language where the key itself has no value. The old key has a value in every language the new key has, so a `fallbackKey` on the OLD key never fires; the one on the NEW key is what carries the fallback. `deprecationInfo` is where "superseded by" is recorded, and it only logs a warning when the old key is requested. The same shape — a key borrowing an existing key's translations — is the house pattern for `fallbackKey` across the repo, most often a Paratext 10 key falling back to its Paratext 9 counterpart.
 
 ### Renaming Terminology Users See
 

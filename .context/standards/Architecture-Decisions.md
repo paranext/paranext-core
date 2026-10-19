@@ -7976,12 +7976,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   consumer switches to the new key, and the old key's metadata gets `deprecationInfo` recording that
   it was superseded and naming the new key. The old key and all its values stay. This is the one
   replacement recipe in the Localization Guide ("If a String Needs Replacement", with "Renaming
-  Terminology Users See" as its worked example), and the same forward shape the repo's `fallbackKey`
-  entries already follow, most often a Paratext 10 key falling back to a Paratext 9 one.
+  Terminology Users See" as its worked example). It is the house pattern for `fallbackKey` — a key
+  borrowing an existing key's translations, most often a Paratext 10 key falling back to its
+  Paratext 9 counterpart.
 - **Alternatives:** **(a) Edit the values in place** — rejected: it breaks value immutability, and
   the change is invisible to translators and to anyone holding the old value. **(b) A `fallbackKey`
-  on the OLD key pointing at the new one** — rejected: it is inert while the old key has a value of
-  its own, because a key's own value wins before its `fallbackKey` is read.
+  on the OLD key pointing at the new one** — rejected: the lookup reads a key's `fallbackKey` only in
+  a language where the key itself has no value, and the old key has a value in every language the
+  new key has, so that `fallbackKey` never fires.
 - **Consequences:** A new value dropped from a language silently shows the old wording through the
   fallback rather than failing visibly, so shipped-file tests pin the new keys' values. The forward
   fallback reaches only the user's first interface language that has strings: for a second interface

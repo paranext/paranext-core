@@ -17,7 +17,7 @@ locale file at all, so their presence is not a signal that a new key belongs in 
 - **`km.json`** — book-name ids (`%LocalizedId.*%`) only, sharing no keys with `en.json`. A new UI
   string never belongs here.
 - **`metadata.json`** — not a locale file. It carries per-key metadata: `fallbackKey` (the Paratext
-  9 string to fall back to) and `deprecationInfo` (when a key was retired and what replaced it). A
+  9 string to fall back to) and `deprecationInfo` (when a key was superseded and what replaced it). A
   new key needs an entry here only if it has a Paratext 9 fallback or it replaces a key you are
   deprecating.
 

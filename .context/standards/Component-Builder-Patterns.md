@@ -520,7 +520,9 @@ Common reusable keys (verify in `assets/localization/en.json` before using — t
 1. Add the NEW key with the new value in every language the old key has a value in
 2. Put `fallbackKey` on the NEW key, pointing at the OLD key
 3. Switch every consumer to the new key
-4. Add `deprecationInfo` to the OLD key's metadata, recording that it was superseded and naming the new key
+4. Verify the old key has no remaining consumer in implementation code (only the strings file and the metadata mention it)
+5. Re-point any `fallbackKey` that targets the old key at the new key
+6. Add `deprecationInfo` to the OLD key's metadata, recording that it was superseded and naming the new key
 
 ```json
 {
@@ -536,7 +538,9 @@ Common reusable keys (verify in `assets/localization/en.json` before using — t
 }
 ```
 
-The `fallbackKey` belongs on the new key because a key's own value is returned before its `fallbackKey` is read. See [If a String Needs Replacement](./Localization-Guide.md#if-a-string-needs-replacement) in the Localization Guide for the full recipe and why it works.
+The example shows English only for brevity; every language the old key has a value in gets the new key too.
+
+The `fallbackKey` belongs on the new key because the lookup reads a key's `fallbackKey` only in a language where the key itself has no value; the old key has a value in every language the new key has, so a `fallbackKey` on the OLD key never fires. See [If a String Needs Replacement](./Localization-Guide.md#if-a-string-needs-replacement) in the Localization Guide for the full recipe and why it works.
 
 ---
 
@@ -866,4 +870,4 @@ After completing UI work on a feature PR, apply the `storybook-review` GitHub la
 | 1.7.5 | 2026-09-23 | "Content Zoom Opt-In": mark the project text, not a content root — `ContentZoomRoot as="span"`, `ContentZoomTextProvider` / `useContentZoomTextProps` for library text, one id across many text elements, per-view inline zoom inside the marker. |
 | 1.7.6 | 2026-09-23 | List the card, list and table reference implementations of text-level zoom markers (Find, the inventories, Checks, the Markers Checklist, the Lexical Tools dictionary) and note that these types are declared zoomable in core. |
 | 1.7.7 | 2026-09-24 | "Content Zoom Opt-In": name areas the user cannot tell apart with `ContentZoomRoot`'s `label`, and tie unscaled rows, columns and cards to one area with `data-platform-content-zoom-scope` (both experimental); the Text Collection grid is the reference, one `resource-<id>` area per resource, with its right-click and "⋮" zoom menus running the platform's zoom commands. |
-| 1.7.8 | 2026-10-19 | "Existing Strings Are Immutable": the one replacement recipe — a new key with `fallbackKey` pointing at the old key, every consumer switched, `deprecationInfo` on the old key, old key and values untouched — matching the Localization Guide. |
+| 1.7.8 | 2026-10-19 | "Existing Strings Are Immutable": the one replacement recipe — a new key with `fallbackKey` pointing at the old key, every consumer switched and the old key verified unused, inbound `fallbackKey`s re-pointed, `deprecationInfo` on the old key, old key and values untouched — matching the Localization Guide. |
