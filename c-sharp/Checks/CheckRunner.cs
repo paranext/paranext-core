@@ -389,27 +389,16 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                 if (checkIdsToRun.Count == 0)
                     continue;
 
-                var failedCheckIds = new HashSet<string>();
-                foreach (
-                    var (failedCheckId, exception) in _checkCache.RunChecksForProject(
-                        range,
-                        checkIdsToRun,
-                        denials
-                    )
-                )
-                {
-                    RecordCheckFailure(job, failedCheckId, range.ProjectId, exception);
-                    failedCheckIds.Add(failedCheckId);
-                }
+                var failedCheckIds = RunChecksAndRecordFailures(job, range, checkIdsToRun, denials);
 
                 // An edit to the book clears its results in the background (the TextChanged
                 // handler in CheckCache). That can land after a check ran and before its results
                 // are read here: one edit clears the book for every check of the project. Once
                 // that clear has reached a check, a check that ran on text read before the edit is
-                // not marked ready either. These checks run once more, together, so the job still delivers
-                // their results. If another edit leaves them not ready again, they are left out of
-                // this job with a log line and no error: each edit tells consumers to run their
-                // checks again.
+                // not marked ready either. These checks run once more, together, so the job still
+                // delivers their results. If another edit leaves them not ready again, they are
+                // left out of this job with a log line and no error: each edit tells consumers to
+                // run their checks again.
                 var clearedCheckIds = new List<string>();
                 foreach (var checkId in checkIdsToRun)
                 {
@@ -431,18 +420,12 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                 if (job.StopRequested)
                     break;
 
-                var rerunFailedCheckIds = new HashSet<string>();
-                foreach (
-                    var (failedCheckId, exception) in _checkCache.RunChecksForProject(
-                        range,
-                        clearedCheckIds,
-                        denials
-                    )
-                )
-                {
-                    RecordCheckFailure(job, failedCheckId, range.ProjectId, exception);
-                    rerunFailedCheckIds.Add(failedCheckId);
-                }
+                var rerunFailedCheckIds = RunChecksAndRecordFailures(
+                    job,
+                    range,
+                    clearedCheckIds,
+                    denials
+                );
                 foreach (var checkId in clearedCheckIds)
                 {
                     if (
@@ -471,6 +454,32 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             // Avoid problems with floating point precision
             job.PercentComplete = Math.Round(job.PercentComplete, 0);
         }
+    }
+
+    /// <summary>
+    /// Runs the checks on the range, records each failure on the job, and returns the IDs of the
+    /// checks that failed.
+    /// </summary>
+    private HashSet<string> RunChecksAndRecordFailures(
+        CheckJobStatus job,
+        InputRange range,
+        IReadOnlyCollection<string> checkIds,
+        ErrorMessageDenials denials
+    )
+    {
+        var failedCheckIds = new HashSet<string>();
+        foreach (
+            var (failedCheckId, exception) in _checkCache.RunChecksForProject(
+                range,
+                checkIds,
+                denials
+            )
+        )
+        {
+            RecordCheckFailure(job, failedCheckId, range.ProjectId, exception);
+            failedCheckIds.Add(failedCheckId);
+        }
+        return failedCheckIds;
     }
 
     /// <summary>

@@ -479,6 +479,65 @@ internal class CheckRunnerJobTests : PapiTestBase
     }
 
     [Test]
+    public void ProcessCheckJob_CheckThatFailsOnTheRerunAfterATextChange_IsRecordedAsAnError()
+    {
+        const string failingCheckId = "TestHookCheckThatFailsOnRerun";
+        const string rerunFailureMessage = "The test check failed on the re-run on purpose.";
+        var editingHook = new HookCheck();
+        var failingHook = new HookCheck();
+        ScriptureCheckBase Create(string checkId, ChecksDataSource dataSource) =>
+            checkId switch
+            {
+                HookCheckId => editingHook,
+                failingCheckId => failingHook,
+                _ => CheckFactory.CreateCheck(checkId, dataSource),
+            };
+        var runner = CreateRunner(Create);
+        runner.CheckCache.GetCheck(HookCheckId, _projectId).SettingsChanged = true;
+        var editReachedTheChecks = false;
+        // The editing hook is listed first, so the edit lands after the book's text was read and
+        // before the failing check runs. That check's first run succeeds but is not marked ready,
+        // so the job runs it again, and the re-run throws.
+        editingHook.OnInitialize = () =>
+        {
+            var requestsBeforeEdit = Client.SentRequestCount;
+            PutBook(1, "In the beginning God God");
+            editReachedTheChecks = SpinWait.SpinUntil(
+                () => Client.SentRequestCount > requestsBeforeEdit,
+                TimeSpan.FromSeconds(30)
+            );
+        };
+        var failingHookRuns = 0;
+        failingHook.OnRun = _ =>
+        {
+            if (++failingHookRuns > 1)
+                throw new InvalidOperationException(rerunFailureMessage);
+        };
+        var originalOut = Console.Out;
+        var capturedText = new StringWriter();
+        Console.SetOut(TextWriter.Synchronized(capturedText));
+        (CheckJobStatusReport Final, List<CheckRunResult> Results) job;
+        try
+        {
+            job = RunJob(runner, [HookCheckId, failingCheckId], 1);
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+        }
+
+        Assert.That(editReachedTheChecks, Is.True);
+        Assert.That(failingHookRuns, Is.EqualTo(2));
+        Assert.That(job.Final.Status, Is.EqualTo(CheckJobStatus.Completed), job.Final.Error);
+        Assert.That(
+            job.Final.CheckErrors,
+            Is.EqualTo(new[] { new CheckJobError(failingCheckId, rerunFailureMessage) })
+        );
+        // A check whose re-run failed is reported as an error, not also as left out of the job
+        Assert.That(capturedText.ToString(), Does.Not.Contain("was left out of job"));
+    }
+
+    [Test]
     public void ProcessCheckJob_CheckReinitializedDuringJobWithoutTextChange_Completes()
     {
         var (runner, hookCheck, _) = CreateRunnerWithHookCheck(s_repeatedWordCheckId);
