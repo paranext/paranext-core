@@ -24,7 +24,11 @@ namespace TestParanextDataProvider.Projects
         [SetUp]
         public void TestSetup()
         {
-            _folder = new TemporaryFolder(TestContext.CurrentContext.Test.ID);
+            // TemporaryFolder deletes an existing folder of the same name, so the name carries the
+            // run's id, and the swept prefix lets a later run clean up a folder this one leaked.
+            _folder = new TemporaryFolder(
+                $"{FixtureSetup.TEST_FOLDER_PREFIX}-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}"
+            );
         }
 
         [TearDown]

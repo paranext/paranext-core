@@ -24,7 +24,11 @@ namespace TestParanextDataProvider.Projects
         [SetUp]
         public void TestSetup()
         {
-            _projectFolder = new TemporaryFolder(TestContext.CurrentContext.Test.ID);
+            // TemporaryFolder deletes an existing folder of the same name, so the name carries the
+            // run's id, and the swept prefix lets a later run clean up a folder this one leaked.
+            _projectFolder = new TemporaryFolder(
+                $"{FixtureSetup.TEST_FOLDER_PREFIX}-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}"
+            );
             ProjectDetails projectDetails =
                 new(
                     "StreamProj",
@@ -175,7 +179,7 @@ namespace TestParanextDataProvider.Projects
             // to an ancestor would recurse until the path length overflowed
             WriteStream($"{ExtensionPath}/mine.json", "mine");
             using var outside = new TemporaryFolder(
-                $"{TestContext.CurrentContext.Test.ID}-outside"
+                $"{FixtureSetup.TEST_FOLDER_PREFIX}-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}-outside"
             );
             File.WriteAllText(Path.Join(outside.Path, "outside.json"), "not ours");
             CreateLinkOrIgnore(
@@ -202,7 +206,7 @@ namespace TestParanextDataProvider.Projects
             // the symbolic-link test above
             WriteStream($"{ExtensionPath}/mine.json", "mine");
             using var outside = new TemporaryFolder(
-                $"{TestContext.CurrentContext.Test.ID}-outside"
+                $"{FixtureSetup.TEST_FOLDER_PREFIX}-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}-outside"
             );
             File.WriteAllText(Path.Join(outside.Path, "outside.json"), "not ours");
             CreateJunctionOrIgnore(
