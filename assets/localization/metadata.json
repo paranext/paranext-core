@@ -124,7 +124,7 @@
   "%onboardingTour_step_sendReceive_description%": {
     "deprecationInfo": {
       "date": "2026-10-13",
-      "message": "\"Send/Receive\" is now called \"sync\". The new key is %onboardingTour_step_sendReceive_description_2%, which adds that Paratext 9 called sync \"Send/Receive\"."
+      "message": "The new key is %onboardingTour_step_sendReceive_description_2%, which adds that Paratext 9 called sync \"Send/Receive\"."
     }
   },
   "%onboardingTour_step_sendReceive_description_2%": {
