@@ -23,12 +23,15 @@ import {
   CheckJobScope,
   CheckJobStatusReport,
   CheckResultsInvalidated,
-  CheckRunnerCheckDetails,
   CheckRunResult,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { projectNamesFromMetadata } from './project-names.util';
-import { buildChecksInfo, CheckInfo, CheckScopes, ProjectOption } from './checks-side-panel.utils';
+import {
+  CheckScopes,
+  defaultCheckRunnerCheckDetails,
+  ProjectOption,
+} from './checks-side-panel.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
 import {
   ChecksSidePanel,
@@ -39,6 +42,7 @@ import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
+import { useChecksInfo } from './use-checks-info.hook';
 
 /**
  * Web-view types that should count as "open" project tabs for the picker's "Open Tabs" grouping.
@@ -47,12 +51,6 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.
  * side panel itself) would falsely mark a project as open.
  */
 const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>([SCRIPTURE_EDITOR_WEBVIEW_TYPE]);
-
-const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
-  checkDescription: '',
-  checkId: '',
-  checkName: '',
-};
 
 const defaultJobStatusReport: CheckJobStatusReport = {
   jobId: '',
@@ -511,32 +509,12 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [availableChecks],
   );
 
-  const [checksInfo, setChecksInfo] = useState<CheckInfo[]>([]);
-
-  useEffect(() => {
-    if (
-      !checkAggregator ||
-      !projectId ||
-      isPlatformError(availableChecks) ||
-      availableChecks.length === 0 ||
-      availableChecks[0] === defaultCheckRunnerCheckDetails
-    ) {
-      setChecksInfo([]);
-      return;
-    }
-
-    const fetchChecksInfo = async () => {
-      setChecksInfo(
-        await buildChecksInfo(
-          availableChecks,
-          (checkId) => checkAggregator.lookUpCheckSetupStatus(checkId, projectId),
-          getLocalizedCheckDescription,
-        ),
-      );
-    };
-
-    fetchChecksInfo();
-  }, [checkAggregator, projectId, availableChecks, getLocalizedCheckDescription]);
+  const checksInfo = useChecksInfo(
+    checkAggregator,
+    projectId,
+    availableChecks,
+    getLocalizedCheckDescription,
+  );
 
   /**
    * Selects the check result in the editor and focuses the editor.

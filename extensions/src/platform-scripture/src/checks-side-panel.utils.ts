@@ -54,6 +54,16 @@ export const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%settings_errorMessages_viewError%',
 ];
 
+/**
+ * The placeholder `useData` returns for the available checks until the real list arrives. A list
+ * that starts with this exact object has not loaded yet.
+ */
+export const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
+  checkDescription: '',
+  checkId: '',
+  checkName: '',
+};
+
 export type CheckInfo = {
   /** Unique identifier of the check */
   checkId: string;
