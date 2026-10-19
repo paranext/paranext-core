@@ -343,7 +343,7 @@ internal class CheckRunnerJobTests : PapiTestBase
 
     #region Edits during a job
 
-    private const string HookCheckId = "TestHookCheck";
+    private const string HookCheckId = HookCheck.Id;
 
     /// <summary>
     /// Creates a runner whose jobs can run <paramref name="otherCheckId"/> and
@@ -354,7 +354,7 @@ internal class CheckRunnerJobTests : PapiTestBase
     /// </summary>
     private (
         CheckRunner Runner,
-        HookCheck HookCheck,
+        HookCheck Hook,
         CheckForProject OtherCheck
     ) CreateRunnerWithHookCheck(string otherCheckId)
     {

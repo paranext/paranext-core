@@ -27,7 +27,11 @@ internal sealed class HookCheck : ScriptureCheckBase
 
     public override Enum<CheckType> Type => CheckType.RepeatedWord;
     public override CheckDataFormat NeededFormat => CheckDataFormat.TextTokens;
-    public override string CheckMarkSettingsKey => "TestHookCheck";
+
+    /// <summary>The check id a test registers this check under.</summary>
+    public const string Id = "TestHookCheck";
+
+    public override string CheckMarkSettingsKey => Id;
     public override bool SetupComplete => true;
     public override string LocalizedSetupCommand => "";
 

@@ -83,9 +83,11 @@ internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, 
     /// Runs the check on a book and records its results. The results are marked ready only if no
     /// edit to the book was counted since <paramref name="editCountBeforeTextRead"/>; otherwise the
     /// check ran on text that has since been edited, its results are dropped, and the next run has
-    /// to redo it. The count only reflects edits whose background clear has already run. An edit
-    /// whose clear is still pending, including one made while this check runs (its clear waits for
-    /// this check's lock), is handled by that clear afterwards, which drops the results.
+    /// to redo it. The count only reflects edits whose background clear has already reached this
+    /// check. An edit whose clear has not, including one made while this check runs (the clear
+    /// cannot take this check's lock until the run ends), leaves the results marked ready until that
+    /// clear drops them; a job that reads them before then delivers them, and the invalidation the
+    /// clear sends makes consumers run the checks again.
     /// </summary>
     /// <param name="editCountBeforeTextRead">
     /// <see cref="GetEditCount"/> for the book, read before the text the check runs on was read
@@ -105,9 +107,9 @@ internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, 
                 Check.Run(bookNum, dataSource, recorder);
                 recorder.PostProcessResults(denials);
                 // Same lock as ClearResultsForBook, so the comparison and the mark are consistent
-                // with every clear that has run. A clear still waiting for this lock runs after the
-                // mark and drops the results then. Results from text that has since been edited are
-                // dropped, not kept as not ready.
+                // with every clear that has reached this check; a later clear drops the results
+                // after the mark. Results from text that has since been edited are dropped, not
+                // kept as not ready.
                 if (_editCountsByBookNum.GetValueOrDefault(bookNum) == editCountBeforeTextRead)
                     recorder.ResultsReady = true;
                 else

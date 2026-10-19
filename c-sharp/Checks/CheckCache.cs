@@ -130,7 +130,9 @@ internal sealed class CheckCache
             }
         }
 
-        // Read before the text, so an edit whose clear has run by the end of a check is noticed
+        // Read before the text, so an edit whose clear reaches a check before that check ends is
+        // noticed. A clear that arrives late for an edit made before this read drops results that
+        // were computed on the edited text, which costs one more run of that check.
         var editCountsBeforeTextRead = checksToRun
             .Select(item => item.check.GetEditCount(bookNum))
             .ToList();
