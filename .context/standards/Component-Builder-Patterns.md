@@ -1,10 +1,10 @@
 ---
 title: Component Builder Patterns Reference
 description: Reference patterns and examples for building React UI components — file naming, structure, shadcn/ui conventions.
-version: 1.7.7
+version: 1.7.8
 status: active
 created: 2026-03-04
-last_updated: 2026-09-24
+last_updated: 2026-10-19
 toc: true
 ---
 
@@ -515,24 +515,28 @@ Common reusable keys (verify in `assets/localization/en.json` before using — t
 
 ### Existing Strings Are Immutable
 
-**NEVER modify existing key/value pairs.** If a string needs replacement:
+**NEVER modify existing key/value pairs.** If a string needs replacement, add a new key; the old key and its values stay:
 
-1. Create a NEW key with the desired value
-2. Add a fallback mapping in the `metadata` section:
+1. Add the NEW key with the new value in every language the old key has a value in
+2. Put `fallbackKey` on the NEW key, pointing at the OLD key
+3. Switch every consumer to the new key
+4. Add `deprecationInfo` to the OLD key's metadata, recording that it was superseded and naming the new key
 
 ```json
 {
   "metadata": {
-    "%oldKey_toReplace%": {
-      "fallbackKey": "%newKey_withCorrectValue%"
+    "%feature_label_2%": { "fallbackKey": "%feature_label%" },
+    "%feature_label%": {
+      "deprecationInfo": { "date": "2026-10-19", "message": "Superseded by %feature_label_2%." }
     }
   },
   "localizedStrings": {
-    "en": { "%newKey_withCorrectValue%": "Correct text" },
-    "es": { "%newKey_withCorrectValue%": "Texto correcto" }
+    "en": { "%feature_label%": "The old text", "%feature_label_2%": "The new text" }
   }
 }
 ```
+
+The `fallbackKey` belongs on the new key because a key's own value is returned before its `fallbackKey` is read. See [If a String Needs Replacement](./Localization-Guide.md#if-a-string-needs-replacement) in the Localization Guide for the full recipe and why it works.
 
 ---
 
@@ -862,3 +866,4 @@ After completing UI work on a feature PR, apply the `storybook-review` GitHub la
 | 1.7.5 | 2026-09-23 | "Content Zoom Opt-In": mark the project text, not a content root — `ContentZoomRoot as="span"`, `ContentZoomTextProvider` / `useContentZoomTextProps` for library text, one id across many text elements, per-view inline zoom inside the marker. |
 | 1.7.6 | 2026-09-23 | List the card, list and table reference implementations of text-level zoom markers (Find, the inventories, Checks, the Markers Checklist, the Lexical Tools dictionary) and note that these types are declared zoomable in core. |
 | 1.7.7 | 2026-09-24 | "Content Zoom Opt-In": name areas the user cannot tell apart with `ContentZoomRoot`'s `label`, and tie unscaled rows, columns and cards to one area with `data-platform-content-zoom-scope` (both experimental); the Text Collection grid is the reference, one `resource-<id>` area per resource, with its right-click and "⋮" zoom menus running the platform's zoom commands. |
+| 1.7.8 | 2026-10-19 | "Existing Strings Are Immutable": the one replacement recipe — a new key with `fallbackKey` pointing at the old key, every consumer switched, `deprecationInfo` on the old key, old key and values untouched — matching the Localization Guide. |
