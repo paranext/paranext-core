@@ -488,10 +488,10 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
     /// <summary>
     /// Reports a check failure on the job. The job logs a failure once per check and message,
-    /// since a check that fails in one book usually fails the same way in every book. The full exception is logged only when
-    /// its message differs from the last one logged in full for this check and project, since a
-    /// check that cannot run on a project fails the same way in every job until its settings change.
-    /// Otherwise one short line is logged.
+    /// since a check that fails in one book usually fails the same way in every book. The full
+    /// exception is logged only when its message differs from the last one logged in full for this
+    /// check and project, since a check that cannot run on a project fails the same way in every
+    /// job until its settings change. Otherwise one short line is logged.
     /// </summary>
     private void RecordCheckFailure(
         CheckJobStatus job,
