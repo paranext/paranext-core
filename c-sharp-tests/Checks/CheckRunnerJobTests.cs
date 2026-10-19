@@ -477,6 +477,51 @@ internal class CheckRunnerJobTests : PapiTestBase
         Assert.That(results.Where(r => r.CheckId == s_repeatedWordCheckId), Is.Empty);
     }
 
+    [Test]
+    public void ProcessCheckJob_TextChangeAfterTheTextWasReadBeforeALaterCheckRuns_DeliversAndCachesTheNewText()
+    {
+        var (runner, hookCheck, _) = CreateRunnerWithHookCheckAfter(s_repeatedWordCheckId);
+        var editReachedTheChecks = false;
+        // The hook check runs first. The book's text was already read for the whole job, so the
+        // edit lands after that read and before the repeated-word check runs. The edit goes through
+        // the project's real TextChanged handler, which clears every check's results for the book
+        // and then asks consumers to run their checks again. That request is sent after the
+        // clearing loop has covered the repeated-word check, so once it is out, the clear for the
+        // repeated-word check has happened.
+        hookCheck.OnInitialize = () =>
+        {
+            var requestsBeforeEdit = Client.SentRequestCount;
+            PutBook(1, "In the beginning God God");
+            editReachedTheChecks = SpinWait.SpinUntil(
+                () => Client.SentRequestCount > requestsBeforeEdit,
+                TimeSpan.FromSeconds(30)
+            );
+            // Only the first initialization is the one that races with the edit
+            hookCheck.OnInitialize = null;
+        };
+
+        var (final, results) = RunJob(runner, [InitializeHookCheckId, s_repeatedWordCheckId], 1);
+
+        Assert.That(editReachedTheChecks, Is.True);
+        Assert.That(final.Status, Is.EqualTo(CheckJobStatus.Completed), final.Error);
+        var itemTexts = results
+            .Where(r => r.CheckId == s_repeatedWordCheckId)
+            .Select(r => r.ItemText)
+            .ToList();
+        Assert.That(itemTexts, Has.Some.Contains("God"));
+        Assert.That(itemTexts, Has.None.Contains("the"));
+
+        // Results served from the cache by a later job are for the edited text too
+        var (secondFinal, secondResults) = RunJob(runner, [s_repeatedWordCheckId], 1);
+        Assert.That(secondFinal.Status, Is.EqualTo(CheckJobStatus.Completed), secondFinal.Error);
+        var secondItemTexts = secondResults
+            .Where(r => r.CheckId == s_repeatedWordCheckId)
+            .Select(r => r.ItemText)
+            .ToList();
+        Assert.That(secondItemTexts, Has.Some.Contains("God"));
+        Assert.That(secondItemTexts, Has.None.Contains("the"));
+    }
+
     private static IEnumerable<CheckJobStatus> ActiveJobs(CheckRunner runner)
     {
         var jobsField =

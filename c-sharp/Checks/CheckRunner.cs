@@ -399,11 +399,12 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                 }
 
                 // An edit to the book clears its results in the background (the TextChanged
-                // handler in CheckCache), which can land after a check ran and before its results
-                // are read here; one edit clears every check that has already run the book. Those
+                // handler in CheckCache). That can land after a check ran and before its results
+                // are read here: one edit clears every check that has already run the book. A
+                // check that ran on text read before the edit is not marked ready either. These
                 // checks run once more, together, so the job still delivers their results. If
-                // another edit clears them again, they are left out of this job without an error:
-                // each edit tells consumers to run their checks again.
+                // another edit leaves them not ready again, they are left out of this job with a
+                // log line and no error: each edit tells consumers to run their checks again.
                 var clearedCheckIds = new List<string>();
                 foreach (var checkId in checkIdsToRun)
                 {
@@ -418,7 +419,10 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
                 if (clearedCheckIds.Count == 0)
                     continue;
-                // A job abandoned because of the edit must not hold up the one replacing it
+                // Best effort: a job abandoned because of the edit should not hold up the one
+                // replacing it. The Checks panel waits a second before abandoning a job after an
+                // edit, so the re-run usually goes ahead, and its results are cached for the job
+                // that replaces this one.
                 if (job.StopRequested)
                     break;
 
