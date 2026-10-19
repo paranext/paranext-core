@@ -82,7 +82,8 @@ internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, 
     /// <summary>
     /// Runs the check on a book and records its results. The results are marked ready only if no
     /// edit to the book was counted since <paramref name="editCountBeforeTextRead"/>; otherwise the
-    /// check ran on text that has since been edited and the next run has to redo it.
+    /// check ran on text that has since been edited, its results are dropped, and the next run has
+    /// to redo it.
     /// </summary>
     /// <param name="editCountBeforeTextRead">
     /// <see cref="GetEditCount"/> for the book, read before the text the check runs on was read
@@ -102,9 +103,12 @@ internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, 
                 Check.Run(bookNum, dataSource, recorder);
                 recorder.PostProcessResults(denials);
                 // Same lock as ClearResultsForBook, so an edit cannot slip in between the comparison
-                // and the mark
-                recorder.ResultsReady =
-                    _editCountsByBookNum.GetValueOrDefault(bookNum) == editCountBeforeTextRead;
+                // and the mark. Results from text that has since been edited are dropped, not kept
+                // as not ready.
+                if (_editCountsByBookNum.GetValueOrDefault(bookNum) == editCountBeforeTextRead)
+                    recorder.ResultsReady = true;
+                else
+                    recorder.ClearResults();
             }
         );
     }
