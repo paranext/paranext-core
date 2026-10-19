@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Nerdbank.Streams;
 using StreamJsonRpc;
+using StreamJsonRpc.Protocol;
 using TestParanextDataProvider;
 
 namespace Paranext.DataProvider.Services.Tests;
@@ -62,11 +63,17 @@ public class SettingsServiceTests
 
     /// <summary>
     /// Answers each request with the next scripted outcome, repeating the last one: an exception to
-    /// throw or a value to return. Stands in for main's answers, which DummyPapiClient's local
-    /// handlers can't produce.
+    /// throw, a value to return, or one of the sentinels below. Stands in for main's answers, which
+    /// DummyPapiClient's local handlers can't produce.
     /// </summary>
     private sealed class ScriptedPapiClient(params object?[] outcomes) : DummyPapiClient
     {
+        /// <summary>A read main never answers; its own request timeout doesn't end it.</summary>
+        public static readonly object NeverAnswers = new();
+
+        /// <summary>The connection drops while the read is in flight.</summary>
+        public static readonly object DisconnectsMidRead = new();
+
         public int Attempts { get; private set; }
 
         public override Task<T?> SendRequestAsync<T>(
@@ -77,6 +84,13 @@ public class SettingsServiceTests
         {
             var outcome = outcomes[Math.Min(Attempts, outcomes.Length - 1)];
             Attempts++;
+            if (outcome == NeverAnswers)
+                return new TaskCompletionSource<T?>().Task;
+            if (outcome == DisconnectsMidRead)
+            {
+                Dispose();
+                return Task.FromException<T?>(new ConnectionLostException());
+            }
             return outcome is Exception ex
                 ? Task.FromException<T?>(ex)
                 : Task.FromResult((T?)outcome);
@@ -92,6 +106,27 @@ public class SettingsServiceTests
         return Assert.ThrowsAsync<RemoteMethodNotFoundException>(
             () => client.InvokeAsync("missing")
         )!;
+    }
+
+    private sealed class EchoTarget
+    {
+        public int Echo(int value) => value;
+    }
+
+    /// <summary>
+    /// A real one that isn't about a missing handler: StreamJsonRpc reports a call to an existing
+    /// method with the wrong arguments as this same exception type.
+    /// </summary>
+    private static RemoteMethodNotFoundException InvalidParams()
+    {
+        var (clientStream, serverStream) = FullDuplexStream.CreatePair();
+        using var server = JsonRpc.Attach(serverStream, new EchoTarget());
+        using var client = JsonRpc.Attach(clientStream);
+        var ex = Assert.ThrowsAsync<RemoteMethodNotFoundException>(
+            () => client.InvokeAsync(nameof(EchoTarget.Echo), 1, 2)
+        )!;
+        Assert.That(ex.ErrorCode, Is.EqualTo(JsonRpcErrorCode.InvalidParams));
+        return ex;
     }
 
     [Test]
@@ -155,23 +190,48 @@ public class SettingsServiceTests
     {
         using var client = new ScriptedPapiClient(MethodNotFound());
 
-        var answered = await SettingsService.WaitForSettingAsync<int?>(
-            client,
-            "testNum",
-            TimeSpan.FromMilliseconds(100),
-            s_retryDelay
-        );
+        var answered = await SettingsService
+            .WaitForSettingAsync<int?>(
+                client,
+                "testNum",
+                TimeSpan.FromMilliseconds(100),
+                s_retryDelay
+            )
+            .WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.That(answered, Is.False);
         Assert.That(client.Attempts, Is.GreaterThan(1));
     }
 
-    [Test]
-    public void WaitForSettingAsync_ReadFailsOtherwise_ThrowsWithoutRetrying()
+    private static IEnumerable<TestCaseData> OtherReadFailures()
     {
-        using var client = new ScriptedPapiClient(new InvalidOperationException("broken"), 15);
+        yield return new TestCaseData(
+            new Func<Exception>(() => new InvalidOperationException("broken"))
+        ).SetArgDisplayNames("local failure");
+        yield return new TestCaseData(
+            new Func<Exception>(
+                () =>
+                    new RemoteInvocationException(
+                        "handler failed",
+                        (int)JsonRpcErrorCode.InvocationError,
+                        (object?)null
+                    )
+            )
+        ).SetArgDisplayNames("handler error");
+        yield return new TestCaseData(new Func<Exception>(InvalidParams)).SetArgDisplayNames(
+            "invalid params"
+        );
+    }
 
-        Assert.ThrowsAsync<InvalidOperationException>(
+    [TestCaseSource(nameof(OtherReadFailures))]
+    public void WaitForSettingAsync_ReadFailsOtherwise_ThrowsWithoutRetrying(
+        Func<Exception> failure
+    )
+    {
+        var expected = failure();
+        using var client = new ScriptedPapiClient(expected, 15);
+
+        var thrown = Assert.CatchAsync(
             () =>
                 SettingsService.WaitForSettingAsync<int?>(
                     client,
@@ -180,6 +240,38 @@ public class SettingsServiceTests
                     s_retryDelay
                 )
         );
+        Assert.That(thrown, Is.SameAs(expected));
+        Assert.That(client.Attempts, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task WaitForSettingAsync_ReadNeverAnswered_ReturnsFalseAtTimeout()
+    {
+        using var client = new ScriptedPapiClient(ScriptedPapiClient.NeverAnswers);
+
+        var answered = await SettingsService
+            .WaitForSettingAsync<int?>(
+                client,
+                "testNum",
+                TimeSpan.FromMilliseconds(100),
+                s_retryDelay
+            )
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.That(answered, Is.False);
+        Assert.That(client.Attempts, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task WaitForSettingAsync_DisconnectsMidRead_ReturnsFalse()
+    {
+        using var client = new ScriptedPapiClient(ScriptedPapiClient.DisconnectsMidRead);
+
+        var answered = await SettingsService
+            .WaitForSettingAsync<int?>(client, "testNum", TimeSpan.FromSeconds(5), s_retryDelay)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.That(answered, Is.False);
         Assert.That(client.Attempts, Is.EqualTo(1));
     }
 
@@ -188,12 +280,14 @@ public class SettingsServiceTests
     {
         using var client = new ScriptedPapiClient([null]);
 
-        var answered = await SettingsService.WaitForSettingAsync<string>(
-            client,
-            "testString",
-            TimeSpan.FromMilliseconds(100),
-            s_retryDelay
-        );
+        var answered = await SettingsService
+            .WaitForSettingAsync<string>(
+                client,
+                "testString",
+                TimeSpan.FromMilliseconds(100),
+                s_retryDelay
+            )
+            .WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.That(answered, Is.False);
         Assert.That(client.Attempts, Is.GreaterThan(1));
