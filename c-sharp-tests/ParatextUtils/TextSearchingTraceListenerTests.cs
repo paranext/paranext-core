@@ -1,114 +1,198 @@
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading;
 using Paranext.DataProvider.ParatextUtils;
 
 namespace TestParanextDataProvider.ParatextUtils
 {
     /// <summary>
-    /// Verifies that <see cref="TextSearchingTraceListener"/> latches <c>FoundText</c> on a
-    /// matching trace, and that <c>currentThreadOnly</c> ignores traces written on other threads.
-    /// Each test adds its listener to the process-global <see cref="Trace.Listeners"/> and removes
-    /// it again, so the collection is left as it was found.
+    /// Verifies <see cref="TextSearchingTraceListener.WasTracedDuring"/>: it reports a matching
+    /// trace written while the watched call runs, ignores traces from other threads when
+    /// <c>currentThreadOnly</c> is set, and removes its listener from the process-global
+    /// <see cref="Trace.Listeners"/> even when the watched call throws.
     /// </summary>
+    /// <remarks>
+    /// Each test searches for its own text (the test name plus a GUID), so a listener that sees
+    /// every thread cannot be tripped by a trace written elsewhere in the run.
+    /// </remarks>
+    // Serial-only: these tests add listeners to the process-global Trace.Listeners. Safe because no
+    // [Parallelizable] exists anywhere in c-sharp-tests; [NonParallelizable] keeps this fixture
+    // serial if that ever changes.
     [TestFixture]
+    [NonParallelizable]
     [ExcludeFromCodeCoverage]
     internal class TextSearchingTraceListenerTests
     {
-        private const string TEXT_TO_FIND = "REST ProtocolError = 401";
-
-        [Test]
-        public void Default_MatchingTraceOnSameThread_SetsFoundText()
+        [TestCase(false)]
+        [TestCase(true)]
+        public void WasTracedDuring_MatchingTraceOnSameThread_ReturnsTrue(bool currentThreadOnly)
         {
-            TextSearchingTraceListener listener = new(TEXT_TO_FIND);
+            string text = UniqueText();
 
-            RunWithListener(listener, () => Trace.TraceWarning($"Request failed: {TEXT_TO_FIND}"));
+            bool found = TextSearchingTraceListener.WasTracedDuring(
+                text,
+                () => Trace.TraceWarning($"Request failed: {text}"),
+                currentThreadOnly
+            );
 
-            Assert.That(listener.FoundText, Is.True);
+            Assert.That(found, Is.True);
         }
 
         [Test]
-        public void Default_MatchingTraceOnOtherThread_SetsFoundText()
+        public void WasTracedDuring_Unscoped_MatchingTraceOnOtherThread_ReturnsTrue()
         {
-            TextSearchingTraceListener listener = new(TEXT_TO_FIND);
+            string text = UniqueText();
 
-            RunWithListener(listener, () => TraceOnOtherThread($"Request failed: {TEXT_TO_FIND}"));
+            bool found = TextSearchingTraceListener.WasTracedDuring(
+                text,
+                () => TraceOnOtherThread($"Request failed: {text}"),
+                currentThreadOnly: false
+            );
+
+            Assert.That(found, Is.True, "an unscoped listener sees traces from every thread");
+        }
+
+        [Test]
+        public void WasTracedDuring_CurrentThreadOnly_MatchingTraceOnOtherThread_ReturnsFalse()
+        {
+            string text = UniqueText();
+
+            bool foundOnOtherThread = TextSearchingTraceListener.WasTracedDuring(
+                text,
+                () => TraceOnOtherThread($"Request failed: {text}"),
+                currentThreadOnly: true
+            );
 
             Assert.That(
-                listener.FoundText,
-                Is.True,
-                "an unscoped listener sees traces from every thread"
-            );
-        }
-
-        [Test]
-        public void CurrentThreadOnly_MatchingTraceOnSameThread_SetsFoundText()
-        {
-            TextSearchingTraceListener listener = new(TEXT_TO_FIND, currentThreadOnly: true);
-
-            RunWithListener(listener, () => Trace.TraceWarning($"Request failed: {TEXT_TO_FIND}"));
-
-            Assert.That(listener.FoundText, Is.True);
-        }
-
-        [Test]
-        public void CurrentThreadOnly_MatchingTraceOnOtherThread_DoesNotSetFoundText()
-        {
-            TextSearchingTraceListener listener = new(TEXT_TO_FIND, currentThreadOnly: true);
-
-            RunWithListener(
-                listener,
-                () =>
-                {
-                    TraceOnOtherThread($"Request failed: {TEXT_TO_FIND}");
-                    Assert.That(
-                        listener.FoundText,
-                        Is.False,
-                        "a thread-scoped listener must ignore traces from other threads"
-                    );
-
-                    // Positive control: the same listener, still attached, does match a trace on
-                    // its own thread, so the negative assertion above is not vacuous.
-                    Trace.TraceWarning($"Request failed: {TEXT_TO_FIND}");
-                }
+                foundOnOtherThread,
+                Is.False,
+                "a thread-scoped listener must ignore traces from other threads"
             );
 
-            Assert.That(listener.FoundText, Is.True);
+            // Positive control: the same text traced on this thread is found, so the negative
+            // assertion above is not vacuous.
+            Assert.That(
+                TextSearchingTraceListener.WasTracedDuring(
+                    text,
+                    () => Trace.TraceWarning($"Request failed: {text}"),
+                    currentThreadOnly: true
+                ),
+                Is.True
+            );
         }
 
         [TestCase(false)]
         [TestCase(true)]
-        public void NonMatchingTrace_DoesNotSetFoundText(bool currentThreadOnly)
+        public void WasTracedDuring_NonMatchingTrace_ReturnsFalse(bool currentThreadOnly)
         {
-            TextSearchingTraceListener listener = new(TEXT_TO_FIND, currentThreadOnly);
+            string text = UniqueText();
+            string nonMatching = text.Replace("Watch", "Other", StringComparison.Ordinal);
 
-            RunWithListener(
-                listener,
+            bool found = TextSearchingTraceListener.WasTracedDuring(
+                text,
                 () =>
                 {
-                    Trace.TraceWarning("REST ProtocolError = 404");
-                    TraceOnOtherThread("REST ProtocolError = 404");
-                }
+                    Trace.TraceWarning(nonMatching);
+                    TraceOnOtherThread(nonMatching);
+                },
+                currentThreadOnly
             );
 
-            Assert.That(listener.FoundText, Is.False);
+            Assert.That(found, Is.False);
+
+            // Positive control: the searched-for text, traced the same way, is found.
+            Assert.That(
+                TextSearchingTraceListener.WasTracedDuring(
+                    text,
+                    () => Trace.TraceWarning(text),
+                    currentThreadOnly
+                ),
+                Is.True
+            );
         }
 
-        private static void RunWithListener(TraceListener listener, Action action)
+        [Test]
+        public void WasTracedDuring_TraceWrite_ReturnsTrue()
         {
-            int listenerCountBefore = Trace.Listeners.Count;
-            Trace.Listeners.Add(listener);
-            try
-            {
-                action();
-            }
-            finally
-            {
-                Trace.Listeners.Remove(listener);
-            }
-            Assert.That(Trace.Listeners, Has.Count.EqualTo(listenerCountBefore));
+            string text = UniqueText();
+
+            bool found = TextSearchingTraceListener.WasTracedDuring(
+                text,
+                () => Trace.Write(text),
+                currentThreadOnly: true
+            );
+
+            Assert.That(found, Is.True);
         }
+
+        [Test]
+        public void WasTracedDuring_TraceWriteLine_ReturnsTrue()
+        {
+            string text = UniqueText();
+
+            bool found = TextSearchingTraceListener.WasTracedDuring(
+                text,
+                () => Trace.WriteLine(text),
+                currentThreadOnly: true
+            );
+
+            Assert.That(found, Is.True);
+        }
+
+        [Test]
+        public void WasTracedDuring_CallThrows_PropagatesAndRemovesListener()
+        {
+            string text = UniqueText();
+            TraceListener[] listenersBefore = Trace.Listeners.Cast<TraceListener>().ToArray();
+            TraceListener? addedListener = null;
+
+            // A local function rather than a lambda: a lambda that only throws also converts to
+            // Func<Task>, which binds to the overload that rejects async calls.
+            void CaptureListenerThenThrow()
+            {
+                addedListener = Trace
+                    .Listeners.Cast<TraceListener>()
+                    .Except(listenersBefore)
+                    .SingleOrDefault();
+                throw new InvalidOperationException(text);
+            }
+
+            Assert.That(
+                () =>
+                    TextSearchingTraceListener.WasTracedDuring(
+                        text,
+                        CaptureListenerThenThrow,
+                        currentThreadOnly: true
+                    ),
+                Throws.InvalidOperationException.With.Message.EqualTo(text)
+            );
+            Assert.That(
+                addedListener,
+                Is.InstanceOf<TextSearchingTraceListener>(),
+                "precondition: the helper attached a listener while the call ran"
+            );
+            Assert.That(Trace.Listeners, Does.Not.Contain(addedListener));
+        }
+
+        [Test]
+        public void WasTracedDuring_EmptyTextToFind_ThrowsWithoutRunningTheCall()
+        {
+            bool ran = false;
+
+            Assert.That(
+                () => TextSearchingTraceListener.WasTracedDuring("", () => ran = true, false),
+                Throws.ArgumentException
+            );
+            Assert.That(ran, Is.False);
+        }
+
+        /// <summary>
+        /// Text unique to the calling test, so a listener cannot match a trace another test wrote.
+        /// </summary>
+        private static string UniqueText() =>
+            $"Watch {TestContext.CurrentContext.Test.Name} {Guid.NewGuid():N}";
 
         /// <summary>
         /// Traces <paramref name="message"/> on a dedicated thread and waits for it. A dedicated
