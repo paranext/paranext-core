@@ -23,6 +23,8 @@ const MOCK_FILES: { [uri: string]: string } = {
   'resources://assets/localization/en.json': `{
     "%some_localization_key%": "This is the English text for %some_localization_key%.",
     "%general_button_submit%": "Submit",
+    "%general_button_submit_2%": "Submit now",
+    "%fallbackTierLookup_old%": "Target in English",
     "%firstRun_title%": "Set up",
     "%firstRun_button_next%": "Next",
     "%firstRun_button_back%": "Back"
@@ -47,6 +49,11 @@ const MOCK_FILES: { [uri: string]: string } = {
     "%general_button_submit%": "Senden",
     "%firstRun_title%": "Einrichten"
   }`,
+  // it has strings but neither submit key, so the first language with data can resolve neither the
+  // key nor its fallbackKey.
+  'resources://assets/localization/it.json': `{
+    "%some_localization_key%": "Testo"
+  }`,
   'resources://assets/localization/metadata.json': `{
     "%yes%": {
       "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",
@@ -54,6 +61,12 @@ const MOCK_FILES: { [uri: string]: string } = {
     },
     "%submit%": {
       "fallbackKey": "%yes%"
+    },
+    "%general_button_submit_2%": {
+      "fallbackKey": "%general_button_submit%"
+    },
+    "%fallbackTierLookup_new%": {
+      "fallbackKey": "%fallbackTierLookup_old%"
     }
   }`,
 };
@@ -138,6 +151,37 @@ test('Correct localized values returned to match array of localizeKeys', async (
     '%general_button_submit%': 'Soumettre',
     '%some_localization_key%': 'Ceci est le texte en français pour %some_localization_key%.',
   });
+});
+
+test('resolves a key missing in the current language through its fallbackKey in that language before falling back to English', async () => {
+  // fr has no %general_button_submit_2% but has its fallbackKey %general_button_submit%; English
+  // has the requested key itself ("Submit now"), which must not win over the fr fallbackKey.
+  const response = await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%general_button_submit_2%',
+    locales: ['fr'],
+  });
+  expect(response).toEqual('Soumettre');
+});
+
+test('a later interface language that translated only the old key does not win over the English new key', async () => {
+  // it has strings but neither key; de has only the old key %general_button_submit%; en has the
+  // new key. The new key is looked up across the remaining languages before the fallbackKey is
+  // tried in them, so English "Submit now" wins over German "Senden".
+  const response = await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%general_button_submit_2%',
+    locales: ['it', 'de'],
+  });
+  expect(response).toEqual('Submit now');
+});
+
+test('resolves a key that has no value in any language through its fallbackKey in the fallback languages', async () => {
+  // %fallbackTierLookup_new% has no value in any language and its fallbackKey has a value only in
+  // English, so only the final fallbackKey-in-fallback-languages tier can resolve it for fr.
+  const response = await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%fallbackTierLookup_new%',
+    locales: ['fr'],
+  });
+  expect(response).toEqual('Target in English');
 });
 
 test('Key returned with localizeKey that does not exist', async () => {
@@ -269,7 +313,7 @@ test('getAvailableInterfaceLanguages offers only allowlisted languages', async (
 
 test('every loaded language, offered or not, is reported as loaded once the files are read', async () => {
   const result = await getAllLoadedInterfaceLanguages();
-  expect(Object.keys(result).sort()).toEqual(['de', 'en', 'es', 'fr']);
+  expect(Object.keys(result).sort()).toEqual(['de', 'en', 'es', 'fr', 'it']);
 });
 
 test('a hidden language stored in the setting renders', async () => {

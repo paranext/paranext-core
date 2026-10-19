@@ -18,7 +18,7 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// projects is syncing, every <see cref="EnterWrite"/> for one of THOSE projects throws immediately
 /// (message ending in <see cref="EditBlockedSentinel"/>) rather than queueing — a user's keystroke
 /// must never hang behind a background sync. The editor catches the sentinel, shows an "editing
-/// paused during Send/Receive" notice, and reverts the un-saved change. A write to a project that
+/// paused during sync" notice, and reverts the un-saved change. A write to a project that
 /// is NOT being synced is unaffected and proceeds (see the per-project remarks below).
 /// </description>
 /// </item>
@@ -184,7 +184,7 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 internal static class SendReceiveWriteLock
 {
     // The exact suffix on every rejection message. The Paratext 10 Scripture editor matches
-    // this sentinel to show an "editing paused during Send/Receive" notification (rather than the
+    // this sentinel to show an "editing paused during sync" notification (rather than the
     // generic permissions message) and revert the un-saved change.
     public const string EditBlockedSentinel = "(SR_EDIT_BLOCKED)";
 
@@ -378,7 +378,7 @@ internal static class SendReceiveWriteLock
 
     private static InvalidOperationException EditBlocked(string projectId) =>
         new(
-            $"Cannot write to project '{projectId}' while an automatic Send/Receive is in "
+            $"Cannot write to project '{projectId}' while an automatic sync is in "
                 + $"progress. {EditBlockedSentinel}"
         );
 
@@ -535,7 +535,7 @@ internal static class SendReceiveWriteLock
                 // "nothing armed on this bracket's behalf, writes flow again, no cleanup owed".
                 Clear(token);
                 throw new TimeoutException(
-                    $"{drainFailure}; the Send/Receive arm was rolled back and the sync must "
+                    $"{drainFailure}; the sync arm was rolled back and the sync must "
                         + "not proceed."
                 );
             }
@@ -543,7 +543,7 @@ internal static class SendReceiveWriteLock
             // Degraded: proceed rather than deadlock the sync. The armed flag keeps rejecting
             // new writes; only the already-stuck write(s) we couldn't drain may still overlap.
             Console.Error.WriteLine(
-                $"[SendReceiveWriteLock] Warning: {drainFailure}; proceeding with Send/Receive "
+                $"[SendReceiveWriteLock] Warning: {drainFailure}; proceeding with the sync "
                     + "anyway (new writes stay rejected while the sync is armed)."
             );
         }

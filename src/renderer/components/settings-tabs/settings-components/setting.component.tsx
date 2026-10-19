@@ -190,6 +190,14 @@ const ZOOM_STEPPER_LABEL_KEYS: Record<
  */
 class SettingWriterUnavailableError extends Error {}
 
+/**
+ * Recognises the sentinel the C# write-gate (`EditBlockedSentinel` in `SendReceiveWriteLock.cs`)
+ * ends a rejection message with while an automatic sync is blocking edits on a project. The
+ * extensions each keep their own copy of this pattern so that no surface depends on another's
+ * module.
+ */
+const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
+
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_loadingOneSetting%',
   '%settings_defaultMessage_noSettingComponent%',
@@ -209,6 +217,7 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_errorMessages_invalidJSON%',
   '%settings_errorMessages_invalidValue%',
   '%settings_errorMessages_notWritableYet%',
+  '%settings_errorMessages_syncEditBlocked%',
   '%settings_errorMessages_errorOccurred%',
   '%settings_errorMessages_viewError%',
   '%settings_uiLanguageSelector_fallbackLanguages%',
@@ -344,7 +353,15 @@ export function Setting({
           setErrorMessage(localizedStrings['%settings_errorMessages_notWritableYet%']);
           return;
         }
-        const message = `Error changing setting ${settingKey}: ${getErrorMessage(error)}`;
+        const errorText = getErrorMessage(error);
+        if (SYNC_EDIT_BLOCKED_REGEX.test(errorText)) {
+          // Logged for the same reason as the generic failure below: the notice only reaches a
+          // mounted component.
+          logger.warn(`Setting ${settingKey} was rejected by the sync write-gate: ${errorText}`);
+          setErrorMessage(localizedStrings['%settings_errorMessages_syncEditBlocked%']);
+          return;
+        }
+        const message = `Error changing setting ${settingKey}: ${errorText}`;
         // The error message below only reaches a mounted component, so a failure landing after the
         // settings tab is closed — a rejected write is at least a debounce plus a round trip behind
         // the edit that caused it — would otherwise leave no trace at all.

@@ -145,10 +145,11 @@ describe.each(CHARACTER_MARKER_CONTROL_FORMAT_KEYS)(
   },
 );
 
-// The one notification string the removal action can show. The commit-message and sync-blocked
-// keys in that list are excluded here: `%versionHistoryCommit_*%` is en-only across the whole file
-// (its insert-footnote and insert-cross-reference siblings are too), and the sync-blocked key is
-// already shipped and paired.
+// The one notification string the removal action owns. The commit-message keys in that list are
+// excluded here: `%versionHistoryCommit_*%` is en-only across the whole file (its insert-footnote
+// and insert-cross-reference siblings are too). The sync-blocked key is not in
+// `REMOVE_CHARACTER_MARKER_STRING_KEYS` at all (see the hook's TSDoc); its parity is checked by
+// the sync edit-blocked block below.
 const REMOVE_CHARACTER_MARKER_PARITY_KEYS = REMOVE_CHARACTER_MARKER_STRING_KEYS.filter(
   (key) => key === '%webView_platformScriptureEditor_error_removeCharacterMarkerFailed%',
 );
@@ -168,6 +169,26 @@ describe('character marker removal notifications', () => {
     });
   });
 });
+
+// The notification shown when an edit is rejected because an automatic sync is in progress. The key
+// falls back to the old Send/Receive key, so a dropped `es` value would silently show the
+// old wording; this block is what notices.
+describe.each(['%webView_platformScriptureEditor_error_syncEditBlocked_2%'])(
+  'sync edit-blocked notification %s',
+  (key) => {
+    it('has an English label', () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it('has a Spanish label', () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+
+    it('Spanish label differs from English', () => {
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
+  },
+);
 
 // Same guard for the book-not-available zero-state. This one matters more than most: the string family
 // it replaced (`%webView_platformScriptureEditor_error_bookNotFoundProject%`) already shipped with a
