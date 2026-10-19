@@ -226,12 +226,10 @@ async function runCommitFlow({
     );
     await Promise.resolve();
   });
-  // Preconditions: the session opened as a passive palette offering the marker in this note
-  // context.
+  // Preconditions: the session opened a palette offering the marker in this note context.
   expect(show).toHaveBeenCalledTimes(1);
-  const [shownItems, , shownPassive] = show.mock.calls[0] ?? [];
-  expect(shownPassive).toBe(true);
-  expect(shownItems?.some((item) => item.id === marker)).toBe(true);
+  const [shownOptions] = show.mock.calls[0] ?? [];
+  expect(shownOptions?.items?.some((item) => item.id === marker)).toBe(true);
 
   // ACTIVE palette: no literal is typed into the document — the real flow claims the trigger and
   // filter keystrokes, so at commit time the document is clean. Let jsdom's queued

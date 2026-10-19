@@ -1,3 +1,36 @@
+/* By default the editor is too tall for the footnote editor, even while empty, so this makes it
+   shorter. */
+.footnote-editor .editor-input {
+  min-height: 75px;
+}
+
+.footnote-editor .typeahead-popover {
+  z-index: 300;
+}
+
+.footnote-editor .immutable-note-caller {
+  display: none;
+}
+
+/* Need to be able to override the styles for the editor that happens to have an underscore */
+/* stylelint-disable selector-class-pattern */
+.footnote-editor .text-spacing .usfm_p {
+  text-indent: 0;
+}
+
+/* \fp (footnote paragraph) displays like a paragraph start — a line break before its span —
+   while the note stays one inline run in the data (no newline ever enters USJ or USFM). A
+   ::before generated line break is used instead of `display: block` because it keeps the span
+   inline (the trailing \f* closer glyph stays on the last content line instead of dropping to
+   its own line) and the pseudo-element is not in the DOM, so the caret can never land in it and
+   the editor's selection/serialization are untouched. Mirrors the structural rule in the
+   editor's usj-nodes stylesheet so the popover renders the break even when the host page does
+   not load that stylesheet (e.g. Storybook). */
+.footnote-editor .note.expanded .usfm_fp::before {
+  content: '\A';
+  white-space: pre;
+}
+
 /**
  * This file was automatically generated on installation of the Shadcn/Lexical editor. The default
  * location of this file has been changed to integrate better with our project structure.
@@ -112,39 +145,6 @@
 
 .Collapsible__container[open] > .Collapsible__title {
   list-style-type: disclosure-open;
-}
-
-/* By default the editor is too tall for the footnote editor, even while empty, so this makes it
-   shorter. */
-.footnote-editor .editor-input {
-  min-height: 75px;
-}
-
-.footnote-editor .typeahead-popover {
-  z-index: 300;
-}
-
-.footnote-editor .immutable-note-caller {
-  display: none;
-}
-
-/* Need to be able to override the styles for the editor that happens to have an underscore */
-/* stylelint-disable selector-class-pattern */
-.footnote-editor .text-spacing .usfm_p {
-  text-indent: 0;
-}
-
-/* \fp (footnote paragraph) displays like a paragraph start — a line break before its span —
-   while the note stays one inline run in the data (no newline ever enters USJ or USFM). A
-   ::before generated line break is used instead of `display: block` because it keeps the span
-   inline (the trailing \f* closer glyph stays on the last content line instead of dropping to
-   its own line) and the pseudo-element is not in the DOM, so the caret can never land in it and
-   the editor's selection/serialization are untouched. Mirrors the structural rule in the
-   editor's usj-nodes stylesheet so the popover renders the break even when the host page does
-   not load that stylesheet (e.g. Storybook). */
-.footnote-editor .note.expanded .usfm_fp::before {
-  content: '\A';
-  white-space: pre;
 }
 
 .banded-row:hover {
