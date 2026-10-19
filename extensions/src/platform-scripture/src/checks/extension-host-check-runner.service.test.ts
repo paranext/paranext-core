@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Check, CheckDetails, CheckCreatorFunction, ICheckRunner } from 'platform-scripture';
+import { logger } from '@papi/backend';
+import type {
+  Check,
+  CheckDetails,
+  CheckCreatorFunction,
+  CheckJobScope,
+  ICheckRunner,
+} from 'platform-scripture';
 import { checkHostingService } from './extension-host-check-runner.service';
 
 type RegisterCheckHandler = (
@@ -61,8 +68,12 @@ async function register(name: string, create: CheckCreatorFunction): Promise<str
   return `registered-${name}-${name}`;
 }
 
-async function runToEnd(runner: ICheckRunner, checkIds: string[]) {
-  const jobId = await runner.beginCheckJob({ checkIds, inputRanges: [RANGE] });
+async function runToEnd(
+  runner: ICheckRunner,
+  checkIds: string[],
+  inputRanges: CheckJobScope['inputRanges'] = [RANGE],
+) {
+  const jobId = await runner.beginCheckJob({ checkIds, inputRanges });
   for (let attempt = 0; attempt < 200; attempt += 1) {
     // Each poll depends on the previous one not being finished yet
     // eslint-disable-next-line no-await-in-loop
@@ -103,11 +114,40 @@ describe('extension-host check runner', () => {
       ]),
     );
 
+    vi.mocked(logger.warn).mockClear();
+
     const report = await runToEnd(runner, [failing, healthy]);
 
     expect(report.status).toBe('completed');
     expect(report.totalResultsCount).toBe(1);
     expect(report.checkErrors).toEqual([{ checkId: failing, message: 'boom' }]);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    const [warning] = vi.mocked(logger.warn).mock.calls[0];
+    expect(warning).toContain(failing);
+    expect(warning).toContain('P1');
+    expect(warning).toContain('boom');
+  });
+
+  it('logs a check that fails in several ranges of one job once', async () => {
+    const runner = await checkHostingService.getCheckRunner();
+    const failingEverywhere = await register(
+      'fails-everywhere',
+      makeCheck('fails-everywhere', async () => {
+        throw new Error('boom everywhere');
+      }),
+    );
+    vi.mocked(logger.warn).mockClear();
+
+    const report = await runToEnd(
+      runner,
+      [failingEverywhere],
+      [RANGE, { ...RANGE, projectId: 'P2' }],
+    );
+
+    expect(report.checkErrors).toEqual([
+      { checkId: failingEverywhere, message: 'boom everywhere' },
+    ]);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
   });
 
   it('reports every check as ready because extension-hosted checks have no setup', async () => {

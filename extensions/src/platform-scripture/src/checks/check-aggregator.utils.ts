@@ -26,16 +26,21 @@ export function isWithinRange(range: ScriptureRange, verseRef: SerializedVerseRe
   return true;
 }
 
-/** Records that a check could not run, unless the same check already failed with the same message */
-export function addCheckError(errors: CheckJobError[], checkError: CheckJobError): void {
+/**
+ * Records that a check could not run, unless the same check already failed with the same message
+ *
+ * @returns `true` when the error was added, `false` when the same error was already recorded
+ */
+export function addCheckError(errors: CheckJobError[], checkError: CheckJobError): boolean {
   if (
     errors.some(
       (existing) =>
         existing.checkId === checkError.checkId && existing.message === checkError.message,
     )
   )
-    return;
+    return false;
   errors.push(checkError);
+  return true;
 }
 
 /** Combines the check errors several runners reported for one job; undefined when there are none */

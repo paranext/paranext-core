@@ -358,7 +358,13 @@ class CheckRunnerEngine
               job.totalResultsCount += results.length;
               incrementStepsCompleted();
             } catch (error) {
-              addCheckError(job.checkErrors, { checkId, message: getErrorMessage(error) });
+              // Logged once per check per job, like the job's own list of check errors
+              if (addCheckError(job.checkErrors, { checkId, message: getErrorMessage(error) }))
+                logger.warn(
+                  `Check ${checkId} could not run on project ${range.projectId}: ${
+                    error instanceof Error && error.stack ? error.stack : getErrorMessage(error)
+                  }`,
+                );
               incrementStepsCompleted();
             } finally {
               // A check that fails to clean up has still produced its results, so the failure is

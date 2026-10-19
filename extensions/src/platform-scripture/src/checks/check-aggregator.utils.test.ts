@@ -108,13 +108,15 @@ function report(overrides: Partial<CheckJobStatusReport> = {}): CheckJobStatusRe
 describe('addCheckError', () => {
   it('records the same check and message once', () => {
     const errors = [{ checkId: 'Quotation', message: 'bad rules' }];
-    addCheckError(errors, { checkId: 'Quotation', message: 'bad rules' });
+    const added = addCheckError(errors, { checkId: 'Quotation', message: 'bad rules' });
+    expect(added).toBe(false);
     expect(errors).toEqual([{ checkId: 'Quotation', message: 'bad rules' }]);
   });
 
   it('records a different message for the same check', () => {
     const errors = [{ checkId: 'Quotation', message: 'bad rules' }];
-    addCheckError(errors, { checkId: 'Quotation', message: 'other' });
+    const added = addCheckError(errors, { checkId: 'Quotation', message: 'other' });
+    expect(added).toBe(true);
     expect(errors).toHaveLength(2);
   });
 });
