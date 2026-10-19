@@ -17,12 +17,30 @@
         "date": "2026-07-26"
       }
     },
+    "%paratextRegistration_description_internetUse_option_Enabled_details%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %paratextRegistration_description_internetUse_option_Enabled_details_2%."
+      }
+    },
+    "%paratextRegistration_description_internetUse_option_Enabled_details_2%": {
+      "fallbackKey": "%paratextRegistration_description_internetUse_option_Enabled_details%"
+    },
     "%paratextRegistration_description_internetUse_option_VpnRequired%": {
       "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[1]%",
       "deprecationInfo": {
         "message": "Changed label to \"Disable access to some Bible translation services\". The new key is %paratextRegistration_description_internetUse_option_VpnRequired_2%.",
         "date": "2026-07-26"
       }
+    },
+    "%paratextRegistration_description_internetUse_option_VpnRequired_details%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %paratextRegistration_description_internetUse_option_VpnRequired_details_2%."
+      }
+    },
+    "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%": {
+      "fallbackKey": "%paratextRegistration_description_internetUse_option_VpnRequired_details%"
     },
     "%paratextRegistration_label_proxyHost%": {
       "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.label2.Text%"
@@ -140,7 +158,6 @@
       }
     },
     "%internetSettings_webView_subtitle%": {
-      "fallbackKey": "%internetSettings_webView_subtitle_2%",
       "deprecationInfo": {
         "message": "Said these settings are shared with a co-installed Paratext 9. They are not: Platform.Bible keeps its own ParatextData settings directory, so changing them here never reaches Paratext 9. The new key is %internetSettings_webView_subtitle_2%.",
         "date": "2026-09-09"
@@ -150,24 +167,6 @@
       "deprecationInfo": {
         "message": "Removed. The per-row \"Coming soon\" badge (%paratextRegistration_internetUse_comingSoon%) already marks the unavailable options, and dropping the line keeps the first-run wizard's Next button in view. No replacement key.",
         "date": "2026-08-19"
-      }
-    },
-    "%paratextRegistration_description_internetUse_option_Enabled_details_2%": {
-      "fallbackKey": "%paratextRegistration_description_internetUse_option_Enabled_details%"
-    },
-    "%paratextRegistration_description_internetUse_option_Enabled_details%": {
-      "deprecationInfo": {
-        "date": "2026-10-13",
-        "message": "\"Send/Receive\" is now called \"sync\". The new key is %paratextRegistration_description_internetUse_option_Enabled_details_2%."
-      }
-    },
-    "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%": {
-      "fallbackKey": "%paratextRegistration_description_internetUse_option_VpnRequired_details%"
-    },
-    "%paratextRegistration_description_internetUse_option_VpnRequired_details%": {
-      "deprecationInfo": {
-        "date": "2026-10-13",
-        "message": "\"Send/Receive\" is now called \"sync\". The new key is %paratextRegistration_description_internetUse_option_VpnRequired_details_2%."
       }
     }
   },

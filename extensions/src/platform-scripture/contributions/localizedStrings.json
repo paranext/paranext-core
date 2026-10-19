@@ -1,5 +1,23 @@
 {
   "metadata": {
+    "%manageBooks_delete_confirmBodyAllShared%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %manageBooks_delete_confirmBodyAllShared_2%."
+      }
+    },
+    "%manageBooks_delete_confirmBodyAllShared_2%": {
+      "fallbackKey": "%manageBooks_delete_confirmBodyAllShared%"
+    },
+    "%manageBooks_delete_confirmBodySharedSendReceive%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %manageBooks_delete_confirmBodySharedSendReceive_2%."
+      }
+    },
+    "%manageBooks_delete_confirmBodySharedSendReceive_2%": {
+      "fallbackKey": "%manageBooks_delete_confirmBodySharedSendReceive%"
+    },
     "%webView_find_allBooks%": {
       "fallbackKey": "%comment_filter_scope_all_books%"
     },
@@ -132,7 +150,7 @@
       "fallbackKey": "%manageBooks_import_onlyNonExistingChapters%"
     },
     "%manageBooks_delete_confirmBodyShared%": {
-      "fallbackKey": "%manageBooks_delete_confirmBodySharedSendReceive%"
+      "fallbackKey": "%manageBooks_delete_confirmBodySharedSendReceive_2%"
     },
     "%manageBooks_copy_confirmBody%": {
       "fallbackKey": "%manageBooks_copy_confirmBodyWithBooks_other%"
@@ -221,32 +239,14 @@
     "%webView_checksSidePanel_projectFilter_projectsAndResources%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
     },
-    "%manageBooks_delete_confirmBodyAllShared_2%": {
-      "fallbackKey": "%manageBooks_delete_confirmBodyAllShared%"
-    },
-    "%manageBooks_delete_confirmBodyAllShared%": {
-      "deprecationInfo": {
-        "date": "2026-10-13",
-        "message": "\"Send/Receive\" is now called \"sync\". The new key is %manageBooks_delete_confirmBodyAllShared_2%."
-      }
-    },
-    "%manageBooks_delete_confirmBodySharedSendReceive_2%": {
-      "fallbackKey": "%manageBooks_delete_confirmBodySharedSendReceive%"
-    },
-    "%manageBooks_delete_confirmBodySharedSendReceive%": {
-      "deprecationInfo": {
-        "date": "2026-10-13",
-        "message": "\"Send/Receive\" is now called \"sync\". The new key is %manageBooks_delete_confirmBodySharedSendReceive_2%."
-      }
-    },
-    "%webView_platformScripture_error_syncEditBlocked_2%": {
-      "fallbackKey": "%webView_platformScripture_error_syncEditBlocked%"
-    },
     "%webView_platformScripture_error_syncEditBlocked%": {
       "deprecationInfo": {
         "date": "2026-10-13",
         "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScripture_error_syncEditBlocked_2%."
       }
+    },
+    "%webView_platformScripture_error_syncEditBlocked_2%": {
+      "fallbackKey": "%webView_platformScripture_error_syncEditBlocked%"
     }
   },
   "localizedStrings": {

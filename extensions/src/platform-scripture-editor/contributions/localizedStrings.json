@@ -1209,8 +1209,26 @@
         "message": "The empty state now explains both Base and Model texts rather than the model text alone. The new key is %webView_modelTextPanel_emptyState_baseOrModel_prompt%."
       }
     },
+    "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%"
+    },
     "%webView_platformScriptureEditor_error_bookNotFoundProject%": {
       "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%"
+    },
+    "%webView_platformScriptureEditor_error_syncEditBlocked%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_error_syncEditBlocked_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_error_syncEditBlocked_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_error_syncEditBlocked%"
     },
     "%webView_platformScriptureEditor_insert%": {
       "fallbackKey": "%Paratext.EditMenu.ListForm.insertToolStripMenuItem.Text%"
@@ -1257,32 +1275,14 @@
     "%webView_platformScriptureEditor_switchScriptureView%": {
       "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
     },
-    "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%": {
-      "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%"
-    },
-    "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%": {
-      "deprecationInfo": {
-        "date": "2026-10-13",
-        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%."
-      }
-    },
-    "%webView_platformScriptureEditor_error_syncEditBlocked_2%": {
-      "fallbackKey": "%webView_platformScriptureEditor_error_syncEditBlocked%"
-    },
-    "%webView_platformScriptureEditor_error_syncEditBlocked%": {
-      "deprecationInfo": {
-        "date": "2026-10-13",
-        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_error_syncEditBlocked_2%."
-      }
-    },
-    "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": {
-      "fallbackKey": "%webView_platformScriptureEditor_syncEditBlocked_banner%"
-    },
     "%webView_platformScriptureEditor_syncEditBlocked_banner%": {
       "deprecationInfo": {
         "date": "2026-10-13",
         "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_syncEditBlocked_banner_2%."
       }
+    },
+    "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_syncEditBlocked_banner%"
     }
   }
 }

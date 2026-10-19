@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 type LocalizedStringsFile = {
   localizedStrings: Record<string, Record<string, string>>;
+  metadata: Record<string, { fallbackKey?: string }>;
 };
 
 function readLocalizedStringsFile(): LocalizedStringsFile {
@@ -14,7 +15,7 @@ function readLocalizedStringsFile(): LocalizedStringsFile {
   return stringsFile;
 }
 
-const { localizedStrings } = readLocalizedStringsFile();
+const { localizedStrings, metadata } = readLocalizedStringsFile();
 
 /**
  * The strings Find shows when extra material is withheld — the book-list note, the disabled-scope
@@ -67,5 +68,21 @@ describe.each(EXTRA_MATERIAL_STRING_KEYS)('extra-material explanation %s', (key)
 
   it('Spanish string differs from English', () => {
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+/**
+ * The shared-project delete confirmation falls back to the renamed key, not the retired one, so a
+ * locale without its own translation shows the sync wording.
+ */
+describe('shared-project delete confirmation fallback', () => {
+  it('falls back to the renamed key', () => {
+    expect(metadata['%manageBooks_delete_confirmBodyShared%'].fallbackKey).toBe(
+      '%manageBooks_delete_confirmBodySharedSendReceive_2%',
+    );
+  });
+
+  it('has an English string for the fallback target', () => {
+    expect(localizedStrings.en['%manageBooks_delete_confirmBodySharedSendReceive_2%']).toBeTruthy();
   });
 });
