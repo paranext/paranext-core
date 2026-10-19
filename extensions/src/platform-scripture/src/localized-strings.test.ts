@@ -97,5 +97,6 @@ describe('all-shared delete confirmation', () => {
     const value = localizedStrings.en['%manageBooks_delete_confirmBodyAllShared_2%'];
     expect(value).toBeTruthy();
     expect(value).toContain('sync');
+    expect(value).not.toMatch(/send\/receive/i);
   });
 });
