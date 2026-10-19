@@ -576,6 +576,8 @@ internal class CheckRunnerJobTests : PapiTestBase
             job.Final.CheckErrors,
             Is.EqualTo(new[] { new CheckJobError(failingCheckId, rerunFailureMessage) })
         );
+        // The failure was logged, so the capture could have shown the left-out message
+        Assert.That(capturedText.ToString(), Does.Contain($"Check {failingCheckId} could not run"));
         // A check whose re-run failed is reported as an error, not also as left out of the job
         Assert.That(capturedText.ToString(), Does.Not.Contain("was left out of job"));
     }
