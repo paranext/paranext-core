@@ -69,8 +69,11 @@ readable top is in addition to the detail below, never a replacement for it.
    `Tickets created earlier:` line — together with the children of a recorded parent
    (`parent = <key>`). An earlier run that stopped partway left these; they go into the table like
    any other hit — a recorded parent through the whole-feature rule below — and nothing is skipped
-   or claimed automatically. If the brief has a `Run stopped <date>` line older than 14 days, use
-   that date in the own-tickets search instead. Propose one action per hit exactly as the skill's
+   or claimed automatically. If the brief has a `Run stopped <date>` line older than 14 days, start
+   the own-tickets search 14 days before that date instead — the stopped run may have created
+   tickets on earlier days than the one it stopped on. A session that died outright leaves no
+   such line; then the 14-day window and the keys already in the brief are all there is, so
+   re-run soon after a crash. Propose one action per hit exactly as the skill's
    [Acting on what the search found](../skills/jira-creation/SKILL.md#acting-on-what-the-search-found)
    section says — link a related ticket, move or convert a duplicate, or leave an in-progress
    duplicate where it is and link it to the parent. Two rules are specific to a batch:
@@ -78,16 +81,17 @@ readable top is in addition to the detail below, never a replacement for it.
      the new children go under it instead of a new parent. This comes first: a ticket that matches
      the whole feature is never moved or converted — those apply only to a duplicate of a single
      work item. If the user picks the existing ticket as the parent, the run is in
-     **existing-parent mode**: the ticket must be able to hold Sub-tasks — read its
-     `issuetype.hierarchyLevel` with `getJiraIssue` and require `0`, the standard level of
+     **existing-parent mode**: the ticket must be able to hold Sub-tasks — read it through
+     `executeRead` (`getJiraIssue`, `responseFields: ["fields.issuetype.name",
+     "fields.issuetype.hierarchyLevel"]`) and require `hierarchyLevel` `0`, the standard level of
      Combined, Dev Task, UX Task and Bug (Initiative, Epic and Sub-task fail it; ask again); the
      step 5 gate shows its type, status, assignee, reporter and created date; no parent is
      created; step 6 re-reads it before attaching the first child and stops if it can no longer
      hold Sub-tasks. The existing parent is edited only with its own yes: if its body is still an
      unfilled template skeleton (typically left by an earlier run), it is drafted and cold-read in
-     steps 3–4 like a new parent and the fill is proposed at the gate; step 7's back-fill is
-     proposed there too. Without those yeses, step 7 hands the user the requirements table as text
-     to add themselves.
+     steps 3–4 like a new parent and the fill is proposed at the gate. Step 7's back-fill gets its
+     own yes later, in step 7, because its text needs the child keys; without it, step 7 hands the
+     user the requirements table as text to add themselves.
    - **A work item settled by an existing ticket** — moved, converted, already under the chosen
      parent, filled as a leftover, or linked in place because someone is working on it — gets no
      new child. That ticket counts as the work item's ticket in the requirements table and in the
@@ -121,8 +125,11 @@ readable top is in addition to the detail below, never a replacement for it.
    `Parent ticket: PT-xxxx` line directly above the §4 work-item table, and each child's in that
    table's **Ticket** column (add the column if an older brief lacks it). These keys are only a
    starting point for a later run's search: if this run stops, the next one finds them and its
-   approval step decides what to do with each. A work item settled by an existing ticket gets
-   `PT-xxxx (existing)` in the column once its action is done and verified.
+   approval step decides what to do with each. Never drop a key an earlier run recorded: one this
+   run doesn't take over as its own ticket moves to a `Tickets created earlier:` line above the
+   table. When the run completes, remove the `Run stopped` line, if there is one. A work item
+   settled by an existing ticket gets `PT-xxxx (existing)` in the column once its action is done
+   and verified.
 
    As soon as the parent is in place — created, filled and verified, or re-read in existing-parent
    mode — carry out the approved actions that need only the parent: each move, each `Relates` or
@@ -152,11 +159,11 @@ readable top is in addition to the detail below, never a replacement for it.
 
 ## Failure handling
 
-If a call fails midway, stop. Never retry a create that returned an error — Jira may have saved it
-(the skill's Process step 6). Write a `Run stopped <date>` line directly above the brief's §4
-work-item table, then report exactly which issues were created (keys) and which weren't, **and**
-which approved actions on existing tickets — move, conversion, link, description edit — are done
-and which are not.
+If a call fails midway, stop. Never blindly retry a create — only one Jira rejected for a named
+field is corrected and sent again (the skill's Process step 6). Write a `Run stopped <date>` line
+directly above the brief's §4 work-item table — one line, replacing an earlier one — then report
+exactly which issues were created (keys) and which weren't, **and** which approved actions on
+existing tickets — move, conversion, link, description edit — are done and which are not.
 
 There is no resume. To continue, run this command again on the same brief: it is an ordinary run.
 Step 2's search finds what the stopped run made — the keys in the brief, and your own recent

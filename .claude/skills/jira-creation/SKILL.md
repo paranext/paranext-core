@@ -136,9 +136,12 @@ holds text. Say which you chose.
    some whose titles no phrase search matches: run
    `project = PT AND reporter = currentUser() AND created >= -14d ORDER BY created DESC` with the
    same fields, and read each hit. Drop the unrelated ones, as with any noise, but always keep a
-   hit whose body is still an unfilled template skeleton (judged on the field step 8 would fill —
-   `customfield_10116` alone being a skeleton is normal) and match it to a draft by its scope, not
-   its title. Pick an action for each kept hit from
+   **leftover** — a hit whose `description` is still an unfilled template skeleton, or, on a
+   ticket that has no `description` (some older Bugs), whose `customfield_10116` is; a filled
+   `description` next to a skeleton `customfield_10116` is normal and is not a leftover. A
+   leftover has no body to compare, so match it to a draft by its title and its parent; if no
+   draft clearly matches, show it at the approval step as unmatched and ask. Pick an action for
+   each kept hit from
    [Acting on what the search found](#acting-on-what-the-search-found).
 2. **Draft the full ticket locally**, before any create call, following
    [Writing tickets people can read](#writing-tickets-people-can-read): plain title, a top
@@ -167,10 +170,13 @@ holds text. Say which you chose.
    accepted; don't hard-code a UUID). Confirm the issue type name with
    `listJiraProjectIssueTypesMetadata` for project `PT`, and the fields you may set at create
    time with `getJiraIssueTypeMetaWithFields` — both through `discover` → `executeRead`.
-6. **Never retry a failed create.** If step 7's create call returns an error, Jira may have saved
-   the issue anyway, and a retry makes a twin that nothing can delete. Stop and report the error.
-   A later run finds the issue, if it was saved, through step 1's search for your own recent
-   tickets, and the user decides at its approval step what to do with it.
+6. **Never blindly retry a failed create.** A create that Jira *rejected* — the response names
+   the field at fault and carries a `repairHint` — saved nothing: correct that field and send it
+   again. Any other error (a timeout, a server error, a dropped connection) may have saved the
+   issue anyway, and a retry makes a twin that nothing can delete — and a search right after it
+   can lag behind the save, so it doesn't prove otherwise. Stop and report the error. A later run
+   finds the issue, if it was saved, through step 1's search for your own recent tickets, and the
+   user decides at its approval step what to do with it.
 7. **Create** with `createJiraIssue`: project `PT`, the issue type, the title (Jira's `summary`),
    the parent, and any custom fields — using the parameter names the tool's schema shows. **Don't
    pass the drafted body text here** — the template discards it every time. Send it in step 10.
@@ -197,11 +203,13 @@ holds text. Say which you chose.
     conversions, and approved description edits of existing tickets — per
     [Acting on what the search found](#acting-on-what-the-search-found), verifying each. A link
     whose target is a draft is made once that draft's ticket is created, filled and verified.
-    **Immediately before each one, re-read the ticket:** status category, assignee, parent, sprint
-    and links, and for a description edit the description itself. Compare with what was shown at
-    the approval step, allowing for this run's own completed writes; if anything else changed — a
-    teammate picked it up, moved it or edited it — stop and ask. A description edit re-sends the
-    whole body, in the format the ticket was read in, and is verified as in step 11.
+    **Immediately before each one, re-read the ticket** through `executeRead` (`getJiraIssue`,
+    `view: "evidence"` for its links, with `fields` naming `status`, `assignee`, `parent`,
+    `customfield_10020` for the sprint, and for a description edit the body field too): status
+    category, assignee, parent, sprint and links, and the description itself. Compare with what
+    was shown at the approval step, allowing for this run's own completed writes; if anything else
+    changed — a teammate picked it up, moved it or edited it — stop and ask. A description edit
+    re-sends the whole body, in the format the ticket was read in, and is verified as in step 11.
 
 **Several issues at once.** Every gap between create and fill is a window where a dead session
 leaves a blank templated stub nobody can delete. So run steps 7–12 to completion on one issue
@@ -298,8 +306,8 @@ the existing ticket, and ask what they want.
 | What the search found | Action |
 | --- | --- |
 | Related, overlapping, or prior work | Link it — `Relates`, or `Blocks` when one has to land first — and also name it in the ticket text, under Dependencies or the closest heading, saying what it is. |
-| A ticket already under the chosen parent whose scope matches a draft | It is that work item's ticket. Nothing to move or create; if its body is still a skeleton, see the next row. |
-| A ticket whose body is still an unfilled template skeleton, matching a draft by scope — typically left by an earlier run that stopped between create and fill | **Fill it** instead of creating a twin: propose the cold-read draft as an edit of that ticket, shown in full at the approval step, and fill it as Process steps 8–11 describe once the user says yes. Show who created it and when, so the user can tell their own leftover from a teammate's ticket. |
+| A ticket already under the chosen parent that matches a draft | It is that work item's ticket. Nothing to move or create; if it is a leftover (Process step 1), see the next row. |
+| A leftover (Process step 1) matching a draft — typically left by an earlier run that stopped between create and fill | **Fill it** instead of creating a twin: propose the cold-read draft as an edit of that ticket, shown in full at the approval step, and fill it as Process steps 8–11 describe once the user says yes. If it sits under a different parent than the chosen one — say the user turned down the earlier run's parent — propose moving it as well, in the same row. Show who created it and when, so the user can tell their own leftover from a teammate's ticket. |
 | An open duplicate in the To Do category, unassigned, that is already a Sub-task | **Move** it under the new parent instead of creating a twin: `editJiraIssue` setting its parent, then re-read its parent to confirm. If Jira refuses or the parent didn't change, show the user and ask. |
 | An open duplicate in the To Do category, unassigned, that is a standard issue (Combined, Dev Task, Bug, …) | **Convert** it into a Sub-task under the new parent — see [Converting a duplicate](#converting-a-duplicate). It keeps its key, text, comments, history, watchers and links, and becomes that work item's ticket. |
 | An open duplicate that is in progress or assigned to someone | Never move work someone owns. Create no ticket for that work: link the existing ticket to the new parent with `Relates`, flag it in the approval table, and treat it as that work's ticket. The user may still choose to move it. |
@@ -438,7 +446,7 @@ is a different case: do what was asked.
 | Sending only the changed section in an edit | The rest of the description is wiped | Send the whole description every time |
 | Writing a body back in a different format than it was read in | Headings turn into literal text, or mentions and images are dropped | Write back in the `appliedContentFormat` the read reported |
 | Creating first, asking after | Un-deletable clutter on the team board | Approval gate before the first create call |
-| Retrying a create that returned an error | A second un-deletable ticket, if Jira saved the first | Stop and report (step 6); the next run's search for your own recent tickets finds it |
+| Retrying a create after a timeout or server error | A second un-deletable ticket, if Jira saved the first | Stop and report (step 6); the next run's search for your own recent tickets finds it. Only a create rejected for a named field is corrected and sent again |
 | Re-running after a stop and skipping the search | Twins of what the stopped run made | A re-run is an ordinary run: search, then the approval step decides each leftover |
 | Summarizing the draft to avoid re-typing it | Ticket ends up thinner than what was approved | Re-send the approved text verbatim |
 | Skipping the existing-ticket search for a quick one-off | A twin of an open ticket lands on the board | Search first (step 1), every time |

@@ -247,8 +247,8 @@ feature or a clean port.
 
 (`/prd-to-jira` fills the **Ticket** column and adds a `Parent ticket: PT-xxxx` line directly above
 this table as it creates the tickets — and a `Run stopped <date>` line if it stops partway. Leave
-the column empty here, apart from anything carried over from an earlier brief as described
-above.)
+the column empty here; keys carried over from an earlier brief go on the lines above the table,
+as described above.)
 
 **WI-1 — {title}.** {What it does. What it produces and which sibling item consumes it. Files it
 likely touches. What it deliberately leaves to other items. Any spike to run before its design.}
