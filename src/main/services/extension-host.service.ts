@@ -88,6 +88,8 @@ function beginTrackedRestart(restart: () => Promise<void>): Promise<void> {
     () => clearRestartGuard(run),
     EXTENSION_HOST_RESTART_READY_TIMEOUT_MS,
   );
+  // A guard must never be what keeps the process alive
+  restartReadyTimer.unref?.();
   // Handles the rejection only to end the guard; the caller still sees `run` reject.
   run.catch(() => clearRestartGuard(run));
   return run;
@@ -300,8 +302,8 @@ function connectToExtensionHostProcess() {
  * leaves every later restart failing the same way until the app is restarted.
  */
 function announceRefusedFork(error: unknown): void {
-  // The restart that tried this fork is over, so a further request may try again.
-  clearRestartGuard(restartInFlight);
+  // The restart that tried this fork ends its own guard when it rejects (`beginTrackedRestart`), so
+  // nothing is cleared here: the guard in flight may by now belong to a newer restart.
   if (isAppShuttingDown()) return;
   logger.error(
     `Could not fork a new extension host; telling the windows it has stopped. ${getErrorMessage(error)}`,
