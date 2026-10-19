@@ -25,6 +25,9 @@ import {
   scopeFilterToLabelKey,
 } from './comment-list-filters.model';
 
+/** Slim "editing paused during sync" notice text shown while this project's sync blocks edits. */
+const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice_2%';
+
 /**
  * Extra localization keys this panel needs beyond `COMMENT_LIST_STRING_KEYS`. The preset/scope
  * portions are DERIVED from the compile-checked `presetToLabelKey`/`scopeFilterToLabelKey` maps
@@ -41,13 +44,10 @@ export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
   ...Object.values(scopeFilterToLabelKey),
   '%no_comments%',
   '%no_comments_match_filter%',
-  '%webView_legacyCommentManager_syncEditBlocked_notice_2%',
+  SYNC_BLOCKED_NOTICE_KEY,
   '%comment_filter_current_user_unavailable%',
   '%comment_filter_retry_current_user%',
 ] as const;
-
-/** Slim "editing paused during sync" notice text shown while this project's sync blocks edits. */
-const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice_2%';
 
 /**
  * `id` of the sticky header (the editing-paused notice, when shown, plus the filter toolbar). The

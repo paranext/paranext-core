@@ -18,7 +18,7 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// projects is syncing, every <see cref="EnterWrite"/> for one of THOSE projects throws immediately
 /// (message ending in <see cref="EditBlockedSentinel"/>) rather than queueing — a user's keystroke
 /// must never hang behind a background sync. The editor catches the sentinel, shows an "editing
-/// paused during Send/Receive" notice, and reverts the un-saved change. A write to a project that
+/// paused during sync" notice, and reverts the un-saved change. A write to a project that
 /// is NOT being synced is unaffected and proceeds (see the per-project remarks below).
 /// </description>
 /// </item>
@@ -184,7 +184,7 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 internal static class SendReceiveWriteLock
 {
     // The exact suffix on every rejection message. The Paratext 10 Scripture editor matches
-    // this sentinel to show an "editing paused during Send/Receive" notification (rather than the
+    // this sentinel to show an "editing paused during sync" notification (rather than the
     // generic permissions message) and revert the un-saved change.
     public const string EditBlockedSentinel = "(SR_EDIT_BLOCKED)";
 

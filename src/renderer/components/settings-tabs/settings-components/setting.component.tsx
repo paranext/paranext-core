@@ -190,6 +190,14 @@ const ZOOM_STEPPER_LABEL_KEYS: Record<
  */
 class SettingWriterUnavailableError extends Error {}
 
+/**
+ * Recognises the sentinel the C# write-gate (`EditBlockedSentinel` in `SendReceiveWriteLock.cs`)
+ * ends a rejection message with while an automatic sync is blocking edits on a project. The
+ * extensions each keep their own copy of this pattern so that no surface depends on another's
+ * module.
+ */
+const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
+
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_loadingOneSetting%',
   '%settings_defaultMessage_noSettingComponent%',
@@ -209,6 +217,7 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_errorMessages_invalidJSON%',
   '%settings_errorMessages_invalidValue%',
   '%settings_errorMessages_notWritableYet%',
+  '%settings_errorMessages_syncEditBlocked%',
   '%settings_errorMessages_errorOccurred%',
   '%settings_errorMessages_viewError%',
   '%settings_uiLanguageSelector_fallbackLanguages%',
@@ -342,6 +351,15 @@ export function Setting({
           // reaches the log for whoever debugs it.
           logger.warn(`Setting ${settingKey} changed before a writer was available for it`);
           setErrorMessage(localizedStrings['%settings_errorMessages_notWritableYet%']);
+          return;
+        }
+        if (SYNC_EDIT_BLOCKED_REGEX.test(getErrorMessage(error))) {
+          // Logged for the same reason as the generic failure below: the notice only reaches a
+          // mounted component.
+          logger.warn(
+            `Setting ${settingKey} was rejected by the sync write-gate: ${getErrorMessage(error)}`,
+          );
+          setErrorMessage(localizedStrings['%settings_errorMessages_syncEditBlocked%']);
           return;
         }
         const message = `Error changing setting ${settingKey}: ${getErrorMessage(error)}`;
