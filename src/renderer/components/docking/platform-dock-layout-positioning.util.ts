@@ -13,7 +13,7 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewDefinition } from '@shared/models
 import cloneDeep from 'lodash/cloneDeep';
 import { FloatPosition, FloatSize, LayoutSize, TabGroup } from 'rc-dock';
 import { ChevronsUpDown } from 'lucide-react';
-import { getToolbarHeight } from '@renderer/components/toolbar-height.util';
+import { getDockTop } from '@renderer/components/toolbar-height.util';
 import { TabType } from './docking-framework-internal.model';
 import { PanelExtraContent } from './panel-extra-content.component';
 import { TabBarDropZone } from './tab-bar-drop-zone.component';
@@ -145,12 +145,15 @@ export function getTabGroup(tabInfo: TabInfo): string {
  * original 8px gap on every side below the main toolbar; Simple mode removes that gap on the
  * left/right/bottom and uses the taller Simple-mode toolbar's clearance instead — see
  * `docs/superpowers/specs/2026-07-20-simple-layout-styling-adjustments-design.md`, Section 7.
+ *
+ * The top inset also clears the strip that sits in flow below the toolbar (`getDockTop`), through a
+ * CSS variable rather than a prop, so the strip's height changes re-lay the dock without
+ * re-rendering it.
  */
 export function getDockLayoutOuterInset(isPowerMode: boolean): CSSProperties {
-  if (isPowerMode) {
-    return { position: 'absolute', top: getToolbarHeight(true), bottom: 8, left: 8, right: 8 };
-  }
-  return { position: 'absolute', top: getToolbarHeight(false), bottom: 0, left: 0, right: 0 };
+  const top = getDockTop(isPowerMode);
+  if (isPowerMode) return { position: 'absolute', top, bottom: 8, left: 8, right: 8 };
+  return { position: 'absolute', top, bottom: 0, left: 0, right: 0 };
 }
 
 /** Initial sizes for each tab in CSS `px` units if created as floating tabs */

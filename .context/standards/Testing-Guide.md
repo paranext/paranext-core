@@ -91,7 +91,7 @@ Do NOT reach for it to park a test that is merely inconvenient, flaky, or unfini
 named defect and no ticket is a skipped test wearing a disguise; skip it explicitly instead.
 
 Live example: the three reconnect blockers in
-`src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts`, all pinned to PT-4435.
+`src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts`, all pinned to PT-4495.
 
 ### Continuous Testing Frequency
 

@@ -28,6 +28,7 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from '@shared/services/scroll-group.service-model';
+  import type { ExtensionHostStoppedEvent } from '@shared/models/extension-host-lifecycle.model';
   import type {
     AppWindowInputEvent,
     FocusedWindowIdEvent,
@@ -76,7 +77,27 @@ declare module 'papi-shared-types' {
     'test.echo': (message: string) => string;
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
+    /**
+     * Restart the extension host, which reloads and reinitializes TS/JS extensions. Resolves once
+     * the new process is forked, before it has started; `platform.onDidStartExtensionHost` says
+     * when it has.
+     *
+     * A call while a restart is already in flight (from its start until the new extension host
+     * announces its start) joins that restart and resolves with it, at once if the new process is
+     * already forked, rather than stopping the host that is still starting.
+     */
     'platform.restartExtensionHost': () => Promise<void>;
+    /**
+     * Whether the extension host is currently stopped without main having asked it to, and why. A
+     * window asks this once at startup, in case the stop happened before it was listening for
+     * `platform.onDidStopExtensionHost`.
+     *
+     * @returns The stop, or nothing while the extension host is running (or has been restarted
+     *   since). Over JSON-RPC that "nothing" arrives as `null`, not `undefined`, so test the result
+     *   for truthiness rather than comparing it with `undefined`.
+     * @experimental
+     */
+    'platform.getExtensionHostStoppedState': () => Promise<ExtensionHostStoppedEvent | undefined>;
     /** Shut down the application */
     'platform.quit': () => Promise<void>;
     /** Restart the application */
@@ -1201,6 +1222,32 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.onDidChangeFocusedWindowId': FocusedWindowIdEvent;
+    /**
+     * Emitted by the main process when the extension host stops without being asked to: it lost its
+     * connection to main (`'lost-connection'`) or exited for any other reason (`'crashed'`). Not
+     * emitted for a requested restart or during app shutdown.
+     *
+     * @experimental
+     */
+    'platform.onDidStopExtensionHost': ExtensionHostStoppedEvent;
+    /**
+     * Emitted by the extension host once its extensions have initialized, including on the first
+     * start. No payload. The readiness signal after `platform.restartExtensionHost`.
+     *
+     * @experimental
+     */
+    'platform.onDidStartExtensionHost': undefined;
+    /**
+     * Emitted by the main process when the app quits. On an explicit quit (Cmd+Q, the Quit menu
+     * item, `platform.quit` or `platform.restart`) it comes before any window is destroyed. When
+     * closing windows shuts the app down (close-all from the primary window, or the last window on
+     * Windows and Linux) it comes only after every window is gone, so no window sees it; those
+     * windows' connections were closed cleanly, as a normal close rather than a failure, before
+     * they were destroyed. No payload. Best effort: a window may be gone before it arrives.
+     *
+     * @experimental
+     */
+    'platform.onWillShutDown': undefined;
   }
 
   /** Union of all known network event names (keys of {@link NetworkEvents}). */
