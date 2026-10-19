@@ -130,14 +130,20 @@ internal sealed class CheckCache
             }
         }
 
+        // Read before the text, so an edit that lands after the text is read is noticed
+        var editCountsBeforeTextRead = checksToRun
+            .Select(item => item.check.GetEditCount(bookNum))
+            .ToList();
+
         // Text has to be tokenized for the checks before the checks can run.
         // "GetText" will tokenize the text for checks to use
         // "0" chapter number means all chapters
         var dataSource = GetChecksDataSource(projectId);
         dataSource.GetText(bookNum, 0, neededDataFormat);
 
-        foreach (var (checkId, check) in checksToRun)
+        for (var i = 0; i < checksToRun.Count; i++)
         {
+            var (checkId, check) = checksToRun[i];
             try
             {
                 if (check.SettingsChanged)
@@ -156,7 +162,7 @@ internal sealed class CheckCache
                         throw;
                     }
                 }
-                check.Run(dataSource, bookNum, denials);
+                check.Run(dataSource, bookNum, denials, editCountsBeforeTextRead[i]);
             }
             catch (Exception ex)
             {

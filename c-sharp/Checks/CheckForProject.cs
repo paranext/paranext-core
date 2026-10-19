@@ -9,6 +9,7 @@ namespace Paranext.DataProvider.Checks;
 internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, string projectId)
 {
     private readonly Dictionary<int, CheckResultsRecorder> _recordersByBookNum = new();
+    private readonly Dictionary<int, int> _editCountsByBookNum = new();
     private readonly object _lock = new();
 
     public ScriptureCheckBase Check { get; } = check;
@@ -51,17 +52,47 @@ internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, 
         }
     }
 
+    /// <summary>
+    /// Clears the results for a book because its text was edited. The edit is counted even when
+    /// this check has no results for the book, so a run that read the book's text before the edit
+    /// can tell that it ran on old text (see <see cref="GetEditCount"/>).
+    /// </summary>
     public void ClearResultsForBook(int bookNum)
     {
         lock (_lock)
         {
-            // A check that has never run on this book has no results for it to clear
+            _editCountsByBookNum[bookNum] = _editCountsByBookNum.GetValueOrDefault(bookNum) + 1;
             if (_recordersByBookNum.TryGetValue(bookNum, out var recorder))
                 recorder.ClearResults();
         }
     }
 
-    public void Run(ChecksDataSource dataSource, int bookNum, ErrorMessageDenials denials)
+    /// <summary>
+    /// The number of edits to a book that this check has been told about. Read it before reading
+    /// the book's text and pass it to <see cref="Run"/>.
+    /// </summary>
+    public int GetEditCount(int bookNum)
+    {
+        lock (_lock)
+        {
+            return _editCountsByBookNum.GetValueOrDefault(bookNum);
+        }
+    }
+
+    /// <summary>
+    /// Runs the check on a book and records its results. The results are marked ready only if no
+    /// edit to the book was counted since <paramref name="editCountBeforeTextRead"/>; otherwise the
+    /// check ran on text that has since been edited and the next run has to redo it.
+    /// </summary>
+    /// <param name="editCountBeforeTextRead">
+    /// <see cref="GetEditCount"/> for the book, read before the text the check runs on was read
+    /// </param>
+    public void Run(
+        ChecksDataSource dataSource,
+        int bookNum,
+        ErrorMessageDenials denials,
+        int editCountBeforeTextRead
+    )
     {
         AccessResults(
             bookNum,
@@ -70,7 +101,10 @@ internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, 
                 recorder.ClearResultsFromBook(bookNum);
                 Check.Run(bookNum, dataSource, recorder);
                 recorder.PostProcessResults(denials);
-                recorder.ResultsReady = true;
+                // Same lock as ClearResultsForBook, so an edit cannot slip in between the comparison
+                // and the mark
+                recorder.ResultsReady =
+                    _editCountsByBookNum.GetValueOrDefault(bookNum) == editCountBeforeTextRead;
             }
         );
     }
