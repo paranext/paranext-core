@@ -4354,8 +4354,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // select can take seconds: a Comments tab that has not been shown this session is not
           // mounted yet (rc-dock renders a tab only once it is first shown), so the message is
           // retried for several seconds and applies only if the user opens the tab in that time.
-          // The helper logs and swallows its own failures. Power mode still awaits its list, so the
-          // list takes focus while the popover is up rather than after the user is typing again.
+          // The helper logs and swallows its own failures. Power mode awaits its list, so the list
+          // takes focus while the popover is up rather than after the user is typing again.
           if (isPowerModeRef.current)
             await openCommentListAndSelectThreadSafe(papi, webViewId, newThreadId);
           else selectCommentThreadInPanelSafe(papi, newThreadId, false);

@@ -4681,6 +4681,7 @@ describe('showCommentThreadForInterfaceMode', () => {
         showCommentThreadForInterfaceMode(papi, { ...options, isPowerMode }),
       ).resolves.toBeUndefined();
       expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('thread-1'));
     },
   );
 });

@@ -13,8 +13,8 @@ import { describe, expect, it } from 'vitest';
  * to a tab that has not been mounted yet (rc-dock does not render a tab until it is first shown)
  * retries until the request gives up. The comment is already saved by then, so the popover must be
  * closed first and the select must not be awaited — otherwise Save looks like it did nothing. Power
- * mode keeps awaiting its comment list before closing, so the list's focus change happens while
- * the popover is still up rather than after the user has gone back to typing.
+ * mode awaits its comment list before closing, so the list's focus change happens while the
+ * popover is still up rather than after the user has gone back to typing.
  */
 
 const SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -53,6 +53,12 @@ describe('onCommentEditorSave thread navigation (platform-scripture-editor.web-v
   const NAVIGATION =
     'if (isPowerModeRef.current) await openCommentListAndSelectThreadSafe(papi, webViewId, newThreadId); ' +
     'else selectCommentThreadInPanelSafe(papi, newThreadId, false);';
+
+  it('stays within its own callback', () => {
+    // Guards the extraction itself: a match that ran on into the next hook would let the
+    // assertions below pass on someone else's code.
+    expect(saveBody).not.toContain('useCallback(');
+  });
 
   it('awaits the Power-mode list but not the Simple-mode select, reading the mode at save time', () => {
     expect(saveBody).toContain(NAVIGATION);
