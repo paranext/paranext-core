@@ -130,7 +130,7 @@ internal sealed class CheckCache
             }
         }
 
-        // Read before the text, so an edit that lands after the text is read is noticed
+        // Read before the text, so an edit whose clear has run by the end of a check is noticed
         var editCountsBeforeTextRead = checksToRun
             .Select(item => item.check.GetEditCount(bookNum))
             .ToList();

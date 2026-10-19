@@ -404,11 +404,12 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
                 // An edit to the book clears its results in the background (the TextChanged
                 // handler in CheckCache). That can land after a check ran and before its results
-                // are read here: one edit clears every check that has already run the book. A
-                // check that ran on text read before the edit is not marked ready either. These
-                // checks run once more, together, so the job still delivers their results. If
-                // another edit leaves them not ready again, they are left out of this job with a
-                // log line and no error: each edit tells consumers to run their checks again.
+                // are read here: one edit clears every check that has already run the book. Once
+                // that clear has run, a check that ran on text read before the edit is not marked
+                // ready either. These checks run once more, together, so the job still delivers
+                // their results. If another edit leaves them not ready again, they are left out of
+                // this job with a log line and no error: each edit tells consumers to run their
+                // checks again.
                 var clearedCheckIds = new List<string>();
                 foreach (var checkId in checkIdsToRun)
                 {
