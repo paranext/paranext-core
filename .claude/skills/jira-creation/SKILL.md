@@ -132,8 +132,14 @@ holds text. Say which you chose.
 
 1. **Search for existing work first**, per [Searching for existing work](#searching-for-existing-work)
    — always, not only for PRD batches: what you find changes what you draft and which links you
-   propose. Leave out tickets this run created itself (step 6). Pick an action for each kept hit
-   from [Acting on what the search found](#acting-on-what-the-search-found).
+   propose. Then look for **your own recent tickets** — an earlier, interrupted run may have left
+   some whose titles no phrase search matches: run
+   `project = PT AND reporter = currentUser() AND created >= -14d ORDER BY created DESC` with the
+   same fields, and read each hit. Drop the unrelated ones, as with any noise, but always keep a
+   hit whose body is still an unfilled template skeleton (judged on the field step 8 would fill —
+   `customfield_10116` alone being a skeleton is normal) and match it to a draft by its scope, not
+   its title. Pick an action for each kept hit from
+   [Acting on what the search found](#acting-on-what-the-search-found).
 2. **Draft the full ticket locally**, before any create call, following
    [Writing tickets people can read](#writing-tickets-people-can-read): plain title, a top
    `**Summary** —` paragraph, then the complete detail. Keep the draft in the conversation
@@ -142,9 +148,13 @@ holds text. Say which you chose.
 3. **Run the [cold-read check](#cold-read-check)** and fix the draft.
 4. **Get approval.** Show the user:
    - the title, issue type, parent, and complete description, and the cold-read line;
-   - the existing-ticket table — `Existing ticket | Status | Resolution | Assignee | Current
-     parent (its status, assignee) | Relation | Proposed action` — with every link and re-parent
-     it proposes. Fill the parent column by reading each distinct parent with `getJiraIssue`;
+   - the existing-ticket table — `Existing ticket | Status | Resolution | Assignee | Reporter,
+     created | Sprint | Current parent (its status, assignee) | Relation | Proposed action` — with
+     every link and re-parent it proposes, each link naming its target (the parent, or which
+     draft). Fill the parent column by reading each distinct parent with `getJiraIssue`. Flag a
+     move or conversion that would take a ticket out of an active or future sprint the new parent
+     isn't in. An action that already holds — the link exists, the parent is already set — is
+     shown as done, not proposed again;
    - **separately, every proposed conversion**: the ticket's key and title, what the conversion
      preview reported (new type, new parent, any field it drops, any status change) — or, when the
      new parent is created in this run and the preview can only run afterwards, that its preview
@@ -157,14 +167,10 @@ holds text. Say which you chose.
    accepted; don't hard-code a UUID). Confirm the issue type name with
    `listJiraProjectIssueTypesMetadata` for project `PT`, and the fields you may set at create
    time with `getJiraIssueTypeMetaWithFields` — both through `discover` → `executeRead`.
-6. **Find this run's own tickets** whenever this is a resume, a retry, or a batch that may have
-   partly run: start from the keys already recorded for the run (see below), then search
-   `project = PT AND reporter = currentUser() AND created >= "<the day the run started>"
-   ORDER BY created DESC`, plus `parent = <new parent>` once the parent exists. If you don't know
-   when the run started, ask the user rather than guessing a window. Match them to the drafts by
-   reading them, not by title search — titles can come out differently on a rerun. A match whose
-   body is still a skeleton is yours to fill (continue at step 8); a match that is already filled
-   is done. Never create a second one — nothing can delete the duplicate.
+6. **Never retry a failed create.** If step 7's create call returns an error, Jira may have saved
+   the issue anyway, and a retry makes a twin that nothing can delete. Stop and report the error.
+   A later run finds the issue, if it was saved, through step 1's search for your own recent
+   tickets, and the user decides at its approval step what to do with it.
 7. **Create** with `createJiraIssue`: project `PT`, the issue type, the title (Jira's `summary`),
    the parent, and any custom fields — using the parameter names the tool's schema shows. **Don't
    pass the drafted body text here** — the template discards it every time. Send it in step 10.
@@ -189,9 +195,13 @@ holds text. Say which you chose.
     leaving a blank stub on the board.
 12. **Carry out the approved existing-ticket actions** for this issue — links, moves,
     conversions, and approved description edits of existing tickets — per
-    [Acting on what the search found](#acting-on-what-the-search-found), verifying each. A
-    description edit re-sends the whole body, in the format the ticket was read in, and is
-    verified as in step 11.
+    [Acting on what the search found](#acting-on-what-the-search-found), verifying each. A link
+    whose target is a draft is made once that draft's ticket is created, filled and verified.
+    **Immediately before each one, re-read the ticket:** status category, assignee, parent, sprint
+    and links, and for a description edit the description itself. Compare with what was shown at
+    the approval step, allowing for this run's own completed writes; if anything else changed — a
+    teammate picked it up, moved it or edited it — stop and ask. A description edit re-sends the
+    whole body, in the format the ticket was read in, and is verified as in step 11.
 
 **Several issues at once.** Every gap between create and fill is a window where a dead session
 leaves a blank templated stub nobody can delete. So run steps 7–12 to completion on one issue
@@ -200,15 +210,12 @@ each child in turn. A conversion that needs the new parent's key gets its previe
 after the parent is filled and verified and before the first child is created — never between a
 child's create and its fill (see [Converting a duplicate](#converting-a-duplicate)).
 
-**Keep a record of the run.** Report each key as it is created, and keep a running list of every
-approved action on an existing ticket — link, re-parent, conversion, description edit — marked
-done or still owed. If a run stops partway, report both. A resumed run finds its own tickets
-through step 6, and before carrying out any owed action it re-reads that ticket's live state —
-status category, assignee, parent, links. An action that already holds is skipped; a ticket whose
-state changed since the approval (no longer To Do, now assigned, already moved) goes back to the
-user. Outside `/prd-to-jira` the list lives only in the session; `/prd-to-jira` also writes each
-key, and each approved action still owed, into the brief (its Ticket column and `Owed:` line) as
-it goes, which survives the session.
+**Keep a record of the run.** Report each key as it is created, and which approved actions on
+existing tickets — link, re-parent, conversion, description edit — are done and which are not. If
+a run stops partway, report both. There is no resume: a run started after a stop is an ordinary
+run, from step 1. Its search finds what the stopped run made, and every action goes through its
+approval step again. (`/prd-to-jira` also writes each created key into the brief, as a starting
+point for that search.)
 
 ## Searching for existing work
 
@@ -230,15 +237,20 @@ open, in progress, or done. Read-only throughout.
     name:     searchJiraIssuesUsingJql
     cloudId:  paratextstudio.atlassian.net
     inputs:   { jql: "<query>", maxResults: 50,
-                fields: ["summary", "status", "issuetype", "parent", "resolution", "assignee"] }
+                fields: ["summary", "status", "issuetype", "parent", "resolution", "assignee",
+                         "reporter", "created", "customfield_10020"] }
     responseFields: ["isLast", "nextPageToken", "issues.key", "issues.fields.summary",
                      "issues.fields.status.name", "issues.fields.status.statusCategory.name",
                      "issues.fields.resolution.name", "issues.fields.assignee.displayName",
-                     "issues.fields.parent.key", "issues.fields.issuetype.name"]
+                     "issues.fields.reporter.displayName", "issues.fields.created",
+                     "issues.fields.parent.key", "issues.fields.issuetype.name",
+                     "issues.fields.customFields"]
   ```
 
   The result is small enough to read directly — one short object per ticket under
-  `data.issues`; no file, no extraction script.
+  `data.issues`; no file, no extraction script. `customfield_10020` is the Sprint field; it comes
+  back under `fields.customFields.Sprint` and lists closed sprints as well as the current one
+  (verified 2026-10-19).
 - **Don't stop at the first page.** While `isLast` is false, run the query again with the
   returned `nextPageToken`. An old, untouched duplicate is exactly what sorts to the end. Narrowing
   a phrase only cuts noise: a narrower query that finds nothing never proves a duplicate doesn't
@@ -286,12 +298,17 @@ the existing ticket, and ask what they want.
 | What the search found | Action |
 | --- | --- |
 | Related, overlapping, or prior work | Link it — `Relates`, or `Blocks` when one has to land first — and also name it in the ticket text, under Dependencies or the closest heading, saying what it is. |
+| A ticket already under the chosen parent whose scope matches a draft | It is that work item's ticket. Nothing to move or create; if its body is still a skeleton, see the next row. |
+| A ticket whose body is still an unfilled template skeleton, matching a draft by scope — typically left by an earlier run that stopped between create and fill | **Fill it** instead of creating a twin: propose the cold-read draft as an edit of that ticket, shown in full at the approval step, and fill it as Process steps 8–11 describe once the user says yes. Show who created it and when, so the user can tell their own leftover from a teammate's ticket. |
 | An open duplicate in the To Do category, unassigned, that is already a Sub-task | **Move** it under the new parent instead of creating a twin: `editJiraIssue` setting its parent, then re-read its parent to confirm. If Jira refuses or the parent didn't change, show the user and ask. |
 | An open duplicate in the To Do category, unassigned, that is a standard issue (Combined, Dev Task, Bug, …) | **Convert** it into a Sub-task under the new parent — see [Converting a duplicate](#converting-a-duplicate). It keeps its key, text, comments, history, watchers and links, and becomes that work item's ticket. |
 | An open duplicate that is in progress or assigned to someone | Never move work someone owns. Create no ticket for that work: link the existing ticket to the new parent with `Relates`, flag it in the approval table, and treat it as that work's ticket. The user may still choose to move it. |
 
-**If the user declines a move or a conversion**, create no ticket for that work either: link the
-existing ticket to the new parent with `Relates`, and treat it as that work's ticket.
+**If the user declines a move or a conversion** — at the approval step or at a conversion's final
+yes — nothing is written to that ticket. Ask what that work item gets instead: a new child, which
+is drafted, cold-read and shown in full for its own yes before it is created, like any other; or
+the existing ticket as its ticket, with a `Relates` link to the parent only if the user approves
+one.
 
 ### Converting a duplicate
 
@@ -307,8 +324,7 @@ Run `convertJiraIssueHierarchy` (found with `discover`; it runs through `execute
    (`SOURCE_HAS_SUBTASKS`), the user lacks the permission (`MOVE_PERMISSION_REQUIRED`), or it is
    otherwise incompatible — show the user what it said and ask. Never fall back to recreating the
    ticket. If the user then chooses not to convert — including when the blocker only shows up
-   after the parent was created — apply the decline rule above: no new ticket for that work, and a
-   `Relates` link from the existing ticket to the parent.
+   after the parent was created — apply the decline rule above.
 3. **Show the preview, then get that conversion's yes.** If the parent already exists (an
    existing ticket the user chose), the preview runs before the approval step and is shown there,
    in the separate conversions list. If the parent is created in this run, it has no key until
@@ -329,7 +345,9 @@ It is a separate item the user approves on its own.
 `inwardIssue` and `outwardIssue`, and reads *inwardIssue — outward wording — outwardIssue*:
 `linkType: "Blocks", inwardIssue: A, outwardIssue: B` records "A blocks B". After creating a
 link, re-read one of the pair with `view: "evidence"` and confirm the wording reads the right way
-round. Web links to a page or URL are a different operation, `createJiraIssueRemoteIssueLink`.
+round. If it reads backwards, stop and tell the user: no MCP operation deletes an issue link, so
+they remove it in Jira themselves. Never add the reverse link — that leaves links both ways. Web
+links to a page or URL are a different operation, `createJiraIssueRemoteIssueLink`.
 
 **No comments, no status changes.** Never comment on a found ticket, and never change its status
 or resolution, as part of this. Comments appear under the user's name and need their own approval.
@@ -420,7 +438,8 @@ is a different case: do what was asked.
 | Sending only the changed section in an edit | The rest of the description is wiped | Send the whole description every time |
 | Writing a body back in a different format than it was read in | Headings turn into literal text, or mentions and images are dropped | Write back in the `appliedContentFormat` the read reported |
 | Creating first, asking after | Un-deletable clutter on the team board | Approval gate before the first create call |
-| Creating again after a failed run | A second un-deletable ticket | Find the run's own tickets (step 6) and fill or skip them |
+| Retrying a create that returned an error | A second un-deletable ticket, if Jira saved the first | Stop and report (step 6); the next run's search for your own recent tickets finds it |
+| Re-running after a stop and skipping the search | Twins of what the stopped run made | A re-run is an ordinary run: search, then the approval step decides each leftover |
 | Summarizing the draft to avoid re-typing it | Ticket ends up thinner than what was approved | Re-send the approved text verbatim |
 | Skipping the existing-ticket search for a quick one-off | A twin of an open ticket lands on the board | Search first (step 1), every time |
 | Reading a search in the default compact view | Resolution and parent are missing, so every hit looks unresolved and parentless | `executeRead` with `responseFields` |

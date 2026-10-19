@@ -200,7 +200,12 @@ The routing test, applied to every question: *could someone who doesn't read cod
 
 ## Step 7: Write the brief
 
-Write `.context/research/investigations/$SLUG/brief.md` (use `None.` for empty sections):
+Write `.context/research/investigations/$SLUG/brief.md` (use `None.` for empty sections). If a
+brief already exists there, `/prd-to-jira` may have recorded Jira keys in it — a
+`Parent ticket:` line, keys in the §4 Ticket column, a `Tickets created earlier:` line, a
+`Run stopped` line. Carry every such key and line over, directly above the new §4 table, putting
+work-item keys on one `Tickets created earlier:` line rather than on the new rows (the work items
+may have changed); `/prd-to-jira`'s next run starts its search from them.
 
 ```markdown
 # {Feature name}: investigation
@@ -240,8 +245,10 @@ feature or a clean port.
 | # | Work item | Repo | Complexity | Depends on | Covers | Ticket |
 | WI-1 | {<Area>: what changes, in plain words} | {repo} | Simple/Moderate/Complex | — | NN-1, NTH-2 | — |
 
-(`/prd-to-jira` fills the **Ticket** column, and adds `Parent ticket: PT-xxxx` and `Owed:` lines
-directly above this table, as it creates the tickets. Leave them out here.)
+(`/prd-to-jira` fills the **Ticket** column and adds a `Parent ticket: PT-xxxx` line directly above
+this table as it creates the tickets — and a `Run stopped <date>` line if it stops partway. Leave
+the column empty here, apart from anything carried over from an earlier brief as described
+above.)
 
 **WI-1 — {title}.** {What it does. What it produces and which sibling item consumes it. Files it
 likely touches. What it deliberately leaves to other items. Any spike to run before its design.}

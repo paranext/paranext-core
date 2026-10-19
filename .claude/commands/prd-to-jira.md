@@ -63,11 +63,14 @@ readable top is in addition to the detail below, never a replacement for it.
    and was searched by investigation phrases, not ticket titles. Follow the
    [Searching for existing work](../skills/jira-creation/SKILL.md#searching-for-existing-work)
    recipe in the `jira-creation` skill: phrases from the feature name for the parent, and from
-   each work item's title and requirement wording for its child. **Every time, first** run the
-   skill's Process step 6 to find tickets an earlier run of this command already created — the
-   parent key and work-item keys recorded in the brief (step 6), and your own recent tickets — and
-   leave them out of the results: a run can die before the brief shows it ever ran. Propose one
-   action per hit exactly as the skill's
+   each work item's title and requirement wording for its child. Also run the skill's search for
+   **your own recent tickets** (its Process step 1), and read every ticket key the brief already
+   records — a `Parent ticket:` line, keys in the work-item table's Ticket column, a
+   `Tickets created earlier:` line — together with the children of a recorded parent
+   (`parent = <key>`). An earlier run that stopped partway left these; they go into the table like
+   any other hit — a recorded parent through the whole-feature rule below — and nothing is skipped
+   or claimed automatically. If the brief has a `Run stopped <date>` line older than 14 days, use
+   that date in the own-tickets search instead. Propose one action per hit exactly as the skill's
    [Acting on what the search found](../skills/jira-creation/SKILL.md#acting-on-what-the-search-found)
    section says — link a related ticket, move or convert a duplicate, or leave an in-progress
    duplicate where it is and link it to the parent. Two rules are specific to a batch:
@@ -75,15 +78,21 @@ readable top is in addition to the detail below, never a replacement for it.
      the new children go under it instead of a new parent. This comes first: a ticket that matches
      the whole feature is never moved or converted — those apply only to a duplicate of a single
      work item. If the user picks the existing ticket as the parent, the run is in
-     **existing-parent mode**: the ticket must be able to hold Sub-tasks (not an Epic or a
-     Sub-task — otherwise ask again); the step 5 gate shows its type, status and assignee; no
-     parent is created and the existing one is never edited; step 6 re-reads it before attaching
-     the first child and stops if it can no longer hold Sub-tasks; and step 7 hands the user the
-     requirements table as text to add there themselves.
-   - **A work item settled by an existing ticket** — moved, converted, linked in place because
-     someone is working on it, or linked because the user declined its move or conversion — gets
-     no new child. That ticket counts as the work item's ticket in
-     the requirements table and in the report.
+     **existing-parent mode**: the ticket must be able to hold Sub-tasks — read its
+     `issuetype.hierarchyLevel` with `getJiraIssue` and require `0`, the standard level of
+     Combined, Dev Task, UX Task and Bug (Initiative, Epic and Sub-task fail it; ask again); the
+     step 5 gate shows its type, status, assignee, reporter and created date; no parent is
+     created; step 6 re-reads it before attaching the first child and stops if it can no longer
+     hold Sub-tasks. The existing parent is edited only with its own yes: if its body is still an
+     unfilled template skeleton (typically left by an earlier run), it is drafted and cold-read in
+     steps 3–4 like a new parent and the fill is proposed at the gate; step 7's back-fill is
+     proposed there too. Without those yeses, step 7 hands the user the requirements table as text
+     to add themselves.
+   - **A work item settled by an existing ticket** — moved, converted, already under the chosen
+     parent, filled as a leftover, or linked in place because someone is working on it — gets no
+     new child. That ticket counts as the work item's ticket in the requirements table and in the
+     report. A declined move or conversion settles nothing by itself: the skill's decline rule
+     asks what that work item gets instead.
 3. **Draft everything locally first**: the parent and every child, titles and full descriptions,
    per the target shape above, with the step 2 links and references folded in. Fill the
    descriptions from the brief and the investigation findings — don't thin them out; the
@@ -105,26 +114,25 @@ readable top is in addition to the detail below, never a replacement for it.
    skill** ([`.claude/skills/jira-creation/SKILL.md`](../skills/jira-creation/SKILL.md)). Enter
    its Process at step 5 (resolve the target): its steps 1–4 — search, draft, cold read, approval
    — are this command's steps 2–5 and already ran once for the whole batch. Create the parent (in
-   existing-parent mode, re-read the chosen ticket instead — see step 2). Then create each child
-   with the parent set, one at a time, filling and verifying each before moving on. **As each key
-   is created, write it into the brief** — the parent's key on a `Parent ticket: PT-xxxx` line
-   directly above the §4 work-item table, and each child's in that table's **Ticket** column
-   (add the column if an older brief lacks it) — so a later session can tell what this run
-   already made. Before the first Jira write of any kind — create, move, link, conversion or edit
-   — write each work item settled by an existing ticket into the column too, with the approved
-   action still owed — `PT-xxxx (existing, conversion owed)`, `(existing, move owed)` or
-   `(existing, link owed)` — and shorten it to `PT-xxxx (existing)` once that action is done and
-   verified; a conversion that falls back to a link (declined at its final yes, or blocked)
-   becomes `(existing, link owed)`. Before that same first write, also put every approved action
-   on a ticket that doesn't settle a work item (a `Relates` link to a related ticket, a
-   description edit) on an `Owed:` line directly above the same table —
-   `Owed: link PT-xxxx (related) to the parent; edit PT-yyyy's description` — and take each off it
-   once done and verified. As soon as the parent is in place — created, filled
-   and verified, or re-read in existing-parent mode — carry out the owed actions: each move and
-   `Relates` link, and each conversion — previewing it now if it was approved in principle,
-   showing the preview, and converting only after that conversion's final yes (see the skill's
-   [Converting a duplicate](../skills/jira-creation/SKILL.md#converting-a-duplicate)). Verify each,
-   and run any approved description edit as the skill's Process step 12 says.
+   existing-parent mode, re-read the chosen ticket instead — see step 2 — and, if its fill was
+   approved, fill it as the skill's steps 8–11 describe). Then create each child
+   with the parent set, one at a time, filling and verifying each before moving on. **Write each
+   key into the brief right after its create call, before the fill** — the parent's on a
+   `Parent ticket: PT-xxxx` line directly above the §4 work-item table, and each child's in that
+   table's **Ticket** column (add the column if an older brief lacks it). These keys are only a
+   starting point for a later run's search: if this run stops, the next one finds them and its
+   approval step decides what to do with each. A work item settled by an existing ticket gets
+   `PT-xxxx (existing)` in the column once its action is done and verified.
+
+   As soon as the parent is in place — created, filled and verified, or re-read in existing-parent
+   mode — carry out the approved actions that need only the parent: each move, each `Relates` or
+   `Blocks` link to the parent, and each conversion — previewing it now if it was approved in
+   principle, showing the preview, and converting only after that conversion's final yes (see the
+   skill's [Converting a duplicate](../skills/jira-creation/SKILL.md#converting-a-duplicate)). A
+   link whose target is a child is made right after that child is created, filled and verified;
+   if that work item was settled by an existing ticket instead, ask again. Re-check each ticket
+   right before acting on it, verify each action, and run any approved description edit, as the
+   skill's Process step 12 says.
 
    The child sections this command drafts (User Story, Description, Implementation Ideas, Testing
    Ideas, Definition of Done, Dependencies) are written to line up with a typical task template —
@@ -133,19 +141,25 @@ readable top is in addition to the detail below, never a replacement for it.
    link / non-negotiables table under the closest headings rather than dropping the scaffold.
 7. **Back-fill the mapping**: update the parent's description so each non-negotiable row lists
    the ticket URL(s) in its "Jira Ticket(s)" cell — created and existing alike, marking existing
-   ones "(existing)" or "(existing, in progress)". In existing-parent mode, don't edit the parent:
-   show the filled-in table as text instead.
+   ones "(existing)" or "(existing, in progress)". In existing-parent mode the parent may be
+   someone else's ticket and the keys didn't exist at the gate, so this edit gets its own yes now:
+   re-check the parent, show its complete new body — everything it already says kept, written back
+   in the format it was read in — and edit only on that yes. Otherwise show the filled-in table as
+   text for the user to add themselves.
 8. **Report**: list the parent + child keys — created, moved, converted, and existing tickets
-   linked in place — plus the links made. The brief's work-item table already holds the keys; the
-   user commits the brief as usual.
+   linked in place — plus the links made. The brief already holds the keys; the user commits the
+   brief as usual.
 
 ## Failure handling
 
-If a call fails midway, stop and report exactly which issues were created (keys) and which
-weren't, **and** every approved action on an existing ticket — move, conversion, link,
-description edit — marked done or still owed. Resume only on user instruction, through the
-skill's Process step 6 and its "Keep a record of the run": find this run's own tickets rather than
-creating them again, take the owed actions from the brief's Ticket column and `Owed:` line, and
-re-check each one against the ticket's live state before carrying it out. The brief records only
-that a description edit is owed, not its text: re-draft that edit and get the user's yes on it
-again.
+If a call fails midway, stop. Never retry a create that returned an error — Jira may have saved it
+(the skill's Process step 6). Write a `Run stopped <date>` line directly above the brief's §4
+work-item table, then report exactly which issues were created (keys) and which weren't, **and**
+which approved actions on existing tickets — move, conversion, link, description edit — are done
+and which are not.
+
+There is no resume. To continue, run this command again on the same brief: it is an ordinary run.
+Step 2's search finds what the stopped run made — the keys in the brief, and your own recent
+tickets — and the approval step decides each one again, with fresh drafts and a fresh cold read.
+The search for your own recent tickets finds only the tickets of whoever runs the command, so a
+teammate who continues the work needs the brief, committed or handed over, with its keys in it.
