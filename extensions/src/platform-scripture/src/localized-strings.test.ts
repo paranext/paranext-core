@@ -87,3 +87,15 @@ describe('shared-project delete confirmation fallback', () => {
     expect(localizedStrings.en['%manageBooks_delete_confirmBodySharedSendReceive_2%']).toBeTruthy();
   });
 });
+
+/**
+ * `%manageBooks_delete_confirmBodyAllShared_2%` has no Spanish value because the whole delete
+ * dialog is English-only, so its English value is what the dialog shows everywhere.
+ */
+describe('all-shared delete confirmation', () => {
+  it('has an English string that says sync', () => {
+    const value = localizedStrings.en['%manageBooks_delete_confirmBodyAllShared_2%'];
+    expect(value).toBeTruthy();
+    expect(value).toContain('sync');
+  });
+});

@@ -24,6 +24,7 @@ const MOCK_FILES: { [uri: string]: string } = {
     "%some_localization_key%": "This is the English text for %some_localization_key%.",
     "%general_button_submit%": "Submit",
     "%general_button_submit_2%": "Submit now",
+    "%retiredLookup_target%": "Target in English",
     "%firstRun_title%": "Set up",
     "%firstRun_button_next%": "Next",
     "%firstRun_button_back%": "Back"
@@ -63,6 +64,9 @@ const MOCK_FILES: { [uri: string]: string } = {
     },
     "%general_button_submit_2%": {
       "fallbackKey": "%general_button_submit%"
+    },
+    "%retiredLookup_test%": {
+      "fallbackKey": "%retiredLookup_target%"
     }
   }`,
 };
@@ -168,6 +172,16 @@ test('a later interface language that translated only the old key does not win o
     locales: ['it', 'de'],
   });
   expect(response).toEqual('Submit now');
+});
+
+test('resolves a key that has no value in any language through its fallbackKey in the fallback languages', async () => {
+  // %retiredLookup_test% has no value in any language and its fallbackKey has a value only in
+  // English, so only the final fallbackKey-in-fallback-languages tier can resolve it for fr.
+  const response = await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%retiredLookup_test%',
+    locales: ['fr'],
+  });
+  expect(response).toEqual('Target in English');
 });
 
 test('Key returned with localizeKey that does not exist', async () => {

@@ -595,7 +595,7 @@ Before completing any UI work:
 The following are **blocking issues** that must be resolved before the work can be marked complete:
 
 1. **Hardcoded English text** - Any user-visible text not going through localization
-2. **Missing translations** - Keys exist in `en` but not `es` (or vice versa)
+2. **Missing translations** - Keys exist in `en` but not `es` (or vice versa) — except a new key that replaces a key which is itself English-only; see [If a String Needs Replacement](#if-a-string-needs-replacement)
 3. **Modified existing strings** - Changing values of existing keys (add a new key whose `fallbackKey` points at the old key instead — see [If a String Needs Replacement](#if-a-string-needs-replacement))
 4. **Duplicate keys** - Creating new keys for strings that already exist
 
