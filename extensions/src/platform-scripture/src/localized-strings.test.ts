@@ -34,6 +34,28 @@ const EXTRA_MATERIAL_STRING_KEYS = [
   '%webView_find_extraMaterialNotSearchedScopeResults%',
 ];
 
+/**
+ * The notification shown when an edit is rejected because an automatic sync is in progress.
+ *
+ * This key falls back to the retired Send/Receive key, so a dropped `es` value would silently show
+ * the retired wording instead of failing anywhere. This test is what notices.
+ */
+const SYNC_EDIT_BLOCKED_STRING_KEYS = ['%webView_platformScripture_error_syncEditBlocked_2%'];
+
+describe.each(SYNC_EDIT_BLOCKED_STRING_KEYS)('sync edit-blocked notification %s', (key) => {
+  it('has an English string', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish string', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish string differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
 describe.each(EXTRA_MATERIAL_STRING_KEYS)('extra-material explanation %s', (key) => {
   it('has an English string', () => {
     expect(localizedStrings.en[key]).toBeTruthy();

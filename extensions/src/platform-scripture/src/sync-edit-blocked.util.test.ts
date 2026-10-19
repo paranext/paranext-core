@@ -48,8 +48,8 @@ describe('notifySyncEditBlocked', () => {
     await notifySyncEditBlocked();
 
     expect(mockSend).toHaveBeenCalledTimes(1);
-    // The literal key (not the util's own constant) so this fails if the key ever drifts from
-    // the entry contributed in contributions/localizedStrings.json.
+    // The literal pins the util's constant, so changing the key there is a deliberate act. That the
+    // key exists in the shipped strings is localized-strings.test.ts's job, not this test's.
     expect(mockSend).toHaveBeenCalledWith({
       message: '%webView_platformScripture_error_syncEditBlocked_2%',
       severity: 'warning',
