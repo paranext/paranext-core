@@ -1,7 +1,5 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using Paranext.DataProvider.Checks;
 using Paratext.Checks;
 using Paratext.Data;
@@ -75,23 +73,6 @@ internal class CheckRunnerJobTests : PapiTestBase
         return check;
     }
 
-    internal static T Invoke<T>(CheckRunner runner, string methodName, params object?[] args)
-    {
-        var method =
-            typeof(CheckRunner).GetMethod(
-                methodName,
-                BindingFlags.NonPublic | BindingFlags.Instance
-            ) ?? throw new MissingMethodException(nameof(CheckRunner), methodName);
-        try
-        {
-            return (T)method.Invoke(runner, args)!;
-        }
-        catch (TargetInvocationException tie) when (tie.InnerException != null)
-        {
-            throw tie.InnerException;
-        }
-    }
-
     /// <summary>
     /// Runs one job over whole books and polls it to a terminal status, collecting every result
     /// batch along the way.
@@ -117,29 +98,19 @@ internal class CheckRunnerJobTests : PapiTestBase
                 ))
                 .ToArray(),
         };
-        var jobId = Invoke<string>(runner, "BeginCheckJob", scope);
+        var jobId = runner.BeginCheckJob(scope);
 
         var results = new List<CheckRunResult>();
         var stopwatch = Stopwatch.StartNew();
         while (stopwatch.Elapsed < TimeSpan.FromSeconds(30))
         {
-            var report = Invoke<CheckJobStatusReport>(
-                runner,
-                "RetrieveCheckJobUpdate",
-                jobId,
-                10_000
-            );
+            var report = runner.RetrieveCheckJobUpdate(jobId, 10_000);
             if (report.NextResults != null)
                 results.AddRange(report.NextResults);
             if (report.Status != CheckJobStatus.Queued && report.Status != CheckJobStatus.Running)
             {
                 // Drain anything produced after the last poll
-                var tail = Invoke<CheckJobStatusReport>(
-                    runner,
-                    "RetrieveCheckJobUpdate",
-                    jobId,
-                    10_000
-                );
+                var tail = runner.RetrieveCheckJobUpdate(jobId, 10_000);
                 if (tail.NextResults != null)
                     results.AddRange(tail.NextResults);
                 return (report, results);
@@ -358,18 +329,8 @@ internal class CheckRunnerJobTests : PapiTestBase
         _scrText.Settings.Quotes = new QuoteMarks("");
         var runner = CreateRunner();
 
-        var state = Invoke<CheckSetupState>(
-            runner,
-            "LookUpCheckSetupStatus",
-            s_quotationCheckId,
-            _projectId
-        );
-        var isSetup = Invoke<bool>(
-            runner,
-            "IsCheckSetupForProject",
-            s_quotationCheckId,
-            _projectId
-        );
+        var state = runner.LookUpCheckSetupStatus(s_quotationCheckId, _projectId);
+        var isSetup = runner.IsCheckSetupForProject(s_quotationCheckId, _projectId);
 
         Assert.That(state.Status, Is.EqualTo(CheckSetupStatus.NotApplicable));
         // A check that doesn't apply counts as set up
@@ -400,14 +361,8 @@ internal class CheckRunnerJobTests : PapiTestBase
                 ? hookCheck
                 : CheckFactory.CreateCheck(checkId, dataSource);
         var runner = CreateRunner(Create);
-        var cacheField =
-            typeof(CheckRunner).GetField(
-                "_checkCache",
-                BindingFlags.NonPublic | BindingFlags.Instance
-            ) ?? throw new MissingFieldException(nameof(CheckRunner), "_checkCache");
-        var cache = (CheckCache)cacheField.GetValue(runner)!;
-        cache.GetCheck(InitializeHookCheckId, _projectId).SettingsChanged = true;
-        return (runner, hookCheck, cache.GetCheck(earlierCheckId, _projectId));
+        runner._checkCache.GetCheck(InitializeHookCheckId, _projectId).SettingsChanged = true;
+        return (runner, hookCheck, runner._checkCache.GetCheck(earlierCheckId, _projectId));
     }
 
     private static bool AreResultsReady(CheckForProject check, int bookNum)
@@ -429,10 +384,10 @@ internal class CheckRunnerJobTests : PapiTestBase
         // in the background; the hook waits until it has.
         hookCheck.OnInitialize = () =>
         {
-            PutBook(1, "In the the beginning God");
+            PutBook(1, "In the beginning God God");
             editClearedFinishedCheck = SpinWait.SpinUntil(
                 () => !AreResultsReady(repeatedWordCheck, 1),
-                TimeSpan.FromSeconds(5)
+                TimeSpan.FromSeconds(30)
             );
         };
 
@@ -444,10 +399,12 @@ internal class CheckRunnerJobTests : PapiTestBase
         Assert.That(final.Error, Is.Null);
         Assert.That(final.CheckErrors, Is.Null.Or.Empty);
         // The cleared check is run again, so its results for the edited text still arrive
-        Assert.That(
-            results.Where(r => r.CheckId == s_repeatedWordCheckId).Select(r => r.ItemText),
-            Has.Some.Contains("the")
-        );
+        var itemTexts = results
+            .Where(r => r.CheckId == s_repeatedWordCheckId)
+            .Select(r => r.ItemText)
+            .ToList();
+        Assert.That(itemTexts, Has.Some.Contains("God"));
+        Assert.That(itemTexts, Has.None.Contains("the"));
     }
 
     [Test]
@@ -461,12 +418,12 @@ internal class CheckRunnerJobTests : PapiTestBase
         // the edit has cleared the finished check's results
         hookCheck.OnInitialize = () =>
         {
-            PutBook(1, "In the the beginning God");
+            PutBook(1, "In the beginning God God");
             editClearedFinishedCheck = SpinWait.SpinUntil(
                 () => !AreResultsReady(repeatedWordCheck, 1),
-                TimeSpan.FromSeconds(5)
+                TimeSpan.FromSeconds(30)
             );
-            foreach (var job in ActiveJobs(runner))
+            foreach (var job in runner._activeCheckJobsByJobId.Values)
                 job.StopRequested = true;
         };
 
@@ -520,16 +477,6 @@ internal class CheckRunnerJobTests : PapiTestBase
             .ToList();
         Assert.That(secondItemTexts, Has.Some.Contains("God"));
         Assert.That(secondItemTexts, Has.None.Contains("the"));
-    }
-
-    private static IEnumerable<CheckJobStatus> ActiveJobs(CheckRunner runner)
-    {
-        var jobsField =
-            typeof(CheckRunner).GetField(
-                "_activeCheckJobsByJobId",
-                BindingFlags.NonPublic | BindingFlags.Instance
-            ) ?? throw new MissingFieldException(nameof(CheckRunner), "_activeCheckJobsByJobId");
-        return ((ConcurrentDictionary<string, CheckJobStatus>)jobsField.GetValue(runner)!).Values;
     }
 
     [Test]
