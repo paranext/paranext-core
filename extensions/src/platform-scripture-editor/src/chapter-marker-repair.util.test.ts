@@ -598,6 +598,19 @@ describe('prepareUsjForChapterSave', () => {
       });
     });
 
+    // Only the line the chapter marker stood on is read as a chapter line. A nameless paragraph
+    // elsewhere is ordinary text, however the caret's offset would read with its `\ ` counted.
+    it('does not count the marker of a nameless line the chapter marker did not stand on', () => {
+      const { caretTarget } = prepareUsjForChapterSave(
+        usjOf(nameless('2 more'), para('p', 'body')),
+        usjOf(chapter('2', { sid: 'GEN 2' }), nameless('2 more'), para('p', 'body')),
+        2,
+        caretInLine(5),
+        true,
+      );
+      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[0].content[0]', offset: 4 } });
+    });
+
     it('uses the usual caret when the caret was not in the moved text', () => {
       const { caretTarget } = prepareUsjForChapterSave(usjOf('c 2', para('p', 'body')), stored, 2, {
         start: { jsonPath: '$.content[1].content[0]', offset: 2 },

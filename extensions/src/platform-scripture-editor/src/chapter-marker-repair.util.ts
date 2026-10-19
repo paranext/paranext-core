@@ -350,8 +350,7 @@ function caretInMovedText(
       },
     };
   }
-  const isChapterLine = index === chapterLineIndex;
-  if (pathBelowItem !== FIRST_CHILD_PATH) return undefined;
+  if (index !== chapterLineIndex || pathBelowItem !== FIRST_CHILD_PATH) return undefined;
 
   const caretOffset = 'offset' in caret.start ? (caret.start.offset ?? 0) : 0;
   const caretInText = (text: string, offset: number): SelectionRange => ({
@@ -364,7 +363,6 @@ function caretInMovedText(
   if (!isMarkerObject(item) || item.type === CHAPTER_TYPE) return undefined;
 
   const marker = item.marker ?? '';
-  if (marker && !isChapterLine) return undefined;
   // The backslash, then the marker's name, then its separator.
   const markerNameEnd = 1 + marker.length;
   if (marker && caretOffset <= markerNameEnd)

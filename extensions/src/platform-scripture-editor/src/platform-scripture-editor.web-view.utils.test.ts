@@ -1036,6 +1036,14 @@ describe('isSelectionInChapterLine', () => {
     ).toBe(true);
   });
 
+  it('is true for a caret anchored on the chapter line element itself', () => {
+    document.body.innerHTML = '<p class="chapter" data-marker="c"><span>\\c 2 </span></p>';
+    const chapterLine = document.querySelector('p.chapter');
+    const selection = document.getSelection();
+    if (chapterLine) selection?.setBaseAndExtent(chapterLine, 0, chapterLine, 0);
+    expect(isSelectionInChapterLine(selection)).toBe(true);
+  });
+
   it('is false for a caret in a paragraph', () => {
     expect(
       isSelectionInChapterLine(
