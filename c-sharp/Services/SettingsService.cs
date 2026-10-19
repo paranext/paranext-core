@@ -188,6 +188,7 @@ internal static class SettingsService
                     return true;
                 reason = "no value returned";
             }
+            // Only WaitAsync's deadline: the async read path doesn't throw this.
             catch (TimeoutException)
             {
                 return false;
