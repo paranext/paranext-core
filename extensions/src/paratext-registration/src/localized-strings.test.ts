@@ -19,8 +19,8 @@ const { localizedStrings } = readLocalizedStringsFile();
 /**
  * The internet-access option descriptions that name sync.
  *
- * Each key falls back to its retired Send/Receive predecessor, so a dropped `es` value would
- * silently show the retired wording instead of failing anywhere. This test is what notices.
+ * Each key falls back to its superseded Send/Receive predecessor, so a dropped `es` value would
+ * silently show the old wording instead of failing anywhere. This test is what notices.
  */
 const INTERNET_ACCESS_DETAIL_STRING_KEYS = [
   '%paratextRegistration_description_internetUse_option_Enabled_details_2%',

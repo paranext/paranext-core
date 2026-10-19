@@ -418,14 +418,14 @@ When a string needs a different value, add a new key; the old key and its values
 ```json
 {
   "metadata": {
-    "%feature_label_2%": {
-      "fallbackKey": "%feature_label%"
-    },
     "%feature_label%": {
       "deprecationInfo": {
         "date": "2026-10-19",
         "message": "Superseded by %feature_label_2%."
       }
+    },
+    "%feature_label_2%": {
+      "fallbackKey": "%feature_label%"
     }
   },
   "localizedStrings": {
@@ -450,7 +450,7 @@ The example shows English only for brevity; every language the old key has a val
 A product-wide wording change (for example "Send/Receive" becoming "sync") is the worked example of the recipe above. It changes what the user reads, so it is a replacement, not a style fix — and the old key stays intact, because third-party extensions and translators may still reference it, and the old value is still correct for anyone who has not adopted the new term:
 
 1. **Add the new key** with the new wording in every language the old key has a value in (for most keys `en` and `es`; a key this repo ships in English only gets its new key in English only). Leave the old key and all its values untouched.
-2. **Add `fallbackKey` on the NEW key**, pointing at the old key, so a language that has not translated the new key yet still shows its old translation instead of the English fallback. This holds for the user's first interface language that has strings; for a second interface language the English new string wins, because the key is looked up across the remaining languages before the `fallbackKey` is (see [Fallback Chain](#fallback-chain-how-missing-translations-are-handled)).
+2. **Add `fallbackKey` on the NEW key**, pointing at the old key, so a language that has not translated the new key yet still shows its old translation instead of the English fallback. This holds for the user's first interface language that has strings; for a second interface language the new key's value from a later interface language, or English, wins over the old translation, because the key is looked up across the remaining languages before the `fallbackKey` is (see [Fallback Chain](#fallback-chain-how-missing-translations-are-handled)).
 3. **Switch every consumer** in this repo to the new key — `t()` calls, menu contributions, English fallback literals in TSX and C#, `displayData.json`.
 4. **Verify the old key has no remaining consumer** in implementation code: search the repo for it and confirm the only hits are the strings file and the metadata. Record the search in the PR. Also search `metadata` for any `fallbackKey` that targets the old key (an older key that has no value of its own and resolves through it) and re-point it at the new key.
 5. **Add `deprecationInfo`** (date + "the new key is …") to the old key's metadata entry.
@@ -458,14 +458,14 @@ A product-wide wording change (for example "Send/Receive" becoming "sync") is th
 ```json
 {
   "metadata": {
-    "%feature_label_2%": {
-      "fallbackKey": "%feature_label%"
-    },
     "%feature_label%": {
       "deprecationInfo": {
         "date": "2026-10-13",
         "message": "\"Send/Receive\" is now called \"sync\". The new key is %feature_label_2%."
       }
+    },
+    "%feature_label_2%": {
+      "fallbackKey": "%feature_label%"
     }
   },
   "localizedStrings": {

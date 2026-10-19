@@ -38,8 +38,8 @@ const EXTRA_MATERIAL_STRING_KEYS = [
 /**
  * The notification shown when an edit is rejected because an automatic sync is in progress.
  *
- * This key falls back to the retired Send/Receive key, so a dropped `es` value would silently show
- * the retired wording instead of failing anywhere. This test is what notices.
+ * This key falls back to the old Send/Receive key, so a dropped `es` value would silently show the
+ * old wording instead of failing anywhere. This test is what notices.
  */
 const SYNC_EDIT_BLOCKED_STRING_KEYS = ['%webView_platformScripture_error_syncEditBlocked_2%'];
 
@@ -72,8 +72,9 @@ describe.each(EXTRA_MATERIAL_STRING_KEYS)('extra-material explanation %s', (key)
 });
 
 /**
- * The shared-project delete confirmation falls back to the renamed key, not the retired one, so a
- * locale without its own translation shows the sync wording.
+ * `%manageBooks_delete_confirmBodyShared%` has no value in any language and resolves only through
+ * its `fallbackKey`, which must name the renamed key, not the old one, so every language shows the
+ * sync wording.
  */
 describe('shared-project delete confirmation fallback', () => {
   it('falls back to the renamed key', () => {

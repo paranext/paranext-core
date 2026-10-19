@@ -527,10 +527,10 @@ Common reusable keys (verify in `assets/localization/en.json` before using — t
 ```json
 {
   "metadata": {
-    "%feature_label_2%": { "fallbackKey": "%feature_label%" },
     "%feature_label%": {
       "deprecationInfo": { "date": "2026-10-19", "message": "Superseded by %feature_label_2%." }
-    }
+    },
+    "%feature_label_2%": { "fallbackKey": "%feature_label%" }
   },
   "localizedStrings": {
     "en": { "%feature_label%": "The old text", "%feature_label_2%": "The new text" }

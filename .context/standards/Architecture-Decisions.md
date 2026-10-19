@@ -7987,7 +7987,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** A new value dropped from a language silently shows the old wording through the
   fallback rather than failing visibly, so shipped-file tests pin the new keys' values. The forward
   fallback reaches only the user's first interface language that has strings: for a second interface
-  language the English new string wins, because the key is looked up across the remaining languages
+  language the new key's value from a later interface language, or English, wins over the old translation, because the key is looked up across the remaining languages
   before the `fallbackKey` is. Any `fallbackKey` elsewhere that targets the old key (an older key
   with no value of its own resolving through it) must be re-pointed at the new key, or that key
   keeps showing the old wording.

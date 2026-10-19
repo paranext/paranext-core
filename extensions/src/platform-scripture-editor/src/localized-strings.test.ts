@@ -171,8 +171,8 @@ describe('character marker removal notifications', () => {
 });
 
 // The notification shown when an edit is rejected because an automatic sync is in progress. The key
-// falls back to the retired Send/Receive key, so a dropped `es` value would silently show the
-// retired wording; this block is what notices.
+// falls back to the old Send/Receive key, so a dropped `es` value would silently show the
+// old wording; this block is what notices.
 describe.each(['%webView_platformScriptureEditor_error_syncEditBlocked_2%'])(
   'sync edit-blocked notification %s',
   (key) => {
