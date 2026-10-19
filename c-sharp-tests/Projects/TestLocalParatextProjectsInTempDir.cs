@@ -17,7 +17,7 @@ namespace TestParanextDataProvider.Projects
             // run's id: a concurrent run's folder for the same test is never touched. The prefix is
             // the one FixtureSetup sweeps, so a folder a crashed run leaked is cleaned up later.
             _folder = new TemporaryFolder(
-                $"Platform.Bible.Tests-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}"
+                $"{FixtureSetup.TEST_FOLDER_PREFIX}-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}"
             );
         }
 

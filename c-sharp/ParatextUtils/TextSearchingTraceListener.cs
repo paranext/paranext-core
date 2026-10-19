@@ -39,11 +39,14 @@ public class TextSearchingTraceListener : TraceListener
     /// <see cref="Trace.Listeners"/>.
     /// </summary>
     /// <param name="textToFind">Text whose appearance in any considered message sets
-    /// <see cref="FoundText"/>.</param>
+    /// <see cref="FoundText"/>. Must not be empty, since every message would match it.</param>
     /// <param name="currentThreadOnly">If <c>true</c>, only messages traced on the thread that
     /// calls this constructor are considered; messages traced on other threads are ignored.</param>
+    /// <exception cref="ArgumentException"><paramref name="textToFind"/> is empty.</exception>
     public TextSearchingTraceListener(string textToFind, bool currentThreadOnly = false)
     {
+        ArgumentException.ThrowIfNullOrEmpty(textToFind);
+
         _textToFind = textToFind;
         _threadId = currentThreadOnly ? Environment.CurrentManagedThreadId : null;
     }
@@ -57,7 +60,8 @@ public class TextSearchingTraceListener : TraceListener
     /// <paramref name="watchedCall"/> returns, so work it leaves running in the background is not
     /// watched; and with <paramref name="currentThreadOnly"/> set, work it hands to other threads
     /// is ignored even while it runs. Passing an async lambda is therefore a compile error (see the
-    /// <see cref="Func{TResult}"/> overload).
+    /// <see cref="Func{TResult}"/> overload). An <c>async void</c> method group cannot be caught at
+    /// compile time, since it converts to <see cref="Action"/>, and must not be passed.
     /// </remarks>
     /// <param name="textToFind">Text to look for. Must not be empty, since every message would
     /// match it.</param>
@@ -75,8 +79,7 @@ public class TextSearchingTraceListener : TraceListener
         bool currentThreadOnly
     )
     {
-        ArgumentException.ThrowIfNullOrEmpty(textToFind);
-
+        // Constructed before the call runs, so an empty textToFind throws without running it.
         TextSearchingTraceListener listener = new(textToFind, currentThreadOnly);
         // PNX001 bans Trace for logging; attaching a listener is how ParatextData's trace-only
         // errors are observed, so the Trace API itself is the point here.
@@ -100,6 +103,12 @@ public class TextSearchingTraceListener : TraceListener
     /// it binds here instead of to <see cref="WasTracedDuring(string, Action, bool)"/>, where it
     /// would return at its first await and leave the rest of its work unwatched.
     /// </summary>
+    /// <remarks>
+    /// There is deliberately no <see cref="ValueTask"/> twin: a plain async lambda converts to both
+    /// delegate types equally well, so a second overload turns this error into an ambiguous-call
+    /// error that does not say why. A lambda declared <c>async ValueTask</c> already fails to
+    /// compile, since it converts to neither this overload nor <see cref="Action"/>.
+    /// </remarks>
     [Obsolete(
         "WasTracedDuring watches only synchronous calls: an async call returns at its first await, "
             + "and the listener is removed before the rest of its work runs.",

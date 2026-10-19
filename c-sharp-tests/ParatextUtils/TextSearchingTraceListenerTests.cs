@@ -188,6 +188,14 @@ namespace TestParanextDataProvider.ParatextUtils
             Assert.That(ran, Is.False);
         }
 
+        [Test]
+        public void Constructor_EmptyTextToFind_Throws()
+        {
+            // A listener constructed directly, rather than through WasTracedDuring, must not be
+            // able to search for empty text, which every message contains.
+            Assert.That(() => new TextSearchingTraceListener(""), Throws.ArgumentException);
+        }
+
         /// <summary>
         /// Text unique to the calling test, so a listener cannot match a trace another test wrote.
         /// </summary>

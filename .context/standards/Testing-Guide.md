@@ -601,17 +601,12 @@ internal abstract class PapiTestBase
 [ExcludeFromCodeCoverage]
 public class FixtureSetup
 {
-    private const string TEST_FOLDER_PREFIX = "Platform.Bible.Tests";
+    internal const string TEST_FOLDER_PREFIX = "Platform.Bible.Tests";
 
-    // Declared before s_testFolder, which reads it: static initializers run in declaration order.
     public static string RunId { get; } = Guid.NewGuid().ToString("N");
 
-    private static readonly string s_testFolder = Path.Combine(
-        Path.GetTempPath(),
-        $"{TEST_FOLDER_PREFIX}-{RunId}"
-    );
-
-    public static string TestFolderPath => s_testFolder;
+    public static string TestFolderPath =>
+        Path.Combine(Path.GetTempPath(), $"{TEST_FOLDER_PREFIX}-{RunId}");
 
     [OneTimeSetUp]
     public void RunBeforeAnyTests()
@@ -620,16 +615,16 @@ public class FixtureSetup
         // neither created nor modified in the last 24 hours, left by runs that never tore down.
         DeleteStaleTestFolders(Path.GetTempPath(), DateTime.UtcNow.AddHours(-24));
 
-        Directory.CreateDirectory(s_testFolder);
+        Directory.CreateDirectory(TestFolderPath);
         // usfm.sty is copied in with overwrite: true, so setup tolerates an existing folder.
-        ParatextGlobals.Initialize(s_testFolder);
+        ParatextGlobals.Initialize(TestFolderPath);
     }
 
     [OneTimeTearDown]
     public void RunAfterAnyTests()
     {
-        if (Directory.Exists(s_testFolder))
-            Directory.Delete(s_testFolder, true);
+        if (Directory.Exists(TestFolderPath))
+            Directory.Delete(TestFolderPath, true);
     }
 
     internal static void DeleteStaleTestFolders(string parentDirectory, DateTime cutoffUtc);
@@ -638,14 +633,15 @@ public class FixtureSetup
 
 The folder is unique per run, so two runs at once (two sessions, or an IDE run beside a CLI run)
 never delete each other's files in teardown. A test that needs its own temp folder names it
-`Platform.Bible.Tests-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}` (as
+`{FixtureSetup.TEST_FOLDER_PREFIX}-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}` (as
 `TestLocalParatextProjectsInTempDir` does), so it is unique per run too and falls under the prefix
 the sweep cleans up if a crashed run leaks it.
 
 No fixture in `c-sharp-tests` is `[Parallelizable]`, so a test may change process-global state
 (`Trace.Listeners`, `Console.Out`/`Console.Error`, a static flag) as long as it restores it, even
-when an assertion fails (`[TearDown]` or `finally`); mark such a fixture `[NonParallelizable]` so it
-stays serial if parallel execution is ever turned on.
+when an assertion fails (`[TearDown]` or `finally`). New fixtures of that kind are marked
+`[NonParallelizable]` so they stay serial if parallel execution is ever turned on; two older ones,
+`ThreadingUtilsTests` and `StartupTimingTests`, document the assumption in a comment instead.
 
 ### Test Doubles
 

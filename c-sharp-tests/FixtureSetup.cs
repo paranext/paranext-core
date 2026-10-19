@@ -9,24 +9,24 @@ namespace TestParanextDataProvider;
 [ExcludeFromCodeCoverage]
 public class FixtureSetup
 {
-    private const string TEST_FOLDER_PREFIX = "Platform.Bible.Tests";
+    /// <summary>
+    /// The prefix every test temp folder name starts with. The stale-folder sweep deletes only
+    /// folders named with it, so a test that makes its own temp folder names it
+    /// <c>{TEST_FOLDER_PREFIX}-{RunId}-{test id}</c>.
+    /// </summary>
+    internal const string TEST_FOLDER_PREFIX = "Platform.Bible.Tests";
 
     /// <summary>
     /// Identifies this test run (a GUID in <c>N</c> format). Temp folders named after it are unique
     /// to the run, so concurrent runs never share, and so never delete, each other's folders.
     /// </summary>
-    // Declared before s_testFolder, which reads it: static initializers run in declaration order.
     public static string RunId { get; } = Guid.NewGuid().ToString("N");
 
     // Unique per test run: the folder is deleted in teardown, so two runs sharing one folder
     // (two developer sessions, or an IDE run beside a CLI run) would delete each other's
     // fixture files mid-run and fail at random.
-    private static readonly string s_testFolder = Path.Combine(
-        Path.GetTempPath(),
-        $"{TEST_FOLDER_PREFIX}-{RunId}"
-    );
-
-    public static string TestFolderPath => s_testFolder;
+    public static string TestFolderPath =>
+        Path.Combine(Path.GetTempPath(), $"{TEST_FOLDER_PREFIX}-{RunId}");
 
     [OneTimeSetUp]
     public void RunBeforeAnyTests()
@@ -41,27 +41,27 @@ public class FixtureSetup
 
         // Create folder for test running. Shouldn't actually be used, but ParatextData
         // throws an error if the directory doesn't exist.
-        Directory.CreateDirectory(s_testFolder);
+        Directory.CreateDirectory(TestFolderPath);
 
         var dllPath = Assembly.GetExecutingAssembly().Location;
         // Climb up to the c-sharp folder, then down to the assets folder in order to get the usfm
         // stylesheet needed by certain parts of ParatextData.
         var srcDir = Path.Combine(dllPath, "..", "..", "..", "..", "..", "c-sharp", "assets");
         var sourcePath = Path.Combine(srcDir, "usfm.sty");
-        var destPath = Path.Combine(s_testFolder, "usfm.sty");
+        var destPath = Path.Combine(TestFolderPath, "usfm.sty");
 
         // Overwrite, so setup tolerates an existing folder that already holds a copy.
         File.Copy(sourcePath, destPath, overwrite: true);
 
-        ParatextGlobals.Initialize(s_testFolder);
+        ParatextGlobals.Initialize(TestFolderPath);
     }
 
     [OneTimeTearDown]
     public void RunAfterAnyTests()
     {
         // Clean up after the tests are run.
-        if (Directory.Exists(s_testFolder))
-            Directory.Delete(s_testFolder, true);
+        if (Directory.Exists(TestFolderPath))
+            Directory.Delete(TestFolderPath, true);
     }
 
     /// <summary>

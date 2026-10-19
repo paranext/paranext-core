@@ -11,8 +11,6 @@ namespace TestParanextDataProvider;
 [ExcludeFromCodeCoverage]
 public class FixtureSetupTests
 {
-    private const string TEST_FOLDER_PREFIX = "Platform.Bible.Tests";
-
     private TemporaryFolder _parent = null!;
 
     [SetUp]
@@ -21,7 +19,7 @@ public class FixtureSetupTests
         // A private parent rather than the real temp directory, so the sweep under test cannot
         // reach another run's folders. Named under the swept prefix so a leaked one is cleaned up.
         _parent = new TemporaryFolder(
-            $"{TEST_FOLDER_PREFIX}-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}"
+            $"{FixtureSetup.TEST_FOLDER_PREFIX}-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}"
         );
     }
 
@@ -42,7 +40,7 @@ public class FixtureSetupTests
     {
         Assert.That(
             Path.GetFileName(FixtureSetup.TestFolderPath),
-            Is.EqualTo($"{TEST_FOLDER_PREFIX}-{FixtureSetup.RunId}")
+            Is.EqualTo($"{FixtureSetup.TEST_FOLDER_PREFIX}-{FixtureSetup.RunId}")
         );
         Assert.That(
             Path.GetDirectoryName(FixtureSetup.TestFolderPath),
@@ -55,15 +53,19 @@ public class FixtureSetupTests
     {
         string[] testFolders =
         [
-            CreateFolder($"{TEST_FOLDER_PREFIX}-{Guid.NewGuid():N}"),
+            CreateFolder($"{FixtureSetup.TEST_FOLDER_PREFIX}-{Guid.NewGuid():N}"),
             CreateFolder(
-                $"{TEST_FOLDER_PREFIX}-{Guid.NewGuid():N}-{TestContext.CurrentContext.Test.ID}"
+                $"{FixtureSetup.TEST_FOLDER_PREFIX}-{Guid.NewGuid():N}-{TestContext.CurrentContext.Test.ID}"
             ),
-            CreateFolder(TEST_FOLDER_PREFIX),
+            CreateFolder(FixtureSetup.TEST_FOLDER_PREFIX),
         ];
         // A file inside a test folder, so deleting it has to be recursive.
         File.WriteAllText(Path.Combine(testFolders[0], "usfm.sty"), "");
-        string[] otherFolders = [CreateFolder("Unrelated"), CreateFolder($"{TEST_FOLDER_PREFIX}X")];
+        string[] otherFolders =
+        [
+            CreateFolder("Unrelated"),
+            CreateFolder($"{FixtureSetup.TEST_FOLDER_PREFIX}X"),
+        ];
 
         FixtureSetup.DeleteStaleTestFolders(_parent.Path, DateTime.UtcNow.AddMinutes(1));
 
@@ -76,8 +78,8 @@ public class FixtureSetupTests
     {
         string[] folders =
         [
-            CreateFolder($"{TEST_FOLDER_PREFIX}-{Guid.NewGuid():N}"),
-            CreateFolder(TEST_FOLDER_PREFIX),
+            CreateFolder($"{FixtureSetup.TEST_FOLDER_PREFIX}-{Guid.NewGuid():N}"),
+            CreateFolder(FixtureSetup.TEST_FOLDER_PREFIX),
             CreateFolder("Unrelated"),
         ];
 
