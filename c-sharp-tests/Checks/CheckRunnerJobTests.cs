@@ -270,6 +270,49 @@ internal class CheckRunnerJobTests : PapiTestBase
     }
 
     [Test]
+    public void CheckFailingTheSameWayInEveryJob_LogsTheFullErrorOnlyWhenTheMessageChanges()
+    {
+        const string stackFrameText = "ThrowingCheck.Run";
+        const string changedMessage = "The test check now fails differently.";
+        var throwing = new ThrowingCheck();
+        ScriptureCheckBase Create(string checkId, ChecksDataSource dataSource) =>
+            checkId == ThrowingCheckId ? throwing : CheckFactory.CreateCheck(checkId, dataSource);
+        var runner = CreateRunner(Create);
+
+        string RunJobAndCaptureLog()
+        {
+            var originalOut = Console.Out;
+            var capturedText = new StringWriter();
+            Console.SetOut(TextWriter.Synchronized(capturedText));
+            try
+            {
+                RunJob(runner, [ThrowingCheckId], 1);
+            }
+            finally
+            {
+                Console.SetOut(originalOut);
+            }
+            return capturedText.ToString();
+        }
+
+        var firstLog = RunJobAndCaptureLog();
+        var secondLog = RunJobAndCaptureLog();
+        throwing.MessageOverride = changedMessage;
+        var thirdLog = RunJobAndCaptureLog();
+
+        // Positive control: the first job logs the stack
+        Assert.That(firstLog, Does.Contain(stackFrameText));
+        Assert.That(secondLog, Does.Not.Contain(stackFrameText));
+        Assert.That(
+            secondLog,
+            Does.Contain($"Check {ThrowingCheckId} still cannot run on project {_projectId}")
+        );
+        Assert.That(secondLog, Does.Contain(ThrowingCheck.Message));
+        Assert.That(thirdLog, Does.Contain(stackFrameText));
+        Assert.That(thirdLog, Does.Contain(changedMessage));
+    }
+
+    [Test]
     public void FailedCheck_RunsAgainOnTheNextJobAfterTheSettingsAreFixed()
     {
         _scrText.Settings.Quotes = new QuoteMarks("“", "”");

@@ -46,6 +46,10 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
     private readonly ConcurrentDictionary<string, ErrorMessageDenials> _denialsByProjectId = new();
     private readonly ConcurrentDictionary<string, CheckJobStatus> _activeCheckJobsByJobId = new();
     private readonly ConcurrentQueue<string> _queuedCheckJobs = new();
+    private readonly ConcurrentDictionary<
+        (string CheckId, string ProjectId),
+        string
+    > _lastFullyLoggedFailureByCheck = new();
     private readonly CheckCache _checkCache;
     private readonly Func<string, ChecksDataSource, ScriptureCheckBase> _createCheck;
     private readonly object _runChecksLock = new();
@@ -483,18 +487,39 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
     }
 
     /// <summary>
-    /// Reports a check failure on the job. The full exception is logged only the first time the
-    /// job sees this failure, since a check that fails in one book usually fails in every book.
+    /// Reports a check failure on the job. The job logs a failure once per check, since a check
+    /// that fails in one book usually fails in every book. The full exception is logged only when
+    /// its message differs from the last one logged in full for this check and project, since a
+    /// check that cannot run on a project fails the same way in every job until its settings change.
+    /// Otherwise one short line is logged.
     /// </summary>
-    private static void RecordCheckFailure(
+    private void RecordCheckFailure(
         CheckJobStatus job,
         string checkId,
         string projectId,
         Exception ex
     )
     {
-        if (job.AddCheckError(new CheckJobError(checkId, ex.Message)))
-            Console.WriteLine($"Check {checkId} could not run on project {projectId}: {ex}");
+        if (!job.AddCheckError(new CheckJobError(checkId, ex.Message)))
+            return;
+
+        // A check whose message varies from book to book logs in full in every job. Jobs run one
+        // at a time, so there is no race between the read and the write.
+        var key = (checkId, projectId);
+        if (
+            _lastFullyLoggedFailureByCheck.TryGetValue(key, out var lastMessage)
+            && lastMessage == ex.Message
+        )
+        {
+            Console.WriteLine(
+                $"Check {checkId} still cannot run on project {projectId}: {ex.Message} "
+                    + "(full error logged earlier)"
+            );
+            return;
+        }
+
+        _lastFullyLoggedFailureByCheck[key] = ex.Message;
+        Console.WriteLine($"Check {checkId} could not run on project {projectId}: {ex}");
     }
 
     private ErrorMessageDenials GetOrCreateDenials(string projectId)

@@ -16,6 +16,9 @@ internal sealed class ThrowingCheck : ScriptureCheckBase
 
     public const string InitializeMessage = "The test check failed to initialize on purpose.";
 
+    /// <summary>The message <see cref="Run"/> throws with instead of <see cref="Message"/>, if set.</summary>
+    public string? MessageOverride { get; set; }
+
     /// <summary>Whether <see cref="Initialize"/> throws; off by default.</summary>
     public bool ThrowInInitialize { get; set; }
 
@@ -37,6 +40,6 @@ internal sealed class ThrowingCheck : ScriptureCheckBase
     public override void Run(int bookNum, ChecksDataSource source, IRecordCheckError recordError)
     {
         if (BooksToThrowFor.Count == 0 || BooksToThrowFor.Contains(bookNum))
-            throw new InvalidOperationException(Message);
+            throw new InvalidOperationException(MessageOverride ?? Message);
     }
 }
