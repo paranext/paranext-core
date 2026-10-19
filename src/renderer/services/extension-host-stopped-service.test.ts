@@ -166,6 +166,19 @@ describe('extension-host-stopped service', () => {
     teardown();
   });
 
+  // What a torn-down subscription heard says nothing about the next catch-up.
+  it('catch-up after a teardown reports the remembered stop, whatever the old subscription heard', async () => {
+    const teardown = initExtensionHostStoppedService();
+    fire(EVENT_NAME_ON_DID_STOP_EXTENSION_HOST, { reason: 'lost-connection' });
+    teardown();
+    resetExtensionHostNotice();
+    vi.mocked(sendCommand).mockResolvedValue({ reason: 'crashed' });
+
+    await catchUpExtensionHostStoppedState();
+
+    expect(getExtensionHostNotice()).toEqual({ phase: 'stopped', reason: 'crashed' });
+  });
+
   it('catch-up swallows a failed request', async () => {
     vi.mocked(sendCommand).mockRejectedValue(new Error('main did not answer'));
 

@@ -179,7 +179,11 @@ describe('extensionHostService stop reporting', () => {
     expect(extensionHostService.getLastUnexpectedStop()).toEqual({ reason: 'crashed' });
   });
 
-  test('a restart that could not fork can be retried once the old child has exited', async () => {
+  // The refused restart's rejection ends its own guard, so the retry runs rather than joining the
+  // restart that failed (which would reject again). No extension host is running by then (the stuck
+  // one was hard-killed), so the retry has no host to send a shutdown message to; that it resolves
+  // and forks is what shows it ran.
+  test('a refused fork frees the guard, so a retry once the old child has exited forks', async () => {
     const stuck = new FakeExtensionHost(false);
     const replacement = new FakeExtensionHost(true);
     willFork(stuck, replacement);
@@ -192,7 +196,7 @@ describe('extensionHostService stop reporting', () => {
     // eslint-disable-next-line no-null/no-null
     stuck.exit(null, 'SIGKILL');
 
-    await extensionHostService.restart(MAX_WAIT_MS);
+    await expect(extensionHostService.restart(MAX_WAIT_MS)).resolves.toBeUndefined();
 
     expect(mocks.fork).toHaveBeenCalledTimes(2);
     expect(extensionHostService.getLastUnexpectedStop()).toBeUndefined();
@@ -380,5 +384,43 @@ describe('extensionHostService restart in flight', () => {
 
     expect(second.shutdownRequestCount).toBe(1);
     expect(mocks.fork).toHaveBeenCalledTimes(3);
+  });
+
+  // An older restart can still be running when a newer one holds the guard: here the older one's
+  // guard timed out while it was still waiting for a stuck host. Its refused fork must not end the
+  // newer restart's guard.
+  test("an older restart's refused fork leaves a newer restart's guard in place", async () => {
+    vi.useFakeTimers();
+    /**
+     * Longer than the ready timeout, so the older restart outlives its own guard, but by less than
+     * the timeout, so it is refused while the newer restart's guard has not timed out yet.
+     */
+    const LONG_WAIT_MS = EXTENSION_HOST_RESTART_READY_TIMEOUT_MS + 30_000;
+    const stuck = new FakeExtensionHost(false);
+    const replacement = new FakeExtensionHost(true);
+    willFork(stuck, replacement);
+    const { extensionHostService } = await loadService();
+    await extensionHostService.start(MAX_WAIT_MS);
+    // The service handles its rejection internally too, so it is not unhandled before we await it.
+    const older = extensionHostService.restart(LONG_WAIT_MS);
+    await vi.advanceTimersByTimeAsync(EXTENSION_HOST_RESTART_READY_TIMEOUT_MS);
+    const newer = extensionHostService.restart(LONG_WAIT_MS);
+    expect(newer).not.toBe(older);
+
+    // The older restart hard-kills the stuck host, waits out the rest of its budget and is refused.
+    await vi.advanceTimersByTimeAsync(LONG_WAIT_MS - EXTENSION_HOST_RESTART_READY_TIMEOUT_MS);
+    await expect(older).rejects.toThrow(
+      'Previous instance of the extension host process was not cleaned up',
+    );
+
+    expect(extensionHostService.restart(MAX_WAIT_MS)).toBe(newer);
+
+    // Let the newer restart finish: the stuck host finally exits and the newer one forks. A signal
+    // ends it, so Node reports no exit code: null, as `exit` documents.
+    // eslint-disable-next-line no-null/no-null
+    stuck.exit(null, 'SIGKILL');
+    await vi.advanceTimersByTimeAsync(LONG_WAIT_MS);
+    await newer;
+    expect(mocks.fork).toHaveBeenCalledTimes(2);
   });
 });
