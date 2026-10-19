@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { newPlatformError } from 'platform-bible-utils';
 import type { CheckRunnerCheckDetails, CheckSetupState } from 'platform-scripture';
 import { describe, expect, it, vi } from 'vitest';
@@ -63,6 +63,33 @@ describe('useChecksInfo', () => {
     rerender([aggregator, 'P2', CHECKS, getName]);
 
     await waitFor(() => expect(result.current[0]?.setupStatus).toBe('setupRequired'));
+  });
+
+  it('drops a lookup that resolves after the project changed', async () => {
+    let resolveFirstProjectLookup: (state: CheckSetupState) => void = () => {};
+    const lookUp = vi.fn<LookUp>((_checkId, projectId) =>
+      projectId === 'P1'
+        ? new Promise<CheckSetupState>((resolve) => {
+            resolveFirstProjectLookup = resolve;
+          })
+        : Promise.resolve({ status: 'setupRequired' }),
+    );
+    const aggregator = aggregatorWith(lookUp);
+    const checks = [CHECKS[0]];
+    const initialProps: HookProps = [aggregator, 'P1', checks, getName];
+    const { result, rerender } = renderHook((props: HookProps) => useChecksInfo(...props), {
+      initialProps,
+    });
+    rerender([aggregator, 'P2', checks, getName]);
+    await waitFor(() => expect(result.current[0]?.setupStatus).toBe('setupRequired'));
+
+    // The first project's lookup, started before the switch, resolves last
+    resolveFirstProjectLookup({ status: 'ready' });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current[0]?.setupStatus).toBe('setupRequired');
   });
 
   describe('returns an empty list and looks nothing up', () => {

@@ -38,17 +38,23 @@ export function useChecksInfo(
       return;
     }
 
+    // Set false by the cleanup, so a lookup that resolves after its inputs changed is dropped
+    let isCurrent = true;
+
     const fetchChecksInfo = async () => {
-      setChecksInfo(
-        await buildChecksInfo(
-          availableChecks,
-          (checkId) => checkAggregator.lookUpCheckSetupStatus(checkId, projectId),
-          getLocalizedCheckDescription,
-        ),
+      const newChecksInfo = await buildChecksInfo(
+        availableChecks,
+        (checkId) => checkAggregator.lookUpCheckSetupStatus(checkId, projectId),
+        getLocalizedCheckDescription,
       );
+      if (isCurrent) setChecksInfo(newChecksInfo);
     };
 
     fetchChecksInfo();
+
+    return () => {
+      isCurrent = false;
+    };
   }, [checkAggregator, projectId, availableChecks, getLocalizedCheckDescription]);
 
   return checksInfo;
