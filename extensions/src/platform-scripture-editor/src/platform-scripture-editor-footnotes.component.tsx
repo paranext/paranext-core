@@ -523,10 +523,11 @@ function FootnotesPane({
   // The pane is outside the editor, whose own copy guard handles only selections that reach into
   // the editor, so the pane shortens its own copies. A copy within the limit is left to the
   // browser, with all its usual clipboard formats; only one that needs shortening is written, as
-  // plain text.
+  // plain text. A copy inside a row editor has already been handled by that editor's own copy
+  // guard, so it is left as the editor wrote it.
   const handleFootnotesCopy = useCallback(
     (event: ClipboardEvent<HTMLDivElement>) => {
-      if (copyLimit === undefined) return;
+      if (copyLimit === undefined || event.defaultPrevented) return;
       const selectedText = window.getSelection()?.toString() ?? '';
       const text = truncateToCopyLimit(selectedText, copyLimit);
       if (text === selectedText) return;

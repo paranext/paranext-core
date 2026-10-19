@@ -429,7 +429,16 @@ export function ResourceCellView({
   // one ref serves both.
   // The ref needs to start out with null for it to work as an element ref
   // eslint-disable-next-line no-null/no-null
-  const contentRef = useRef<HTMLDivElement>(null);
+  const copyAreaRef = useRef<HTMLDivElement>(null);
+  // The header layout's content area is also the caller's `contentRef`, so it takes both refs.
+  const setHeaderContentElement = useCallback(
+    (element: HTMLDivElement | null) => {
+      copyAreaRef.current = element;
+      if (typeof contentRef === 'function') contentRef(element);
+      else if (contentRef) contentRef.current = element;
+    },
+    [contentRef],
+  );
 
   // A resource that is not installed shows only a placeholder, so there is nothing to copy and the
   // browser's own menu is left alone there.
@@ -444,7 +453,7 @@ export function ResourceCellView({
       event.stopPropagation();
       // Capture the selection now, before the menu opens and takes focus. It is cut to the limit
       // in force now, so a limit that grows while the menu is open cannot copy more of it.
-      const text = getSelectedTextWithin(contentRef.current ?? event.currentTarget).trim();
+      const text = getSelectedTextWithin(copyAreaRef.current ?? event.currentTarget).trim();
       setSelectedText(truncateToCopyLimit(text, copyLimit));
       setRightClickMenuPos({ x: event.clientX, y: event.clientY });
     },
@@ -486,7 +495,7 @@ export function ResourceCellView({
         <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
           <ResourceNameLabel label={label} className="tw:max-w-24 tw:min-w-0 tw:text-sm" />
           <div
-            ref={contentRef}
+            ref={copyAreaRef}
             className={`tw:min-w-0 tw:flex-1 ${contentOverflowClass}`}
             style={contentStyle}
           >
@@ -574,7 +583,7 @@ export function ResourceCellView({
             ) : undefined}
           </div>
           <div
-            ref={contentRef}
+            ref={setHeaderContentElement}
             data-cell-content
             className={`tw:flex-1 ${contentOverflowClass}`}
             style={contentStyle}
