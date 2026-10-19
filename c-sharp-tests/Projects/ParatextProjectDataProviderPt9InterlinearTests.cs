@@ -7,6 +7,7 @@ using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using Paratext.Data.Users;
+using static TestParanextDataProvider.FileSystemLinks;
 
 namespace TestParanextDataProvider.Projects;
 
@@ -1875,23 +1876,6 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     #endregion
 
     #region Path containment
-
-    // Symbolic-link creation can be a privileged operation (e.g. Windows without developer
-    // mode), so tests that need one skip rather than fail where the OS refuses.
-    private static void CreateLinkOrIgnore(string linkPath, string targetPath, bool isDirectory)
-    {
-        try
-        {
-            if (isDirectory)
-                Directory.CreateSymbolicLink(linkPath, targetPath);
-            else
-                File.CreateSymbolicLink(linkPath, targetPath);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            Assert.Ignore($"Symbolic links cannot be created in this environment: {e.Message}");
-        }
-    }
 
     [Test]
     [Description(

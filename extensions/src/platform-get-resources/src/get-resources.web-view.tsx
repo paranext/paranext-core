@@ -13,6 +13,7 @@ import {
   newResourceActionProviderNotReadyError,
   ResourceAction,
 } from './get-resources.component';
+import { getInternetBlockedNotification } from './internet-block-notification.utils';
 
 type InstallInfo = {
   dblEntryUid: string;
@@ -28,6 +29,18 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installResource = dblResourcesProvider?.installDblResource;
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
+  // The dialog reports the failure itself; this notification is what carries the action that opens
+  // the Internet & connectivity setting responsible for it.
+  const notifyIfInternetBlocked = useCallback((error: unknown) => {
+    const notification = getInternetBlockedNotification(error);
+    if (notification) papi.notifications.send(notification);
+  }, []);
+
+  // Held for the effect below rather than reported from inside the fetch: a fetch that a retry has
+  // superseded still runs its own `catch`, so notifying there would leave a stale block notification
+  // over a list that has since loaded.
+  const catalogErrorRef = useRef<unknown>(undefined);
+
   const {
     data: catalog,
     isLoading,
@@ -35,11 +48,21 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     hasSettled,
     refetch: refetchResources,
   } = useRetryablePromise(
-    useCallback(
-      async () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
-      [],
-    ),
+    useCallback(async () => {
+      try {
+        return await papi.commands.sendCommand('platformGetResources.getCachedResources');
+      } catch (e) {
+        catalogErrorRef.current = e;
+        throw e;
+      }
+    }, []),
   );
+
+  // `hasError` tracks only the fetch the hook is still waiting on, so this reports the failure the
+  // user is actually looking at.
+  useEffect(() => {
+    if (isResourcesError) notifyIfInternetBlocked(catalogErrorRef.current);
+  }, [isResourcesError, notifyIfInternetBlocked]);
 
   // `!hasSettled` counts as loading, not just `isLoading`. A retry clears the error synchronously
   // while `usePromise` only raises its loading flag in an effect, so the render in between would
@@ -180,13 +203,14 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
         })
         .catch((error) => {
           logger.debug(getErrorMessage(error));
+          notifyIfInternetBlocked(error);
           // The action failed, so clear its optimistic in-progress entry and re-throw so the
           // component can surface the error to the user.
           setInstallInfo((prevInfo) => prevInfo.filter((info) => info.dblEntryUid !== dblEntryUid));
           throw error;
         });
     },
-    [installResource, uninstallResource, refetchResources],
+    [installResource, uninstallResource, refetchResources, notifyIfInternetBlocked],
   );
 
   // Correct the update badges once the list is up. `getCachedResources` answers one refresh behind,

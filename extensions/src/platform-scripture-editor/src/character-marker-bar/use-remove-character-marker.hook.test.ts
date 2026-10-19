@@ -23,7 +23,7 @@ import { useRemoveCharacterMarker } from './use-remove-character-marker.hook';
 const STRINGS = {
   '%versionHistoryCommit_beforeRemoveCharacterMarker%': 'Before removing character marker',
   '%webView_platformScriptureEditor_error_removeCharacterMarkerFailed%': 'Could not remove',
-  '%webView_platformScriptureEditor_error_syncEditBlocked%': 'Editing paused',
+  '%webView_platformScriptureEditor_error_syncEditBlocked_2%': 'Editing paused',
 };
 
 function makeEditorRef({ throws = false } = {}) {

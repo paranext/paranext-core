@@ -33,14 +33,10 @@ import type {
   MarkerMenuItem as EditorMarkerMenuItem,
   SelectionRange,
 } from '@eten-tech-foundation/platform-editor';
-import {
-  markerMenuItemToPaletteItem,
-  type FootnoteEditorHandle,
-  type MarkerMenuItem,
-} from 'platform-bible-react';
+import { type FootnoteEditorHandle, type MarkerMenuItem } from 'platform-bible-react';
 import {
   isEditorContextMenuOpenFor,
-  stripMarkerNestingPrefix,
+  markerMenuItemToPaletteItem,
 } from 'platform-bible-react/experimental';
 import type { FlushableDebouncer } from './flushable-debouncer.util';
 import type { NoteSessionUpdateDecision } from './platform-scripture-editor.utils';
@@ -290,7 +286,25 @@ export interface EditingSessionActivityInput {
  * close path, keeping popover state consistent) and stop deferring.
  *
  * A palette session carries no time bound here: its lifecycle is owned by the overlay service's
- * show promise, which always settles (select, dismiss, or replacement rejection).
+ * show promise, which settles on select, dismiss, or replacement rejection.
+ *
+ * Settling is not bounded in time, though: an open palette closes only on Escape, a commit, a
+ * chapter change, or a gesture that reaches the overlay service, so a palette the user leaves open
+ * and untouched keeps `isActive` true for as long as it stays open. Known gap: while it does,
+ * `useEditorPdpSync` treats every differing same-document PDP update as an echo to defer — it keeps
+ * the incoming update unapplied and pushes the editor's content back up through
+ * `saveUsjToPdpIfUpdated`, which writes whatever differs from the incoming update. An external
+ * change that lands meanwhile (e.g. a Send/Receive merge delivering a collaborator's edit) is
+ * therefore overwritten by the editor's pre-merge content as soon as a write is accepted (a push
+ * made while an automatic Send/Receive holds the backend write gate is rejected; one after it
+ * clears is not). The window-blur flush of the debounced save is the only save path a palette
+ * session suppresses.
+ *
+ * Tracked as PT-4817. The intended fix is a staleness bound like the note session's refreshed-at
+ * bound — a palette session defers only within the editor-ownership window of the last local edit,
+ * after which the update applies and the change guard closes the palette — not dismissing the
+ * palette on unrelated keys. An automatic Send/Receive dismisses the palette before it writes, so
+ * that particular collision is closed; other external writers can still be overwritten.
  *
  * A pane session is never reported stale: it stops holding updates back once the user stops editing
  * in it (see {@link EditingSessionActivityInput.paneSession}), and the update it then lets through
@@ -373,28 +387,6 @@ export function resolvePaletteItemStrings(
     description: item.description === undefined ? undefined : resolve(item.description),
     badge: item.badge === undefined ? undefined : resolve(item.badge),
   }));
-}
-
-/**
- * Whether the `\` palette's Space key should COMMIT the palette selection (like Enter) instead of
- * materializing the typed literal: true when the typed filter names a NOTE marker among the offered
- * items. A materialized note literal (`\f `) misbehaves mid-text — the Tier-2 tokenizer absorbs the
- * following word into the new footnote as its caller — so note markers route through the overlay
- * commit, which inserts an empty footnote exactly like `\f` + Enter (see
- * `MarkerPaletteSessionState.shouldSpaceCommit`).
- *
- * The comparison uses the shared marker normalization (case-fold, `+` nesting prefix stripped —
- * `stripMarkerNestingPrefix`), the same way the visible list matches: `\F` must hit the same `f`
- * entry the palette shows it matching.
- */
-export function shouldSpaceCommitNoteMarker(
-  items: readonly Pick<EditorMarkerMenuItem, 'kind' | 'marker'>[],
-  filter: string,
-): boolean {
-  const typed = stripMarkerNestingPrefix(filter).toLowerCase();
-  return items.some(
-    (item) => item.kind === 'note' && stripMarkerNestingPrefix(item.marker).toLowerCase() === typed,
-  );
 }
 
 /**

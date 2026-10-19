@@ -237,7 +237,7 @@ describe('RpcClient initial connection', () => {
   it('settles on an error that is not followed by a close', async () => {
     // A socket that reports a problem but stays live fires `error` alone, so the error handler is
     // the only thing that can settle the attempt — the close handler never gets a turn. Closing
-    // that abandoned socket is deliberately left to PT-4435, which owns what a failed connect does
+    // that abandoned socket is deliberately left to PT-4495, which owns what a failed connect does
     // to a live socket.
     mocks.state.refuseConnection = true;
     mocks.state.errorWithoutClose = true;

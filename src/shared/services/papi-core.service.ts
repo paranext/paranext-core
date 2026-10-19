@@ -36,6 +36,10 @@ export type {
 } from '@shared/models/docking-framework.model';
 export type { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
 export type {
+  ExtensionHostStoppedEvent,
+  ExtensionHostStopReason,
+} from '@shared/models/extension-host-lifecycle.model';
+export type {
   HandleUri,
   RegisterUriHandler,
   UriHandler,
@@ -63,8 +67,11 @@ export type {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 export type {
+  ExtensionDataEnumerationProjectDataTypes,
+  ExtensionDataListScope,
   ExtensionDataScope,
   MandatoryProjectDataTypes,
+  WithProjectDataProviderEngineExtensionDataEnumerationMethods,
 } from '@shared/models/project-data-provider.model';
 export type { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
 export type {

@@ -18,7 +18,7 @@ import {
 } from 'platform-bible-utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
-import { deriveCellState } from './resource-cell.utils';
+import { deriveCellState, isUsjForChapter } from './resource-cell.utils';
 import {
   CHAPTER_EMPTY_KEY,
   EMPTY_KEY,
@@ -34,6 +34,9 @@ import {
   resolveDisplayVerseNum,
   sliceUsjToVerse,
 } from './verse-display.utils';
+import { VERSE_NUMBER_SCROLL_OFFSET } from '../editor-dom.util';
+import { findVerseMarkerForVerse, isMarkerFullyInPortView } from './reference-scroll.utils';
+import { useReferenceScroll } from './use-reference-scroll.hook';
 import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
 import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
 
@@ -52,6 +55,14 @@ type ResourceCellProps = {
   resourceRef: GridResource;
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
+  /** Whether this web view is showing; owned by the web view, which explains why. */
+  isViewVisible: boolean;
+  /**
+   * This cell's position among its siblings, for a chapter column in a reorderable row. A change
+   * re-arms the reference scroll, because reordering moves the column's DOM node and the browser
+   * resets a moved scroll container to the top.
+   */
+  orderIndex?: number;
   /**
    * `'chapter'` and `'aligned'` both feed the editor the whole chapter; `'verse'` feeds only the
    * reference's verse. `'aligned'` additionally asks the editor for its block-verse layout, which
@@ -95,6 +106,8 @@ export function ResourceCell({
   resourceRef,
   scrRef,
   setScrRef,
+  isViewVisible,
+  orderIndex,
   viewMode = 'chapter',
   zoomArea,
   zoom,
@@ -190,6 +203,42 @@ export function ResourceCell({
   // EditorRef requires null initial value per React ref convention
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+
+  // This cell's own scroll port, when it has one. React's ref API requires `null` here.
+  // eslint-disable-next-line no-null/no-null
+  const contentRef = useRef<HTMLDivElement>(null);
+  // The reference this cell last published, so the scroll group's echo of the reader's own click
+  // can be told from a genuine navigation. Consumed by `useReferenceScroll`.
+  const lastPublishedScrRefRef = useRef<SerializedVerseRef | undefined>(undefined);
+  // Chapter surfaces render a whole chapter in a short port — the chapter-context split, a chapter
+  // column, the single-resource view — so they have to follow the scroll group's verse themselves.
+  // The other two modes deliberately do not:
+  //   - verse mode has nothing to scroll to; `sliceUsjToVerse` has already reduced the cell to the
+  //     reference's verse;
+  //   - aligned mode hands its scrolling to the grid root, which owns the only port in that view
+  //     (`contentOverflow="visible"`), and `AlignedGrid` runs this same hook there.
+  //
+  // Hidden case (`.claude/rules/cross-view-sync-hidden-views.md`): handled inside the hook, which
+  // defers while the dock tab is inactive and consumes one catch-up on activation, instantly —
+  // `scrollPortToBlock` is `scrollTop` arithmetic, so there is nothing to animate from. In Simple
+  // mode that is the common path, not the edge: column 3 shows one tab at a time.
+  //
+  // Enabled only once the cell shows the chapter the reference names. Right after a navigation the
+  // cell still holds the chapter the reader left, then swaps in a loading placeholder; scrolling
+  // either would aim at the wrong content, and the placeholder shrinking the port would read as the
+  // reader scrolling away and stand the hook down. Turning back on re-arms the hook, which is also
+  // what re-scrolls a cell switched to a different resource at the same reference.
+  useReferenceScroll(contentRef, scrRef, isViewVisible, findVerseMarkerForVerse, {
+    isEnabled:
+      viewMode === 'chapter' &&
+      state === 'ready' &&
+      isUsjForChapter(usjPossiblyError, scrRef.book, scrRef.chapterNum),
+    isTargetVisible: isMarkerFullyInPortView,
+    publishedScrRefRef: lastPublishedScrRefRef,
+    // The lead-in the Scripture editor, the model text panel and the reference panels use.
+    leadInPx: VERSE_NUMBER_SCROLL_OFFSET,
+    rearmKey: orderIndex,
+  });
   // Give the editor this resource's valid markers so it recognizes them (footnote/apparatus and
   // other resource-specific markers) instead of rendering them inline as raw text. Mirrors the
   // resource-text-panel render path this cell reuses.
@@ -251,6 +300,8 @@ export function ResourceCell({
   const handleScrRefChange = useCallback(
     (nextScrRef: SerializedVerseRef) => {
       if (viewMode === 'verse' && isFallenForward) return;
+      // Arm the echo latch before publishing; see `useReferenceScroll`'s re-arm effect.
+      lastPublishedScrRefRef.current = nextScrRef;
       setScrRef(nextScrRef);
     },
     [viewMode, isFallenForward, setScrRef],
@@ -301,6 +352,7 @@ export function ResourceCell({
       nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
       // In the aligned grid the single scroll port is the grid root; see `contentOverflow`.
       contentOverflow={viewMode === 'aligned' ? 'visible' : 'auto'}
+      contentRef={contentRef}
       // The aligned grid's content wrapper is a subgrid box, so scaling it would scale the shared
       // row tracks along with the text; the level rides down to the verse blocks instead.
       zoomTarget={viewMode === 'aligned' ? 'blocks' : 'box'}

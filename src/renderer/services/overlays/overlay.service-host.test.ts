@@ -1308,11 +1308,15 @@ describe('overlay.service-host', () => {
       // A fully-resolved request never consults the localization service for ITEM text — the
       // await that would introduce is the window where keystrokes typed right after show were
       // dropped. (The fire-and-forget screen-reader lookups are the only legitimate ones on this
-      // path — the opened announcement plus the per-open hoist of the two update-announcement
+      // path — the opened announcement plus the per-open hoist of the three update-announcement
       // templates — and neither gates overlay creation.)
       const legitimateAnnouncementLookups = [
         ['%overlay_aria_commandPaletteOpened%'],
-        ['%overlay_aria_commandPaletteNoResults%', '%overlay_aria_commandPaletteHighlightedItem%'],
+        [
+          '%overlay_aria_commandPaletteNoResults%',
+          '%overlay_aria_commandPaletteHighlightedItem%',
+          '%overlay_aria_commandPaletteResultCount%',
+        ],
       ];
       vi.mocked(localizationService.getLocalizedStrings).mock.calls.forEach(
         ([{ localizeKeys }]) => {
@@ -1445,12 +1449,26 @@ describe('overlay.service-host', () => {
       ],
     };
 
+    /** The same palette as a LIST-FOCUSED one: it focuses its own listbox rather than nothing. */
+    const listFocusedPaletteRequest: CommandPaletteRequest = {
+      ...markerPaletteRequest,
+      passive: false,
+      focusTarget: 'list',
+    };
+
     /** Announcement templates the mock localization service resolves */
     const ANNOUNCEMENT_STRINGS: LanguageStrings = {
       '%overlay_aria_commandPaletteOpened%': 'Command palette opened',
       '%overlay_aria_commandPaletteHighlightedItem%': '{label}, {index} of {count}',
       '%overlay_aria_commandPaletteNoResults%': 'No results',
+      '%overlay_aria_commandPaletteResultCount%': 'Results: {count}',
     };
+
+    /** Empties the live region, so the next assertion sees only what was said after this point. */
+    function clearAriaLive(): void {
+      const region = document.querySelector('[aria-live="assertive"]');
+      if (region) region.textContent = '';
+    }
 
     /** Text currently in the overlay service's aria-live region */
     function ariaLiveText(): string {
@@ -1504,6 +1522,55 @@ describe('overlay.service-host', () => {
       await expect(palette).resolves.toBeUndefined();
     }
 
+    it('a LIST-FOCUSED palette announces the match count but NOT the highlighted item', async () => {
+      // Its listbox is focused, so `aria-activedescendant` already speaks the highlight; saying it
+      // here too would speak every marker twice, with the second utterance over the next key. The
+      // COUNT has no other voice, so it still comes from here.
+      const palette = overlayService.showCommandPalette(listFocusedPaletteRequest, 'sr-list');
+      await flushAnnouncements();
+
+      await overlayService.updateCommandPalette('sr-list', { filterText: 'fe' });
+      await flushAnnouncements();
+
+      expect(ariaLiveText()).toBe('Results: 1');
+
+      await dismissAndAwait(palette);
+    });
+
+    it('a LIST-FOCUSED palette still announces the empty case', async () => {
+      // `aria-activedescendant` has nothing to say when nothing matches. Without this a screen
+      // reader user who types a marker that does not exist hears silence, then an Enter that does
+      // nothing.
+      const palette = overlayService.showCommandPalette(listFocusedPaletteRequest, 'sr-list-empty');
+      await flushAnnouncements();
+
+      await overlayService.updateCommandPalette('sr-list-empty', { filterText: 'zz' });
+      await flushAnnouncements();
+
+      expect(ariaLiveText()).toBe('No results');
+
+      await dismissAndAwait(palette);
+    });
+
+    it('a LIST-FOCUSED palette does not re-announce the count when only the highlight moves', async () => {
+      // The de-dupe drops the highlighted item from its key in this mode. Keyed on it instead,
+      // every arrow key would read as a change and repeat the count over the next keystroke.
+      const palette = overlayService.showCommandPalette(listFocusedPaletteRequest, 'sr-list-arrow');
+      await flushAnnouncements();
+
+      await overlayService.updateCommandPalette('sr-list-arrow', { filterText: 'f' });
+      await flushAnnouncements();
+      expect(ariaLiveText()).toBe('Results: 3');
+
+      clearAriaLive();
+      await overlayService.updateCommandPalette('sr-list-arrow', { moveSelection: 1 });
+      await flushAnnouncements();
+
+      expect(ariaLiveText()).toBe('');
+
+      await dismissAndAwait(palette);
+    });
+
     it('should announce the highlighted item and match count when the filter narrows the list', async () => {
       const { palette } = await showAnnouncingPalette('sr-filter');
 
@@ -1519,7 +1586,8 @@ describe('overlay.service-host', () => {
       // The per-update announcement runs on nearly every filtering keystroke (its de-dupe keys on
       // highlight + match count), and each localization resolve is a JSON-RPC round trip to the
       // extension host — so the templates are hoisted to palette open. Both static keys resolve
-      // there; every later keystroke formats locally.
+      // there; every later keystroke formats locally. All three keys resolve there: a
+      // list-focused palette announces the empty case and the match count from the same cache.
       const { palette } = await showAnnouncingPalette('sr-hoist');
       vi.mocked(localizationService.getLocalizedStrings).mockClear();
 
@@ -1546,7 +1614,7 @@ describe('overlay.service-host', () => {
       const hangs: Promise<never> = new Promise(() => {});
       vi.mocked(localizationService.getLocalizedStrings).mockImplementation(
         async ({ localizeKeys }) => {
-          if (localizeKeys.length === 2) return hangs; // the hoist's two-key template resolve
+          if (localizeKeys.length === 3) return hangs; // the hoist's three-key template resolve
           const strings: LanguageStrings = {};
           localizeKeys.forEach((key) => {
             if (ANNOUNCEMENT_STRINGS[key] !== undefined) strings[key] = ANNOUNCEMENT_STRINGS[key];
