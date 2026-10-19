@@ -346,16 +346,17 @@ internal class CheckRunnerJobTests : PapiTestBase
     private const string InitializeHookCheckId = "TestInitializeHookCheck";
 
     /// <summary>
-    /// Creates a runner whose jobs can run <paramref name="earlierCheckId"/> and then
+    /// Creates a runner whose jobs can run <paramref name="otherCheckId"/> and
     /// <see cref="InitializeHookCheck"/>. The hook check's settings are marked changed, so a job
-    /// re-initializes it after the earlier check has finished the book and before the job reads
-    /// the earlier check's results back.
+    /// re-initializes it partway through the book, in the order of the job's check ids: listed after
+    /// the other check, after that check has finished the book and before the job reads its results
+    /// back; listed first, after the book's text was read and before the other check runs.
     /// </summary>
     private (
         CheckRunner Runner,
         InitializeHookCheck HookCheck,
-        CheckForProject EarlierCheck
-    ) CreateRunnerWithHookCheckAfter(string earlierCheckId)
+        CheckForProject OtherCheck
+    ) CreateRunnerWithHookCheck(string otherCheckId)
     {
         var hookCheck = new InitializeHookCheck();
         ScriptureCheckBase Create(string checkId, ChecksDataSource dataSource) =>
@@ -364,7 +365,7 @@ internal class CheckRunnerJobTests : PapiTestBase
                 : CheckFactory.CreateCheck(checkId, dataSource);
         var runner = CreateRunner(Create);
         runner.CheckCache.GetCheck(InitializeHookCheckId, _projectId).SettingsChanged = true;
-        return (runner, hookCheck, runner.CheckCache.GetCheck(earlierCheckId, _projectId));
+        return (runner, hookCheck, runner.CheckCache.GetCheck(otherCheckId, _projectId));
     }
 
     private static bool AreResultsReady(CheckForProject check, int bookNum)
@@ -377,7 +378,7 @@ internal class CheckRunnerJobTests : PapiTestBase
     [Test]
     public void ProcessCheckJob_TextChangeDuringJob_DoesNotErrorTheWholeJob()
     {
-        var (runner, hookCheck, repeatedWordCheck) = CreateRunnerWithHookCheckAfter(
+        var (runner, hookCheck, repeatedWordCheck) = CreateRunnerWithHookCheck(
             s_repeatedWordCheckId
         );
         var editClearedFinishedCheck = false;
@@ -412,7 +413,7 @@ internal class CheckRunnerJobTests : PapiTestBase
     [Test]
     public void ProcessCheckJob_TextChangeThenStopDuringJob_DoesNotRunClearedChecksAgain()
     {
-        var (runner, hookCheck, repeatedWordCheck) = CreateRunnerWithHookCheckAfter(
+        var (runner, hookCheck, repeatedWordCheck) = CreateRunnerWithHookCheck(
             s_repeatedWordCheckId
         );
         var editClearedFinishedCheck = false;
@@ -439,7 +440,7 @@ internal class CheckRunnerJobTests : PapiTestBase
     [Test]
     public void ProcessCheckJob_TextChangeAfterTheTextWasReadBeforeALaterCheckRuns_DeliversAndCachesTheNewText()
     {
-        var (runner, hookCheck, _) = CreateRunnerWithHookCheckAfter(s_repeatedWordCheckId);
+        var (runner, hookCheck, _) = CreateRunnerWithHookCheck(s_repeatedWordCheckId);
         var editReachedTheChecks = false;
         // The hook check runs first. The book's text was already read for the whole job, so the
         // edit lands after that read and before the repeated-word check runs. The edit goes through
@@ -484,7 +485,7 @@ internal class CheckRunnerJobTests : PapiTestBase
     [Test]
     public void ProcessCheckJob_CheckReinitializedDuringJobWithoutTextChange_Completes()
     {
-        var (runner, hookCheck, _) = CreateRunnerWithHookCheckAfter(s_repeatedWordCheckId);
+        var (runner, hookCheck, _) = CreateRunnerWithHookCheck(s_repeatedWordCheckId);
         var hookRan = false;
         hookCheck.OnInitialize = () => hookRan = true;
 
