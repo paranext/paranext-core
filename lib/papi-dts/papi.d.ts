@@ -6229,6 +6229,15 @@ declare module 'papi-shared-types' {
     'test.echo': (message: string) => string;
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
+    /**
+     * Restart the extension host, which reloads and reinitializes TS/JS extensions. Resolves once
+     * the new process is forked, before it has started; `platform.onDidStartExtensionHost` says
+     * when it has.
+     *
+     * A call while a restart is already in flight (from its start until the new extension host
+     * announces its start) joins that restart and resolves with it, at once if the new process is
+     * already forked, rather than stopping the host that is still starting.
+     */
     'platform.restartExtensionHost': () => Promise<void>;
     /**
      * Whether the extension host is currently stopped without main having asked it to, and why. A

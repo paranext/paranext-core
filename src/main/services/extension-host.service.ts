@@ -9,6 +9,7 @@ import { logger } from '@shared/services/logger.service';
 import {
   AsyncVariable,
   debounce,
+  getErrorMessage,
   PlatformEventEmitter,
   waitForDuration,
 } from 'platform-bible-utils';
@@ -19,7 +20,10 @@ import { FileHandle, readFile } from 'fs/promises';
 import path from 'path';
 import { Readable } from 'stream';
 import { watch as chokidarWatch, FSWatcher } from 'chokidar';
-import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
+import {
+  extensionHostStartedMessage,
+  gracefulShutdownMessage,
+} from '@node/models/interprocess-messages.model';
 import { isAppShuttingDown } from '@main/services/shutdown-latch.service';
 import { classifyExtensionHostExit } from '@main/services/extension-host-exit.util';
 import { ExtensionHostStoppedEvent } from '@shared/models/extension-host-lifecycle.model';
@@ -43,6 +47,48 @@ const unexpectedStopEmitter = new PlatformEventEmitter<ExtensionHostStoppedEvent
  * listening when it happened (opened later, or still starting) can ask for it.
  */
 let lastUnexpectedStop: ExtensionHostStoppedEvent | undefined;
+
+/**
+ * How long, from when a restart begins, it counts as in flight if the new extension host never says
+ * it has started. Mirrors the fallback after which a window's extension-host-stopped banner stops
+ * waiting for the start announcement (`RESTART_READY_FALLBACK_MS`).
+ */
+export const RESTART_READY_TIMEOUT_MS = 90_000;
+/**
+ * The restart in flight, if any. It resolves once the new process is forked, but stays set until
+ * that process says it has started (or stops unexpectedly, the restart fails, or
+ * {@link RESTART_READY_TIMEOUT_MS} passes), so a second request — another window's Restart button —
+ * joins it instead of stopping a host that is still starting and forking yet another.
+ */
+let restartInFlight: Promise<void> | undefined;
+/** Ends {@link restartInFlight} after {@link RESTART_READY_TIMEOUT_MS} */
+let restartReadyTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Ends the restart in flight, but only if it is `run`: a late signal from an older restart (its
+ * timer, its rejection) must not end a newer one.
+ */
+function clearRestartGuard(run: Promise<void> | undefined): void {
+  if (!run || restartInFlight !== run) return;
+  clearTimeout(restartReadyTimer);
+  restartReadyTimer = undefined;
+  restartInFlight = undefined;
+}
+
+/** Records `run` as the restart in flight until one of the ends {@link restartInFlight} lists. */
+function trackRestart(run: Promise<void>): void {
+  clearTimeout(restartReadyTimer);
+  restartInFlight = run;
+  restartReadyTimer = setTimeout(() => clearRestartGuard(run), RESTART_READY_TIMEOUT_MS);
+  // Handles the rejection only to end the guard; whoever started `run` still sees it reject.
+  run.catch(() => clearRestartGuard(run));
+}
+
+/** The current extension host says it has started, so the restart that forked it is over. */
+function markExtensionHostStarted(): void {
+  if (restartInFlight) logger.debug('Extension host started; the restart in flight is complete');
+  clearRestartGuard(restartInFlight);
+}
 
 function createNewProcessLifetimeVariable(): void {
   if (processLifetimeVariable)
@@ -116,10 +162,23 @@ async function waitForExtensionHost(maxWaitTimeInMS: number, shouldCloseWatcher 
   if (!didExit) logger.warn(`Extension host did not exit within ${maxWaitTimeInMS.toString()} ms`);
 }
 
-async function restartExtensionHost(maxWaitTimeInMS: number) {
-  await waitForExtensionHost(maxWaitTimeInMS);
-  logger.debug('Extension host closed, restarting now');
-  return startExtensionHost(maxWaitTimeInMS, true);
+/**
+ * Stops the extension host and forks a new one. Resolves once the new process is forked, not once
+ * it has started. A call while a restart is already in flight (see {@link restartInFlight}) joins
+ * that restart and does not stop or fork anything itself.
+ */
+function restartExtensionHost(maxWaitTimeInMS: number): Promise<void> {
+  if (restartInFlight) {
+    logger.info('Extension host restart already in flight; joining it');
+    return restartInFlight;
+  }
+  const run = (async () => {
+    await waitForExtensionHost(maxWaitTimeInMS);
+    logger.debug('Extension host closed, restarting now');
+    await startExtensionHost(maxWaitTimeInMS, true);
+  })();
+  trackRestart(run);
+  return run;
 }
 
 function hardKillExtensionHost() {
@@ -178,6 +237,13 @@ function connectToExtensionHostProcess() {
   }
 
   const child = extensionHost;
+  child.on('message', (message) => {
+    if (message !== extensionHostStartedMessage) return;
+    // Only the current child's start ends the restart in flight: a child main has since replaced
+    // says nothing about the one now starting.
+    if (extensionHost !== child) return;
+    markExtensionHostStarted();
+  });
   child.once('exit', (code, signal) => {
     // A child that is no longer the current one was hard-killed (`hardKillExtensionHost`, reached
     // through `kill()` or a requested stop that ran out of time), which drops the reference before
@@ -209,8 +275,31 @@ function connectToExtensionHostProcess() {
       `Extension host stopped unexpectedly (${unexpectedStop.reason}); telling the windows so the user can restart it`,
     );
     lastUnexpectedStop = unexpectedStop;
+    // The host a restart forked has died, so that restart is over: the user may restart at once.
+    clearRestartGuard(restartInFlight);
     unexpectedStopEmitter.emit(unexpectedStop);
   });
+}
+
+/**
+ * Reports a failed fork as an unexpected stop: the old process is gone (or given up on) and no new
+ * one is running, so without this no window would offer a restart.
+ *
+ * The usual cause is a restart that hard-killed a stuck process whose exit has not arrived yet, so
+ * its lifetime is unresolved and `createNewProcessLifetimeVariable` refuses to fork. That clears
+ * once the late exit lands: the next restart forks normally. Two causes do not clear: a process
+ * that never exits, and `fork()` itself throwing (the new lifetime is then never resolved). Either
+ * leaves every later restart failing the same way until the app is restarted.
+ */
+function announceRefusedFork(error: unknown): void {
+  // The restart that tried this fork is over, so a further request may try again.
+  clearRestartGuard(restartInFlight);
+  if (isAppShuttingDown()) return;
+  logger.error(
+    `Could not fork a new extension host; telling the windows it has stopped. ${getErrorMessage(error)}`,
+  );
+  lastUnexpectedStop = { reason: 'crashed' };
+  unexpectedStopEmitter.emit(lastUnexpectedStop);
 }
 
 /**
@@ -236,7 +325,7 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
   ];
   if (isRestarting) sharedArgs.push(commandLineArgumentsAliases[CommandLineArgs.DidRestart][0]);
 
-  function startExtensionHostInternal() {
+  function forkExtensionHostProcess() {
     // Throws, and so forks nothing, while the previous process is not cleaned up; the flags below
     // still describe that previous process until a new one is actually forked.
     createNewProcessLifetimeVariable();
@@ -278,6 +367,18 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
       env: extensionHostEnv,
       execArgv: extensionHostExecArgv,
     });
+  }
+
+  function startExtensionHostInternal() {
+    // Only a failure to fork is a stop to announce, not any failure of `startExtensionHost`: once
+    // forked (in dev it goes on to read nodemon.json, which can fail) a process is running, and its
+    // own exit reports whatever happens to it.
+    try {
+      forkExtensionHostProcess();
+    } catch (error) {
+      announceRefusedFork(error);
+      throw error;
+    }
     connectToExtensionHostProcess();
   }
 
@@ -304,12 +405,24 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
     : [];
 
   const restartExtensionHostInternalDevDebounced = debounce(async () => {
-    await waitForExtensionHost(maxWaitTimeInMS, false);
+    // Recorded as the restart in flight so a Restart button pressed meanwhile joins it. It does not
+    // join a restart already in flight itself: a further file change restarts again, as nodemon does.
+    const run = (async () => {
+      await waitForExtensionHost(maxWaitTimeInMS, false);
 
-    // If we didn't already set the restarting flag, set it now
-    if (!isRestarting) sharedArgs.push(commandLineArgumentsAliases[CommandLineArgs.DidRestart][0]);
+      // If we didn't already set the restarting flag, set it now
+      if (!isRestarting)
+        sharedArgs.push(commandLineArgumentsAliases[CommandLineArgs.DidRestart][0]);
 
-    startExtensionHostInternal();
+      startExtensionHostInternal();
+    })();
+    trackRestart(run);
+    try {
+      await run;
+    } catch (error) {
+      // Nothing awaits the watcher, so log rather than rethrow
+      logger.error(`File watcher could not restart the extension host: ${getErrorMessage(error)}`);
+    }
     // Debounce by the nodemon-configured amount
   }, nodemonConfig?.delay);
 

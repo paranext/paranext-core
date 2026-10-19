@@ -21,6 +21,7 @@ import { startProjectSettingsService } from '@extension-host/services/project-se
 import { initialize as initializeLocalizationService } from '@extension-host/services/localization.service-host';
 import {
   EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE,
+  extensionHostStartedMessage,
   gracefulShutdownMessage,
 } from '@node/models/interprocess-messages.model';
 import { killChildProcessesFromExtensions } from '@extension-host/services/create-process.service';
@@ -145,6 +146,11 @@ process.on('unhandledRejection', (reason) => {
     await extensionService.initialize();
     markStartup('extensions-initialized');
     announceExtensionHostStarted();
+    // `process.send` exists only when main forked this process with an IPC channel; run on its own
+    // (`npm run start:extension-host`) there is no main restart to tell.
+    process.send?.(extensionHostStartedMessage, (error) => {
+      if (error) logger.warn(`Error telling main the extension host started: ${error}`);
+    });
   } catch (error) {
     logger.error(error);
   }

@@ -2,6 +2,15 @@ export const gracefulShutdownMessage = 'gracefulShutdown';
 export const heartbeatMessage = 'heartbeat';
 
 /**
+ * Sent by the extension host to main over the child-process IPC channel once it has initialized its
+ * extensions, at the same moment it emits `platform.onDidStartExtensionHost` to the windows. Main
+ * uses it to end a restart in flight: until it arrives, a further restart request joins the running
+ * one instead of stopping the host that is still starting. It travels on the channel of one child
+ * process, so main can tell which process sent it.
+ */
+export const extensionHostStartedMessage = 'extensionHostStarted';
+
+/**
  * Exit code the extension host uses when it ends itself because its connection to main died. Main
  * reads it off the child process `exit` event to tell "lost its link" from any other unexpected
  * exit, which it reports as a crash.

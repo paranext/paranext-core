@@ -2568,7 +2568,11 @@ async function main() {
 
   commandService.registerCommand('platform.restartExtensionHost', restartExtensionHost, {
     method: {
-      summary: 'Restart the extension host which reloads and reinitializes TS/JS extensions',
+      summary:
+        'Restart the extension host which reloads and reinitializes TS/JS extensions. Resolves ' +
+        'once the new process is forked. A call while a restart is already in flight (until the ' +
+        'new extension host announces its start) joins that restart and resolves with it, at ' +
+        'once if the new process is already forked.',
       params: [],
       result: {
         name: 'return value',
