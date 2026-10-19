@@ -17,12 +17,15 @@ import {
  * @param availableChecks The checks to look up; the placeholder list `useData` returns while
  *   loading counts as no list yet
  * @param getLocalizedCheckDescription Gives the name to show for a check
+ * @param refreshKey Changing it looks every check up again while the old labels stay in place, for
+ *   a change to the project that can alter a check's setup status
  */
 export function useChecksInfo(
   checkAggregator: Pick<ICheckAggregatorService, 'lookUpCheckSetupStatus'> | undefined,
   projectId: string | undefined,
   availableChecks: CheckRunnerCheckDetails[] | PlatformError,
   getLocalizedCheckDescription: (checkId: string) => string,
+  refreshKey: number,
 ): CheckInfo[] {
   const [checksInfo, setChecksInfo] = useState<CheckInfo[]>([]);
 
@@ -55,7 +58,7 @@ export function useChecksInfo(
     return () => {
       isCurrent = false;
     };
-  }, [checkAggregator, projectId, availableChecks, getLocalizedCheckDescription]);
+  }, [checkAggregator, projectId, availableChecks, getLocalizedCheckDescription, refreshKey]);
 
   return checksInfo;
 }

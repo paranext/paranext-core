@@ -32,7 +32,7 @@ describe('useChecksInfo', () => {
     // lookups on every render
     const aggregator = aggregatorWith(lookUp);
 
-    const { result } = renderHook(() => useChecksInfo(aggregator, 'P1', CHECKS, getName));
+    const { result } = renderHook(() => useChecksInfo(aggregator, 'P1', CHECKS, getName, 0));
 
     await waitFor(() => expect(result.current).toHaveLength(2));
     expect(
@@ -54,15 +54,47 @@ describe('useChecksInfo', () => {
       projectId === 'P1' ? { status: 'ready' } : { status: 'setupRequired' },
     );
     const aggregator = aggregatorWith(lookUp);
-    const initialProps: HookProps = [aggregator, 'P1', CHECKS, getName];
+    const initialProps: HookProps = [aggregator, 'P1', CHECKS, getName, 0];
     const { result, rerender } = renderHook((props: HookProps) => useChecksInfo(...props), {
       initialProps,
     });
     await waitFor(() => expect(result.current[0]?.setupStatus).toBe('ready'));
 
-    rerender([aggregator, 'P2', CHECKS, getName]);
+    rerender([aggregator, 'P2', CHECKS, getName, 0]);
 
     await waitFor(() => expect(result.current[0]?.setupStatus).toBe('setupRequired'));
+  });
+
+  it('looks the checks up again when the refresh key changes, keeping the labels meanwhile', async () => {
+    let status: CheckSetupState['status'] = 'setupRequired';
+    let resolveRefreshedLookup: () => void = () => {};
+    let isRefreshing = false;
+    const lookUp = vi.fn<LookUp>(async () => {
+      if (isRefreshing) {
+        await new Promise<void>((resolve) => {
+          resolveRefreshedLookup = resolve;
+        });
+      }
+      return { status };
+    });
+    const aggregator = aggregatorWith(lookUp);
+    const checks = [CHECKS[0]];
+    const initialProps: HookProps = [aggregator, 'P1', checks, getName, 0];
+    const { result, rerender } = renderHook((props: HookProps) => useChecksInfo(...props), {
+      initialProps,
+    });
+    await waitFor(() => expect(result.current[0]?.setupStatus).toBe('setupRequired'));
+
+    // The user finished the check's setup, which a full invalidation reports
+    status = 'ready';
+    isRefreshing = true;
+    rerender([aggregator, 'P1', checks, getName, 1]);
+
+    // The labels stay until the new lookup finishes
+    expect(result.current[0]?.setupStatus).toBe('setupRequired');
+    await waitFor(() => expect(lookUp).toHaveBeenCalledTimes(2));
+    resolveRefreshedLookup();
+    await waitFor(() => expect(result.current[0]?.setupStatus).toBe('ready'));
   });
 
   it('drops a lookup that resolves after the project changed', async () => {
@@ -76,11 +108,11 @@ describe('useChecksInfo', () => {
     );
     const aggregator = aggregatorWith(lookUp);
     const checks = [CHECKS[0]];
-    const initialProps: HookProps = [aggregator, 'P1', checks, getName];
+    const initialProps: HookProps = [aggregator, 'P1', checks, getName, 0];
     const { result, rerender } = renderHook((props: HookProps) => useChecksInfo(...props), {
       initialProps,
     });
-    rerender([aggregator, 'P2', checks, getName]);
+    rerender([aggregator, 'P2', checks, getName, 0]);
     await waitFor(() => expect(result.current[0]?.setupStatus).toBe('setupRequired'));
 
     // The first project's lookup, started before the switch, resolves last
@@ -96,16 +128,16 @@ describe('useChecksInfo', () => {
     const placeholderChecks = [defaultCheckRunnerCheckDetails];
     const platformError = newPlatformError('The checks could not be loaded');
     const cases: [string, (aggregator: ReturnType<typeof aggregatorWith>) => HookProps][] = [
-      ['there is no check runner yet', () => [undefined, 'P1', CHECKS, getName]],
-      ['there is no project', (aggregator) => [aggregator, undefined, CHECKS, getName]],
+      ['there is no check runner yet', () => [undefined, 'P1', CHECKS, getName, 0]],
+      ['there is no project', (aggregator) => [aggregator, undefined, CHECKS, getName, 0]],
       [
         'the available checks failed to load',
-        (aggregator) => [aggregator, 'P1', platformError, getName],
+        (aggregator) => [aggregator, 'P1', platformError, getName, 0],
       ],
-      ['there are no available checks', (aggregator) => [aggregator, 'P1', [], getName]],
+      ['there are no available checks', (aggregator) => [aggregator, 'P1', [], getName, 0]],
       [
         'the available checks are still the loading placeholder',
-        (aggregator) => [aggregator, 'P1', placeholderChecks, getName],
+        (aggregator) => [aggregator, 'P1', placeholderChecks, getName, 0],
       ],
     ];
 

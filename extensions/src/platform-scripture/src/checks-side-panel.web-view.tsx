@@ -86,6 +86,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useState<CheckJobStatusReport>(defaultJobStatusReport);
   const activeJobIdRef = useRef<string | undefined>(undefined);
   const [forceNewCheckRun, setForceNewCheckRun] = useState(1);
+  const [checksInfoRefreshKey, setChecksInfoRefreshKey] = useState(0);
   const [checkResults, setCheckResults] = useState<CheckRunResult[]>(() => defaultCheckResults);
   const checkResultsRef = useRef<CheckRunResult[]>(checkResults);
   const [isResultLoadingCancelled, setIsResultLoadingCancelled] = useState(false);
@@ -430,6 +431,12 @@ global.webViewComponent = function ChecksSidePanelWebView({
     (details: CheckResultsInvalidated) => {
       if (!checkAggregator || !isMountedRef.current) return;
 
+      // A change to the whole project can alter any check's setup status, selected or not (book-scope
+      // changes cannot). This is not debounced or filtered by the selected checks: a later event
+      // would cancel the debounce, and an unselected check's label must refresh too.
+      if (details.scope === 'all' && details.projectId === projectId)
+        setChecksInfoRefreshKey((key) => key + 1);
+
       // Clear any existing timeout
       if (invalidateTimeoutRef.current) {
         clearTimeout(invalidateTimeoutRef.current);
@@ -458,7 +465,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
         if (applies) setForceNewCheckRun((x) => x + 1);
       }, 1000); // Debounce for 1 second
     },
-    [activeRanges, checkAggregator, selectedCheckTypeIds],
+    [activeRanges, checkAggregator, projectId, selectedCheckTypeIds],
   );
 
   useEvent(network.getNetworkEvent(CHECK_RESULTS_INVALIDATED_EVENT), invalidateResultsIfNecessary);
@@ -514,6 +521,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     projectId,
     availableChecks,
     getLocalizedCheckDescription,
+    checksInfoRefreshKey,
   );
 
   /**
