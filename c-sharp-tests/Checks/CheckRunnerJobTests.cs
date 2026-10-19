@@ -343,28 +343,26 @@ internal class CheckRunnerJobTests : PapiTestBase
 
     #region Edits during a job
 
-    private const string InitializeHookCheckId = "TestInitializeHookCheck";
+    private const string HookCheckId = "TestHookCheck";
 
     /// <summary>
     /// Creates a runner whose jobs can run <paramref name="otherCheckId"/> and
-    /// <see cref="InitializeHookCheck"/>. The hook check's settings are marked changed, so a job
+    /// <see cref="HookCheck"/>. The hook check's settings are marked changed, so a job
     /// re-initializes it partway through the book, in the order of the job's check ids: listed after
     /// the other check, after that check has finished the book and before the job reads its results
     /// back; listed first, after the book's text was read and before the other check runs.
     /// </summary>
     private (
         CheckRunner Runner,
-        InitializeHookCheck HookCheck,
+        HookCheck HookCheck,
         CheckForProject OtherCheck
     ) CreateRunnerWithHookCheck(string otherCheckId)
     {
-        var hookCheck = new InitializeHookCheck();
+        var hookCheck = new HookCheck();
         ScriptureCheckBase Create(string checkId, ChecksDataSource dataSource) =>
-            checkId == InitializeHookCheckId
-                ? hookCheck
-                : CheckFactory.CreateCheck(checkId, dataSource);
+            checkId == HookCheckId ? hookCheck : CheckFactory.CreateCheck(checkId, dataSource);
         var runner = CreateRunner(Create);
-        runner.CheckCache.GetCheck(InitializeHookCheckId, _projectId).SettingsChanged = true;
+        runner.CheckCache.GetCheck(HookCheckId, _projectId).SettingsChanged = true;
         return (runner, hookCheck, runner.CheckCache.GetCheck(otherCheckId, _projectId));
     }
 
@@ -394,7 +392,7 @@ internal class CheckRunnerJobTests : PapiTestBase
             );
         };
 
-        var (final, results) = RunJob(runner, [s_repeatedWordCheckId, InitializeHookCheckId], 1);
+        var (final, results) = RunJob(runner, [s_repeatedWordCheckId, HookCheckId], 1);
 
         // The edit really landed between the finished check's run and the job reading it back
         Assert.That(editClearedFinishedCheck, Is.True);
@@ -430,7 +428,7 @@ internal class CheckRunnerJobTests : PapiTestBase
                 job.StopRequested = true;
         };
 
-        var (final, results) = RunJob(runner, [s_repeatedWordCheckId, InitializeHookCheckId], 1);
+        var (final, results) = RunJob(runner, [s_repeatedWordCheckId, HookCheckId], 1);
 
         Assert.That(editClearedFinishedCheck, Is.True);
         Assert.That(final.Status, Is.EqualTo(CheckJobStatus.Stopped), final.Error);
@@ -456,11 +454,9 @@ internal class CheckRunnerJobTests : PapiTestBase
                 () => Client.SentRequestCount > requestsBeforeEdit,
                 TimeSpan.FromSeconds(30)
             );
-            // Only the first initialization is the one that races with the edit
-            hookCheck.OnInitialize = null;
         };
 
-        var (final, results) = RunJob(runner, [InitializeHookCheckId, s_repeatedWordCheckId], 1);
+        var (final, results) = RunJob(runner, [HookCheckId, s_repeatedWordCheckId], 1);
 
         Assert.That(editReachedTheChecks, Is.True);
         Assert.That(final.Status, Is.EqualTo(CheckJobStatus.Completed), final.Error);
@@ -489,7 +485,7 @@ internal class CheckRunnerJobTests : PapiTestBase
         var hookRan = false;
         hookCheck.OnInitialize = () => hookRan = true;
 
-        var (final, results) = RunJob(runner, [s_repeatedWordCheckId, InitializeHookCheckId], 1);
+        var (final, results) = RunJob(runner, [s_repeatedWordCheckId, HookCheckId], 1);
 
         Assert.That(hookRan, Is.True);
         Assert.That(final.Status, Is.EqualTo(CheckJobStatus.Completed), final.Error);

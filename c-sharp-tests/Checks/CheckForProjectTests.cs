@@ -15,7 +15,7 @@ internal class CheckForProjectTests
     {
         // An edit to any book clears every cached check for the project, including checks that
         // have only ever run on other books
-        var check = new CheckForProject(new InitializeHookCheck(), "TestCheck", "TestProject");
+        var check = new CheckForProject(new HookCheck(), "TestCheck", "TestProject");
         check.AccessResults(1, recorder => recorder.ResultsReady = true);
 
         Assert.DoesNotThrow(() => check.ClearResultsForBook(2));
@@ -34,7 +34,7 @@ internal class CheckForProjectTests
     [Test]
     public void Run_NoEditSinceTheTextWasRead_MarksResultsReady()
     {
-        var check = new CheckForProject(new InitializeHookCheck(), "TestCheck", "TestProject");
+        var check = new CheckForProject(new HookCheck(), "TestCheck", "TestProject");
         var editCount = check.GetEditCount(1);
 
         check.Run(null!, 1, null!, editCount);
@@ -51,7 +51,7 @@ internal class CheckForProjectTests
 
     private static CheckForProject CreateCheckThatFindsOneError()
     {
-        var hookCheck = new InitializeHookCheck
+        var hookCheck = new HookCheck
         {
             OnRun = recordError =>
                 recordError.RecordError(
@@ -78,7 +78,7 @@ internal class CheckForProjectTests
     }
 
     [Test]
-    public void Run_EditAfterTheTextWasReadBeforeTheRunEnds_LeavesNoResultsAndNotReady()
+    public void Run_EditAfterTheTextWasReadAndBeforeTheRunStarts_LeavesNoResultsAndNotReady()
     {
         var check = CreateCheckThatFindsOneError();
         // The check's job reads the book's text, then an edit lands, then the check runs on the
@@ -87,6 +87,20 @@ internal class CheckForProjectTests
         check.ClearResultsForBook(1);
 
         check.Run(null!, 1, null!, editCountBeforeTextRead);
+
+        Assert.That(AreResultsReady(check, 1), Is.False);
+        Assert.That(CountResults(check, 1), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ClearResultsForBook_EditAfterTheRun_RemovesTheResultsAndMarksThemNotReady()
+    {
+        var check = CreateCheckThatFindsOneError();
+        check.Run(null!, 1, null!, check.GetEditCount(1));
+        Assert.That(AreResultsReady(check, 1), Is.True);
+        Assert.That(CountResults(check, 1), Is.EqualTo(1));
+
+        check.ClearResultsForBook(1);
 
         Assert.That(AreResultsReady(check, 1), Is.False);
         Assert.That(CountResults(check, 1), Is.EqualTo(0));

@@ -15,7 +15,7 @@ namespace TestParanextDataProvider.Checks;
 /// on another thread that needs that lock.
 /// </summary>
 [ExcludeFromCodeCoverage]
-internal sealed class InitializeHookCheck : ScriptureCheckBase
+internal sealed class HookCheck : ScriptureCheckBase
 {
     /// <summary>Runs on every <see cref="Initialize"/>; does nothing when null.</summary>
     public Action? OnInitialize { get; set; }
@@ -27,7 +27,7 @@ internal sealed class InitializeHookCheck : ScriptureCheckBase
 
     public override Enum<CheckType> Type => CheckType.RepeatedWord;
     public override CheckDataFormat NeededFormat => CheckDataFormat.TextTokens;
-    public override string CheckMarkSettingsKey => "TestInitializeHookCheck";
+    public override string CheckMarkSettingsKey => "TestHookCheck";
     public override bool SetupComplete => true;
     public override string LocalizedSetupCommand => "";
 
