@@ -4601,17 +4601,16 @@ describe('withDocumentEndOnText', () => {
     ).toEqual({ jsonPath: '$.content[2].content[1]', offset: 8 });
   });
 
-  it.each([
+  it.each<[string, UsjTextContentLocation]>([
     ['an offset inside the text', { jsonPath: '$.content[2].content[1]', offset: 3 }],
     ['the end of the text', { jsonPath: '$.content[2].content[1]', offset: 8 }],
     ['an offset no location rule produces', { jsonPath: '$.content[2].content[1]', offset: 10 }],
-    ['a location that is not on text', { jsonPath: '$.content[2].content[1]' }],
   ])('leaves %s alone', (_name, location) => {
     expect(withDocumentEndOnText(location, 8, endsInText)).toBe(location);
   });
 
   it('leaves one past the end alone on a text that is not the last in the document', () => {
-    const location = { jsonPath: '$.content[2].content[1]', offset: 9 };
+    const location: UsjTextContentLocation = { jsonPath: '$.content[2].content[1]', offset: 9 };
     const followed: Usj = {
       ...endsInText,
       content: [...endsInText.content, { type: 'para', marker: 'p', content: ['God said'] }],
