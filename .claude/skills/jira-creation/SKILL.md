@@ -171,12 +171,14 @@ holds text. Say which you chose.
    `listJiraProjectIssueTypesMetadata` for project `PT`, and the fields you may set at create
    time with `getJiraIssueTypeMetaWithFields` — both through `discover` → `executeRead`.
 6. **Never blindly retry a failed create.** A create that Jira *rejected* — the response names
-   the field at fault and carries a `repairHint` — saved nothing: correct that field and send it
-   again. Any other error (a timeout, a server error, a dropped connection) may have saved the
-   issue anyway, and a retry makes a twin that nothing can delete — and a search right after it
-   can lag behind the save, so it doesn't prove otherwise. Stop and report the error. A later run
-   finds the issue, if it was saved, through step 1's search for your own recent tickets, and the
-   user decides at its approval step what to do with it.
+   the field at fault and carries a `repairHint` (the v2 create tool's own description says "A
+   rejected create returns a repairHint and names the field at fault") — saved nothing: correct
+   that field and send it again. An error without both is not a rejection. Any other error — a
+   timeout, a server error, a dropped connection — may have saved the issue anyway, and a retry
+   makes a twin that nothing can delete; a search right after it can lag behind the save, so it
+   doesn't prove otherwise. Stop and report the error. A later run finds the issue, if it was
+   saved, through step 1's search for your own recent tickets, and the user decides at its
+   approval step what to do with it.
 7. **Create** with `createJiraIssue`: project `PT`, the issue type, the title (Jira's `summary`),
    the parent, and any custom fields — using the parameter names the tool's schema shows. **Don't
    pass the drafted body text here** — the template discards it every time. Send it in step 10.
