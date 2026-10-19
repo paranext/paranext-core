@@ -1283,6 +1283,41 @@ describe('FootnotesLayout copy limit', () => {
     expect(isCancelled).toBe(true);
   });
 
+  it('leaves a copy alone that a row editor has already handled', () => {
+    const editorCopy = vi.fn((event: Event) => event.preventDefault());
+    renderPane({
+      usj: USJ_WITH_FOOTNOTE,
+      copyLimit: 5,
+      editingFootnoteIndex: 0,
+      renderEditingFootnote: () => (
+        <div
+          data-testid="row-editor"
+          ref={(element) => {
+            element?.addEventListener('copy', editorCopy);
+          }}
+        >
+          The footnote text
+        </div>
+      ),
+    });
+    const rowEditor = screen.getByTestId('row-editor');
+    const range = document.createRange();
+    range.selectNodeContents(rowEditor);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    const setData = vi.fn();
+    const event = createEvent.copy(rowEditor);
+    Object.defineProperty(event, 'clipboardData', { value: { setData } });
+
+    fireEvent(rowEditor, event);
+    window.getSelection()?.removeAllRanges();
+
+    // A positive control: the selection is over the limit, so the pane would shorten it.
+    expect(range.toString().length).toBeGreaterThan(5);
+    expect(editorCopy).toHaveBeenCalledTimes(1);
+    expect(setData).not.toHaveBeenCalled();
+  });
+
   it('copies nothing from the pane while the copy limit is 0', () => {
     const { container } = renderPane({ usj: USJ_WITH_FOOTNOTE, copyLimit: 0 });
 

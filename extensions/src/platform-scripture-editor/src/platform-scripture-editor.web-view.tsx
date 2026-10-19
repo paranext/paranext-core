@@ -3860,7 +3860,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         onClose={closePaneFootnoteEditorFromInside}
         onNoteEdit={onFootnoteEditorNoteEdit}
         scrRef={scrRef}
-        editorOptions={options}
+        editorOptions={editorOptionsWithCopyLimit}
         defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
         localizedStrings={localizedStrings}
         parentEditorRef={editorRef}
@@ -3872,7 +3872,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       closePaneFootnoteEditorFromInside,
       onFootnoteEditorNoteEdit,
       scrRef,
-      options,
+      editorOptionsWithCopyLimit,
       localizedStrings,
       footnoteMarkerPalette,
     ],
