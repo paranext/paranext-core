@@ -13,7 +13,12 @@ namespace TestParanextDataProvider.Projects
         public TestLocalParatextProjectsInTempDir()
             : base()
         {
-            _folder = new TemporaryFolder(TestContext.CurrentContext.Test.ID);
+            // TemporaryFolder deletes an existing folder of the same name, so the name carries the
+            // run's id: a concurrent run's folder for the same test is never touched. The prefix is
+            // the one FixtureSetup sweeps, so a folder a crashed run leaked is cleaned up later.
+            _folder = new TemporaryFolder(
+                $"Platform.Bible.Tests-{FixtureSetup.RunId}-{TestContext.CurrentContext.Test.ID}"
+            );
         }
 
         public override void Dispose()
