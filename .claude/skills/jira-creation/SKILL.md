@@ -206,12 +206,13 @@ holds text. Say which you chose.
     [Acting on what the search found](#acting-on-what-the-search-found), verifying each. A link
     whose target is a draft is made once that draft's ticket is created, filled and verified.
     **Immediately before each one, re-read the ticket** through `executeRead` (`getJiraIssue`,
-    `view: "evidence"` for its links, with `fields` naming `status`, `assignee`, `parent`,
-    `customfield_10020` for the sprint, and for a description edit the body field too): status
-    category, assignee, parent, sprint and links, and the description itself. Compare with what
-    was shown at the approval step, allowing for this run's own completed writes; if anything else
-    changed — a teammate picked it up, moved it or edited it — stop and ask. A description edit
-    re-sends the whole body, in the format the ticket was read in, and is verified as in step 11.
+    `view: "evidence"`, with `fields` naming `status`, `assignee`, `parent`, `issuelinks`,
+    `customfield_10020` for the sprint, and for a description edit the body field too — a field
+    not named doesn't come back, links included): status category, assignee, parent, sprint and
+    links, and the description itself. Compare with what was shown at the approval step,
+    allowing for this run's own completed writes; if anything else changed — a teammate picked it
+    up, moved it or edited it — stop and ask. A description edit re-sends the whole body, in the
+    format the ticket was read in, and is verified as in step 11.
 
 **Several issues at once.** Every gap between create and fill is a window where a dead session
 leaves a blank templated stub nobody can delete. So run steps 7–12 to completion on one issue
