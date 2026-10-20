@@ -519,23 +519,6 @@ export const CONTEXT_MENU_ACTION_TO_NOTE_KIND: Record<
   insertEndnote: 'insertEndnoteAtSelection',
 };
 
-/**
- * Which {@link NOTE_INSERT_CONFIG} kind the Ctrl+T / Ctrl+Shift+T keyboard shortcut inserts: Ctrl+T
- * inserts a footnote, Ctrl+Shift+T inserts a cross-reference. One mapping shared by the shortcut
- * handler and its test, so swapping the two chords' kinds fails a test rather than only showing up
- * as Ctrl+T inserting the wrong note type.
- *
- * @param shiftKey Whether Shift was held (`KeyboardEvent.shiftKey`).
- */
-export function noteKindForCtrlTChord(
-  shiftKey: boolean,
-): Extract<
-  EditorMessageInsertTextualNoteAtSelection['method'],
-  'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection'
-> {
-  return shiftKey ? 'insertCrossReferenceAtSelection' : 'insertFootnoteAtSelection';
-}
-
 const INSERT_FOOTNOTE_TITLE_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_insertFootnoteAtSelection%';
 const INSERT_CROSS_REFERENCE_TITLE_KEY: LocalizeKey =
