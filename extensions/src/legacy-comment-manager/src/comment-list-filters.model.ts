@@ -120,7 +120,16 @@ export const presetNeedsFrozenReadMembership = {
 
 // --- Scope axis (how much Scripture the list covers) ---
 
-export const DEFAULT_SCOPE_FILTER: ScopeFilter = 'all-books';
+/** The scope a comment list opens on when nothing was stored or requested for it. */
+export const DEFAULT_SCOPE_FILTER: ScopeFilter = 'current-chapter';
+
+/**
+ * The scope with no Scripture-range restriction. Distinct from {@link DEFAULT_SCOPE_FILTER}: the
+ * `openCommentList` command, `setFilters` messages and the deprecated `'unfiltered'` value all mean
+ * "all books" when they omit or misstate a scope, and that public contract does not follow the
+ * default a fresh view opens on.
+ */
+export const ALL_BOOKS_SCOPE_FILTER: ScopeFilter = 'all-books';
 
 export const scopeFilterToLabelKey = {
   'all-books': '%comment_filter_scope_all_books%',
@@ -155,14 +164,14 @@ export const scopeFilterToFallbackLabel = {
  * Maps the deprecated {@link LegacyScopeFilter} `'unfiltered'` onto its exact replacement,
  * `'all-books'` — both mean "no Scripture-range restriction". Anything else this build doesn't
  * recognize — a scope from a newer build, or a malformed value crossing the command/message bus —
- * resolves to the default rather than reaching `scopeFieldsUsed`, which throws on an unrecognized
+ * resolves to `'all-books'` rather than reaching `scopeFieldsUsed`, which throws on an unrecognized
  * key.
  */
 export function resolveScopeFilter(candidate?: ScopeFilter | LegacyScopeFilter): ScopeFilter {
-  if (candidate === 'unfiltered') return DEFAULT_SCOPE_FILTER;
+  if (candidate === 'unfiltered') return ALL_BOOKS_SCOPE_FILTER;
   return typeof candidate === 'string' && isScopeFilter(candidate)
     ? candidate
-    : DEFAULT_SCOPE_FILTER;
+    : ALL_BOOKS_SCOPE_FILTER;
 }
 
 /** The Scripture-range granularity each scope queries at; `all-books` queries no range at all. */
@@ -215,7 +224,7 @@ export function isShowingAllThreads({
   filters: CommentFilters;
   scopeFilter: ScopeFilter;
 }): boolean {
-  return areCommentFiltersAtDefault(filters) && scopeFilter === DEFAULT_SCOPE_FILTER;
+  return areCommentFiltersAtDefault(filters) && scopeFilter === ALL_BOOKS_SCOPE_FILTER;
 }
 
 /**
@@ -308,7 +317,7 @@ function isNewCommentFiltersShape(
  *   key) is mapped onto its matching preset via {@link presetFromLegacyAxes}, which reports an
  *   inexact mapping through `warn` (see {@link WarnFn}).
  * - A `preset` this build doesn't recognize — from a newer build, or a malformed value crossing the
- *   command/message bus — resolves to the default rather than reaching
+ *   command/message bus — resolves to `'all-books'` rather than reaching
  *   {@link buildCommentThreadSelector}, whose exhaustiveness guard throws on an unhandled preset.
  */
 export function applyFilterOverrides(

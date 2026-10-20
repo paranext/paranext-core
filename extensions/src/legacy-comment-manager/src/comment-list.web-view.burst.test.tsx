@@ -495,6 +495,7 @@ describe('setFilters messages replayed in a burst', () => {
   });
 
   it('applies a message equal to the pre-burst state instead of skipping it', async () => {
+    seedStoredSelection('project-1', { preset: 'all', scopeFilter: 'all-books' });
     renderCommentListWebView();
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
 
@@ -510,7 +511,7 @@ describe('setFilters messages replayed in a burst', () => {
 
     await waitFor(() => {
       expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS);
-      expect(latestPanelProps().scopeFilter).toBe(DEFAULT_SCOPE_FILTER);
+      expect(latestPanelProps().scopeFilter).toBe('all-books');
     });
   });
 
@@ -531,6 +532,7 @@ describe('setFilters messages replayed in a burst', () => {
   });
 
   it('applies a message equal to the scope a panel change just left behind', async () => {
+    seedStoredSelection('project-1', { preset: 'all', scopeFilter: 'all-books' });
     renderCommentListWebView();
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
 
@@ -539,7 +541,7 @@ describe('setFilters messages replayed in a burst', () => {
       dispatchSetFilters({});
     });
 
-    await waitFor(() => expect(latestPanelProps().scopeFilter).toBe(DEFAULT_SCOPE_FILTER));
+    await waitFor(() => expect(latestPanelProps().scopeFilter).toBe('all-books'));
   });
 
   it('still skips a genuinely identical repeat, minting no new filters object', async () => {
@@ -727,10 +729,11 @@ describe('current-* scope scrRef wiring', () => {
   });
 
   it('does not resubscribe on a verse move when scoped to all-books', async () => {
+    seedStoredSelection('project-1', { preset: 'all', scopeFilter: 'all-books' });
     const scrRefControls = makeControllableScrRef({ book: 'MRK', chapterNum: 1, verseNum: 1 });
     renderCommentListWebView(scrRefControls.hook);
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
-    // The default scope is all-books; confirm the query has no scripture range before moving on,
+    // The stored scope is all-books; confirm the query has no scripture range before moving on,
     // so the "no resubscribe" assertion below isn't vacuously true for some other reason.
     const selectorBeforeMove = latestCommentThreadSelector();
     expect(selectorBeforeMove.scriptureRanges).toBeUndefined();
@@ -1092,6 +1095,7 @@ describe('unsaved preset filtering', () => {
       },
     });
 
+    seedStoredSelection('project-1', { preset: 'all', scopeFilter: 'all-books' });
     renderCommentListWebView();
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
 
