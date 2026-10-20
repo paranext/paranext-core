@@ -8787,6 +8787,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   a backup that carries a stale last-synced tip reads as ⬇️ until its next sync, and a project
   with no last-synced tip at all is never ⬇️. Public core carries an always-empty `toReceive`, and
   the Studio patch must keep the exact `GetServerTipIds` signature so the seam keeps binding.
+- **Amended 2026-10-20 (PT-4694 follow-up):** ⬆️ means "local changes this user's sync will send",
+  so a project whose current user cannot change it (an Observer, or not a member) is never ⬆️.
+  ParatextData's Send/Receive neither commits nor pushes for such a user
+  (`VersionedText.ShareChanges` gates both on `PermissionManager.HaveRoleNotObserver`), and the
+  observer path's `hg update -C` even reverts the `hg add` it ran. Without this rule, files an
+  extension writes into the project's `shared` folder (ParatextData counts everything there as
+  project data) stayed "Changes to send" through every successful sync. ⬇️ is unaffected: such a
+  user still receives. `ParatextProjectSendReceiveService.HasUnsyncedLocalChanges` applies the rule
+  before reading the repository.
 - **Source:** PT-4694; the follow-up of `adr-toolbar-sync-status-is-local`.
 
 ## adr-usersnap-lives-in-product-patch: Usersnap keys and Help items live in the product's repo patch; core ships empty constants
