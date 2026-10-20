@@ -238,9 +238,11 @@
       "%webView_platformScriptureEditor_insertCommentAtSelection%": "Insert comment",
       "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%": "Insert cross-reference",
       "%webView_platformScriptureEditor_insertEndnoteAtSelection%": "Insert endnote",
+      "%webView_platformScriptureEditor_insertEndnoteAtSelection_2%": "Insert end note",
       "%webView_platformScriptureEditor_insertFootnoteAtSelection%": "Insert footnote",
       "%webView_platformScriptureEditor_markersInventory%": "Inventory: Markers...",
       "%webView_platformScriptureEditor_openChecks%": "Open Checks...",
+      "%webView_platformScriptureEditor_openChecks_2%": "Basic checks",
       "%webView_platformScriptureEditor_openChecksSidePanel%": "Open Checks Side Panel",
       "%webView_platformScriptureEditor_openFind%": "Find",
       "%webView_platformScriptureEditor_options%": "Options",
@@ -253,6 +255,7 @@
       "%webView_platformScriptureEditor_redo%": "Redo",
       "%webView_platformScriptureEditor_repeatedWordsInventory%": "Inventory: Repeated Words...",
       "%webView_platformScriptureEditor_resetZoomToDefault%": "Zoom reset",
+      "%webView_platformScriptureEditor_resetZoomToDefault_2%": "Zoom 100%",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Share layout with team",
       "%webView_platformScriptureEditor_showBibleTextsPanel%": "Bible texts",
       "%webView_platformScriptureEditor_showCheckResults%": "Show Check Results...",
@@ -272,6 +275,7 @@
       "%webView_platformScriptureEditor_structureProtection_unlockStructure%": "Unlock structure",
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Unlock structure for project",
       "%webView_platformScriptureEditor_switchScriptureView%": "Switch Scripture view",
+      "%webView_platformScriptureEditor_switchScriptureView_2%": "Switch scripture view",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Editing paused — Send/Receive in progress",
       "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": "Editing paused — sync in progress",
       "%webView_platformScriptureEditor_tabCouldNotOpen%": "That tab couldn't be opened. Please try again.",
@@ -285,6 +289,7 @@
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(Read-only)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Resource Viewer",
       "%webView_platformScriptureEditor_tools%": "Tools",
+      "%webView_platformScriptureEditor_toolsAndResources%": "Tools and resources",
       "%webView_platformScriptureEditor_twoStepDelete_deleteSelection%": "Press {key} again to delete selection",
       "%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%": "Press {key} again to remove verse marker",
       "%webView_platformScriptureEditor_undo%": "Undo",
@@ -597,9 +602,11 @@
       "%webView_platformScriptureEditor_insertCommentAtSelection%": "Insertar comentario",
       "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%": "Insertar referencia cruzada",
       "%webView_platformScriptureEditor_insertEndnoteAtSelection%": "Insertar nota al final",
+      "%webView_platformScriptureEditor_insertEndnoteAtSelection_2%": "Insertar nota final",
       "%webView_platformScriptureEditor_insertFootnoteAtSelection%": "Insertar nota al pie",
       "%webView_platformScriptureEditor_markersInventory%": "Inventario: Marcadores...",
       "%webView_platformScriptureEditor_openChecks%": "Abrir verificaciones...",
+      "%webView_platformScriptureEditor_openChecks_2%": "Verificaciones básicas",
       "%webView_platformScriptureEditor_openChecksSidePanel%": "Abrir el panel lateral de verificaciones",
       "%webView_platformScriptureEditor_openFind%": "Buscar",
       "%webView_platformScriptureEditor_options%": "Opciones",
@@ -612,6 +619,7 @@
       "%webView_platformScriptureEditor_redo%": "Rehacer",
       "%webView_platformScriptureEditor_repeatedWordsInventory%": "Inventario: Palabras repetidas...",
       "%webView_platformScriptureEditor_resetZoomToDefault%": "Restablecer el zoom al valor predeterminado",
+      "%webView_platformScriptureEditor_resetZoomToDefault_2%": "Zoom 100%",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Compartir diseño con el equipo",
       "%webView_platformScriptureEditor_showBibleTextsPanel%": "Textos bíblicos",
       "%webView_platformScriptureEditor_showCheckResults%": "Mostrar resultados de verificación...",
@@ -631,6 +639,7 @@
       "%webView_platformScriptureEditor_structureProtection_unlockStructure%": "Desbloquear estructura",
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Desbloquear estructura para el proyecto",
       "%webView_platformScriptureEditor_switchScriptureView%": "Cambiar vista de escrituras",
+      "%webView_platformScriptureEditor_switchScriptureView_2%": "Cambiar vista de las Escrituras",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Edición pausada — Enviar/Recibir en curso",
       "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": "Edición pausada — sincronización en curso",
       "%webView_platformScriptureEditor_tabCouldNotOpen%": "No se pudo abrir esa pestaña. Inténtelo de nuevo.",
@@ -644,6 +653,7 @@
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(solo lectura)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Visor de recursos",
       "%webView_platformScriptureEditor_tools%": "Herramientas",
+      "%webView_platformScriptureEditor_toolsAndResources%": "Herramientas y recursos",
       "%webView_platformScriptureEditor_twoStepDelete_deleteSelection%": "Presione {key} de nuevo para eliminar lo seleccionado",
       "%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%": "Presione {key} de nuevo para borrar este número de versículo",
       "%webView_platformScriptureEditor_undo%": "Deshacer",
@@ -1271,13 +1281,56 @@
     "%webView_platformScriptureEditor_insert%": {
       "fallbackKey": "%Paratext.EditMenu.ListForm.insertToolStripMenuItem.Text%"
     },
+    "%webView_platformScriptureEditor_insertEndnoteAtSelection%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Relabeled to \"Insert end note\". The new key is %webView_platformScriptureEditor_insertEndnoteAtSelection_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_insertEndnoteAtSelection_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_insertEndnoteAtSelection%"
+    },
     "%webView_platformScriptureEditor_openChecks%": {
-      "fallbackKey": "%webView_platformScriptureEditor_openChecksSidePanel%"
+      "fallbackKey": "%webView_platformScriptureEditor_openChecksSidePanel%",
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Relabeled to \"Basic checks\". The new key is %webView_platformScriptureEditor_openChecks_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_openChecks_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_openChecks%"
+    },
+    "%webView_platformScriptureEditor_resetZoomToDefault%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Relabeled to \"Zoom 100%\". The new key is %webView_platformScriptureEditor_resetZoomToDefault_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_resetZoomToDefault_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_resetZoomToDefault%"
+    },
+    "%webView_platformScriptureEditor_qualityChecks%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "The Simple editor menu no longer has a Quality checks section. Retired with no replacement key."
+      }
     },
     "%webView_platformScriptureEditor_shareLayout_ariaLabel%": {
       "deprecationInfo": {
         "date": "2026-09-21",
         "message": "The toolbar button that opens this dialog was renamed from \"Share layout with team\" to \"Team layout\". The new key is %webView_platformScriptureEditor_teamLayout_ariaLabel%."
+      }
+    },
+    "%webView_platformScriptureEditor_showCommentsPanel%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "The Simple editor menu now shares the Comments label with the Power menu. The new key is %webView_legacyCommentManager_openComments_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_showDictionaryPanel%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "The Simple editor menu no longer has a Dictionary item: the Dictionary tab is always open in its third column. Retired with no replacement key."
       }
     },
     "%webView_platformScriptureEditor_structureProtection_lockStructure%": {
@@ -1311,7 +1364,14 @@
       }
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
-      "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
+      "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%",
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Sentence case: \"Switch scripture view\". The new key is %webView_platformScriptureEditor_switchScriptureView_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_switchScriptureView_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_switchScriptureView%"
     },
     "%webView_platformScriptureEditor_syncEditBlocked_banner%": {
       "deprecationInfo": {
@@ -1321,6 +1381,12 @@
     },
     "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": {
       "fallbackKey": "%webView_platformScriptureEditor_syncEditBlocked_banner%"
+    },
+    "%webView_platformScriptureEditor_zoom%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "The Zoom items moved into the View section of the editor menu, so there is no Zoom heading. Retired with no replacement key."
+      }
     }
   }
 }
