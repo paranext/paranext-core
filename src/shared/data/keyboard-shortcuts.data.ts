@@ -119,7 +119,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'open-home',
-    purpose: 'Open Home, which lists your projects and resources',
+    purpose: 'Open Home, which lists your projects and resources (Power mode)',
     category: 'Navigation',
     context: 'Main process (global)',
     keys: { macOS: '⌘O', windows: 'Ctrl+O', linux: 'Ctrl+O' },
