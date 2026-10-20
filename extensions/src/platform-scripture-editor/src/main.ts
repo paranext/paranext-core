@@ -501,6 +501,16 @@ async function setScriptureView(
   await controller?.setScriptureView(viewType);
 }
 
+async function undoInEditor(webViewId: string | undefined): Promise<void> {
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.undo();
+}
+
+async function redoInEditor(webViewId: string | undefined): Promise<void> {
+  const controller = await getScriptureEditorController(webViewId);
+  await controller?.redo();
+}
+
 async function toggleFootnotesPane(webViewId: string | undefined): Promise<void> {
   const controller = await getScriptureEditorController(webViewId);
   await controller?.toggleFootnotesPaneVisibility();
@@ -746,6 +756,40 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           );
         } catch (e) {
           const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running setScriptureView! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async undo() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to undo`,
+          );
+          const message: EditorWebViewMessage = { method: 'undo' };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running undo! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async redo() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to redo`,
+          );
+          const message: EditorWebViewMessage = { method: 'redo' };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running redo! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }
@@ -1323,6 +1367,44 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const undoPromise = papi.commands.registerCommand('platformScriptureEditor.undo', undoInEditor, {
+    method: {
+      'x-experimental': true,
+      summary: 'Undo the last edit in the editor',
+      params: [
+        {
+          name: 'webViewId',
+          required: false,
+          summary: 'The ID of the WebView whose last edit is to be undone',
+          schema: { type: 'string' },
+        },
+      ],
+      result: {
+        name: 'return value',
+        schema: { type: 'null' },
+      },
+    },
+  });
+
+  const redoPromise = papi.commands.registerCommand('platformScriptureEditor.redo', redoInEditor, {
+    method: {
+      'x-experimental': true,
+      summary: 'Redo the last undone edit in the editor',
+      params: [
+        {
+          name: 'webViewId',
+          required: false,
+          summary: 'The ID of the WebView whose last undone edit is to be redone',
+          schema: { type: 'string' },
+        },
+      ],
+      result: {
+        name: 'return value',
+        schema: { type: 'null' },
+      },
+    },
+  });
+
   const toggleFootnotesPanePromise = papi.commands.registerCommand(
     'platformScriptureEditor.toggleFootnotes',
     toggleFootnotesPane,
@@ -1615,6 +1697,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await changeScriptureViewPromise,
     await setViewStandardPromise,
     await setViewPreviewPromise,
+    await undoPromise,
+    await redoPromise,
     await toggleFootnotesPanePromise,
     await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,

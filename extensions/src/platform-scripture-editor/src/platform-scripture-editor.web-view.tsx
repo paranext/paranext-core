@@ -162,7 +162,11 @@ import {
   scrollToNoteCaller,
   scrollToVerse,
 } from './editor-dom.util';
-import { handleEditMenuCommand, isEditMenuCommand } from './edit-menu-actions.util';
+import {
+  type EditMenuActionCommand,
+  handleEditMenuCommand,
+  isEditMenuCommand,
+} from './edit-menu-actions.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
@@ -2002,6 +2006,35 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     ],
   );
 
+  /**
+   * Runs an Edit flyout action on this editor with its read-only notices, selection restore and
+   * refocus. Cut, Copy and Paste reach it from the menu's select handler (the clipboard needs the
+   * click's user activation); Undo and Redo reach it as PAPI-command messages.
+   */
+  const runEditMenuCommand = useCallback(
+    (command: EditMenuActionCommand) =>
+      handleEditMenuCommand(
+        command,
+        editorRef.current ?? undefined,
+        { isReadOnly: isReadOnlyEffective, isDurablyReadOnly, isSyncBlocked },
+        {
+          notifyActionBlocked: () => notifyEditMenuActionBlocked(localizedStrings),
+          notifySyncEditBlocked,
+          restoreSelectionIfLost: (editor) =>
+            restoreSelectionIfLost(editor, lastFocusOutSelectionRef.current),
+          onActionError: (e) => logger.warn(`Edit menu action failed: ${getErrorMessage(e)}`),
+          focusEditor: () => requestAnimationFrame(() => editorRef.current?.focus()),
+        },
+      ),
+    [
+      isDurablyReadOnly,
+      isReadOnlyEffective,
+      isSyncBlocked,
+      localizedStrings,
+      notifySyncEditBlocked,
+    ],
+  );
+
   // listen to messages from the web view controller
   useEffect(() => {
     const webViewMessageListener = async ({
@@ -2046,6 +2079,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // Standard view is Power-only, so a request for it outside Power lands on formatted.
           endPaneNoteEdit();
           setViewType(viewTypeForSetScriptureMessage(editorMessage.viewType, isPowerMode));
+          break;
+        }
+        case 'undo': {
+          runEditMenuCommand('platformScriptureEditor.undo');
+          break;
+        }
+        case 'redo': {
+          runEditMenuCommand('platformScriptureEditor.redo');
           break;
         }
         case 'toggleFootnotesPaneVisibility': {
@@ -2264,6 +2305,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setViewType,
     viewType,
     isPowerMode,
+    runEditMenuCommand,
   ]);
 
   // #region Marker Palettes
@@ -4563,19 +4605,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // The Edit flyout acts on this editor, and the clipboard needs the click's user activation,
       // so it runs here rather than as a PAPI command
       if (isEditMenuCommand(projectMenuCommand.command)) {
-        handleEditMenuCommand(
-          projectMenuCommand.command,
-          editorRef.current ?? undefined,
-          { isReadOnly: isReadOnlyEffective, isDurablyReadOnly, isSyncBlocked },
-          {
-            notifyActionBlocked: () => notifyEditMenuActionBlocked(localizedStrings),
-            notifySyncEditBlocked,
-            restoreSelectionIfLost: (editor) =>
-              restoreSelectionIfLost(editor, lastFocusOutSelectionRef.current),
-            onActionError: (e) => logger.warn(`Edit menu action failed: ${getErrorMessage(e)}`),
-            focusEditor: () => requestAnimationFrame(() => editorRef.current?.focus()),
-          },
-        );
+        runEditMenuCommand(projectMenuCommand.command);
         return;
       }
       // Find is the one menu command that needs more than the tab id: it carries this tab's current
@@ -4606,15 +4636,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           ),
         );
     },
-    [
-      getMenuFindSelectionText,
-      isDurablyReadOnly,
-      isReadOnlyEffective,
-      isSyncBlocked,
-      localizedStrings,
-      notifySyncEditBlocked,
-      webViewId,
-    ],
+    [getMenuFindSelectionText, runEditMenuCommand, webViewId],
   );
 
   function renderEditor() {

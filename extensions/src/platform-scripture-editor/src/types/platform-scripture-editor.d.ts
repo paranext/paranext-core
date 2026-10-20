@@ -61,6 +61,24 @@ declare module 'platform-scripture-editor' {
     viewType: ScriptureEditorViewType;
   };
 
+  /**
+   * Tell the editor to undo its last edit, unless the editor is read-only
+   *
+   * @experimental This message is unstable and may change or disappear without notice
+   */
+  export type EditorMessageUndo = {
+    method: 'undo';
+  };
+
+  /**
+   * Tell the editor to redo its last undone edit, unless the editor is read-only
+   *
+   * @experimental This message is unstable and may change or disappear without notice
+   */
+  export type EditorMessageRedo = {
+    method: 'redo';
+  };
+
   /** Tell the editor to toggle footnotes pane visibility */
   export type EditorMessageToggleFootnotesPaneVisibility = {
     method: 'toggleFootnotesPaneVisibility';
@@ -157,6 +175,8 @@ declare module 'platform-scripture-editor' {
     | EditorMessageUpdateDecorations
     | EditorMessageChangeScriptureView
     | EditorMessageSetScriptureView
+    | EditorMessageUndo
+    | EditorMessageRedo
     | EditorMessageToggleFootnotesPaneVisibility
     | EditorMessageChangeFootnotesPaneLocation
     | EditorMessageInsertTextualNoteAtSelection
@@ -394,6 +414,20 @@ declare module 'platform-scripture-editor' {
      * @experimental This method is unstable and may change or disappear without notice
      */
     setScriptureView(viewType: ScriptureEditorViewType): Promise<void>;
+    /**
+     * Undo the last edit in the editor. Does nothing but tell the user while the editor is
+     * read-only
+     *
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    undo(): Promise<void>;
+    /**
+     * Redo the last undone edit in the editor. Does nothing but tell the user while the editor is
+     * read-only
+     *
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    redo(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     toggleFootnotesPaneVisibility(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
@@ -854,6 +888,24 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platformScriptureEditor.setViewPreview': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Undoes the last edit in the editor for the given WebView ID. Does nothing but tell the user
+     * while the editor is read-only.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.undo': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Redoes the last undone edit in the editor for the given WebView ID. Does nothing but tell the
+     * user while the editor is read-only.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.redo': (webViewId: string | undefined) => Promise<void>;
 
     /**
      * Toggles the visibility of the footnotes pane for the given the WebView ID
