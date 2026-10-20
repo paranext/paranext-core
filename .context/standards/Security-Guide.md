@@ -150,6 +150,14 @@ PAPI WebSocket can call that request type for any resource registered with the R
   [The renderer's PAPI port](#the-renderers-papi-port)), and the window's CSP allows `ws:`
   connections. So the allowlist does not stop an extension with a web view from requesting a token
   for any registered resource, with any of the five scopes.
+- Extension-host code can too, with no web view and whether or not the extension holds the
+  privilege. `activateExtensions` in `src/extension-host/services/extension.service.ts` wraps
+  `Module.prototype.require` and replaces `globalThis.WebSocket`, but `process.getBuiltinModule`
+  hands out Node's built-in modules, `net` and `http` included, without going through `require`
+  (as of 2026-10, Electron 39 runs the extension host on Node 22, where it exists). An extension
+  can open its own socket to port 8876 that way. This is the shared-realm limit above, not a
+  separate gap: wrapping `process.getBuiltinModule` alone would not make the extension host a
+  boundary between extensions.
 
 Rejecting browser connections is not the fix: browser clients are legitimate too.
 `platform.openDeveloperDocumentationUrl` opens the OpenRPC playground against this WebSocket, and

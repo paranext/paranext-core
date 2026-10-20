@@ -6294,7 +6294,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   not authenticated and the server can't tell a page from Platform.Bible's own processes; unlike the
   other PAPI methods such a page can call, this one returns a credential that works off the machine.
   So can any installed extension's web view, privilege or not, through the native
-  `window.top.WebSocket`, which bypasses the manifest allowlist. Rejecting browser connections is
+  `window.top.WebSocket`, which bypasses the manifest allowlist. So can extension-host code, with no
+  web view, through `process.getBuiltinModule('net')`, which the extension host's `require` wrapper
+  doesn't intercept; that is the same shared-realm limit. Rejecting browser connections is
   not the answer, since browser clients are legitimate (the OpenRPC playground that
   `platform.openDeveloperDocumentationUrl` opens, and browser-based PAPI testing). Authenticating
   the clients the main process launches, so sensitive request types can be limited to the extension

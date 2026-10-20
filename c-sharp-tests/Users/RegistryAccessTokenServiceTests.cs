@@ -358,13 +358,23 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         Assert.That(result.Message, Does.Contain("HTTP 400"));
     }
 
-    [TestCase(401)]
-    [TestCase(403)]
-    public async Task RegistryRefusesTheRegistration_FailsWithUnauthenticated(int status)
+    [Test]
+    public async Task Registry401_FailsWithUnauthenticated()
     {
-        _tokenClient.Default = () => Task.FromResult(new RegistryTokenHttpResponse(status, ""));
+        _tokenClient.Default = () => Task.FromResult(new RegistryTokenHttpResponse(401, ""));
 
         AssertFailure(await Get(), PlatformErrorCodes.Unauthenticated);
+    }
+
+    [Test]
+    public async Task Registry403_FailsWithPermissionDeniedWithoutBlamingTheRegistration()
+    {
+        _tokenClient.Default = () => Task.FromResult(new RegistryTokenHttpResponse(403, ""));
+
+        var result = await Get();
+
+        AssertFailure(result, PlatformErrorCodes.PermissionDenied);
+        Assert.That(result.Message, Does.Contain("HTTP 403").And.Not.Contain("registration"));
     }
 
     [TestCase(404)]
@@ -676,6 +686,49 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         Assert.That(
             Regex.Matches(_capturedOut.ToString(), "to extension 'assistant'").Count,
             Is.EqualTo(1)
+        );
+    }
+
+    private const string FORGED_LINE = "Issued a Registry access token to extension 'forged'";
+
+    [TestCase("\n")]
+    [TestCase("\r\n")]
+    [TestCase("\u0085")]
+    public async Task ExtensionNameWithALineBreak_StaysOnOneLogLine(string lineBreak)
+    {
+        await _service.GetAccessTokenAsync(
+            $"assistant{lineBreak}{FORGED_LINE}",
+            RESOURCE,
+            ["projects.members:read"]
+        );
+
+        AssertNoForgedLogLine();
+    }
+
+    [Test]
+    public async Task ResourceWithALineBreak_StaysOnOneLogLine()
+    {
+        await Get(resource: $"{RESOURCE}\n{FORGED_LINE}");
+
+        AssertNoForgedLogLine();
+    }
+
+    [Test]
+    public async Task DisallowedScopeWithALineBreak_StaysOnOneLogLine()
+    {
+        var result = await Get([$"orgs:read\n{FORGED_LINE}"]);
+
+        AssertFailure(result, PlatformErrorCodes.InvalidArgument);
+        AssertNoForgedLogLine();
+    }
+
+    private void AssertNoForgedLogLine()
+    {
+        string logged = _capturedOut.ToString();
+        Assert.That(logged, Does.Contain(FORGED_LINE), "the value must still be logged");
+        Assert.That(
+            logged.Split('\n', '\r', '\u0085').Where(line => line.StartsWith(FORGED_LINE)),
+            Is.Empty
         );
     }
 

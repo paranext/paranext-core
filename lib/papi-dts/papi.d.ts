@@ -10120,7 +10120,9 @@ declare module 'shared/models/request-registry-tokens-privilege.model' {
      * Rejects with a `PlatformError`. Its `code` says why; its `message` is an English diagnostic for
      * logs, so show users your own localized text based on the `code`:
      *
-     * - `PERMISSION_DENIED`: `resource` is not in the manifest's `paratextRegistryTokenResources`
+     * - `PERMISSION_DENIED`: `resource` is not in the manifest's `paratextRegistryTokenResources`, or
+     *   the Registry accepted the registration but refused to issue the token (HTTP 403), which
+     *   registering again won't fix
      * - `INVALID_ARGUMENT`: a scope is not allowed, or the Registry rejected the request (for example,
      *   the resource is not registered with this Registry)
      * - `UNAUTHENTICATED`: the user has no valid registration, or the Registry did not accept it

@@ -4,7 +4,7 @@ description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contributio
 version: 1.1.8
 status: active
 created: 2026-03-04
-last_updated: 2026-10-16
+last_updated: 2026-10-20
 ---
 
 # Extension Development Guide
@@ -221,7 +221,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     location is restricted or could not be determined.
   - `UNAVAILABLE`: retry later.
   - `INVALID_ARGUMENT` or `PERMISSION_DENIED`: a configuration bug in the extension or the
-    Registry. A resource stored from before the user switched Registry server also gets
+    Registry. `PERMISSION_DENIED` also covers the Registry refusing to issue the token for a
+    registration it accepted (HTTP 403), so don't offer registration for it: registering again
+    won't help. A resource stored from before the user switched Registry server also gets
     `INVALID_ARGUMENT` from the new Registry when only the other Registry has it registered, so
     resolve the resource again before each request.
   - No `code` (for example, the request timed out): treat it like `UNAVAILABLE`.

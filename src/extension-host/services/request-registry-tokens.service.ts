@@ -22,7 +22,7 @@ function isNonEmptyStringList(value: unknown): value is string[] {
   return (
     Array.isArray(value) &&
     value.length > 0 &&
-    value.every((entry) => typeof entry === 'string' && entry.length > 0)
+    value.every((entry) => isString(entry) && entry.length > 0)
   );
 }
 

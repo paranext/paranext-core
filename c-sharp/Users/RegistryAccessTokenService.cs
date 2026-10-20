@@ -247,7 +247,7 @@ internal sealed class RegistryAccessTokenService(
         string[] scopes,
         DateTimeOffset expiresAt
     ) =>
-        Console.WriteLine(
+        Log(
             $"{(reused ? "Handed an already-issued" : "Issued a")} Registry access token to extension "
                 + $"'{extensionName}' for resource '{resource}' "
                 + $"(scopes: {(scopes.Length == 0 ? "none" : string.Join(' ', scopes))}), "
@@ -383,13 +383,21 @@ internal sealed class RegistryAccessTokenService(
                     PlatformErrorCodes.InvalidArgument,
                     DescribeRejection(response.Body)
                 );
-            case 401
-            or 403:
+            case 401:
                 return Fail(
                     extensionName,
                     resource,
                     PlatformErrorCodes.Unauthenticated,
-                    $"The Paratext Registry did not accept this registration (HTTP {response.StatusCode})."
+                    "The Paratext Registry did not accept this registration (HTTP 401)."
+                );
+            // The Registry answers 403 only once it has accepted the registration, when the caller
+            // isn't allowed this grant, so registering again can't fix it.
+            case 403:
+                return Fail(
+                    extensionName,
+                    resource,
+                    PlatformErrorCodes.PermissionDenied,
+                    "The Paratext Registry refused to issue this token (HTTP 403)."
                 );
             default:
                 return Fail(
@@ -409,12 +417,47 @@ internal sealed class RegistryAccessTokenService(
         string? logDetail = null
     )
     {
-        Console.WriteLine(
+        Log(
             $"Registry access token request from extension '{extensionName}' for resource "
                 + $"'{resource}' failed: {errorCode}: {message}"
                 + (logDetail == null ? "" : $" ({logDetail})")
         );
         return RegistryAccessTokenResult.Failure(errorCode, message);
+    }
+
+    // The extension name, resource, scopes and the Registry's error text all come from outside this
+    // process, so control characters are escaped: a line break in one would otherwise start a line
+    // that reads like one of this service's own, in the only record of which extensions got tokens.
+    private static void Log(string line)
+    {
+        if (!line.Any(char.IsControl))
+        {
+            Console.WriteLine(line);
+            return;
+        }
+        var escaped = new StringBuilder(line.Length + 16);
+        foreach (char c in line)
+        {
+            switch (c)
+            {
+                case '\r':
+                    escaped.Append("\\r");
+                    break;
+                case '\n':
+                    escaped.Append("\\n");
+                    break;
+                case '\t':
+                    escaped.Append("\\t");
+                    break;
+                default:
+                    if (char.IsControl(c))
+                        escaped.Append($"\\u{(int)c:X4}");
+                    else
+                        escaped.Append(c);
+                    break;
+            }
+        }
+        Console.WriteLine(escaped.ToString());
     }
 
     private static bool TryReadToken(
