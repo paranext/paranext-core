@@ -125,6 +125,7 @@ import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet
 import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
 import { useIsProjectDataLoading } from './copy-limit/use-is-project-data-loading.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
+import { substituteProjectNameInMenu } from './menu-label-substitution.util';
 import {
   StructureProtectionButton,
   STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
@@ -4506,6 +4507,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return webViewMenuPossiblyError;
   }, [webViewMenuPossiblyError]);
 
+  // Menu labels are localized once for every editor, so the project name stays as the
+  // `{projectName}` placeholder (for example the Sync item's "Sync {projectName}") until here.
+  const projectMenuData = useMemo(
+    () => substituteProjectNameInMenu(webViewMenu.topMenu, projectName),
+    [webViewMenu.topMenu, projectName],
+  );
+
   const [booksPresentPossiblyError] = useProjectSetting(
     projectId,
     'platformScripture.booksPresent',
@@ -4862,7 +4870,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
-        projectMenuData={webViewMenu.topMenu}
+        projectMenuData={projectMenuData}
         className={`scripture-editor-tab-nav tw:z-10${isPowerMode ? '' : ' scripture-editor-tab-nav-simple'}`}
         startAreaChildren={
           <>
