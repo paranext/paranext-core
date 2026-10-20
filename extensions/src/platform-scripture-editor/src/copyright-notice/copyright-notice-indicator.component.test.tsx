@@ -140,4 +140,42 @@ describe('CopyrightNoticeIndicator', () => {
     );
     expect(onCellClick).not.toHaveBeenCalled();
   });
+
+  describe('for a notification text with no more copyright than its notice', () => {
+    beforeEach(() => {
+      noticesByProject.set('esv', {
+        kind: 'notification',
+        name: 'ESVUK',
+        fullName: 'English Standard Version Anglicised',
+        bannerText: 'Do not translate the ESV.',
+        details: '',
+      });
+    });
+
+    it('still shows the notice in its tooltip', async () => {
+      render(<CopyrightNoticeIndicator projectId="esv" localizedStrings={STRINGS} />);
+
+      fireEvent.focus(screen.getByRole('button', { name: 'Copyright notice for ESVUK' }));
+
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(
+        'ESVUK: Do not translate the ESV.',
+      );
+    });
+
+    it('opens no empty details window, and still does not activate the cell around it', () => {
+      const onCellClick = vi.fn();
+
+      render(
+        // The grid opens a chapter view when a cell is clicked; the stand-in cell records that
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+        <div onClick={onCellClick}>
+          <CopyrightNoticeIndicator projectId="esv" localizedStrings={STRINGS} />
+        </div>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Copyright notice for ESVUK' }));
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(onCellClick).not.toHaveBeenCalled();
+    });
+  });
 });

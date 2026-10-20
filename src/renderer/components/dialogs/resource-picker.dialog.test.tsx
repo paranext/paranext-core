@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Dialog } from 'platform-bible-react';
 import { RESOURCE_PICKER_DIALOG } from '@renderer/components/dialogs/resource-picker.dialog';
 import { sendCommand } from '@shared/services/command.service';
+import { MODEL_TEXT_RESTRICTIONS_RECHECK_MS } from '@renderer/hooks/use-model-text-restrictions-catch-up.hook';
 
 /*
  * The panels this dialog opens from distinguish a failed resource-catalog fetch from an empty one
@@ -215,6 +216,55 @@ describe('ResourcePickerDialogWrapper', () => {
       expect(row).toHaveTextContent('%restrictedModelOrBaseText_disabledReason%');
       expect(submitDialog).not.toHaveBeenCalled();
     });
+
+    it('greys out texts still being checked, then settles each once the backend answers', async () => {
+      // Read before the backend said which texts are restricted
+      const unchecked = { ...restrictedText, isRestrictedAsModelText: undefined };
+      const otherUnchecked = {
+        ...unchecked,
+        dblEntryUid: 'b1f2b3a4c5d6e7f8',
+        displayName: 'OPEN',
+        fullName: 'Open text',
+      };
+      const checkedCatalog = {
+        status: 'available',
+        resources: [
+          { ...unchecked, isRestrictedAsModelText: true },
+          { ...otherUnchecked, isRestrictedAsModelText: false },
+        ],
+      };
+      let catalogReads = 0;
+      mockCommands(async () => {
+        catalogReads += 1;
+        return catalogReads === 1
+          ? { status: 'available', resources: [unchecked, otherUnchecked] }
+          : checkedCatalog;
+      });
+      renderWrapper({ disableRestrictedModelTexts: true });
+
+      const rowsBeingChecked = [await findRow('NIV11'), await findRow('OPEN')];
+      rowsBeingChecked.forEach((row) => {
+        expect(row).toHaveAttribute('aria-disabled', 'true');
+        expect(row).toHaveTextContent('%restrictedModelOrBaseText_pendingReason%');
+      });
+      // A picker that reads the flag waits for it, so it is less often shown still being checked
+      expect(sendCommand).toHaveBeenCalledWith(DBL_CATALOG_COMMAND, true);
+
+      // Real timers: the re-check is a real wait of MODEL_TEXT_RESTRICTIONS_RECHECK_MS
+      await waitFor(
+        () =>
+          expect(screen.getByText('OPEN').closest('tr')).not.toHaveAttribute(
+            'aria-disabled',
+            'true',
+          ),
+        { timeout: MODEL_TEXT_RESTRICTIONS_RECHECK_MS + 2000 },
+      );
+      const restrictedRow = await findRow('NIV11');
+      expect(restrictedRow).toHaveAttribute('aria-disabled', 'true');
+      expect(restrictedRow).toHaveTextContent('%restrictedModelOrBaseText_disabledReason%');
+      // Nothing is pending any more, so nothing is read again
+      expect(countDblCatalogCalls()).toBe(2);
+    }, 15_000);
 
     it('offers a restricted text normally when picking a reference text', async () => {
       mockCommands(async () => ({ status: 'available', resources: [restrictedText] }));

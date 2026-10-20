@@ -13,8 +13,9 @@ import type { ResourceReference, ResourceReferenceList } from 'platform-scriptur
 import { DIALOG_BASE, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
 import {
   getRestrictedModelTextReason,
-  RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY,
+  RESTRICTED_MODEL_TEXT_STRING_KEYS,
 } from '@renderer/components/dialogs/restricted-model-text.utils';
+import { useModelTextRestrictionsCatchUp } from '@renderer/hooks/use-model-text-restrictions-catch-up.hook';
 import {
   DialogDefinition,
   ShareLayoutDialogOptions,
@@ -79,7 +80,7 @@ const NO_RESOURCES: DblResourceData[] = [];
 const TEAM_LAYOUT_STRING_KEYS = [...TEAM_LAYOUT_DIALOG_ALL_STRING_KEYS];
 const RESOURCE_PICKER_STRING_KEYS = [
   ...RESOURCE_PICKER_DIALOG_STRING_KEYS,
-  RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY,
+  ...RESTRICTED_MODEL_TEXT_STRING_KEYS,
 ];
 
 /**
@@ -119,10 +120,19 @@ function TeamLayoutDialogWrapper({
     // on a stale one now costs a redundant install that succeeds as a no-op and corrects itself —
     // where awaiting the refresh would hold the dialog's first paint on a backend call, which is
     // the blocking `getCachedResources` was written to avoid.
-    useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
+    useCallback(async () => sendCommand('platformGetResources.getCachedResources', true), []),
   );
 
-  const allResources = catalog?.status === 'available' ? catalog.resources : undefined;
+  // Rows read before the backend says which texts are restricted are disabled as model texts while
+  // still being checked; this brings them up to date while the dialog stays open
+  const allResources = useModelTextRestrictionsCatchUp(
+    catalog?.status === 'available' ? catalog.resources : undefined,
+    useCallback(async () => {
+      const rereadCatalog = await sendCommand('platformGetResources.getCachedResources', true);
+      return rereadCatalog.status === 'available' ? rereadCatalog.resources : undefined;
+    }, []),
+    true,
+  );
 
   // `notReady` is transient — the DBL provider registers in the background — so it earns the
   // retryable error state the embedded pickers render. `notConfigured` is permanent for this

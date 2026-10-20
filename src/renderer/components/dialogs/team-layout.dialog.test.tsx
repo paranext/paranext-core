@@ -10,6 +10,7 @@ import { DIALOGS } from '@renderer/components/dialogs/index';
 import { TEAM_LAYOUT_DIALOG } from '@renderer/components/dialogs/team-layout.dialog';
 import { sendCommand } from '@shared/services/command.service';
 import { useLocalizedStrings, useProjectDataProvider } from '@renderer/hooks/papi-hooks';
+import { MODEL_TEXT_RESTRICTIONS_RECHECK_MS } from '@renderer/hooks/use-model-text-restrictions-catch-up.hook';
 import {
   TEAM_LAYOUT_PANEL_STRING_KEYS,
   TEAM_LAYOUT_DIALOG_STRING_KEYS,
@@ -167,6 +168,8 @@ function makeDblResource(overrides: Partial<DblResourceData>): DblResourceData {
     installed: true,
     updateAvailable: false,
     projectId: 'proj',
+    // platformGetResources sets it on every row once the backend has answered
+    isRestrictedAsModelText: false,
     ...overrides,
   };
 }
@@ -1158,6 +1161,47 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     expect(mockState.setStructureProtected).toHaveBeenCalledWith(true);
     expect(mockState.setModelTexts).not.toHaveBeenCalled();
   });
+
+  it('greys out model texts still being checked until the backend answers', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    let catalogReads = 0;
+    vi.mocked(sendCommand).mockImplementation(async (commandName: unknown) => {
+      if (commandName !== 'platformGetResources.getCachedResources') return undefined;
+      catalogReads += 1;
+      // The first read lands before the backend said which texts are restricted
+      const isRestrictedAsModelText = catalogReads === 1 ? undefined : false;
+      return {
+        status: 'available',
+        resources: [
+          makeDblResource({
+            dblEntryUid: 'esv-uid',
+            displayName: 'ESV',
+            fullName: 'English Standard Version',
+            isRestrictedAsModelText,
+          }),
+        ],
+      };
+    });
+
+    renderWrapper();
+    await screen.findByText('%shareLayoutDialog_modelText_label%');
+    act(() => {
+      screen.getByText('%shareLayoutDialog_modelText_none%').click();
+    });
+    const rowFor = (fullName: string) => {
+      const row = screen.getByText(fullName).closest('tr');
+      if (!row) throw new Error(`${fullName} row not found`);
+      return row;
+    };
+    expect(rowFor('English Standard Version')).toHaveAttribute('aria-disabled', 'true');
+    expect(sendCommand).toHaveBeenCalledWith('platformGetResources.getCachedResources', true);
+
+    // Real timers: the re-check is a real wait of MODEL_TEXT_RESTRICTIONS_RECHECK_MS
+    await waitFor(
+      () => expect(rowFor('English Standard Version')).not.toHaveAttribute('aria-disabled'),
+      { timeout: MODEL_TEXT_RESTRICTIONS_RECHECK_MS + 2000 },
+    );
+  }, 15_000);
 
   // On a project that has never shared a layout, `seedResourceList` seeds the resource lists from
   // the ADMIN'S PERSONAL selections — so writing them unconditionally would publish one person's

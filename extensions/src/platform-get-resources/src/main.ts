@@ -44,9 +44,9 @@ const HOME_WEB_VIEW_SIZE = { width: 1000, height: 650 };
 const RESOURCES_CACHE_KEY = 'cachedDblResources';
 const RESOURCES_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000;
 /**
- * How long a catalog read waits for the first model-text restrictions fetch. Bounded so a stalled
- * backend cannot hold a picker open, and long enough for a local, network-free answer to arrive so
- * a picker opened at startup does not offer restricted texts.
+ * How long a read that asks for the model-text restrictions waits for the first fetch of them.
+ * Bounded so a stalled backend cannot hold a picker open, and long enough for a local, network-free
+ * answer to arrive so a picker opened at startup rarely shows its rows as still being checked.
  */
 const MODEL_TEXT_RESTRICTIONS_WAIT_MS = 2000;
 
@@ -55,6 +55,12 @@ let cachedResources: DblResourceData[] | undefined;
 const fetchMutex = new Mutex();
 let hasFetchStarted = false;
 let syncInFlight: Promise<void> | undefined;
+/**
+ * The install-flag step of `syncInFlight`, which settles before the model-text restrictions step
+ * that follows it. That step has no time bound, so a caller that needs only the flags waits on
+ * this.
+ */
+let flagSyncInFlight: Promise<void> | undefined;
 /** Whether `syncInFlight` refreshes `updateAvailable` as well as the install flags. */
 let doesSyncInFlightRecomputeUpdateStatus = false;
 
@@ -302,8 +308,11 @@ async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<boolean>
 function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promise<void> {
   if (!syncInFlight) {
     doesSyncInFlightRecomputeUpdateStatus = shouldRecomputeUpdateStatus;
+    // syncFlags never rejects, so a caller waiting on the flag step alone cannot see a rejection
+    const flagSync = syncFlags(shouldRecomputeUpdateStatus);
+    flagSyncInFlight = flagSync.then(() => undefined);
     syncInFlight = (async () => {
-      const isAnyFlagChanged = await syncFlags(shouldRecomputeUpdateStatus);
+      const isAnyFlagChanged = await flagSync;
       await syncModelTextRestrictionsAfterFlagSync(modelTextRestrictions, {
         isRefreshRequested: shouldRecomputeUpdateStatus,
         isAnyFlagChanged,
@@ -312,9 +321,19 @@ function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promis
       .catch((e) => logger.warn(`Background flag sync failed: ${getErrorMessage(e)}`))
       .finally(() => {
         syncInFlight = undefined;
+        flagSyncInFlight = undefined;
       });
   }
   return syncInFlight;
+}
+
+/**
+ * {@link ensureInstalledFlagsSynced}, resolving once the flags are synced rather than after the
+ * model-text restrictions step too, which waits on the backend with no time bound.
+ */
+function ensureInstalledFlagsOnlySynced(): Promise<void> {
+  const sync = ensureInstalledFlagsSynced();
+  return flagSyncInFlight ?? sync;
 }
 
 /**
@@ -383,13 +402,21 @@ async function readCatalog(): Promise<DblResourceCatalog> {
   });
 }
 
-async function getCachedResources(): Promise<DblResourceCatalog> {
-  // Waits, boundedly, for the first restrictions fetch so a picker opened early is not fail-open;
-  // after that the restrictions are in memory and this adds nothing.
+/**
+ * How long a read waits for the first model-text restrictions fetch: bounded for a caller that
+ * reads them, and not at all for any other, whose rows still carry them once they are known.
+ */
+function getModelTextRestrictionsWaitMs(shouldWaitForModelTextRestrictions: boolean): number {
+  return shouldWaitForModelTextRestrictions ? MODEL_TEXT_RESTRICTIONS_WAIT_MS : 0;
+}
+
+async function getCachedResources(
+  shouldWaitForModelTextRestrictions = false,
+): Promise<DblResourceCatalog> {
   return applyModelTextRestrictionsToCatalogWithin(
     readCatalog(),
     modelTextRestrictions,
-    MODEL_TEXT_RESTRICTIONS_WAIT_MS,
+    getModelTextRestrictionsWaitMs(shouldWaitForModelTextRestrictions),
   );
 }
 
@@ -402,14 +429,17 @@ async function getCachedResources(): Promise<DblResourceCatalog> {
  * callers (e.g. `selectTextConnection`) can create a `ProjectReference` instead of a
  * `DblResourceReference` when the user selects one.
  */
-async function getLocalNonDblResources(): Promise<DblResourceData[]> {
+async function getLocalNonDblResources(
+  shouldWaitForModelTextRestrictions = false,
+): Promise<DblResourceData[]> {
   try {
-    await getCachedResources();
+    await readCatalog();
     // The exclusion below is only as good as the catalog's `installed`/`projectId` flags, and
-    // `getCachedResources` returns before its background sync finishes. Wait for that sync and read
+    // `readCatalog` returns before its background sync finishes. Wait for that sync's flags and read
     // `cachedResources` afterwards, so a resource already on disk is excluded as a DBL entry rather
-    // than emitted a second time as a synthetic non-DBL one.
-    await ensureInstalledFlagsSynced();
+    // than emitted a second time as a synthetic non-DBL one. Only its flags: the bounded wait below
+    // is this read's one wait on the model-text restrictions.
+    await ensureInstalledFlagsOnlySynced();
     // An absent catalog means one has never been fetched on this profile (a fetched catalog is
     // persisted and reloaded on activation), so there is nothing for these projects to duplicate
     // and no reason to withhold them. Suppressing them here would hide side-loaded resources from
@@ -420,7 +450,7 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
     return await applyModelTextRestrictionsWithin(
       buildLocalNonDblResources(allMetadata, dblCatalog),
       modelTextRestrictions,
-      MODEL_TEXT_RESTRICTIONS_WAIT_MS,
+      getModelTextRestrictionsWaitMs(shouldWaitForModelTextRestrictions),
     );
   } catch (error: unknown) {
     logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
@@ -702,8 +732,16 @@ export async function activate(context: ExecutionActivationContext) {
     // run, so that install costs two syncs. That is accepted rather than deduplicated: a sync that
     // finished before the event cannot vouch for the state the event announces, and one sync is a
     // single cheap backend call.
+    // The model-text restrictions are fetched afresh afterwards rather than left to the sync. A
+    // resource copied in by hand has no catalog row, so no flag changes and the sync keeps the
+    // cached restrictions, which cannot name a project they have not seen. Fetched after the sync
+    // settles, so a read the sync started before the change cannot overwrite the new list.
+    // Neither step rejects
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    syncAfterInFlight(false);
+    (async () => {
+      await syncAfterInFlight(false);
+      await modelTextRestrictions.refresh();
+    })();
   });
   context.registrations.add(unsubscribeFromProjectsChanged);
 

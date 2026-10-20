@@ -12,6 +12,7 @@ import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
 import { CopyrightDetailsDialog } from './copyright-details-dialog.component';
 import {
   getCopyrightNoticeMessageFormat,
+  hasCopyrightDetails,
   renderCopyrightNoticeMessage,
   type ShowableCopyrightNotice,
 } from './copyright-notice-message.utils';
@@ -27,7 +28,7 @@ export type CopyrightNoticeBannerProps = {
  * A dismissible strip across the top of a pane showing a text's copyright notice: either the text's
  * own "Notification:" wording (as Paratext 9 shows for the ESV), or the notice that a traditionally
  * licensed Biblica text is for reference only and may not be used as the basis of a new
- * translation. "More info" opens the details.
+ * translation. "More info" opens the details, when there are any.
  *
  * The message is clamped to two lines so it does not push the text far down a narrow pane; "Show
  * more" appears whenever it does not fit.
@@ -99,15 +100,17 @@ export function CopyrightNoticeBanner({
               }
             </Button>
           )}
-          <CopyrightDetailsDialog
-            notice={notice}
-            localizedStrings={localizedStrings}
-            trigger={
-              <Button variant="link" className="tw:h-auto tw:p-0 tw:text-sm">
-                {localizedStrings['%platformScripture_copyrightNotice_moreInfo%']}
-              </Button>
-            }
-          />
+          {hasCopyrightDetails(notice) && (
+            <CopyrightDetailsDialog
+              notice={notice}
+              localizedStrings={localizedStrings}
+              trigger={
+                <Button variant="link" className="tw:h-auto tw:p-0 tw:text-sm">
+                  {localizedStrings['%platformScripture_copyrightNotice_moreInfo%']}
+                </Button>
+              }
+            />
+          )}
         </div>
       </div>
       <TooltipProvider>
