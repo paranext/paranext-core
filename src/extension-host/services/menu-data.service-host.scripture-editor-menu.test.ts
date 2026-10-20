@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isGroupUnderColumnOrSubMenu } from 'platform-bible-react';
+import menuDataObject from '@extension-host/data/menu.data.json';
+import { MenuDocumentCombiner } from '@shared/utils/menu-document-combiner';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { describe, expect, test } from 'vitest';
 // Resolvable from this project: neither a `tsc -p ./tsconfig.json` typecheck nor `vitest`'s
@@ -10,6 +12,7 @@ import { getMenuSectionsWithItems } from '../../../lib/platform-bible-react/src/
 import { EDIT_MENU_COMMANDS } from '../../../extensions/src/platform-scripture-editor/src/edit-menu-actions.util';
 import {
   EXTENSIONS_DIR,
+  getMenuContributingExtensions,
   getMenuDataEngineInMode,
   getRealCombinedMenus,
 } from './menu-data.service-host.test-utils';
@@ -571,5 +574,62 @@ describe("The scripture editor's Project menu, per mode", () => {
     // Anything missing from Simple must be on the allow-list above, not silently absent.
     const missingFromSimple = [...declared].filter((id) => !simpleCommands.has(id));
     expect(new Set(missingFromSimple)).toEqual(POWER_ONLY_COMMANDS);
+  });
+
+  /**
+   * The checks group must stay extensible: another extension (here the Checking assistant, Power
+   * only) adds its item after Basic checks, and a group that is not extensible makes the combiner
+   * throw, which drops that extension's whole menu document.
+   */
+  describe('an extension adding a tool after Basic checks', () => {
+    const FOREIGN_COMMAND = 'checkingAssistant.open';
+
+    async function getMenuWithForeignChecksItem(mode: 'simple' | 'power') {
+      const combiner = new MenuDocumentCombiner(menuDataObject);
+      getMenuContributingExtensions({ excludeDevOnly: true }).forEach(([name, menus]) => {
+        combiner.addOrUpdateContribution(name, menus);
+      });
+      combiner.addOrUpdateContribution('checkingAssistant', {
+        webViewMenus: {
+          [SCRIPTURE_EDITOR_WEB_VIEW_TYPE]: {
+            topMenu: {
+              items: [
+                {
+                  label: '%checkingAssistant_menu_open%',
+                  group: 'platformScriptureEditor.checks',
+                  order: 4,
+                  command: FOREIGN_COMMAND,
+                  hiddenInterfaceModes: ['simple'],
+                },
+              ],
+            },
+          },
+        },
+      });
+      if (!combiner.rawOutput) throw new Error('The menu document failed to combine');
+      const engine = await getMenuDataEngineInMode(combiner.rawOutput, mode);
+      const webViewMenu = await engine.getWebViewMenu(SCRIPTURE_EDITOR_WEB_VIEW_TYPE);
+      if (!webViewMenu.topMenu) throw new Error('The scripture editor serves no top menu');
+      return webViewMenu.topMenu;
+    }
+
+    test('Power serves it after Basic checks in the Tools column', async () => {
+      const menu = await getMenuWithForeignChecksItem('power');
+      const tools = describeSections(menu).find(
+        ([columnKey]) => columnKey === 'platformScriptureEditor.tools',
+      );
+      expect(tools?.[1]).toEqual([
+        'legacyCommentManager.openCommentList',
+        'platformScripture.openChecksSidePanel',
+        FOREIGN_COMMAND,
+      ]);
+    });
+
+    test('Simple does not serve it', async () => {
+      const menu = await getMenuWithForeignChecksItem('simple');
+      expect(servedCommandIds(menu).has(FOREIGN_COMMAND)).toBe(false);
+      // Positive control: the combined menu is the real Simple menu
+      expect(servedCommandIds(menu).has('platform.webViewContentZoomIn')).toBe(true);
+    });
   });
 });

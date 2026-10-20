@@ -76,7 +76,8 @@
           },
           "platformScriptureEditor.checks": {
             "column": "platformScriptureEditor.tools",
-            "order": 3
+            "order": 3,
+            "isExtensible": true
           },
           "platformScriptureEditor.simpleEditMenu": {
             "column": "platformScriptureEditor.simpleEdit",
