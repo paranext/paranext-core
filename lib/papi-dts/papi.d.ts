@@ -442,7 +442,7 @@ declare module 'shared/models/web-view.model' {
      */
     iconUrl?: string;
     /**
-     * Name of a lucide icon (kebab-case, e.g. `'book-open'`) to show on the title bar of the tab. The
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab. The
      * icon follows the tab's text colour, so it suits every theme and tab state. Takes precedence
      * over {@link WebViewDefinitionBase.iconUrl}. The icons the platform can show are listed in
      * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). If the name is not one
@@ -4808,7 +4808,7 @@ declare module 'shared/models/docking-framework.model' {
      */
     tabIconUrl?: string;
     /**
-     * Name of a lucide icon (kebab-case, e.g. `'book-open'`) to show on the title bar of the tab
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab
      * instead of {@link tabIconUrl}. The icons the platform can show are listed in `LUCIDE_ICON_NAMES`
      * (exported from `platform-bible-react/experimental`). An unknown name is ignored, so
      * {@link tabIconUrl} (and then the standard logo) is shown instead.
@@ -9453,7 +9453,7 @@ declare module 'shared/models/dialog-options.model' {
     /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
     iconUrl?: string;
     /**
-     * Name of a lucide icon (kebab-case, e.g. `'book-open'`) to display in the header. Takes
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to display in the header. Takes
      * precedence over {@link DialogOptions.iconUrl}. The icons the platform can show are listed in
      * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). An unknown name is
      * ignored and {@link DialogOptions.iconUrl} is used instead.

@@ -108,6 +108,11 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-001 — MarbleForm)',
       if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
 
+    // The beforeEach cleanup is best-effort, so count the ER tabs already open rather than assume
+    // there are none.
+    const erDockTabs = mainPage.locator('.dock-tab', { hasText: ER_DOCK_TAB });
+    const erTabsBefore = await erDockTabs.count();
+
     // Ask for the ER web view on a resource id that is not a Marble resource. The provider
     // returns a definition for any resource id, so the call resolves with a web view id.
     const openedId = await mainPage.evaluate(async () => {
@@ -137,9 +142,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-001 — MarbleForm)',
     expect(typeof openedId).toBe('string');
 
     // The ER dock tab opens, showing the empty state.
-    await expect(mainPage.locator('.dock-tab', { hasText: ER_DOCK_TAB })).toHaveCount(1, {
-      timeout: 15_000,
-    });
+    await expect(erDockTabs).toHaveCount(erTabsBefore + 1, { timeout: 15_000 });
 
     // Renderer must not have crashed (no uncaught React errors in the console besides expected
     // PAPI rejection logs).
