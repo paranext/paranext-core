@@ -12,6 +12,10 @@ import {
   noteInternetSettingsLoaded,
   noteInternetSettingsSaved,
 } from '@renderer/services/first-run-store';
+import {
+  hasSavedInternetUseChoice,
+  resetInternetUseChoiceForTesting,
+} from '@renderer/services/internet-use-choice-store';
 import type { FirstRunStepProps } from '../first-run-step-props.model';
 import { InternetSettingsStep } from './internet-settings-step.component';
 
@@ -23,7 +27,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     {
       '%internetSettings_button_retry%': 'Retry',
       '%firstRun_step_internetSettings_heading%': 'Internet & connectivity',
-      '%firstRun_step_internetSettings_body%': 'Manage how Paratext accesses the internet.',
+      '%firstRun_step_internetSettings_body_2%': 'Choose how Paratext accesses the internet.',
       '%firstRun_step_internetSettings_restartNote%': 'Restart note sentinel',
       '%firstRun_step_internetSettings_connecting%': 'Getting things ready…',
       '%firstRun_step_internetSettings_loadError%':
@@ -66,16 +70,22 @@ vi.mock('platform-bible-react', () => ({
 }));
 
 vi.mock('platform-bible-react/experimental', () => ({
+  // One button stands in for the radio group; `data-state` and `disabled` mirror the selected Radix
+  // radio the step puts focus back on after a save.
   InternetAccessOptionList: ({
     value,
     onChange,
+    disabled,
   }: {
-    value: string;
+    value: string | undefined;
     onChange: (value: string) => void;
+    disabled: boolean;
   }) => (
     <button
       data-testid="option-list"
       data-value={value}
+      data-state={value ? 'checked' : 'unchecked'}
+      disabled={disabled}
       type="button"
       onClick={() => onChange('Enabled')}
     >
@@ -112,10 +122,25 @@ function configureHooks(opts: {
   value?: unknown;
   isLoading?: boolean;
   setData?: ReturnType<typeof vi.fn>;
+  /**
+   * Hold a saved value back until `deliverSavedValue` is called, as the real `useData` does: its
+   * `setData` resolves before the provider's update brings the saved value.
+   */
+  deliverSavesLater?: boolean;
 }) {
   // `'setData' in opts` so a caller can force setData === undefined (provider not yet resolved);
   // omitting it defaults to a resolving spy.
   const setData = 'setData' in opts ? opts.setData : vi.fn().mockResolvedValue(undefined);
+  // Like the real provider, a successful save becomes the value `useData` reads from then on.
+  let currentValue: unknown = opts.value ?? MOCK_SETTINGS;
+  let savedValue: unknown = currentValue;
+  const persistingSetData = setData
+    ? async (next: unknown) => {
+        await setData(next);
+        savedValue = next;
+        if (!opts.deliverSavesLater) currentValue = next;
+      }
+    : undefined;
   vi.mocked(useDataProvider).mockReturnValue(
     // opts.provider is `unknown` by design so the helper can accept both undefined and a branded
     // object; typing this precisely would require a complex generic that adds no test value.
@@ -126,9 +151,27 @@ function configureHooks(opts: {
   // papi-hooks tests. Replicating it here would create brittle coupling.
   // eslint-disable-next-line no-type-assertion/no-type-assertion -- necessary for mock helper flexibility
   vi.mocked(useData).mockReturnValue({
-    InternetSettings: () => [opts.value ?? MOCK_SETTINGS, setData, opts.isLoading ?? false],
+    InternetSettings: () => [currentValue, persistingSetData, opts.isLoading ?? false],
   } as never);
-  return { setData };
+  return {
+    setData,
+    deliverSavedValue: () => {
+      currentValue = savedValue;
+    },
+  };
+}
+
+/**
+ * A browser drops focus to the page body when the focused control becomes disabled; jsdom keeps it
+ * there and ignores `blur()` on a disabled control. Removing a focused element does send focus to
+ * the body, so do that.
+ */
+function dropFocusToBody() {
+  const placeholder = document.createElement('button');
+  document.body.append(placeholder);
+  placeholder.focus();
+  placeholder.remove();
+  expect(document.body).toHaveFocus();
 }
 
 function renderStep(setCanProceed = vi.fn()) {
@@ -139,6 +182,7 @@ function renderStep(setCanProceed = vi.fn()) {
 describe('InternetSettingsStep', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetInternetUseChoiceForTesting();
   });
 
   // The heading and its lead-in match the standalone Internet & Connectivity web view. They wrap
@@ -157,7 +201,7 @@ describe('InternetSettingsStep', () => {
     ).toBeInTheDocument();
     // The lead-in is what frames the radio list, so it must be present in every state — without it
     // the first thing the user reads is the bare "Unrestricted" option.
-    expect(screen.getByText('Manage how Paratext accesses the internet.')).toBeInTheDocument();
+    expect(screen.getByText('Choose how Paratext accesses the internet.')).toBeInTheDocument();
   });
 
   it('shows a spinner and no error while the provider is undefined', () => {
@@ -179,12 +223,189 @@ describe('InternetSettingsStep', () => {
     expect(setCanProceed).not.toHaveBeenCalledWith(true);
   });
 
-  it('renders the settings form and enables Next once data has loaded', async () => {
-    configureHooks({ value: MOCK_SETTINGS, isLoading: false });
-    const { setCanProceed } = renderStep();
+  // ParatextData saves "Disable access to some Bible translation services" (VpnRequired) on first
+  // startup, and a Paratext 9 upgrade can carry over a value nobody chose. That option turns off
+  // sync and the DBL, so the wizard must not accept it on the user's behalf.
+  describe('an explicit choice', () => {
+    it('selects no option and keeps Next disabled once data has loaded', async () => {
+      configureHooks({ value: MOCK_SETTINGS, isLoading: false });
+      const { setCanProceed } = renderStep();
 
-    expect(screen.getByTestId('option-list')).toBeInTheDocument();
-    await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(true));
+      expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
+      await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(false));
+      expect(setCanProceed).not.toHaveBeenCalledWith(true);
+    });
+
+    it('shows the choice and enables Next once the user picks an option', async () => {
+      configureHooks({ value: MOCK_SETTINGS, isLoading: false });
+      const { setCanProceed } = renderStep();
+
+      await userEvent.click(screen.getByTestId('option-list'));
+
+      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Enabled');
+      await waitFor(() => expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(true));
+    });
+
+    it('keeps showing the choice while the provider still reports the value from before the save', async () => {
+      const { deliverSavedValue } = configureHooks({
+        value: MOCK_SETTINGS,
+        isLoading: false,
+        deliverSavesLater: true,
+      });
+      const setCanProceed = vi.fn();
+      const props: FirstRunStepProps = { onNext: vi.fn(), setCanProceed };
+      const { rerender } = render(<InternetSettingsStep {...props} />);
+
+      await userEvent.click(screen.getByTestId('option-list'));
+
+      // The save has resolved but `useData` still reads the stored "Disable access…" value; showing
+      // that would present it as the user's choice.
+      await waitFor(() => expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(true));
+      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Enabled');
+
+      deliverSavedValue();
+      rerender(<InternetSettingsStep {...props} />);
+
+      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Enabled');
+      expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(true);
+    });
+
+    it('counts picking the option that is already stored as a choice', async () => {
+      const { setData } = configureHooks({
+        value: { ...MOCK_SETTINGS, permittedInternetUse: 'Enabled' },
+        isLoading: false,
+      });
+      const { setCanProceed } = renderStep();
+      expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
+
+      await userEvent.click(screen.getByTestId('option-list'));
+
+      expect(setData).toHaveBeenCalledWith(
+        expect.objectContaining({ permittedInternetUse: 'Enabled' }),
+      );
+      await waitFor(() => expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(true));
+    });
+
+    it('does not let a server change alone unlock Next', async () => {
+      const { setData } = configureHooks({ value: MOCK_SETTINGS, isLoading: false });
+      const { setCanProceed } = renderStep();
+
+      await userEvent.click(screen.getByTestId('dev-section'));
+
+      await waitFor(() => expect(setData).toHaveBeenCalled());
+      await waitFor(() => expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(false));
+      expect(setCanProceed).not.toHaveBeenCalledWith(true);
+      expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
+    });
+
+    // The shell remounts the step when the user goes on to the next step and comes back.
+    it('remembers the choice when the step is shown again', async () => {
+      configureHooks({ value: MOCK_SETTINGS, isLoading: false });
+      const { unmount } = renderStep();
+      await userEvent.click(screen.getByTestId('option-list'));
+      await waitFor(() =>
+        expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Enabled'),
+      );
+      unmount();
+
+      configureHooks({ value: { ...MOCK_SETTINGS, permittedInternetUse: 'Enabled' } });
+      const { setCanProceed } = renderStep();
+
+      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Enabled');
+      await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(true));
+    });
+
+    it('does not count a choice whose save failed', async () => {
+      const setData = vi.fn().mockRejectedValue(new Error('save failed'));
+      configureHooks({ value: MOCK_SETTINGS, setData });
+      const { unmount } = renderStep();
+      await userEvent.click(screen.getByTestId('option-list'));
+      await waitFor(() => expect(screen.getByText(/save failed/i)).toBeInTheDocument());
+      unmount();
+
+      configureHooks({ value: MOCK_SETTINGS });
+      const { setCanProceed } = renderStep();
+
+      expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
+      await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(false));
+      expect(setCanProceed).not.toHaveBeenCalledWith(true);
+    });
+
+    // The shell's Back is not held while the step saves, so the step can be shown again before the
+    // save the user started resolves.
+    it('shows a choice that an earlier instance of the step saved after it was left', async () => {
+      let resolveSave: () => void = () => {};
+      const setData = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSave = resolve;
+          }),
+      );
+      configureHooks({ value: MOCK_SETTINGS, setData });
+      const { unmount } = renderStep();
+      await userEvent.click(screen.getByTestId('option-list'));
+      unmount();
+
+      configureHooks({ value: MOCK_SETTINGS });
+      const setCanProceed = vi.fn();
+      const props: FirstRunStepProps = { onNext: vi.fn(), setCanProceed };
+      const { rerender } = render(<InternetSettingsStep {...props} />);
+      expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
+
+      // The earlier save lands, then the provider reports the value it saved.
+      resolveSave();
+      await waitFor(() => expect(hasSavedInternetUseChoice()).toBe(true));
+      configureHooks({ value: { ...MOCK_SETTINGS, permittedInternetUse: 'Enabled' } });
+      rerender(<InternetSettingsStep {...props} />);
+
+      await waitFor(() =>
+        expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Enabled'),
+      );
+      expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(true);
+    });
+
+    it('puts focus back on the picked option once its save ends', async () => {
+      let resolveSave: () => void = () => {};
+      const setData = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSave = resolve;
+          }),
+      );
+      configureHooks({ value: MOCK_SETTINGS, setData });
+      renderStep();
+      const optionList = screen.getByTestId('option-list');
+
+      await userEvent.click(optionList);
+      expect(optionList).toBeDisabled();
+      dropFocusToBody();
+
+      resolveSave();
+
+      await waitFor(() => expect(optionList).toHaveFocus());
+    });
+
+    it('leaves focus where the user moved it during the save', async () => {
+      let resolveSave: () => void = () => {};
+      const setData = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSave = resolve;
+          }),
+      );
+      configureHooks({ value: MOCK_SETTINGS, setData });
+      renderStep();
+      const elsewhere = document.createElement('button');
+      document.body.append(elsewhere);
+
+      await userEvent.click(screen.getByTestId('option-list'));
+      elsewhere.focus();
+      resolveSave();
+
+      await waitFor(() => expect(screen.getByTestId('option-list')).not.toBeDisabled());
+      expect(elsewhere).toHaveFocus();
+      elsewhere.remove();
+    });
   });
 
   it('calls setData with the new value immediately when a selection changes', async () => {
@@ -244,19 +465,37 @@ describe('InternetSettingsStep', () => {
     expect(calls.at(-1)).toBe(false);
   });
 
-  it('reverts the displayed selection to the last-good value when a save fails', async () => {
+  it('reverts the displayed selection when a save fails', async () => {
     const setData = vi.fn().mockRejectedValue(new Error('save failed'));
     configureHooks({ value: MOCK_SETTINGS, setData });
     renderStep();
 
-    // Loaded value is VpnRequired; the click optimistically switches to Enabled, then the failed
-    // save must revert the displayed value back to VpnRequired (lastGood).
-    expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'VpnRequired');
+    // Nothing is shown selected before the user chooses; the click optimistically shows Enabled,
+    // then the failed save must go back to showing no choice.
+    expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
     await userEvent.click(screen.getByTestId('option-list'));
 
+    await waitFor(() => expect(screen.getByText(/save failed/i)).toBeInTheDocument());
+    expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
+  });
+
+  it('reverts to the last saved choice when a later save fails', async () => {
+    const setData = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('save failed'));
+    configureHooks({ value: MOCK_SETTINGS, setData });
+    renderStep();
+
+    // First click saves Enabled; a server change that then fails reverts to that saved choice.
+    await userEvent.click(screen.getByTestId('option-list'));
     await waitFor(() =>
-      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'VpnRequired'),
+      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Enabled'),
     );
+    await userEvent.click(screen.getByTestId('dev-section'));
+
+    await waitFor(() => expect(screen.getByText(/save failed/i)).toBeInTheDocument());
+    expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Enabled');
   });
 
   it('bails without persisting or reporting success when setData is unavailable', async () => {
@@ -269,7 +508,7 @@ describe('InternetSettingsStep', () => {
     // The guard warns and returns before the optimistic update, so the selection does not change and
     // no false "saved" state is reported.
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
-    expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'VpnRequired');
+    expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
   });
 
   it('shows a friendly error, a Retry button, and keeps Next disabled when the read is a PlatformError', () => {

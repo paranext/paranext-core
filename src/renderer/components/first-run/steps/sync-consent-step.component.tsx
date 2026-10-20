@@ -2,7 +2,11 @@ import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { isDemoMode } from '@renderer/services/first-run-store';
 import { sendCommand } from '@shared/services/command.service';
 import { Button, Spinner } from 'platform-bible-react';
-import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isErrorMessageAboutParatextBlockingInternetAccess,
+  LocalizeKey,
+} from 'platform-bible-utils';
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { WizardStepForm } from '../wizard-step-form.component';
 import { FirstRunStepProps } from '../first-run-step-props.model';
@@ -14,6 +18,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_button_dontSyncYet%',
   '%firstRun_button_back%',
   '%firstRun_step_syncProgress_heading%',
+  '%firstRun_step_syncConsent_internetBlocked%',
 ];
 
 // Demo/UX mode: resolve immediately without touching the real S/R backend so the wizard
@@ -74,7 +79,15 @@ function SyncConsentStep({
       await onSync();
       onNext();
     } catch (e) {
-      setError(getErrorMessage(e));
+      // The internet setting refuses sync with a message carrying a machine-readable sentinel, so
+      // show a localized message instead. It points to "Don't sync yet" rather than linking to the
+      // setting: the setting's dialog would open behind the full-screen wizard, and Sync would only
+      // fail again.
+      setError(
+        isErrorMessageAboutParatextBlockingInternetAccess(e)
+          ? strings['%firstRun_step_syncConsent_internetBlocked%']
+          : getErrorMessage(e),
+      );
       setCanDeclineSync?.(true); // restore it so the user can still decline after a failed sync
     } finally {
       setIsSyncing(false);
