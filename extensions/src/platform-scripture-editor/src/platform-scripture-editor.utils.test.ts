@@ -32,7 +32,6 @@ import {
   resolveOpenEditorDispatch,
   resolveViewTypeForInterfaceMode,
   VIEW_TYPE_FOR_SET_VIEW_COMMAND,
-  viewTypeForSetScriptureMessage,
   syncOnProjectSwitch,
   syncOnSwitchToPower,
   UNSENT_CHANGES_SYNC_WAIT_MS,
@@ -5069,7 +5068,7 @@ describe('shouldPublishPaneDocument (the pane repaints only when its notes chang
   });
 });
 
-describe('resolveViewTypeForInterfaceMode (standard view is power-mode-only)', () => {
+describe('resolveViewTypeForInterfaceMode (standard and markers views are power-mode-only)', () => {
   it('coerces standard to formatted in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('standard', false)).toBe('formatted');
   });
@@ -5082,8 +5081,8 @@ describe('resolveViewTypeForInterfaceMode (standard view is power-mode-only)', (
     expect(resolveViewTypeForInterfaceMode('formatted', false)).toBe('formatted');
   });
 
-  it('leaves markers unchanged in simple mode', () => {
-    expect(resolveViewTypeForInterfaceMode('markers', false)).toBe('markers');
+  it('coerces markers to formatted in simple mode, which has no way back from the read-only view', () => {
+    expect(resolveViewTypeForInterfaceMode('markers', false)).toBe('formatted');
   });
 
   it('leaves formatted and markers unchanged in power mode', () => {
@@ -5158,15 +5157,6 @@ describe('direct view-setting commands', () => {
       'formatted',
     );
   });
-
-  it("applies 'standard' as standard in Power and as formatted in Simple", () => {
-    expect(viewTypeForSetScriptureMessage('standard', true)).toBe('standard');
-    expect(viewTypeForSetScriptureMessage('standard', false)).toBe('formatted');
-  });
-
-  it("applies 'formatted' as formatted", () => {
-    expect(viewTypeForSetScriptureMessage('formatted', true)).toBe('formatted');
-  });
 });
 
 describe('getNextViewTypeInCycle', () => {
@@ -5176,21 +5166,10 @@ describe('getNextViewTypeInCycle', () => {
     expect(getNextViewTypeInCycle('markers', true)).toBe('formatted');
   });
 
-  it('skips standard in simple mode: formatted -> markers -> formatted', () => {
-    expect(getNextViewTypeInCycle('formatted', false)).toBe('markers');
-    expect(getNextViewTypeInCycle('markers', false)).toBe('formatted');
-  });
-
-  it('moves a lingering standard view forward to markers in simple mode', () => {
-    // A persisted 'standard' can still be the current state for a moment before the web view's
-    // coercion effect runs; cycling from it must behave as if it were already coerced.
-    expect(getNextViewTypeInCycle('standard', false)).toBe('markers');
-  });
-
-  it('never yields standard in simple mode for any current view type', () => {
+  it('stays on formatted in simple mode for any current view type', () => {
     const allViewTypes = ['formatted', 'markers', 'standard'] as const;
     allViewTypes.forEach((current) => {
-      expect(getNextViewTypeInCycle(current, false)).not.toBe('standard');
+      expect(getNextViewTypeInCycle(current, false)).toBe('formatted');
     });
   });
 });
