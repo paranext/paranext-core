@@ -1304,6 +1304,12 @@
     "%webView_platformScriptureEditor_openChecks_2%": {
       "fallbackKey": "%webView_platformScriptureEditor_openChecks%"
     },
+    "%webView_platformScriptureEditor_options%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "The editor menu column is now called \"View\". The new key is %webView_platformScriptureEditor_view%."
+      }
+    },
     "%webView_platformScriptureEditor_resetZoomToDefault%": {
       "deprecationInfo": {
         "date": "2026-10-20",

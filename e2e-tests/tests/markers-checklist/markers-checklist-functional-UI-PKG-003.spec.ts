@@ -75,10 +75,9 @@ async function openMarkersChecklistTool(page: Page): Promise<void> {
     return;
   }
 
-  // Navigate via the scripture editor's hamburger menu. The menu item is declared in
-  // platform-scripture-editor/contributions/menus.json under the inventory group, firing
-  // `platformScripture.openMarkersChecklist` with the editor's webViewId as context (which is
-  // how the handler resolves the active projectId).
+  // Send `platformScripture.openMarkersChecklist` with the editor's webViewId as context (which is
+  // how the handler resolves the active projectId). The editor's menu hides its Markers Checklist
+  // item, so the command is the way in.
   await sendOpenMarkersChecklistCommand(page);
 
   await expect(page.locator('.dock-tab', { hasText: CHECKLIST_TAB_TITLE_PATTERN })).toBeVisible({
@@ -110,8 +109,8 @@ async function openMarkerSettingsDialog(page: Page): Promise<FrameLocator> {
   // The web-view chrome renders the hamburger (`aria-label="View Info"`) inside the iframe.
   await frame.locator("button[aria-label='View Info']").first().click();
 
-  // Settings... menu item — match exactly to disambiguate from "Open Project Settings..."
-  // injected by default contributions.
+  // Settings... menu item. Matched exactly so it cannot match the default contributions'
+  // "Project settings" item.
   await frame.getByRole('menuitem', { name: 'Settings...', exact: true }).click();
 
   // Primary dialog title assertion — confirms `MarkerSettingsDialog` mounted with `open={true}`.
