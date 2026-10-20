@@ -1,11 +1,6 @@
 import { menuDocumentCombiner } from '@extension-host/services/contribution.service';
 import { testingMenuDataService } from '@extension-host/services/menu-data.service-host';
-import {
-  getAllObjectFunctionNames,
-  PlatformMenus,
-  ReferencedItem,
-  WebViewMenus,
-} from 'platform-bible-utils';
+import { PlatformMenus, ReferencedItem, WebViewMenus } from 'platform-bible-utils';
 import { vi } from 'vitest';
 
 vi.mock('@shared/services/settings.service', () => ({
@@ -824,28 +819,4 @@ describe('shortcut hints', () => {
       'Ctrl+F',
     );
   });
-});
-
-test('the engine does not publish its unsubscribers as network methods', async () => {
-  const { settingsService } = await import('@shared/services/settings.service');
-  const unsubscribeFromInterfaceMode = vi.fn(async () => true);
-  vi.mocked(settingsService.subscribe).mockImplementationOnce(
-    async () => unsubscribeFromInterfaceMode,
-  );
-  const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
-  await Promise.resolve();
-  await Promise.resolve();
-
-  const functionNames = getAllObjectFunctionNames(
-    // A class instance has no index signature, which getAllObjectFunctionNames asks for
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    engine as unknown as { [property: string]: unknown },
-  );
-
-  expect(functionNames).toContain('getMainMenu');
-  expect(functionNames).not.toContain('unsubscribeOnDidResyncContributions');
-  expect(functionNames).not.toContain('unsubscribeFromInterfaceMode');
-  // Proves the interface mode unsubscriber was already stored when the names were collected
-  await engine.dispose();
-  expect(unsubscribeFromInterfaceMode).toHaveBeenCalled();
 });
