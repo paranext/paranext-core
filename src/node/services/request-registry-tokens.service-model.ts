@@ -9,9 +9,9 @@ const CATEGORY_REQUEST_REGISTRY_TOKENS = 'requestRegistryTokens';
  * Serialized request type the C# data provider handles to mint a Paratext Registry access token.
  * Outside the `command:` category so extension code can't send it through PAPI; extensions are
  * meant to reach it only through the `requestRegistryTokens` elevated privilege. Main refuses it to
- * browser pages and web views with an insecure temporary stopgap, but local processes and
- * extension-host code with its own socket can still reach it until PT-2893 lands; see "Paratext
- * Registry access tokens" in `.context/standards/Security-Guide.md`.
+ * browser pages and web views with an insecure temporary stopgap, but other local clients can still
+ * reach it until PT-2893 lands; see "Paratext Registry access tokens" in
+ * `.context/standards/Security-Guide.md`.
  */
 export const REGISTRY_TOKEN_REQUEST_TYPE = serializeRequestType(
   CATEGORY_REQUEST_REGISTRY_TOKENS,

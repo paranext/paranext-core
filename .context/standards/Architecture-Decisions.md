@@ -6290,9 +6290,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   extension can wrap shared built-ins and see another extension's tokens. The allowlist stops honest
   mistakes; the real control is which extensions get installed. Local processes on the loopback
   WebSocket can also call the request type; they already run as the user and can read the user's
-  Paratext data directly. So can extension-host code, with no web view, through
-  `process.getBuiltinModule('net')`, which the extension host's `require` wrapper doesn't intercept;
-  that is the same shared-realm limit. A web page in the user's browser could too, because
+  Paratext data directly. A web page in the user's browser could too, because
   WebSocket connections are not authenticated, and so could any installed extension's web view,
   privilege or not, through the native `window.top.WebSocket` or its window's PAPI connection;
   unlike the other PAPI methods they can call, this one returns a credential that works off the

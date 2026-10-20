@@ -417,10 +417,9 @@ export class RpcServer implements IRpcHandler {
           // PT-2893's caller identification. Browsers always send `Origin` on a WebSocket handshake
           // and page script can't remove it, and web views can drive their renderer's MessagePort,
           // so this keeps browser pages and extension web views from minting Registry tokens. It
-          // trusts a header instead of identifying the caller: any local process that leaves
-          // `Origin` out, and extension-host code opening its own socket through
-          // `process.getBuiltinModule('net')`, still gets through. Checked before the event branch
-          // too, so the request type can't be sent on as an event either.
+          // trusts a header instead of identifying the caller, so any local process that leaves
+          // `Origin` out still gets through. Checked before the event branch too, so the request
+          // type can't be sent on as an event either.
           if (
             !this.isWebSocketWithoutOrigin &&
             REQUEST_TYPES_REFUSED_TO_BROWSERS_AND_RENDERERS.has(request.method)

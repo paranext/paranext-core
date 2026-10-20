@@ -138,18 +138,8 @@ has the same limit. The real control is which extensions get installed.
 
 The C# handler does not check the allowlist itself. Main refuses the request type to browser pages
 and web views with the stopgap below, but anything else that can reach the unauthenticated PAPI
-WebSocket can call it for any resource registered with the Registry:
-
-- Local processes already run as the user and can read the user's Paratext data directly, so they
-  gain nothing new.
-- Extension-host code can too, with no web view and whether or not the extension holds the
-  privilege. `activateExtensions` in `src/extension-host/services/extension.service.ts` wraps
-  `Module.prototype.require` and replaces `globalThis.WebSocket`, but `process.getBuiltinModule`
-  hands out Node's built-in modules, `net` and `http` included, without going through `require`
-  (as of 2026-10, Electron 39 runs the extension host on Node 22, where it exists). An extension
-  can open its own socket to port 8876 that way. This is the shared-realm limit above, not a
-  separate gap: wrapping `process.getBuiltinModule` alone would not make the extension host a
-  boundary between extensions.
+WebSocket can call it for any resource registered with the Registry. Local processes already run
+as the user and can read the user's Paratext data directly, so they gain nothing new.
 
 **Insecure temporary stopgap, not a security boundary; PT-2893 must replace it.** Main refuses
 `requestRegistryTokens:getAccessToken` from any WebSocket connection whose handshake carried an
@@ -166,8 +156,7 @@ type would hand a credential that works off the machine:
   the window's CSP allows `ws:` connections, or drive its window's PAPI connection.
 
 The stopgap trusts a header instead of identifying the caller, so any process that leaves `Origin`
-out gets through, including the local processes and extension-host code listed earlier. Don't
-treat it as the fix or build on it.
+out gets through. Don't treat it as the fix or build on it.
 
 Rejecting browser connections outright is not the fix: browser clients are legitimate too.
 `platform.openDeveloperDocumentationUrl` opens the OpenRPC playground against this WebSocket, and
