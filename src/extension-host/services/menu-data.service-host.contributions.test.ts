@@ -1,7 +1,10 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { USERSNAP_SPACE_API_KEY } from '@shared/data/platform.data';
 import { JsonDocumentLike } from 'platform-bible-utils';
 import { describe, expect, test } from 'vitest';
 import {
+  EXTENSIONS_DIR,
   getMenuContributingExtensions,
   getMenuDataEngineInMode,
   getRealCombinedMenus,
@@ -87,14 +90,12 @@ describe('The shipped main menu is pinned exactly, per mode', () => {
     'paratextRegistration.showParatextRegistration',
     'platform.about',
     'platform.createWindow',
-    'platform.openDeveloperDocumentationUrl',
     'platform.openSettings',
     'platform.quit',
-    'platform.showOnboardingTour',
     ...PRODUCT_FEEDBACK_ITEMS,
     'platform.visitFAQsPage',
     'platform.visitGettingStartedPage',
-    'platformEnhancedResources.openEnhancedResource',
+    'platformGetResources.openGetResources',
     'platformGetResources.openHome',
     'platformLexicalTools.openDictionary',
   ];
@@ -105,6 +106,103 @@ describe('The shipped main menu is pinned exactly, per mode', () => {
 
   test('Power offers exactly these entries', async () => {
     expect(entriesIn(await getMainMenuInMode('power'))).toEqual(POWER_MAIN_MENU);
+  });
+});
+
+/** English text of every string key the shipped menus use: core's `en.json` plus each extension's. */
+function readEnglishStrings(): Record<string, string> {
+  const coreStrings: Record<string, string> = JSON.parse(
+    readFileSync(resolve(__dirname, '../../../assets/localization/en.json'), 'utf8'),
+  );
+  const extensionStrings = readdirSync(EXTENSIONS_DIR, { withFileTypes: true }).map((entry) => {
+    const stringsPath = resolve(EXTENSIONS_DIR, entry.name, 'contributions/localizedStrings.json');
+    if (!entry.isDirectory() || !existsSync(stringsPath)) return {};
+    const contributed: { localizedStrings?: { en?: Record<string, string> } } = JSON.parse(
+      readFileSync(stringsPath, 'utf8'),
+    );
+    return contributed.localizedStrings?.en ?? {};
+  });
+  return Object.assign({}, coreStrings, ...extensionStrings);
+}
+
+describe('The Power main menu is laid out as designed', () => {
+  async function getPowerLayout() {
+    const menu = await getMainMenuInMode('power');
+    const strings = readEnglishStrings();
+    const find = (command: string) => {
+      const item = menu.items.find((entry) => 'command' in entry && entry.command === command);
+      if (!item) throw new Error(`Power main menu has no ${command}`);
+      return item;
+    };
+    return { menu, strings, find };
+  }
+
+  test.each([
+    ['platformGetResources.openGetResources', 'Get resources'],
+    ['platformGetResources.openHome', 'Open'],
+    ['platformLexicalTools.openDictionary', 'Open Dictionary: Hebrew/Greek'],
+    ['platform.createWindow', 'New window'],
+    ['platform.visitGettingStartedPage', 'Browse help'],
+    ['paratextRegistration.showParatextRegistration', 'Registration information'],
+  ])('%s is labelled "%s"', async (command, label) => {
+    const { strings, find } = await getPowerLayout();
+    expect(strings[find(command).label]).toBe(label);
+  });
+
+  test.each([
+    ['platformGetResources.openGetResources', 'download'],
+    ['platformGetResources.openHome', 'house'],
+    ['platformLexicalTools.openDictionary', 'book-a'],
+    ['platform.openSettings', 'settings'],
+    ['platform.visitGettingStartedPage', 'circle-question-mark'],
+    ['platform.visitFAQsPage', 'users'],
+  ])('%s shows the lucide icon "%s" before its label', async (command, icon) => {
+    const { find } = await getPowerLayout();
+    expect(find(command)).toMatchObject({ iconNameBefore: icon });
+  });
+
+  test.each(['platform.visitGettingStartedPage', 'platform.visitFAQsPage'])(
+    '%s marks its external destination with the lucide "external-link" icon',
+    async (command) => {
+      const { find } = await getPowerLayout();
+      const item = find(command);
+      expect(item).toMatchObject({ iconNameAfter: 'external-link' });
+      expect(item).not.toHaveProperty('iconPathAfter');
+    },
+  );
+
+  test('groups hold the items in the designed order', async () => {
+    const { menu } = await getPowerLayout();
+    const commandsIn = (group: string) =>
+      menu.items
+        .filter((item) => item.group === group && 'command' in item)
+        .sort((a, b) => a.order - b.order)
+        .map((item) => ('command' in item ? item.command : ''))
+        .filter((command) => !command.startsWith('helloRock3.'));
+    expect(commandsIn('platform.projectProjects')).toEqual([
+      'platformGetResources.openGetResources',
+    ]);
+    expect(commandsIn('platform.projectResources')).toEqual([
+      'platformGetResources.openHome',
+      'platformLexicalTools.openDictionary',
+    ]);
+    expect(commandsIn('platform.projectSettings')).toEqual(['platform.openSettings']);
+    expect(commandsIn('platform.projectMisc')).toEqual(['platform.createWindow', 'platform.quit']);
+    expect(commandsIn('platform.helpInfo')).toEqual([
+      'platform.visitGettingStartedPage',
+      'platform.visitFAQsPage',
+    ]);
+    expect(commandsIn('platform.helpRegistration')).toEqual([]);
+    expect(commandsIn('platform.helpMisc')).toEqual([
+      'paratextRegistration.showParatextRegistration',
+      'platform.about',
+    ]);
+  });
+
+  test('Get resources is absent in Simple', async () => {
+    expect(
+      hasCommand(await getMainMenuInMode('simple'), 'platformGetResources.openGetResources'),
+    ).toBe(false);
   });
 });
 
@@ -132,18 +230,31 @@ describe('Extension-contributed main menu items are gated for Simple mode', () =
    * a flag that wrongly hides an item in both modes still passes.
    */
   const HIDDEN_IN_SIMPLE = [
-    ['Open...', 'platformGetResources.openHome'],
-    ['Open Dictionary: SDBH/SDBG', 'platformLexicalTools.openDictionary'],
+    ['Open', 'platformGetResources.openHome'],
+    ['Open Dictionary: Hebrew/Greek', 'platformLexicalTools.openDictionary'],
     ['Open enhanced resource', 'platformEnhancedResources.openEnhancedResource'],
-    ['Paratext Registration Information...', 'paratextRegistration.showParatextRegistration'],
+    ['Registration information', 'paratextRegistration.showParatextRegistration'],
+  ] as const;
+
+  /** Hidden in both modes: Power's main menu leaves enhanced resources to the Open home view. */
+  const HIDDEN_IN_POWER = [
+    ['Open enhanced resource', 'platformEnhancedResources.openEnhancedResource'],
   ] as const;
 
   test.each(HIDDEN_IN_SIMPLE)('"%s" is absent from the main menu in Simple', async (_, command) => {
     expect(hasCommand(await getMainMenuInMode('simple'), command)).toBe(false);
   });
 
-  test.each(HIDDEN_IN_SIMPLE)('"%s" is still present in Power', async (_, command) => {
+  test.each(
+    HIDDEN_IN_SIMPLE.filter(
+      ([, command]) => !HIDDEN_IN_POWER.some(([, hidden]) => hidden === command),
+    ),
+  )('"%s" is still present in Power', async (_, command) => {
     expect(hasCommand(await getMainMenuInMode('power'), command)).toBe(true);
+  });
+
+  test.each(HIDDEN_IN_POWER)('"%s" is absent from the main menu in Power', async (_, command) => {
+    expect(hasCommand(await getMainMenuInMode('power'), command)).toBe(false);
   });
 });
 
@@ -179,6 +290,9 @@ describe('Pruning empties menu groups but never a whole column', () => {
    */
   const EMPTIED_IN_SIMPLE = ['platform.projectResources', 'platform.helpRegistration'];
 
+  /** Groups Simple prunes empty that Power still fills; `helpRegistration` is left for extensions. */
+  const FILLED_IN_POWER = ['platform.projectResources'];
+
   function itemCountsByGroup(menu: Awaited<ReturnType<typeof getMainMenuInMode>>) {
     const counts = new Map<string, number>();
     menu.items.forEach((item) => {
@@ -191,7 +305,7 @@ describe('Pruning empties menu groups but never a whole column', () => {
     expect(itemCountsByGroup(await getMainMenuInMode('simple')).get(group) ?? 0).toBe(0);
   });
 
-  test.each(EMPTIED_IN_SIMPLE)('group "%s" still has items in Power', async (group) => {
+  test.each(FILLED_IN_POWER)('group "%s" still has items in Power', async (group) => {
     expect(itemCountsByGroup(await getMainMenuInMode('power')).get(group) ?? 0).toBeGreaterThan(0);
   });
 
