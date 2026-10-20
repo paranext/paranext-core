@@ -684,7 +684,7 @@
   "%userProfile_interfaceMode_power_description%": "Full Paratext interface with all panels and tools",
   "%userProfile_interfaceMode_power_description_2%": "Configurable interface with panels and tools — use alongside Paratext 9.",
   "%userProfile_interfaceMode_power_label%": "Power mode",
-  "%userProfile_interfaceMode_power_preview%": "[preview]",
+  "%userProfile_interfaceMode_power_labelWithPreview%": "{label} [preview]",
   "%userProfile_interfaceMode_simple_description%": "Streamlined interface for focused translation work",
   "%userProfile_interfaceMode_simple_description_2%": "Streamlined interface for basic exegesis, drafting and AI checks.",
   "%userProfile_interfaceMode_simple_label%": "Simple mode",

@@ -38,6 +38,7 @@ import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
 import {
+  formatReplacementString,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
@@ -55,7 +56,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_interfaceMode_simple_label%',
   '%userProfile_interfaceMode_simple_description_2%',
   '%userProfile_interfaceMode_power_label%',
-  '%userProfile_interfaceMode_power_preview%',
+  '%userProfile_interfaceMode_power_labelWithPreview%',
   '%userProfile_interfaceMode_power_description_2%',
   '%userProfile_profileAndRegistration%',
   '%userProfile_registrationNeeded%',
@@ -448,7 +449,10 @@ export function UserProfilePopover() {
                 safeInterfaceMode === 'power' && 'tw:text-accent-foreground',
               )}
             >
-              {`${localizedStrings['%userProfile_interfaceMode_power_label%']} ${localizedStrings['%userProfile_interfaceMode_power_preview%']}`}
+              {formatReplacementString(
+                localizedStrings['%userProfile_interfaceMode_power_labelWithPreview%'],
+                { label: localizedStrings['%userProfile_interfaceMode_power_label%'] },
+              )}
             </span>
             <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
               {localizedStrings['%userProfile_interfaceMode_power_description_2%']}

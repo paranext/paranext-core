@@ -797,7 +797,7 @@
   "%userProfile_interfaceMode_power_description%": "Interfaz completa de Paratext con todos los paneles y herramientas",
   "%userProfile_interfaceMode_power_description_2%": "Interfaz configurable con paneles y herramientas: úsela junto con Paratext 9.",
   "%userProfile_interfaceMode_power_label%": "Modo avanzado",
-  "%userProfile_interfaceMode_power_preview%": "[preliminar]",
+  "%userProfile_interfaceMode_power_labelWithPreview%": "{label} [preliminar]",
   "%userProfile_interfaceMode_simple_description%": "Interfaz simplificada para enfocarse en la traducción",
   "%userProfile_interfaceMode_simple_description_2%": "Interfaz simplificada para exégesis básica, redacción y revisiones con IA.",
   "%userProfile_interfaceMode_simple_label%": "Modo simplificado",

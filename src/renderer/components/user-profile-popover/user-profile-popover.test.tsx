@@ -98,7 +98,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%userProfile_interfaceMode_power_description%': 'All panels',
       '%userProfile_interfaceMode_simple_description_2%': 'Basic work, short list',
       '%userProfile_interfaceMode_power_description_2%': 'Configurable, with PT9',
-      '%userProfile_interfaceMode_power_preview%': '[early look]',
+      '%userProfile_interfaceMode_power_labelWithPreview%': '{label} [early look]',
       '%userProfile_profileAndRegistration%': 'Profile and registration row',
       '%userProfile_networkSettings_2%': 'Internet and connectivity row',
       '%userProfile_language%': 'UI language',
