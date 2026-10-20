@@ -40,13 +40,26 @@ function MenuItemIcon({ icon, iconName, menuLabel, leading, leadingSlot }: MenuI
     );
   }
 
-  return icon ? (
-    <img
-      className={cn('tw:max-h-5 tw:max-w-5', spacing)}
-      src={icon}
-      alt={`${leading ? 'Leading' : 'Trailing'} icon for ${menuLabel}`}
-    />
-  ) : undefined;
+  if (!icon) return undefined;
+
+  const alt = `${leading ? 'Leading' : 'Trailing'} icon for ${menuLabel}`;
+
+  // A leading image sits in a box as wide as the spacer of an icon-less item, so the labels of both
+  // line up whatever the image's own width is. The image keeps its max size so it never upscales.
+  if (leading)
+    return (
+      <span
+        data-slot="menu-icon-image-box"
+        className={cn(
+          'tw:inline-flex tw:w-5 tw:shrink-0 tw:items-center tw:justify-center',
+          spacing,
+        )}
+      >
+        <img className="tw:max-h-5 tw:max-w-5" src={icon} alt={alt} />
+      </span>
+    );
+
+  return <img className={cn('tw:max-h-5 tw:max-w-5', spacing)} src={icon} alt={alt} />;
 }
 
 export default MenuItemIcon;

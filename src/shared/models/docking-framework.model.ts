@@ -65,7 +65,10 @@ export type TabInfo = SavedTabInfo & {
    */
   tabIconUrl?: string;
   /**
-   * Name of a lucide icon to show on the title bar of the tab instead of {@link tabIconUrl}.
+   * Name of a lucide icon (kebab-case, e.g. `'book-open'`) to show on the title bar of the tab
+   * instead of {@link tabIconUrl}. The icons the platform can show are listed in `LUCIDE_ICON_NAMES`
+   * (exported from `platform-bible-react/experimental`). An unknown name is ignored, so
+   * {@link tabIconUrl} (and then the standard logo) is shown instead.
    *
    * @experimental This field is unstable and may change or disappear without notice
    */

@@ -94,7 +94,8 @@
           },
           "platformScriptureEditor.editFind": {
             "menuItem": "platformScriptureEditor.editSubmenu",
-            "order": 2
+            "order": 2,
+            "isExperimental": true
           },
           "platformScriptureEditor.viewModes": {
             "menuItem": "platformScriptureEditor.viewSubmenu",
