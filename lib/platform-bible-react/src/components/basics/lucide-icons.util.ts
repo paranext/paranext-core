@@ -36,7 +36,7 @@ import {
  * Curated set of lucide icons that can be shown by name. Each icon is a named import so the bundle
  * contains only these icons; adding an icon means adding it here.
  */
-export const LUCIDE_ICONS_BY_NAME: Readonly<Record<string, LucideIconComponent>> = {
+const LUCIDE_ICON_COMPONENTS = {
   'refresh-cw': RefreshCw,
   download: Download,
   house: House,
@@ -64,7 +64,13 @@ export const LUCIDE_ICONS_BY_NAME: Readonly<Record<string, LucideIconComponent>>
   'message-square': MessageSquare,
   'circle-check-big': CircleCheckBig,
   sparkles: Sparkles,
-};
+} as const satisfies Record<string, LucideIconComponent>;
+
+/** Name of an icon in the curated set */
+export type LucideIconName = keyof typeof LUCIDE_ICON_COMPONENTS;
+
+export const LUCIDE_ICONS_BY_NAME: Readonly<Record<LucideIconName, LucideIconComponent>> =
+  LUCIDE_ICON_COMPONENTS;
 
 /**
  * Names (lucide kebab-case) of the icons `LucideIcon` can render
@@ -79,7 +85,7 @@ export const LUCIDE_ICON_NAMES: readonly string[] = Object.keys(LUCIDE_ICONS_BY_
  *
  * @param name Lucide icon name in kebab-case, or `undefined` when the item names no icon
  */
-export function isLucideIconName(name: string | undefined): name is string {
+export function isLucideIconName(name: string | undefined): name is LucideIconName {
   // Object.hasOwn keeps inherited keys such as `constructor` from resolving to a non-icon
   return name !== undefined && Object.hasOwn(LUCIDE_ICONS_BY_NAME, name);
 }

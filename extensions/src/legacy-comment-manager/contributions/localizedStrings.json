@@ -195,7 +195,7 @@
       "%webView_legacyCommentManager_syncEditBlocked_notice%": "Edición pausada — Enviar/Recibir en curso",
       "%webView_legacyCommentManager_syncEditBlocked_notice_2%": "Edición pausada — sincronización en curso",
       "%webView_legacyCommentManager_openComments%": "Abrir Comentarios",
-      "%webView_legacyCommentManager_openComments_2%": "Comentarios de proyecto"
+      "%webView_legacyCommentManager_openComments_2%": "Comentarios"
     }
   }
 }
