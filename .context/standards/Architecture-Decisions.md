@@ -1577,6 +1577,49 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Only the zoomability is held per open menu, not the whole item list, because Power mode's window targets arrive after the menu opens.
 - **Source:** UX feedback 2026-09-22; epic PT-4575.
 
+## adr-copy-limit-rule-lives-downstream: The copy-limit mechanism ships in public code; the rule that drives it ships in a private patch
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** Paratext 9 limits how much text can be copied at once from some texts, and its rule
+  was in closed code. Platform.Bible (`paranext-core`) is open source, so the rule cannot live in
+  this repo in any form.
+- **Decision:** Public code provides only the mechanism, and answers "no limit" everywhere:
+  - a read-only project data type, `platformScripture.CopyLimit` / `BookCopyLimits`, one array per
+    book with one entry per chapter, each a count of UTF-16 code units;
+  - a core hook, `useChapterCopyLimit`, that subscribes once per book and resolves the limit for
+    the chapter on screen;
+  - the editor option `EditorOptions.copyLimit`, whose plugin shortens an over-limit copy or cut
+    and blocks the Select All shortcut while a limit is set;
+  - an unknown limit — still loading, or the request failed — blocks copying for every text.
+
+  The Paratext 10 Studio patch supplies the actual rule by replacing the public "no limit" answer.
+- **Alternatives:**
+  - **A private extension implementing the whole feature** — rejected: it cannot tell "no
+    provider is installed" apart from "the answer just hasn't arrived yet."
+  - **The rule itself in public code** — rejected per the Product Owner's preference, given P10 is
+    open source.
+  - **Limiting the selection as it is made**, rather than at copy time — not chosen: Paratext 9
+    limits at copy time, and this keeps parity with it.
+  - **A per-chapter data type** (one request per chapter instead of per book) — rejected: it would
+    cause a blocked moment on every chapter change while the new chapter's limit is fetched.
+- **Consequences:**
+  - TSDoc and other public-facing docs describe only what a caller can observe — never the rule
+    itself. See `adr-closed-source-command-doc-altitude` for the same altitude discipline applied
+    to a different closed-source-backed command.
+  - Public tests exercise the mechanism with arbitrary limits, not real ones.
+  - Copy limits are refetched on every update the Paratext project data provider sends.
+  - A view passes a limit of `0` while its displayed chapter's text is still loading, because the
+    per-book limit can arrive before the new chapter's text does — so a chapter navigation blocks
+    copying for a moment even on an unlimited text.
+  - `BookCopyLimits` is indexed like the chapter-text endpoints, by the project's own chapter
+    numbers: only the selector's book is read, and its versification, chapter and verse are
+    ignored. The chapter-text endpoints fetch a chapter by its number in the project's own
+    versification, so a view indexes the limits with the same chapter number it fetches text with.
+  - A view showing chapter 0 (a book's introduction, shown with chapter 1) uses chapter 1's limit.
+
+- **Source:** [PT-4730](https://paratextstudio.atlassian.net/browse/PT-4730).
+
 ## adr-core-dialog-reuses-panel-strings: A core dialog that explains what an extension panel explains renders a shared library component from the extension's own keys
 
 - **Date:** 2026-10-02
@@ -1695,6 +1738,37 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   mismatched result where the two projects' versifications diverge at that reference. That gap is
   accepted as a consequence of this decision, not a defect in it, until PT-4031 lands.
 - **Source:** external code review, finding 16.
+## adr-data-update-scope-hook: A data type every update must refresh is added by an overridable hook on the base data provider
+
+- **Date:** 2026-09-30
+- **Status:** Accepted
+- **Context:** Some data a C# data provider serves is derived from other data it serves, so any
+  change to the provider's data may change it. `BookCopyLimits` on `ParatextProjectDataProvider`
+  is one: its subscribers must refetch it whenever the provider sends an update, and the provider
+  sends updates from dozens of call sites, each naming only the data types it changed.
+- **Decision:** `DataProvider.SendDataUpdateEventAsync` (`c-sharp/NetworkObjects/DataProvider.cs`)
+  calls a protected virtual hook, `ExpandDataUpdateScope(List<string> dataTypes)`, on every
+  update that names data types, and sends the list it returns. The base class decodes the scope
+  first: `"*"` already refreshes every data type, so it is sent without reaching the hook, and
+  nothing is sent for a blank data type or an empty list, before or after the hook. The hook gets a
+  list the base class owns, so an override may add to it and return it. A subclass adds the data
+  types it must always refresh there.
+- **Alternatives:**
+  - **A wrapper that call sites use instead of `SendDataUpdateEvent`** — rejected: every existing
+    call site would have to change, and a new one that calls the base method directly would skip
+    the refresh with nothing to catch it.
+  - **Naming the derived data type at every call site** — rejected for the same reason.
+  - **A test that scans the source for update calls that leave the data type out** — rejected: a
+    text match catches only the call shapes it was written for, while the hook makes the refresh
+    structural, so no call site can leave it out.
+- **Consequences:**
+  - Each subscriber to a data type added this way refetches it on every update the provider sends.
+    Narrow the hook to the scopes that can change the derived data if that cost starts to matter.
+  - An override should call `base.ExpandDataUpdateScope` first, so that a hook added lower in the
+    hierarchy keeps working; nothing enforces it.
+  - The hook sees decoded data types, never the wire encoding of the scope, so a change to that
+    encoding (see issue #443 in `paranext/paranext-core`) touches only the base class.
+
 ## adr-dbl-cache-recompute-on-read: The DBL resource cache recomputes derived flags on read, not on write
 
 - **Date:** 2026-09-01
@@ -3617,6 +3691,71 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   hardening if such layouts recur.
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
+
+## adr-marker-palettes-take-real-focus: Standard-view marker palettes hold real keyboard focus in the overlay; the editor stays editable
+
+- **Date:** 2026-10-01
+- **Status:** Accepted
+- **Context:** Standard view opens a marker palette from `\` and from Enter. The palette is rendered
+  by the renderer's overlay service, outside the web view's iframe, so it can extend past the web
+  view's edges — which means whichever document holds focus is the only one that sees a keystroke.
+  The product ruling is that only choosing a marker may change the scripture text, and that the
+  palette ignores non-basic-Latin input as Paratext 9 does. Neither can be met by cancelling keys
+  alone: `beforeinput` for `insertCompositionText` is not cancelable, and `compositionstart` accepts
+  `preventDefault()` and composes anyway (measured in this Electron build). An earlier
+  implementation met them by making the editor's content element `contenteditable="false"` for the
+  life of every session. That worked, but it blurred the editor: keys then landed on the page body,
+  so routing had to admit page-body keys; the caret had to be restored everywhere; a
+  `MutationObserver` fought Lexical over the attribute; `paste`/`cut`/`drop` needed separate
+  blocking; and the footnote popover and the footnote pane each needed their own lock. Focus also
+  never returned after a `\` palette closed. Separately, the palettes that DID ask for focus never
+  got it — the overlay's autofocus gave up when its input did not exist yet, which is always true on
+  an anchored palette's first pass because Radix's portal renders nothing then.
+- **Decision:** Fix the autofocus (retry until the element attaches, not just until focus sticks)
+  and give the overlay an opt-in `focusTarget: 'list'`: the palette focuses its result LIST, renders
+  the search box read-only over the host-driven filter, and forwards EVERY key back to the
+  requester. All three marker-palette kinds use it; no other PAPI consumer does. The editor stays
+  fully editable and keeps its caret for the life of a session, and key routing in both consumers is
+  simply "the editor has focus". One key table — Paratext 9's rules — serves every kind; letters and
+  digits come from the TYPED character, falling back to the physical key (`keyCode`) only when that
+  character cannot name a marker, so a non-Latin layout still types a Latin marker name.
+- **Alternatives:**
+  - _The `contenteditable="false"` lock._ Stops composed input, but blurs the editor and every
+    consumer inherits the fallout above. Rejected once focus in the palette proved workable.
+  - _Lexical `setEditable(false)`._ Removes the observer and the separate paste blocking, but has
+    the same blur side effects and fires Lexical's editable listeners, so toolbars and plugins
+    react as if the project were read-only.
+  - _The lock moved into `scripture-editors` behind one API._ The best form of the lock, but focus
+    still ends up on the page body rather than on anything meaningful.
+  - _A hidden focusable element inside the iframe._ Measured: keys that hit it were dropped rather
+    than forwarded, simulated IME input still reached the editor through the DOM selection, and a
+    dead key followed by `e` was lost.
+  - _Focusing the palette's text INPUT and reading `keyCode`._ Works for ordinary keys and Windows
+    dead keys, but an IME composes in any focused text box, so the candidate window would appear
+    over the palette. Kept as the fallback if a real IME turns out to compose on a focused list.
+  - _Switching the keyboard layout while the palette is open._ Paratext 9 does not; Paratext 10's
+    keyboard-switching feature is unmerged, each switch costs several asynchronous PAPI calls, and
+    it cannot turn an IME off.
+  - _Letting composed text land and then removing it._ The candidate text shows in the verse, dead
+    keys flicker, and half-composed text can be saved in the meantime.
+  - _Taking focus back whenever the editor grabs it._ Focus ping-pong fires focus/blur events that
+    window-focus tracking and the footnote pane both react to, and the renderer's window-blur
+    handler dismisses the palette anyway.
+- **Consequences:** The editor is never put into a state the rest of the code has to remember. A
+  palette can be opened from any editor without that editor needing a lock of its own, which is what
+  lets the footnote popover and the footnote pane share the behaviour for free. `aria-activedescendant`
+  now speaks, because the element carrying it is focused — in the non-focusing passive mode it was
+  inert and the service announced through a live region instead. One gap remains by design: the
+  session is created synchronously in the trigger's keydown, and for a short window before the
+  palette has focus the editor still has it. Keys there are routed to the same table, but a
+  composition begun in that window cannot be forwarded, so the consumer closes the palette and lets
+  the composed text land as ordinary typing. Revisit if a real Windows or macOS IME composes even
+  with a non-editable list focused — then fall back to focusing the read-only input and clearing on
+  `compositionend`.
+- **Source:** `src/renderer/components/overlays/overlay-command-palette.component.tsx`;
+  `lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts`;
+  `.context/standards/Standard-View-Invariants.md` § 3; Paratext 9
+  `ParatextBase/ScriptureEditor/MarkerDropdownControl.cs:136-219`.
 
 ## adr-menu-close-focus-restores-without-the-ring: A pointer-closed menu returns focus to its trigger without showing the focus ring
 

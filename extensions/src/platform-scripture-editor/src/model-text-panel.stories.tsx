@@ -236,6 +236,7 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         }}
         showResourcePicker={showResourcePicker}
         getResourceChapter={async () => ({ usj: sampleUsj, textDirection: 'ltr' })}
+        resourceCopyLimit={undefined}
       />
       <Dialog
         open={pickerOpen}
