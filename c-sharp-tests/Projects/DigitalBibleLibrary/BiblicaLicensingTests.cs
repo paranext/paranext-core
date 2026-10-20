@@ -245,6 +245,16 @@ internal class BiblicaLicensingTests
         );
     }
 
+    [Test]
+    public void GetCopyrightYears_SkipsLongerDigitRuns()
+    {
+        // A five-digit run is not a year, even though its first four digits look like one
+        Assert.That(
+            BiblicaLicensing.GetCopyrightYears("© Biblica Inc. 20112, 1984"),
+            Is.EqualTo("1984")
+        );
+    }
+
     [TestCase(null)]
     [TestCase("")]
     [TestCase("© Biblica, Inc. All rights reserved.")]

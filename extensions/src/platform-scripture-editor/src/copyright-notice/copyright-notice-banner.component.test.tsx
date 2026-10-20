@@ -217,6 +217,24 @@ describe('CopyrightNoticeBanner', () => {
     expect(paragraphs).toEqual(['Copyright © 2016 Crossway.', 'All rights reserved.']);
   });
 
+  it.each(['', '\n \n'])(
+    'offers no More info for a notification text with no more copyright to show (details %j)',
+    (details) => {
+      renderBanner({
+        notice: {
+          kind: 'notification',
+          name: 'ESVUK',
+          fullName: 'English Standard Version Anglicised',
+          bannerText: 'Do not translate the ESV.',
+          details,
+        },
+      });
+
+      expect(screen.getByRole('note')).toHaveTextContent('ESVUK: Do not translate the ESV.');
+      expect(screen.queryByRole('button', { name: 'More info' })).not.toBeInTheDocument();
+    },
+  );
+
   it('offers one way to close the details: its own Close button', () => {
     renderBanner();
 

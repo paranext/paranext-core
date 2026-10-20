@@ -16,7 +16,7 @@ import {
   MIN_ZOOM_FACTOR,
 } from 'platform-bible-utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type DragEvent, type KeyboardEvent } from 'react';
 import { useChapterUsjWithCopyLimit } from '../copy-limit/use-chapter-usj-with-copy-limit.hook';
 import { deriveCellState, isUsjForChapter } from './resource-cell.utils';
 import {
@@ -94,7 +94,7 @@ type ResourceCellProps = {
   /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
   onReorderKeyDown?: (event: KeyboardEvent) => void;
   /** Makes the cell's header band the drag source for a reorder; passed straight to the view. */
-  headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
+  headerDrag?: { onDragStart: (event: DragEvent) => void; onDragEnd: () => void };
 };
 
 /**
