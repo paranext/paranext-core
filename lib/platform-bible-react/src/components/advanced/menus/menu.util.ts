@@ -7,7 +7,7 @@ import {
   MenuGroupDetailsInSubMenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { isLucideIconName } from '@/components/basics/lucide-icon.component';
+import { isLucideIconName } from '../../basics/lucide-icons.util';
 
 /**
  * Looks up the keys of every sub-menu group whose `menuItem` property is the given submenu item id.
