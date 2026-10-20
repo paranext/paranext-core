@@ -45,7 +45,10 @@ import {
 import { startDialogServiceRouter } from '@main/services/dialog.service-router';
 import { startUsersnapServiceRouter } from '@main/services/usersnap.service-router';
 import { startBookChapterControlServiceRouter } from '@main/services/book-chapter-control.service-router';
-import { startFirstRunServiceRouter } from '@main/services/first-run.service-router';
+import {
+  applyPendingFirstRunReset,
+  startFirstRunServiceRouter,
+} from '@main/services/first-run.service-router';
 import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour.service-router';
 import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
@@ -2424,6 +2427,8 @@ async function main() {
           logger.info(`Failed to build the macOS menubar ${error}`);
         }
       }
+
+      await applyPendingFirstRunReset();
 
       // Caught here rather than left to reject this chain: `createWindow` refuses outright during a
       // quit and the restore reads from disk, so this can fail — and a rejection would skip the

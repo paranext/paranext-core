@@ -186,6 +186,97 @@ namespace TestParanextDataProvider.ParatextUtils
         }
 
         [Test]
+        public void ForgetCopiedFromParatext9_DoesNotThrow_WhenTheMarkerCannotBeDeleted()
+        {
+            MakeParatextFolder("Paratext95", "<reg from=\"95\"/>");
+            var info = new PlatformParatextInfo(_root);
+            var folder = info.ResolvedAppDataFolder;
+            var marker = Path.Combine(folder, "CopiedFromParatext9.txt");
+            Assert.That(File.Exists(marker), Is.True);
+
+            // Windows refuses to delete a file held open without delete sharing; Unix refuses to
+            // delete from a folder without write permission.
+            FileStream? held = null;
+            UnixFileMode? folderMode = null;
+            if (OperatingSystem.IsWindows())
+                held = new FileStream(marker, FileMode.Open, FileAccess.Read, FileShare.None);
+            else
+            {
+                folderMode = File.GetUnixFileMode(folder);
+                File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            }
+            try
+            {
+                Assert.DoesNotThrow(info.ForgetCopiedFromParatext9);
+                if (!File.Exists(marker))
+                    Assert.Inconclusive("Could not make the marker undeletable on this machine");
+            }
+            finally
+            {
+                held?.Dispose();
+                if (folderMode is { } mode)
+                    File.SetUnixFileMode(folder, mode);
+            }
+        }
+
+        [Test]
+        public void Reseeds_WhenRequested_EvenIfASeededFileWasRecreatedSince()
+        {
+            MakeParatextFolder("Paratext95", "<reg from=\"95\"/>");
+            var info = new PlatformParatextInfo(_root);
+            var folder = info.ResolvedAppDataFolder;
+            File.WriteAllText(Path.Combine(folder, "RegistrationInfo.xml"), "<reg own=\"true\"/>");
+            File.WriteAllText(Path.Combine(folder, "autoReplace.txt"), "own list");
+
+            info.RequestReseedFromParatext9();
+            // ParatextData rewrites internet settings whenever they are saved.
+            File.WriteAllText(Path.Combine(folder, "InternetSettings.xml"), "<net own=\"true\"/>");
+
+            var nextStartup = new PlatformParatextInfo(_root);
+            _ = nextStartup.ResolvedAppDataFolder;
+
+            Assert.That(
+                File.ReadAllText(Path.Combine(folder, "RegistrationInfo.xml")),
+                Is.EqualTo("<reg from=\"95\"/>")
+            );
+            Assert.That(
+                File.ReadAllText(Path.Combine(folder, "InternetSettings.xml")),
+                Is.EqualTo("<net from=\"Paratext95\"/>")
+            );
+            Assert.That(
+                File.ReadAllText(Path.Combine(folder, "autoReplace.txt")),
+                Is.EqualTo("own list")
+            );
+            Assert.That(nextStartup.IsRegistrationCopiedFromParatext9, Is.True);
+
+            // Honored once: a registration entered afterwards survives later startups.
+            File.WriteAllText(Path.Combine(folder, "RegistrationInfo.xml"), "<reg own=\"again\"/>");
+            _ = new PlatformParatextInfo(_root).ResolvedAppDataFolder;
+            Assert.That(
+                File.ReadAllText(Path.Combine(folder, "RegistrationInfo.xml")),
+                Is.EqualTo("<reg own=\"again\"/>")
+            );
+        }
+
+        [Test]
+        public void DoesNotReseed_WhenTheRequestWasCancelled()
+        {
+            MakeParatextFolder("Paratext95", "<reg from=\"95\"/>");
+            var info = new PlatformParatextInfo(_root);
+            var folder = info.ResolvedAppDataFolder;
+            File.WriteAllText(Path.Combine(folder, "RegistrationInfo.xml"), "<reg own=\"true\"/>");
+
+            info.RequestReseedFromParatext9();
+            info.CancelReseedFromParatext9();
+            _ = new PlatformParatextInfo(_root).ResolvedAppDataFolder;
+
+            Assert.That(
+                File.ReadAllText(Path.Combine(folder, "RegistrationInfo.xml")),
+                Is.EqualTo("<reg own=\"true\"/>")
+            );
+        }
+
+        [Test]
         public void DoesNotClaimARegistrationEnteredInPlatformBibleWasCopied()
         {
             MakeParatextFolder("Paratext95", "<reg from=\"95\"/>");

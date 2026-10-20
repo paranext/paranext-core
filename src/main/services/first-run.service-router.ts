@@ -14,6 +14,9 @@
  * service shard".
  */
 
+import { app } from 'electron';
+import { unlink, writeFile } from 'fs/promises';
+import path from 'path';
 import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
 import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
@@ -31,8 +34,19 @@ import * as networkService from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
 import { serializeRequestType } from '@shared/utils/util';
 import type { ResetFirstRunOptions, ResetFirstRunRegistration } from 'papi-shared-types';
+import { getErrorMessage } from 'platform-bible-utils';
 
 const REGISTRATION_MODES: ResetFirstRunRegistration[] = ['keep', 'copyFromParatext9', 'clear'];
+
+/**
+ * Present while a reset is waiting for the next startup to switch to Simple mode. See
+ * {@link applyPendingFirstRunReset}.
+ */
+const SIMPLE_MODE_PENDING_FILE_NAME = 'first-run-reset-simple-mode-pending';
+
+function getSimpleModePendingFilePath(): string {
+  return path.join(app.getPath('userData'), SIMPLE_MODE_PENDING_FILE_NAME);
+}
 
 /** The first-run service shard each window registers, found by network object type */
 const firstRunShards = createServiceShardIndex<IFirstRunServiceShard>({
@@ -90,13 +104,41 @@ async function resetFirstRun(options?: ResetFirstRunOptions): Promise<void> {
   logger.info(`Resetting first run (registration: ${registration})`);
   if (registration !== 'keep')
     await commandService.sendCommand('paratextRegistration.resetForFirstRun', registration);
+  await firstRunShard.clearLocalState();
   // The wizard only runs in Simple mode, and only until first run is complete.
   await settingsService.set('platform.firstRunComplete', false);
-  await settingsService.set('platform.interfaceMode', 'simple');
   await settingsService.set('platform.syncOnStartup', true);
   await settingsService.set('platform.showRegistrationReminderOnStartup', true);
-  await firstRunShard.clearLocalState();
+  // Not switched to Simple mode now: in Power mode that would close every secondary window with a
+  // Simple-mode close sync, and the quit would then sync every open editor's project instead of
+  // following the Power-mode schedule.
+  await writeFile(getSimpleModePendingFilePath(), '');
   await commandService.sendCommand('platform.restart');
+}
+
+/**
+ * Finish a `platform.resetFirstRun` from the previous session by switching to Simple mode. Must run
+ * at startup before any window is created, so the window restore and the renderer's first-run gate
+ * both read the Simple mode. Never throws: a failure is logged and startup continues in the saved
+ * mode.
+ */
+export async function applyPendingFirstRunReset(): Promise<void> {
+  const pendingFilePath = getSimpleModePendingFilePath();
+  try {
+    // Removed before the switch, so a failed switch can't make every later launch switch again.
+    await unlink(pendingFilePath);
+  } catch (e) {
+    const isNoResetPending = !!e && typeof e === 'object' && 'code' in e && e.code === 'ENOENT';
+    if (!isNoResetPending)
+      logger.warn(`Could not remove ${pendingFilePath}: ${getErrorMessage(e)}`);
+    return;
+  }
+  try {
+    logger.info('Switching to Simple mode to finish the first-run reset');
+    await settingsService.set('platform.interfaceMode', 'simple');
+  } catch (e) {
+    logger.warn(`Could not switch to Simple mode for the first-run reset: ${getErrorMessage(e)}`);
+  }
 }
 
 /**

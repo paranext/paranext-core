@@ -6281,10 +6281,10 @@ declare module 'papi-shared-types' {
    * ParatextData folder. Paratext 9's registration is never changed.
    *
    * - `keep`: leave the registration as it is
-   * - `copyFromParatext9`: delete Platform.Bible's registration and internet settings, and copy
-   *   Paratext 9's again on the restart, the way a Paratext 9 user's first launch does. With no
-   *   registered Paratext 8 or 9 on the machine, this leaves Platform.Bible unregistered and on
-   *   default internet settings.
+   * - `copyFromParatext9`: on the restart, replace Platform.Bible's registration and internet
+   *   settings with fresh copies of Paratext 9's, the way a Paratext 9 user's first launch does.
+   *   With no registered Paratext 8 or 9 on the machine, this leaves Platform.Bible unregistered
+   *   and on default internet settings.
    * - `clear`: remove the registration, like a Paratext 9 user who never registered
    *
    * @experimental This type is unstable and may change or disappear without notice

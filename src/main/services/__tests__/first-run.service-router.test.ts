@@ -1,6 +1,12 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { existsSync, mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
-import { startFirstRunServiceRouter } from '@main/services/first-run.service-router';
+import {
+  applyPendingFirstRunReset,
+  startFirstRunServiceRouter,
+} from '@main/services/first-run.service-router';
 import {
   withWindows as withWindowsServingShards,
   type ShardAnnouncementListeners,
@@ -15,6 +21,8 @@ const mocks = vi.hoisted(() => {
   const steps: string[] = [];
   return {
     steps,
+    // A real temporary folder standing in for Electron's userData folder.
+    userDataPath: '',
     getTargetWindowId: vi.fn(),
     getReadyWindowIds: vi.fn(),
     getUnreachableWindowIds: vi.fn(),
@@ -39,6 +47,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+vi.mock('electron', () => ({ app: { getPath: () => mocks.userDataPath } }));
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getReadyWindowIds: mocks.getReadyWindowIds,
@@ -82,10 +91,13 @@ function resetHandler(): (options?: unknown) => Promise<void> {
 
 const SETTINGS_RESET = [
   'setting platform.firstRunComplete=false',
-  'setting platform.interfaceMode="simple"',
   'setting platform.syncOnStartup=true',
   'setting platform.showRegistrationReminderOnStartup=true',
 ];
+
+function isSimpleModePending(): boolean {
+  return existsSync(path.join(mocks.userDataPath, 'first-run-reset-simple-mode-pending'));
+}
 
 describe('First-run service router', () => {
   beforeEach(async () => {
@@ -97,7 +109,12 @@ describe('First-run service router', () => {
     mocks.getAbandonedWindowIds.mockReturnValue([]);
     mocks.networkObjectGet.mockResolvedValue(undefined);
     mocks.registerRequestHandler.mockResolvedValue(vi.fn());
+    mocks.userDataPath = mkdtempSync(path.join(tmpdir(), 'first-run-router-'));
     await startFirstRunServiceRouter();
+  });
+
+  afterEach(() => {
+    rmSync(mocks.userDataPath, { recursive: true, force: true });
   });
 
   test('claims exactly the reset command, published as experimental', () => {
@@ -114,10 +131,49 @@ describe('First-run service router', () => {
     await resetHandler()();
 
     expect(mocks.steps).toEqual([
-      ...SETTINGS_RESET,
       'clear renderer state',
+      ...SETTINGS_RESET,
       'command platform.restart',
     ]);
+  });
+
+  test('leaves the switch to Simple mode to the next startup', async () => {
+    // Switching now would close a Power user's secondary windows and make the quit sync every open
+    // editor's project instead of following the Power-mode schedule.
+    withWindows({ 2: firstRunShard() });
+    let wasPendingAtRestart = false;
+    mocks.sendCommand.mockImplementationOnce(async (command: string) => {
+      if (command === 'platform.restart') wasPendingAtRestart = isSimpleModePending();
+    });
+
+    await resetHandler()();
+
+    expect(mocks.settingsSet).not.toHaveBeenCalledWith('platform.interfaceMode', expect.anything());
+    expect(wasPendingAtRestart).toBe(true);
+
+    // The next startup.
+    await applyPendingFirstRunReset();
+
+    expect(mocks.settingsSet).toHaveBeenLastCalledWith('platform.interfaceMode', 'simple');
+    expect(isSimpleModePending()).toBe(false);
+  });
+
+  test('a startup with no reset pending changes no settings', async () => {
+    await applyPendingFirstRunReset();
+
+    expect(mocks.settingsSet).not.toHaveBeenCalled();
+  });
+
+  test('a reset is finished only once, even when switching to Simple mode fails', async () => {
+    withWindows({ 2: firstRunShard() });
+    await resetHandler()();
+    mocks.settingsSet.mockRejectedValueOnce(new Error('extension host is gone'));
+
+    await expect(applyPendingFirstRunReset()).resolves.toBeUndefined();
+    mocks.settingsSet.mockClear();
+    await applyPendingFirstRunReset();
+
+    expect(mocks.settingsSet).not.toHaveBeenCalled();
   });
 
   test.each(['copyFromParatext9', 'clear'])(
@@ -129,8 +185,8 @@ describe('First-run service router', () => {
 
       expect(mocks.steps).toEqual([
         `command paratextRegistration.resetForFirstRun ["${registration}"]`,
-        ...SETTINGS_RESET,
         'clear renderer state',
+        ...SETTINGS_RESET,
         'command platform.restart',
       ]);
     },
@@ -161,5 +217,6 @@ describe('First-run service router', () => {
 
     await expect(resetHandler()({ registration: 'clear' })).rejects.toThrow('Refusing');
     expect(mocks.steps).toEqual([]);
+    expect(isSimpleModePending()).toBe(false);
   });
 });
