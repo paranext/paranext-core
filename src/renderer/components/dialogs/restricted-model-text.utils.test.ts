@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   getRestrictedModelTextReason,
   RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY,
+  RESTRICTED_MODEL_OR_BASE_TEXT_PENDING_REASON_KEY,
 } from './restricted-model-text.utils';
 
 const STRINGS = {
   [RESTRICTED_MODEL_OR_BASE_TEXT_DISABLED_REASON_KEY]: 'Licensing prohibits using this as a model.',
+  [RESTRICTED_MODEL_OR_BASE_TEXT_PENDING_REASON_KEY]: 'Checking whether licensing allows this.',
 };
 
 function row(overrides: Partial<DblResourceData>): DblResourceData {
@@ -44,7 +46,16 @@ describe('getRestrictedModelTextReason', () => {
     ).toBeUndefined();
   });
 
-  it('gives no reason for a row that does not say, such as a locally installed text', () => {
-    expect(getRestrictedModelTextReason(row({}), STRINGS)).toBeUndefined();
+  // A picker opened before the backend answers must not offer a restricted text in the meantime
+  it('gives a reason for a row read before the backend said whether it is restricted', () => {
+    expect(getRestrictedModelTextReason(row({}), STRINGS)).toBe(
+      'Checking whether licensing allows this.',
+    );
+  });
+
+  it('still gives a reason for a row being checked when its string has not loaded', () => {
+    expect(getRestrictedModelTextReason(row({}), {})).toBe(
+      RESTRICTED_MODEL_OR_BASE_TEXT_PENDING_REASON_KEY,
+    );
   });
 });

@@ -16,7 +16,11 @@ import {
   LanguageStrings,
 } from 'platform-bible-utils';
 import { ReactElement, useId } from 'react';
-import { keyed, type ShowableCopyrightNotice } from './copyright-notice-message.utils';
+import {
+  getCopyrightDetailsParagraphs,
+  keyed,
+  type ShowableCopyrightNotice,
+} from './copyright-notice-message.utils';
 import { BIBLICA_PERMISSIONS_URL } from './copyright-notice.const';
 import { openInBrowser } from './open-in-browser.utils';
 
@@ -34,16 +38,13 @@ function CopyrightNoticeDetails({ notice, localizedStrings }: CopyrightNoticeDet
   const opensInBrowserId = useId();
 
   if (notice.kind === 'notification')
-    return notice.details
-      .split('\n')
-      .filter((paragraph) => paragraph.length > 0)
-      .map((paragraph, index) => (
-        // Paragraphs of one copyright never reorder, and two can have the same text
-        // eslint-disable-next-line react/no-array-index-key
-        <p key={index} dir="auto" className="tw:text-sm tw:leading-relaxed">
-          {paragraph}
-        </p>
-      ));
+    return getCopyrightDetailsParagraphs(notice.details).map((paragraph, index) => (
+      // Paragraphs of one copyright never reorder, and two can have the same text
+      // eslint-disable-next-line react/no-array-index-key
+      <p key={index} dir="auto" className="tw:text-sm tw:leading-relaxed">
+        {paragraph}
+      </p>
+    ));
 
   // This wording, "Outside of Paratext" included, is Biblica's own required license text: do not
   // reword it (e.g. to "Paratext 10") without Biblica's agreement

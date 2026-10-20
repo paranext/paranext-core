@@ -207,16 +207,22 @@ declare module 'papi-shared-types' {
      * If no cached value exists, attempts to fetch them. Failed refresh attempts do NOT clear
      * existing cached data.
      *
-     * Each row's `isRestrictedAsModelText` is set from the backend's model-text restrictions. A
-     * read waits up to two seconds for the first answer; if none has arrived by then the rows are
-     * returned without the flag, and a later read carries it.
+     * Each row's `isRestrictedAsModelText` is set from the backend's model-text restrictions. Until
+     * the backend first answers, the rows are returned without the flag, and a later read carries
+     * it.
      *
+     * @param shouldWaitForModelTextRestrictions Whether to wait, up to two seconds, for the
+     *   backend's first answer about model-text restrictions. Pass `true` only from a caller that
+     *   reads `isRestrictedAsModelText`, such as a model or base text picker; every other caller
+     *   would wait on a flag it ignores.
      * @returns The cached catalog, or an `unavailable` result when this build cannot produce one.
      * @throws When the fetch itself fails. Callers that render an error state with a retry should
      *   key it on the rejection, never on an `unavailable` result — retrying the latter cannot
      *   change the answer.
      */
-    'platformGetResources.getCachedResources': () => Promise<DblResourceCatalog>;
+    'platformGetResources.getCachedResources': (
+      shouldWaitForModelTextRestrictions?: boolean,
+    ) => Promise<DblResourceCatalog>;
 
     /**
      * Brings the catalog's derived flags (`installed`, `projectId`, `updateAvailable`) up to date
@@ -247,12 +253,15 @@ declare module 'papi-shared-types' {
      * a `DblResourceReference` so the resource is loadable without a catalog entry. Each entry's
      * `isRestrictedAsModelText` is set the same way as in `getCachedResources`.
      *
+     * @param shouldWaitForModelTextRestrictions As in `getCachedResources`.
      * @returns Synthetic resource entries for locally-installed non-DBL resources. Also returns
      *   `[]` when the C# data provider has not registered its projects yet or the lookup threw —
      *   callers cannot distinguish those from a genuine "no local non-DBL resources" result, so a
      *   caller that needs a retry or loading affordance must get that signal from elsewhere.
      */
-    'platformGetResources.getLocalNonDblResources': () => Promise<DblResourceData[]>;
+    'platformGetResources.getLocalNonDblResources': (
+      shouldWaitForModelTextRestrictions?: boolean,
+    ) => Promise<DblResourceData[]>;
 
     // `paratextBibleSendReceive.*` commands are deliberately NOT declared here. This file is
     // auto-included (via `typeRoots`) into the TypeScript programs of extension repos developed

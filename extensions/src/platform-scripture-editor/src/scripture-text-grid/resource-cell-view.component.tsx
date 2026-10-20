@@ -31,6 +31,7 @@ import {
   useCallback,
   useRef,
   useState,
+  type DragEvent,
   type KeyboardEvent,
   type MouseEvent,
   type Ref,
@@ -167,7 +168,7 @@ export type ResourceCellViewProps = {
    * source turns a click-drag across the text into a reorder instead of a selection — and selecting
    * a passage down a column is the reason this view renders one editor per column.
    */
-  headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
+  headerDrag?: { onDragStart: (event: DragEvent) => void; onDragEnd: () => void };
   /** The resource's copyright notice indicator, shown beside its name */
   copyrightIndicator?: ReactNode;
 };

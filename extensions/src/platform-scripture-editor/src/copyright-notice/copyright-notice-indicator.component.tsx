@@ -9,6 +9,7 @@ import {
 import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
 import { CopyrightDetailsDialog } from './copyright-details-dialog.component';
 import {
+  hasCopyrightDetails,
   renderCopyrightNoticeMessage,
   type ShowableCopyrightNotice,
 } from './copyright-notice-message.utils';
@@ -23,36 +24,44 @@ export type CopyrightNoticeIndicatorViewProps = {
 /**
  * A small info button carrying a text's copyright notice, for places too small for the banner such
  * as a Text Collection cell. Its tooltip shows the notice, and clicking it opens the details the
- * banner's "More info" opens. It cannot be dismissed, since it takes almost no space.
+ * banner's "More info" opens, when there are any. It cannot be dismissed, since it takes almost no
+ * space.
  */
 export function CopyrightNoticeIndicatorView({
   notice,
   localizedStrings,
 }: CopyrightNoticeIndicatorViewProps) {
+  const trigger = (
+    <TooltipTrigger asChild>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={formatReplacementString(
+          localizedStrings['%platformScripture_copyrightNotice_indicator_label%'],
+          { name: notice.name },
+        )}
+        // A click must not reach the cell, whose click opens the chapter view
+        onClick={(event) => event.stopPropagation()}
+        className="tw:h-6 tw:w-6 tw:shrink-0 tw:text-muted-foreground"
+      >
+        <Info className="tw:h-4 tw:w-4" />
+      </Button>
+    </TooltipTrigger>
+  );
+
   return (
     <TooltipProvider>
       <Tooltip>
-        <CopyrightDetailsDialog
-          notice={notice}
-          localizedStrings={localizedStrings}
-          trigger={
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={formatReplacementString(
-                  localizedStrings['%platformScripture_copyrightNotice_indicator_label%'],
-                  { name: notice.name },
-                )}
-                // A click must not reach the cell, whose click opens the chapter view
-                onClick={(event) => event.stopPropagation()}
-                className="tw:h-6 tw:w-6 tw:shrink-0 tw:text-muted-foreground"
-              >
-                <Info className="tw:h-4 tw:w-4" />
-              </Button>
-            </TooltipTrigger>
-          }
-        />
+        {/* With no details to open, the tooltip alone carries the whole notice */}
+        {hasCopyrightDetails(notice) ? (
+          <CopyrightDetailsDialog
+            notice={notice}
+            localizedStrings={localizedStrings}
+            trigger={trigger}
+          />
+        ) : (
+          trigger
+        )}
         <TooltipContent>
           <p>{renderCopyrightNoticeMessage(notice, localizedStrings)}</p>
         </TooltipContent>
