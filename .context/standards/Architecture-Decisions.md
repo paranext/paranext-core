@@ -2308,8 +2308,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   correct.
 - **Consequences:** An annotation painting one element gets both classes and draws exactly as an
   unsplit style would. A line wrap inside an annotation leaves the line ends open, as one long
-  inline element does. Elements of an annotation hidden inside a collapsed note still count as its
-  first or last, so a box crossing into a collapsed note's content shows no side there. A host
+  inline element does. An element a collapsed note hides (anything in its content but its caller,
+  decided from the tree so it holds in a hidden tab) never counts as first or last: a box running
+  into a collapsed footnote ends on the last element still shown, its caller included, and moves
+  into the note's content as it expands; and the vendored stylesheet draws no box on a `<mark>`
+  inside collapsed note content, whose text is hidden. A host
   writing its own stylesheet (core's `_editor-overrides.scss`) uses the same three classes. Hover
   stays per element: `:hover` on an annotation's class lights only the element under the pointer,
   as before; lighting the whole annotation needs a host-set state class and is not done here.

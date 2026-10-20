@@ -197,6 +197,21 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     });
   });
 
+  // A collapsed note hides its content's text but not a `<mark>` around it, so an annotation's box
+  // style would draw an empty sliver beside the caller.
+  describe('collapsed note content', () => {
+    it('draws no box on an annotation mark inside it', () => {
+      for (const declaration of [
+        'margin: 0',
+        'padding: 0',
+        'border: none',
+        'outline: none',
+        'box-shadow: none',
+      ])
+        expect(scss).toMatch(rule(['.note.collapsed mark'], declaration));
+    });
+  });
+
   describe('note caller sequences', () => {
     it('keys the caller counters on the editor-stamped data-note-kind (PT9 Standard.xslt classification)', () => {
       expect(scss).toMatch(/@counter-style cross-ref-callers/);
