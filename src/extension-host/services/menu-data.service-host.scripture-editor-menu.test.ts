@@ -133,7 +133,8 @@ const HIDDEN_IN_BOTH_MODES = [
   'platformScripture.openMarkersChecklist',
 ];
 const HIDDEN_IN_SIMPLE = [
-  'platformScriptureEditor.changeView',
+  'platformScriptureEditor.setViewStandard',
+  'platformScriptureEditor.setViewPreview',
   'platformScripture.openChecksSidePanel',
   'platformScripture.openManageBooks',
   'legacyCommentManager.openCommentList',
@@ -180,7 +181,7 @@ describe("The scripture editor's Project menu, per mode", () => {
       [
         'platformScriptureEditor.options',
         [
-          'platformScriptureEditor.changeView',
+          'platformScriptureEditor.viewSubmenu ▸ platformScriptureEditor.setViewStandard, platformScriptureEditor.setViewPreview',
           'platformScriptureEditor.toggleFootnotes',
           'platformScriptureEditor.changeFootnotesPaneLocation',
         ],
@@ -291,10 +292,12 @@ describe("The scripture editor's Project menu, per mode", () => {
     ['platformScriptureEditor.insertCrossReferenceAtSelection', 'link'],
     ['platformScriptureEditor.insertEndnoteAtSelection', 'sigma'],
   ];
-  const ICONS_POWER_ONLY: [string, string][] = [
+  const ICONS_POWER_ONLY: [string, string | undefined][] = [
     ['platformScripture.openManageBooks', 'book-copy'],
     ['platformScripture.openFind', 'search'],
-    ['platformScriptureEditor.changeView', 'eye'],
+    ['platformScriptureEditor.viewSubmenu', 'eye'],
+    ['platformScriptureEditor.setViewStandard', undefined],
+    ['platformScriptureEditor.setViewPreview', undefined],
     ['legacyCommentManager.openCommentList', 'message-square'],
     ['platformScripture.openChecksSidePanel', 'circle-check-big'],
   ];
@@ -333,6 +336,8 @@ describe("The scripture editor's Project menu, per mode", () => {
     ['power', 'legacyCommentManager.openCommentList', 'Comments'],
     ['power', 'platformScripture.openChecksSidePanel', 'Basic checks'],
     ['power', 'platformScripture.openManageBooks', 'Manage books'],
+    ['power', 'platformScriptureEditor.setViewStandard', 'Standard view'],
+    ['power', 'platformScriptureEditor.setViewPreview', 'Preview'],
     ['simple', 'platform.openSettings', 'Project settings'],
     ['simple', 'platform.webViewContentZoomReset', 'Zoom 100%'],
     ['simple', 'legacyCommentManager.showCommentListPanel', 'Comments'],
@@ -361,6 +366,14 @@ describe("The scripture editor's Project menu, per mode", () => {
     HIDDEN_IN_SIMPLE.forEach((command) => expect(simple.has(command)).toBe(false));
     // Positive control: the served set is the real Simple menu
     expect(simple.has('platform.webViewContentZoomIn')).toBe(true);
+  });
+
+  test("Power's Switch scripture view submenu is labeled and absent from Simple", async () => {
+    const isViewSubmenu = (item: Item) =>
+      'id' in item && item.id === 'platformScriptureEditor.viewSubmenu';
+    const root = (await getEditorTopMenuInMode('power')).items.find(isViewSubmenu);
+    expect(root && labelText(root.label)).toBe('Switch scripture view');
+    expect((await getEditorTopMenuInMode('simple')).items.some(isViewSubmenu)).toBe(false);
   });
 
   test('the served Simple menu marks only the Edit column isHeaderHidden', async () => {
@@ -433,8 +446,9 @@ describe("The scripture editor's Project menu, per mode", () => {
     // The Power Comments item opens a separate Comment List web view; Simple's own Comments item
     // (legacyCommentManager.showCommentListPanel) fronts the shared Column 3 tab instead.
     'legacyCommentManager.openCommentList',
-    // Switch scripture view: Simple's editor has a single view type.
-    'platformScriptureEditor.changeView',
+    // Switch scripture view ▸ Standard view / Preview: Simple's editor has a single view type.
+    'platformScriptureEditor.setViewStandard',
+    'platformScriptureEditor.setViewPreview',
   ]);
 
   /**
