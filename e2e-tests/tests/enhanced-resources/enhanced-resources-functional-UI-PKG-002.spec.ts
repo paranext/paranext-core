@@ -14,7 +14,7 @@ import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 //   forward notes (in-scope for this WP): FN-018, FN-019, FN-020 (c+d+e), FN-021, FN-022
 //
 // Selector strategy:
-//   - Top window navigation uses platform-bible main menu (visible UI only).
+//   - The Enhanced Resource window is opened by its command; everything after that is visible UI.
 //   - Webview frame title is the localized %enhancedResources_shell_title% — test matches loosely.
 //   - data-testid values mirror the storybook-designer output already on disk:
 //       dictionary-tab, dictionary-entry-{tokenId}, dictionary-entry-detail-{tokenId},
@@ -29,12 +29,8 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-002 DictionaryTab)', 
   });
 
   /**
-   * Helper: open the Enhanced Resource window via the platform main menu and switch to the
-   * Dictionary tab inside the webview. Returns the FrameLocator scoped to the webview iframe.
-   *
-   * The launcher menu (UI-PKG-009) registers an entry under the `Resources` (or equivalent) main
-   * menu group; final label is whatever ER ships with — implementation pass adjusts the regex below
-   * to match the registered command name.
+   * Helper: open the Enhanced Resource window by its command and switch to the Dictionary tab
+   * inside the webview. Returns the FrameLocator scoped to the webview iframe.
    */
   async function openDictionaryTab(mainPage: import('@playwright/test').Page) {
     await openEnhancedResource(mainPage);
