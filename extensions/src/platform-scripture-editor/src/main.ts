@@ -55,6 +55,7 @@ import {
   toScriptureEditorInfos,
   updateRelatedChecksSidePanel,
   updateRelatedFindPanel,
+  VIEW_TYPE_FOR_SET_VIEW_COMMAND,
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 import { SharedLayoutReceiver } from './shared-layout-receiver.model';
@@ -1287,7 +1288,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
   const setViewStandardPromise = papi.commands.registerCommand(
     'platformScriptureEditor.setViewStandard',
-    (webViewId) => setScriptureView(webViewId, 'standard'),
+    (webViewId) =>
+      setScriptureView(
+        webViewId,
+        VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewStandard'],
+      ),
     {
       method: {
         'x-experimental': true,
@@ -1310,7 +1315,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
   const setViewPreviewPromise = papi.commands.registerCommand(
     'platformScriptureEditor.setViewPreview',
-    (webViewId) => setScriptureView(webViewId, 'formatted'),
+    (webViewId) =>
+      setScriptureView(
+        webViewId,
+        VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewPreview'],
+      ),
     {
       method: {
         'x-experimental': true,
