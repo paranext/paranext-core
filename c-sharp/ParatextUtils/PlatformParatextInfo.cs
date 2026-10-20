@@ -50,6 +50,13 @@ internal sealed class PlatformParatextInfo : ParatextInfo
     private const string COPIED_FROM_PARATEXT9_MARKER_FILE_NAME = "CopiedFromParatext9.txt";
 
     /// <summary>
+    /// Written by <see cref="RequestReseedFromParatext9"/>; the next startup deletes the seeded files
+    /// and copies them from Paratext 9 again. Not one of <see cref="SEEDED_FILE_NAMES"/>, so a
+    /// pending request never counts as "already seeded".
+    /// </summary>
+    private const string RESEED_PENDING_MARKER_FILE_NAME = "ReseedFromParatext9Pending.txt";
+
+    /// <summary>
     /// Paratext 8.x and 9.x app-data folders (<c>Paratext80</c>–<c>Paratext99</c>). Only these are
     /// seeding sources; a <c>Paratext10x</c> folder is never read.
     /// </summary>
@@ -96,7 +103,7 @@ internal sealed class PlatformParatextInfo : ParatextInfo
 
     /// <summary>
     /// The pinned app-data folder, seeded from Paratext 9 on first use if it has none of the
-    /// <see cref="SEEDED_FILE_NAMES"/>.
+    /// <see cref="SEEDED_FILE_NAMES"/> or a <see cref="RequestReseedFromParatext9"/> is pending.
     /// </summary>
     internal string ResolvedAppDataFolder => _appDataFolder.Value;
 
@@ -116,9 +123,46 @@ internal sealed class PlatformParatextInfo : ParatextInfo
     /// changes or removes the registration, so a registration entered here is never described as
     /// copied.
     /// </summary>
+    /// <remarks>
+    /// Never throws: callers run it right after the registration change it describes has been
+    /// saved, so a marker that cannot be deleted must not turn that into a reported failure. The
+    /// cost of a stale marker is only that the registration is still described as copied.
+    /// </remarks>
     internal void ForgetCopiedFromParatext9()
     {
         var markerPath = Path.Combine(AppDataFolderPath, COPIED_FROM_PARATEXT9_MARKER_FILE_NAME);
+        try
+        {
+            if (File.Exists(markerPath))
+                // SR-write-gate: exempt — per-user ParatextData settings, not project data
+                File.Delete(markerPath);
+        }
+        catch (Exception e) when (IsFileSystemFailure(e))
+        {
+            Console.WriteLine(
+                $"Could not delete {markerPath}; the registration may still be described as copied "
+                    + $"from Paratext 9: {e.Message}"
+            );
+        }
+    }
+
+    /// <summary>
+    /// Makes the next startup delete the files seeding copies from Paratext 9 and copy them again,
+    /// the way a Paratext 9 user's first launch does. Deferred to startup rather than done now
+    /// because ParatextData rewrites <c>InternetSettings.xml</c> whenever internet settings are
+    /// saved, and one recreated seeded file would stop the next startup from seeding.
+    /// </summary>
+    internal void RequestReseedFromParatext9()
+    {
+        // Resolve first, so the request is left for the next startup instead of being honored by
+        // this process's own first read of the folder.
+        File.WriteAllText(Path.Combine(ResolvedAppDataFolder, RESEED_PENDING_MARKER_FILE_NAME), "");
+    }
+
+    /// <summary>Withdraws a <see cref="RequestReseedFromParatext9"/> not yet honored.</summary>
+    internal void CancelReseedFromParatext9()
+    {
+        var markerPath = Path.Combine(AppDataFolderPath, RESEED_PENDING_MARKER_FILE_NAME);
         if (File.Exists(markerPath))
             // SR-write-gate: exempt — per-user ParatextData settings, not project data
             File.Delete(markerPath);
@@ -126,11 +170,10 @@ internal sealed class PlatformParatextInfo : ParatextInfo
 
     /// <summary>
     /// Deletes the files seeding copies from Paratext 9 (and their <c>.BAK</c> backups and the
-    /// copied-from marker) so that the next startup seeds the folder again, the way a Paratext 9
-    /// user's first launch does. Every other file in the folder — e.g. the user's auto-replace
-    /// list — is kept.
+    /// copied-from marker). Every other file in the folder — e.g. the user's auto-replace list — is
+    /// kept.
     /// </summary>
-    internal void DeleteSeededFiles()
+    private void DeleteSeededFiles()
     {
         var fileNames = SEEDED_FILE_NAMES
             .SelectMany(fileName => new[] { fileName, fileName + ".BAK" })
@@ -154,6 +197,18 @@ internal sealed class PlatformParatextInfo : ParatextInfo
     {
         try
         {
+            var reseedPendingMarkerPath = Path.Combine(
+                AppDataFolderPath,
+                RESEED_PENDING_MARKER_FILE_NAME
+            );
+            if (File.Exists(reseedPendingMarkerPath))
+            {
+                // Marker first: if it cannot be deleted, nothing is, and the request stays pending.
+                // The other order would wipe the seeded files again on every startup.
+                // SR-write-gate: exempt — per-user ParatextData settings, not project data
+                File.Delete(reseedPendingMarkerPath);
+                DeleteSeededFiles();
+            }
             if (
                 !SEEDED_FILE_NAMES.Any(fileName =>
                     File.Exists(Path.Combine(AppDataFolderPath, fileName))

@@ -27,7 +27,7 @@ namespace TestParanextDataProvider.Users
         }
 
         [Test]
-        public void CopyFromParatext9_DeletesOnlyTheCopiedFiles_SoTheNextStartupReseeds()
+        public void CopyFromParatext9_ReplacesOnlyTheCopiedFiles_AtTheNextStartup()
         {
             var paratext9 = Path.Combine(_root, "Paratext95");
             Directory.CreateDirectory(paratext9);
@@ -54,22 +54,25 @@ namespace TestParanextDataProvider.Users
                 PlatformParatextInfo.Restore(previous);
             }
 
+            // The running session keeps its registration until the restart.
             Assert.That(
-                Directory.EnumerateFiles(pinned).Select(Path.GetFileName),
-                Is.EquivalentTo(new[] { "autoReplace.txt" })
+                File.ReadAllText(Path.Combine(pinned, "RegistrationInfo.xml")),
+                Is.EqualTo("<reg own=\"true\"/>")
+            );
+
+            // The next startup copies from Paratext 9 again and keeps everything else.
+            _ = new PlatformParatextInfo(_root).ResolvedAppDataFolder;
+            Assert.That(
+                File.ReadAllText(Path.Combine(pinned, "RegistrationInfo.xml")),
+                Is.EqualTo("<reg from=\"95\"/>")
+            );
+            Assert.That(File.Exists(Path.Combine(pinned, "RegistrationInfo.xml.BAK")), Is.False);
+            Assert.That(
+                File.ReadAllText(Path.Combine(pinned, "autoReplace.txt")),
+                Is.EqualTo("own list")
             );
             Assert.That(
                 File.ReadAllText(Path.Combine(paratext9, "RegistrationInfo.xml")),
-                Is.EqualTo("<reg from=\"95\"/>")
-            );
-            // What the next startup sees: an empty pinned folder, seeded from Paratext 9 again.
-            Assert.That(
-                File.ReadAllText(
-                    Path.Combine(
-                        new PlatformParatextInfo(_root).ResolvedAppDataFolder,
-                        "RegistrationInfo.xml"
-                    )
-                ),
                 Is.EqualTo("<reg from=\"95\"/>")
             );
         }

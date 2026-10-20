@@ -253,21 +253,19 @@ internal class ParatextRegistrationService(
     /// Platform.Bible's pinned ParatextData folder — Paratext 9's registration is never changed.
     /// </summary>
     /// <param name="mode">
-    /// <c>copyFromParatext9</c>: delete Platform.Bible's copies of the registration and internet
-    /// settings so the next startup copies them from Paratext 9 again. <c>clear</c>: remove only
-    /// Platform.Bible's registration (an unregistered Paratext 9 user). <c>keep</c>: do nothing.
+    /// <c>copyFromParatext9</c>: have the next startup replace Platform.Bible's copies of the
+    /// registration and internet settings with fresh copies from Paratext 9. <c>clear</c>: remove
+    /// only Platform.Bible's registration (an unregistered Paratext 9 user). <c>keep</c>: do
+    /// nothing.
     /// </param>
     internal static void ResetForFirstRun(string mode)
     {
         if (mode == "keep")
             return;
 
-        // Don't read ParatextInfo.AppDataFolder unless the pinned folder is installed: resolving
-        // ParatextData's own folder can create or seed a Paratext 9 folder.
-        if (
-            ParatextInfo.Default is not PlatformParatextInfo platformParatextInfo
-            || ParatextInfo.AppDataFolder != platformParatextInfo.AppDataFolderPath
-        )
+        // Refuse unless ParatextData is using PlatformParatextInfo: its own folder resolution can
+        // create or seed a Paratext 9 folder, and the registration there belongs to Paratext 9.
+        if (ParatextInfo.Default is not PlatformParatextInfo platformParatextInfo)
             throw new InvalidOperationException(
                 "Refusing to reset registration: ParatextData is not using Platform.Bible's own "
                     + "app-data folder"
@@ -276,11 +274,14 @@ internal class ParatextRegistrationService(
         switch (mode)
         {
             case "copyFromParatext9":
-                platformParatextInfo.DeleteSeededFiles();
+                platformParatextInfo.RequestReseedFromParatext9();
                 break;
             case "clear":
                 RegistrationInfo.DeleteRegistration();
                 platformParatextInfo.ForgetCopiedFromParatext9();
+                // An earlier copyFromParatext9 reset whose restart never happened would otherwise
+                // bring the registration back.
+                platformParatextInfo.CancelReseedFromParatext9();
                 break;
             default:
                 throw new ArgumentException(

@@ -245,6 +245,22 @@ describe('resolveFirstRunState', () => {
     expect(localStorage.getItem('platform-bible.firstRunWizardRestarted')).toBe('false');
   });
 
+  it('resumes at sync consent when the wizard restarted for internet settings and validity returns invalid (transient failure guard)', async () => {
+    // The restart is only offered with a registration that was valid moments earlier.
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    markWizardRestarting();
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+
+    await resolveFirstRunState();
+
+    expect(getFirstRunStatus()).toMatchObject({
+      kind: 'wizard',
+      step: 'syncConsent',
+      registrationValidAtStart: true,
+    });
+  });
+
   it('resumes at sync consent after the registration relaunch (wizardActive persisted)', async () => {
     localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
     localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');

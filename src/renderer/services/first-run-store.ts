@@ -60,21 +60,16 @@ const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
 const JUST_REGISTERED_KEY = 'platform-bible.firstRunJustRegistered';
 // Written by the Identify step immediately before it restarts the app to apply changed internet
 // settings for an already-registered user; consumed on the next startup, which then resumes at sync
-// consent the same way a restart after registering does. See consumeWizardRestartedFlag.
+// consent — with the same 'invalid' allowance — the way a restart after registering does.
 const WIZARD_RESTARTED_KEY = 'platform-bible.firstRunWizardRestarted';
 
 // Guards startBackgroundRegistrationRecheck so the completed-user re-check runs at most once per
 // startup even if resolveInternal is re-entered (e.g. via retryFirstRunResolution).
 let backgroundRecheckStarted = false;
 
-// Remembers that JUST_REGISTERED_KEY was set when this startup began. The durable flag is a
-// one-shot spent on the first read, but a startup can ask about registration more than once (the
-// Retry button re-enters resolveInternal), and the transient 'invalid' the flag exists to absorb
-// can just as easily land on the retry as on the first probe. See consumeJustRegisteredFlag.
-let justRegisteredThisStartup = false;
-
-// Same one-shot-but-remembered handling as justRegisteredThisStartup, for WIZARD_RESTARTED_KEY.
-let wizardRestartedThisStartup = false;
+// The one-launch flags (JUST_REGISTERED_KEY, WIZARD_RESTARTED_KEY) that were set when this startup
+// began. See consumeOneLaunchFlag.
+const oneLaunchFlagsSetThisStartup = new Set<string>();
 
 // Internet settings only take effect after a restart. The wizard's Internet settings step reports
 // the values it first loaded and every value it saves; the Identify step restarts the app when the
@@ -299,16 +294,18 @@ async function resolveInternal(generation: number): Promise<void> {
     }
 
     const wizardActive = readBooleanFlag(WIZARD_ACTIVE_KEY);
-    // Consume the just-registered flag before resolving validity: the user set it just before
-    // calling platform.restart(), so 'invalid' here is almost certainly a transient backend fluke.
-    const justRegistered = consumeJustRegisteredFlag();
-    const wizardRestarted = consumeWizardRestartedFlag();
+    // Consume the one-launch flags before resolving validity: the wizard set one just before calling
+    // platform.restart() with a registration that was valid (just entered, or already there), so
+    // 'invalid' here is almost certainly a transient backend fluke.
+    const justRegistered = consumeOneLaunchFlag(JUST_REGISTERED_KEY);
+    const wizardRestarted = consumeOneLaunchFlag(WIZARD_RESTARTED_KEY);
+    const wizardJustRestarted = justRegistered || wizardRestarted;
     const registrationValidity = await refreshRegistrationValidity();
     const effectiveValidity =
-      justRegistered && registrationValidity === 'invalid' ? 'valid' : registrationValidity;
+      wizardJustRestarted && registrationValidity === 'invalid' ? 'valid' : registrationValidity;
     // Record the answer the gate acted on, not the raw probe, so the reminder dot starts the session
-    // agreeing with the just-registered suppression decided here. A later forced re-check (opening
-    // the profile popover) can still re-probe past it.
+    // agreeing with the suppression decided here. A later forced re-check (opening the profile
+    // popover) can still re-probe past it.
     // See `adr-registration-validity-once-per-session`.
     //
     // Deliberately ahead of the supersession check below, unlike every other side effect here. That
@@ -321,7 +318,7 @@ async function resolveInternal(generation: number): Promise<void> {
       firstRunComplete: false,
       wizardActive,
       registrationValidity: effectiveValidity,
-      wizardJustRestarted: justRegistered || wizardRestarted,
+      wizardJustRestarted,
     });
 
     // The registration probe above is the long await where the watchdog reveals the escape hatch, so
@@ -416,36 +413,23 @@ export async function resolveFirstRunState(): Promise<void> {
 }
 
 /**
- * Reads and clears the just-registered flag, returning whether it was set at any point during this
- * startup. The fresh-user startup path and the completed-user background re-check each consume it —
- * a transient 'invalid' on the launch right after a re-register is treated as a backend fluke, not
- * a re-nag.
+ * Reads and clears a one-launch flag the wizard sets just before restarting the app, returning
+ * whether it was set at any point during this startup. A transient 'invalid' on that launch is
+ * treated as a backend fluke, not a re-nag.
  *
  * Clearing the durable flag and remembering the answer are deliberately separate. The flag grants
  * exactly one launch of trust and must not survive into the next one, so it is cleared on the first
  * read. But within that launch the answer has to outlive the read: an `'unknown'` probe routes the
  * user to the "couldn't verify" screen without ever using the flag, and the transient `'invalid'`
- * it was meant to absorb then arrives on the Retry — which, unguarded, mis-routes a user who just
- * registered successfully back to the language step instead of resuming at sync consent.
+ * it was meant to absorb then arrives on the Retry — which, unguarded, mis-routes a user with a
+ * valid registration back to the language step instead of resuming at sync consent.
  */
-function consumeJustRegisteredFlag(): boolean {
-  if (readBooleanFlag(JUST_REGISTERED_KEY)) {
-    writeBooleanFlag(JUST_REGISTERED_KEY, false);
-    justRegisteredThisStartup = true;
+function consumeOneLaunchFlag(key: string): boolean {
+  if (readBooleanFlag(key)) {
+    writeBooleanFlag(key, false);
+    oneLaunchFlagsSetThisStartup.add(key);
   }
-  return justRegisteredThisStartup;
-}
-
-/**
- * Reads and clears the wizard-restarted flag, returning whether it was set at any point during this
- * startup — cleared on first read, remembered for Retry, like {@link consumeJustRegisteredFlag}.
- */
-function consumeWizardRestartedFlag(): boolean {
-  if (readBooleanFlag(WIZARD_RESTARTED_KEY)) {
-    writeBooleanFlag(WIZARD_RESTARTED_KEY, false);
-    wizardRestartedThisStartup = true;
-  }
-  return wizardRestartedThisStartup;
+  return oneLaunchFlagsSetThisStartup.has(key);
 }
 
 /**
@@ -463,7 +447,7 @@ async function startBackgroundRegistrationRecheck(): Promise<void> {
   try {
     // Consume the just-registered flag once per startup, before any early return, so a suppressed
     // launch can't leave it stale (which could later swallow a legitimate wizard raise).
-    const justRegistered = consumeJustRegisteredFlag();
+    const justRegistered = consumeOneLaunchFlag(JUST_REGISTERED_KEY);
     let reminderSuppressed = false;
     try {
       const value = await settingsService.get('platform.showRegistrationReminderOnStartup');
@@ -582,8 +566,7 @@ export function resetFirstRunStore(): void {
   resolvePromise = undefined;
   resolving = false;
   backgroundRecheckStarted = false;
-  justRegisteredThisStartup = false;
-  wizardRestartedThisStartup = false;
+  oneLaunchFlagsSetThisStartup.clear();
   internetSettingsAtStart = undefined;
   internetSettingsChangedThisRun = false;
   listeners.clear();
