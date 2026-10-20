@@ -81,6 +81,36 @@ namespace TestParanextDataProvider
     ///    body styles while leaving \fr/\ft/\xo/\xt open. (Paratext 9's 3.1 editor separately strips
     ///    stray typed "\+" prefixes on save via UsfmUtils.RemoveMarkerPlusIfNotNeeded.)
     /// 9. New 3.1 milestones become reachable: qt-s / qt1-s..qt5-s, ts-s, and ts.
+    /// 10. <c>\ref</c> markers: <c>ParatextProjectDataProvider.ConvertUsfmToUsx</c> deliberately
+    ///    omits <c>JumpDecorater</c> because this ParatextData cannot tell a generated
+    ///    <c>ref</c> from an authored one (no <c>gen</c> attribute support) and always strips
+    ///    <c>ref</c>-type markers on USX -&gt; USFM, which would delete user-authored
+    ///    <c>\ref</c>s; they survive today only via the unknown-marker path (unclosed -&gt;
+    ///    <c>para</c> type; closed -&gt; <c>para</c> opener + <c>unmatched</c> closer). If the
+    ///    upgraded ParatextData distinguishes generated refs (USFM 3.1 defines <c>\ref</c>),
+    ///    revisit emitting real <c>ref</c>-type USX (see the decision comment in
+    ///    ConvertUsfmToUsx).
+    /// 11. USX/USJ version stamps are hard-coded to "3.0" on the TypeScript side. This
+    ///    ParatextData stamps every USX <c>version="3.0"</c> (<c>UsfmToUsx.UsxVersionNumber</c>,
+    ///    even for USFM 2 projects); scripture-utilities' <c>usxStringToUsj</c> discards that
+    ///    value (USJ <c>version</c> is always its <c>USJ_VERSION</c>, "3.1", and the editor's
+    ///    <c>getUsj</c> regenerates it, so no USJ field can carry the source version through an
+    ///    edit), and <c>usjToUsxString</c> stamps "3.1" unless the caller passes
+    ///    <c>{ usxVersion }</c>. platform-scripture pins both directions to its
+    ///    <c>PARATEXT_USX_EXPECTED_VERSION</c> ("3.0", scripture.util.ts): USJ reads via
+    ///    <c>correctUsjVersion</c> (and the editor web view via <c>correctEditorUsjVersion</c>, which
+    ///    its USJ equality checks depend on), and the extender PDPE's <c>setBookUSJ</c> /
+    ///    <c>setChapterUSJ</c> writes via <c>correctUsxStringVersion</c> (a string replace that
+    ///    keys on <c>USJ_VERSION</c>, so it silently no-ops if scripture-utilities ever moves
+    ///    <c>USX_VERSION</c> apart from it) or, once core consumes it, the <c>usxVersion</c>
+    ///    option. <c>ConvertUsxToUsfm</c> never reads the attribute, so the stamp is inert on this
+    ///    PDP's own write path today; Paratext 9's plugin API does reject a mismatch
+    ///    (ProjectWrapper.cs:477, against <c>UsfmToUsx.UsxVersionNumber</c>). On upgrade, a 3.1
+    ///    project's USX would be relabelled "3.0" on every round trip: replace the constant with
+    ///    the version the project's USX was actually served at (read the root <c>version</c> on
+    ///    the get, or derive it from the project's UsfmVersion), confirm what the upgraded
+    ///    <c>UsfmToUsx</c> stamps for 3.1 projects, and decide whether USJ <c>version</c> should
+    ///    keep being forced at all.
     /// </para>
     ///
     /// <para>

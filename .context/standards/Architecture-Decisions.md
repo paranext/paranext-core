@@ -905,6 +905,40 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   PT-4602 (open as of 2026-09-21), since it's a code fix in the Studio patch, not a doc fix.
 - **Source:** PT-4483, review of #2771.
 
+## adr-collab-ot-two-coordinate-systems: The editor keeps two named OT coordinate systems rather than unifying them
+
+- **Date:** 2026-10-20
+- **Status:** Accepted
+- **Context:** The scripture editor's collab/OT layer counts document positions in two subtly
+  different ways, and they diverge only in editable marker mode: the doc delta that
+  `DeltaOnChangePlugin` serializes counts an editable chapter embed (1 unit) PLUS its glyph text
+  (`"\c 1 "`, 5 units), while `$applyUpdate`'s insert/delete traversals treat every element embed
+  as one opaque unit. Producing an op in one counting and applying or reverse-looking-it-up in the
+  other lands it offset by the glyph length of each preceding editable chapter — a real bug
+  (footnote-popover Save ops displaced by `"\c 1 "`) before the two countings were made explicit.
+  The standard-view epic (PT-4186) deferred the "apply vs delta-doc" question; PT-4197's audit
+  requires the decision recorded.
+- **Decision:** Keep BOTH countings and name them: `OTCoordinateSystem` is an explicit two-member
+  type (`"delta-doc" | "apply"`) in scripture-editors
+  `libs/shared-react/src/plugins/usj/collab/delta-common.utils.ts`, and the position helpers take
+  it as a parameter. The TSDoc at that definition is the normative specification — the counting
+  rules, a worked example, and the choose-which-one rule by caller (reading or agreeing with the
+  `DeltaOnChangePlugin`/`getEditorDelta` op stream → `"delta-doc"`; building ops for `$applyUpdate`
+  or reverse-looking-up where it placed a node → `"apply"`). This log entry records that the
+  decision was made and where the rules live; it does not restate them.
+- **Alternatives:**
+  - *Unify on one counting.* Rejected for now: the OT collab path was never fully completed, no
+    live flow routes ops across an editable chapter into `$applyUpdate`, and unifying editable-mode
+    doc-delta coordinates with the apply-side traversals is future collab work, not a bug fix.
+  - *Leave the difference implicit.* Rejected: that is what produced the displaced-op bug — the two
+    countings coincide in every non-editable marker mode, so an implicit convention looks correct
+    until an editable chapter precedes the op.
+- **Consequences:** Callers must say which counting they mean, and the type surfaces the question
+  at every new call site. The remaining editable-chapter divergence between the two systems is
+  accepted. **Revisit** when OT collab work resumes and ops can cross an editable chapter into
+  `$applyUpdate` — that is when unification earns its cost.
+- **Source:** PT-4197 (WI-10 audit, item 3).
+
 ## adr-collapsed-multi-axis-filter-toolbar: A multi-axis filter surface collapses behind one trigger with a chip per active axis
 
 - **Date:** 2026-09-15
