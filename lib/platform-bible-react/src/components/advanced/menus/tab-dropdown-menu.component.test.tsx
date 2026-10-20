@@ -684,3 +684,68 @@ describe('TabDropdownMenu focus after the menu closes', () => {
     }
   });
 });
+
+describe('TabDropdownMenu label alignment and shortcut spacing', () => {
+  const MIXED: Localized<MultiColumnMenu> = {
+    columns: { 'test.project': { label: 'Project', order: 1 } },
+    groups: {
+      'test.top': { column: 'test.project', order: 1 },
+      'test.sub': { menuItem: 'test.submenu', order: 1 },
+    },
+    items: [
+      {
+        label: 'With icon',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 1,
+        command: 'test.a',
+        iconNameBefore: 'search',
+      },
+      {
+        label: 'Plain',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 2,
+        command: 'test.b',
+        shortcut: 'Ctrl+Shift+T',
+      },
+      { id: 'test.submenu', label: 'Sub', localizeNotes: '', group: 'test.top', order: 3 },
+      { label: 'Inner', localizeNotes: '', group: 'test.sub', order: 1, command: 'test.c' },
+    ],
+  };
+  const spacerOf = (el: HTMLElement) => el.querySelector('[data-slot="menu-icon-spacer"]');
+
+  it('gives each icon-less item an aria-hidden spacer when another item has a leading icon', async () => {
+    await openMenu(MIXED);
+    expect(spacerOf(screen.getByRole('menuitem', { name: /^With icon/ }))).toBeNull();
+    const plain = spacerOf(screen.getByRole('menuitem', { name: /^Plain/ }));
+    expect(plain).not.toBeNull();
+    expect(plain).toHaveAttribute('aria-hidden', 'true');
+    expect(spacerOf(screen.getByRole('menuitem', { name: /^Sub/ }))).not.toBeNull();
+  });
+
+  it('decides the slot per submenu content, not for the whole menu', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<TabDropdownMenu menuData={MIXED} onSelectMenuItem={() => {}} tabLabel="Tab menu" />);
+    await user.click(screen.getByRole('button', { name: 'Tab menu' }));
+    const trigger = await screen.findByRole('menuitem', { name: /^Sub/ });
+    trigger.focus();
+    await user.keyboard('{ArrowRight}');
+    const inner = await screen.findByRole('menuitem', { name: 'Inner' });
+    expect(spacerOf(inner)).toBeNull();
+  });
+
+  it('renders no spacer when no item has a leading icon', async () => {
+    await openMenu({ ...MIXED, items: MIXED.items.filter((item) => !item.iconNameBefore) });
+    expect(screen.getByRole('menuitem', { name: /^Plain/ })).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-slot="menu-icon-spacer"]')).toHaveLength(0);
+  });
+
+  it('keeps a minimum gap between the label and the shortcut', async () => {
+    await openMenu(MIXED);
+    const shortcut = screen
+      .getByRole('menuitem', { name: /^Plain/ })
+      .querySelector('[data-slot="dropdown-menu-shortcut"]');
+    expect(shortcut).toHaveClass('tw:ps-4');
+  });
+});
