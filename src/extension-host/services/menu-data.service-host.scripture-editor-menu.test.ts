@@ -115,14 +115,17 @@ function servedCommandIds(menu: Menu): Set<string> {
 
 /** Commands hidden in Power's editor menu and in Simple's, kept declared so the flag can be lifted. */
 const HIDDEN_IN_POWER = [
-  'platform.webViewContentZoomIn',
-  'platform.webViewContentZoomOut',
-  'platform.webViewContentZoomReset',
   'platformScripture.openCharactersInventory',
   'platformScripture.openRepeatedWordsInventory',
   'platformScripture.openMarkersInventory',
   'platformScripture.openPunctuationInventory',
   'platformScripture.openMarkersChecklist',
+];
+/** The zoom items, served in both modes. */
+const ZOOM_COMMANDS = [
+  'platform.webViewContentZoomIn',
+  'platform.webViewContentZoomOut',
+  'platform.webViewContentZoomReset',
 ];
 /** Declared but served in neither mode, until the flag that hides them is lifted. */
 const HIDDEN_IN_BOTH_MODES = [
@@ -182,6 +185,9 @@ describe("The scripture editor's Project menu, per mode", () => {
         'platformScriptureEditor.options',
         [
           'platformScriptureEditor.viewSubmenu ▸ platformScriptureEditor.setViewStandard, platformScriptureEditor.setViewPreview',
+          'platform.webViewContentZoomIn',
+          'platform.webViewContentZoomOut',
+          'platform.webViewContentZoomReset',
           'platformScriptureEditor.toggleFootnotes',
           'platformScriptureEditor.changeFootnotesPaneLocation',
         ],
@@ -285,12 +291,15 @@ describe("The scripture editor's Project menu, per mode", () => {
     ['platformScriptureEditor.cutSelection', undefined],
     ['platformScriptureEditor.copySelection', undefined],
     ['platformScriptureEditor.pasteAtSelection', undefined],
+    ['platform.webViewContentZoomIn', 'zoom-in'],
+    ['platform.webViewContentZoomOut', 'zoom-out'],
+    ['platform.webViewContentZoomReset', 'scan'],
     ['platformScriptureEditor.toggleFootnotes', 'file-text'],
     ['platformScriptureEditor.changeFootnotesPaneLocation', 'panel-bottom'],
     ['platformScriptureEditor.insertCommentAtSelection', 'message-square-plus'],
-    ['platformScriptureEditor.insertFootnoteAtSelection', 'asterisk'],
-    ['platformScriptureEditor.insertCrossReferenceAtSelection', 'link'],
-    ['platformScriptureEditor.insertEndnoteAtSelection', 'sigma'],
+    ['platformScriptureEditor.insertFootnoteAtSelection', 'square-function'],
+    ['platformScriptureEditor.insertCrossReferenceAtSelection', 'square-x'],
+    ['platformScriptureEditor.insertEndnoteAtSelection', 'square-sigma'],
   ];
   const ICONS_POWER_ONLY: [string, string | undefined][] = [
     ['platformScripture.openManageBooks', 'book-copy'],
@@ -302,9 +311,6 @@ describe("The scripture editor's Project menu, per mode", () => {
     ['platformScripture.openChecksSidePanel', 'circle-check-big'],
   ];
   const ICONS_SIMPLE_ONLY: [string, string][] = [
-    ['platform.webViewContentZoomIn', 'zoom-in'],
-    ['platform.webViewContentZoomOut', 'zoom-out'],
-    ['platform.webViewContentZoomReset', 'scan'],
     ['platformScriptureEditor.showBibleTextsPanel', 'book'],
     ['platformScriptureEditor.showCommentariesPanel', 'book-marked'],
     ['platformScriptureEditor.showTextCollectionPanel', 'library'],
@@ -339,6 +345,7 @@ describe("The scripture editor's Project menu, per mode", () => {
     ['power', 'platformScriptureEditor.setViewStandard', 'Standard view'],
     ['power', 'platformScriptureEditor.setViewPreview', 'Preview'],
     ['simple', 'platform.openSettings', 'Project settings'],
+    ['power', 'platform.webViewContentZoomReset', 'Zoom 100%'],
     ['simple', 'platform.webViewContentZoomReset', 'Zoom 100%'],
     ['simple', 'legacyCommentManager.showCommentListPanel', 'Comments'],
     ['simple', 'platformScriptureEditor.insertEndnoteAtSelection', 'Insert end note'],
@@ -350,15 +357,27 @@ describe("The scripture editor's Project menu, per mode", () => {
     expect(item && labelText(item.label)).toBe(expected);
   });
 
-  test('inventories, Markers Checklist and zoom are hidden in Power but stay declared', async () => {
+  test('inventories and Markers Checklist are hidden in Power but stay declared', async () => {
     const power = servedCommandIds(await getEditorTopMenuInMode('power'));
     const declared = declaredEditorCommandIds();
     HIDDEN_IN_POWER.forEach((command) => {
       expect(power.has(command)).toBe(false);
     });
-    // Hidden, not deleted: the inventories and Markers Checklist remain declared. (The zoom items are
-    // declared too, and are served in Simple.)
+    // Hidden, not deleted: the inventories and Markers Checklist remain declared.
     HIDDEN_IN_POWER.forEach((command) => expect(declared.has(command)).toBe(true));
+  });
+
+  test('zoom is served in Power, in the View column between the view modes and the footnotes pane', async () => {
+    const menu = await getEditorTopMenuInMode('power');
+    const viewColumn = describeSections(menu).find(
+      ([columnKey]) => columnKey === 'platformScriptureEditor.options',
+    );
+    const entries = viewColumn?.[1] ?? [];
+    const zoomIndexes = ZOOM_COMMANDS.map((command) => entries.indexOf(command));
+    expect(zoomIndexes).toEqual([1, 2, 3]);
+    expect(entries.indexOf('platformScriptureEditor.toggleFootnotes')).toBeGreaterThan(
+      zoomIndexes[2],
+    );
   });
 
   test('Simple serves none of the Power-only items', async () => {

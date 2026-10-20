@@ -333,7 +333,7 @@ describe('Pruning empties menu groups but never a whole column', () => {
   });
 });
 
-describe("The Scripture editor's hamburger offers zoom in Simple mode only", () => {
+describe("The Scripture editor's hamburger offers zoom in both Power and Simple mode", () => {
   const ZOOM_COMMANDS = [
     'platform.webViewContentZoomIn',
     'platform.webViewContentZoomOut',
@@ -355,15 +355,24 @@ describe("The Scripture editor's hamburger offers zoom in Simple mode only", () 
     );
   }
 
-  test('Power mode: no zoom item in the hamburger', async () => {
+  test('Power mode: all three zoom items in the hamburger, in the View column', async () => {
     const topMenu = await getEditorTopMenuInMode('power');
-    // Positive control: the editor's own menu was served, so the absence below is the mode filter.
+    // Positive control: the editor's own menu was served.
     expect(
       topMenu?.items.some(
         (item) => 'command' in item && item.command === 'platformScriptureEditor.toggleFootnotes',
       ),
     ).toBe(true);
-    expect(zoomCommandsIn(topMenu)).toEqual([]);
+    expect(zoomCommandsIn(topMenu).sort()).toEqual([...ZOOM_COMMANDS].sort());
+    const viewColumnGroups = Object.entries(topMenu?.groups ?? {})
+      .filter(
+        ([, group]) => 'column' in group && group.column === 'platformScriptureEditor.options',
+      )
+      .map(([key]) => key);
+    const zoomGroups = (topMenu?.items ?? []).flatMap((item) =>
+      'command' in item && ZOOM_COMMANDS.includes(item.command) ? [item.group] : [],
+    );
+    zoomGroups.forEach((group) => expect(viewColumnGroups).toContain(group));
   });
 
   test('Simple mode: all three zoom items in the hamburger', async () => {
