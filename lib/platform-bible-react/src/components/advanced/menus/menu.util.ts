@@ -7,6 +7,7 @@ import {
   MenuGroupDetailsInSubMenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
+import { isLucideIconName } from '@/components/basics/lucide-icon.component';
 
 /**
  * Looks up the keys of every sub-menu group whose `menuItem` property is the given submenu item id.
@@ -153,12 +154,12 @@ type ItemWithLeadingIcon = { iconNameBefore?: string; iconPathBefore?: string };
  * items that have one, so all labels in the list start at the same position.
  *
  * @param items The items rendered in the list, including submenu trigger items
- * @returns `'none'` if no item has a leading icon, `'icon'` if any has a named icon (which wins
- *   over an image path, matching how `MenuItemIcon` renders), and `'image'` if only image paths are
- *   used
+ * @returns `'none'` if no item has a leading icon, `'icon'` if any has a known named icon (which
+ *   wins over an image path, matching how `MenuItemIcon` renders), and `'image'` if only image
+ *   paths are used. An unknown icon name counts only through the image path beside it, if any
  */
 export function getLeadingIconSlot(items: ItemWithLeadingIcon[]): LeadingIconSlot {
-  if (items.some((item) => item.iconNameBefore)) return 'icon';
+  if (items.some((item) => isLucideIconName(item.iconNameBefore))) return 'icon';
   if (items.some((item) => item.iconPathBefore)) return 'image';
   return 'none';
 }

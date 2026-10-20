@@ -71,6 +71,16 @@ const LUCIDE_ICONS_BY_NAME: Readonly<Record<string, LucideIconComponent>> = {
  */
 export const LUCIDE_ICON_NAMES: readonly string[] = Object.keys(LUCIDE_ICONS_BY_NAME);
 
+/**
+ * Whether {@link LucideIcon} can render the given name. Lets a caller that also has an image path
+ * fall back to the path for a name this build does not know, such as one a newer core added.
+ *
+ * @param name Lucide icon name in kebab-case, or `undefined` when the item names no icon
+ */
+export function isLucideIconName(name: string | undefined): name is string {
+  return name !== undefined && Object.hasOwn(LUCIDE_ICONS_BY_NAME, name);
+}
+
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export type LucideIconProps = {
   /**
@@ -96,7 +106,7 @@ export type LucideIconProps = {
  */
 export function LucideIcon({ name, className }: LucideIconProps) {
   // Object.hasOwn keeps inherited keys such as `constructor` from resolving to a non-icon
-  const Icon = Object.hasOwn(LUCIDE_ICONS_BY_NAME, name) ? LUCIDE_ICONS_BY_NAME[name] : undefined;
+  const Icon = isLucideIconName(name) ? LUCIDE_ICONS_BY_NAME[name] : undefined;
   if (!Icon) return undefined;
   return <Icon aria-hidden="true" className={cn('tw:h-4 tw:w-4 tw:shrink-0', className)} />;
 }
