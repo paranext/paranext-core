@@ -100,9 +100,18 @@ internal class DblResourcesDataProvider(
     private const string NO_COMPATIBLE_RESOURCES_MESSAGE =
         "The resource list from the DBL contained no compatible resources.";
 
-    // Replaceable so tests can drive the provider's fetch-failure handling without a live DBL.
+    // Replaceable so tests can drive the provider's fetch-failure handling without a live DBL. The
+    // internet gate belongs to the real fetch: it reads the machine's saved internet setting, which
+    // a test must neither depend on nor change.
     private readonly Func<List<InstallableResource>> _fetchCatalog =
-        fetchCatalog ?? FetchAvailableDBLResources;
+        fetchCatalog
+        ?? (
+            () =>
+            {
+                InternetServicesGate.ThrowIfBlocked(papiClient);
+                return FetchAvailableDBLResources();
+            }
+        );
 
     private List<InstallableResource> _resources = [];
 
@@ -248,8 +257,6 @@ internal class DblResourcesDataProvider(
     /// </summary>
     private void FetchResourcesCore()
     {
-        InternetServicesGate.ThrowIfBlocked(PapiClient);
-
         // Captured rather than logged so the reason the DBL could not be reached travels with the
         // exception to the front end's log. Capturing suppresses AlertCapture's own console
         // fallback, so the `finally` below logs every captured alert itself, on every exit path.
