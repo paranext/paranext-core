@@ -3191,10 +3191,19 @@ export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, i
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare const LUCIDE_ICON_NAMES: readonly string[];
+/** @experimental This export is unstable and may change shape or disappear without notice */
 export type LucideIconProps = {
-	/** Lucide icon name in kebab-case, e.g. `refresh-cw`. Must be one of {@link LUCIDE_ICON_NAMES}. */
+	/**
+	 * Lucide icon name in kebab-case, e.g. `refresh-cw`. Must be one of {@link LUCIDE_ICON_NAMES}.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
 	name: string;
-	/** Extra classes for the svg, appended to the default 16px size */
+	/**
+	 * Extra classes for the svg, appended to the default 16px size
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
 	className?: string;
 };
 /**
