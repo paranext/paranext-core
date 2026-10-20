@@ -1509,14 +1509,12 @@ export async function syncOnProjectSwitch(
     // toolbar indicator mounts only in Simple mode, so switching to Power while a suppressed sync
     // runs leaves it with no progress surface until it ends. Accepted in
     // `adr-sync-surface-per-interface-mode`.
-    if (interfaceMode === 'simple')
-      await papi.commands.sendCommand(
-        'paratextBibleSendReceive.syncProjects',
-        [incomingProjectId],
-        true,
-      );
-    else
-      await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
+    const flag: [true] | [] = interfaceMode === 'simple' ? [true] : [];
+    await papi.commands.sendCommand(
+      'paratextBibleSendReceive.syncProjects',
+      [incomingProjectId],
+      ...flag,
+    );
   } catch (e) {
     papi.logger.warn(
       `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,

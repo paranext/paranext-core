@@ -2440,19 +2440,7 @@ describe('syncOnProjectSwitch', () => {
     ]);
   });
 
-  it('leaves the outgoing sendReceiveProjects call unchanged in Simple mode', async () => {
-    const { papi, mockSendCommand } = createSyncMockPapi();
-
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
-
-    expect(
-      mockSendCommand.mock.calls.find(
-        ([cmd]) => cmd === 'paratextBibleSendReceive.sendReceiveProjects',
-      ),
-    ).toEqual(['paratextBibleSendReceive.sendReceiveProjects', ['proj-outgoing']]);
-  });
-
-  it('calls sendReceiveProjects with the outgoing project ID when provided', async () => {
+  it('calls sendReceiveProjects with only the outgoing project ID when provided, even in Simple mode', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
@@ -2640,14 +2628,6 @@ describe('finalizeProjectSwitch', () => {
     expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
       'paratextBibleSendReceive.sendReceiveProjects',
     );
-  });
-
-  it('reads the interface mode to decide the sync surface', async () => {
-    const { papi, mockSettingsGet } = createFinalizeMockPapi();
-
-    await finalizeProjectSwitch(papi, 'proj-1', undefined);
-
-    expect(mockSettingsGet).toHaveBeenCalledWith('platform.interfaceMode');
   });
 
   it('keeps the progress toast when the user has switched back to Power mode', async () => {

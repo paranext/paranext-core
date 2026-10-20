@@ -39,10 +39,10 @@ internal class ParatextProjectSendReceiveService(
     /// <para>
     /// Contract for an implementation that runs syncs: raise this through
     /// <see cref="RaiseSyncActivityChanged"/> at each transition of every run, including runs whose
-    /// caller passed <c>suppressProgressNotification</c> — for those, this is the only signal the
-    /// toolbar indicator gets. This class's stub sync bodies run no sync, so on their own they never
-    /// raise it; the Paratext 10 patch replaces those bodies and raises it. Do not remove — the patch
-    /// depends on it.
+    /// caller passed <c>suppressProgressNotification</c> — for those that raise no Send/Receive claim
+    /// of their own, this is the only signal the toolbar indicator gets. This class's stub sync
+    /// bodies run no sync, so on their own they never raise it; the Paratext 10 patch replaces those
+    /// bodies and raises it. Do not remove — the patch depends on it.
     /// </para>
     /// <para>
     /// Deliberately derived from the run marker rather than from
@@ -226,9 +226,9 @@ internal class ParatextProjectSendReceiveService(
     /// </param>
     /// <param name="suppressProgressNotification">
     /// When <see langword="true"/>, do not show the persistent in-progress toast (the one carrying
-    /// Cancel) for this sync; failure, role-change and watchdog toasts still show. Defaults to
-    /// <see langword="false"/>. When to pass it is part of the TypeScript contract: see
-    /// <c>paratextBibleSendReceive.syncProjects</c> in
+    /// Cancel) for this sync; its other notifications, such as failure and role-change toasts, still
+    /// show. Defaults to <see langword="false"/>. When to pass it is part of the TypeScript
+    /// contract: see <c>paratextBibleSendReceive.syncProjects</c> in
     /// <c>src/@types/paratext-bible-send-receive/index.d.ts</c>.
     /// In-process C# callers must pass both arguments: <c>PapiClient</c>'s in-process dispatch
     /// (<c>DynamicInvoke</c>) does not fill optional defaults, so only JSON-RPC callers may omit it.

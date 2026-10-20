@@ -17,9 +17,12 @@ const KEYS: LocalizeKey[] = [
 // is fully click-through-able end-to-end (see first-run-store.ts isDemoMode).
 // Otherwise the progress toast is kept by omitting `suppressProgressNotification`: this whole sync
 // runs inside the first-run wizard, which covers the toolbar sync indicator, so the toast is its
-// only visible progress.
+// only visible progress. `undefined` must be passed explicitly: a call with no arguments sends no
+// params, which the dotnet `SyncProjects` rejects.
 const defaultSyncFn = (): Promise<void> =>
-  isDemoMode() ? Promise.resolve() : sendCommand('paratextBibleSendReceive.syncProjects');
+  isDemoMode()
+    ? Promise.resolve()
+    : sendCommand('paratextBibleSendReceive.syncProjects', undefined);
 
 /**
  * Sync consent wizard step. Presents "Sync" as the primary action; skip is surfaced by the shell

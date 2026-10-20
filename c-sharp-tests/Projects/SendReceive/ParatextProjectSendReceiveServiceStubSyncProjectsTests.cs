@@ -1,19 +1,17 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Nerdbank.Streams;
-using Paranext.DataProvider;
 using Paranext.DataProvider.JsonUtils;
-using Paranext.DataProvider.Projects;
-using Paranext.DataProvider.Projects.SendReceive;
 using StreamJsonRpc;
-using StreamJsonRpc.Protocol;
 
 namespace TestParanextDataProvider.Projects.SendReceive
 {
     /// <summary>
     /// The <c>syncProjects</c> wire contract of the open-source
-    /// <see cref="ParatextProjectSendReceiveService"/> stub: the optional
-    /// <c>suppressProgressNotification</c> argument callers pass. The Paratext 10 patch replaces the
-    /// stub's body but must keep this signature, so these tests are the tripwire for it.
+    /// <see cref="Paranext.DataProvider.Projects.SendReceive.ParatextProjectSendReceiveService"/>
+    /// stub: the optional <c>suppressProgressNotification</c> argument callers pass. The Paratext 10
+    /// patch replaces the stub's body but must keep this signature, so these tests are the tripwire
+    /// for it.
     /// </summary>
     [TestFixture]
     [ExcludeFromCodeCoverage]
@@ -23,15 +21,26 @@ namespace TestParanextDataProvider.Projects.SendReceive
 
         private async Task<Delegate> GetRegisteredSyncProjectsAsync()
         {
-            var service = new ParatextProjectSendReceiveService(
-                Client,
-                new ParatextProjectDataProviderFactory(Client, ParatextProjects),
-                new AppInfo("test", "1.0.0", "test"),
-                ParatextProjects
-            );
+            var service = CreateSendReceiveService();
             await service.InitializeAsync();
             return Client.GetRequestHandler(SyncProjectsWireName);
         }
+
+        /// <summary>
+        /// Stands in for the registered handler in the binding tests below, which only need its
+        /// signature: the Paratext 10 patched suite runs these tests against the real
+        /// <c>SyncProjects</c>, whose body would start a real sync. Kept identical to the real
+        /// signature by <see cref="SyncProjects_HasTheSignatureTheBindingTestsUse"/>.
+        /// </summary>
+        [SuppressMessage(
+            "Style",
+            "IDE0060:Remove unused parameter",
+            Justification = "Only the signature matters; see the summary."
+        )]
+        private static void SyncProjectsSignatureStandIn(
+            String[]? projectIds,
+            bool suppressProgressNotification = false
+        ) { }
 
         [Test]
         public async Task SyncProjects_DeclaresAnOptionalSuppressProgressNotificationDefaultingToFalse()
@@ -48,11 +57,27 @@ namespace TestParanextDataProvider.Projects.SendReceive
             });
         }
 
-        // The arguments core's callers actually send: `syncProjects(undefined)` from callers that do
-        // not pass the flag (e.g. the Send/Receive extension), `syncProjects(undefined, true)` from
-        // the startup sync (undefined serializes as null), and an explicit id list from the project
-        // switch, with `true` in Simple mode and without the flag otherwise. A caller that keeps the
-        // toast omits the flag rather than sending `false`.
+        [Test]
+        public async Task SyncProjects_HasTheSignatureTheBindingTestsUse()
+        {
+            static object?[] Describe(ParameterInfo p) =>
+                [p.Name, p.ParameterType, p.IsOptional, p.IsOptional ? p.DefaultValue : null];
+
+            var registered = (await GetRegisteredSyncProjectsAsync()).Method.GetParameters();
+            var standIn = (
+                (Action<String[]?, bool>)SyncProjectsSignatureStandIn
+            ).Method.GetParameters();
+
+            Assert.That(
+                registered.Select(Describe).ToArray(),
+                Is.EqualTo(standIn.Select(Describe).ToArray())
+            );
+        }
+
+        // The arguments callers send. Core: `syncProjects(undefined)` from the first-run consent
+        // step and `syncProjects(undefined, true)` from the Simple-mode startup sync (`undefined`
+        // serializes as null). Core's project switch and the Send/Receive extension send an explicit
+        // id list: `[ids]`, or `[ids, true]` in Simple mode.
         private static readonly object?[][] s_wireArgumentShapes =
         [
             [null],
@@ -73,26 +98,37 @@ namespace TestParanextDataProvider.Projects.SendReceive
             );
         }
 
-        // Negative control: proves the harness above can see a binding failure at all, so its
-        // passing cases are evidence rather than a test that cannot fail.
-        [Test]
-        public async Task SyncProjects_RejectsAnArgumentShapeItDoesNotDeclare()
+        // Shapes that must not bind, which is why callers pass `undefined` explicitly for
+        // `projectIds` and send the flag only as `true`. The last one is a negative control proving
+        // the harness can see a binding failure at all.
+        private static readonly TestCaseData[] s_rejectedWireArgumentShapes =
+        [
+            new TestCaseData(new object?[] { Array.Empty<object?>() }).SetArgDisplayNames(
+                "no arguments: projectIds has no default"
+            ),
+            new TestCaseData(
+                new object?[] { new object?[] { new[] { "PROJ1" }, null } }
+            ).SetArgDisplayNames("flag sent as undefined: null does not bind to bool"),
+            new TestCaseData(
+                new object?[] { new object?[] { null, true, "unexpected" } }
+            ).SetArgDisplayNames("an argument it does not declare"),
+        ];
+
+        [TestCaseSource(nameof(s_rejectedWireArgumentShapes))]
+        public async Task SyncProjects_RejectsAShape(object?[] args)
         {
-            int? bindingErrorCode = await InvokeOverJsonRpcAsync([null, true, "unexpected"]);
+            int? bindingErrorCode = await InvokeOverJsonRpcAsync(args);
 
             Assert.That(bindingErrorCode, Is.Not.Null);
         }
 
         /// <summary>
-        /// Invokes the registered <c>syncProjects</c> handler over a real <see cref="JsonRpc"/> pair
-        /// and returns the JSON-RPC error code if the call failed to BIND (no overload accepts the
-        /// arguments), or <see langword="null"/> if it bound. The stub's body either throws
-        /// PlatformUnimplementedException (Release) or runs the DEBUG placeholder; both count as
-        /// bound.
+        /// Invokes <see cref="SyncProjectsSignatureStandIn"/> over a real <see cref="JsonRpc"/> pair
+        /// and returns the JSON-RPC error code if the call failed to BIND, or
+        /// <see langword="null"/> if it bound.
         /// </summary>
-        private async Task<int?> InvokeOverJsonRpcAsync(object?[] args)
+        private static async Task<int?> InvokeOverJsonRpcAsync(object?[] args)
         {
-            Delegate handler = await GetRegisteredSyncProjectsAsync();
             (Stream serverStream, Stream clientStream) = FullDuplexStream.CreatePair();
             using var server = new JsonRpc(
                 new HeaderDelimitedMessageHandler(
@@ -100,7 +136,10 @@ namespace TestParanextDataProvider.Projects.SendReceive
                     SerializationOptions.CreateJsonRpcMessageFormatter()
                 )
             );
-            server.AddLocalRpcMethod(SyncProjectsWireName, handler);
+            server.AddLocalRpcMethod(
+                SyncProjectsWireName,
+                (Action<String[]?, bool>)SyncProjectsSignatureStandIn
+            );
             server.StartListening();
             using var client = new JsonRpc(
                 new HeaderDelimitedMessageHandler(
@@ -116,18 +155,13 @@ namespace TestParanextDataProvider.Projects.SendReceive
                     .InvokeAsync(SyncProjectsWireName, args)
                     .WaitAsync(TimeSpan.FromSeconds(30));
             }
-            // StreamJsonRpc reports an argument count no overload accepts as a
-            // RemoteMethodNotFoundException, which is NOT a RemoteInvocationException.
+            // StreamJsonRpc's client reports every binding failure here — a missing required
+            // argument, an extra one, or one that does not deserialize to its parameter type, whether
+            // the server answers -32601 or -32602 — as a RemoteMethodNotFoundException.
             catch (RemoteMethodNotFoundException ex)
             {
                 return (int)ex.ErrorCode;
             }
-            catch (RemoteInvocationException ex)
-                when (ex.ErrorCode == (int)JsonRpcErrorCode.InvalidParams)
-            {
-                return ex.ErrorCode;
-            }
-            catch (RemoteInvocationException) { }
             return null;
         }
     }
