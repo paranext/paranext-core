@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ColumnsWithHeaders, Localized, MultiColumnMenu } from 'platform-bible-utils';
 import {
+  getColumnGroupKeys,
   getMenuSectionsWithItems,
   getSortedMenuColumns,
   getSubMenuGroupKeysForMenuItemId,
@@ -151,6 +152,28 @@ describe('getMenuSectionsWithItems', () => {
       'platform.app',
       'platformScriptureEditor.tools',
     ]);
+  });
+});
+
+describe('getColumnGroupKeys', () => {
+  it('returns the groups that name the column or are keyed by it, sorted by `order`', () => {
+    // Stored out of order, so the result can only be right by sorting
+    const groups: Localized<MultiColumnMenu>['groups'] = {
+      'test.second': { column: 'test.column', order: 2 },
+      'test.elsewhere': { column: 'test.otherColumn', order: 1 },
+      'test.column': { menuItem: 'test.unusedMenuItem', order: 3 },
+      'test.first': { column: 'test.column', order: 1 },
+    };
+
+    expect(getColumnGroupKeys(groups, 'test.column')).toEqual([
+      'test.first',
+      'test.second',
+      'test.column',
+    ]);
+  });
+
+  it('returns an empty list when no group belongs to the column', () => {
+    expect(getColumnGroupKeys(MENU_WITH_SUBMENU.groups, 'test.unknown')).toEqual([]);
   });
 });
 
