@@ -3,6 +3,12 @@
 > **Frozen record** — design for PT-4833, agreed 2026-10-15 on branch `worktree-pt-4833`. It records
 > the decisions as made; follow the current files, not this document.
 
+> **Superseded 2026-10-20.** Product (Sebastian, with Vladimir and Ian) replaced the badge with a
+> plain-text suffix, "Power mode [preview]", agreed new Simple and Power descriptions, and asked the
+> onboarding tour's profile stop to name the Simple / Power switch. The shipped code follows those
+> texts (see the PT-4833 comments of 2026-10-20); the badge, its CSS and "Preliminar" described
+> below were never merged.
+
 ## Problem
 
 Power mode ships in the November release with features still missing. Users who switch to it should

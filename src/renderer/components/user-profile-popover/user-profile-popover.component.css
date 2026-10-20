@@ -13,15 +13,6 @@
   font-size: 10px;
 }
 
-/* A label with a badge beside it. Baseline alignment keeps a badge that is taller than the label's
-   line on the label's text line; the small row gap keeps a badge that wraps under a long label as
-   close to it as the description below. Raw CSS for the same reason as the font sizes above. */
-.user-profile-popover-label-row {
-  align-items: baseline;
-  column-gap: 6px;
-  row-gap: 2px;
-}
-
 /* Windows High Contrast forces every background to a system color and drops box-shadow, which
    between them are the reminder dot's entire visual — leaving an invisible 8px box. An outline
    survives forced-colors (the UA repaints it in a system color), so it is what keeps the marker

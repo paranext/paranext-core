@@ -140,6 +140,12 @@
       "message": "The tour's left-column stop now names both Base and Model texts rather than the model text alone. The new key is %onboardingTour_step_baseOrModelText_title%."
     }
   },
+  "%onboardingTour_step_profile_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "The tour's profile stop now also names the Simple / Power switch in the User menu. The new key is %onboardingTour_step_profile_description_2%."
+    }
+  },
   "%onboardingTour_step_sendReceive_description%": {
     "deprecationInfo": {
       "date": "2026-10-13",
@@ -374,6 +380,18 @@
   "%undoButton_tooltip%": {
     "notes": "The tooltip text for the undo button in the common undo/redo control used in various editors.",
     "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiUndo.ToolTipText%"
+  },
+  "%userProfile_interfaceMode_power_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Power mode is now described as a configurable interface to use alongside Paratext 9 rather than the full Paratext interface. The new key is %userProfile_interfaceMode_power_description_2%."
+    }
+  },
+  "%userProfile_interfaceMode_simple_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Simple mode is now described by what it supports (basic exegesis, drafting and AI checks) rather than as focused translation work. The new key is %userProfile_interfaceMode_simple_description_2%."
+    }
   },
   "%userProfile_networkSettings%": {
     "deprecationInfo": {

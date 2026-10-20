@@ -28,6 +28,34 @@ describe.each(STEP_LOCALIZE_KEYS)('onboarding tour stop string %s', (key) => {
   });
 });
 
+// The profile stop also teaches the Simple / Power switch that lives in the same menu. The shipped
+// description named only the internet connection and registration, so a new key carries the wording
+// and the shipped one is retired with its value intact.
+describe('onboarding tour profile stop', () => {
+  it('asks for the profile description that names the Simple / Power switch', () => {
+    expect(STEP_LOCALIZE_KEYS).toContain('%onboardingTour_step_profile_description_2%');
+    expect(STEP_LOCALIZE_KEYS).not.toContain('%onboardingTour_step_profile_description%');
+  });
+
+  it('has the agreed English text', () => {
+    expect(english['%onboardingTour_step_profile_description_2%']).toBe(
+      "Need to switch between Simple and Power mode, control your internet connection or change your registration? It's here, in the User menu.",
+    );
+  });
+
+  it('retires the shipped description with a deprecation notice and its shipped values', () => {
+    expect(metadata['%onboardingTour_step_profile_description%']?.deprecationInfo?.message).toMatch(
+      /\S/,
+    );
+    expect(english['%onboardingTour_step_profile_description%']).toBe(
+      "Need to change your internet connection or registration? They're here, under the Profile button.",
+    );
+    expect(spanish['%onboardingTour_step_profile_description%']).toBe(
+      '¿Necesita cambiar su conexión a internet o su registro? Están aquí, bajo el botón Perfil.',
+    );
+  });
+});
+
 // The tour's left-column stop names both Base and Model texts. The shipped stop keys name the model
 // text alone, a narrower meaning, so new keys carry the wording and the shipped ones are retired
 // with their values intact (Localization-Guide.md, "Existing Strings Are Immutable").

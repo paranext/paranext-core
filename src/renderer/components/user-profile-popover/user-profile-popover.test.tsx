@@ -96,7 +96,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%userProfile_interfaceMode_simple_description%': 'Fewer panels',
       '%userProfile_interfaceMode_power_label%': 'Advanced UI',
       '%userProfile_interfaceMode_power_description%': 'All panels',
-      '%userProfile_interfaceMode_power_previewBadge%': 'Preview badge',
+      '%userProfile_interfaceMode_simple_description_2%': 'Basic work, short list',
+      '%userProfile_interfaceMode_power_description_2%': 'Configurable, with PT9',
+      '%userProfile_interfaceMode_power_preview%': '[early look]',
       '%userProfile_profileAndRegistration%': 'Profile and registration row',
       '%userProfile_networkSettings_2%': 'Internet and connectivity row',
       '%userProfile_language%': 'UI language',
@@ -290,31 +292,41 @@ describe('UserProfilePopover interface mode', () => {
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
   });
 
-  test('marks the Power option, and only the Power option, with the localized Preview badge', () => {
+  test('labels the Power option, and only the Power option, as a preview', () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
 
     const powerOption = screen.getByTestId('user-profile-interface-mode-power');
-    expect(
-      within(powerOption).getByTestId('user-profile-interface-mode-power-preview-badge'),
-    ).toHaveTextContent('Preview badge');
+    expect(within(powerOption).getByText('Advanced UI [early look]')).toBeInTheDocument();
     // Screen-reader users get the preview status with the option itself, not as a separate stop.
-    expect(powerOption).toHaveAccessibleName(/Preview badge/);
-    expect(
-      within(screen.getByTestId('user-profile-interface-mode-simple')).queryByText('Preview badge'),
-    ).not.toBeInTheDocument();
+    expect(powerOption).toHaveAccessibleName(/Advanced UI \[early look\]/);
+    expect(screen.getByTestId('user-profile-interface-mode-simple')).not.toHaveTextContent(
+      '[early look]',
+    );
   });
 
-  test('keeps the Preview badge on the Power option while Power mode is selected', () => {
+  test('keeps the preview label on the Power option while Power mode is selected', () => {
     setMockSetting('interfaceMode', 'power');
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
 
     expect(
-      within(screen.getByTestId('user-profile-interface-mode-power')).getByTestId(
-        'user-profile-interface-mode-power-preview-badge',
+      within(screen.getByTestId('user-profile-interface-mode-power')).getByText(
+        'Advanced UI [early look]',
       ),
-    ).toHaveTextContent('Preview badge');
+    ).toBeInTheDocument();
+  });
+
+  test('describes each mode with the current description strings', () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    const simpleOption = screen.getByTestId('user-profile-interface-mode-simple');
+    const powerOption = screen.getByTestId('user-profile-interface-mode-power');
+    expect(simpleOption).toHaveTextContent('Basic work, short list');
+    expect(powerOption).toHaveTextContent('Configurable, with PT9');
+    expect(simpleOption).not.toHaveTextContent('Fewer panels');
+    expect(powerOption).not.toHaveTextContent('All panels');
   });
 });
 

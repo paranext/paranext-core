@@ -1,5 +1,4 @@
 import {
-  Badge,
   Button,
   cn,
   Popover,
@@ -54,10 +53,10 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_header_defaultName%',
   '%userProfile_header_notRegistered%',
   '%userProfile_interfaceMode_simple_label%',
-  '%userProfile_interfaceMode_simple_description%',
+  '%userProfile_interfaceMode_simple_description_2%',
   '%userProfile_interfaceMode_power_label%',
-  '%userProfile_interfaceMode_power_description%',
-  '%userProfile_interfaceMode_power_previewBadge%',
+  '%userProfile_interfaceMode_power_preview%',
+  '%userProfile_interfaceMode_power_description_2%',
   '%userProfile_profileAndRegistration%',
   '%userProfile_registrationNeeded%',
   '%userProfile_networkSettings_2%',
@@ -135,7 +134,7 @@ function ReminderDot({ testId, className }: { testId: string; className?: string
  * (theme) controls. Replaces the previous standalone theme-toggle, internet-settings, and
  * Paratext-registration buttons in the toolbar.
  *
- * The Power option carries a "Preview" badge: Power mode is shipped as a preview, so users should
+ * The Power option's label ends in "[preview]": Power mode is shipped as a preview, so users should
  * expect missing features rather than read the gaps as bugs.
  *
  * When the user's Paratext registration is missing or invalid, an unobtrusive reminder dot appears
@@ -430,7 +429,7 @@ export function UserProfilePopover() {
               {localizedStrings['%userProfile_interfaceMode_simple_label%']}
             </span>
             <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
-              {localizedStrings['%userProfile_interfaceMode_simple_description%']}
+              {localizedStrings['%userProfile_interfaceMode_simple_description_2%']}
             </span>
           </ToggleGroupItem>
           <ToggleGroupItem
@@ -443,25 +442,16 @@ export function UserProfilePopover() {
                 'tw:border-2 tw:border-primary tw:bg-accent tw:text-accent-foreground tw:shadow-sm',
             )}
           >
-            <span className="user-profile-popover-label-row tw:flex tw:flex-wrap">
-              <span
-                className={cn(
-                  'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
-                  safeInterfaceMode === 'power' && 'tw:text-accent-foreground',
-                )}
-              >
-                {localizedStrings['%userProfile_interfaceMode_power_label%']}
-              </span>
-              <Badge
-                variant="outline"
-                data-testid="user-profile-interface-mode-power-preview-badge"
-                className="user-profile-popover-text-3xs tw:h-4 tw:px-1.5"
-              >
-                {localizedStrings['%userProfile_interfaceMode_power_previewBadge%']}
-              </Badge>
+            <span
+              className={cn(
+                'user-profile-popover-text-2xs tw:leading-tight tw:font-semibold',
+                safeInterfaceMode === 'power' && 'tw:text-accent-foreground',
+              )}
+            >
+              {`${localizedStrings['%userProfile_interfaceMode_power_label%']} ${localizedStrings['%userProfile_interfaceMode_power_preview%']}`}
             </span>
             <span className="user-profile-popover-text-3xs tw:leading-tight tw:text-muted-foreground">
-              {localizedStrings['%userProfile_interfaceMode_power_description%']}
+              {localizedStrings['%userProfile_interfaceMode_power_description_2%']}
             </span>
           </ToggleGroupItem>
         </ToggleGroup>

@@ -1,5 +1,9 @@
 # Power Mode "Preview" Badge Implementation Plan
 
+> **Frozen record, superseded 2026-10-20.** This plan was executed for the badge design, which
+> product then replaced with a "[preview]" text suffix and new mode descriptions. See the superseded
+> note in [`2026-10-15-power-mode-preview-badge-design.md`](./2026-10-15-power-mode-preview-badge-design.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Show a localized "Preview" badge on the Power option of the Simple / Power switcher in the profile popover (PT-4833).
