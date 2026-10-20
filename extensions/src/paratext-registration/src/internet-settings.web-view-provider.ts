@@ -1,18 +1,32 @@
-import { IWebViewProvider, SavedWebViewDefinition, WebViewDefinition } from '@papi/core';
+import {
+  IWebViewProvider,
+  OpenWebViewOptions,
+  SavedWebViewDefinition,
+  WebViewDefinition,
+} from '@papi/core';
 import papi from '@papi/backend';
 import paratextRegistrationListWebView from './internet-settings.web-view?inline';
 import paratextRegistrationListStyles from './tailwind.css?inline';
+import { buildInternetSettingsWebViewState } from './internet-settings-web-view-state.utils';
 
 export const internetSettingsWebViewType = 'paratextRegistration.internetSettingsView';
 
 const titleKey = '%internetSettings_webView_title%';
 const tooltipKey = '%internetSettings_webView_tooltip%';
 
+export interface InternetSettingsWebViewOptions extends OpenWebViewOptions {
+  /** One-shot: was Shift held when the opener clicked/activated "Internet & connectivity"? */
+  requestDeveloperSettings?: boolean;
+}
+
 export class InternetSettingsWebViewProvider implements IWebViewProvider {
   // getWebView doesn't use instance state but cannot be static because it implements the
   // IWebViewProvider interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    getWebViewOptions: InternetSettingsWebViewOptions,
+  ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== internetSettingsWebViewType)
       throw new Error(
         `${internetSettingsWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
@@ -27,9 +41,7 @@ export class InternetSettingsWebViewProvider implements IWebViewProvider {
       tooltip,
       content: paratextRegistrationListWebView,
       styles: paratextRegistrationListStyles,
-      state: {
-        ...savedWebView.state,
-      },
+      state: buildInternetSettingsWebViewState(savedWebView, getWebViewOptions),
     };
   }
 }

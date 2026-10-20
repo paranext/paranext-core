@@ -99,9 +99,16 @@ declare module 'papi-shared-types' {
      * Show the Paratext Registration Internet Settings window with which the user defines internet
      * settings for connecting to the Paratext Registration
      *
+     * @param requestDeveloperSettings One-shot signal that the user deliberately asked to reveal
+     *   the hidden server-selection control (Shift-clicked/Shift-Entered the "Internet &
+     *   connectivity" row), one of the two inputs to the dialog's decision about whether to show it
+     *   — the other being whether the server is already something other than Production, which the
+     *   dialog reads live for itself.
      * @returns Id of the internet settings web view
      */
-    'paratextRegistration.showInternetSettings': () => Promise<string | undefined>;
+    'paratextRegistration.showInternetSettings': (
+      requestDeveloperSettings?: boolean,
+    ) => Promise<string | undefined>;
     /**
      * Gets information about user's current Paratext Registry user information in
      * `ParatextData.dll`

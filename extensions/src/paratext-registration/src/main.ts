@@ -5,6 +5,7 @@ import {
   paratextRegistrationWebViewType,
 } from './paratext-registration.web-view-provider';
 import {
+  InternetSettingsWebViewOptions,
   InternetSettingsWebViewProvider,
   internetSettingsWebViewType,
 } from './internet-settings.web-view-provider';
@@ -17,11 +18,14 @@ async function showParatextRegistration(): Promise<string | undefined> {
   );
 }
 
-async function showInternetSettings(): Promise<string | undefined> {
+async function showInternetSettings(
+  requestDeveloperSettings?: boolean,
+): Promise<string | undefined> {
+  const options: InternetSettingsWebViewOptions = { existingId: '?', requestDeveloperSettings };
   return papi.webViews.openWebView(
     internetSettingsWebViewType,
     { type: 'float', position: 'center', floatSize: { width: 450, height: 500 } },
-    { existingId: '?' },
+    options,
   );
 }
 
