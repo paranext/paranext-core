@@ -1,4 +1,5 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from 'platform-bible-react';
+import { formatReplacementString } from 'platform-bible-utils';
 import {
   NO_PROJECT_VIEW_KEYS,
   type NoProjectViewLocalizedStrings,
@@ -6,8 +7,13 @@ import {
 } from './no-project-view.const';
 import type { ProjectPresence } from './use-project-presence.hook';
 
-const { NO_PROJECT_SELECTED_KEY, NO_PROJECTS_TITLE_KEY, NO_PROJECTS_DESCRIPTION_KEY } =
-  NO_PROJECT_VIEW_KEYS;
+const {
+  NO_PROJECT_SELECTED_KEY,
+  NO_PROJECTS_TITLE_KEY,
+  NO_PROJECTS_DESCRIPTION_KEY,
+  NO_PROJECTS_DESCRIPTION_REGISTERED_KEY,
+  PRODUCT_NAME_KEY,
+} = NO_PROJECT_VIEW_KEYS;
 
 // Re-exported so consumers keep importing the view's contract from the view.
 export {
@@ -22,13 +28,19 @@ const localize = (strings: NoProjectViewLocalizedStrings, key: NoProjectViewStri
 export type NoProjectViewProps = {
   /** Whether the user has any project of their own. Only `none` shows the guidance. */
   presence: ProjectPresence;
+  /**
+   * Whether the user's Paratext registration is known to be valid. A registered user cannot fix
+   * having no projects by registering, so the guidance names their other options instead.
+   */
+  isRegistered?: boolean;
   /** Localized strings for both contents. Missing strings fall back to their keys. */
   localizedStrings?: NoProjectViewLocalizedStrings;
 };
 
 /**
  * Replaces the editor canvas when the editor has no project. When the user has no projects at all
- * it explains how to get one — register Paratext, or ask a project administrator — and otherwise it
+ * it explains how to get one — register Paratext, or ask a project administrator; or, for a
+ * registered user, have a project shared with them or create one in Paratext 9 — and otherwise it
  * says no project is selected.
  *
  * Accessibility: only the guidance is announced. It renders into a `role="status"` region that
@@ -38,8 +50,17 @@ export type NoProjectViewProps = {
  * carries no role of its own; nested live regions announce twice or not at all. Focus is left
  * alone: there is no editor content in this state for focus to have been lost from.
  */
-export function NoProjectView({ presence, localizedStrings = {} }: NoProjectViewProps) {
+export function NoProjectView({
+  presence,
+  isRegistered = false,
+  localizedStrings = {},
+}: NoProjectViewProps) {
   const isShowingGuidance = presence === 'none';
+  const description = isRegistered
+    ? formatReplacementString(localize(localizedStrings, NO_PROJECTS_DESCRIPTION_REGISTERED_KEY), {
+        [PRODUCT_NAME_KEY]: localize(localizedStrings, PRODUCT_NAME_KEY),
+      })
+    : localize(localizedStrings, NO_PROJECTS_DESCRIPTION_KEY);
 
   return (
     <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:px-4">
@@ -53,9 +74,7 @@ export function NoProjectView({ presence, localizedStrings = {} }: NoProjectView
               <EmptyTitle>
                 <h2>{localize(localizedStrings, NO_PROJECTS_TITLE_KEY)}</h2>
               </EmptyTitle>
-              <EmptyDescription>
-                {localize(localizedStrings, NO_PROJECTS_DESCRIPTION_KEY)}
-              </EmptyDescription>
+              <EmptyDescription>{description}</EmptyDescription>
             </EmptyHeader>
           </Empty>
         )}

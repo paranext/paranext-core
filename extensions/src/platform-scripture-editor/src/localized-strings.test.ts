@@ -7,7 +7,7 @@ import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
 import { EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.const';
-import { NO_PROJECT_VIEW_STRING_KEYS } from './no-project-view.const';
+import { NO_PROJECT_VIEW_CONTRIBUTED_STRING_KEYS } from './no-project-view.const';
 import { RESOURCE_CELL_STRING_KEYS } from './scripture-text-grid/resource-cell.const';
 import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
@@ -308,7 +308,7 @@ describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s'
 // What the editor shows when it has no project, including the guidance for a user who has no
 // projects at all. For that user this is the only text on screen, so it has to exist in every
 // shipped language.
-describe.each([...NO_PROJECT_VIEW_STRING_KEYS])('no project view label %s', (key) => {
+describe.each([...NO_PROJECT_VIEW_CONTRIBUTED_STRING_KEYS])('no project view label %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();
   });

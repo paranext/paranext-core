@@ -4,7 +4,8 @@ import { NoProjectView, NO_PROJECT_VIEW_STRING_KEYS } from './no-project-view.co
 
 /**
  * Replaces the editor canvas when the editor has no project. A Simple-mode user with no projects at
- * all is told how to get one — register Paratext, or ask a project administrator to add them.
+ * all is told how to get one — register Paratext, or ask a project administrator to add them; a
+ * registered user is told to have a project shared with them or to create one in Paratext 9.
  */
 const meta: Meta<typeof NoProjectView> = {
   title: 'Bundled Extensions/platform-scripture-editor/NoProjectView',
@@ -29,6 +30,11 @@ type Story = StoryObj<typeof NoProjectView>;
 
 /** The user has no projects: the guidance on how to get one. */
 export const NoProjects: Story = {};
+
+/** A registered user has no projects: the guidance names where their projects can come from. */
+export const NoProjectsRegistered: Story = {
+  args: { isRegistered: true },
+};
 
 /**
  * Anything short of a confirmed "no projects": projects exist but none is open, the answer is not

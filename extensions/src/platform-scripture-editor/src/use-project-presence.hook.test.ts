@@ -274,6 +274,23 @@ describe('useProjectPresence', () => {
     expect(result.current).toBe('none');
   });
 
+  it('stops retrying the sync-activity seed once a sync event has answered', async () => {
+    vi.useFakeTimers();
+    getMetadataForAllProjects.mockResolvedValue([SAMPLE_WEB]);
+    sendCommand.mockRejectedValue(new Error('not registered yet'));
+    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
+    await act(async () => {});
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+
+    fire('paratextBibleSendReceive.onSyncActivityChanged', { isSyncing: false, projectIds: [] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_ACTIVITY_SEED_RETRY_DELAY_MS * 3);
+    });
+
+    expect(sendCommand).toHaveBeenCalledTimes(1);
+    expect(result.current).toBe('none');
+  });
+
   it('stops re-reading the sync activity once the sync has ended', async () => {
     vi.useFakeTimers();
     getMetadataForAllProjects.mockResolvedValue([SAMPLE_WEB]);
@@ -391,6 +408,30 @@ describe('useProjectPresence', () => {
     });
 
     // The event's own lookup, then a retry of it
+    expect(getMetadataForAllProjects).toHaveBeenCalledTimes(1 + MAX_LOOKUP_RETRIES + 2);
+  });
+
+  it('gives lookups a fresh retry budget when they resume after a sync', async () => {
+    vi.useFakeTimers();
+    getMetadataForAllProjects.mockRejectedValue(new Error('lookup failed'));
+    renderHook(() => useProjectPresence({ enabled: true }));
+    await act(async () => {});
+    await Array.from({ length: MAX_LOOKUP_RETRIES }).reduce<Promise<void>>(async (previous) => {
+      await previous;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOOKUP_RETRY_DELAY_MS);
+      });
+    }, Promise.resolve());
+    expect(getMetadataForAllProjects).toHaveBeenCalledTimes(1 + MAX_LOOKUP_RETRIES);
+
+    fire('paratextBibleSendReceive.onSyncActivityChanged', { isSyncing: true, projectIds: [] });
+    fire('paratextBibleSendReceive.onSyncActivityChanged', { isSyncing: false, projectIds: [] });
+    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOOKUP_RETRY_DELAY_MS);
+    });
+
+    // The resumed lookup, then a retry of it
     expect(getMetadataForAllProjects).toHaveBeenCalledTimes(1 + MAX_LOOKUP_RETRIES + 2);
   });
 

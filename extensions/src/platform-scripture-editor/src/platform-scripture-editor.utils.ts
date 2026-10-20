@@ -1038,8 +1038,11 @@ export async function openDefaultActiveProjectIfApplicable(
  *   finishing. Newly-added shared projects look ineligible (`editedStatus === 'new'`, no
  *   `lastSendReceiveDate`) until the first sync settles, so the picker has to re-check after that.
  * - `platform.onDidChangeProjects` — handles the project set changing, including through the syncs
- *   that raise no `onSyncStateChanged` (see `adr-toolbar-sync-status-is-local`). Not debounced
- *   here: its emitter (`LocalParatextProjects`, C#) already debounces it.
+ *   that raise no `onSyncStateChanged` (see `adr-toolbar-sync-status-is-local`). It also fires when
+ *   a project's metadata changes (a rename, its language, whether it is editable), which re-runs
+ *   the picker for nothing; that is cheap, since a run exits early (`'no-empty'`) once the editor
+ *   has a project. Not debounced here: its emitter (`LocalParatextProjects`, C#) already debounces
+ *   it.
  *
  * Cold-start gap: there is no explicit "S/R command registered" signal, so if
  * `paratextBibleSendReceive` activates after `platformScriptureEditor` but before any of the
