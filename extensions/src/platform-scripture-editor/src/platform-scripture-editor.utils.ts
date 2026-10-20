@@ -93,6 +93,30 @@ export function resolveViewTypeForInterfaceMode(
 }
 
 /**
+ * The view type each direct view-setting command shows. "Preview" is the user-facing name of the
+ * `'formatted'` view type.
+ */
+export const VIEW_TYPE_FOR_SET_VIEW_COMMAND = {
+  'platformScriptureEditor.setViewStandard': 'standard',
+  'platformScriptureEditor.setViewPreview': 'formatted',
+} as const satisfies Record<string, ScriptureEditorViewType>;
+
+/**
+ * The view type the editor shows after a `setScriptureView` message: the requested one, except that
+ * Standard view resolves to the formatted view outside Power mode.
+ *
+ * @param requested The view type the message asks for
+ * @param isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @returns The view type to apply
+ */
+export function viewTypeForSetScriptureMessage(
+  requested: ScriptureEditorViewType,
+  isPowerMode: boolean,
+): ScriptureEditorViewType {
+  return resolveViewTypeForInterfaceMode(requested, isPowerMode);
+}
+
+/**
  * Computes the next view type for the view-cycling affordance (the `changeScriptureView` command).
  * Power mode cycles formatted -> standard -> markers -> formatted; simple mode skips 'standard'
  * entirely (see {@link resolveViewTypeForInterfaceMode}), cycling formatted <-> markers.
