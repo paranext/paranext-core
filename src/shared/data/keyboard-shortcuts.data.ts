@@ -526,38 +526,64 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
     command: 'platformScriptureEditor.insertCommentAtSelection',
   },
-  // TODO(PT-4735): Show hints on the rest of Simple's Project menu. ⌃T and ⌃⇧T below need a
-  // `command` that works in every view; the design's ⌃J, ⌃E and F7 have no editor handler or entry
-  // here yet. A new `command` also needs its row in `EXPECTED_MENU_HINTS`.
+  // TODO(PT-4735): Show hints on the rest of Simple's Project menu. The design's ⌃J and ⌃E have no
+  // editor handler or entry here yet. A new `command` also needs its row in `EXPECTED_MENU_HINTS`.
   {
     id: 'scripture-insert-footnote',
     purpose:
-      'Insert a footnote at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
+      'Insert a footnote at the selection (editable text, every view). Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃T (not ⌘T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
-    // No `command`: the chord works only in Standard view, but the menu item works in every view
     keys: { macOS: '⌃T', windows: 'Ctrl+T', linux: 'Ctrl+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
+    command: 'platformScriptureEditor.insertFootnoteAtSelection',
   },
   {
     id: 'scripture-insert-cross-reference',
     purpose:
-      'Insert a cross-reference at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
+      'Insert a cross-reference at the selection (editable text, every view). Does nothing while the editor’s right-click menu is open',
     category: 'Editing',
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃⇧T (not ⌘⇧T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
-    // No `command`: the chord works only in Standard view, but the menu item works in every view
     keys: { macOS: '⌃⇧T', windows: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
+    command: 'platformScriptureEditor.insertCrossReferenceAtSelection',
+  },
+  {
+    id: 'scripture-toggle-footnotes',
+    purpose: 'Show or hide the footnotes pane',
+    category: 'View',
+    context: 'Scripture editor web view',
+    keys: { macOS: 'F7', windows: 'F7', linux: 'F7' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
+    ],
+    command: 'platformScriptureEditor.toggleFootnotes',
+  },
+  {
+    id: 'scripture-open-basic-checks',
+    purpose: 'Open Basic checks for the project (Power mode)',
+    category: 'Navigation',
+    context: 'Scripture editor web view',
+    // macOS uses ⌃⇧R (not ⌘⇧R) because ⌘⇧R is the macOS menu bar's force reload
+    keys: { macOS: '⌃⇧R', windows: 'Ctrl+Shift+R', linux: 'Ctrl+Shift+R' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
+    ],
+    command: 'platformScripture.openChecksSidePanel',
   },
   {
     id: 'scripture-remove-character-formatting',
