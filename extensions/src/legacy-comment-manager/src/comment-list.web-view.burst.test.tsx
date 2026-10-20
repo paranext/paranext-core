@@ -14,6 +14,7 @@ import { saveDrafts } from './comment-draft-store';
 import type { StoredFilterSelection } from './comment-filter-store';
 import { makeEditorState } from './comment-draft.fixtures';
 import {
+  ALL_BOOKS_SCOPE_FILTER,
   CommentFilters,
   CommentPreset,
   DEFAULT_COMMENT_FILTERS,
@@ -495,7 +496,7 @@ describe('setFilters messages replayed in a burst', () => {
   });
 
   it('applies a message equal to the pre-burst state instead of skipping it', async () => {
-    seedStoredSelection('project-1', { preset: 'all', scopeFilter: 'all-books' });
+    seedStoredSelection('project-1', { preset: 'all', scopeFilter: ALL_BOOKS_SCOPE_FILTER });
     renderCommentListWebView();
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
 
@@ -511,7 +512,7 @@ describe('setFilters messages replayed in a burst', () => {
 
     await waitFor(() => {
       expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS);
-      expect(latestPanelProps().scopeFilter).toBe('all-books');
+      expect(latestPanelProps().scopeFilter).toBe(ALL_BOOKS_SCOPE_FILTER);
     });
   });
 
@@ -532,7 +533,7 @@ describe('setFilters messages replayed in a burst', () => {
   });
 
   it('applies a message equal to the scope a panel change just left behind', async () => {
-    seedStoredSelection('project-1', { preset: 'all', scopeFilter: 'all-books' });
+    seedStoredSelection('project-1', { preset: 'all', scopeFilter: ALL_BOOKS_SCOPE_FILTER });
     renderCommentListWebView();
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
 
@@ -541,7 +542,7 @@ describe('setFilters messages replayed in a burst', () => {
       dispatchSetFilters({});
     });
 
-    await waitFor(() => expect(latestPanelProps().scopeFilter).toBe('all-books'));
+    await waitFor(() => expect(latestPanelProps().scopeFilter).toBe(ALL_BOOKS_SCOPE_FILTER));
   });
 
   it('still skips a genuinely identical repeat, minting no new filters object', async () => {
@@ -729,7 +730,7 @@ describe('current-* scope scrRef wiring', () => {
   });
 
   it('does not resubscribe on a verse move when scoped to all-books', async () => {
-    seedStoredSelection('project-1', { preset: 'all', scopeFilter: 'all-books' });
+    seedStoredSelection('project-1', { preset: 'all', scopeFilter: ALL_BOOKS_SCOPE_FILTER });
     const scrRefControls = makeControllableScrRef({ book: 'MRK', chapterNum: 1, verseNum: 1 });
     renderCommentListWebView(scrRefControls.hook);
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
@@ -1095,7 +1096,7 @@ describe('unsaved preset filtering', () => {
       },
     });
 
-    seedStoredSelection('project-1', { preset: 'all', scopeFilter: 'all-books' });
+    seedStoredSelection('project-1', { preset: 'all', scopeFilter: ALL_BOOKS_SCOPE_FILTER });
     renderCommentListWebView();
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
 
