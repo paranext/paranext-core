@@ -283,7 +283,7 @@ describe("The scripture editor's Project menu, per mode", () => {
     expect(rendered).not.toContain(otherModeToolsColumn);
   });
 
-  /** Spec §3 icon table: each served item's `iconNameBefore`, per mode. */
+  /** The icon each served item must carry, per mode. */
   const ICONS_IN_BOTH_MODES: [string, string | undefined][] = [
     ['platform.openProjectSettingsForWebView', 'settings'],
     ['platformScriptureEditor.editSubmenu', 'pencil'],

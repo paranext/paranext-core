@@ -6,7 +6,7 @@
       {
         "label": "%mainMenu_openParatextRegistration_2%",
         "hiddenInterfaceModes": ["simple"],
-        "localizeNotes": "Application main menu > Help > Registration information Hidden in Simple mode: registration details stay reachable there from the user profile popover in the toolbar",
+        "localizeNotes": "Application main menu > Help > Registration information. Hidden in Simple mode: registration details stay reachable there from the user profile popover in the toolbar",
         "group": "platform.helpMisc",
         "order": 999999000,
         "command": "paratextRegistration.showParatextRegistration"

@@ -84,16 +84,18 @@ export type MenuItemBase = OrderedItem & {
   hiddenInterfaceModes?: InterfaceMode[];
   /**
    * Lucide icon name (kebab-case, e.g. `refresh-cw`) to display before the menu text. The icon
-   * takes the text colour of the item. Names outside the platform's curated set render nothing.
-   * Wins over `iconPathBefore` when both are set.
+   * takes the text colour of the item. The curated names are listed in `LUCIDE_ICON_NAMES`
+   * (exported from `platform-bible-react/experimental`). Wins over `iconPathBefore` when both are
+   * set, unless the name is not in that set: then `iconPathBefore` is shown if set, else no icon.
    *
    * @experimental This field is unstable and may change or disappear without notice
    */
   iconNameBefore?: string;
   /**
    * Lucide icon name (kebab-case, e.g. `external-link`) to display after the menu text. The icon
-   * takes the text colour of the item. Names outside the platform's curated set render nothing.
-   * Wins over `iconPathAfter` when both are set.
+   * takes the text colour of the item. The curated names are listed in `LUCIDE_ICON_NAMES`
+   * (exported from `platform-bible-react/experimental`). Wins over `iconPathAfter` when both are
+   * set, unless the name is not in that set: then `iconPathAfter` is shown if set, else no icon.
    *
    * @experimental This field is unstable and may change or disappear without notice
    */
@@ -512,12 +514,12 @@ export const menuDocumentSchema = {
         },
         iconNameBefore: {
           description:
-            'Lucide icon name (kebab-case, e.g. `refresh-cw`) to display before the menu text. Wins over `iconPathBefore` when both are set.',
+            'Lucide icon name (kebab-case, e.g. `refresh-cw`) to display before the menu text. The curated names are listed in `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). Wins over `iconPathBefore` when both are set, unless the name is not in that set: then `iconPathBefore` is shown if set, else no icon.',
           type: 'string',
         },
         iconNameAfter: {
           description:
-            'Lucide icon name (kebab-case, e.g. `external-link`) to display after the menu text. Wins over `iconPathAfter` when both are set.',
+            'Lucide icon name (kebab-case, e.g. `external-link`) to display after the menu text. The curated names are listed in `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). Wins over `iconPathAfter` when both are set, unless the name is not in that set: then `iconPathAfter` is shown if set, else no icon.',
           type: 'string',
         },
       },

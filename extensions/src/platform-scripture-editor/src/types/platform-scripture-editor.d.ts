@@ -43,16 +43,17 @@ declare module 'platform-scripture-editor' {
   };
 
   /**
-   * Tell the editor to cycle between the Scripture view types (currently just a toggle between
-   * formatted and Marker view)
+   * Tell the editor to cycle between the Scripture view types. In Power mode the cycle is formatted
+   * (Preview), then Standard, then Marker view, then back to formatted. Outside Power mode only the
+   * formatted view is available, so the cycle stays on it.
    */
   export type EditorMessageChangeScriptureView = {
     method: 'changeScriptureView';
   };
 
   /**
-   * Tell the editor to show a specific Scripture view type. A `'standard'` request resolves to the
-   * formatted view when the interface mode is not Power.
+   * Tell the editor to show a specific Scripture view type. A `'standard'` or `'markers'` request
+   * resolves to the formatted view when the interface mode is not Power.
    *
    * @experimental This message is unstable and may change or disappear without notice
    */
@@ -403,13 +404,14 @@ declare module 'platform-scripture-editor' {
      */
     selectRange(range: ScriptureRange): Promise<void>;
     /**
-     * Cycle through the Scripture view types in the editor (currently just a toggle between
-     * formatted and Marker view)
+     * Cycle through the Scripture view types in the editor. In Power mode the cycle is formatted
+     * (Preview), then Standard, then Marker view, then back to formatted. Outside Power mode only
+     * the formatted view is available, so the cycle stays on it.
      */
     changeScriptureView(): Promise<void>;
     /**
-     * Show a specific Scripture view type in the editor (`'standard'` resolves to the formatted
-     * view outside Power mode)
+     * Show a specific Scripture view type in the editor (`'standard'` and `'markers'` resolve to
+     * the formatted view outside Power mode)
      *
      * @experimental This method is unstable and may change or disappear without notice
      */
@@ -865,8 +867,9 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Cycles through the Scripture view types in the editor (currently just a toggle between
-     * formatted and Marker view) for the given the WebView ID
+     * Cycles through the Scripture view types in the editor for the given WebView ID. In Power mode
+     * the cycle is formatted (Preview), then Standard, then Marker view, then back to formatted.
+     * Outside Power mode only the formatted view is available, so the cycle stays on it.
      *
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
