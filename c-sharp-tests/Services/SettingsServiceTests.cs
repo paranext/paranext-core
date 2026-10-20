@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Nerdbank.Streams;
@@ -61,10 +62,30 @@ public class SettingsServiceTests
 
     private static readonly TimeSpan s_retryDelay = TimeSpan.FromMilliseconds(10);
 
+    /// <summary>Waits with a deadline <paramref name="timeout"/> from now.</summary>
+    private static async Task<bool> WaitWithTimeoutAsync<T>(
+        PapiClient client,
+        string key,
+        TimeSpan timeout,
+        TimeSpan retryDelay
+    )
+    {
+        using var deadline = new CancellationTokenSource(timeout);
+        return await SettingsService.WaitForSettingAsync<T>(
+            client,
+            key,
+            retryDelay,
+            deadline.Token
+        );
+    }
+
+    /// <summary>A read main answers with <paramref name="Value"/> after <paramref name="Delay"/>.</summary>
+    private sealed record AnswersAfter(TimeSpan Delay, object? Value);
+
     /// <summary>
     /// Answers each request with the next scripted outcome, repeating the last one: an exception to
-    /// throw, a value to return, or one of the sentinels below. Stands in for main's answers, which
-    /// DummyPapiClient's local handlers can't produce.
+    /// throw, a value to return, an <see cref="AnswersAfter"/>, or one of the sentinels below.
+    /// Stands in for main's answers, which DummyPapiClient's local handlers can't produce.
     /// </summary>
     private sealed class ScriptedPapiClient(params object?[] outcomes) : DummyPapiClient
     {
@@ -91,9 +112,17 @@ public class SettingsServiceTests
                 Dispose();
                 return Task.FromException<T?>(new ConnectionLostException());
             }
+            if (outcome is AnswersAfter late)
+                return AnswerLaterAsync<T>(late);
             return outcome is Exception ex
                 ? Task.FromException<T?>(ex)
                 : Task.FromResult((T?)outcome);
+        }
+
+        private static async Task<T?> AnswerLaterAsync<T>(AnswersAfter late)
+        {
+            await Task.Delay(late.Delay);
+            return (T?)late.Value;
         }
     }
 
@@ -134,7 +163,7 @@ public class SettingsServiceTests
     {
         _settingsService.AddSettingValue("testNum", 15);
 
-        var answered = await SettingsService.WaitForSettingAsync<int?>(
+        var answered = await WaitWithTimeoutAsync<int?>(
             _client,
             "testNum",
             TimeSpan.FromSeconds(5),
@@ -148,7 +177,7 @@ public class SettingsServiceTests
     public async Task WaitForSettingAsync_ServiceRegistersWhileWaiting_ReturnsTrue()
     {
         using var client = new DummyPapiClient();
-        var waitTask = SettingsService.WaitForSettingAsync<int?>(
+        var waitTask = WaitWithTimeoutAsync<int?>(
             client,
             "testNum",
             TimeSpan.FromSeconds(5),
@@ -166,15 +195,11 @@ public class SettingsServiceTests
     }
 
     [Test]
-    public async Task WaitForSettingAsync_NoHandlerThenTimeoutThenValue_ReturnsTrue()
+    public async Task WaitForSettingAsync_NoHandlerThenNullThenValue_ReturnsTrue()
     {
-        using var client = new ScriptedPapiClient(
-            MethodNotFound(),
-            new OperationCanceledException(),
-            15
-        );
+        using var client = new ScriptedPapiClient(MethodNotFound(), null, 15);
 
-        var answered = await SettingsService.WaitForSettingAsync<int?>(
+        var answered = await WaitWithTimeoutAsync<int?>(
             client,
             "testNum",
             TimeSpan.FromSeconds(5),
@@ -190,8 +215,7 @@ public class SettingsServiceTests
     {
         using var client = new ScriptedPapiClient(MethodNotFound());
 
-        var answered = await SettingsService
-            .WaitForSettingAsync<int?>(
+        var answered = await WaitWithTimeoutAsync<int?>(
                 client,
                 "testNum",
                 TimeSpan.FromMilliseconds(100),
@@ -200,7 +224,82 @@ public class SettingsServiceTests
             .WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.That(answered, Is.False);
-        Assert.That(client.Attempts, Is.GreaterThan(1));
+        // About 10 attempts with these delays; a retry loop that doesn't pause makes thousands.
+        Assert.That(client.Attempts, Is.GreaterThan(1).And.LessThan(50));
+    }
+
+    [Test]
+    public async Task WaitForSettingAsync_ReadAnsweredBeforeTimeout_ReturnsTrue()
+    {
+        using var client = new ScriptedPapiClient(
+            new AnswersAfter(TimeSpan.FromMilliseconds(50), 15)
+        );
+
+        var answered = await WaitWithTimeoutAsync<int?>(
+                client,
+                "testNum",
+                TimeSpan.FromSeconds(5),
+                s_retryDelay
+            )
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.That(answered, Is.True);
+        Assert.That(client.Attempts, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task WaitForSettingAsync_LaterReadNeverAnswered_ReturnsFalseAtTimeout()
+    {
+        // The second read starts halfway through, so only a cap at the time left ends it on time.
+        var timeout = TimeSpan.FromMilliseconds(500);
+        using var client = new ScriptedPapiClient(
+            new AnswersAfter(timeout / 2, null),
+            ScriptedPapiClient.NeverAnswers
+        );
+        var stopwatch = Stopwatch.StartNew();
+
+        var answered = await WaitWithTimeoutAsync<int?>(client, "testNum", timeout, s_retryDelay)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.That(answered, Is.False);
+        Assert.That(client.Attempts, Is.EqualTo(2));
+        Assert.That(stopwatch.Elapsed, Is.GreaterThan(timeout * 0.8).And.LessThan(timeout * 1.4));
+    }
+
+    [Test]
+    public async Task WaitForSettingAsync_RetryDelayPastTimeout_ReturnsFalseAtTimeout()
+    {
+        var timeout = TimeSpan.FromMilliseconds(100);
+        using var client = new ScriptedPapiClient(MethodNotFound());
+        var stopwatch = Stopwatch.StartNew();
+
+        var answered = await WaitWithTimeoutAsync<int?>(
+                client,
+                "testNum",
+                timeout,
+                TimeSpan.FromSeconds(10)
+            )
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.That(answered, Is.False);
+        Assert.That(client.Attempts, Is.EqualTo(1));
+        Assert.That(stopwatch.Elapsed, Is.LessThan(TimeSpan.FromSeconds(2)));
+    }
+
+    [Test]
+    public async Task WaitForSettingAsync_DeadlineAlreadyPassed_ReturnsFalseWithoutReading()
+    {
+        using var client = new ScriptedPapiClient(15);
+
+        var answered = await SettingsService.WaitForSettingAsync<int?>(
+            client,
+            "testNum",
+            s_retryDelay,
+            new CancellationToken(canceled: true)
+        );
+
+        Assert.That(answered, Is.False);
+        Assert.That(client.Attempts, Is.EqualTo(0));
     }
 
     private static IEnumerable<TestCaseData> OtherReadFailures()
@@ -233,12 +332,7 @@ public class SettingsServiceTests
 
         var thrown = Assert.CatchAsync(
             () =>
-                SettingsService.WaitForSettingAsync<int?>(
-                    client,
-                    "testNum",
-                    TimeSpan.FromSeconds(5),
-                    s_retryDelay
-                )
+                WaitWithTimeoutAsync<int?>(client, "testNum", TimeSpan.FromSeconds(5), s_retryDelay)
         );
         Assert.That(thrown, Is.SameAs(expected));
         Assert.That(client.Attempts, Is.EqualTo(1));
@@ -249,8 +343,7 @@ public class SettingsServiceTests
     {
         using var client = new ScriptedPapiClient(ScriptedPapiClient.NeverAnswers);
 
-        var answered = await SettingsService
-            .WaitForSettingAsync<int?>(
+        var answered = await WaitWithTimeoutAsync<int?>(
                 client,
                 "testNum",
                 TimeSpan.FromMilliseconds(100),
@@ -267,8 +360,12 @@ public class SettingsServiceTests
     {
         using var client = new ScriptedPapiClient(ScriptedPapiClient.DisconnectsMidRead);
 
-        var answered = await SettingsService
-            .WaitForSettingAsync<int?>(client, "testNum", TimeSpan.FromSeconds(5), s_retryDelay)
+        var answered = await WaitWithTimeoutAsync<int?>(
+                client,
+                "testNum",
+                TimeSpan.FromSeconds(5),
+                s_retryDelay
+            )
             .WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.That(answered, Is.False);
@@ -280,8 +377,7 @@ public class SettingsServiceTests
     {
         using var client = new ScriptedPapiClient([null]);
 
-        var answered = await SettingsService
-            .WaitForSettingAsync<string>(
+        var answered = await WaitWithTimeoutAsync<string>(
                 client,
                 "testString",
                 TimeSpan.FromMilliseconds(100),
@@ -290,7 +386,7 @@ public class SettingsServiceTests
             .WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.That(answered, Is.False);
-        Assert.That(client.Attempts, Is.GreaterThan(1));
+        Assert.That(client.Attempts, Is.GreaterThan(1).And.LessThan(50));
     }
 
     [Test]
@@ -298,7 +394,7 @@ public class SettingsServiceTests
     {
         _client.Dispose();
 
-        var waitTask = SettingsService.WaitForSettingAsync<int?>(
+        var waitTask = WaitWithTimeoutAsync<int?>(
             _client,
             "testNum",
             TimeSpan.FromMinutes(10),

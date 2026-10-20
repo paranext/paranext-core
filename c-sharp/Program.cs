@@ -76,16 +76,29 @@ public static class Program
 
             // The persisted settings below read from the settings service, which the extension host
             // can still be starting. Reading too soon throws and ends this process. Starting with
-            // empty values instead would let the next save wipe what is stored. One setting stands
-            // in for the whole service: it has a contributed default, so any answer is non-null.
+            // empty values instead would let the next save wipe what is stored. Both settings have
+            // contributed defaults, so any answer is non-null. Each is waited for: a stored setting
+            // is answered as soon as the service registers, but an unstored one only after the
+            // extension host's contributions load.
             var settingsWaitTimeout = TimeSpan.FromSeconds(60);
+            var settingsRetryDelay = TimeSpan.FromMilliseconds(250);
+            StartupTiming.Mark("settings-wait-start");
+            using var settingsWaitDeadline = new CancellationTokenSource(settingsWaitTimeout);
             var settingsServiceAnswered =
                 await SettingsService.WaitForSettingAsync<SerializableStringDictionary>(
                     papi,
                     Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
-                    settingsWaitTimeout,
-                    TimeSpan.FromMilliseconds(250)
+                    settingsRetryDelay,
+                    settingsWaitDeadline.Token
+                )
+                && await SettingsService.WaitForSettingAsync<SerializableStringDictionary>(
+                    papi,
+                    Settings.PTX_UTILS_MEMENTO_DATA,
+                    settingsRetryDelay,
+                    settingsWaitDeadline.Token
                 );
+            if (papi.DisconnectTask.IsCompleted)
+                return;
             if (!settingsServiceAnswered)
             {
                 Console.Error.WriteLine(
