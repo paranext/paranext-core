@@ -30,10 +30,10 @@ internal static class InternetServicesGate
     /// </summary>
     public const string BlockedSentinel = "(INTERNET_SERVICES_BLOCKED)";
 
-    private const string BLOCKED_MESSAGE_KEY = "%data_loading_error_internetAccess_disabled_2%";
+    private const string BLOCKED_MESSAGE_KEY = "%data_loading_error_internetAccess_disabled_3%";
 
     private const string BLOCKED_MESSAGE_FALLBACK =
-        "Internet access is disabled in “Internet & connectivity”. Please enable it and try again.";
+        "Internet access is disabled in “Internet connectivity”. Please enable it and try again.";
 
     /// <summary>Whether the saved internet setting turns off Send/Receive and the DBL.</summary>
     public static bool IsBlocked(InternetUse savedInternetUse) =>
