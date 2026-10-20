@@ -43,8 +43,8 @@ export const ER_FRAME_SELECTOR = 'iframe[title="Enhanced Resource"]';
 
 /**
  * Open an Enhanced Resource window with the `platformEnhancedResources.openEnhancedResource`
- * command and wait for the iframe to be ready. Power's main menu no longer offers this command, so
- * the command is the only way in.
+ * command and wait for the iframe to be ready. The main menu hides this command in both interface
+ * modes, so the command is the only way in.
  *
  * The hardcoded ESV16UK+ default in main.ts (TODO(GAP-001)) means the command opens the resource
  * directly — no picker dialog. The MarbleGuide tutorial may auto-show on the first ER open per
