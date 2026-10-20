@@ -5147,6 +5147,21 @@ describe('getSimpleModeRootClassNames', () => {
   });
 });
 
+describe('resolving the view type a setScriptureView message requests', () => {
+  it("setScriptureView with 'standard' sets standard in Power", () => {
+    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
+  });
+
+  it("setScriptureView with 'formatted' sets formatted", () => {
+    expect(resolveViewTypeForInterfaceMode('formatted', true)).toBe('formatted');
+    expect(resolveViewTypeForInterfaceMode('formatted', false)).toBe('formatted');
+  });
+
+  it("setScriptureView with 'standard' in Simple resolves to formatted", () => {
+    expect(resolveViewTypeForInterfaceMode('standard', false)).toBe('formatted');
+  });
+});
+
 describe('getNextViewTypeInCycle', () => {
   it('cycles formatted -> standard -> markers -> formatted in power mode', () => {
     expect(getNextViewTypeInCycle('formatted', true)).toBe('standard');
