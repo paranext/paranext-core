@@ -8,7 +8,14 @@ import { registerWebViewRoot } from '@renderer/services/web-view-root.registry';
 
 const mocks = vi.hoisted(() => ({
   reloadWebView:
-    vi.fn<(webViewType: string, id: string, options?: unknown) => Promise<string | undefined>>(),
+    vi.fn<
+      (
+        webViewType: string,
+        id: string,
+        options?: unknown,
+        shouldWaitPatientlyForProvider?: boolean,
+      ) => Promise<string | undefined>
+    >(),
   getSavedWebViewDefinitionSync: vi.fn<(id: string) => unknown>(),
   loggerDebug: vi.fn(),
   loggerWarn: vi.fn(),
@@ -118,6 +125,26 @@ beforeEach(() => {
 });
 
 describe('a restored tab fetching the content it was saved without', () => {
+  test('asks reloadWebView to keep re-arming its wait for the provider', async () => {
+    // A tab-restore's provider may belong to an extension that has not finished activating yet.
+    // Dropping `shouldWaitPatientlyForProvider` on the way to `reloadWebView` would silently
+    // reintroduce the failure that leaves an extension's tab stuck blank if it fails to activate
+    // within the normal 20s window.
+    const { loadWebViewTab } = await import('./web-view.component');
+    mocks.reloadWebView.mockResolvedValue(SAVED_WEB_VIEW_ID);
+
+    loadWebViewTab(RESTORED_TAB);
+
+    await vi.waitFor(() =>
+      expect(mocks.reloadWebView).toHaveBeenCalledWith(
+        SAVED_WEB_VIEW_TYPE,
+        SAVED_WEB_VIEW_ID,
+        { bringToFront: false },
+        true,
+      ),
+    );
+  });
+
   test('says nothing louder than debug when the web view left the dock while it fetched', async () => {
     // The reload answers `undefined` for a web view that is no longer in this window's dock — a
     // layout load that took the dock wholesale while the tab was still fetching, or the tab being

@@ -162,7 +162,7 @@ const PROVIDER_WAIT_ARM_MS = 20000;
 /**
  * Total time {@link waitForWebViewProviderPatiently} spends re-arming the wait before giving up —
  * comfortably past the ~28s worst-case cold-start activation time observed in practice, with room
- * as more extensions get bundled. See the retry-decision write-up this implements.
+ * as more extensions get bundled.
  */
 const PATIENT_PROVIDER_WAIT_TOTAL_MS = 2 * 60 * 1000;
 
@@ -179,11 +179,13 @@ const PATIENT_PROVIDER_WAIT_TOTAL_MS = 2 * 60 * 1000;
 async function waitForWebViewProviderPatiently(
   webViewProviderObjectId: string,
 ): Promise<NetworkObjectDetails> {
-  const deadline = Date.now() + PATIENT_PROVIDER_WAIT_TOTAL_MS;
+  // Use a timer that won't jump if the system clock changes. This code can run during startup,
+  // when the system clock may be adjusted (e.g., after booting, dual-booting, or resuming a VM).
+  // This matches the approach in `startup-readiness.util.ts`.
+  const deadline = performance.now() + PATIENT_PROVIDER_WAIT_TOTAL_MS;
   // Re-arming is the point: each arm is the same bounded wait, retried until it resolves or the
   // total budget above is spent.
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  for (;;) {
     try {
       // Sequential by construction — each arm starts only once the previous one has timed out.
       // eslint-disable-next-line no-await-in-loop
@@ -194,7 +196,7 @@ async function waitForWebViewProviderPatiently(
     } catch (e) {
       // Budget spent: let this arm's rejection propagate exactly as the one-shot wait's would,
       // just later — same error shape, same caller-side handling.
-      if (Date.now() >= deadline) throw e;
+      if (performance.now() >= deadline) throw e;
     }
   }
 }

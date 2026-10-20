@@ -85,7 +85,12 @@ const LIVE_DEFINITION: WebViewDefinition = {
 
 /** Narrow view of the published shard covering only the reload method under test */
 type ReloadShard = {
-  reloadWebView(webViewType: string, webViewId: WebViewId): Promise<WebViewId | undefined>;
+  reloadWebView(
+    webViewType: string,
+    webViewId: WebViewId,
+    options?: unknown,
+    shouldWaitPatientlyForProvider?: boolean,
+  ): Promise<WebViewId | undefined>;
 };
 
 /**
@@ -218,6 +223,18 @@ describe('content arriving through a door that names no caller', () => {
       expect.anything(),
       undefined,
     );
+  });
+});
+
+describe('a tab-restore reload stays patient with a still-activating provider', () => {
+  test('threads the patient-wait flag through to the provider lookup', async () => {
+    const { shard } = await shardOverDockRecordingAdds();
+    await primeProvider();
+    const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
+
+    await shard.reloadWebView('test.type', 'open-view', undefined, true);
+
+    expect(webViewProviderService.getWebViewProvider).toHaveBeenCalledWith('test.type', true);
   });
 });
 

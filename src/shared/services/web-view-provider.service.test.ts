@@ -114,9 +114,9 @@ describe('getWebViewProvider — the patient, re-arming wait (tab-restore path)'
     const service = await loadService();
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
-    // Each rejection also advances the fake clock by one 20s arm, simulating that much wall-clock
-    // time having actually passed while this arm waited — the loop reads Date.now() to decide
-    // whether to re-arm again, not a real timer, so nothing here needs to actually wait 2 minutes.
+    // Each rejection also advances the fake clock by one 20s arm, simulating that much time having
+    // actually passed while this arm waited — the loop reads performance.now() to decide whether to
+    // re-arm again, not a real timer, so nothing here needs to actually wait 2 minutes.
     mockWaitForNetworkObject.mockImplementation(async () => {
       vi.advanceTimersByTime(20000);
       throw new Error('Timeout reached when waiting for wait-for-net-obj');

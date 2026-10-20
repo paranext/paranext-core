@@ -5892,9 +5892,17 @@ declare module 'shared/services/web-view-provider.service' {
    * Get a web view provider that has previously been set up
    *
    * @param webViewType Type of webview provider to get
+   * @param shouldWaitPatiently Whether to keep re-arming the wait for up to
+   *   {@link PATIENT_PROVIDER_WAIT_TOTAL_MS} if the provider's extension is still activating, instead
+   *   of failing after the first {@link PROVIDER_WAIT_ARM_MS}. Set this only for a tab-restore
+   *   request; leave it `false` (the default) for a fresh `openWebView()` request. Defaults to
+   *   `false`
    * @returns Web view provider with the given name if one exists, undefined otherwise
    */
-  function getWebViewProvider(webViewType: string): Promise<IRegisteredWebViewProvider | undefined>;
+  function getWebViewProvider(
+    webViewType: string,
+    shouldWaitPatiently?: boolean,
+  ): Promise<IRegisteredWebViewProvider | undefined>;
   /**
    * Register a web view controller to represent a web view. It is expected that a web view provider
    * calls this to register a web view controller for a web view that is being created. If a web view
