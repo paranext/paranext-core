@@ -87,10 +87,9 @@ export async function openInternetSettings(mainPage: Page): Promise<void> {
 /**
  * Returns a FrameLocator scoped to the internet settings web view iframe.
  *
- * Matched on the iframe's title attribute, case-insensitively and on the stable word alone: the web
- * view provider still names itself with the deprecated `%internetSettings_webView_title%`
- * ("Internet Settings") while its replacement key reads "Internet connectivity", so anything
- * matching the full phrase or its capitalization breaks on whichever key wins.
+ * Matched on the iframe's title attribute, case-insensitively and on the stable word alone, so a
+ * change to the rest of the title ("Internet connectivity") or its capitalization does not break
+ * it.
  *
  * Does not wait for the panel to finish loading — callers should await a stable element (e.g.,
  * `frame.locator('h2').toBeVisible()`) before interacting with the frame.
