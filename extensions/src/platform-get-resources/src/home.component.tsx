@@ -17,6 +17,7 @@ import {
   CardFooter,
   CardHeader,
   cn,
+  DisabledActionTooltip,
   DropdownMenuItem,
   Label,
   SearchBar,
@@ -29,8 +30,13 @@ import {
   TableRow,
 } from 'platform-bible-react';
 import type { ProjectMetadata } from '@papi/core';
-import type { LocalizedStringValue } from 'platform-bible-utils';
-import { formatTimeSpan, getErrorMessage, normalizeFullName } from 'platform-bible-utils';
+import type { LanguageStrings, LocalizedStringValue } from 'platform-bible-utils';
+import {
+  formatTimeSpan,
+  getErrorMessage,
+  isLocalizeKey,
+  normalizeFullName,
+} from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
@@ -106,6 +112,7 @@ export type RemoteProjectsState =
 const NO_LOCAL_PROJECTS: LocalProjectInfo[] = [];
 const NO_SHARED_PROJECTS: SharedProjectsInfo = {};
 const NO_ACTIVE_SEND_RECEIVE_PROJECTS: string[] = [];
+const NO_LOCALIZED_UNSUPPORTED_REASONS: LanguageStrings = {};
 
 export type SortConfig = {
   key: 'shortName' | 'fullName' | 'language' | 'activity' | 'action';
@@ -122,6 +129,8 @@ export type LocalProjectInfo = {
   fullName?: string;
   name: string;
   language: string;
+  /** Localize key; absent means the project can be opened. See `ProjectMetadata.unsupportedReason`. */
+  unsupportedReason?: string;
 };
 
 /**
@@ -136,6 +145,7 @@ export function metadataToLocalProjectInfo(data: ProjectMetadata): LocalProjectI
     fullName: normalizeFullName(data.fullName),
     name: data.name ?? data.id,
     language: data.language ?? '',
+    unsupportedReason: data.unsupportedReason,
   };
 }
 
@@ -155,6 +165,8 @@ export type MergedProjectInfo = {
    */
   hasUnsyncedChanges?: boolean;
   lastSendReceiveDate?: string;
+  /** Localize key; absent means the project can be opened. See `ProjectMetadata.unsupportedReason`. */
+  unsupportedReason?: string;
 };
 
 /**
@@ -231,6 +243,11 @@ export type HomeProps = {
   /** Array of project IDs that are currently being sent/received. */
   activeSendReceiveProjects?: string[];
   /**
+   * Localized text for each `unsupportedReason` key in the list; a key with no entry shows no
+   * tooltip text.
+   */
+  localizedUnsupportedReasons?: LanguageStrings;
+  /**
    * Content for the header, e.g. <><HomeIcon
    * size={36}/><CardTitle>{localizedDialogTitleText}</CardTitle></>
    */
@@ -259,6 +276,8 @@ export type HomeProps = {
  * @param {sharedProjectsInfo} - Object of shared project information, containing projects on the
  *   send/receive server.
  * @param {activeSendReceiveProjects} - Array of project IDs that are currently being sent/received.
+ * @param {localizedUnsupportedReasons} - Localized text for each `unsupportedReason` key in the
+ *   list.
  * @param {headerContent} - Content for the header, e.g. <><HomeIcon
  *   size={36}/><CardTitle>{localizedDialogTitleText}</CardTitle></>
  * @returns
@@ -279,6 +298,7 @@ export function Home({
   localProjectsInfo = NO_LOCAL_PROJECTS,
   sharedProjectsInfo = NO_SHARED_PROJECTS,
   activeSendReceiveProjects = NO_ACTIVE_SEND_RECEIVE_PROJECTS,
+  localizedUnsupportedReasons = NO_LOCALIZED_UNSUPPORTED_REASONS,
   headerContent,
 }: HomeProps) {
   const getLocalizedString = (localizeKey: HomeLocalizedStringKey) => {
@@ -352,6 +372,7 @@ export function Home({
     const newMergedProjectInfo: MergedProjectInfo[] = [];
     if (sharedProjectsInfo) {
       Object.entries(sharedProjectsInfo).forEach(([projectId, sharedProject]) => {
+        const localProject = localProjectsInfo?.find((project) => project.projectId === projectId);
         newMergedProjectInfo.push({
           projectId,
           name: sharedProject.name,
@@ -360,10 +381,13 @@ export function Home({
           // Shared (send/receive) projects are not published resources.
           isPublished: false,
           isSendReceivable: true,
-          isLocallyAvailable: localProjectsInfo?.some((project) => project.projectId === projectId),
+          isLocallyAvailable: !!localProject,
           editedStatus: sharedProject.editedStatus,
           hasUnsyncedChanges: unsyncedProjectIds?.includes(projectId.toUpperCase()),
           lastSendReceiveDate: sharedProject.lastSendReceiveDate,
+          // The server's answer covers a project that is not downloaded yet; the local one covers a
+          // server that does not report it. `||` so an empty reason never masks a real one.
+          unsupportedReason: sharedProject.unsupportedReason || localProject?.unsupportedReason,
         });
       });
     }
@@ -380,6 +404,7 @@ export function Home({
           isSendReceivable: false,
           isLocallyAvailable: true,
           hasUnsyncedChanges: unsyncedProjectIds?.includes(project.projectId.toUpperCase()),
+          unsupportedReason: project.unsupportedReason,
         });
       }
     });
@@ -514,16 +539,53 @@ export function Home({
   };
 
   const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    const rawUnsupportedReasonText =
+      project.unsupportedReason && isLocalizeKey(project.unsupportedReason)
+        ? localizedUnsupportedReasons[project.unsupportedReason]
+        : undefined;
+    // A key with no translation can resolve to itself (the loading seed, and possibly the
+    // fallback chain's last resort), so a value that is still a localize key is treated as
+    // missing rather than shown verbatim as tooltip text.
+    const unsupportedReasonText =
+      rawUnsupportedReasonText && !isLocalizeKey(rawUnsupportedReasonText)
+        ? rawUnsupportedReasonText
+        : undefined;
+    const isOpenBlocked = !!project.unsupportedReason;
+    // A disabled menu item takes no pointer events, so it cannot show a hover tooltip; the reason
+    // is written inside the item instead, where it is also part of the item's accessible name.
+    // `onSelect` rather than `onClick`, because Radix withholds `onSelect` from a disabled item.
     if (isMenuItem)
       return (
-        <DropdownMenuItem onClick={() => onOpenProject(project.projectId, project.isPublished)}>
-          <span>{openText}</span>
+        <DropdownMenuItem
+          disabled={isOpenBlocked}
+          onSelect={() => onOpenProject(project.projectId, project.isPublished)}
+        >
+          {/* Not muted: the disabled item is already drawn at half opacity, and muted text under
+              that is unreadable. `min-w-0` lets a long reason wrap instead of widening the menu. */}
+          <div className="tw:flex tw:min-w-0 tw:flex-col">
+            <span>{openText}</span>
+            {unsupportedReasonText && (
+              <span className="tw:text-xs tw:italic tw:whitespace-normal tw:text-foreground">
+                {unsupportedReasonText}
+              </span>
+            )}
+          </div>
         </DropdownMenuItem>
       );
+    // Without reason text the wrapper would be a nameless tab stop with an empty bubble; the button
+    // stays disabled either way.
     return (
-      <Button onClick={() => onOpenProject(project.projectId, project.isPublished)}>
-        {openText}
-      </Button>
+      <DisabledActionTooltip
+        disabled={isOpenBlocked && !!unsupportedReasonText}
+        tooltipText={unsupportedReasonText ?? ''}
+      >
+        <Button
+          disabled={isOpenBlocked}
+          onClick={() => onOpenProject(project.projectId, project.isPublished)}
+        >
+          {openText}
+        </Button>
+      </DisabledActionTooltip>
     );
   };
 
@@ -651,15 +713,19 @@ export function Home({
                             // cancel double‑click text selection
                             if (e.detail > 1) e.preventDefault();
                           }}
-                          onDoubleClick={() =>
-                            project.isLocallyAvailable
-                              ? onOpenProject(project.projectId, project.isPublished)
-                              : !isSendReceiveInProgress &&
-                                handleSendReceiveProject(project.projectId)
-                          }
+                          onDoubleClick={() => {
+                            if (project.isLocallyAvailable) {
+                              // Only Open is blocked for an unsupported project, not Get.
+                              if (project.unsupportedReason) return;
+                              onOpenProject(project.projectId, project.isPublished);
+                            } else if (!isSendReceiveInProgress) {
+                              handleSendReceiveProject(project.projectId);
+                            }
+                          }}
                           key={project.projectId}
                           className={cn('tw:rounded-sm', {
-                            'tw:text-muted-foreground/70': !project.isLocallyAvailable,
+                            'tw:text-muted-foreground/70':
+                              !project.isLocallyAvailable || !!project.unsupportedReason,
                           })}
                         >
                           <TableCell className={cn({ 'tw:ps-2': isEdited(project) })}>
@@ -689,18 +755,17 @@ export function Home({
 
                               <div className="tw:grow tw:hidden tw:max-[300px]:!flex">
                                 <div className="tw:grow" />
+                                {/*
+                                 * The menu-item builders return `DropdownMenuItem`s themselves.
+                                 * Wrapping one in another `DropdownMenuItem asChild` would spread
+                                 * the outer item's `aria-disabled`/`data-disabled` (undefined) over
+                                 * the inner item's, so a disabled Open would look and act enabled.
+                                 */}
                                 <HomeItemDropdownMenu ellipsisButtonClassName="tw:h-6">
                                   {project.isSendReceivable &&
-                                    (!project.isLocallyAvailable || isEdited(project)) && (
-                                      <DropdownMenuItem asChild>
-                                        {syncOrGetButton(project, true)}
-                                      </DropdownMenuItem>
-                                    )}
-                                  {project.isLocallyAvailable && (
-                                    <DropdownMenuItem asChild>
-                                      {openButton(project, true)}
-                                    </DropdownMenuItem>
-                                  )}
+                                    (!project.isLocallyAvailable || isEdited(project)) &&
+                                    syncOrGetButton(project, true)}
+                                  {project.isLocallyAvailable && openButton(project, true)}
                                 </HomeItemDropdownMenu>
                               </div>
                             </div>
@@ -728,11 +793,9 @@ export function Home({
                                 : openButton(project)}
                               {project.isSendReceivable && project.isLocallyAvailable && (
                                 <HomeItemDropdownMenu>
-                                  <DropdownMenuItem asChild>
-                                    {isEdited(project)
-                                      ? openButton(project, true)
-                                      : syncOrGetButton(project, true)}
-                                  </DropdownMenuItem>
+                                  {isEdited(project)
+                                    ? openButton(project, true)
+                                    : syncOrGetButton(project, true)}
                                 </HomeItemDropdownMenu>
                               )}
                             </div>

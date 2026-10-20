@@ -117,6 +117,10 @@ internal static class ChecklistService
             .ComparativeTextIds.Select(LocalParatextProjects.GetParatextProject)
             .ToList();
         List<ScrText> allScrTexts = [mainScrText, .. comparativeScrTexts];
+        // The checklist reads every column's text, so refuse if any project can't be opened. The
+        // network object reports this as ChecklistErrorCodes.ProjectOpenBlocked.
+        foreach (ScrText scrText in allScrTexts)
+            scrText.ThrowIfOpenBlocked();
 
         // Step 1: compute effective [startRef, endRef] (BHV-118) + VAL-003 adjustment.
         (VerseRef startRef, VerseRef endRef) = ResolveVerseRange(mainScrText, request.VerseRange);

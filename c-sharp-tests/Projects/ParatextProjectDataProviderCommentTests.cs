@@ -1,7 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using Paranext.DataProvider;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
 using Paratext.Data.Users;
@@ -3286,6 +3288,59 @@ namespace TestParanextDataProvider.Projects
             mgr.AddComment(normal);
             mgr.SaveUser(normal.User, false);
             Assert.That(_provider.GetConflictResolutionOptions(normal.Thread), Is.EqualTo("none"));
+        }
+
+        // --- a project Platform.Bible can't open (Study Bible Additions) --------------------------
+
+        [Test]
+        public void CreateComment_StudyBibleAdditions_RefusesWithTheOpenBlockedSentinel()
+        {
+            var comment = CreateTestComment("GEN", 1, 1, "A comment");
+            MakeStudyBibleAdditions(_scrText);
+
+            Assert.That(
+                () => _provider.CreateComment(new PlatformCommentWrapper(comment)),
+                Throws
+                    .TypeOf<ProjectOpenBlockedException>()
+                    .With.Message.Contains(ProjectOpenBlockedException.Sentinel)
+            );
+            Assert.That(SendReceiveWriteLock.InFlightWriteCount, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void ResolveConflict_StudyBibleAdditions_RefusesAndLeavesTheConflictOpen()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            MakeStudyBibleAdditions(_scrText);
+
+            Assert.That(
+                () => _provider.ResolveConflict(thread.Id, "accept"),
+                Throws
+                    .TypeOf<ProjectOpenBlockedException>()
+                    .With.Message.Contains(ProjectOpenBlockedException.Sentinel)
+            );
+            Assert.That(ReloadThread(thread.Id).Status, Is.Not.EqualTo(NoteStatus.Resolved));
+            Assert.That(SendReceiveWriteLock.InFlightWriteCount, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void GetConflictResolutionOptions_StudyBibleAdditions_None()
+        {
+            CommentThread thread = SeedVerseTextConflict();
+            MakeStudyBibleAdditions(_scrText);
+
+            Assert.That(_provider.GetConflictResolutionOptions(thread.Id), Is.EqualTo("none"));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void CanUserCreateComments_StudyBibleAdditions_ReturnsFalseWhateverAllowInSba(
+            bool allowInSba
+        )
+        {
+            MakeStudyBibleAdditions(_scrText);
+
+            Assert.That(_provider.CanUserCreateComments(allowInSba), Is.False);
         }
 
         [Test]

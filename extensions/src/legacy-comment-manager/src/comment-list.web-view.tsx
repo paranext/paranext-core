@@ -73,6 +73,10 @@ import { useBcvSyncScroll } from './use-bcv-sync-scroll.hook';
 import { useCommentDrafts } from './use-comment-drafts.hook';
 import { useFrozenPresetThreadIds } from './use-frozen-preset-thread-ids.hook';
 import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel.utils';
+import {
+  getProjectOpenBlockedReasonKey,
+  notifyProjectOpenBlocked,
+} from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { gateCommentWriteCapabilities } from './comment-list-capability-gating.util';
 
@@ -958,11 +962,15 @@ global.webViewComponent = function CommentListWebView({
           await pdp.resolveConflict(threadId, resolution);
           return true;
         } catch (error) {
+          const openBlockedReasonKey = getProjectOpenBlockedReasonKey(error);
           // A write-gate rejection (an automatic Send/Receive is syncing this project) gets the
           // shared "editing paused" notice rather than the generic resolve-failed toast. Defense-in-
           // depth behind the disabled resolve affordance.
           if (isSyncEditBlockedError(error)) {
             notifySyncEditBlocked();
+          } else if (openBlockedReasonKey) {
+            // Resolving writes verse text, which a project that cannot be opened refuses.
+            notifyProjectOpenBlocked(openBlockedReasonKey);
           } else {
             logger.error(`Failed to resolve conflict thread ${threadId}:`, error);
             sonner.error(

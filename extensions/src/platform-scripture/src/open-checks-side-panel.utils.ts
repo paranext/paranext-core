@@ -1,5 +1,6 @@
 import papi, { logger } from '@papi/backend';
 import type { SavedWebViewDefinition } from '@papi/core';
+import { getErrorMessage } from 'platform-bible-utils';
 import {
   ChecksSidePanelWebViewOptions,
   checksSidePanelWebViewType,
@@ -107,8 +108,8 @@ export async function openChecksSidePanelWebView(
  * @param projectId Id of the project the Checks side panel should check from now on
  * @param editorWebViewId Id of the editor web view the switch produced. Omit to keep the id the
  *   panel already holds.
- * @returns The id of the re-pointed Checks side panel, or `undefined` if none was open or the
- *   reload did not take
+ * @returns The id of the re-pointed Checks side panel, or `undefined` if none was open, the project
+ *   cannot be opened (see `ProjectMetadata.unsupportedReason`), or the reload did not take
  */
 export async function updateChecksSidePanelProject(
   projectId: string,
@@ -125,6 +126,17 @@ export async function updateChecksSidePanelProject(
   const existingDefinition = await papi.webViews.getOpenWebViewDefinition(checksWebViewId);
   if (isChecksSidePanelCurrent(existingDefinition, projectId, editorWebViewId))
     return checksWebViewId;
+
+  // Checks stays on the project it was checking: on a project that cannot be opened it could only
+  // show the backend's refusal. A failed lookup counts as openable, as everywhere else.
+  try {
+    const { unsupportedReason } = await papi.projectLookup.getMetadataForProject(projectId);
+    if (unsupportedReason) return undefined;
+  } catch (e) {
+    logger.warn(
+      `updateChecksSidePanelProject: could not look up whether ${projectId} can be opened (${getErrorMessage(e)}); treating it as openable`,
+    );
+  }
 
   // Hidden case: reloaded while hidden too. A reload is data-driven, so it works without layout, and
   // it costs one remount per project switch — the same cost the Find re-point pays.

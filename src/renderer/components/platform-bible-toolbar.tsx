@@ -85,6 +85,13 @@ const EMPTY_BOOK_IDS: string[] = [];
 // Stable identities so the selector does not re-partition or re-render on every toolbar render.
 const EMPTY_OPEN_TABS: never[] = [];
 
+// Stable key list for the common case of no unsupported project, so localization is not
+// resubscribed on every project-list refresh.
+const NO_UNSUPPORTED_REASON_KEYS: LocalizeKey[] = [];
+
+// Joins localize keys into one comparable value; no key contains a line break.
+const UNSUPPORTED_REASON_KEY_SEPARATOR = '\n';
+
 // The two buckets the toolbar's grouping partitions into. Keys, not headings — the headings are
 // localized in `getSectionHeading`.
 const RECENT_GROUP_KEY = 'recent';
@@ -306,20 +313,50 @@ function ToolbarProjectSelector({
 
   const strings = useMemo(() => resolvePickerStrings(localizedStrings), [localizedStrings]);
 
+  // Reasons are localize keys chosen by each project's factory, so localize exactly the ones present.
+  // Every refresh brings a new `projects` list, so the key list is memoized on the set of keys:
+  // a new key list would resubscribe to localization.
+  const joinedUnsupportedReasonKeys = [...new Set(projects.map((p) => p.unsupportedReason))]
+    .filter((k): k is LocalizeKey => !!k && isLocalizeKey(k))
+    .sort()
+    .join(UNSUPPORTED_REASON_KEY_SEPARATOR);
+  const unsupportedReasonKeys = useMemo(
+    () =>
+      joinedUnsupportedReasonKeys
+        ? joinedUnsupportedReasonKeys.split(UNSUPPORTED_REASON_KEY_SEPARATOR).filter(isLocalizeKey)
+        : NO_UNSUPPORTED_REASON_KEYS,
+    [joinedUnsupportedReasonKeys],
+  );
+  const [unsupportedReasonStrings, isUnsupportedReasonLoading] =
+    useLocalizedStrings(unsupportedReasonKeys);
+
   // `ProjectItem` and `ProjectSelectorProject` invert the meaning of `language`: the item's is a
   // BCP-47 tag and its `languageDisplayName` is the readable name, while the selector's `language`
   // is the readable name and `languageCode` is the tag. Mapping them straight across type-checks
   // and is wrong.
   const selectorProjects = useMemo<ProjectSelectorProject[]>(
     () =>
-      projects.map((project) => ({
-        id: project.id,
-        shortName: project.shortName,
-        fullName: project.fullName,
-        language: project.languageDisplayName,
-        languageCode: project.language,
-      })),
-    [projects],
+      projects.map((project) => {
+        // Absent while loading, and absent when the lookup settles on the bare key (as the loading
+        // seed does, and a failed lookup can): a key would show verbatim as the tooltip.
+        const localizedReason =
+          project.unsupportedReason &&
+          !isUnsupportedReasonLoading &&
+          isLocalizeKey(project.unsupportedReason)
+            ? unsupportedReasonStrings[project.unsupportedReason]
+            : undefined;
+        return {
+          id: project.id,
+          shortName: project.shortName,
+          fullName: project.fullName,
+          language: project.languageDisplayName,
+          languageCode: project.language,
+          isDisabled: !!project.unsupportedReason,
+          disabledReason:
+            localizedReason && !isLocalizeKey(localizedReason) ? localizedReason : undefined,
+        };
+      }),
+    [projects, unsupportedReasonStrings, isUnsupportedReasonLoading],
   );
 
   const recentIndex = useMemo(() => {

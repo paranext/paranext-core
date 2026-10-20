@@ -46,6 +46,11 @@ import {
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { projectNamesFromMetadata } from './project-names.util';
+import {
+  getProjectOpenBlockedReasonKey,
+  toProjectOpenBlockedReasonKey,
+} from './project-open-blocked.util';
+import { useProjectOpenBlockedMessage } from './hooks/use-project-open-blocked-message';
 import { Find, FIND_LOCALIZED_STRING_KEYS, FindProject } from './find/find.component';
 import { FIND_FOCUS_SEARCH_EVENT } from './find.model';
 import { useFocusSearchOnInvoke } from './find/use-focus-search-on-invoke.hook';
@@ -119,7 +124,15 @@ const DEFAULT_RECENT_SEARCHES: string[] = [];
 
 /** Display names and language for every scripture project/resource, keyed by canonical project id. */
 type ProjectNamesById = {
-  [id: string]: Pick<FindProject, 'shortName' | 'fullName' | 'language'>;
+  [id: string]: Pick<FindProject, 'shortName' | 'fullName' | 'language'> & {
+    /**
+     * Present when the project cannot be opened (see `ProjectMetadata.unsupportedReason`). Kept
+     * alongside the display names — rather than filtering it out of this dictionary — so its open
+     * tabs can be recognized and left out of `allOpenProjectTabs`, and so the refetch effect below
+     * still sees the project as known and does not treat its open tab as missing metadata.
+     */
+    unsupportedReason?: string;
+  };
 };
 
 /**
@@ -379,7 +392,10 @@ global.webViewComponent = function FindWebView({
       // Every name the picker shows comes off the metadata already fetched above, so there is no
       // per-project read left that could fail and take the whole picker with it.
       allMetadata.forEach((metadata) => {
-        projectDict[metadata.id] = projectNamesFromMetadata(metadata);
+        projectDict[metadata.id] = {
+          ...projectNamesFromMetadata(metadata),
+          unsupportedReason: metadata.unsupportedReason,
+        };
       });
 
       return projectDict;
@@ -400,19 +416,32 @@ global.webViewComponent = function FindWebView({
   const openProjectTabs = useOpenProjectTabs(searchableWebViewFilter, {
     includeNavigableProjectIds: true,
   });
+
+  // Normalized id → reason, for every project the metadata says cannot be opened.
+  const unsupportedReasonByProjectId = useMemo(() => {
+    const reasons = new Map<string, string>();
+    Object.entries(projectIdsAndNames).forEach(([id, { unsupportedReason }]) => {
+      if (unsupportedReason) reasons.set(normalizeProjectId(id), unsupportedReason);
+    });
+    return reasons;
+  }, [projectIdsAndNames]);
+
   // A reference panel's container project is the editable project whose reference list it shows —
   // the panel is not displaying that project's text, so Find must not offer it. The hook unions
   // container and declared projects, per what the shared state key documents; narrowing that to
   // "what this tab actually displays" is Find's rule, so it is applied here rather than there.
+  //
+  // A tab showing a project that cannot be opened has no text to search, so it counts as not open.
+  // It still counts until the metadata arrives, which is safe: the fallback waits for the metadata.
   const allOpenProjectTabs = useMemo(
     () =>
       openProjectTabs.filter(
         (tab) =>
           !(
             REFERENCE_PANEL_WEB_VIEW_TYPES.has(tab.webViewType) && tab.projectSource === 'container'
-          ),
+          ) && !unsupportedReasonByProjectId.has(normalizeProjectId(tab.projectId)),
       ),
-    [openProjectTabs],
+    [openProjectTabs, unsupportedReasonByProjectId],
   );
   const noOpenProjects = allOpenProjectTabs.length === 0;
 
@@ -436,9 +465,11 @@ global.webViewComponent = function FindWebView({
     () =>
       Object.entries(projectIdsAndNames)
         .filter(([id]) => openProjectIds.has(normalizeProjectId(id)))
-        .map(([id, names]) => ({
+        .map(([id, { shortName, fullName, language }]) => ({
           id,
-          ...names,
+          shortName,
+          fullName,
+          language,
           lastUsedAt: recencyMap.get(normalizeProjectId(id)),
         })),
     [projectIdsAndNames, openProjectIds, recencyMap],
@@ -526,6 +557,12 @@ global.webViewComponent = function FindWebView({
     [projectId, allOpenProjectTabs],
   );
 
+  // Set when Find is bound to a project that cannot be opened. Such a project is never searched or
+  // replaced in; the reason shows where a search error would.
+  const boundProjectUnsupportedReason = projectId
+    ? unsupportedReasonByProjectId.get(normalizeProjectId(projectId))
+    : undefined;
+
   // #endregion
 
   const editorWebViewController = useWebViewController(
@@ -600,6 +637,13 @@ global.webViewComponent = function FindWebView({
       return Array.from(SEARCH_RESULT_LOCALIZED_STRING_KEYS);
     }, []),
   );
+
+  // Why the project cannot be searched: the bound project's own reason, or the one the backend gave
+  // when it refused a search. Shown in place of the raw error.
+  const openBlockedReasonKey = boundProjectUnsupportedReason
+    ? toProjectOpenBlockedReasonKey(boundProjectUnsupportedReason)
+    : getProjectOpenBlockedReasonKey(searchError);
+  const openBlockedMessage = useProjectOpenBlockedMessage(openBlockedReasonKey);
 
   const isMountedRef = useRef(false);
   useEffect(() => {
@@ -1155,7 +1199,9 @@ global.webViewComponent = function FindWebView({
   const handleStartSearch = useCallback(
     async (isExplicitSearch = false) => {
       const gate = gateStartSearch({
-        isSearchQueryValid,
+        // A project that cannot be opened is gated like an invalid query: skipped, and not retried
+        // when the provider becomes ready, since readiness changes nothing about it.
+        isSearchQueryValid: isSearchQueryValid && !boundProjectUnsupportedReason,
         // Availability, not just presence. `findPdp` uses `preserveValue: true`, so right after a
         // project switch it still holds the PREVIOUS project's provider — starting a job then would
         // silently search the wrong project. Treating "resolving" as no-PDP routes it through the
@@ -1256,6 +1302,7 @@ global.webViewComponent = function FindWebView({
       abandonFindJob,
       addToHistory,
       beginFindJob,
+      boundProjectUnsupportedReason,
       clearPendingSearchTimeout,
       findPdp,
       findPdpAvailability,
@@ -1312,6 +1359,17 @@ global.webViewComponent = function FindWebView({
   // identity changed.
   const handleStopSearchRef = useRef(handleStopSearch);
   handleStopSearchRef.current = handleStopSearch;
+
+  // Results already on screen (from before the project was known to be unopenable) must not stay
+  // replaceable, and a running job must not keep reading the project.
+  useEffect(() => {
+    if (!boundProjectUnsupportedReason) return;
+    handleStopSearchRef.current(true).catch((error) => {
+      logger.warn(
+        `Find: failed to clear results for a project that cannot be opened: ${getErrorMessage(error)}`,
+      );
+    });
+  }, [boundProjectUnsupportedReason]);
 
   const loadMoreResults = useCallback(async () => {
     try {
@@ -1885,7 +1943,7 @@ global.webViewComponent = function FindWebView({
 
   const handleReplace = useCallback(
     async (resultIndex?: number) => {
-      if (isReplacing || !projectId) return;
+      if (isReplacing || !projectId || boundProjectUnsupportedReason) return;
       const indexToReplace = resultIndex ?? focusedResultIndex;
       if (indexToReplace === undefined || !replacePdp) return;
 
@@ -2022,6 +2080,7 @@ global.webViewComponent = function FindWebView({
       }
     },
     [
+      boundProjectUnsupportedReason,
       focusedResultIndex,
       isReplacing,
       localizedStrings,
@@ -2036,7 +2095,7 @@ global.webViewComponent = function FindWebView({
   );
 
   const handleReplaceAll = useCallback(async () => {
-    if (isReplacing || !replacePdp || !projectId) return;
+    if (isReplacing || !replacePdp || !projectId || boundProjectUnsupportedReason) return;
 
     setIsReplacing(true);
     try {
@@ -2224,6 +2283,7 @@ global.webViewComponent = function FindWebView({
       setIsReplacing(false);
     }
   }, [
+    boundProjectUnsupportedReason,
     isReplacing,
     localizedStrings,
     preserveCase,
@@ -2307,8 +2367,9 @@ global.webViewComponent = function FindWebView({
       results={results}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}
-      searchStatus={searchStatus}
-      searchError={searchError}
+      searchStatus={boundProjectUnsupportedReason ? 'errored' : searchStatus}
+      searchError={openBlockedReasonKey ? undefined : searchError}
+      openBlockedMessage={openBlockedMessage}
       searchProgress={searchProgress}
       totalNumberOfResults={totalNumberOfResults}
       numberOfHiddenResults={numberOfHiddenResults}

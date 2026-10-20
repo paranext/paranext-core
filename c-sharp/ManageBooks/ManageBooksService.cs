@@ -437,6 +437,10 @@ internal sealed class ManageBooksService : NetworkObject
     /// map any lookup failure to the appropriate <see cref="PlatformErrorCodes"/>.
     /// Target vs model lookups differ only in the error code they throw
     /// (NOT_FOUND for target, FAILED_PRECONDITION for model per Theme 7).
+    /// A project Platform.Bible can't open is refused with
+    /// <see cref="ProjectOpenBlockedException"/> (FAILED_PRECONDITION) whichever
+    /// role it has. In the mutating methods this runs inside their write scope,
+    /// which they open first per the write-gate rule.
     /// </summary>
     private static ScrText ResolveProjectOrThrow(
         string projectId,
@@ -444,9 +448,10 @@ internal sealed class ManageBooksService : NetworkObject
         string errorMessage
     )
     {
+        ScrText scrText;
         try
         {
-            return LocalParatextProjects.GetParatextProject(projectId);
+            scrText = LocalParatextProjects.GetParatextProject(projectId);
         }
         // Theme 9 (2026-04-30): narrowed from `catch (Exception)` to the
         // expected lookup-failure types only. ScrTextCollection.GetById
@@ -464,6 +469,11 @@ internal sealed class ManageBooksService : NetworkObject
         {
             throw PlatformErrorCodes.WithCode(platformErrorCode, errorMessage);
         }
+
+        // Every Manage Books operation reads or writes the resolved project's books, so refuse a
+        // project Platform.Bible can't open. The exception carries FAILED_PRECONDITION.
+        scrText.ThrowIfOpenBlocked();
+        return scrText;
     }
 
     /// <summary>

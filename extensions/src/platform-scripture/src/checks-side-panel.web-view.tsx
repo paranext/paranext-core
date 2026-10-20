@@ -42,7 +42,9 @@ import {
 } from './checks/checks-side-panel/checks-side-panel.component';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { useProjectRecencyMap } from './hooks/use-project-recency-map';
+import { getProjectOpenBlockedReasonKey } from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
+import { useProjectOpenBlockedMessage } from './hooks/use-project-open-blocked-message';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 import { useChecksInfo } from './use-checks-info.hook';
 
@@ -120,6 +122,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
       // Every name this panel shows comes off the metadata already fetched above, so there is no
       // per-project read left to await.
       allMetadata.forEach((metadata) => {
+        if (metadata.unsupportedReason) return;
         projectDict[metadata.id] = projectNamesFromMetadata(metadata);
       });
 
@@ -724,6 +727,16 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [checkResults],
   );
 
+  const openBlockedReasonKey = getProjectOpenBlockedReasonKey(activeJobStatusReport.error);
+  const openBlockedMessage = useProjectOpenBlockedMessage(openBlockedReasonKey);
+  const displayedJobStatusReport = useMemo(
+    () =>
+      openBlockedReasonKey
+        ? { ...activeJobStatusReport, error: openBlockedMessage }
+        : activeJobStatusReport,
+    [activeJobStatusReport, openBlockedReasonKey, openBlockedMessage],
+  );
+
   // Shape the loaded project metadata into the list the panel renders in the project filter.
   const projects = useMemo<ChecksSidePanelProject[]>(() => {
     return Object.entries(projectIdsAndNames).map(([id, project]) => ({
@@ -747,7 +760,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
       selectedCheckTypeIds={selectedCheckTypeIds}
       checksInfo={checksInfo}
       checkResults={safeCheckResults}
-      jobStatusReport={activeJobStatusReport}
+      jobStatusReport={displayedJobStatusReport}
       hasActiveJob={activeJobStatusReport !== defaultJobStatusReport}
       isResultLoadingCancelled={isResultLoadingCancelled}
       getLocalizedCheckDescription={getLocalizedCheckDescription}

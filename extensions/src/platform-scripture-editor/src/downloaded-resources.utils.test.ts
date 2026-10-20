@@ -377,6 +377,24 @@ describe('fetchDownloadedResources', () => {
     expect(papi.projectDataProviders.get).not.toHaveBeenCalled();
   });
 
+  it('excludes a read-only project that cannot be opened', async () => {
+    vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockResolvedValue([
+      { id: 'proj-kjn', projectInterfaces: [], pdpFactoryInfo: {}, isEditable: false, name: 'KJN' },
+      {
+        id: 'proj-sba',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+        isEditable: false,
+        name: 'SBA',
+        unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+      },
+    ]);
+
+    const result = await fetchDownloadedResources();
+
+    expect(result.map((r) => r.projectId)).toEqual(['proj-kjn']);
+  });
+
   it('returns [] and warns when enumeration throws', async () => {
     vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockRejectedValue(new Error('boom'));
     await expect(fetchDownloadedResources()).resolves.toEqual([]);
