@@ -136,20 +136,12 @@ example `JSON.parse`, `Promise.prototype.then`, the writable `globalThis.fetch`,
 before activation) and see another extension's tokens without holding the privilege. `createProcess`
 has the same limit. The real control is which extensions get installed.
 
-The C# handler does not check the allowlist itself, so anything that can reach the unauthenticated
-PAPI WebSocket can call that request type for any resource registered with the Registry:
+The C# handler does not check the allowlist itself. Main refuses the request type to browser pages
+and web views with the stopgap below, but anything else that can reach the unauthenticated PAPI
+WebSocket can call it for any resource registered with the Registry:
 
 - Local processes already run as the user and can read the user's Paratext data directly, so they
   gain nothing new.
-- A web page open in the user's browser can also connect to `ws://localhost:8876`. Connections are
-  not authenticated, so the server can't tell such a page from Platform.Bible's own processes. The
-  page can already call every other PAPI method, but this is the first one whose result works off
-  the machine.
-- Any installed extension's web view can too, whether or not the extension holds the privilege. It
-  can open a native WebSocket to port 8876 through `window.top.WebSocket` (see
-  [The renderer's PAPI port](#the-renderers-papi-port)), and the window's CSP allows `ws:`
-  connections. So the allowlist does not stop an extension with a web view from requesting a token
-  for any registered resource, with any of the five scopes.
 - Extension-host code can too, with no web view and whether or not the extension holds the
   privilege. `activateExtensions` in `src/extension-host/services/extension.service.ts` wraps
   `Module.prototype.require` and replaces `globalThis.WebSocket`, but `process.getBuiltinModule`
@@ -159,12 +151,31 @@ PAPI WebSocket can call that request type for any resource registered with the R
   separate gap: wrapping `process.getBuiltinModule` alone would not make the extension host a
   boundary between extensions.
 
-Rejecting browser connections is not the fix: browser clients are legitimate too.
+**Insecure temporary stopgap, not a security boundary; PT-2893 must replace it.** Main refuses
+`requestRegistryTokens:getAccessToken` from any WebSocket connection whose handshake carried an
+`Origin` header, and from renderer connections (`RpcServer.processMessage` in
+`src/main/services/rpc-server.ts`). Browsers always send `Origin` on a WebSocket handshake, and page
+script can't remove it. The extension host's `ws` client and the C# `ClientWebSocket` send none.
+This keeps out two callers that can already call every other PAPI method, and that this request
+type would hand a credential that works off the machine:
+
+- A web page open in the user's browser, which can connect to `ws://localhost:8876` because
+  connections are not authenticated.
+- Any installed extension's web view, privilege or not. It can open a native WebSocket to port 8876
+  through `window.top.WebSocket` (see [The renderer's PAPI port](#the-renderers-papi-port)), since
+  the window's CSP allows `ws:` connections, or drive its window's PAPI connection.
+
+The stopgap trusts a header instead of identifying the caller, so any process that leaves `Origin`
+out gets through, including the local processes and extension-host code listed earlier. Don't
+treat it as the fix or build on it.
+
+Rejecting browser connections outright is not the fix: browser clients are legitimate too.
 `platform.openDeveloperDocumentationUrl` opens the OpenRPC playground against this WebSocket, and
-developers test PAPI calls from browsers. As of 2026-10, authenticating the clients the main
-process launches, so that sensitive request types like this one can be limited to the extension
-host, is open work in PT-2893. A renderer connection can't be trusted with them even once
-identified, because a web view can drive its window's PAPI connection.
+developers test PAPI calls from browsers; the stopgap refuses them only this request type. As of
+2026-10, authenticating the clients the main process launches, so that sensitive request types like
+this one can be limited to the extension host, is open work in PT-2893. A renderer connection can't
+be trusted with them even once identified, because a web view can drive its window's PAPI
+connection.
 
 Rationale: `adr-registry-tokens-via-elevated-privilege` in `Architecture-Decisions.md`.
 

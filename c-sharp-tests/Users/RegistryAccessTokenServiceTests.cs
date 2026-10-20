@@ -553,7 +553,7 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
     }
 
     [Test]
-    public async Task RegistrationChangeDuringARequest_DoesNotCacheTheOldToken()
+    public async Task RegistrationChangeDuringARequest_DoesNotHandOutTheOldToken()
     {
         var gate = new TaskCompletionSource<RegistryTokenHttpResponse>(
             TaskCreationOptions.RunContinuationsAsynchronously

@@ -26,7 +26,11 @@ export type RegistryAccessTokenRequest = {
    * Platform.Bible is pointed at.
    */
   resource: string;
-  /** Scopes the token should carry. Pass them explicitly: if omitted, the token carries none. */
+  /**
+   * Scopes the token should carry. Pass them explicitly: if omitted, the token carries none. As of
+   * 2026-10 the Paratext Registry both documents and implements that for a caller using a
+   * registration code; its default scopes apply only to trusted clients.
+   */
   scope?: RegistryReadScope[];
 };
 

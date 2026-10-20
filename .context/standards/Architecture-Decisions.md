@@ -6290,19 +6290,24 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   extension can wrap shared built-ins and see another extension's tokens. The allowlist stops honest
   mistakes; the real control is which extensions get installed. Local processes on the loopback
   WebSocket can also call the request type; they already run as the user and can read the user's
-  Paratext data directly. So can a web page in the user's browser, because WebSocket connections are
-  not authenticated and the server can't tell a page from Platform.Bible's own processes; unlike the
-  other PAPI methods such a page can call, this one returns a credential that works off the machine.
-  So can any installed extension's web view, privilege or not, through the native
-  `window.top.WebSocket`, which bypasses the manifest allowlist. So can extension-host code, with no
-  web view, through `process.getBuiltinModule('net')`, which the extension host's `require` wrapper
-  doesn't intercept; that is the same shared-realm limit. Rejecting browser connections is
-  not the answer, since browser clients are legitimate (the OpenRPC playground that
-  `platform.openDeveloperDocumentationUrl` opens, and browser-based PAPI testing). Authenticating
-  the clients the main process launches, so sensitive request types can be limited to the extension
-  host, is open work in PT-2893, deferred as of 2026-10-20 until after the November release; a
-  renderer connection can't be trusted with them because a web view can drive it. Revisit when PT-4750 lands (throw codes instead of returning them), when the
-  WebSocket authenticates its clients, or if a consent prompt becomes necessary.
+  Paratext data directly. So can extension-host code, with no web view, through
+  `process.getBuiltinModule('net')`, which the extension host's `require` wrapper doesn't intercept;
+  that is the same shared-realm limit. A web page in the user's browser could too, because
+  WebSocket connections are not authenticated, and so could any installed extension's web view,
+  privilege or not, through the native `window.top.WebSocket` or its window's PAPI connection;
+  unlike the other PAPI methods they can call, this one returns a credential that works off the
+  machine. So, as an insecure temporary stopgap that is not a security boundary, main refuses this
+  request type from any WebSocket connection whose handshake carried an `Origin` header (browsers
+  always send one) and from renderer connections. It trusts a header instead of identifying the
+  caller, and PT-2893's caller identification must replace it. Rejecting browser connections
+  outright is not the answer, since browser clients are legitimate (the OpenRPC playground that
+  `platform.openDeveloperDocumentationUrl` opens, and browser-based PAPI testing); the stopgap
+  refuses them only this request type. Authenticating the clients the main process launches, so
+  sensitive request types can be limited to the extension host, is open work in PT-2893, deferred
+  as of 2026-10-20 until after the November release; a renderer connection can't be trusted with
+  them because a web view can drive it. Revisit when PT-4750 lands (throw codes instead of
+  returning them), when the WebSocket authenticates its clients (and remove the `Origin` stopgap
+  then), or if a consent prompt becomes necessary.
 - **Source:** PT-4865 (design spec attached there).
 
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path

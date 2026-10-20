@@ -3100,6 +3100,14 @@ declare module 'main/services/rpc-server' {
     private readonly propagateEventMethod;
     /** Called by an RpcServer once its client's methods have been removed from the registry */
     private readonly announceClientDisconnectMethod;
+    /** See the constructor's `isWebSocketWithoutOrigin` */
+    private readonly isWebSocketWithoutOrigin;
+    /**
+     * @param isWebSocketWithoutOrigin Whether the client connected over a WebSocket whose handshake
+     *   carried no `Origin` header. Only such a client may send the request types main refuses to
+     *   browsers and renderers. Defaults to false, so a connection nobody vouched for is refused
+     *   them.
+     */
     constructor(
       name: string,
       webSocket: ServerSocketLike,
@@ -3107,6 +3115,7 @@ declare module 'main/services/rpc-server' {
       rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
       rpcEventDetailsByEventName: IRpcEventRegistry,
       announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
+      isWebSocketWithoutOrigin?: boolean,
     );
     connect(): Promise<boolean>;
     disconnect(): Promise<void>;
@@ -3344,6 +3353,10 @@ declare module 'main/services/rpc-websocket-listener' {
      * @param eventType The event name being announced.
      */
     private warnIfInvalidEventAnnouncement;
+    /**
+     * @param upgradeRequest The handshake request, which `ws` always passes. Without one the client
+     *   is treated as having sent `Origin`.
+     */
     private onClientConnect;
     /** Attach an `RpcServer` to a socket and track it until the socket closes */
     private serveClient;
@@ -10077,7 +10090,11 @@ declare module 'shared/models/request-registry-tokens-privilege.model' {
      * Platform.Bible is pointed at.
      */
     resource: string;
-    /** Scopes the token should carry. Pass them explicitly: if omitted, the token carries none. */
+    /**
+     * Scopes the token should carry. Pass them explicitly: if omitted, the token carries none. As of
+     * 2026-10 the Paratext Registry both documents and implements that for a caller using a
+     * registration code; its default scopes apply only to trusted clients.
+     */
     scope?: RegistryReadScope[];
   };
   /** A Paratext Registry access token for one service */

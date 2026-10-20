@@ -14,8 +14,9 @@ namespace Paranext.DataProvider.Users;
 /// <remarks>
 /// The request type is outside the <c>command:</c> category, so extension code can't send it
 /// through PAPI; the extension host checks the caller's manifest before forwarding a request here.
-/// Raw WebSocket clients, extension web views included, can still reach it until PT-2893 lands; see
-/// "Paratext Registry access tokens" in <c>.context/standards/Security-Guide.md</c>.
+/// Main refuses it to browser pages and web views with an insecure temporary stopgap, but local
+/// processes and extension-host code with its own socket can still reach it until PT-2893 lands;
+/// see "Paratext Registry access tokens" in <c>.context/standards/Security-Guide.md</c>.
 /// </remarks>
 internal sealed class RegistryAccessTokenService(
     PapiClient papiClient,
