@@ -27,7 +27,11 @@ import { RefObject, useEffect, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
-import { getSortedMenuColumns, getSubMenuGroupKeyForMenuItemId } from './menu.util';
+import {
+  getSortedMenuColumns,
+  getSubMenuGroupKeysForMenuItemId,
+  isGroupUnderColumnOrSubMenu,
+} from './menu.util';
 import MenuItemIcon from './menu-icon.component';
 
 /**
@@ -46,22 +50,29 @@ const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEvent
   }, 0);
 };
 
+/** Keys of the groups rendered under a column, sorted by the groups' `order` */
+const getColumnGroupKeys = (groups: Localized<GroupsInMultiColumnMenu>, columnKey: string) =>
+  Object.entries(groups)
+    .filter(([key, group]) => isGroupUnderColumnOrSubMenu(key, group, columnKey))
+    .sort(([, a], [, b]) => a.order - b.order)
+    .map(([key]) => key);
+
+/**
+ * Renders the items of the given groups in the order given, with a separator between groups.
+ *
+ * @param groupKeys Keys of the groups to render, already sorted by the groups' `order`
+ * @param isSubMenu Whether the groups fill a submenu. A submenu separates only groups that have
+ *   items; a column puts a separator after every group but the last that has items.
+ */
 const getMenubarContent = (
   groups: Localized<GroupsInMultiColumnMenu>,
   items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
-  columnOrSubMenuKey: string | undefined,
+  groupKeys: string[],
+  isSubMenu: boolean,
   onSelectMenuItem: SelectMenuItemHandler,
 ) => {
-  if (!columnOrSubMenuKey) return undefined;
-
-  const sortedGroupsForColumn = Object.entries(groups)
-    .filter(
-      ([key, group]) =>
-        ('column' in group && group.column === columnOrSubMenuKey) || key === columnOrSubMenuKey,
-    )
-    .sort(([, a], [, b]) => a.order - b.order);
-
-  return sortedGroupsForColumn.flatMap(([groupKey], index) => {
+  let hasShownItems = false;
+  return groupKeys.flatMap((groupKey, index) => {
     const groupItems = items
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
@@ -107,7 +118,8 @@ const getMenubarContent = (
                     {getMenubarContent(
                       groups,
                       items,
-                      getSubMenuGroupKeyForMenuItemId(groups, item.id),
+                      getSubMenuGroupKeysForMenuItemId(groups, item.id),
+                      true,
                       onSelectMenuItem,
                     )}
                   </MenubarSubContent>
@@ -119,8 +131,19 @@ const getMenubarContent = (
         );
       });
 
+    if (isSubMenu) {
+      // The separator goes before a group's items, once an earlier group has shown some, so an
+      // emptied group never leaves a stray separator
+      const separator =
+        hasShownItems && groupItems.length > 0
+          ? [<MenubarSeparator key={`separator-${groupKey}`} />]
+          : [];
+      if (groupItems.length > 0) hasShownItems = true;
+      return [...separator, ...groupItems];
+    }
+
     const itemsWithSeparator = [...groupItems];
-    if (groupItems.length > 0 && index < sortedGroupsForColumn.length - 1) {
+    if (groupItems.length > 0 && index < groupKeys.length - 1) {
       itemsWithSeparator.push(<MenubarSeparator key={`separator-${groupKey}`} />);
     }
 
@@ -257,7 +280,13 @@ export function PlatformMenubar({
             style={{ zIndex: Z_INDEX_ABOVE_DOCK }} // Need to get over the floating web view z-index 200
           >
             <TooltipProvider>
-              {getMenubarContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
+              {getMenubarContent(
+                menuData.groups,
+                menuData.items,
+                getColumnGroupKeys(menuData.groups, columnKey),
+                false,
+                onSelectMenuItem,
+              )}
             </TooltipProvider>
           </MenubarContent>
         </MenubarMenu>

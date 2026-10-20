@@ -39,25 +39,36 @@ import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
 import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
   getMenuSectionsWithItems,
-  getSubMenuGroupKeyForMenuItemId,
+  getSubMenuGroupKeysForMenuItemId,
   isGroupUnderColumnOrSubMenu,
 } from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
 
+/** Keys of the groups rendered under a column, sorted by the groups' `order` */
+const getColumnGroupKeys = (groups: Localized<GroupsInMultiColumnMenu>, columnKey: string) =>
+  Object.entries(groups)
+    .filter(([key, group]) => isGroupUnderColumnOrSubMenu(key, group, columnKey))
+    .sort(([, a], [, b]) => a.order - b.order)
+    .map(([key]) => key);
+
+/**
+ * Renders the items of the given groups in the order given. Groups within a column are not
+ * distinguished from each other; a submenu's groups are, with a separator between each pair that
+ * both have items.
+ *
+ * @param groupKeys Keys of the groups to render, already sorted by the groups' `order`
+ * @param separateGroups Whether to put a separator between consecutive groups that have items
+ */
 const getGroupContent = (
   groups: Localized<GroupsInMultiColumnMenu>,
   items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
-  columnOrSubMenuKey: string | undefined,
+  groupKeys: string[],
+  separateGroups: boolean,
   onSelectMenuItem: SelectMenuItemHandler,
-) => {
-  if (!columnOrSubMenuKey) return undefined;
-
-  const sortedGroupsForColumn = Object.entries(groups)
-    .filter(([key, group]) => isGroupUnderColumnOrSubMenu(key, group, columnOrSubMenuKey))
-    .sort(([, a], [, b]) => a.order - b.order);
-
-  return sortedGroupsForColumn.flatMap(([groupKey]) => {
+): ReactNode[] => {
+  let hasShownItems = false;
+  return groupKeys.flatMap((groupKey) => {
     const groupItems = items
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
@@ -129,7 +140,8 @@ const getGroupContent = (
                 {getGroupContent(
                   groups,
                   items,
-                  getSubMenuGroupKeyForMenuItemId(groups, item.id),
+                  getSubMenuGroupKeysForMenuItemId(groups, item.id),
+                  true,
                   onSelectMenuItem,
                 )}
               </DropdownMenuSubContent>
@@ -138,7 +150,15 @@ const getGroupContent = (
         );
       });
 
-    return groupItems;
+    // Only a group with items gets a separator, and only once an earlier group has shown items, so
+    // an emptied group never leaves a stray separator
+    const separator =
+      separateGroups && hasShownItems && groupItems.length > 0
+        ? [<DropdownMenuSeparator key={`separator-${groupKey}`} />]
+        : [];
+    if (groupItems.length > 0) hasShownItems = true;
+
+    return [...separator, ...groupItems];
   });
 };
 
@@ -180,9 +200,10 @@ export type TabDropdownMenuProps = {
 /**
  * Dropdown menu for Platform.Bible menu data. Each column that has items is a section, divided from
  * the next by a line; columns without items are left out. Groups within a column are not
- * distinguished. Items show their tooltip on hover and their `shortcut`, if any, at the end of the
- * row. With `showSectionHeadings`, each section is headed by its column label, except a column that
- * sets `isHeaderHidden`, whose label names the section for screen readers only.
+ * distinguished, while the groups of a submenu are divided by a line. Items show their tooltip on
+ * hover and their `shortcut`, if any, at the end of the row. With `showSectionHeadings`, each
+ * section is headed by its column label, except a column that sets `isHeaderHidden`, whose label
+ * names the section for screen readers only.
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
@@ -254,7 +275,13 @@ export default function TabDropdownMenu({
                   </DropdownMenuLabel>
                 )}
                 <TooltipProvider>
-                  {getGroupContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
+                  {getGroupContent(
+                    menuData.groups,
+                    menuData.items,
+                    getColumnGroupKeys(menuData.groups, columnKey),
+                    false,
+                    onSelectMenuItem,
+                  )}
                 </TooltipProvider>
               </DropdownMenuGroup>
 

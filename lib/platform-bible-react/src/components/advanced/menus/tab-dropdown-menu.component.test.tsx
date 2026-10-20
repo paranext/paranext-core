@@ -363,6 +363,89 @@ describe('TabDropdownMenu', () => {
   });
 });
 
+describe('TabDropdownMenu submenu groups', () => {
+  /** Two groups point at the Edit submenu; Find's group is stored first but ordered second */
+  const TWO_GROUP_MENU: Localized<MultiColumnMenu> = {
+    columns: { 'test.project': { label: 'Project', order: 1 } },
+    groups: {
+      'test.top': { column: 'test.project', order: 1 },
+      'test.editFind': { menuItem: 'test.editSubmenu', order: 2 },
+      'test.editActions': { menuItem: 'test.editSubmenu', order: 1 },
+    },
+    items: [
+      { id: 'test.editSubmenu', label: 'Edit', localizeNotes: '', group: 'test.top', order: 1 },
+      {
+        label: 'Undo',
+        localizeNotes: '',
+        group: 'test.editActions',
+        order: 1,
+        command: 'test.undo',
+      },
+      {
+        label: 'Redo',
+        localizeNotes: '',
+        group: 'test.editActions',
+        order: 2,
+        command: 'test.redo',
+      },
+      { label: 'Find', localizeNotes: '', group: 'test.editFind', order: 1, command: 'test.find' },
+    ],
+  };
+
+  async function openEditFlyout(menuData: Localized<MultiColumnMenu>) {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<TabDropdownMenu menuData={menuData} onSelectMenuItem={() => {}} tabLabel="Project" />);
+    await user.click(screen.getByRole('button', { name: 'Project' }));
+    const editTrigger = await screen.findByRole('menuitem', { name: /^Edit/ });
+    editTrigger.focus();
+    await user.keyboard('{ArrowRight}');
+    await waitFor(() => expect(screen.getAllByRole('menu')).toHaveLength(2));
+    const menus = screen.getAllByRole('menu');
+    return menus[menus.length - 1];
+  }
+
+  it('shows the items of every group, in group order, with one separator between the groups', async () => {
+    const flyout = await openEditFlyout(TWO_GROUP_MENU);
+
+    expect(
+      within(flyout)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Undo', 'Redo', 'Find']);
+    const separators = within(flyout).getAllByRole('separator');
+    expect(separators).toHaveLength(1);
+    // The separator sits between Redo and Find
+    expect(
+      Array.from(flyout.querySelectorAll('[role="menuitem"], [role="separator"]')).map((element) =>
+        element.getAttribute('role') === 'separator' ? '---' : element.textContent,
+      ),
+    ).toEqual(['Undo', 'Redo', '---', 'Find']);
+  });
+
+  it('adds no separator for a group that has no items', async () => {
+    const flyout = await openEditFlyout({
+      ...TWO_GROUP_MENU,
+      items: TWO_GROUP_MENU.items.filter((item) => item.group !== 'test.editFind'),
+    });
+
+    expect(within(flyout).getAllByRole('menuitem')).toHaveLength(2);
+    expect(within(flyout).queryAllByRole('separator')).toHaveLength(0);
+  });
+
+  it('adds no separator for an empty group between two groups that have items', async () => {
+    const flyout = await openEditFlyout({
+      ...TWO_GROUP_MENU,
+      groups: {
+        ...TWO_GROUP_MENU.groups,
+        'test.editEmpty': { menuItem: 'test.editSubmenu', order: 1.5 },
+      },
+    });
+
+    expect(within(flyout).getAllByRole('menuitem')).toHaveLength(3);
+    expect(within(flyout).getAllByRole('separator')).toHaveLength(1);
+  });
+});
+
 describe('TabDropdownMenu icons', () => {
   const ICON_MENU: Localized<MultiColumnMenu> = {
     columns: { 'test.project': { label: 'Project', order: 1 } },
