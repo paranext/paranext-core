@@ -1746,6 +1746,31 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   mismatched result where the two projects' versifications diverge at that reference. That gap is
   accepted as a consequence of this decision, not a defect in it, until PT-4031 lands.
 - **Source:** external code review, finding 16.
+
+## adr-data-provider-waits-for-settings-service: The .NET data provider waits, bounded, for the settings service before reading persisted settings
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Context:** `Program.Main` creates `PersistedParatextDataSettings` and `PersistedPtxUtilsSettings`,
+  whose constructors read settings from the extension host's settings service. Main starts the data
+  provider before it forks the extension host, and gives up on a request for an unregistered handler
+  after about 9 s. When the settings service came up later than that, the read threw out of `Main`
+  and no Paratext projects were available for the session.
+- **Decision:** Before creating the persisted settings, `Main` waits up to 60 s
+  (`SettingsService.WaitForSettingAsync`) for the settings service to answer with a value, retrying
+  only while it isn't answering yet. On timeout, startup continues and fails as before.
+- **Alternatives:** *Start with empty values when the read fails* — rejected: the next `SafeSave`
+  would overwrite what is stored. *Reorder startup so main launches the data provider after the
+  settings service registers* — rejected: it puts the data provider, and everything waiting on it,
+  behind the extension host on every launch, to fix a race that only a slow boot loses. *Wait on the
+  settings service's registration instead of a read* — rejected: a read of an unstored setting also
+  waits for the extension host's contributions to load, which registration doesn't cover.
+- **Consequences:** On a slow boot the .NET project data provider factories register up to 60 s
+  later. That delay falls inside `adr-startup-sync-readiness-gate`'s 120 s budget, which waits for
+  those factories. If the settings service never answers, the outcome is the pre-existing crash,
+  logged after the wait rather than after 9 s.
+- **Source:** paranext-core PR #2896.
+
 ## adr-data-update-scope-hook: A data type every update must refresh is added by an overridable hook on the base data provider
 
 - **Date:** 2026-09-30

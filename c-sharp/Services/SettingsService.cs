@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using StreamJsonRpc;
 using StreamJsonRpc.Protocol;
@@ -158,64 +157,53 @@ internal static class SettingsService
     /// Waits until the settings service answers a read of the setting with a value. The extension
     /// host brings the settings service up after this process starts, and main gives up on a request
     /// whose handler isn't registered after about 9 seconds. Retries only while the service isn't
-    /// answering yet: no handler, a canceled request, or a <see langword="null"/> answer (see
-    /// <see cref="GetSettingAsync"/>). A read still unanswered when <paramref name="timeout"/>
-    /// passes is abandoned: its own request timeout doesn't end it, as main ignores cancellation.
+    /// answering yet: no handler or a <see langword="null"/> answer (see
+    /// <see cref="GetSettingAsync"/>). No read starts once <paramref name="deadline"/> is canceled,
+    /// and one still unanswered then is abandoned: its own request timeout doesn't end it, as main
+    /// ignores cancellation.
     /// </summary>
     /// <returns>
-    /// <see langword="false"/> when <paramref name="timeout"/> passes or the client disconnects
-    /// first.
+    /// <see langword="false"/> when <paramref name="deadline"/> is canceled or the client
+    /// disconnects first.
     /// </returns>
     /// <exception cref="Exception">Any other failure of a read, as thrown by the read.</exception>
     public static async Task<bool> WaitForSettingAsync<T>(
         PapiClient papiClient,
         string key,
-        TimeSpan timeout,
-        TimeSpan retryDelay
+        TimeSpan retryDelay,
+        CancellationToken deadline
     )
     {
-        var stopwatch = Stopwatch.StartNew();
         var hasLoggedWait = false;
-        while (!papiClient.DisconnectTask.IsCompleted)
+        try
         {
-            string reason;
-            try
+            while (!deadline.IsCancellationRequested && !papiClient.DisconnectTask.IsCompleted)
             {
-                var remaining = timeout - stopwatch.Elapsed;
-                var read = GetSettingAsync<T>(papiClient, key)
-                    .WaitAsync(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero);
-                if (await read != null)
-                    return true;
-                reason = "no value returned";
+                string reason;
+                try
+                {
+                    if (await GetSettingAsync<T>(papiClient, key).WaitAsync(deadline) != null)
+                        return true;
+                    reason = "no value returned";
+                }
+                // StreamJsonRpc throws this type for invalid params too, which retrying won't fix.
+                catch (RemoteMethodNotFoundException ex)
+                    when (ex.ErrorCode == JsonRpcErrorCode.MethodNotFound)
+                {
+                    reason = ex.Message;
+                }
+                if (!hasLoggedWait)
+                {
+                    Console.WriteLine(
+                        $"Waiting for the settings service to answer {key}: {reason}"
+                    );
+                    hasLoggedWait = true;
+                }
+                await Task.Delay(retryDelay, deadline);
             }
-            // Only WaitAsync's deadline: the async read path doesn't throw this.
-            catch (TimeoutException)
-            {
-                return false;
-            }
-            catch (Exception) when (papiClient.DisconnectTask.IsCompleted)
-            {
-                return false;
-            }
-            // StreamJsonRpc throws this type for invalid params too, which retrying won't fix.
-            catch (RemoteMethodNotFoundException ex)
-                when (ex.ErrorCode == JsonRpcErrorCode.MethodNotFound)
-            {
-                reason = ex.Message;
-            }
-            catch (OperationCanceledException ex)
-            {
-                reason = ex.Message;
-            }
-            if (stopwatch.Elapsed >= timeout)
-                return false;
-            if (!hasLoggedWait)
-            {
-                Console.WriteLine($"Waiting for the settings service to answer {key}: {reason}");
-                hasLoggedWait = true;
-            }
-            await Task.Delay(retryDelay);
         }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested) { }
+        catch (Exception) when (papiClient.DisconnectTask.IsCompleted) { }
         return false;
     }
 
