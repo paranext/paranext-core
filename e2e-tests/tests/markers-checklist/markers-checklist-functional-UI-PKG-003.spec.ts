@@ -30,10 +30,10 @@
  */
 import type { FrameLocator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { sendOpenMarkersChecklistCommand, waitForAppReady } from '../../fixtures/helpers';
 
-// Markers Checklist is opened from the scripture editor's hamburger menu, which hides that item
-// in Simple mode.
+// The suite's layout is written for Power mode, and the editor menu hides the Markers Checklist item
+// in both modes, so the checklist is opened by command.
 test.use({ requiredInterfaceMode: 'power' });
 
 // -----------------------------------------------------------------------------
@@ -79,12 +79,7 @@ async function openMarkersChecklistTool(page: Page): Promise<void> {
   // platform-scripture-editor/contributions/menus.json under the inventory group, firing
   // `platformScripture.openMarkersChecklist` with the editor's webViewId as context (which is
   // how the handler resolves the active projectId).
-  const editorFrame = page.frameLocator(`iframe[title*="${PROJECT_NAME}" i][title*="Editable" i]`);
-  await editorFrame.locator("button[aria-label='Project']").first().click();
-  await editorFrame
-    .getByRole('menuitem', { name: /Markers Checklist/i })
-    .first()
-    .click();
+  await sendOpenMarkersChecklistCommand(page);
 
   await expect(page.locator('.dock-tab', { hasText: CHECKLIST_TAB_TITLE_PATTERN })).toBeVisible({
     timeout: 30_000,
