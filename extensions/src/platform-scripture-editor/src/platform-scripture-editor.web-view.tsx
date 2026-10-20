@@ -236,6 +236,7 @@ import {
   returnFocusToScriptureTextIfDocumentFocused,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
+import { matchEditorChord, shouldRunEditorChord } from './editor-chords.util';
 import { useGuardedProjectSetting } from './use-guarded-project-setting.hook';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
@@ -2699,8 +2700,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [getSelectionBeforePointerPress],
   );
 
-  // Listen for the marker menu trigger to open the marker menu, for Ctrl+T / Ctrl+Shift+T to
-  // insert a footnote/cross-reference, and for
+  // Listen for the marker menu trigger to open the marker menu, for F7 (footnotes), Ctrl+Shift+R
+  // (Basic checks) and Ctrl+T / Ctrl+Shift+T (insert a footnote/cross-reference) in every view,
+  // and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
     /**
@@ -2842,25 +2844,35 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // Swallowed while the editor's right-click menu is up, like the Ctrl+T shortcuts below.
         // See `isEditorContextMenuOpen`.
         if (!isEditorContextMenuOpen(editorContainerRef.current)) insertCommentAtCurrentSelection();
-      } else if (
-        !isReadOnlyEffective &&
-        viewType === 'standard' &&
-        editorRef.current?.isFocused() &&
-        event.ctrlKey &&
-        // AltGr reports as Ctrl+Alt on Windows/Linux, and it is how `t`-bearing characters are
-        // typed on several European layouts — so an unqualified Ctrl+T would eat those keystrokes
-        // and insert a footnote instead. Meta is excluded for the same reason: it is a different
-        // chord, not this one.
-        !event.altKey &&
-        !event.metaKey &&
-        event.key.toLowerCase() === 't'
-      ) {
-        // Ctrl+T inserts a footnote; Ctrl+Shift+T inserts a cross-reference. Scoped to
-        // the main editor via the same `editorRef.current.isFocused()` check used for the marker
-        // menu trigger above, so the shortcut doesn't fire while the FootnoteEditor/CommentEditor
-        // popovers (which have their own separate `.editor-input`) have focus. Standard-view only,
-        // matching the other Standard view PT9-parity entry points.
+      } else {
+        const chord = matchEditorChord(event);
+        if (
+          !chord ||
+          !shouldRunEditorChord(chord, {
+            isReadOnly: isReadOnlyEffective,
+            // Scoped to the main editor via `isFocused()`, so the insert chords don't fire while the
+            // FootnoteEditor/CommentEditor popovers (which have their own `.editor-input`) have focus
+            isEditorFocused: !!editorRef.current?.isFocused(),
+            isPowerMode,
+          })
+        )
+          return;
+
         event.preventDefault();
+        if (chord === 'showFootnotes' || chord === 'basicChecks') {
+          // The same commands the top menu runs, so the chord and the menu item cannot drift
+          papi.commands
+            .sendCommand(
+              chord === 'showFootnotes'
+                ? 'platformScriptureEditor.toggleFootnotes'
+                : 'platformScripture.openChecksSidePanel',
+              webViewId,
+            )
+            .catch((e) =>
+              logger.warn(`Failed to run ${chord} from the keyboard: ${getErrorMessage(e)}`),
+            );
+          return;
+        }
         // Swallowed while the editor's right-click menu is up: the insert opens the footnote editor,
         // which would land over a menu that is still open. See `isEditorContextMenuOpen`.
         if (isEditorContextMenuOpen(editorContainerRef.current)) return;
@@ -2889,6 +2901,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     showInlineMarkersMenu,
     isMac,
     isReadOnlyEffective,
+    isPowerMode,
+    webViewId,
     viewType,
     styleInfo,
     openMarkerPaletteAtCaret,
