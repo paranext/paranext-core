@@ -263,7 +263,6 @@ import {
   insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
   nextEditingNoteOps,
-  noteKindForCtrlTChord,
   NOTE_INSERT_CONFIG,
   resolvePaletteItemStrings,
   parseCallerSequenceSetting,
@@ -272,7 +271,7 @@ import {
   returnFocusToScriptureTextIfDocumentFocused,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
-import { matchEditorChord, shouldRunEditorChord } from './editor-chords.util';
+import { matchEditorChord, runEditorChord, shouldRunEditorChord } from './editor-chords.util';
 import { useGuardedProjectSetting } from './use-guarded-project-setting.hook';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
@@ -2871,9 +2870,9 @@ function PlatformScriptureEditor({
   );
 
   // Listen for the marker menu trigger to open the marker menu, for F7 (footnotes), Ctrl+Shift+R
-  // (Basic checks) and Ctrl+T / Ctrl+Shift+T (insert a footnote/cross-reference) in every view,
-  // and for
-  // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
+  // (Basic checks) and Ctrl+T / Ctrl+Shift+T (insert a footnote/cross-reference) in every view, and
+  // for Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at
+  // selection
   useEffect(() => {
     /**
      * Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux). Read by BOTH listeners below:
@@ -3029,31 +3028,29 @@ function PlatformScriptureEditor({
           return;
 
         event.preventDefault();
-        if (chord === 'showFootnotes' || chord === 'basicChecks') {
-          // The same commands the top menu runs, so the chord and the menu item cannot drift
-          papi.commands
-            .sendCommand(
-              chord === 'showFootnotes'
-                ? 'platformScriptureEditor.toggleFootnotes'
-                : 'platformScripture.openChecksSidePanel',
-              webViewId,
-            )
-            .catch((e) =>
-              logger.warn(`Failed to run ${chord} from the keyboard: ${getErrorMessage(e)}`),
+        runEditorChord(chord, {
+          webViewId,
+          sendCommand: (command, id) => {
+            papi.commands
+              .sendCommand(command, id)
+              .catch((e) =>
+                logger.warn(`Failed to run ${chord} from the keyboard: ${getErrorMessage(e)}`),
+              );
+          },
+          insertNote: (method) => {
+            // Swallowed while the editor's right-click menu is up: the insert opens the footnote
+            // editor, which would land over a menu that is still open. See
+            // `isEditorContextMenuOpen`.
+            if (isEditorContextMenuOpen(editorContainerRef.current)) return;
+            // insertNoteAtCurrentSelection is async and this handler is not, so surface a rejection
+            // instead of dropping it as an unhandled promise: the user pressed a key and must not
+            // be left with no marker and no explanation.
+            logInsertRejection(
+              insertNoteAtCurrentSelection(method),
+              `${NOTE_INSERT_CONFIG[method].editDescription} from keyboard shortcut`,
             );
-          return;
-        }
-        // Swallowed while the editor's right-click menu is up: the insert opens the footnote editor,
-        // which would land over a menu that is still open. See `isEditorContextMenuOpen`.
-        if (isEditorContextMenuOpen(editorContainerRef.current)) return;
-        // insertNoteAtCurrentSelection is async and this handler is not, so surface a rejection
-        // instead of dropping it as an unhandled promise: the user pressed a key and must not be
-        // left with no marker and no explanation.
-        const method = noteKindForCtrlTChord(event.shiftKey);
-        logInsertRejection(
-          insertNoteAtCurrentSelection(method),
-          `${NOTE_INSERT_CONFIG[method].editDescription} from keyboard shortcut`,
-        );
+          },
+        });
       }
     };
 
