@@ -1,0 +1,76 @@
+{
+  "type": "USJ",
+  "version": "3.0",
+  "content": [
+    {
+      "type": "chapter",
+      "marker": "c",
+      "number": "5",
+      "altnumber": "5a",
+      "sid": " 5"
+    },
+    {
+      "type": "char",
+      "marker": "ca",
+      "content": ["5b"]
+    },
+    " Stray text on the chapter line after a second ca, before any paragraph.",
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "1",
+          "sid": ""
+        },
+        "Chapter 5 holds deliberately damaged USFM that can still exist at rest in a Paratext 9 project. A nameless marker follows this sentence. "
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "",
+      "content": [
+        "2 ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "2",
+          "sid": ""
+        },
+        "A bare backslash after a character marker ",
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false"
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "",
+      "content": [
+        "text after it. ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "3",
+          "sid": ""
+        },
+        "A bare backslash at the end of a verse "
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "",
+      "vid": ""
+    },
+    {
+      "type": "para",
+      "marker": "b",
+      "vid": "",
+      "content": ["Stray text after a blank-line marker."]
+    }
+  ]
+}

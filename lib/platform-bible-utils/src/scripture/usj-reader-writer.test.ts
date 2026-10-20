@@ -187,6 +187,38 @@ const testUSFM2SACh3Usj = JSON.parse(readTestDataFile('testUSFM-2SA-3.usj'));
  */
 const testUSFM2SACh3UsjCorrected = JSON.parse(readTestDataFile('testUSFM-2SA-3-corrected.usj'));
 
+/** TestUSFM 2 Samuel 4 in USFM, at rest in Paratext 9: standard USFM chapters 1-3 do not use. */
+const testUSFM2SACh4Usfm = readTestDataFile('testUSFM-2SA-4.usfm');
+
+/** TestUSFM 2 Samuel 5 in USFM, at rest in Paratext 9: deliberately damaged USFM. */
+const testUSFM2SACh5Usfm = readTestDataFile('testUSFM-2SA-5.usfm');
+
+/** TestUSFM 1 Samuel 1 in USFM, at rest in Paratext 9: a book start with introduction material. */
+const testUSFM1SACh1Usfm = readTestDataFile('testUSFM-1SA-1.usfm');
+
+/**
+ * TestUSFM 2 Samuel 4: ParatextData's USX (`pdp-usx/testUSFM-2SA-4-ch4.usx`) converted by
+ * `usxStringToUsj`, with version 3.1 replaced with 3.0 in the USJ marker.
+ */
+const testUSFM2SACh4Usj = JSON.parse(readTestDataFile('testUSFM-2SA-4.usj'));
+
+/**
+ * TestUSFM 2 Samuel 5: ParatextData's USX (`pdp-usx/testUSFM-2SA-5-ch5.usx`) converted by
+ * `usxStringToUsj`, with the following modifications:
+ *
+ * - Version 3.1 replaced with 3.0 in the USJ marker.
+ * - Each of the three nameless paragraphs (`<para style="">`, from `\ 2`, `\ text` and the bare `\`
+ *   at the end of verse 3) has `marker: ""` in place of the `style: ""` property `usxStringToUsj`
+ *   leaves behind when it drops an empty style. The empty marker is the author's own bytes.
+ */
+const testUSFM2SACh5Usj = JSON.parse(readTestDataFile('testUSFM-2SA-5.usj'));
+
+/**
+ * TestUSFM 1 Samuel 1: ParatextData's USX (`pdp-usx/testUSFM-1SA-1-ch1.usx`) converted by
+ * `usxStringToUsj`, with version 3.1 replaced with 3.0 in the USJ marker.
+ */
+const testUSFM1SACh1Usj = JSON.parse(readTestDataFile('testUSFM-1SA-1.usj'));
+
 // #endregion testUSFM test data - in Paratext 9 USFM 3.0 format
 
 // #region testUSFM test data - in canonical 3.1 format
@@ -1893,6 +1925,44 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh3Usfm);
+  });
+
+  test('2SA 4 testUSFM', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh4Usj, usjReaderWriterOptionsParatext3_0);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(testUSFM2SACh4Usfm);
+  });
+
+  // Expected failure on the chapter line only: `toUsfm` writes `\c 5\n \ca 5a\ca*\ca 5b\ca*`, which
+  // drops the space between the two `\ca` runs (catalog C-4, which FR-1's whole-chapter rewrite
+  // would carry into untouched text) and breaks the line after `\c 5` where the at-rest text keeps
+  // `\c 5 \ca` on one line (layout only, catalog S-1). The test after this one pins the rest of the
+  // chapter. Once both chapter-line differences are gone this test reports red; drop `.fails` then.
+  test.fails('2SA 5 testUSFM', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh5Usj, usjReaderWriterOptionsParatext3_0);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(testUSFM2SACh5Usfm);
+  });
+
+  test('2SA 5 testUSFM after the chapter line', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh5Usj, usjReaderWriterOptionsParatext3_0);
+    const afterChapterLine = (usfm: string) => {
+      const firstParagraph = usfm.indexOf('\\p\n');
+      expect(firstParagraph).toBeGreaterThan(0);
+      return usfm.slice(firstParagraph);
+    };
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(afterChapterLine(resultingUsfm)).toBe(afterChapterLine(testUSFM2SACh5Usfm));
+  });
+
+  test('1SA 1 testUSFM', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM1SACh1Usj, usjReaderWriterOptionsParatext3_0);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(testUSFM1SACh1Usfm);
   });
 
   // Pins closing-marker suppression for implicitly closed char markers. ParatextData emits

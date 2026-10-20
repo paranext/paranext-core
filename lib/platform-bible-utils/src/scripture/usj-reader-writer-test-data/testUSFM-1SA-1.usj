@@ -1,0 +1,91 @@
+{
+  "type": "USJ",
+  "version": "3.0",
+  "content": [
+    {
+      "type": "book",
+      "marker": "id",
+      "code": "1SA",
+      "content": ["- TJs USFM Test"]
+    },
+    {
+      "type": "para",
+      "marker": "h",
+      "content": ["1 Samuel"]
+    },
+    {
+      "type": "para",
+      "marker": "toc1",
+      "content": ["1 Samuel"]
+    },
+    {
+      "type": "para",
+      "marker": "mt1",
+      "content": ["1 Samuel"]
+    },
+    {
+      "type": "para",
+      "marker": "imt",
+      "content": ["Introduction"]
+    },
+    {
+      "type": "para",
+      "marker": "is",
+      "content": ["Introduction section heading"]
+    },
+    {
+      "type": "para",
+      "marker": "ip",
+      "content": [
+        "An introduction paragraph. Introduction material precedes the first chapter, so it lives in this book-start fixture rather than in a 2 Samuel chapter."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "io1",
+      "content": [
+        "Outline entry one ",
+        {
+          "type": "char",
+          "marker": "ior",
+          "content": ["1.1-4.22"]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "io2",
+      "content": [
+        "Outline entry two ",
+        {
+          "type": "char",
+          "marker": "ior",
+          "content": ["5.1-7.17"]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "ie"
+    },
+    {
+      "type": "chapter",
+      "marker": "c",
+      "number": "1",
+      "sid": "1SA 1"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "1",
+          "sid": "1SA 1:1"
+        },
+        "The first verse after the introduction."
+      ]
+    }
+  ]
+}
