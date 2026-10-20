@@ -1,0 +1,95 @@
+import {
+  Asterisk,
+  Book,
+  BookA,
+  BookCopy,
+  BookMarked,
+  CircleCheckBig,
+  CircleQuestionMark,
+  Download,
+  ExternalLink,
+  Eye,
+  FileText,
+  House,
+  Library,
+  Link,
+  type LucideIcon as LucideIconComponent,
+  MessageSquare,
+  MessageSquarePlus,
+  PanelBottom,
+  Pencil,
+  RefreshCw,
+  Scan,
+  Search,
+  Settings,
+  Sigma,
+  Sparkles,
+  Users,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
+import { cn } from '@/utils/shadcn-ui/utils';
+
+/**
+ * Curated set of lucide icons that can be shown by name. Each icon is a named import so the bundle
+ * contains only these icons; adding an icon means adding it here.
+ */
+const LUCIDE_ICONS_BY_NAME: Readonly<Record<string, LucideIconComponent>> = {
+  'refresh-cw': RefreshCw,
+  download: Download,
+  house: House,
+  'book-a': BookA,
+  settings: Settings,
+  'circle-question-mark': CircleQuestionMark,
+  'external-link': ExternalLink,
+  users: Users,
+  'book-copy': BookCopy,
+  pencil: Pencil,
+  eye: Eye,
+  'zoom-in': ZoomIn,
+  'zoom-out': ZoomOut,
+  scan: Scan,
+  'file-text': FileText,
+  'panel-bottom': PanelBottom,
+  'message-square-plus': MessageSquarePlus,
+  asterisk: Asterisk,
+  link: Link,
+  sigma: Sigma,
+  book: Book,
+  'book-marked': BookMarked,
+  library: Library,
+  search: Search,
+  'message-square': MessageSquare,
+  'circle-check-big': CircleCheckBig,
+  sparkles: Sparkles,
+};
+
+/**
+ * Names (lucide kebab-case) of the icons {@link LucideIcon} can render
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export const LUCIDE_ICON_NAMES: readonly string[] = Object.keys(LUCIDE_ICONS_BY_NAME);
+
+export type LucideIconProps = {
+  /** Lucide icon name in kebab-case, e.g. `refresh-cw`. Must be one of {@link LUCIDE_ICON_NAMES}. */
+  name: string;
+  /** Extra classes for the svg, appended to the default 16px size */
+  className?: string;
+};
+
+/**
+ * Renders a lucide icon by name. The svg strokes with `currentColor`, so it follows the text colour
+ * of its surroundings (theme, hover, selected and disabled states). Renders nothing for a name that
+ * is not in {@link LUCIDE_ICON_NAMES}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export function LucideIcon({ name, className }: LucideIconProps) {
+  // Object.hasOwn keeps inherited keys such as `constructor` from resolving to a non-icon
+  const Icon = Object.hasOwn(LUCIDE_ICONS_BY_NAME, name) ? LUCIDE_ICONS_BY_NAME[name] : undefined;
+  if (!Icon) return undefined;
+  return <Icon aria-hidden="true" className={cn('tw:h-4 tw:w-4 tw:shrink-0', className)} />;
+}
+
+export default LucideIcon;

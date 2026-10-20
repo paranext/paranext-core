@@ -82,6 +82,22 @@ export type MenuItemBase = OrderedItem & {
    * items that should show in every mode — most items need no value here at all.
    */
   hiddenInterfaceModes?: InterfaceMode[];
+  /**
+   * Lucide icon name (kebab-case, e.g. `refresh-cw`) to display before the menu text. The icon
+   * takes the text colour of the item. Names outside the platform's curated set render nothing.
+   * Wins over `iconPathBefore` when both are set.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  iconNameBefore?: string;
+  /**
+   * Lucide icon name (kebab-case, e.g. `external-link`) to display after the menu text. The icon
+   * takes the text colour of the item. Names outside the platform's curated set render nothing.
+   * Wins over `iconPathAfter` when both are set.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  iconNameAfter?: string;
 };
 
 /** Menu item that hosts a submenu */
@@ -493,6 +509,16 @@ export const menuDocumentSchema = {
           type: 'array',
           items: { enum: ['simple', 'power'] },
           uniqueItems: true,
+        },
+        iconNameBefore: {
+          description:
+            'Lucide icon name (kebab-case, e.g. `refresh-cw`) to display before the menu text. Wins over `iconPathBefore` when both are set.',
+          type: 'string',
+        },
+        iconNameAfter: {
+          description:
+            'Lucide icon name (kebab-case, e.g. `external-link`) to display after the menu text. Wins over `iconPathAfter` when both are set.',
+          type: 'string',
         },
       },
       required: ['label', 'group', 'order'],

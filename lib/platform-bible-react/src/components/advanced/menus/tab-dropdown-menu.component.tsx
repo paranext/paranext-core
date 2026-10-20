@@ -79,13 +79,18 @@ const getGroupContent = (
                     onSelectMenuItem(item as MenuItemContainingCommand);
                   }}
                 >
-                  {item.iconPathBefore && (
-                    <MenuItemIcon icon={item.iconPathBefore} menuLabel={item.label} leading />
-                  )}
+                  <MenuItemIcon
+                    iconName={item.iconNameBefore}
+                    icon={item.iconPathBefore}
+                    menuLabel={item.label}
+                    leading
+                  />
                   {item.label}
-                  {item.iconPathAfter && (
-                    <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
-                  )}
+                  <MenuItemIcon
+                    iconName={item.iconNameAfter}
+                    icon={item.iconPathAfter}
+                    menuLabel={item.label}
+                  />
                   {item.shortcut && (
                     <DropdownMenuShortcut>
                       <ShortcutKeys hint={item.shortcut} />
@@ -101,7 +106,13 @@ const getGroupContent = (
         // Only wrap the trigger when there is a tooltip: `TooltipTrigger asChild` clones its own
         // `data-state` and `data-slot` onto the trigger, hiding the submenu's open state from
         // `data-open:` styles
-        const subTrigger = <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>;
+        const subTrigger = (
+          <DropdownMenuSubTrigger>
+            <MenuItemIcon iconName={item.iconNameBefore} menuLabel={item.label} leading />
+            {item.label}
+            <MenuItemIcon iconName={item.iconNameAfter} menuLabel={item.label} />
+          </DropdownMenuSubTrigger>
+        );
         return (
           <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
             {item.tooltip ? (
