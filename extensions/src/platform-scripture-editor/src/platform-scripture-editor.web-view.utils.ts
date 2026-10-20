@@ -549,7 +549,7 @@ const INSERT_FOOTNOTE_TITLE_KEY: LocalizeKey =
 const INSERT_CROSS_REFERENCE_TITLE_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%';
 const INSERT_ENDNOTE_TITLE_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_insertEndnoteAtSelection%';
+  '%webView_platformScriptureEditor_insertEndnoteAtSelection_2%';
 const INSERT_COMMENT_TITLE_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_insertCommentAtSelection%';
 
@@ -562,10 +562,10 @@ const INSERT_COMMENT_TITLE_KEY: LocalizeKey =
  * independently.
  */
 export const INSERT_CONTEXT_MENU_STRING_KEYS = Object.freeze([
+  INSERT_COMMENT_TITLE_KEY,
   INSERT_FOOTNOTE_TITLE_KEY,
   INSERT_CROSS_REFERENCE_TITLE_KEY,
   INSERT_ENDNOTE_TITLE_KEY,
-  INSERT_COMMENT_TITLE_KEY,
 ] as const);
 
 /** Callbacks the editor context menu's insert items dispatch to. */
@@ -601,6 +601,12 @@ export function createInsertContextMenuItems(
   const { isReadOnly, canUserCreateComments, isSyncBlocked } = state;
   return [
     {
+      title: localizedStrings[INSERT_COMMENT_TITLE_KEY],
+      onSelect: actions.insertComment,
+      // Disabled while sync-blocked too, so the menu reflects the frozen state.
+      isDisabled: !canUserCreateComments || isSyncBlocked,
+    },
+    {
       title: localizedStrings[INSERT_FOOTNOTE_TITLE_KEY],
       onSelect: actions.insertFootnote,
       isDisabled: isReadOnly,
@@ -614,12 +620,6 @@ export function createInsertContextMenuItems(
       title: localizedStrings[INSERT_ENDNOTE_TITLE_KEY],
       onSelect: actions.insertEndnote,
       isDisabled: isReadOnly,
-    },
-    {
-      title: localizedStrings[INSERT_COMMENT_TITLE_KEY],
-      onSelect: actions.insertComment,
-      // Disabled while sync-blocked too, so the menu reflects the frozen state.
-      isDisabled: !canUserCreateComments || isSyncBlocked,
     },
   ];
 }

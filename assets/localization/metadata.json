@@ -444,6 +444,15 @@
   "%userProfile_server_badge_test%": {
     "notes": "Usually left untranslated (falling back to the English \"Test\") since this badge targets a dev/support audience who will likely recognize the terse English environment name regardless of interface language. Translate it if that reasoning doesn't hold in your language or script — it is not required to match the English string. The tooltip, %userProfile_server_tooltip_test%, should still be translated: it carries the full explanation for anyone who ends up on this server."
   },
+  "%webView_openProjectSettings%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Relabeled to \"Project settings\" for every mode and web view. The new key is %webView_openProjectSettings_2%."
+    }
+  },
+  "%webView_openProjectSettings_2%": {
+    "fallbackKey": "%webView_openProjectSettings%"
+  },
   "%yes%": {
     "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",
     "fallbackKey": "%confirm%"

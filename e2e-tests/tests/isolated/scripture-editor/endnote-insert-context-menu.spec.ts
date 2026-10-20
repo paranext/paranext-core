@@ -230,10 +230,10 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       optionTexts = await contextMenu.locator('[role="option"]').allTextContents();
       const insertOptions = optionTexts.filter((text) => text.startsWith('Insert'));
       expect(insertOptions).toEqual([
+        'Insert comment',
         'Insert footnote',
         'Insert cross-reference',
-        'Insert endnote',
-        'Insert comment',
+        'Insert end note',
       ]);
     });
 
@@ -335,7 +335,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
     });
 
     await test.step('arrow keys then Enter invoke the highlighted item, not the Enter palette', async () => {
-      const endNoteIndex = optionTexts.indexOf('Insert endnote');
+      const endNoteIndex = optionTexts.indexOf('Insert end note');
       expect(endNoteIndex).toBeGreaterThanOrEqual(0);
       const endnotesBefore = await endnotes.count();
 
@@ -367,7 +367,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       }
       // Proves the shortcuts above did not steal the highlight or close the menu out from under
       // this loop.
-      await expect(contextMenu.locator('li.selected')).toHaveText('Insert endnote');
+      await expect(contextMenu.locator('li.selected')).toHaveText('Insert end note');
 
       const checkNoStrayPalette = await watchForStrayCommandPalette();
       await mainPage.keyboard.press('Enter');
@@ -446,7 +446,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       await expect(hamburger).toBeVisible({ timeout: 15_000 });
       await hamburger.click();
       const insertEndnoteMenuItem = editorFrame.getByRole('menuitem', {
-        name: 'Insert endnote',
+        name: 'Insert end note',
         exact: true,
       });
       await expect(insertEndnoteMenuItem).toBeVisible({ timeout: 5_000 });
@@ -461,7 +461,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
       await expect(endnotesInVerseParas).toHaveCount(endnotesBefore + 1);
     });
 
-    await test.step('clicking "Insert endnote" in the right-click menu with the mouse inserts an endnote', async () => {
+    await test.step('clicking "Insert end note" in the right-click menu with the mouse inserts an endnote', async () => {
       // The top-menu insert above opened the footnote editor popover, which only a chapter change
       // closes (see constraint 2 in the header); left open, it covers the paragraph to right-click.
       await navigateToolbarBcv(mainPage, 'Jonah 2:1');
@@ -479,7 +479,7 @@ test.describe('scripture editor endnote insert + context-menu parity', () => {
 
       await openContextMenu(versePara);
       const insertEndnoteOption = contextMenu.getByRole('option', {
-        name: 'Insert endnote',
+        name: 'Insert end note',
         exact: true,
       });
       await insertEndnoteOption.click();
