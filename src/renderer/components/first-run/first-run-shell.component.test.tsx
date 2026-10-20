@@ -18,7 +18,9 @@ vi.mock('@renderer/services/first-run-store', () => ({
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn(), set: vi.fn().mockResolvedValue(undefined) },
 }));
-vi.mock('lucide-react', () => ({
+// Partial: platform-bible-react's icon map reads other lucide exports when it loads
+vi.mock('lucide-react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('lucide-react')>()),
   CircleCheck: () => <span data-testid="circle-check-icon" />,
   AlertCircle: () => <span data-testid="alert-circle-icon" />,
 }));
