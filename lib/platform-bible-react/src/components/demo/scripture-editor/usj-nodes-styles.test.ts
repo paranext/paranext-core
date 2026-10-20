@@ -194,7 +194,13 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     // carries a complete color value here, so `var()` resolves; the literal stays only as the
     // fallback for a host that defines no such token.
     it('resolves the hover color against the host theme', () => {
-      expect(css).toMatch(rule(['.attribute:hover'], 'color: var(--foreground'));
+      // Every piece of a run an annotation cuts lifts with the hovered one.
+      expect(css).toMatch(
+        rule(
+          ['.attribute:hover', ':has(> .attribute:hover) > .attribute'],
+          'color: var(--foreground',
+        ),
+      );
       expect(css).toMatch(rule(['.attribute-run:hover'], 'color: var(--foreground'));
     });
   });
