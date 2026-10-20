@@ -502,9 +502,7 @@ describe('Platform menu document interface-mode gating', () => {
   const POWER_ONLY_COMMANDS = ['platform.createWindow', 'platform.visitGettingStartedPage'];
 
   /** Gated out of both modes: Power's main menu leaves these to other surfaces. */
-  const HIDDEN_IN_BOTH_MODES = [
-    'platform.openDeveloperDocumentationUrl',
-  ];
+  const HIDDEN_IN_BOTH_MODES = ['platform.openDeveloperDocumentationUrl'];
 
   test.each(HIDDEN_IN_BOTH_MODES)('getMainMenu hides %s in both modes', async (command) => {
     expect(await isCommandInMainMenu('simple', command)).toBe(false);
