@@ -93,6 +93,11 @@
           "platformScriptureEditor.editFind": {
             "menuItem": "platformScriptureEditor.editSubmenu",
             "order": 2
+          },
+          "platformScriptureEditor.viewModes": {
+            "menuItem": "platformScriptureEditor.viewSubmenu",
+            "order": 1,
+            "isExperimental": true
           }
         },
         "items": [
@@ -158,13 +163,29 @@
             "command": "platformScripture.openFind"
           },
           {
+            "id": "platformScriptureEditor.viewSubmenu",
             "label": "%webView_platformScriptureEditor_switchScriptureView_2%",
             "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu (Power) > View > Switch scripture view — changes the editor's Scripture view type",
+            "localizeNotes": "Scripture editor top menu (Power) > View > Switch scripture view ▸ — opens the Standard view / Preview flyout. Hidden in Simple mode, whose editor has a single view type",
             "iconNameBefore": "eye",
             "group": "platformScriptureEditor.layout",
+            "order": 1
+          },
+          {
+            "label": "%webView_platformScriptureEditor_standardView%",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu (Power) > View > Switch scripture view > Standard view — shows the editable view with visible paragraph markers",
+            "group": "platformScriptureEditor.viewModes",
             "order": 1,
-            "command": "platformScriptureEditor.changeView"
+            "command": "platformScriptureEditor.setViewStandard"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_preview%",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu (Power) > View > Switch scripture view > Preview — shows the formatted view of the text, the way it reads when published",
+            "group": "platformScriptureEditor.viewModes",
+            "order": 2,
+            "command": "platformScriptureEditor.setViewPreview"
           },
           {
             "label": "%webView_platformScriptureEditor_zoomIn%",

@@ -2040,6 +2040,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           setViewType(getNextViewTypeInCycle(viewType, isPowerMode));
           break;
         }
+        case 'setScriptureView': {
+          // Standard view is Power-only, so a request for it outside Power lands on formatted.
+          endPaneNoteEdit();
+          setViewType(resolveViewTypeForInterfaceMode(editorMessage.viewType, isPowerMode));
+          break;
+        }
         case 'toggleFootnotesPaneVisibility': {
           const { current } = footnotesPaneVisibleRef;
           // Opening or closing the pane beside the text (rather than below it) changes the text

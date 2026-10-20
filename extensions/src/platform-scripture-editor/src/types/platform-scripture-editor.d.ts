@@ -50,6 +50,17 @@ declare module 'platform-scripture-editor' {
     method: 'changeScriptureView';
   };
 
+  /**
+   * Tell the editor to show a specific Scripture view type. A `'standard'` request resolves to the
+   * formatted view when the interface mode is not Power.
+   *
+   * @experimental This message is unstable and may change or disappear without notice
+   */
+  export type EditorMessageSetScriptureView = {
+    method: 'setScriptureView';
+    viewType: ScriptureEditorViewType;
+  };
+
   /** Tell the editor to toggle footnotes pane visibility */
   export type EditorMessageToggleFootnotesPaneVisibility = {
     method: 'toggleFootnotesPaneVisibility';
@@ -145,6 +156,7 @@ declare module 'platform-scripture-editor' {
     | EditorMessageSelectRange
     | EditorMessageUpdateDecorations
     | EditorMessageChangeScriptureView
+    | EditorMessageSetScriptureView
     | EditorMessageToggleFootnotesPaneVisibility
     | EditorMessageChangeFootnotesPaneLocation
     | EditorMessageInsertTextualNoteAtSelection
@@ -375,6 +387,13 @@ declare module 'platform-scripture-editor' {
      * formatted and Marker view)
      */
     changeScriptureView(): Promise<void>;
+    /**
+     * Show a specific Scripture view type in the editor (`'standard'` resolves to the formatted
+     * view outside Power mode)
+     *
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    setScriptureView(viewType: ScriptureEditorViewType): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     toggleFootnotesPaneVisibility(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
@@ -818,6 +837,23 @@ declare module 'papi-shared-types' {
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
     'platformScriptureEditor.changeView': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Shows Standard view in the editor for the given WebView ID. Outside Power mode the editor
+     * shows the Preview (formatted) view instead.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.setViewStandard': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Shows Preview (the formatted view) in the editor for the given WebView ID.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platformScriptureEditor.setViewPreview': (webViewId: string | undefined) => Promise<void>;
 
     /**
      * Toggles the visibility of the footnotes pane for the given the WebView ID
