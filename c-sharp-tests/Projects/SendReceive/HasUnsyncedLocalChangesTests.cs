@@ -4,6 +4,7 @@ using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Data;
 using Paratext.Data.Repository;
+using Paratext.Data.Users;
 
 namespace TestParanextDataProvider.Projects.SendReceive
 {
@@ -17,6 +18,13 @@ namespace TestParanextDataProvider.Projects.SendReceive
     internal class HasUnsyncedLocalChangesTests : PapiTestBase
     {
         private const string FailureLog = "Could not determine unsynced changes";
+
+        /// <summary>
+        /// A file an extension wrote into the project's shared folder and Send/Receive has not added
+        /// yet. ParatextData counts every file under <c>shared</c> as project data.
+        /// </summary>
+        private const string UntrackedExtensionDataFile =
+            "shared/platform.bible/extensions/someExtension/someData";
 
         private Hg? _originalHg;
         private ScriptedHg _hg = null!;
@@ -47,18 +55,34 @@ namespace TestParanextDataProvider.Projects.SendReceive
             Assert.That(_service.HasUnsyncedLocalChanges(new DummyScrText()), Is.False);
         }
 
-        [Test]
-        public void UncommittedChanges_AreUnsynced()
+        [TestCase(UserRoles.Administrator)]
+        [TestCase(UserRoles.TeamMember)]
+        [TestCase(UserRoles.Consultant)]
+        public void UncommittedChanges_AreUnsynced(UserRoles role)
         {
             _hg.Statuses["file.usfm"] = Hg.FileStatus.Modified;
 
-            Assert.That(_service.HasUnsyncedLocalChanges(new SharedDummyScrText()), Is.True);
+            Assert.That(_service.HasUnsyncedLocalChanges(new SharedDummyScrText(role)), Is.True);
+        }
+
+        [Test]
+        public void UntrackedExtensionDataFile_IsUnsynced()
+        {
+            _hg.Statuses[UntrackedExtensionDataFile] = Hg.FileStatus.Untracked;
+
+            Assert.That(
+                _service.HasUnsyncedLocalChanges(new SharedDummyScrText(UserRoles.TeamMember)),
+                Is.True
+            );
         }
 
         [Test]
         public void CleanRepositoryWithoutLastSyncedTip_IsNotUnsynced()
         {
-            Assert.That(_service.HasUnsyncedLocalChanges(new SharedDummyScrText()), Is.False);
+            Assert.That(
+                _service.HasUnsyncedLocalChanges(new SharedDummyScrText(UserRoles.TeamMember)),
+                Is.False
+            );
         }
 
         [Test]
@@ -67,7 +91,35 @@ namespace TestParanextDataProvider.Projects.SendReceive
             _service.LastSyncedTip = "t0";
             _hg.TipId = "t1";
 
-            Assert.That(_service.HasUnsyncedLocalChanges(new SharedDummyScrText()), Is.True);
+            Assert.That(
+                _service.HasUnsyncedLocalChanges(new SharedDummyScrText(UserRoles.TeamMember)),
+                Is.True
+            );
+        }
+
+        // Send/Receive never sends for a user without a role that may change the project: it
+        // neither commits nor pushes, so whatever is waiting locally would stay "unsent" forever.
+        [TestCase("Modified", UserRoles.Observer)]
+        [TestCase("Modified", null)]
+        [TestCase("UntrackedExtensionData", UserRoles.Observer)]
+        [TestCase("TipMoved", UserRoles.Observer)]
+        public void ChangesOfAUserWhoCannotSend_AreNotUnsynced(string change, UserRoles? role)
+        {
+            switch (change)
+            {
+                case "Modified":
+                    _hg.Statuses["file.usfm"] = Hg.FileStatus.Modified;
+                    break;
+                case "UntrackedExtensionData":
+                    _hg.Statuses[UntrackedExtensionDataFile] = Hg.FileStatus.Untracked;
+                    break;
+                case "TipMoved":
+                    _service.LastSyncedTip = "t0";
+                    _hg.TipId = "t1";
+                    break;
+            }
+
+            Assert.That(_service.HasUnsyncedLocalChanges(new SharedDummyScrText(role)), Is.False);
         }
 
         [Test]
@@ -75,7 +127,10 @@ namespace TestParanextDataProvider.Projects.SendReceive
         {
             _hg.StatusFailure = new InvalidOperationException("hg is gone");
 
-            Assert.That(_service.HasUnsyncedLocalChanges(new SharedDummyScrText()), Is.Null);
+            Assert.That(
+                _service.HasUnsyncedLocalChanges(new SharedDummyScrText(UserRoles.TeamMember)),
+                Is.Null
+            );
         }
 
         [TestCase("Uncommitted", true, TestName = "LogsOncePerFailureEpisode_Uncommitted")]
@@ -83,7 +138,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         [TestCase("TipComparison", true, TestName = "LogsOncePerFailureEpisode_TipComparison")]
         public void LogsOncePerFailureEpisode(string successPath, bool expectedAfterRecovery)
         {
-            var project = new SharedDummyScrText();
+            var project = new SharedDummyScrText(UserRoles.TeamMember);
             var original = Console.Error;
             var captured = new StringWriter();
             Console.SetError(captured);
