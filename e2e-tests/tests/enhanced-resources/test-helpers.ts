@@ -23,13 +23,30 @@ export async function closeAllNonHomeDockTabs(page: Page): Promise<void> {
   /* eslint-enable no-await-in-loop */
 }
 
+/**
+ * Sends `platformEnhancedResources.openEnhancedResource` through the renderer's `papi`, exposed on
+ * `window` untyped here (the same pattern the content-zoom spec uses).
+ */
+export async function sendOpenEnhancedResourceCommand(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as {
+      papi: { commands: { sendCommand: (command: string) => Promise<unknown> } };
+    };
+    await win.papi.commands.sendCommand('platformEnhancedResources.openEnhancedResource');
+  });
+}
+
 /** WebView iframe selector for Enhanced Resource. */
 export const ER_FRAME_SELECTOR = 'iframe[title="Enhanced Resource"]';
 
 /**
- * Open an Enhanced Resource window via the Platform menu and wait for the iframe to be ready.
+ * Open an Enhanced Resource window with the `platformEnhancedResources.openEnhancedResource`
+ * command and wait for the iframe to be ready. Power's main menu no longer offers this command, so
+ * the command is the only way in.
  *
- * The hardcoded ESV16UK+ default in main.ts (TODO(GAP-001)) means the menu click opens the resource
+ * The hardcoded ESV16UK+ default in main.ts (TODO(GAP-001)) means the command opens the resource
  * directly — no picker dialog. The MarbleGuide tutorial may auto-show on the first ER open per
  * session (BHV-461 / TS-067). When `dismissGuide` is true (default), this helper closes the guide
  * if it appears so subsequent assertions on the scripture pane are not blocked by the modal.
@@ -39,8 +56,7 @@ export async function openEnhancedResource(
   options: { dismissGuide?: boolean } = {},
 ): Promise<void> {
   const { dismissGuide = true } = options;
-  await page.getByRole('menuitem', { name: /^Platform$/i }).click();
-  await page.getByRole('menuitem', { name: /^Open Enhanced Resource$/i }).click();
+  await sendOpenEnhancedResourceCommand(page);
   await expect(page.locator('.dock-tab', { hasText: /Enhanced Resource/i }).first()).toBeVisible({
     timeout: 15_000,
   });
