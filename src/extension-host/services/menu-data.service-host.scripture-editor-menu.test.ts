@@ -112,6 +112,56 @@ function servedCommandIds(menu: Menu): Set<string> {
   return new Set(menu.items.flatMap((item) => ('command' in item ? [item.command] : [])));
 }
 
+/** Commands hidden in Power's editor menu and in Simple's, kept declared so the flag can be lifted. */
+const HIDDEN_IN_POWER = [
+  'platform.webViewContentZoomIn',
+  'platform.webViewContentZoomOut',
+  'platform.webViewContentZoomReset',
+  'platformScripture.openCharactersInventory',
+  'platformScripture.openRepeatedWordsInventory',
+  'platformScripture.openMarkersInventory',
+  'platformScripture.openPunctuationInventory',
+  'platformScripture.openMarkersChecklist',
+];
+/** Declared but served in neither mode, until the flag that hides them is lifted. */
+const HIDDEN_IN_BOTH_MODES = [
+  'platformScripture.openCharactersInventory',
+  'platformScripture.openRepeatedWordsInventory',
+  'platformScripture.openMarkersInventory',
+  'platformScripture.openPunctuationInventory',
+  'platformScripture.openMarkersChecklist',
+];
+const HIDDEN_IN_SIMPLE = [
+  'platformScriptureEditor.changeView',
+  'platformScripture.openChecksSidePanel',
+  'platformScripture.openManageBooks',
+  'legacyCommentManager.openCommentList',
+  'platformLexicalTools.openDictionary',
+  'platformScripture.openCharactersInventory',
+  'platformScripture.openMarkersChecklist',
+];
+
+const ENGLISH_STRING_FILES = [
+  resolve(__dirname, '../../../assets/localization/en.json'),
+  ...['platform-scripture-editor', 'platform-scripture', 'legacy-comment-manager'].map(
+    (directory) => resolve(EXTENSIONS_DIR, directory, 'contributions/localizedStrings.json'),
+  ),
+];
+
+/** The English text of a `%key%` label, read from the shipped string files. */
+function labelText(label: string): string {
+  const text = ENGLISH_STRING_FILES.map((file) => {
+    const json = JSON.parse(readFileSync(file, 'utf8'));
+    return json.localizedStrings?.en?.[label] ?? json[label];
+  }).find((value) => typeof value === 'string');
+  if (text === undefined) throw new Error(`No English string for ${label}`);
+  return text;
+}
+
+function menuOrder(entry: object): number {
+  return 'order' in entry && typeof entry.order === 'number' ? entry.order : 0;
+}
+
 describe("The scripture editor's Project menu, per mode", () => {
   /**
    * Power's menu is pinned in full so that reshaping Simple's menu — which shares this document —
@@ -119,8 +169,13 @@ describe("The scripture editor's Project menu, per mode", () => {
    */
   test('Power serves its established layout', async () => {
     expect(describeSections(await getEditorTopMenuInMode('power'))).toEqual([
-      ['platform.app', ['platform.openSettings', 'platformScripture.openManageBooks']],
-      ['platformScriptureEditor.edit', ['platformScripture.openFind']],
+      ['platform.app', ['platformScripture.openManageBooks', 'platform.openSettings']],
+      [
+        'platformScriptureEditor.simpleEdit',
+        [
+          'platformScriptureEditor.editSubmenu ▸ platformScriptureEditor.undo, platformScriptureEditor.redo, platformScriptureEditor.cutSelection, platformScriptureEditor.copySelection, platformScriptureEditor.pasteAtSelection, platformScripture.openFind',
+        ],
+      ],
       [
         'platformScriptureEditor.options',
         [
@@ -130,25 +185,17 @@ describe("The scripture editor's Project menu, per mode", () => {
         ],
       ],
       [
-        'platformScriptureEditor.tools',
-        [
-          'platformScripture.openCharactersInventory',
-          'platformScripture.openRepeatedWordsInventory',
-          'platformScripture.openMarkersInventory',
-          'platformScripture.openPunctuationInventory',
-          'platformScripture.openMarkersChecklist',
-          'platformScripture.openChecksSidePanel',
-          'legacyCommentManager.openCommentList',
-        ],
-      ],
-      [
         'platformScriptureEditor.insert',
         [
+          'platformScriptureEditor.insertCommentAtSelection',
           'platformScriptureEditor.insertFootnoteAtSelection',
           'platformScriptureEditor.insertCrossReferenceAtSelection',
           'platformScriptureEditor.insertEndnoteAtSelection',
-          'platformScriptureEditor.insertCommentAtSelection',
         ],
+      ],
+      [
+        'platformScriptureEditor.tools',
+        ['legacyCommentManager.openCommentList', 'platformScripture.openChecksSidePanel'],
       ],
     ]);
   });
@@ -163,17 +210,11 @@ describe("The scripture editor's Project menu, per mode", () => {
         ],
       ],
       [
-        'platformScriptureEditor.zoomSection',
+        'platformScriptureEditor.options',
         [
           'platform.webViewContentZoomIn',
           'platform.webViewContentZoomOut',
           'platform.webViewContentZoomReset',
-        ],
-      ],
-      [
-        'platformScriptureEditor.simpleView',
-        [
-          'platformScriptureEditor.changeView',
           'platformScriptureEditor.toggleFootnotes',
           'platformScriptureEditor.changeFootnotesPaneLocation',
         ],
@@ -181,10 +222,10 @@ describe("The scripture editor's Project menu, per mode", () => {
       [
         'platformScriptureEditor.insert',
         [
+          'platformScriptureEditor.insertCommentAtSelection',
           'platformScriptureEditor.insertFootnoteAtSelection',
           'platformScriptureEditor.insertCrossReferenceAtSelection',
           'platformScriptureEditor.insertEndnoteAtSelection',
-          'platformScriptureEditor.insertCommentAtSelection',
         ],
       ],
       [
@@ -192,14 +233,123 @@ describe("The scripture editor's Project menu, per mode", () => {
         [
           'platformScriptureEditor.showBibleTextsPanel',
           'platformScriptureEditor.showCommentariesPanel',
-          'platformLexicalTools.openDictionary',
-          'legacyCommentManager.showCommentListPanel',
           'platformScriptureEditor.showTextCollectionPanel',
           'platformScripture.openFind',
+          'legacyCommentManager.showCommentListPanel',
         ],
       ],
-      ['platformScriptureEditor.simpleQualityChecks', ['platformScripture.openChecksSidePanel']],
     ]);
+  });
+
+  /** The section headings, in order, each mode serves: the View and Tools renames live here. */
+  test.each([
+    ['power', ['Project', 'View', 'Insert', 'Tools']],
+    ['simple', ['Project', 'View', 'Insert', 'Tools and resources']],
+  ] as const)('%s labels its sections', async (mode, expectedHeadings) => {
+    const menu = await getEditorTopMenuInMode(mode);
+    const served = describeSections(menu).map(([columnKey]) => columnKey);
+    const headings = keyedEntries<{ label: string; isHeaderHidden?: boolean }>(menu.columns)
+      .filter(([columnKey, column]) => served.includes(columnKey) && !column.isHeaderHidden)
+      .sort(([, a], [, b]) => menuOrder(a) - menuOrder(b))
+      .map(([, column]) => labelText(column.label));
+    expect(headings).toEqual(expectedHeadings);
+  });
+
+  test('no served section is empty', async () => {
+    // Positive control: the served menus do have sections, so "none empty" is not vacuous
+    const power = describeSections(await getEditorTopMenuInMode('power'));
+    const simple = describeSections(await getEditorTopMenuInMode('simple'));
+    expect(power.length).toBeGreaterThan(0);
+    expect(simple.length).toBeGreaterThan(0);
+    [...power, ...simple].forEach(([, entries]) => expect(entries.length).toBeGreaterThan(0));
+  });
+
+  /** Spec §3 icon table: each served item's `iconNameBefore`, per mode. */
+  const ICONS_IN_BOTH_MODES: [string, string | undefined][] = [
+    ['platform.openSettings', 'settings'],
+    ['platformScriptureEditor.editSubmenu', 'pencil'],
+    ['platformScriptureEditor.undo', undefined],
+    ['platformScriptureEditor.redo', undefined],
+    ['platformScriptureEditor.cutSelection', undefined],
+    ['platformScriptureEditor.copySelection', undefined],
+    ['platformScriptureEditor.pasteAtSelection', undefined],
+    ['platformScriptureEditor.toggleFootnotes', 'file-text'],
+    ['platformScriptureEditor.changeFootnotesPaneLocation', 'panel-bottom'],
+    ['platformScriptureEditor.insertCommentAtSelection', 'message-square-plus'],
+    ['platformScriptureEditor.insertFootnoteAtSelection', 'asterisk'],
+    ['platformScriptureEditor.insertCrossReferenceAtSelection', 'link'],
+    ['platformScriptureEditor.insertEndnoteAtSelection', 'sigma'],
+  ];
+  const ICONS_POWER_ONLY: [string, string][] = [
+    ['platformScripture.openManageBooks', 'book-copy'],
+    ['platformScripture.openFind', 'search'],
+    ['platformScriptureEditor.changeView', 'eye'],
+    ['legacyCommentManager.openCommentList', 'message-square'],
+    ['platformScripture.openChecksSidePanel', 'circle-check-big'],
+  ];
+  const ICONS_SIMPLE_ONLY: [string, string][] = [
+    ['platform.webViewContentZoomIn', 'zoom-in'],
+    ['platform.webViewContentZoomOut', 'zoom-out'],
+    ['platform.webViewContentZoomReset', 'scan'],
+    ['platformScriptureEditor.showBibleTextsPanel', 'book'],
+    ['platformScriptureEditor.showCommentariesPanel', 'book-marked'],
+    ['platformScriptureEditor.showTextCollectionPanel', 'library'],
+    ['platformScripture.openFind', 'search'],
+    ['legacyCommentManager.showCommentListPanel', 'message-square'],
+  ];
+
+  test.each([
+    ['power', [...ICONS_IN_BOTH_MODES, ...ICONS_POWER_ONLY]],
+    ['simple', [...ICONS_IN_BOTH_MODES, ...ICONS_SIMPLE_ONLY]],
+  ] as const)('%s serves the specified icon on every item', async (mode, expectedIcons) => {
+    const menu = await getEditorTopMenuInMode(mode);
+    const served = menu.items.map((item) => ({
+      key: 'command' in item ? item.command : item.id,
+      icon: item.iconNameBefore,
+    }));
+    expect(served.length).toBeGreaterThan(0);
+    // Every served item is covered by the table, so a new item cannot ship without an icon decision
+    expect(served.map(({ key }) => key).sort()).toEqual(expectedIcons.map(([key]) => key).sort());
+    expectedIcons.forEach(([key, icon]) => {
+      expect({ key, icon: served.find((item) => item.key === key)?.icon }).toEqual({ key, icon });
+    });
+  });
+
+  test.each([
+    ['power', 'platform.openSettings', 'Project settings'],
+    ['power', 'platformScriptureEditor.toggleFootnotes', 'Show footnotes'],
+    ['power', 'platformScriptureEditor.insertEndnoteAtSelection', 'Insert end note'],
+    ['power', 'legacyCommentManager.openCommentList', 'Comments'],
+    ['power', 'platformScripture.openChecksSidePanel', 'Basic checks'],
+    ['power', 'platformScripture.openManageBooks', 'Manage books'],
+    ['simple', 'platform.openSettings', 'Project settings'],
+    ['simple', 'platform.webViewContentZoomReset', 'Zoom 100%'],
+    ['simple', 'legacyCommentManager.showCommentListPanel', 'Comments'],
+    ['simple', 'platformScriptureEditor.insertEndnoteAtSelection', 'Insert end note'],
+  ] as const)('%s labels %s "%s"', async (mode, command, expected) => {
+    const menu = await getEditorTopMenuInMode(mode);
+    const item = menu.items.find(
+      (candidate) => 'command' in candidate && candidate.command === command,
+    );
+    expect(item && labelText(item.label)).toBe(expected);
+  });
+
+  test('inventories, Markers Checklist and zoom are hidden in Power but stay declared', async () => {
+    const power = servedCommandIds(await getEditorTopMenuInMode('power'));
+    const declared = declaredEditorCommandIds();
+    HIDDEN_IN_POWER.forEach((command) => {
+      expect(power.has(command)).toBe(false);
+    });
+    // Hidden, not deleted: the inventories and Markers Checklist remain declared. (The zoom items are
+    // declared too, and are served in Simple.)
+    HIDDEN_IN_POWER.forEach((command) => expect(declared.has(command)).toBe(true));
+  });
+
+  test('Simple serves none of the Power-only items', async () => {
+    const simple = servedCommandIds(await getEditorTopMenuInMode('simple'));
+    HIDDEN_IN_SIMPLE.forEach((command) => expect(simple.has(command)).toBe(false));
+    // Positive control: the served set is the real Simple menu
+    expect(simple.has('platform.webViewContentZoomIn')).toBe(true);
   });
 
   test('the served Simple menu marks only the Edit column isHeaderHidden', async () => {
@@ -210,12 +360,19 @@ describe("The scripture editor's Project menu, per mode", () => {
     expect(headerHiddenColumns).toEqual(['platformScriptureEditor.simpleEdit']);
   });
 
+  test('the served Power menu marks the same Edit column isHeaderHidden', async () => {
+    const powerMenu = await getEditorTopMenuInMode('power');
+    const headerHiddenColumns = keyedEntries<{ isHeaderHidden?: boolean }>(powerMenu.columns)
+      .filter(([, column]) => column.isHeaderHidden)
+      .map(([columnKey]) => columnKey);
+    expect(headerHiddenColumns).toEqual(['platformScriptureEditor.simpleEdit']);
+  });
+
   test("Power's served items include none of Simple's own entries", async () => {
     const powerMenu = await getEditorTopMenuInMode('power');
     const served = powerMenu.items.map((item) => ('command' in item ? item.command : item.id));
-    expect(served).not.toContain('platformScriptureEditor.editSubmenu');
-    expect(served).not.toContain('platformScriptureEditor.undo');
     expect(served).not.toContain('platformScriptureEditor.showBibleTextsPanel');
+    expect(served).not.toContain('legacyCommentManager.showCommentListPanel');
     // Positive control: the list is the real served menu, not an empty one
     expect(served).toContain('platformScriptureEditor.insertCommentAtSelection');
   });
@@ -234,6 +391,12 @@ describe("The scripture editor's Project menu, per mode", () => {
     expect(flyoutCommandIds(simpleMenu, 'platformScriptureEditor.editSubmenu')).toEqual([
       ...EDIT_MENU_COMMANDS,
     ]);
+    // Power's flyout adds Find after the edit actions, which the web view routes to its own handler
+    const powerMenu = await getEditorTopMenuInMode('power');
+    expect(flyoutCommandIds(powerMenu, 'platformScriptureEditor.editSubmenu')).toEqual([
+      ...EDIT_MENU_COMMANDS,
+      'platformScripture.openFind',
+    ]);
   });
 
   /**
@@ -244,8 +407,8 @@ describe("The scripture editor's Project menu, per mode", () => {
    * has to sign off on.
    */
   const POWER_ONLY_COMMANDS = new Set([
-    // The four inventories and Markers Checklist: Simple's design keeps its quality tools to the
-    // Checks side panel, under Quality checks.
+    // The four inventories and Markers Checklist: hidden in both modes, so they stay declared and
+    // return when the flag is removed.
     'platformScripture.openCharactersInventory',
     'platformScripture.openRepeatedWordsInventory',
     'platformScripture.openMarkersInventory',
@@ -254,9 +417,13 @@ describe("The scripture editor's Project menu, per mode", () => {
     // Manage books: book management is a Power-mode task; Simple's missing-book message instead
     // tells the user to ask their project administrator.
     'platformScripture.openManageBooks',
+    // Basic checks: Simple's quality tooling is the Checking assistant, contributed outside core.
+    'platformScripture.openChecksSidePanel',
     // The Power Comments item opens a separate Comment List web view; Simple's own Comments item
     // (legacyCommentManager.showCommentListPanel) fronts the shared Column 3 tab instead.
     'legacyCommentManager.openCommentList',
+    // Switch scripture view: Simple's editor has a single view type.
+    'platformScriptureEditor.changeView',
   ]);
 
   /**
@@ -274,8 +441,8 @@ describe("The scripture editor's Project menu, per mode", () => {
     const simple = labelsByCommand(await getEditorTopMenuInMode('simple'));
     const shared = [...simple.keys()].filter((command) => power.has(command));
 
-    // Positive control: the duplicated View and Find items are among the shared commands
-    expect(shared).toContain('platformScriptureEditor.changeView');
+    // Positive control: the per-mode Find items and the shared footnote items are among them
+    expect(shared).toContain('platformScriptureEditor.toggleFootnotes');
     expect(shared).toContain('platformScripture.openFind');
     shared.forEach((command) => {
       expect({ command, label: simple.get(command) }).toEqual({
@@ -290,12 +457,19 @@ describe("The scripture editor's Project menu, per mode", () => {
     const powerCommands = servedCommandIds(await getEditorTopMenuInMode('power'));
     const simpleCommands = servedCommandIds(await getEditorTopMenuInMode('simple'));
 
-    // Nothing the editor declares is orphaned: every command reaches at least one mode. (The
+    // Nothing the editor declares is orphaned: every command reaches at least one mode, bar the
+    // ones deliberately hidden in both. (The
     // served sets can be larger than `declared` — `includeDefaults: true` also serves items like
     // `platform.openSettings` that no line in this editor's own menus.json declares — so this
     // checks membership rather than set equality.)
-    declared.forEach((id) => {
-      expect(powerCommands.has(id) || simpleCommands.has(id)).toBe(true);
+    [...declared]
+      .filter((id) => !HIDDEN_IN_BOTH_MODES.includes(id))
+      .forEach((id) => {
+        expect(powerCommands.has(id) || simpleCommands.has(id)).toBe(true);
+      });
+    HIDDEN_IN_BOTH_MODES.forEach((id) => {
+      expect(declared.has(id)).toBe(true);
+      expect(powerCommands.has(id) || simpleCommands.has(id)).toBe(false);
     });
 
     // Anything missing from Simple must be on the allow-list above, not silently absent.
