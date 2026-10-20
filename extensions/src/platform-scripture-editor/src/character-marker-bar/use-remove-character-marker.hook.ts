@@ -31,7 +31,7 @@ export type UseRemoveCharacterMarkerOptions = {
   editorRef: MutableRefObject<EditorRef | null>;
   /** The project to snapshot before removing. No project means no snapshot. */
   projectId?: string;
-  /** `true` while an automatic Send/Receive has editing paused. Removal refuses and explains. */
+  /** `true` while an automatic sync has editing paused. Removal refuses and explains. */
   isSyncBlocked: boolean;
   /** Localized strings for the snapshot message and the three notifications. */
   localizedStrings: LanguageStrings;

@@ -331,8 +331,8 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_delete_confirmTitle%',
   '%manageBooks_delete_confirmBodyPartial%',
   '%manageBooks_delete_confirmBodyAll%',
-  '%manageBooks_delete_confirmBodySharedSendReceive%',
-  '%manageBooks_delete_confirmBodyAllShared%',
+  '%manageBooks_delete_confirmBodySharedSendReceive_2%',
+  '%manageBooks_delete_confirmBodyAllShared_2%',
   '%manageBooks_delete_confirmCancel%',
   '%manageBooks_delete_confirmAccept%',
   // runDelete refreshes the destination book set before issuing the delete; if the user's

@@ -916,8 +916,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Status:** Accepted, amended 2026-09-18 — the Text Collection's follow gate is now decided by
   project kind (`platform.isPublished`), not editability, and the editor's gate on Find's re-point
   is removed, so Find follows every editor-column switch.
-- **Context:** Simple mode's Column 3 holds exactly five panels — Bible Texts, Commentaries,
-  Comments, the Text Collection, and Find — pinned by `shipped-simple-layout-order.test.ts`. A
+- **Context:** Simple mode's Column 3 holds a fixed set of panels, pinned by
+  `shipped-simple-layout-order.test.ts`. A
   project switch re-pointed three of them explicitly (`openOrUpdateRelatedPanels` sends two
   `openResourceText` calls and `openCommentListPanel`; its fourth command, `openModelText`, targets
   the **Column 1** Model Text panel, not Column 3 — see `simple-layout.data.ts`) plus Find
@@ -933,7 +933,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   silently corrected itself.
 - **Decision:** Every Column 3 panel is **told** its project by the switch; none infers one. The Text
   Collection is re-pointed by `updateRelatedTextCollectionPanel`, called directly from
-  `openOrUpdateRelatedPanels` (same module, so no command indirection is needed — unlike the four
+  `openOrUpdateRelatedPanels` (same module, so no command indirection is needed — unlike the
   command-driven panels, whose handlers live in `main.ts` for Model Text and the two resource
   panels, in `legacy-comment-manager` for Comments, and in `platform-scripture` for Find). There are **two** switch paths and both must call it:
   the editor-column switch via `openOrUpdateRelatedPanels`, and the Power→Simple mode switch via
@@ -1519,7 +1519,14 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     is greppable rather than living only in this log — a slug rather than a `PT-XXXX` for the same
     reason `TODO(main-renderer-shutdown-relay)` above is one.
 
-- **Amended 2026-09-24 (PT-1641):** With the renderer on a MessagePort (`adr-renderer-papi-transport-is-messageport`), an OS suspend no longer trips this banner; its remaining normal trigger is main closing the port on purpose without a close frame, or a port that dies with main. The per-window port main now holds is the natural carrier for the `main-renderer-shutdown-relay` deferral above; wiring it is still a separate ticket.
+- **Amended 2026-09-24 (PT-1641):** With the renderer on a MessagePort (`adr-renderer-papi-transport-is-messageport`), an OS suspend no longer trips this banner; its remaining normal trigger is main closing the port on purpose without a close frame, or a port that dies with main. The per-window port main now holds is the natural carrier for the `main-renderer-shutdown-relay` deferral above; wiring it is still a separate ticket. (Since wired; see the 2026-10-14 amendment below.)
+- **Amended 2026-10-14 (PT-4599):** The relay the "one follow-up closes three" bullet above waited
+  for exists: `platform.onDidStopExtensionHost` and `platform.onWillShutDown`
+  (`adr-extension-host-exits-on-lost-connection`). Sites 1 (extension-host disconnect) and 2
+  (quit-time latch) are closed; site 3 (main's accelerators and the document-level hotkeys behind
+  the scrim) is PT-4851, because that one runs the other way — main must notice this window's port
+  dying, since the window cannot tell it. The `TODO(main-renderer-shutdown-relay)` slug is gone from
+  the code.
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
 
@@ -1546,6 +1553,49 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - The macOS View-menu items stay always enabled and do nothing on a non-zoomable pane.
   - Only the zoomability is held per open menu, not the whole item list, because Power mode's window targets arrive after the menu opens.
 - **Source:** UX feedback 2026-09-22; epic PT-4575.
+
+## adr-copy-limit-rule-lives-downstream: The copy-limit mechanism ships in public code; the rule that drives it ships in a private patch
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** Paratext 9 limits how much text can be copied at once from some texts, and its rule
+  was in closed code. Platform.Bible (`paranext-core`) is open source, so the rule cannot live in
+  this repo in any form.
+- **Decision:** Public code provides only the mechanism, and answers "no limit" everywhere:
+  - a read-only project data type, `platformScripture.CopyLimit` / `BookCopyLimits`, one array per
+    book with one entry per chapter, each a count of UTF-16 code units;
+  - a core hook, `useChapterCopyLimit`, that subscribes once per book and resolves the limit for
+    the chapter on screen;
+  - the editor option `EditorOptions.copyLimit`, whose plugin shortens an over-limit copy or cut
+    and blocks the Select All shortcut while a limit is set;
+  - an unknown limit — still loading, or the request failed — blocks copying for every text.
+
+  The Paratext 10 Studio patch supplies the actual rule by replacing the public "no limit" answer.
+- **Alternatives:**
+  - **A private extension implementing the whole feature** — rejected: it cannot tell "no
+    provider is installed" apart from "the answer just hasn't arrived yet."
+  - **The rule itself in public code** — rejected per the Product Owner's preference, given P10 is
+    open source.
+  - **Limiting the selection as it is made**, rather than at copy time — not chosen: Paratext 9
+    limits at copy time, and this keeps parity with it.
+  - **A per-chapter data type** (one request per chapter instead of per book) — rejected: it would
+    cause a blocked moment on every chapter change while the new chapter's limit is fetched.
+- **Consequences:**
+  - TSDoc and other public-facing docs describe only what a caller can observe — never the rule
+    itself. See `adr-closed-source-command-doc-altitude` for the same altitude discipline applied
+    to a different closed-source-backed command.
+  - Public tests exercise the mechanism with arbitrary limits, not real ones.
+  - Copy limits are refetched on every update the Paratext project data provider sends.
+  - A view passes a limit of `0` while its displayed chapter's text is still loading, because the
+    per-book limit can arrive before the new chapter's text does — so a chapter navigation blocks
+    copying for a moment even on an unlimited text.
+  - `BookCopyLimits` is indexed like the chapter-text endpoints, by the project's own chapter
+    numbers: only the selector's book is read, and its versification, chapter and verse are
+    ignored. The chapter-text endpoints fetch a chapter by its number in the project's own
+    versification, so a view indexes the limits with the same chapter number it fetches text with.
+  - A view showing chapter 0 (a book's introduction, shown with chapter 1) uses chapter 1's limit.
+
+- **Source:** [PT-4730](https://paratextstudio.atlassian.net/browse/PT-4730).
 
 ## adr-core-dialog-reuses-panel-strings: A core dialog that explains what an extension panel explains renders a shared library component from the extension's own keys
 
@@ -1665,6 +1715,37 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   mismatched result where the two projects' versifications diverge at that reference. That gap is
   accepted as a consequence of this decision, not a defect in it, until PT-4031 lands.
 - **Source:** external code review, finding 16.
+## adr-data-update-scope-hook: A data type every update must refresh is added by an overridable hook on the base data provider
+
+- **Date:** 2026-09-30
+- **Status:** Accepted
+- **Context:** Some data a C# data provider serves is derived from other data it serves, so any
+  change to the provider's data may change it. `BookCopyLimits` on `ParatextProjectDataProvider`
+  is one: its subscribers must refetch it whenever the provider sends an update, and the provider
+  sends updates from dozens of call sites, each naming only the data types it changed.
+- **Decision:** `DataProvider.SendDataUpdateEventAsync` (`c-sharp/NetworkObjects/DataProvider.cs`)
+  calls a protected virtual hook, `ExpandDataUpdateScope(List<string> dataTypes)`, on every
+  update that names data types, and sends the list it returns. The base class decodes the scope
+  first: `"*"` already refreshes every data type, so it is sent without reaching the hook, and
+  nothing is sent for a blank data type or an empty list, before or after the hook. The hook gets a
+  list the base class owns, so an override may add to it and return it. A subclass adds the data
+  types it must always refresh there.
+- **Alternatives:**
+  - **A wrapper that call sites use instead of `SendDataUpdateEvent`** — rejected: every existing
+    call site would have to change, and a new one that calls the base method directly would skip
+    the refresh with nothing to catch it.
+  - **Naming the derived data type at every call site** — rejected for the same reason.
+  - **A test that scans the source for update calls that leave the data type out** — rejected: a
+    text match catches only the call shapes it was written for, while the hook makes the refresh
+    structural, so no call site can leave it out.
+- **Consequences:**
+  - Each subscriber to a data type added this way refetches it on every update the provider sends.
+    Narrow the hook to the scopes that can change the derived data if that cost starts to matter.
+  - An override should call `base.ExpandDataUpdateScope` first, so that a hook added lower in the
+    hierarchy keeps working; nothing enforces it.
+  - The hook sees decoded data types, never the wire encoding of the scope, so a change to that
+    encoding (see issue #443 in `paranext/paranext-core`) touches only the base class.
+
 ## adr-dbl-cache-recompute-on-read: The DBL resource cache recomputes derived flags on read, not on write
 
 - **Date:** 2026-09-01
@@ -2293,6 +2374,93 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4111 design + implementation. (The original design note lives under gitignored
   `docs/superpowers/specs/`, so it is not a citable reference — the reasoning is reproduced here
   precisely because that path is not readable from the repo.)
+
+## adr-extension-host-exits-on-lost-connection: The extension host exits when its connection to main dies; main relays the stop to every window, and the user restarts it
+
+- **Date:** 2026-10-14
+- **Status:** Accepted
+- **Context:** PT-4599. Twice in September 2026 the extension host's WebSocket to main closed
+  (code 1006) while the extension host process kept running. Nothing in the extension host
+  reacted: `network.service` relays `onDidLoseConnection` but no extension-host code subscribed,
+  every later request threw "Tried to send payload while not connected", and the renderer, whose
+  own link to main was healthy, showed nothing. Main's only liveness signal for the child was the
+  process `exit` event, which only logged. The three `TODO(main-renderer-shutdown-relay)` sites
+  from `adr-connection-lost-is-renderer-local` named this gap, the quit-time false positive of the
+  connection-lost latch, and the keyboard accelerators leaking past that overlay.
+- **Decision:** (1) The extension host subscribes to `onDidLoseConnection` after its network
+  service initializes and ends itself through the existing graceful-shutdown path with a dedicated
+  exit code (`EXTENSION_HOST_LOST_CONNECTION_EXIT_CODE`). (2) Main's child-process `exit` handler
+  classifies the exit (`classifyExtensionHostExit`): a stop main requested, or any stop during app
+  shutdown, is silent; anything else is announced on the `@experimental` network event
+  `platform.onDidStopExtensionHost` with a `reason` of `'lost-connection'` or `'crashed'` and
+  nothing else on the wire. (3) Main also emits `platform.onWillShutDown` from `before-quit`,
+  once per process. On an explicit quit (Cmd+Q, the Quit menu item, `platform.quit`,
+  `platform.restart`) it goes out before any window is destroyed. A close-all from the primary
+  window's close button and closing the last window on Windows and Linux reach `before-quit` only
+  after every window is gone, so it is emitted then and no window sees it (other peers, such as the
+  extension host, still do); those windows' ports were closed cleanly (1001) before they were
+  destroyed, so they need no hint. Main also
+  answers `platform.getExtensionHostStoppedState` for a window that was not listening when the
+  stop happened. (4) The extension host emits
+  `platform.onDidStartExtensionHost` once its extensions have initialized: `restartExtensionHost`
+  settles at fork time (about 30 ms live), roughly a minute before a dev-build host can serve
+  anything, so the command is not a readiness signal. Main itself counts a restart as in flight
+  until the new host tells it over the child-process IPC channel that it has started (or it stops
+  unexpectedly, the restart fails, or 90 s pass), and a `platform.restartExtensionHost` call
+  meanwhile joins the running restart instead of stopping the host that is still starting. The
+  start event ends any outstanding stop notice
+  in every window, whichever window pressed Restart, so a restart whose command was rejected but
+  whose fork went ahead, or a restart pressed in another window, cannot leave a stale alarm.
+  (5) Each renderer subscribes at launch (`extension-host-stopped-service.ts`) into an
+  import-free store; a startup-mounted, non-blocking banner offers `platform.restartExtensionHost`
+  and `platform.restart`. It sits in flow between the toolbar and the dock and publishes its
+  measured height in a CSS variable the dock's top inset adds, so the dock shrinks instead of
+  having its top row of tabs covered. While restarting only Restart service is disabled: an app
+  restart is always safe and is the way out if the new host never comes up. A stop that arrives
+  while restarting brings the alarm back, since it can only be the new host dying before it
+  announced its start. The banner waits for the start event (90 s fallback; a fallback restart is
+  shown as "The service may not have restarted", never as a confirmed restart), and then stays up
+  in a calmer state with Restart app and Dismiss, because a restart does not heal every part of a
+  window: in
+  the live check every settings subscription opened before the restart stayed dead in main and the
+  renderer (interface mode, zoom factor, request timeout, web view titles), while the editor,
+  scroll sync, project picker, navigation and Find all healed. Recovery is user-pressed; nothing
+  restarts automatically.
+- **Alternatives:** (A) Keep the zombie process and have main match the disconnecting peer's name
+  against the forked pid: covers only the zombie case, not a crash, and needs peer identity on
+  `RpcClientDisconnectEvent`. (B, chosen) above. (C) An in-band control frame on the per-window
+  MessagePort: no PAPI surface, but medium-risk changes in transport code for the same user-visible
+  result. In-process reconnect was rejected for this release: besides the `RpcClient` gaps now
+  owned by PT-4495, it would have to replay every registration the extension host made against a
+  main that already broadcast their disposal; a fresh process does that for free. Automatic
+  restart was rejected because renderer healing after a restart is known to be incomplete
+  (#2853), so a silent restart could leave half-working UI with no signal. A blocking scrim was
+  rejected because everything main hosts still works in this state.
+- **Consequences:** The extension host now has a deliberate exit path besides the graceful-shutdown
+  message. Its exit code is 70, outside Node's own codes (1–13) and the 128+ signal range. When the
+  loss is what starts the graceful shutdown, a 5 s watchdog bounds it, because main is not waiting
+  for this exit; the watchdog keeps the event loop alive, so a shutdown hung on a promise still
+  ends with 70 rather than a 0 main would call a crash. The graceful shutdown runs once per
+  process, and a loss during a shutdown main requested joins it rather than starting another. Main
+  bounds that requested stop with its own, much shorter hard-kill, so the loss arms only a 30 s
+  backstop there: it fires only when main itself is gone (it quit right after the shutdown message,
+  or crashed) and a `deactivate` hangs, which would otherwise orphan the extension host. Main has
+  already marked that stop as requested, so its exit code is not reported. An extension host whose
+  first connect to main fails exits with `EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE` (1), which main
+  reports as a crash. Main distinguishes requested from unexpected stops with a module flag set in
+  `waitForExtensionHost` and cleared on the next fork, plus `isAppShuttingDown()`, and it
+  classifies only the exit of the current child: a child it hard-killed or replaced exited for a
+  stop main asked for, however late that exit arrives. Three new
+  `@experimental` network events and one `@experimental` command; every peer receives the events,
+  only renderers listen. The banner's `role="status"` live region is always mounted, empty until
+  there is a notice, because a live region inserted together with its content is generally not
+  announced by screen readers. Healing main's and the renderer's settings subscriptions after a
+  restart is NOT done here; PT-4807 (the shared service wrappers keep a disposed extension-host
+  provider cached) owns it, and the banner's restarted state and Restart app are the mitigation. The quit-time relay is best effort: delivery over the port is asynchronous and
+  the window may be destroyed first, which was already the situation, so it can only suppress a
+  false alarm. Marker sites 1 and 2 of `adr-connection-lost-is-renderer-local` are closed; site 3
+  (accelerators behind the overlay) is PT-4851 and needs main to notice a window's port dying on
+  its own. The `TODO(PT-4435)` reconnect markers are re-homed on PT-4495.
 
 ## adr-find-follows-editor-to-read-only: Find follows the editor onto read-only resources, with replace withheld
 
@@ -3500,6 +3668,71 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   hardening if such layouts recur.
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
+
+## adr-marker-palettes-take-real-focus: Standard-view marker palettes hold real keyboard focus in the overlay; the editor stays editable
+
+- **Date:** 2026-10-01
+- **Status:** Accepted
+- **Context:** Standard view opens a marker palette from `\` and from Enter. The palette is rendered
+  by the renderer's overlay service, outside the web view's iframe, so it can extend past the web
+  view's edges — which means whichever document holds focus is the only one that sees a keystroke.
+  The product ruling is that only choosing a marker may change the scripture text, and that the
+  palette ignores non-basic-Latin input as Paratext 9 does. Neither can be met by cancelling keys
+  alone: `beforeinput` for `insertCompositionText` is not cancelable, and `compositionstart` accepts
+  `preventDefault()` and composes anyway (measured in this Electron build). An earlier
+  implementation met them by making the editor's content element `contenteditable="false"` for the
+  life of every session. That worked, but it blurred the editor: keys then landed on the page body,
+  so routing had to admit page-body keys; the caret had to be restored everywhere; a
+  `MutationObserver` fought Lexical over the attribute; `paste`/`cut`/`drop` needed separate
+  blocking; and the footnote popover and the footnote pane each needed their own lock. Focus also
+  never returned after a `\` palette closed. Separately, the palettes that DID ask for focus never
+  got it — the overlay's autofocus gave up when its input did not exist yet, which is always true on
+  an anchored palette's first pass because Radix's portal renders nothing then.
+- **Decision:** Fix the autofocus (retry until the element attaches, not just until focus sticks)
+  and give the overlay an opt-in `focusTarget: 'list'`: the palette focuses its result LIST, renders
+  the search box read-only over the host-driven filter, and forwards EVERY key back to the
+  requester. All three marker-palette kinds use it; no other PAPI consumer does. The editor stays
+  fully editable and keeps its caret for the life of a session, and key routing in both consumers is
+  simply "the editor has focus". One key table — Paratext 9's rules — serves every kind; letters and
+  digits come from the TYPED character, falling back to the physical key (`keyCode`) only when that
+  character cannot name a marker, so a non-Latin layout still types a Latin marker name.
+- **Alternatives:**
+  - _The `contenteditable="false"` lock._ Stops composed input, but blurs the editor and every
+    consumer inherits the fallout above. Rejected once focus in the palette proved workable.
+  - _Lexical `setEditable(false)`._ Removes the observer and the separate paste blocking, but has
+    the same blur side effects and fires Lexical's editable listeners, so toolbars and plugins
+    react as if the project were read-only.
+  - _The lock moved into `scripture-editors` behind one API._ The best form of the lock, but focus
+    still ends up on the page body rather than on anything meaningful.
+  - _A hidden focusable element inside the iframe._ Measured: keys that hit it were dropped rather
+    than forwarded, simulated IME input still reached the editor through the DOM selection, and a
+    dead key followed by `e` was lost.
+  - _Focusing the palette's text INPUT and reading `keyCode`._ Works for ordinary keys and Windows
+    dead keys, but an IME composes in any focused text box, so the candidate window would appear
+    over the palette. Kept as the fallback if a real IME turns out to compose on a focused list.
+  - _Switching the keyboard layout while the palette is open._ Paratext 9 does not; Paratext 10's
+    keyboard-switching feature is unmerged, each switch costs several asynchronous PAPI calls, and
+    it cannot turn an IME off.
+  - _Letting composed text land and then removing it._ The candidate text shows in the verse, dead
+    keys flicker, and half-composed text can be saved in the meantime.
+  - _Taking focus back whenever the editor grabs it._ Focus ping-pong fires focus/blur events that
+    window-focus tracking and the footnote pane both react to, and the renderer's window-blur
+    handler dismisses the palette anyway.
+- **Consequences:** The editor is never put into a state the rest of the code has to remember. A
+  palette can be opened from any editor without that editor needing a lock of its own, which is what
+  lets the footnote popover and the footnote pane share the behaviour for free. `aria-activedescendant`
+  now speaks, because the element carrying it is focused — in the non-focusing passive mode it was
+  inert and the service announced through a live region instead. One gap remains by design: the
+  session is created synchronously in the trigger's keydown, and for a short window before the
+  palette has focus the editor still has it. Keys there are routed to the same table, but a
+  composition begun in that window cannot be forwarded, so the consumer closes the palette and lets
+  the composed text land as ordinary typing. Revisit if a real Windows or macOS IME composes even
+  with a non-editable list focused — then fall back to focusing the read-only input and clearing on
+  `compositionend`.
+- **Source:** `src/renderer/components/overlays/overlay-command-palette.component.tsx`;
+  `lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts`;
+  `.context/standards/Standard-View-Invariants.md` § 3; Paratext 9
+  `ParatextBase/ScriptureEditor/MarkerDropdownControl.cs:136-219`.
 
 ## adr-menu-close-focus-restores-without-the-ring: A pointer-closed menu returns focus to its trigger without showing the focus ring
 
@@ -4826,6 +5059,158 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** `/code-review` of scripture-editors #13 + paranext-core #2656, and the follow-up
   triage with the epic lead.
 
+## adr-pdp-enumerates-extension-data-qualifiers: A PDP lists its extension-data qualifiers through a `list*` method on its own `projectInterface`, `platform.extensionDataEnumeration`
+
+- **Date:** 2026-09-04
+- **Status:** Proposed — no consumer has merged yet, and one shape question is open: whether the
+  missing third member of the extension-data triple (`deleteExtensionData`, mirroring
+  `resetSetting`) should ship alongside. Promote to Accepted once a real consumer has replaced a
+  hand-maintained index document with it. **Amended 2026-09-09:** the method moved off
+  `platform.base` onto its own `projectInterface` before merge, on review of PR #2786; see shape
+  choice (2) and `adr-pdp-methods-are-never-optional`.
+- **Context:** `platform.base` exposed only `getExtensionData`/`setExtensionData`
+  (`project-data-provider.model.ts`, `WithProjectDataProviderEngineExtensionDataMethods`), so an
+  extension could read only a `dataQualifier` it could already name. Two costs followed. Probing for
+  a qualifier by reading it **created** it: `ParatextProjectDataProvider.GetExtensionData` called
+  `GetExtensionStream(scope, createIfNotExists: true)` and
+  `RawDirectoryProjectStreamManager.GetDataStream` does `Directory.CreateDirectory` +
+  `FileMode.OpenOrCreate`, leaving a zero-byte file under `shared/**` that Send/Receive commits to
+  every clone, with no delete API. And because Send/Receive replaces rather than merges files under
+  `shared/**`, multi-writer data has to be split one file per writer — after which an extension has
+  no way to find the files, so it hand-maintains an index document that Send/Receive can itself
+  overwrite. `IProjectStreamManager.GetExistingDataStreamNames` had existed unused (marked
+  `// TODO: This doesn't seem to be used`) the whole time.
+- **Decision:** add one method, `listExtensionDataQualifiers(scope)`, returning sorted
+  `dataQualifier`s that round-trip verbatim into `getExtensionData` — forward slashes on every
+  platform, recursive, scoped to `{EXTENSION_DATA_SUBDIRECTORY}/{extensionName}`, empty documents
+  included, and **creating nothing**. Five shape choices go with it. (1) `list*`, not `get*`:
+  `get`/`set`/`subscribe` are magic prefixes for the data-provider service, and a `get*` name would
+  demand a paired setter with nothing to set and imply a subscriber with nothing to notify. (2) **Its
+  own `projectInterface`, `platform.extensionDataEnumeration`, with the method required there** —
+  not a member of `platform.base`. Not every PDP can enumerate its extension data (one over a remote
+  store may not be able to), and a PDP method is never optional
+  (`adr-pdp-methods-are-never-optional`), so a PDP that can enumerate advertises the interface and
+  one that cannot leaves it off: the Paratext PDP publishes it for published and unpublished
+  projects alike, `hello-rock3` claims it, `platform-lexical-tools` (which holds no extension data)
+  does not, and the `platform.base` registration guard keeps checking only
+  `getExtensionData`/`getSetting`. Consumers discover it from project metadata `projectInterfaces`
+  and obtain it with `papi.projectDataProviders.get('platform.extensionDataEnumeration', id)`. On
+  the TS side the interface carries no data type — no `get*`/`set*`/`subscribe*` trio — and its one
+  method is declared once, on `WithProjectDataProviderEngineExtensionDataEnumerationMethods`, and
+  shared by the engine and consumer types, as `platform.base` already does for `getExtensionData`.
+  (3) No `subscribeExtensionDataQualifiers`: there is no data type behind the method, and
+  `subscribeExtensionData` on a known qualifier already covers change notification. (4)
+  `GetExtensionData` **stops creating** the document it looks for (`createIfNotExists: false`); an
+  absent document reads as `""`, the same answer callers always got for one, so the wire behavior is
+  unchanged and only the side effect is gone. (5) **A resource's extension data is what its archive
+  carries.** `ScrText.Directory` for a resource is the folder *holding* its .p8z, so resolving
+  extension data against it gave every resource in `_Resources` one shared bucket (and those in
+  `_resourcesById` a second), never read the archive, and let `setExtensionData` write loose files
+  into that folder. `ResourceProjectStreamManager` now reads through the resource's own
+  `ScrText.FileManager` and lists the entries of the archive that file manager reads (for a joined
+  text such as HEB+GRK, which has no path of its own, its Old Testament text's), keeping only those
+  that file manager's rule admits (an encrypted resource's unencrypted entries are refused on read,
+  so they are not listed). It decides that from the entries' flags rather than by opening them,
+  so an entry that cannot be decrypted is listed, and reading it throws rather than reading as
+  empty. A file manager read that fails to decrypt locks the archive and never unlocks it, so a
+  read first opens the entry on an archive of its own, which has no lock, and hands the file
+  manager only an entry that opens. `setExtensionData` refuses a resource before taking the write
+  lock.
+- **Alternatives:** *Optional on the engine, required on the consumer, inside `platform.base`* —
+  the shape the PR first took, superseded before merge: a member optional to implement but required
+  to call cannot be reasoned about from either side, and it is discovered by failure, because the
+  platform's proxies make a missing method undetectable in advance. A remote PDP proxy fabricates a
+  request function for **any** property name (`createRemoteProxy` in `network-object.service.ts`),
+  so `pdp.method?.()` never short-circuits over the wire — it calls and then rejects — while a PDP
+  registered in the *calling* process is reached through `createLocalProxy`/`createDataProviderProxy`,
+  which pass a missing method through as `undefined`, so there the property really is absent and a
+  direct call throws **synchronously**. The two failure shapes needed different catching, the type
+  lied on any platform that predated the method, and a consumer shipped separately from the platform
+  could not tell an old platform from a broken call. Advertising the capability as a
+  `projectInterface` answers all three, and is what `projectInterface`s exist for
+  (`adr-pt9-legacy-data-as-parsed-models` rejected a non-interface shape on the same ground).
+  *A required engine method on `platform.base`* — rejected: it breaks every third-party PDP engine at
+  compile time, forces throwing stubs onto PDPs that cannot enumerate, and would need a repository
+  comb and a `#platform-changes` announcement to land something less capable. *Not adding the method
+  and shipping only the create-on-read fix* — rejected: the fix removes the cost of probing but not
+  the need to guess; a consumer whose file names are minted on other machines
+  (`byMachine/<document>/<machineId>.json`) cannot guess them at all. *Enumerate the project root and filter
+  afterwards* — rejected: project directories hold thousands of files, and returning `Settings.xml`
+  and every book file to an extension asking about its own data leaks the project layout. *A
+  `dataQualifierPrefix` narrowing parameter on the scope* — dropped before shipping: it saved a
+  caller one `.filter()` over an array it already held, had no consumer, and the two in-repo
+  implementations had already diverged on what "prefix" meant (ordinal vs grapheme-aware) before
+  either was used. Add it when a consumer needs it, and specify the match once. *Returning
+  `undefined` for an absent document* — deferred: the TS type permits it, but `""` is what every
+  caller was written against; telling absent from empty is a separate contract change.
+- **Consequences:** extensions can drop hand-maintained index documents and their self-healing
+  repair logic (the Checking Assistant carries two: the `machines.json` list behind its per-machine
+  documents, and the index of its shared gloss books; `platform-scripture` stores
+  `deniedResultsList` as one shared read-modify-write blob) — with one caveat: nothing notifies a
+  consumer that a *new* qualifier has appeared (another machine's file arriving via Send/Receive),
+  since `subscribeExtensionData` needs a name and no subscription covers the set, so a consumer that
+  must stay current re-lists. A consumer checks `projectInterfaces` before asking; on a platform
+  that predates the interface no project advertises it, so the consumer keeps its fallback instead
+  of guessing. `getExtensionData` no longer leaves a file behind, so probing by read is safe.
+  `GetExistingDataStreamNames` gained an optional `underPath` and now normalizes to `/` — the
+  parameterless whole-project call still works, but its result is forward-slashed on Windows where
+  it used to be backslashed; it had no callers. A PDP over a store that cannot enumerate simply does
+  not advertise the interface. The method takes no Send/Receive write scope: it is a read. No
+  `platform.base` type changed in either direction, so nothing breaks for existing engines or
+  consumers. Extension data written to a resource before (5) sits as loose files beside the
+  archives and is no longer read.
+- **Source:** PT-4527; PR #2786 and its review. The `list*`-vs-`get*` naming rule it applies is already in
+  `Paranext-Core-Patterns.md` ("Naming rule (read first)"); the own-`projectInterface` shape is
+  promoted there as "A capability not every PDP can serve is its own `projectInterface`".
+
+## adr-pdp-methods-are-never-optional: A Project Data Provider method is never optional; a capability not every PDP can serve is its own `projectInterface`
+
+- **Date:** 2026-09-09
+- **Status:** Accepted
+- **Context:** The first shape of `listExtensionDataQualifiers` (PR #2786) declared the method
+  optional on the engine type (`method?()` on `WithProjectDataProviderEngineExtensionDataMethods`)
+  and required on the consumer type (`IBaseProjectDataProvider`), so that an engine which cannot
+  enumerate — a PDP over a remote store — could omit it while consumers saw a complete
+  `platform.base`. The platform API owner's review (tjcouch-sil) rejected the shape as too messy for
+  the API: a member that is optional to implement but required to call cannot be reasoned about from
+  either side. An implementer cannot tell what consumers assume, and a consumer cannot tell whether
+  a given PDP has the method, because the platform's own proxies make that undetectable in advance.
+  A PDP reached over the network is a `createRemoteProxy` (`network-object.service.ts`) that
+  fabricates a request function for **any** property name, so `pdp.method?.()` never short-circuits
+  and fails only after the call; a PDP in the calling process is a local proxy where the property is
+  genuinely absent and a direct call throws synchronously. A consumer shipped separately from the
+  platform (any extension) also cannot tell a platform that predates the method from a broken call,
+  because the type says the method is there.
+- **Decision:** A PDP method is never optional, in either direction. Every method a
+  `projectInterface` declares is required of every PDP that advertises the interface and present on
+  every PDP a consumer obtains through it. When a capability cannot be served by every PDP that
+  serves the interface it would naturally belong to, it becomes its **own** `projectInterface` with
+  the method required there — `platform.extensionDataEnumeration` is the first. A PDP that can serve
+  it advertises the interface in its `projectInterfaces`; one that cannot leaves it off. Consumers
+  discover the capability the way they discover every other one: from project metadata
+  `projectInterfaces` (`papi.projectLookup`) and
+  `papi.projectDataProviders.get(<interface>, projectId)`, which throws when the project does not
+  advertise it — never by probing for a property or by catching a failed call.
+- **Alternatives:** *Optional on the engine, required on the consumer* — rejected, above.
+  *Optional on both sides*, so consumers feature-detect with `?.` — rejected: the remote proxy makes
+  `?.` a lie over the wire. *Required on both sides within the existing interface* — the honest
+  version of "add a method", and the right one when every PDP can serve it; for a capability some
+  PDPs cannot serve it breaks every existing engine at compile time and forces throwing stubs that
+  make "required" hollow. *A command instead of a `projectInterface`* — rejected for the reason
+  `adr-pt9-legacy-data-as-parsed-models` gives: per-project capability advertisement is what
+  `projectInterface`s exist for.
+- **Consequences:** A capability not every PDP can serve costs a new `projectInterface` — a TS
+  `ProjectDataProviderInterfaces` entry and interface type, a C# `ProjectInterfaces` constant and an
+  entry in the published and/or unpublished lists, and the engines that serve it claiming it —
+  instead of one optional member. In exchange there is no breaking change to comb repositories for
+  or announce, "cannot serve it" stops masquerading as "no data", and a separately shipped consumer
+  falls back cleanly on a platform that predates the capability. The `platform.base` registration
+  guard (`project-data-provider.service.ts`) keeps checking only what `platform.base` requires.
+  `Paranext-Core-Patterns.md` carries the recipe ("A capability not every PDP can serve is its own
+  `projectInterface`").
+- **Source:** review of PR #2786, 2026-09-09. The shape it replaced is recorded under
+  `adr-pdp-enumerates-extension-data-qualifiers`.
+
 ## adr-per-project-selection-collapses-scroll-groups: Per-project consumers collapse multi-scroll-group projects themselves
 
 - **Date:** 2026-09-14
@@ -6151,6 +6536,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** Take the renderer-to-main link off Chromium's network stack. Each window asks main for an Electron `MessageChannelMain` port through the preload (`src/main/preload.ts`, channels `electronAPI:papi.*`); main's `papi-port-broker.service` answers only while the window has no open port (one live channel per window) and only requests from the window's page frame, which a same-origin web view can still drive through the bridge, and serves its end through `RpcWebSocketListener.acceptLocalClient` as `renderer:<windowId>`; the page's `MessagePortWebSocket` presents the other end as the DOM `WebSocket` `RpcClient` already uses (`web-socket.factory.ts` selects it when the bridge exists). Mojo pipes observe no power events (no `PowerMonitor` reference anywhere in `mojo/core`; Chromium's own suspend broadcast to the network service travels over Mojo during the transition). Close intent travels in an in-band close frame (`PAPI_PORT_CLOSE_FRAME_TYPE`) because a port close carries no code; a port that closes with no frame is 1006, so `isCleanCloseEvent` and the connection-lost banner work unchanged. The `ws` server on 8876 stays for the extension host, .NET, e2e fixtures and tooling.
 - **Alternatives:** Reconnect after resume: a state machine on a link guaranteed to fail, needing a replay of every registration after main has already announced the window's death, plus the four blockers `adr-renderer-websocket-suspend-disconnect` records; both Electron reporters did this and still had trouble on Windows. Plain `ipcRenderer`/`ipcMain` channels: survive sleep too, but have no per-connection close signal and copy every payload through the context bridge; a port maps one-to-one onto the per-socket `RpcServer`. WebTransport over QUIC: escapes the TCP observer, but QUIC's idle timeout (30 s by default) expires during any real sleep, Node 22 has no HTTP/3 server, and it requires a certificate even on loopback. `powerSaveBlocker`: cannot stop a user-initiated sleep and drains the battery. A Chromium flag: none exists.
 - **Consequences:** Main has two accept paths (`onClientConnect` for `ws`, `acceptLocalClient` for ports) sharing `serveClient`. The renderer's connection is no longer observable from outside the process (`lsof`/`netstat` on 8876 show two clients, not three). The renderer-side `MessagePort` `close` event exists only because Electron force-enables Chromium's `MessagePortCloseEvent` feature (upstream status `test` in M142, `shell/renderer/renderer_client_base.cc`); an Electron upgrade that dropped it would turn a main-side port close into silence in the page, which the manual sleep/close checks would show. Same-origin web views can reach `window.top.electronAPI.papi.requestPort()`; the broker answers only while the window has no open port and the adapter keeps its first port, so the worst an extension can do is nothing it could not already do through `window.papi`. `ServerSocketLike`, `IRpcLocalClientAcceptor`, `acceptLocalClient` and the `papi-port.model` shapes are `@experimental`. Tightening the renderer CSP now that the page itself opens no WebSocket is a follow-up, pending a review of web views' own WebSocket use. The per-window port is also the natural carrier for the deferred `main-renderer-shutdown-relay`; not done here.
+- **Amended 2026-10-14 (PT-4599):** The per-window port now carries the relay deferred above:
+  `platform.onDidStopExtensionHost` and `platform.onWillShutDown`
+  (`adr-extension-host-exits-on-lost-connection`).
 - **Source:** PT-1641; design by Matt Lyons (2026-09-10) with corrections recorded in the PRD folder; verified on Windows by sleep test before merge (log excerpt in the PR).
 
 ## adr-renderer-registers-no-names: Renderer platform code registers no command or request names; routers call shard methods
@@ -7805,6 +8193,41 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   or make it behave as Cancel is with the product owner. Tracked separately from PT-4557, which
   this entry closes, in `~/Desktop/PT-4557-followup-close-button-discards-staged-edits.md`.
 - **Source:** PT-4557; design-document comment (Sebastian); PR #2835 review (findings 2, 5, 7, 8, 25; round 3 A1, A2, A3).
+
+## adr-terminology-rename-forward-fallback: A user-visible term is renamed with a new key that falls back to the old one; old keys and values stay
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Context:** Renaming a term users see — "Send/Receive" becoming "sync" was the first product-wide
+  case — touches many localized strings at once. Localized values are immutable: third-party
+  extensions and translators may still reference an old key, and an old value stays correct for
+  anyone who has not adopted the new term. The localization lookup
+  (`getLocalizedString` → `findLocalizationForFallbackLanguageAndOrKey` in
+  `src/extension-host/services/localization.service-host.ts`) returns a key's own value in the first
+  interface language that has strings, then that key's `fallbackKey` in the same language, then the
+  key across the remaining interface languages and English, then the `fallbackKey` across those,
+  then the bare key.
+- **Decision:** Each renamed string gets a NEW key carrying the new wording in every language the
+  old key has a value in. The new key's metadata has `fallbackKey` pointing at the OLD key, every
+  consumer switches to the new key, and the old key's metadata gets `deprecationInfo` recording that
+  it was superseded and naming the new key. The old key and all its values stay. This is the one
+  replacement recipe in the Localization Guide ("If a String Needs Replacement", with "Renaming
+  Terminology Users See" as its worked example). It is the house pattern for `fallbackKey` — a key
+  borrowing an existing key's translations, most often a Paratext 10 key falling back to its
+  Paratext 9 counterpart.
+- **Alternatives:** **(a) Edit the values in place** — rejected: it breaks value immutability, and
+  the change is invisible to translators and to anyone holding the old value. **(b) A `fallbackKey`
+  on the OLD key pointing at the new one** — rejected: the lookup reads a key's `fallbackKey` only in
+  a language where the key itself has no value, and the old key has a value in every language the
+  new key has, so that `fallbackKey` never fires.
+- **Consequences:** A new value dropped from a language silently shows the old wording through the
+  fallback rather than failing visibly, so shipped-file tests pin the new keys' values. The forward
+  fallback reaches only the user's first interface language that has strings: for a second interface
+  language the new key's value from a later interface language, or English, wins over the old translation, because the key is looked up across the remaining languages
+  before the `fallbackKey` is. Any `fallbackKey` elsewhere that targets the old key (an older key
+  with no value of its own resolving through it) must be re-pointed at the new key, or that key
+  keeps showing the old wording.
+- **Source:** PT-4810.
 
 ## adr-text-collection-resources-are-zoom-areas: Each Text Collection resource is its own content zoom area; a click scope and an area label let the platform target and name it
 

@@ -121,6 +121,15 @@
       "message": "The tour's left-column stop now names both Base and Model texts rather than the model text alone. The new key is %onboardingTour_step_baseOrModelText_title%."
     }
   },
+  "%onboardingTour_step_sendReceive_description%": {
+    "deprecationInfo": {
+      "date": "2026-10-13",
+      "message": "The new key is %onboardingTour_step_sendReceive_description_2%, which adds that Paratext 9 called sync \"Send/Receive\"."
+    }
+  },
+  "%onboardingTour_step_sendReceive_description_2%": {
+    "fallbackKey": "%onboardingTour_step_sendReceive_description%"
+  },
   "%product_shortName%": {
     "fallbackKey": "%product_name%"
   },

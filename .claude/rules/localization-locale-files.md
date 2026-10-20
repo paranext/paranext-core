@@ -16,10 +16,13 @@ locale file at all, so their presence is not a signal that a new key belongs in 
   alone unless you are working on book names or the wizard.
 - **`km.json`** — book-name ids (`%LocalizedId.*%`) only, sharing no keys with `en.json`. A new UI
   string never belongs here.
-- **`metadata.json`** — not a locale file. It carries per-key metadata: `fallbackKey` (the Paratext
-  9 string to fall back to) and `deprecationInfo` (when a key was retired and what replaced it). A
-  new key needs an entry here only if it has a Paratext 9 fallback or it replaces a key you are
-  deprecating.
+- **`metadata.json`** — not a locale file. It carries per-key metadata: `fallbackKey` names the key
+  whose translations this key borrows (most often a Paratext 9 key; for a replaced string it is the
+  NEW key that carries a `fallbackKey` pointing at the OLD key — see "If a String Needs
+  Replacement" in [the Localization Guide](../../.context/standards/Localization-Guide.md));
+  `deprecationInfo` records when a key was deprecated (superseded by a new key, or no longer used)
+  and what, if anything, replaced it. A new key needs an entry here only if it borrows another
+  key's translations or it replaces a key you are deprecating.
 
 So "this key is missing from four locale files" is the expected state, not a gap to close.
 

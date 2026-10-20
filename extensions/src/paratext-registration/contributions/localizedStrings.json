@@ -17,12 +17,30 @@
         "date": "2026-07-26"
       }
     },
+    "%paratextRegistration_description_internetUse_option_Enabled_details%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %paratextRegistration_description_internetUse_option_Enabled_details_2%."
+      }
+    },
+    "%paratextRegistration_description_internetUse_option_Enabled_details_2%": {
+      "fallbackKey": "%paratextRegistration_description_internetUse_option_Enabled_details%"
+    },
     "%paratextRegistration_description_internetUse_option_VpnRequired%": {
       "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[1]%",
       "deprecationInfo": {
         "message": "Changed label to \"Disable access to some Bible translation services\". The new key is %paratextRegistration_description_internetUse_option_VpnRequired_2%.",
         "date": "2026-07-26"
       }
+    },
+    "%paratextRegistration_description_internetUse_option_VpnRequired_details%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %paratextRegistration_description_internetUse_option_VpnRequired_details_2%."
+      }
+    },
+    "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%": {
+      "fallbackKey": "%paratextRegistration_description_internetUse_option_VpnRequired_details%"
     },
     "%paratextRegistration_label_proxyHost%": {
       "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.label2.Text%"
@@ -140,7 +158,6 @@
       }
     },
     "%internetSettings_webView_subtitle%": {
-      "fallbackKey": "%internetSettings_webView_subtitle_2%",
       "deprecationInfo": {
         "message": "Said these settings are shared with a co-installed Paratext 9. They are not: Platform.Bible keeps its own ParatextData settings directory, so changing them here never reaches Paratext 9. The new key is %internetSettings_webView_subtitle_2%.",
         "date": "2026-09-09"
@@ -190,12 +207,14 @@
       "%paratextRegistration_description_internetUse_option_Enabled%": "Allow unrestricted Internet use",
       "%paratextRegistration_description_internetUse_option_Enabled_2%": "Unrestricted",
       "%paratextRegistration_description_internetUse_option_Enabled_details%": "Allows Paratext to use the internet for all services: Registry, Send/Receive, and resource downloads.",
+      "%paratextRegistration_description_internetUse_option_Enabled_details_2%": "Allows Paratext to use the internet for all services: Registry, sync, and resource downloads.",
       "%paratextRegistration_description_internetUse_option_ProxyOnly%": "Use a proxy",
       "%paratextRegistration_description_internetUse_option_ProxyOnly_2%": "Configure proxy",
       "%paratextRegistration_description_internetUse_option_ProxyOnly_details%": "Routes Paratext internet traffic through a configured proxy server.",
       "%paratextRegistration_description_internetUse_option_VpnRequired%": "Disable Internet use in sensitive locations",
       "%paratextRegistration_description_internetUse_option_VpnRequired_2%": "Disable access to some Bible translation services",
       "%paratextRegistration_description_internetUse_option_VpnRequired_details%": "Disables access to Registry, Send/Receive, and the Digital Bible Library within the Paratext app. Other internet features and other applications are not affected.",
+      "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%": "Disables access to Registry, sync, and the Digital Bible Library within the Paratext app. Other internet features and other applications are not affected.",
       "%paratextRegistration_description_is_registered%": "Your {%product_name%} is registered!",
       "%paratextRegistration_description_shared_with_paratext_9%": "These settings also apply to Paratext 9.",
       "%paratextRegistration_developer_section_label%": "Developer only",
@@ -276,12 +295,14 @@
       "%paratextRegistration_description_internetUse_option_Enabled%": "Permitir uso de Internet sin restricción",
       "%paratextRegistration_description_internetUse_option_Enabled_2%": "Sin restricciones",
       "%paratextRegistration_description_internetUse_option_Enabled_details%": "Permite a Paratext usar internet para todos los servicios: Registro, Enviar/Recibir y descargas de recursos.",
+      "%paratextRegistration_description_internetUse_option_Enabled_details_2%": "Permite a Paratext usar internet para todos los servicios: Registro, sincronización y descargas de recursos.",
       "%paratextRegistration_description_internetUse_option_ProxyOnly%": "Usar un proxy",
       "%paratextRegistration_description_internetUse_option_ProxyOnly_2%": "Configurar proxy",
       "%paratextRegistration_description_internetUse_option_ProxyOnly_details%": "Enruta el tráfico de internet de Paratext a través de un servidor proxy configurado.",
       "%paratextRegistration_description_internetUse_option_VpnRequired%": "Deshabilitar Internet en áreas sensibles",
       "%paratextRegistration_description_internetUse_option_VpnRequired_2%": "Deshabilitar acceso a algunos servicios de traducción bíblica",
       "%paratextRegistration_description_internetUse_option_VpnRequired_details%": "Deshabilita el acceso al Registro, Enviar/Recibir y la Biblioteca Bíblica Digital dentro de la aplicación Paratext. Otras funciones de internet y otras aplicaciones no se ven afectadas.",
+      "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%": "Deshabilita el acceso al Registro, la sincronización y la Biblioteca Bíblica Digital dentro de la aplicación Paratext. Otras funciones de internet y otras aplicaciones no se ven afectadas.",
       "%paratextRegistration_description_shared_with_paratext_9%": "Estas configuraciones se aplican también a Paratext 9.",
       "%paratextRegistration_developer_section_label%": "Solo para desarrolladores",
       "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "Debe proporcionar credenciales de Registro de Paratext válidas antes de abrir recursos de la Biblioteca Bíblica Digital.",

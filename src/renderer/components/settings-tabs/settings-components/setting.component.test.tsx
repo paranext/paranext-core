@@ -83,6 +83,7 @@ const ERROR_STRINGS = {
   '%settings_errorMessages_viewError%': 'View error',
   '%settings_errorMessages_invalidValue%': 'Invalid value',
   '%settings_errorMessages_notWritableYet%': 'Setting not writable yet',
+  '%settings_errorMessages_syncEditBlocked%': 'Editing paused for sync',
 };
 
 /** The stepper's percentage field, which shows the factor as a whole percentage. */
@@ -229,12 +230,12 @@ describe('failed setting writes', () => {
     vi.mocked(useLocalizedStrings).mockReturnValue([{}, false]);
   });
 
-  it('logs a rejected write so the failure outlives the component', async () => {
+  it('shows the localized sync notice, not the raw message, when the write-gate rejects the write', async () => {
     vi.useFakeTimers();
     vi.mocked(useLocalizedStrings).mockReturnValue([ERROR_STRINGS, false]);
-    // The shape of a Send/Receive write-gate rejection, which reports only into component state —
-    // and `setErrorMessage` is a no-op once the settings tab has been closed.
-    const setSetting = vi.fn().mockRejectedValue(new Error('project is syncing (SR_EDIT_BLOCKED)'));
+    const setSetting = vi
+      .fn()
+      .mockRejectedValue(new Error('Project abc is syncing; write rejected (SR_EDIT_BLOCKED)'));
     render(
       <Setting
         setSetting={setSetting}
@@ -247,9 +248,36 @@ describe('failed setting writes', () => {
     );
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Spanish' } });
     await act(() => vi.advanceTimersByTimeAsync(500));
+    const errorDetails = screen.getByTestId('error-details');
+    expect(errorDetails).toHaveTextContent('Editing paused for sync');
+    expect(errorDetails).not.toHaveTextContent(/SR_EDIT_BLOCKED|Error changing setting/);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('SR_EDIT_BLOCKED'));
+  });
+
+  it('shows the raw failure message and logs it when a rejected write is not the sync write-gate', async () => {
+    vi.useFakeTimers();
+    vi.mocked(useLocalizedStrings).mockReturnValue([ERROR_STRINGS, false]);
+    // An unexpected write failure, which would otherwise report only into component state — and
+    // `setErrorMessage` is a no-op once the settings tab has been closed, so the log is what
+    // outlives the component.
+    const setSetting = vi.fn().mockRejectedValue(new Error('disk full'));
+    render(
+      <Setting
+        setSetting={setSetting}
+        isLoading={false}
+        validateProjectSetting={vi.fn().mockResolvedValue(true)}
+        settingKey="platform.language"
+        setting="English"
+        label="Language"
+      />,
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Spanish' } });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(screen.getByTestId('error-details')).toHaveTextContent(/Error changing setting/);
+    expect(screen.getByTestId('error-details')).not.toHaveTextContent('Editing paused for sync');
     expect(logger.warn).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('platform.language'));
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('SR_EDIT_BLOCKED'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('disk full'));
   });
 
   it('clears an error left by a failed validation once a later change writes successfully', async () => {
