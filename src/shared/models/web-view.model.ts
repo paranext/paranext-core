@@ -104,10 +104,11 @@ type WebViewDefinitionBase = {
    */
   iconUrl?: string;
   /**
-   * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab. The
+   * Name of a lucide icon (kebab-case, e.g. `'book-open'`) to show on the title bar of the tab. The
    * icon follows the tab's text colour, so it suits every theme and tab state. Takes precedence
-   * over {@link WebViewDefinitionBase.iconUrl}. If the name is not one of the icons the platform can
-   * show, `iconUrl` is used instead (and then the software's standard logo).
+   * over {@link WebViewDefinitionBase.iconUrl}. The icons the platform can show are listed in
+   * `LUCIDE_ICON_NAMES` (exported from `platform-bible-react/experimental`). If the name is not one
+   * of them, `iconUrl` is used instead (and then the software's standard logo).
    *
    * @experimental This field is unstable and may change or disappear without notice
    */

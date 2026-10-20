@@ -94,9 +94,10 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-001 — MarbleForm)',
   });
 
   // @scenario TS-043
-  // Behaviors: BHV-616 + INV-011 (non-Marble guard). The launcher must reject a request to open
-  // the window for a non-Marble resource. UI surfaces this as a graceful error, not a crash.
-  test('should not open ER window for a non-MarbleResource (graceful error, no crash)', async ({
+  // Behaviors: BHV-616 + INV-011 (non-Marble guard). The web view provider never declines: a
+  // request for a non-Marble resource opens an Enhanced Resource tab whose shell renders an empty
+  // state because it has no tokens. The page must absorb that gracefully, not crash.
+  test('opens a non-Marble resource as an empty Enhanced Resource tab without crashing', async ({
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
@@ -107,9 +108,8 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-001 — MarbleForm)',
       if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
 
-    // Ask for the ER web view on a resource id that is not a Marble resource. The web view
-    // provider must decline; whether that surfaces as a rejection or as no web view id, the page
-    // must absorb it, so the evaluate itself never throws.
+    // Ask for the ER web view on a resource id that is not a Marble resource. The provider
+    // returns a definition for any resource id, so the call resolves with a web view id.
     const openedId = await mainPage.evaluate(async () => {
       // The renderer exposes `papi` on `window` without a declared type in the e2e project.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -134,11 +134,11 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-001 — MarbleForm)',
         return undefined;
       }
     });
-    expect(openedId).toBeUndefined();
+    expect(typeof openedId).toBe('string');
 
-    // Confirm no ER dock tab opened.
-    await expect(mainPage.locator('.dock-tab', { hasText: ER_DOCK_TAB })).toHaveCount(0, {
-      timeout: 5_000,
+    // The ER dock tab opens, showing the empty state.
+    await expect(mainPage.locator('.dock-tab', { hasText: ER_DOCK_TAB })).toHaveCount(1, {
+      timeout: 15_000,
     });
 
     // Renderer must not have crashed (no uncaught React errors in the console besides expected
@@ -150,6 +150,8 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-001 — MarbleForm)',
         !e.includes('NOT_FOUND'),
     );
     expect(fatalErrors).toHaveLength(0);
+
+    await closeAllNonHomeDockTabs(mainPage);
   });
 
   // Power's main menu deliberately omits the launcher (removing the `hiddenInterfaceModes` flag
