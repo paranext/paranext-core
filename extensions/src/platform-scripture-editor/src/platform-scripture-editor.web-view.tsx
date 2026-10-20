@@ -4655,8 +4655,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const menuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
-      // The Edit flyout acts on this editor, and the clipboard needs the click's user activation,
-      // so it runs here rather than as a PAPI command
+      // Cut, Copy and Paste act on this editor and need the click's user activation for the
+      // clipboard, so they run here rather than as a PAPI command (Undo and Redo go through PAPI)
       if (isEditMenuCommand(projectMenuCommand.command)) {
         runEditMenuCommand(projectMenuCommand.command);
         return;
