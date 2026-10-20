@@ -9,15 +9,6 @@
     "%internetSettings_webView_title_3%": {
       "fallbackKey": "%internetSettings_webView_title_2%"
     },
-    "%mainMenu_openInternetSettings_2%": {
-      "deprecationInfo": {
-        "date": "2026-10-20",
-        "message": "Renamed to \"Internet connectivity\". The new key is %mainMenu_openInternetSettings_3%."
-      }
-    },
-    "%mainMenu_openInternetSettings_3%": {
-      "fallbackKey": "%mainMenu_openInternetSettings_2%"
-    },
     "%mainMenu_openParatextRegistration%": {
       "deprecationInfo": {
         "date": "2026-10-20",
@@ -236,7 +227,6 @@
       "%internetSettings_webView_tooltip%": "Enter your Paratext Registration Internet Settings into this form.",
       "%mainMenu_openInternetSettings%": "Internet Settings...",
       "%mainMenu_openInternetSettings_2%": "Internet & connectivity",
-      "%mainMenu_openInternetSettings_3%": "Internet connectivity",
       "%mainMenu_openParatextRegistration%": "Paratext Registration Information...",
       "%mainMenu_openParatextRegistration_2%": "Registration information",
       "%paratextRegistrationProfile_webView_title_2%": "Registration information",
@@ -331,7 +321,6 @@
       "%internetSettings_webView_tooltip%": "Ingrese su configuración de Internet de Registro de Paratext en este formulario.",
       "%mainMenu_openInternetSettings%": "Configuración de Internet...",
       "%mainMenu_openInternetSettings_2%": "Internet y conectividad",
-      "%mainMenu_openInternetSettings_3%": "Conectividad a Internet",
       "%mainMenu_openParatextRegistration%": "Información de Registro Paratext...",
       "%mainMenu_openParatextRegistration_2%": "Información de registro",
       "%paratextRegistrationProfile_webView_title_2%": "Información de registro",
