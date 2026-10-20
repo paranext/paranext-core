@@ -34,8 +34,7 @@ vi.mock('@papi/frontend', () => ({
 vi.mock('@papi/frontend/react', () => ({
   useLocalizedStrings: () => [
     {
-      '%webView_modelTextPanel_pickModelText%': 'Pick model text…',
-      '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
+      '%webView_modelTextPanel_emptyState_pickText%': 'Pick a text…',
       '%webView_modelTextPanel_title%': 'Model text',
       '%webView_modelTextPanel_title_withResource%': 'Model text: {textName}',
       '%platformScripture_copyrightNotice_restrictedLicense_banner%':
@@ -92,6 +91,10 @@ vi.mock('./use-dbl-resource-catalog.hook', () => ({
 
 vi.mock('./use-install-dbl-resource.hook', () => ({
   useInstallDblResource: vi.fn(() => vi.fn(async () => {})),
+}));
+
+vi.mock('./copy-limit/use-chapter-copy-limit.hook', () => ({
+  useChapterCopyLimit: vi.fn(() => undefined),
 }));
 
 vi.mock('./use-open-find-shortcut.hook', () => ({ useOpenFindShortcut: vi.fn() }));
@@ -212,7 +215,7 @@ describe('ModelTextPanelWebView model text picker', () => {
     configureModelText(undefined);
 
     renderWebView();
-    fireEvent.click(await screen.findByRole('button', { name: 'Pick model text…' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Pick a text…' }));
 
     expect(mockShowDialog).toHaveBeenCalledWith(
       'platform.resourcePicker',
