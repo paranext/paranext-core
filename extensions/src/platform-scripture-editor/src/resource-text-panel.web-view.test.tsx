@@ -846,6 +846,51 @@ describe('ResourceTextPanel — catalog failure keeps resolved rows visible', ()
     expect(setSelectedResourceId).not.toHaveBeenCalled();
   });
 
+  it('reads no text for the first downloaded row while the catalog-error view covers it', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
+
+    const { useWebViewState } = makeTrackedWebViewState('ScriptureResource', {
+      selectedResourceId: `dbl:${CONFIGURED_DBL_REFERENCE.id}`,
+    });
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(screen.getByText('%webView_resourcePanel_catalogUnavailable%')).toBeInTheDocument();
+    // Positive control: the chapter text is asked for, just not for the row the error view hides.
+    expect(mockUseProjectDataProvider).toHaveBeenCalledWith(
+      'platformScripture.USJ_Chapter',
+      undefined,
+    );
+    expect(mockUseProjectDataProvider).not.toHaveBeenCalledWith(
+      'platformScripture.USJ_Chapter',
+      DOWNLOADED_ROW.projectId,
+    );
+  });
+
+  it('still migrates a legacy bare selection id while the catalog has failed', () => {
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.1.0', items: [CONFIGURED_DBL_REFERENCE] },
+    });
+    mockUseDblResourceCatalog.mockReturnValue(FAILED_CATALOG);
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_ROW], false]);
+
+    const { useWebViewState, setters } = makeTrackedWebViewState('ScriptureResource', {
+      selectedResourceId: DOWNLOADED_ROW.projectId,
+    });
+    const ResourceTextPanel = getResourceTextPanel();
+    render(<ResourceTextPanel {...makeProps({ useWebViewState })} />);
+
+    expect(setters.get('selectedResourceId')).toHaveBeenCalledWith(
+      `project:${DOWNLOADED_ROW.projectId}`,
+    );
+  });
+
   it('shows the catalog-error view for a saved DBL selection even when nothing is referenced', () => {
     // A downloaded DBL resource picked while online is saved as `dbl:`, without being referenced.
     mockUseEffectiveResourceReferenceList.mockReturnValue({

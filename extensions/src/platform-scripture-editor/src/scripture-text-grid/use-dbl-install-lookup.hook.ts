@@ -1,10 +1,13 @@
 import papi, { logger } from '@papi/frontend';
-import { useEvent, usePromise } from 'platform-bible-react';
+import { useEvent, usePromise, useRunWhenVisible, useViewVisibility } from 'platform-bible-react';
 import { getErrorMessage, retryUntil, type DblResourceData } from 'platform-bible-utils';
 import type { DblResourceInstallStatus } from 'platform-get-resources';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BibleTextReference } from '../scripture-text-grid-contents.utils';
 import { needsInstallLookup, toInstallLookup, type InstallLookup } from './grid-resources.utils';
+
+/** How long a burst of project changes, such as one install's, has to go quiet before one re-ask. */
+export const PROJECTS_CHANGE_COLLAPSE_MS = 250;
 
 /** Asks the backend which DBL resources are installed on disk. */
 async function fetchInstalledDblResources(): Promise<DblResourceInstallStatus> {
@@ -23,13 +26,15 @@ async function fetchInstalledDblResources(): Promise<DblResourceInstallStatus> {
 
 /**
  * Asks whose answers stand in for one another: the same references, with no install from this grid
- * in between. `lastAnswered` is the newest non-empty answer any of them got, and `lastAnsweredAsk`
- * is the order that ask started in, so a slow earlier ask cannot overwrite a newer answer.
+ * in between. `lastAnswered` is the newest answer any of them got, and `lastAnsweredAsk` is the
+ * order that ask started in, so a slow earlier ask cannot overwrite a newer answer.
+ * `lastAnsweredProjectsChange` is the count of project changes that answer had seen.
  */
 type Generation = {
   asksStarted: number;
   lastAnsweredAsk: number;
   lastAnswered: DblResourceInstallStatus | undefined;
+  lastAnsweredProjectsChange: number;
 };
 
 /**
@@ -50,8 +55,10 @@ type Answer = {
  * changes the disk; after either, only a new answer counts. A Retry, or a project added, removed or
  * renamed anywhere, asks again but keeps showing the answer in hand until a newer one arrives.
  *
- * Hidden case: runs while the tab is inactive, deliberately. It is data only, no geometry, so the
- * cells are right when the tab is shown.
+ * Hidden case: the asks a Retry or an install starts run while the tab is inactive, deliberately.
+ * They are data only, no geometry, so the cells are right when the tab is shown. Project changes
+ * are different: they come from anywhere in the app, so while hidden they collapse into one re-ask
+ * when the tab is shown.
  */
 export function useDblInstallLookup({
   references,
@@ -74,17 +81,33 @@ export function useDblInstallLookup({
 
   // A resource removed in another panel would otherwise stay resolved to a project that is gone.
   const [projectsChangeCount, setProjectsChangeCount] = useState(0);
+  const requestProjectsReask = useRunWhenVisible(useViewVisibility(), () =>
+    setProjectsChangeCount((count) => count + 1),
+  );
+  const projectsChangeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(projectsChangeTimerRef.current), []);
   const onDidChangeProjects = useMemo(
     () => papi.network.getNetworkEvent('platform.onDidChangeProjects'),
     [],
   );
   useEvent(
     onDidChangeProjects,
-    useCallback(() => setProjectsChangeCount((count) => count + 1), []),
+    useCallback(() => {
+      clearTimeout(projectsChangeTimerRef.current);
+      projectsChangeTimerRef.current = setTimeout(
+        requestProjectsReask,
+        PROJECTS_CHANGE_COLLAPSE_MS,
+      );
+    }, [requestProjectsReask]),
   );
 
   const generation = useMemo(
-    (): Generation => ({ asksStarted: 0, lastAnsweredAsk: 0, lastAnswered: undefined }),
+    (): Generation => ({
+      asksStarted: 0,
+      lastAnsweredAsk: 0,
+      lastAnswered: undefined,
+      lastAnsweredProjectsChange: 0,
+    }),
     // `refreshCounter` is a trigger (value unread): an install changes what is on disk.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [isNeeded, refreshCounter],
@@ -94,19 +117,25 @@ export function useDblInstallLookup({
     if (!isNeeded) return undefined;
     const run = async (): Promise<Answer> => {
       // The catalog fetch holds the provider until it settles, so a disk scan asked meanwhile can
-      // only hear "busy". Skip it when an answer is already in hand; without one (first mount), ask
-      // anyway, because that is what renders an installed resource while the catalog loads.
-      if (!hasCatalogSettled && generation.lastAnswered)
+      // only hear "busy"; the settle asks again. Only a generation's first ask scans anyway, because
+      // that is what renders an installed resource while the catalog loads.
+      if (!hasCatalogSettled && generation.asksStarted > 0)
         return { ask: run, generation, status: generation.lastAnswered };
 
       generation.asksStarted += 1;
       const askOrder = generation.asksStarted;
       try {
         const status = await fetchInstalledDblResources();
-        // An empty map is "no answer", so it never replaces one.
-        if (Object.keys(status).length > 0 && askOrder > generation.lastAnsweredAsk) {
-          generation.lastAnswered = status;
+        const isEmpty = Object.keys(status).length === 0;
+        // An empty map is "no answer", so it never replaces one, with one exception. Offline, the
+        // scan names only installed resources, so removing the last one also answers `{}`; once
+        // projects have changed since the answer in hand, that answer may name a removed project,
+        // and is dropped rather than kept.
+        const isStale = projectsChangeCount > generation.lastAnsweredProjectsChange;
+        if (askOrder > generation.lastAnsweredAsk && (!isEmpty || isStale)) {
+          generation.lastAnswered = isEmpty ? undefined : status;
           generation.lastAnsweredAsk = askOrder;
+          generation.lastAnsweredProjectsChange = projectsChangeCount;
         }
       } catch (error) {
         logger.warn(`Could not check which DBL resources are installed: ${getErrorMessage(error)}`);
@@ -114,10 +143,8 @@ export function useDblInstallLookup({
       return { ask: run, generation, status: generation.lastAnswered };
     };
     return run;
-    // `projectsChangeCount` is a trigger (value unread): ask again after a project change.
-    // `hasCatalogSettled` is read, and also a trigger: ask again once the catalog fetch releases the
-    // provider — after a Retry or an install, too.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Each change also asks again: after a project change, and once the catalog fetch releases the
+    // provider (after a Retry or an install, too).
   }, [generation, isNeeded, hasCatalogSettled, projectsChangeCount]);
 
   const [answer] = usePromise(ask, undefined);
