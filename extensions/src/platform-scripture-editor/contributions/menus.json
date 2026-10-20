@@ -189,8 +189,7 @@
           },
           {
             "label": "%webView_platformScriptureEditor_zoomIn%",
-            "hiddenInterfaceModes": ["power"],
-            "localizeNotes": "Scripture editor top menu (Simple mode only) > View > Zoom in. Enlarges the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected. Hidden in Power mode, where the tab's own context menu offers the same item.",
+            "localizeNotes": "Scripture editor top menu > View > Zoom in. Enlarges the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected. In Power mode the tab's own context menu offers the same item too.",
             "iconNameBefore": "zoom-in",
             "group": "platformScriptureEditor.zoom",
             "order": 1,
@@ -198,8 +197,7 @@
           },
           {
             "label": "%webView_platformScriptureEditor_zoomOut%",
-            "hiddenInterfaceModes": ["power"],
-            "localizeNotes": "Scripture editor top menu (Simple mode only) > View > Zoom out. Shrinks the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected. Hidden in Power mode, where the tab's own context menu offers the same item.",
+            "localizeNotes": "Scripture editor top menu > View > Zoom out. Shrinks the text of whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane); toolbars are unaffected. In Power mode the tab's own context menu offers the same item too.",
             "iconNameBefore": "zoom-out",
             "group": "platformScriptureEditor.zoom",
             "order": 2,
@@ -207,8 +205,7 @@
           },
           {
             "label": "%webView_platformScriptureEditor_resetZoomToDefault_2%",
-            "hiddenInterfaceModes": ["power"],
-            "localizeNotes": "Scripture editor top menu (Simple mode only) > View > Zoom 100%. Returns whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane) to the Settings default zoom. Hidden in Power mode, where the tab's own context menu offers the same item.",
+            "localizeNotes": "Scripture editor top menu > View > Zoom 100%. Returns whichever pane of this editor tab was used last (the Scripture text pane or the footnotes pane) to the Settings default zoom. In Power mode the tab's own context menu offers the same item too.",
             "iconNameBefore": "scan",
             "group": "platformScriptureEditor.zoom",
             "order": 3,
@@ -241,7 +238,7 @@
           {
             "label": "%webView_platformScriptureEditor_insertFootnoteAtSelection%",
             "localizeNotes": "Scripture editor top menu > Insert > Insert footnote",
-            "iconNameBefore": "asterisk",
+            "iconNameBefore": "square-function",
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 2,
             "command": "platformScriptureEditor.insertFootnoteAtSelection"
@@ -249,7 +246,7 @@
           {
             "label": "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%",
             "localizeNotes": "Scripture editor top menu > Insert > Insert cross-reference",
-            "iconNameBefore": "link",
+            "iconNameBefore": "square-x",
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 3,
             "command": "platformScriptureEditor.insertCrossReferenceAtSelection"
@@ -257,7 +254,7 @@
           {
             "label": "%webView_platformScriptureEditor_insertEndnoteAtSelection_2%",
             "localizeNotes": "Scripture editor top menu > Insert > Insert end note",
-            "iconNameBefore": "sigma",
+            "iconNameBefore": "square-sigma",
             "group": "platformScriptureEditor.insertTextualNotes",
             "order": 4,
             "command": "platformScriptureEditor.insertEndnoteAtSelection"
