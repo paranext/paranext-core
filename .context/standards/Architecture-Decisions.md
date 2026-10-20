@@ -4677,7 +4677,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   a name and a path are both set, the name wins. The path fields keep working unchanged.
 - **Alternatives:**
   - *SVG files tinted through a CSS mask.* Works for arbitrary files, but needs a mask per icon,
-    gives the svg no accessibility tree presence, and keeps one asset per icon to ship.
+    gives no per-icon stroke control, and keeps one asset per icon to ship.
   - *`lucide-react/dynamic`.* Resolves any name at runtime, but its type declarations and per-icon
     lazy chunks would be bundled into the checked-in `platform-bible-react` dist (the vite config
     marks only exact package names external), and an unknown name would fail at runtime instead

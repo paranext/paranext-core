@@ -384,8 +384,8 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
     await frame.locator("button[aria-label='View Info']").first().click();
 
     // Radix portals the menu into the iframe's body, so the menu items are also inside the frame.
-    // Match "Settings..." exactly — the web-view chrome also injects "Open Project Settings..."
-    // via default contributions, which shares the substring.
+    // Match "Settings..." exactly so it cannot match the default contributions' "Project
+    // settings" item.
     const settingsItem = frame.getByRole('menuitem', { name: 'Settings...', exact: true });
     await expect(settingsItem).toBeVisible({ timeout: 10_000 });
 
