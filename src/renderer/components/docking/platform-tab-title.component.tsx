@@ -47,14 +47,12 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuTrigger,
-  LUCIDE_ICON_NAMES,
-  LucideIcon,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { ShortcutKeys } from 'platform-bible-react/experimental';
+import { LUCIDE_ICON_NAMES, LucideIcon, ShortcutKeys } from 'platform-bible-react/experimental';
 import {
   getErrorMessage,
   isLocalizeKey,
