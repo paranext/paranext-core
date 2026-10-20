@@ -790,17 +790,13 @@ describe('showResourceInReferencePanel', () => {
     it('answers, and lets the next show start, without waiting for its warning to be sent', async () => {
       // The warning invites a retry, which must not be held behind the warning itself.
       mocks.notify.mockImplementation(() => holdUntilReleased('notification-1'));
-      let firstAnswer: unknown;
-      showResourceInReferencePanel('byz-project').then((answer) => {
-        firstAnswer = answer;
-        return undefined;
-      });
+      const first = showResourceInReferencePanel('byz-project');
       const next = showResourceInReferencePanel('byz-project');
 
       await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
 
-      // The deadline's warning is still held.
-      expect(firstAnswer).toEqual(NOT_SHOWN);
+      // The deadline's warning is still held: an answer that waited for it would never come.
+      await expect(first).resolves.toEqual(NOT_SHOWN);
       expect(mocks.getAllOpenWebViewDefinitions).toHaveBeenCalledTimes(2);
       await releaseHeld();
       await expect(next).resolves.toEqual(NOT_SHOWN);
