@@ -2193,8 +2193,11 @@
 
 /* Hovering an attribute run lifts it out of its dim resting color to the host's ordinary text
    color. The literal is only the fallback for a host that defines no `--foreground`: a fixed
-   near-black would be all but invisible against a dark theme. */
-.attribute:hover {
+   near-black would be all but invisible against a dark theme. An annotation that holds part of a
+   run cuts it into sibling pieces, so the hover lifts every `.attribute` child of the hovered
+   piece's parent: a char span or other owner holds one attribute run, so those are its pieces. */
+.attribute:hover,
+:has(> .attribute:hover) > .attribute {
   color: var(--foreground, rgba(25, 25, 25, 1));
 }
 

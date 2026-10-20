@@ -123,8 +123,15 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     // A fixed near-black hover color is all but invisible against a dark theme. The host's
     // `--foreground` carries a complete color value here, so `var()` resolves; the literal stays
     // only as the fallback for a host that defines no such token.
+    // An annotation that holds part of an attribute run cuts it into sibling `.attribute` pieces,
+    // so hovering one piece lifts every attribute child of the same parent.
     it('resolves the attribute hover color against the host theme', () => {
-      expect(scss).toMatch(rule(['.attribute:hover'], 'color: var(--foreground'));
+      expect(scss).toMatch(
+        rule(
+          ['.attribute:hover', ':has(> .attribute:hover) > .attribute'],
+          'color: var(--foreground',
+        ),
+      );
       expect(scss).toMatch(rule(['.attribute-run:hover'], 'color: var(--foreground'));
     });
 
