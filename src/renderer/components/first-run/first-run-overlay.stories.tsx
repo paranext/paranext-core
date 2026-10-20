@@ -61,7 +61,7 @@ export const WizardActive: Story = { args: { status: { kind: 'wizard', step: 'la
  */
 const optionListStrings = getLocalizedStrings([
   ...INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
-  '%firstRun_step_internetSettings_heading%',
+  '%firstRun_step_internetSettings_heading_2%',
 ]);
 
 function InternetSettingsDemoStep({ setCanProceed }: FirstRunStepProps) {
@@ -75,7 +75,7 @@ function InternetSettingsDemoStep({ setCanProceed }: FirstRunStepProps) {
   return (
     <div className="tw:flex tw:flex-col tw:gap-3">
       <WizardStepHeading>
-        {optionListStrings['%firstRun_step_internetSettings_heading%']}
+        {optionListStrings['%firstRun_step_internetSettings_heading_2%']}
       </WizardStepHeading>
       <InternetAccessOptionList
         localizedStrings={optionListStrings}
