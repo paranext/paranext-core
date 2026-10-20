@@ -116,21 +116,16 @@ function servedCommandIds(menu: Menu): Set<string> {
   return new Set(menu.items.flatMap((item) => ('command' in item ? [item.command] : [])));
 }
 
-/** Commands hidden in Power's editor menu and in Simple's, kept declared so the flag can be lifted. */
-const HIDDEN_IN_POWER = [
-  'platformScripture.openCharactersInventory',
-  'platformScripture.openRepeatedWordsInventory',
-  'platformScripture.openMarkersInventory',
-  'platformScripture.openPunctuationInventory',
-  'platformScripture.openMarkersChecklist',
-];
 /** The zoom items, served in both modes. */
 const ZOOM_COMMANDS = [
   'platform.webViewContentZoomIn',
   'platform.webViewContentZoomOut',
   'platform.webViewContentZoomReset',
 ];
-/** Declared but served in neither mode, until the flag that hides them is lifted. */
+/**
+ * Declared but served in neither mode (Power's editor menu and Simple's), so the flag that hides
+ * them can be lifted.
+ */
 const HIDDEN_IN_BOTH_MODES = [
   'platformScripture.openCharactersInventory',
   'platformScripture.openRepeatedWordsInventory',
@@ -366,11 +361,11 @@ describe("The scripture editor's Project menu, per mode", () => {
   test('inventories and Markers Checklist are hidden in Power but stay declared', async () => {
     const power = servedCommandIds(await getEditorTopMenuInMode('power'));
     const declared = declaredEditorCommandIds();
-    HIDDEN_IN_POWER.forEach((command) => {
+    HIDDEN_IN_BOTH_MODES.forEach((command) => {
       expect(power.has(command)).toBe(false);
     });
     // Hidden, not deleted: the inventories and Markers Checklist remain declared.
-    HIDDEN_IN_POWER.forEach((command) => expect(declared.has(command)).toBe(true));
+    HIDDEN_IN_BOTH_MODES.forEach((command) => expect(declared.has(command)).toBe(true));
   });
 
   test('zoom is served in Power, in the View column between the view modes and the footnotes pane', async () => {
@@ -520,7 +515,7 @@ describe("The scripture editor's Project menu, per mode", () => {
     // The Power Comments item opens a separate Comment List web view; Simple's own Comments item
     // (legacyCommentManager.showCommentListPanel) fronts the shared Column 3 tab instead.
     'legacyCommentManager.openCommentList',
-    // Switch scripture view ▸ Standard view / Preview: Simple's editor has a single view type.
+    // Switch scripture view ▸ Standard view / Preview: Simple shows only Preview.
     'platformScriptureEditor.setViewStandard',
     'platformScriptureEditor.setViewPreview',
   ]);
