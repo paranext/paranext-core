@@ -7,7 +7,7 @@ import type { DblResourceData } from 'platform-bible-utils';
 import type { DblResourceInstallStatus } from 'platform-get-resources';
 import type { DblResourceReference } from 'platform-scripture';
 import type { InstallLookup } from './grid-resources.utils';
-import { useDblInstallLookup } from './use-dbl-install-lookup.hook';
+import { PROJECTS_CHANGE_COLLAPSE_MS, useDblInstallLookup } from './use-dbl-install-lookup.hook';
 
 vi.mock('@papi/frontend', () => ({
   default: {
@@ -18,13 +18,17 @@ vi.mock('@papi/frontend', () => ({
 }));
 
 // The hook subscribes to `platform.onDidChangeProjects` through `useEvent`. Capture the handler it
-// registers so a test can fire the event; `usePromise` stays real.
+// registers so a test can fire the event. The real `useViewVisibility` needs an
+// IntersectionObserver, which jsdom lacks, so a test sets `isViewVisible` instead; `usePromise`
+// and `useRunWhenVisible` stay real.
 let capturedProjectsChangedHandler: (() => void) | undefined;
+let isViewVisible = true;
 vi.mock('platform-bible-react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('platform-bible-react')>()),
   useEvent: vi.fn((_event: unknown, handler: () => void) => {
     capturedProjectsChangedHandler = handler;
   }),
+  useViewVisibility: () => isViewVisible,
 }));
 
 const mockGet = vi.mocked(papi.dataProviders.get);
@@ -84,10 +88,24 @@ async function flush() {
   });
 }
 
+/** Lets fake time pass, settling what it starts. */
+async function advance(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
+
+/** Fires `platform.onDidChangeProjects`, then lets the collapsed re-ask start and settle. */
+async function changeProjects() {
+  act(() => capturedProjectsChangedHandler?.());
+  await advance(PROJECTS_CHANGE_COLLAPSE_MS);
+}
+
 describe('useDblInstallLookup', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    isViewVisible = true;
   });
 
   afterEach(() => {
@@ -237,8 +255,7 @@ describe('useDblInstallLookup', () => {
     await flush();
     expect(result.current).toEqual({ status: 'answered', installedProjectIds: { uid: 'P' } });
 
-    act(() => capturedProjectsChangedHandler?.());
-    await flush();
+    await changeProjects();
 
     expect(recompute).toHaveBeenCalledTimes(2);
     expect(result.current).toEqual({
@@ -258,8 +275,7 @@ describe('useDblInstallLookup', () => {
     provideRecompute(() => answers.shift() ?? Promise.resolve({}));
     const { result, rerender } = renderLookup(CATALOG_FAILED);
     await flush();
-    act(() => capturedProjectsChangedHandler?.());
-    await flush();
+    await changeProjects();
     expect(result.current).toEqual({ status: 'answered', installedProjectIds: { uid: 'NEW' } });
 
     resolveFirstAsk({ uid: 'OLD' });
@@ -269,5 +285,73 @@ describe('useDblInstallLookup', () => {
     await flush();
 
     expect(result.current).toEqual({ status: 'answered', installedProjectIds: { uid: 'NEW' } });
+  });
+
+  it('does not scan the provider a Retry holds when no answer is in hand', async () => {
+    // Offline with nothing installed, the scan never hears anything but an empty map.
+    const recompute = provideRecompute(() => Promise.resolve({}));
+    const { result, rerender } = renderLookup(CATALOG_FAILED);
+    await advance(2500);
+    expect(result.current.status).toBe('unanswered');
+    const callsBeforeRetry = recompute.mock.calls.length;
+    expect(callsBeforeRetry).toBeGreaterThan(0);
+
+    rerender(CATALOG_REFETCHING);
+    await advance(2500);
+
+    expect(recompute).toHaveBeenCalledTimes(callsBeforeRetry);
+    expect(result.current.status).toBe('pending');
+
+    // Once the refetch releases the provider, it is asked again.
+    rerender(CATALOG_FAILED);
+    await advance(2500);
+    expect(recompute.mock.calls.length).toBeGreaterThan(callsBeforeRetry);
+  });
+
+  it('drops an answer naming a removed resource when a project change finds nothing installed', async () => {
+    // Offline, the scan names only installed resources: removing the last one answers `{}`.
+    const answers: DblResourceInstallStatus[] = [{ uid: 'P' }];
+    provideRecompute(() => Promise.resolve(answers.shift() ?? {}));
+    const { result } = renderLookup(CATALOG_FAILED);
+    await flush();
+    expect(result.current).toEqual({ status: 'answered', installedProjectIds: { uid: 'P' } });
+
+    await changeProjects();
+    await advance(2500);
+
+    expect(result.current.status).toBe('unanswered');
+  });
+
+  it('collapses a burst of project changes into one re-ask', async () => {
+    const recompute = provideRecompute(() => Promise.resolve({ uid: 'P' }));
+    renderLookup(CATALOG_FAILED);
+    await flush();
+    expect(recompute).toHaveBeenCalledTimes(1);
+
+    act(() => capturedProjectsChangedHandler?.());
+    act(() => capturedProjectsChangedHandler?.());
+    act(() => capturedProjectsChangedHandler?.());
+    await advance(PROJECTS_CHANGE_COLLAPSE_MS);
+
+    expect(recompute).toHaveBeenCalledTimes(2);
+  });
+
+  it('defers project-change re-asks while hidden, catching up once when shown', async () => {
+    const recompute = provideRecompute(() => Promise.resolve({ uid: 'P' }));
+    const { rerender } = renderLookup(CATALOG_FAILED);
+    await flush();
+    expect(recompute).toHaveBeenCalledTimes(1);
+
+    isViewVisible = false;
+    rerender({ ...CATALOG_FAILED });
+    await changeProjects();
+    await changeProjects();
+    expect(recompute).toHaveBeenCalledTimes(1);
+
+    isViewVisible = true;
+    rerender({ ...CATALOG_FAILED });
+    await flush();
+
+    expect(recompute).toHaveBeenCalledTimes(2);
   });
 });

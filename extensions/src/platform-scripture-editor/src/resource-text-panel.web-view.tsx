@@ -258,7 +258,9 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     selectedResourceId,
     pendingResourceId,
   );
-  const selectedRef = selection.selectedRow;
+  // Behind the catalog-error view nothing is on screen, so the first-row fallback must not keep a
+  // chapter subscription open or become what Ctrl+F searches.
+  const selectedRef = readiness === 'catalogError' ? undefined : selection.selectedRow;
 
   // Falling back to another row while the catalog is down would overwrite a saved DBL selection
   // that only lacks a row until the catalog returns. Committing a pick and migrating a legacy bare
