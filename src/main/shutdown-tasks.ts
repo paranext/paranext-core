@@ -200,7 +200,7 @@ function readOpenWebViewDefinitionsEagerly(
  * a time and refuses the rest outright: a request per window would cover whichever window got there
  * first and be refused for every other, each of them already closed and unable to be asked again.
  * That one-at-a-time behavior belongs to the send/receive command's backend handler, which lives
- * outside this repository (the Paratext 10 Studio overlay), so it is stated here on purpose as a
+ * outside this repository (in the paratext-10-studio repo), so it is stated here on purpose as a
  * cross-repo dependency: if that handler ever started accepting concurrent calls, batching would
  * become an optimization rather than the thing that makes every closing window's work go out.
  *

@@ -10911,9 +10911,9 @@ declare module 'shared/data/platform.data' {
    * RETRIEVE any information from it.
    *
    * The Usersnap keys are intentionally empty in Platform.Bible. A product built on top of core
-   * (Paratext 10 Studio) sets them at build time through its repository patch, together with the Help
-   * menu items that open the forms. While this key is empty, Usersnap is never initialized and makes
-   * no network request.
+   * (Paratext 10) sets them at build time through its repository patch, together with the Help menu
+   * items that open the forms. While this key is empty, Usersnap is never initialized and makes no
+   * network request.
    *
    * Typed as `string` rather than the literal `''` so a build that sets it still type-checks.
    *
