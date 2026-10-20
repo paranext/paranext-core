@@ -1,11 +1,14 @@
-import { LucideIcon } from '@/components/basics/lucide-icon.component';
+import { isLucideIconName, LucideIcon } from '@/components/basics/lucide-icon.component';
 import { cn } from '@/utils/shadcn-ui/utils';
 import type { LeadingIconSlot } from './menu.util';
 
 type MenuItemIconProps = {
-  /** Uri path of the image to display. Ignored when `iconName` is set. */
+  /** Uri path of the image to display. Ignored when `iconName` names a known icon. */
   icon?: string;
-  /** Lucide icon name to display. Wins over `icon` when both are set. */
+  /**
+   * Lucide icon name to display. Wins over `icon` when both are set, unless the name is not one of
+   * the known icons: then `icon` is shown, and with no `icon` the slot counts as having no icon.
+   */
   iconName?: string;
   /** The label of the menu item */
   menuLabel: string;
@@ -21,7 +24,7 @@ type MenuItemIconProps = {
 function MenuItemIcon({ icon, iconName, menuLabel, leading, leadingSlot }: MenuItemIconProps) {
   const spacing = leading ? 'tw:me-2' : 'tw:ms-2';
 
-  if (iconName) return <LucideIcon name={iconName} className={spacing} />;
+  if (isLucideIconName(iconName)) return <LucideIcon name={iconName} className={spacing} />;
 
   if (!icon && leading && leadingSlot && leadingSlot !== 'none') {
     return (
