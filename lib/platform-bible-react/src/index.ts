@@ -270,8 +270,6 @@ export type {
   UndoRedoButtonsProps,
 } from './components/basics/undo-redo-buttons.component';
 export { default as ResultsCard } from './components/basics/results-card.component';
-export { LucideIcon, LUCIDE_ICON_NAMES } from './components/basics/lucide-icon.component';
-export type { LucideIconProps } from './components/basics/lucide-icon.component';
 export { EmptyState } from './components/basics/empty-state.component';
 export type { EmptyStateProps } from './components/basics/empty-state.component';
 export { RetryableErrorView } from './components/basics/retryable-error-view.component';

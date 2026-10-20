@@ -234,6 +234,18 @@ describe('getLeadingIconSlot', () => {
     ).toBe('icon');
   });
 
+  it('treats an unknown icon name as no icon', () => {
+    expect(getLeadingIconSlot([{ iconNameBefore: 'not-a-known-icon' }])).toBe('none');
+  });
+
+  it('falls back to the image path beside an unknown icon name', () => {
+    expect(
+      getLeadingIconSlot([
+        { iconNameBefore: 'not-a-known-icon', iconPathBefore: 'https://example.test/a.svg' },
+      ]),
+    ).toBe('image');
+  });
+
   it('ignores trailing icons', () => {
     const trailingOnly = [
       { iconNameBefore: undefined, iconNameAfter: 'search' },
