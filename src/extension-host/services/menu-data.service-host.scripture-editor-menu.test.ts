@@ -421,26 +421,63 @@ describe("The scripture editor's Project menu, per mode", () => {
   });
 
   /**
-   * `EDIT_MENU_COMMANDS` (in `edit-menu-actions.util.ts`) and the Edit ▸ flyout's command list in
-   * `menus.json` are two independently maintained lists that must name the same commands in the
-   * same order: the web view's `menuCommandHandler` intercepts a flyout click only when
-   * `isEditMenuCommand` — driven off `EDIT_MENU_COMMANDS` — recognizes it, so a flyout item added
-   * or reordered in `menus.json` without a matching update there falls through to a `sendCommand`
-   * call for a command PAPI never registers. Comparing against the ids this test derives from the
-   * served menu, rather than a third hardcoded list, is what catches that drift.
+   * `EDIT_MENU_COMMANDS` (in `edit-menu-actions.util.ts`) lists the Edit flyout commands the web
+   * view intercepts because they need the click's user activation (the clipboard ones). It and the
+   * Edit ▸ flyout's command list in `menus.json` are two independently maintained lists: the web
+   * view's `menuCommandHandler` intercepts a flyout click only when `isEditMenuCommand` recognizes
+   * it, so a clipboard item added or reordered in `menus.json` without a matching update there
+   * falls through to a `sendCommand` call for a command PAPI never registers. Undo and Redo are
+   * registered PAPI commands, so they lead the flyout and are not on the list. Comparing against
+   * the ids this test derives from the served menu, rather than a third hardcoded list, is what
+   * catches that drift.
    */
-  test('EDIT_MENU_COMMANDS matches the Edit flyout served commands, in order', async () => {
+  test('EDIT_MENU_COMMANDS matches the Edit flyout clipboard commands, in order', async () => {
+    const registeredEditCommands = ['platformScriptureEditor.undo', 'platformScriptureEditor.redo'];
     const simpleMenu = await getEditorTopMenuInMode('simple');
     expect(flyoutCommandIds(simpleMenu, 'platformScriptureEditor.editSubmenu')).toEqual([
+      ...registeredEditCommands,
       ...EDIT_MENU_COMMANDS,
     ]);
     // Power's flyout adds Find after the edit actions, which the web view routes to its own handler
     const powerMenu = await getEditorTopMenuInMode('power');
     expect(flyoutCommandIds(powerMenu, 'platformScriptureEditor.editSubmenu')).toEqual([
+      ...registeredEditCommands,
       ...EDIT_MENU_COMMANDS,
       'platformScripture.openFind',
     ]);
   });
+
+  test('the intercepted Edit flyout commands are the three clipboard ones', () => {
+    expect([...EDIT_MENU_COMMANDS]).toEqual([
+      'platformScriptureEditor.cutSelection',
+      'platformScriptureEditor.copySelection',
+      'platformScriptureEditor.pasteAtSelection',
+    ]);
+  });
+
+  /**
+   * A menu hint appears only for an item that runs a registered PAPI command with a catalogued
+   * chord. Undo and Redo are such commands; Cut, Copy and Paste stay intercepted in the web view
+   * (the clipboard needs the click's user activation), so their chords are not hinted.
+   */
+  test.each(['power', 'simple'] as const)(
+    '%s shows shortcut hints on Undo and Redo but not on Cut, Copy or Paste',
+    async (mode) => {
+      const menu = await getEditorTopMenuInMode(mode);
+      const shortcutOf = (command: string) => {
+        const item = menu.items.find(
+          (candidate) => 'command' in candidate && candidate.command === command,
+        );
+        if (!item) throw new Error(`${command} is not served`);
+        return 'shortcut' in item ? item.shortcut : undefined;
+      };
+      expect(shortcutOf('platformScriptureEditor.undo')).toEqual(expect.any(String));
+      expect(shortcutOf('platformScriptureEditor.redo')).toEqual(expect.any(String));
+      expect(shortcutOf('platformScriptureEditor.cutSelection')).toBeUndefined();
+      expect(shortcutOf('platformScriptureEditor.copySelection')).toBeUndefined();
+      expect(shortcutOf('platformScriptureEditor.pasteAtSelection')).toBeUndefined();
+    },
+  );
 
   /**
    * Guards the regression class a mode-gated menu document invites: `hiddenInterfaceModes` can drop
