@@ -9,32 +9,35 @@ import {
 } from 'platform-bible-utils';
 
 /**
- * Function that looks up the key of a sub-menu group using the value of it's `menuItem` property.
+ * Looks up the keys of every sub-menu group whose `menuItem` property is the given submenu item id.
+ * A submenu can be fed by more than one group, for example a shared group alongside a group that
+ * only some views contribute.
  *
  * @example
  *
  * ```ts
  * const groups = {
- *   'platform.subMenu': { menuItem: 'platform.subMenuId', order: 1 },
- *   'platform.subSubMenu': { menuItem: 'platform.subSubMenuId', order: 2 },
+ *   'platform.subMenuB': { menuItem: 'platform.subMenuId', order: 2 },
+ *   'platform.subMenuA': { menuItem: 'platform.subMenuId', order: 1 },
+ *   'platform.subSubMenu': { menuItem: 'platform.subSubMenuId', order: 3 },
  * };
- * const id = 'platform.subMenuId';
- * const groupKey = getSubMenuGroupKeyForMenuItemId(groups, id);
- * console.log(groupKey); // Output: 'platform.subMenu'
+ * const groupKeys = getSubMenuGroupKeysForMenuItemId(groups, 'platform.subMenuId');
+ * console.log(groupKeys); // Output: ['platform.subMenuA', 'platform.subMenuB']
  * ```
  *
  * @param groups The JSON Object containing the group definitions
- * @param id The value of the `menuItem` property of the group to look up
- * @returns The key of the group that has the `menuItem` property with the value of `id` or
- *   `undefined` if no such group exists.
+ * @param id The value of the `menuItem` property of the groups to look up
+ * @returns The keys of the groups that have the `menuItem` property with the value of `id`, sorted
+ *   by the groups' `order`. Empty if no such group exists.
  */
-export function getSubMenuGroupKeyForMenuItemId(
+export function getSubMenuGroupKeysForMenuItemId(
   groups: Localized<GroupsInMultiColumnMenu>,
   id: string,
-): string | undefined {
-  return Object.entries(groups).find(
-    ([, value]) => 'menuItem' in value && value.menuItem === id,
-  )?.[0];
+): string[] {
+  return Object.entries(groups)
+    .filter(([, value]) => 'menuItem' in value && value.menuItem === id)
+    .sort(([, a], [, b]) => a.order - b.order)
+    .map(([groupKey]) => groupKey);
 }
 
 /** A column of a multi-column menu, paired with the key it is stored under */
