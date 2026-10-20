@@ -274,18 +274,19 @@ each range.
 **An annotation paints exactly what it holds, as classes on real elements; measure it by its
 ranges.** Every annotation paints as CSS classes on elements — content text in a `<mark>`, and a
 display byte with the same classes plus `display-annotation` — so every host class rule, any
-property and `:hover` included, applies to everything it paints, and `CSS.highlights` is never
-used. An editable carrier (a marker glyph, a verse, an attribute run, an editable caller) held only
-in part is cut into sibling pieces of its own class and `data-*` attributes, and only the held
-pieces carry the annotation's classes: `\v<NBSP>4 ` held on its `4` renders as three
-`span.verse[data-number="4"]` pieces, `\v<NBSP>`, `4` and ` `. So a selector for a carrier can
-match several pieces — the carrier's own node is the first, which `querySelector` and Playwright's
-`.first()` find — and a box rule on a carrier class repeats on every piece. A read-only decorator
-held in part keeps its root whole and draws sub-spans carrying the classes and
-`data-annotation-keys` over the held characters. Whitespace between two held bytes in one block is
-painted, on its own element; whitespace at the edges never is, and bytes the view does not display
-paint nothing. Measure, scroll to or hit-test an annotation with
-`EditorRef.getAnnotationRanges(type, id)` — one range over each painted element's contents, in
+property and `:hover` included, applies to everything it paints, and `CSS.highlights` is never used.
+An editable carrier (a marker glyph, a verse, an attribute run, an editable caller) held only in
+part is cut into sibling pieces of its own class and `data-*` attributes, and only the held pieces
+carry the annotation's classes: `\v<NBSP>4 ` held on its `4` renders as three
+`span.verse[data-number="4"]` pieces, `\v<NBSP>`, `4` and ` `. So a selector for a carrier can match
+several pieces — the carrier's own node is the first, which `querySelector` and Playwright's
+`.first()` find, and every later piece's element carries `data-piece-continuation` — and a box rule
+on a carrier class repeats on every piece unless it is scoped to the head piece with
+`:not([data-piece-continuation])`. A read-only decorator held in part keeps its root whole and draws
+sub-spans carrying the classes and `data-annotation-keys` over the held characters. Whitespace
+between two held bytes in one block is painted, on its own element; whitespace at the edges never
+is, and bytes the view does not display paint nothing. Measure, scroll to or hit-test an annotation
+with `EditorRef.getAnnotationRanges(type, id)` — one range over each painted element's contents, in
 document order — as `editor-dom.util.ts` does, rather than re-deriving the painting rules from
 classes. An annotation inside a collapsed note's content — its undisplayed `\cat` included — is not
 shown and never paints the caller, as in Paratext 9; it reappears when the note is expanded and

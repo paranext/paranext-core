@@ -2317,13 +2317,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Consequences:** Every host class rule, any property and `:hover` included, applies to
   everything an annotation paints, and `CSS.highlights` is never used. A selector for a carrier
   (`span.verse[data-number="4"]`, `span.opening[data-marker="wj"]`) can match several sibling
-  pieces; no DOM attribute marks a later piece, but the first comes first, so `querySelector` and
-  Playwright's `.first()` find it. Hosts keep measuring, scrolling to and hit-testing an annotation
-  with `EditorRef.getAnnotationRanges(type, id)` — one range over each painted element's contents,
-  in document order — and a sub-span a React-rendered decorator draws appears only once React has
-  rendered it. A box rule on a carrier class repeats on every piece, or lands on one piece only
-  (`padding-inline-start` on a table row's opening glyph, the `.attribute:hover` lift, the
-  verse-arrival pulse on the first piece's `::before`); this is cosmetic and open.
+  pieces; the first comes first, so `querySelector` and Playwright's `.first()` find it, and every
+  later piece's element carries `data-piece-continuation`. Hosts keep measuring, scrolling to and
+  hit-testing an annotation with `EditorRef.getAnnotationRanges(type, id)` — one range over each
+  painted element's contents, in document order — and a sub-span a React-rendered decorator draws
+  appears only once React has rendered it. A box rule on a carrier class repeats on every piece
+  unless it is scoped to the head piece with `:not([data-piece-continuation])`, as the table row
+  glyph's `padding-inline-start` is. A rule that reacts to one element lands on one piece only (the
+  `.attribute:hover` lift, the verse-arrival pulse on the first piece's `::before`); this is
+  cosmetic and open.
 - **Source:** PT-4370.
 
 ## adr-editor-annotations-paint-exactly: An annotation paints exactly the bytes it holds, and hosts find it by its ranges
