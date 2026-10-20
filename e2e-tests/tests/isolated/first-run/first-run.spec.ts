@@ -10,6 +10,7 @@
  *
  * - Wizard appears and localisation resolves
  * - Forward navigation: Language → Internet Settings → Identify (Next hidden at Identify)
+ * - Internet Settings step never shows a server picker (PT-4647)
  * - Skip automatic sync on Sync consent closes the wizard (PT-4178)
  * - Sync progress step renders the syncing heading with Finish disabled (PT-4179)
  *
@@ -128,6 +129,23 @@ test.describe('First-run wizard', () => {
     });
     await expect(frPage.dialog.getByRole('button', { name: /^(Next|Finish)$/i })).not.toBeVisible();
     await expect(frPage.dialog.getByRole('button', { name: /save and restart/i })).toBeVisible();
+  });
+
+  test('internet-settings step never shows a server picker', async ({ mainPage }) => {
+    // A first-run install never offers a server choice during setup (PT-4647): a user who needs a
+    // non-Production server sets it afterward from the profile's Internet Settings dialog, where a
+    // Shift-click gate applies.
+    await injectDemoMode(mainPage);
+    const frPage = new FirstRunPage(mainPage);
+    await frPage.waitForWizard();
+
+    await frPage.clickNext(); // Language → Internet Settings
+
+    // Wait for the step's loaded content (the internet-access radio list) before asserting on what
+    // it does NOT contain — otherwise the assertion could trivially pass while the step is still
+    // showing its loading spinner.
+    await expect(frPage.dialog.getByRole('radiogroup')).toBeVisible({ timeout: 10_000 });
+    await expect(frPage.dialog.getByRole('button', { name: /Developer only/ })).not.toBeVisible();
   });
 
   test('skip automatic sync on Sync consent closes the wizard', async ({ mainPage }) => {

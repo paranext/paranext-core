@@ -1,8 +1,6 @@
 import type { InternetSettings, IInternetSettingsDataProvider } from 'paratext-registration';
 import { Alert, AlertDescription, Button } from 'platform-bible-react';
 import {
-  DeveloperSection,
-  DEVELOPER_SECTION_STRING_KEYS,
   InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
   isSupportedInternetUse,
@@ -38,7 +36,6 @@ const STRING_KEYS: LocalizeKey[] = [
   '%firstRun_step_internetSettings_connecting%',
   '%firstRun_step_internetSettings_loadError%',
   ...INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
-  ...DEVELOPER_SECTION_STRING_KEYS,
 ];
 
 // `useData`'s defaultValue is typed as the data type's getData (InternetSettings), so it cannot be
@@ -238,12 +235,6 @@ function InternetSettingsLoaded({
         localizedStrings={localizedStrings}
         value={settings.permittedInternetUse}
         onChange={(v) => handleChange({ ...settings, permittedInternetUse: v })}
-        disabled={isSaving}
-      />
-      <DeveloperSection
-        localizedStrings={localizedStrings}
-        selectedServer={settings.selectedServer}
-        onServerChange={(s) => handleChange({ ...settings, selectedServer: s })}
         disabled={isSaving}
       />
     </div>

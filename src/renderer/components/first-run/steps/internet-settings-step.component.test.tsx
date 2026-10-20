@@ -73,16 +73,10 @@ vi.mock('platform-bible-react/experimental', () => ({
       option list
     </button>
   ),
-  DeveloperSection: ({ onServerChange }: { onServerChange: (server: string) => void }) => (
-    <button data-testid="dev-section" type="button" onClick={() => onServerChange('Development')}>
-      dev section
-    </button>
-  ),
   // Stands in for the real helper, whose own list of implemented options is covered by
   // InternetAccessOptionList's tests. This step only cares that it gates Next.
   isSupportedInternetUse: (value: string) => value === 'Enabled' || value === 'VpnRequired',
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: [],
-  DEVELOPER_SECTION_STRING_KEYS: [],
 }));
 
 const MOCK_SETTINGS = {
@@ -264,19 +258,6 @@ describe('InternetSettingsStep', () => {
       await userEvent.click(screen.getByTestId('option-list'));
 
       await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(true));
-    });
-
-    it('does not let a server change alone unlock Next', async () => {
-      const { setData } = configureHooks({ value: UNSUPPORTED_SETTINGS, isLoading: false });
-      const { setCanProceed } = renderStep();
-
-      await userEvent.click(screen.getByTestId('dev-section'));
-
-      // The save succeeds, so the step re-derives whether it can proceed — from the value it just
-      // persisted, which still names the option the app cannot honor.
-      await waitFor(() => expect(setData).toHaveBeenCalled());
-      await waitFor(() => expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(false));
-      expect(setCanProceed).not.toHaveBeenCalledWith(true);
     });
   });
 
