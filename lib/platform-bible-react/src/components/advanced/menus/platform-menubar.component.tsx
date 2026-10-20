@@ -78,13 +78,18 @@ const getMenubarContent = (
                     onSelectMenuItem(item as MenuItemContainingCommand);
                   }}
                 >
-                  {item.iconPathBefore && (
-                    <MenuItemIcon icon={item.iconPathBefore} menuLabel={item.label} leading />
-                  )}
+                  <MenuItemIcon
+                    iconName={item.iconNameBefore}
+                    icon={item.iconPathBefore}
+                    menuLabel={item.label}
+                    leading
+                  />
                   {item.label}
-                  {item.iconPathAfter && (
-                    <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
-                  )}
+                  <MenuItemIcon
+                    iconName={item.iconNameAfter}
+                    icon={item.iconPathAfter}
+                    menuLabel={item.label}
+                  />
                   {item.shortcut && (
                     <MenubarShortcut>
                       <ShortcutKeys hint={item.shortcut} />
@@ -93,7 +98,11 @@ const getMenubarContent = (
                 </MenubarItem>
               ) : (
                 <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
-                  <MenubarSubTrigger>{item.label}</MenubarSubTrigger>
+                  <MenubarSubTrigger>
+                    <MenuItemIcon iconName={item.iconNameBefore} menuLabel={item.label} leading />
+                    {item.label}
+                    <MenuItemIcon iconName={item.iconNameAfter} menuLabel={item.label} />
+                  </MenubarSubTrigger>
                   <MenubarSubContent>
                     {getMenubarContent(
                       groups,

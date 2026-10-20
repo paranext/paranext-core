@@ -117,6 +117,111 @@ describe('PlatformMenubar', () => {
   });
 });
 
+const ICON_MENU: Localized<MultiColumnMenu> = {
+  columns: { 'platform.app': { label: 'Project', order: 1 } },
+  groups: {
+    'test.top': { column: 'platform.app', order: 1 },
+    'test.editActions': { menuItem: 'test.editSubmenu', order: 1 },
+  },
+  items: [
+    {
+      label: 'Before',
+      localizeNotes: '',
+      group: 'test.top',
+      order: 1,
+      command: 'test.before',
+      iconNameBefore: 'search',
+    },
+    {
+      label: 'After',
+      localizeNotes: '',
+      group: 'test.top',
+      order: 2,
+      command: 'test.after',
+      iconNameAfter: 'external-link',
+    },
+    {
+      label: 'PathOnly',
+      localizeNotes: '',
+      group: 'test.top',
+      order: 3,
+      command: 'test.pathOnly',
+      iconPathBefore: 'https://example.test/icon.svg',
+    },
+    {
+      label: 'Both',
+      localizeNotes: '',
+      group: 'test.top',
+      order: 4,
+      command: 'test.both',
+      iconNameBefore: 'search',
+      iconPathBefore: 'https://example.test/icon.svg',
+    },
+    {
+      id: 'test.editSubmenu',
+      label: 'Edit',
+      localizeNotes: '',
+      group: 'test.top',
+      order: 5,
+      iconNameBefore: 'pencil',
+    },
+    {
+      label: 'Undo',
+      localizeNotes: '',
+      group: 'test.editActions',
+      order: 1,
+      command: 'test.undo',
+    },
+  ],
+};
+
+describe('PlatformMenubar icons', () => {
+  async function openIconMenu() {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<PlatformMenubar menuData={ICON_MENU} onSelectMenuItem={() => {}} />);
+    await user.click(screen.getByRole('menuitem', { name: 'Project' }));
+    await screen.findByRole('menuitem', { name: /^Before/ });
+  }
+
+  it('shows a lucide icon before the label for iconNameBefore', async () => {
+    await openIconMenu();
+    const item = screen.getByRole('menuitem', { name: /^Before/ });
+    const svg = item.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(item.firstElementChild).toBe(svg);
+  });
+
+  it('shows a lucide icon after the label for iconNameAfter', async () => {
+    await openIconMenu();
+    const item = screen.getByRole('menuitem', { name: /^After/ });
+    const svg = item.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(item.lastElementChild).toBe(svg);
+    expect(item.querySelector('img')).toBeNull();
+  });
+
+  it('still shows an image for an item that only has iconPathBefore', async () => {
+    await openIconMenu();
+    const item = screen.getByRole('menuitem', { name: /PathOnly/ });
+    expect(item.querySelector('img')).not.toBeNull();
+    expect(item.querySelector('svg')).toBeNull();
+  });
+
+  it('shows only the lucide icon when both a name and a path are set', async () => {
+    await openIconMenu();
+    const item = screen.getByRole('menuitem', { name: /^Both/ });
+    expect(item.querySelector('svg')).not.toBeNull();
+    expect(item.querySelector('img')).toBeNull();
+  });
+
+  it('shows the icon of a submenu root', async () => {
+    await openIconMenu();
+    const root = screen.getByRole('menuitem', { name: /^Edit/ });
+    // The sub-trigger also carries a chevron svg, so look for the lucide pencil specifically
+    expect(root.querySelector('svg.lucide-pencil')).not.toBeNull();
+  });
+});
+
 /**
  * Hiding menu items for an interface mode prunes items only — the groups and columns they belonged
  * to survive, so a group can end up with nothing in it. These fixtures place an emptied group in
