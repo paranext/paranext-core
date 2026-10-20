@@ -4855,6 +4855,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `LocalParatextProjects.Initialize` (C#) installs the sample WEB project whenever it finds no
   projects, so an empty answer means the Paratext factory has not answered yet, and the sample is
   excluded by its fixed ID along with resources (`isPublished`).
+  A registered user (`paratextRegistration.doesUserHaveValidRegistration`) cannot fix "none" by
+  registering, so they are told instead that projects cannot be created here yet: have one shared
+  with them, or create one in Paratext 9. A registration that cannot be determined keeps the
+  "register" wording, and the guidance waits for the answer so it never swaps text in front of the
+  user.
   `startDefaultProjectPicker` also re-runs on `platform.onDidChangeProjects`, so an arriving project
   opens in the editor if the picker can find it (a recent project, or one Send/Receive lists).
 - **Alternatives:** Count only editable projects, which also excludes the read-only sample —
@@ -4870,7 +4875,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   reconciled here. Power mode keeps the plain text, since the guidance is written for Simple mode's
   first-run experience. **Revisit** when the Sample project (PT-4324) lands: unless it reuses the
   sample WEB's ID, it will count as a project until this rule learns to exclude it.
-- **Source:** PT-4311 implementation (2026-09-25).
+- **Source:** PT-4311 implementation (2026-09-25); the registered-user wording is PT-4442.
 
 ## adr-node-dom-globals-polyfill: Node processes install `@xmldom/xmldom` DOM globals; the extension host does it in a first-import side-effect module
 

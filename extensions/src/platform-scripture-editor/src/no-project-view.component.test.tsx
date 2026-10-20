@@ -28,6 +28,35 @@ describe('NoProjectView', () => {
     expect(screen.queryByText('No project selected')).not.toBeInTheDocument();
   });
 
+  it('tells a registered user where projects come from, naming the product', () => {
+    render(
+      <NoProjectView
+        localizedStrings={{
+          ...STRINGS,
+          '%webView_platformScriptureEditor_emptyState_noProjects_description_registered%':
+            'It is not yet possible to create a project in {%product_name%}. Either someone needs to share a project with you, or you need to create a project in Paratext 9.',
+          '%product_name%': 'Paratext 10',
+        }}
+        presence="none"
+        isRegistered
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { name: "You don't have any projects of your own yet" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'It is not yet possible to create a project in Paratext 10. Either someone needs to share a project with you, or you need to create a project in Paratext 9.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        STRINGS['%webView_platformScriptureEditor_emptyState_noProjects_description%'],
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it.each(['unknown', 'some'] as const)(
     'shows only "No project selected", outside the live region, when presence is %s',
     (presence) => {

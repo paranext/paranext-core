@@ -19,8 +19,9 @@ export type ProjectPresence = 'unknown' | 'none' | 'some';
 /**
  * `projectInterface` a project must support to count: it can be opened in the Scripture editor.
  *
- * The toolbar picker (`src/renderer/hooks/use-project-picker-data.hook.ts`) keeps its own copy of
- * this literal. If you change this one, consider whether that one should change too.
+ * The toolbar picker (`src/renderer/hooks/use-project-picker-data.hook.ts`) and the startup
+ * readiness gate (`src/main/startup-readiness.util.ts`) each keep their own copy of this literal.
+ * If you change this one, consider whether those should change too.
  */
 const PROJECT_INTERFACE = 'platformScripture.USJ_Chapter';
 
@@ -39,8 +40,8 @@ export const PDP_FACTORY_REGISTRATION_DEBOUNCE_MS = 200;
  */
 export const LOOKUP_RETRY_DELAY_MS = 5 * 1000;
 /**
- * How many times to retry a failed lookup. A lookup triggered by a new project or factory event
- * starts a fresh budget.
+ * How many times to retry a failed lookup. A lookup triggered by a new project or factory event, or
+ * resuming after a sync or a disabled stretch, starts a fresh budget.
  */
 export const MAX_LOOKUP_RETRIES = 3;
 
@@ -129,9 +130,10 @@ export function useProjectPresence({ enabled }: { enabled: boolean }): ProjectPr
 
   useEffect(() => {
     // An answer from before a sync or a disabled stretch may be stale, so it is dropped rather than
-    // kept until the next lookup answers.
+    // kept until the next lookup answers. The lookups that resume afterward get a fresh retry budget.
     if (!isIdle) {
       setLookupAnswer('unknown');
+      failedLookupCountRef.current = 0;
       return undefined;
     }
     let isCurrent = true;
@@ -215,7 +217,10 @@ export function useProjectPresence({ enabled }: { enabled: boolean }): ProjectPr
     }
     let isCurrent = true;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const eventCountAtSeed = syncEventCountRef.current;
     const seed = async (retriesLeft: number) => {
+      // A sync event has answered since the seed began, so a retry has nothing left to add.
+      if (syncEventCountRef.current !== eventCountAtSeed) return;
       try {
         await readSyncActivity(() => isCurrent);
       } catch (e) {
