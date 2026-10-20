@@ -522,7 +522,6 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
       'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
-      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
     command: 'platformScriptureEditor.insertFootnoteAtSelection',
   },
@@ -538,7 +537,6 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
       'extensions/src/platform-scripture-editor/src/editor-chords.util.ts',
-      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
     command: 'platformScriptureEditor.insertCrossReferenceAtSelection',
   },
