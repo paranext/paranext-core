@@ -384,3 +384,77 @@ describe('PlatformMenubar submenu groups', () => {
     expect(within(flyout).getAllByRole('separator')).toHaveLength(1);
   });
 });
+
+describe('PlatformMenubar label alignment and shortcut spacing', () => {
+  const MIXED: Localized<MultiColumnMenu> = {
+    columns: {
+      'platform.app': { label: 'Project', order: 1 },
+      'platform.window': { label: 'Window', order: 2 },
+    },
+    groups: {
+      'test.top': { column: 'platform.app', order: 1 },
+      'test.win': { column: 'platform.window', order: 1 },
+      'test.sub': { menuItem: 'test.submenu', order: 1 },
+    },
+    items: [
+      {
+        label: 'With icon',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 1,
+        command: 'test.a',
+        iconNameBefore: 'search',
+      },
+      {
+        label: 'Plain',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 2,
+        command: 'test.b',
+        shortcut: 'Ctrl+Shift+T',
+      },
+      { id: 'test.submenu', label: 'Sub', localizeNotes: '', group: 'test.top', order: 3 },
+      { label: 'Inner', localizeNotes: '', group: 'test.sub', order: 1, command: 'test.c' },
+      { label: 'Other', localizeNotes: '', group: 'test.win', order: 1, command: 'test.d' },
+    ],
+  };
+  const spacerOf = (el: HTMLElement) => el.querySelector('[data-slot="menu-icon-spacer"]');
+
+  it('gives each icon-less item an aria-hidden spacer when another item has a leading icon', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<PlatformMenubar menuData={MIXED} onSelectMenuItem={() => {}} />);
+    await user.click(screen.getByRole('menuitem', { name: 'Project' }));
+    expect(spacerOf(await screen.findByRole('menuitem', { name: /^With icon/ }))).toBeNull();
+    const plain = spacerOf(screen.getByRole('menuitem', { name: /^Plain/ }));
+    expect(plain).not.toBeNull();
+    expect(plain).toHaveAttribute('aria-hidden', 'true');
+    expect(spacerOf(screen.getByRole('menuitem', { name: /^Sub/ }))).not.toBeNull();
+  });
+
+  it('decides the slot per menu, so a menu without icons gets no spacer', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<PlatformMenubar menuData={MIXED} onSelectMenuItem={() => {}} />);
+    await user.click(screen.getByRole('menuitem', { name: 'Window' }));
+    const other = await screen.findByRole('menuitem', { name: 'Other' });
+    expect(spacerOf(other)).toBeNull();
+  });
+
+  it('decides the slot per submenu content', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<PlatformMenubar menuData={MIXED} onSelectMenuItem={() => {}} />);
+    await user.click(screen.getByRole('menuitem', { name: 'Project' }));
+    await user.click(await screen.findByRole('menuitem', { name: /^Sub/ }));
+    const inner = await screen.findByRole('menuitem', { name: 'Inner' });
+    expect(spacerOf(inner)).toBeNull();
+  });
+
+  it('keeps a minimum gap between the label and the shortcut', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<PlatformMenubar menuData={MIXED} onSelectMenuItem={() => {}} />);
+    await user.click(screen.getByRole('menuitem', { name: 'Project' }));
+    const shortcut = (await screen.findByRole('menuitem', { name: /^Plain/ })).querySelector(
+      '[data-slot="menubar-shortcut"]',
+    );
+    expect(shortcut).toHaveClass('tw:ps-4');
+  });
+});

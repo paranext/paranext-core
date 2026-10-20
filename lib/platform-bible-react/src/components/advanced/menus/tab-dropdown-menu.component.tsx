@@ -39,8 +39,11 @@ import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
 import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
   getColumnGroupKeys,
+  getItemsInGroups,
+  getLeadingIconSlot,
   getMenuSectionsWithItems,
   getSubMenuGroupKeysForMenuItemId,
+  LeadingIconSlot,
 } from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
@@ -52,6 +55,8 @@ import MenuItemIcon from './menu-icon.component';
  *
  * @param groupKeys Keys of the groups to render, already sorted by the groups' `order`
  * @param separateGroups Whether to put a separator between consecutive groups that have items
+ * @param leadingSlot The leading icon slot of the list these items render in. A submenu works out
+ *   its own from its items.
  */
 const getGroupContent = (
   groups: Localized<GroupsInMultiColumnMenu>,
@@ -59,6 +64,7 @@ const getGroupContent = (
   groupKeys: string[],
   separateGroups: boolean,
   onSelectMenuItem: SelectMenuItemHandler,
+  leadingSlot: LeadingIconSlot,
 ): ReactNode[] => {
   let hasShownItems = false;
   return groupKeys.flatMap((groupKey) => {
@@ -88,6 +94,7 @@ const getGroupContent = (
                     icon={item.iconPathBefore}
                     menuLabel={item.label}
                     leading
+                    leadingSlot={leadingSlot}
                   />
                   {item.label}
                   <MenuItemIcon
@@ -96,7 +103,7 @@ const getGroupContent = (
                     menuLabel={item.label}
                   />
                   {item.shortcut && (
-                    <DropdownMenuShortcut>
+                    <DropdownMenuShortcut className="tw:ps-4">
                       <ShortcutKeys hint={item.shortcut} />
                     </DropdownMenuShortcut>
                   )}
@@ -112,11 +119,17 @@ const getGroupContent = (
         // `data-open:` styles
         const subTrigger = (
           <DropdownMenuSubTrigger>
-            <MenuItemIcon iconName={item.iconNameBefore} menuLabel={item.label} leading />
+            <MenuItemIcon
+              iconName={item.iconNameBefore}
+              menuLabel={item.label}
+              leading
+              leadingSlot={leadingSlot}
+            />
             {item.label}
             <MenuItemIcon iconName={item.iconNameAfter} menuLabel={item.label} />
           </DropdownMenuSubTrigger>
         );
+        const subGroupKeys = getSubMenuGroupKeysForMenuItemId(groups, item.id);
         return (
           <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
             {item.tooltip ? (
@@ -133,9 +146,10 @@ const getGroupContent = (
                 {getGroupContent(
                   groups,
                   items,
-                  getSubMenuGroupKeysForMenuItemId(groups, item.id),
+                  subGroupKeys,
                   true,
                   onSelectMenuItem,
+                  getLeadingIconSlot(getItemsInGroups(items, subGroupKeys)),
                 )}
               </DropdownMenuSubContent>
             </DropdownMenuPortal>
@@ -214,6 +228,13 @@ export default function TabDropdownMenu({
   const headingIdPrefix = useId();
   const sections = getMenuSectionsWithItems(menuData);
   const showHeadings = showSectionHeadings && sections.length > 1;
+  // Every section shares one content, so one slot keeps all their labels aligned
+  const leadingSlot = getLeadingIconSlot(
+    getItemsInGroups(
+      menuData.items,
+      sections.flatMap(({ columnKey }) => getColumnGroupKeys(menuData.groups, columnKey)),
+    ),
+  );
 
   // Radix restores focus to the trigger on every close, and the tab order depends on that. The focus
   // ring does not belong there after a pointer close, though — it would sit on a button the pointer
@@ -274,6 +295,7 @@ export default function TabDropdownMenu({
                     getColumnGroupKeys(menuData.groups, columnKey),
                     false,
                     onSelectMenuItem,
+                    leadingSlot,
                   )}
                 </TooltipProvider>
               </DropdownMenuGroup>

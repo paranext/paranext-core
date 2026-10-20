@@ -140,3 +140,40 @@ export function getMenuSectionsWithItems(menuData: Localized<MultiColumnMenu>): 
       isHeaderHidden: column.isHeaderHidden ?? false,
     }));
 }
+
+/** The size of the leading icon slot a menu list reserves, so every label in the list lines up */
+export type LeadingIconSlot = 'none' | 'icon' | 'image';
+
+/** The fields of a menu item that decide whether it shows a leading icon */
+type ItemWithLeadingIcon = { iconNameBefore?: string; iconPathBefore?: string };
+
+/**
+ * Picks the leading icon slot for one rendered list of menu items (one dropdown content, one
+ * submenu content, or one menubar menu). Items without a leading icon reserve the same slot as the
+ * items that have one, so all labels in the list start at the same position.
+ *
+ * @param items The items rendered in the list, including submenu trigger items
+ * @returns `'none'` if no item has a leading icon, `'icon'` if any has a named icon (which wins
+ *   over an image path, matching how `MenuItemIcon` renders), and `'image'` if only image paths are
+ *   used
+ */
+export function getLeadingIconSlot(items: ItemWithLeadingIcon[]): LeadingIconSlot {
+  if (items.some((item) => item.iconNameBefore)) return 'icon';
+  if (items.some((item) => item.iconPathBefore)) return 'image';
+  return 'none';
+}
+
+/**
+ * Gets the items that belong to any of the given groups.
+ *
+ * @param items All the menu's items
+ * @param groupKeys Keys of the groups rendered together in one list
+ * @returns The items whose `group` is one of `groupKeys`
+ */
+export function getItemsInGroups<T extends { group: string }>(
+  items: T[],
+  groupKeys: string[],
+): T[] {
+  const keys = new Set(groupKeys);
+  return items.filter((item) => keys.has(item.group));
+}
