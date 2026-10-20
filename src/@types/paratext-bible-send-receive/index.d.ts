@@ -515,6 +515,14 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.openSyncStatus': () => Promise<string | undefined>;
 
     /**
+     * Opens the Send/Receive web view and returns its WebView id
+     *
+     * @returns WebView id for the Send/Receive WebView or `undefined` if not created
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.openSendReceive': () => Promise<string | undefined>;
+
+    /**
      * Returns the current {@link SyncState} so a consumer can seed its sync status on mount rather
      * than waiting for the next `paratextBibleSendReceive.onSyncStateChanged` event — which, for a
      * sync already in progress, has already fired and will not fire again until that sync ends.
