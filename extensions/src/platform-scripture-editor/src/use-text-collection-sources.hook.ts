@@ -80,6 +80,7 @@ export function useTextCollectionSources(projectId: string | undefined) {
     if (!textConnectionPdp) return undefined;
 
     let disposed = false;
+    let hasReceivedOrder = false;
     const unsubscribers: Array<() => Promise<boolean>> = [];
 
     // `isRequired`: `sources` cannot assemble without this subscription, so its failure must be
@@ -133,10 +134,15 @@ export function useTextCollectionSources(projectId: string | undefined) {
         // project last delivered, and leaves the order pending only if none has arrived yet.
         if (isPlatformError(value)) {
           logger.warn(
-            'Could not read the saved cell order; keeping the last order received, if any (reordering stays disabled until one arrives).',
+            hasReceivedOrder
+              ? 'Could not read the saved cell order; keeping the last order received.'
+              : 'Could not read the saved cell order; reordering stays disabled until it can be read.',
           );
           return;
         }
+        // `undefined` is a valid delivery and leaves the order pending, so it does not count as
+        // received.
+        hasReceivedOrder = value !== undefined;
         setOrder(value);
       }),
       'cell order',

@@ -79,8 +79,7 @@ const STRINGS: Record<string, string> = {
   '%general_loading%': 'Loading',
   '%webView_scriptureTextGrid_viewOptions_notSupported%':
     'Text Collection settings could not be loaded for this project.',
-  '%webView_scriptureTextGrid_viewOptions_settingsUnavailable%':
-    "Couldn't load your texts. They will appear once they're available.",
+  '%webView_scriptureTextGrid_viewOptions_settingsUnavailable%': "Couldn't load your texts.",
   '%webView_scriptureTextGrid_chapterContext_close%': 'Close chapter view',
   '%webView_scriptureTextGrid_emptyState_prompt%':
     'No texts to display. Open {viewOptionsLabel} to choose which texts to show.',

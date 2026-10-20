@@ -301,7 +301,6 @@ function ScriptureTextGridProjectView({
   const caretResourceProjectId = useFocusedResourceProjectId(displayedProjectIds);
   useOpenFindShortcut(webViewId, caretResourceProjectId);
 
-  // The grid is one web view hosting many projects, so its members are invisible to global
   const gridBodyState = getGridBodyState({
     hasRows: resources.length > 0,
     hasSources: sources !== undefined,
@@ -309,6 +308,7 @@ function ScriptureTextGridProjectView({
     isLoading: isLoadingCachedResources || isLoadingLocalizedStrings,
   });
 
+  // The grid is one web view hosting many projects, so its members are invisible to global
   // navigation UI unless declared here.
   // `resources` — and so `displayedProjectIds` — is transiently empty until the sources and the
   // cached DBL list have both loaded, which is indistinguishable from "every project was removed".
