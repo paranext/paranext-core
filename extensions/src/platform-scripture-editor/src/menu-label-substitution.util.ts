@@ -13,6 +13,9 @@ const TEXT_FIELDS: TextField[] = ['label', 'tooltip', 'searchTerms'];
  * with the whitespace before it.
  */
 function fillProjectName(text: string, projectName: string): string {
+  // Native `includes`/`split` are correct here: the code looks only for the literal ASCII token
+  // and splits on the exact boundary it matched, inserting the name verbatim. A combining mark
+  // fused onto the closing brace would mean the token was not written as the token.
   if (!text.includes(PROJECT_NAME_PLACEHOLDER)) return text;
   if (projectName === '') return text.replace(PROJECT_NAME_PLACEHOLDER_WITH_LEADING_SPACE, '');
   return text.split(PROJECT_NAME_PLACEHOLDER).join(projectName);
