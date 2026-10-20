@@ -32,6 +32,7 @@ import {
   setContentZoomActiveArea,
   setContentZoomAreas,
 } from '@renderer/services/web-view-content-zoom.service';
+import { registerWebViewRoot } from '@renderer/services/web-view-root.registry';
 import { spliceIntoWebViewHead } from '@renderer/services/web-view-head.util';
 import { isCreateElementAllowedByStack } from '@renderer/services/renderer-create-element-guard.util';
 import { localThemeService } from '@renderer/services/theme.service';
@@ -1224,7 +1225,12 @@ function getLegacySavedLayout(defaultLayout: LayoutInfo): {
     lowestPrefixedWindowId !== undefined
       ? localStorage.getItem(`${lowestPrefixedWindowId}_${DOCK_LAYOUT_KEY}`)
       : localStorage.getItem(DOCK_LAYOUT_KEY);
-  const savedLayout: LayoutInfo | undefined = saved ? deserialize(saved) : undefined;
+  // Only a stored object is a layout; any other JSON value (`null`, a number, a string, an array,
+  // a boolean) is not one, and healing it would hand rc-dock an empty layout
+  const parsed = saved ? deserialize(saved) : undefined;
+  const savedLayout: LayoutInfo | undefined =
+    // `deserialize` turns a stored `null` into `undefined`, so `typeof` alone excludes it
+    typeof parsed === 'object' && !Array.isArray(parsed) ? reconcileSavedLayout(parsed) : undefined;
   return savedLayout
     ? { layout: savedLayout, isBakedDefault: false }
     : { layout: defaultLayout, isBakedDefault: true };
@@ -2555,6 +2561,8 @@ globalThis.reportContentZoomActiveAreaById = (webViewId, areaId) => {
     logger.warn(`Content zoom active area report failed for ${webViewId}: ${getErrorMessage(e)}`);
   }
 };
+// The bootstrap reports each React root it creates so the web view component can unmount it
+globalThis.registerWebViewRootById = registerWebViewRoot;
 
 // #endregion Set up global variables to use in `openWebView`'s `imports` below
 
@@ -2834,6 +2842,7 @@ export async function openOrReloadWebView(
   var resetContentZoomById = window.parent.resetContentZoomById;
   var reportContentZoomAreasById = window.parent.reportContentZoomAreasById;
   var reportContentZoomActiveAreaById = window.parent.reportContentZoomActiveAreaById;
+  var registerWebViewRootById = window.parent.registerWebViewRootById;
   window.fetch = papi.fetch;
   window.WebSocket = papi.WebSocket;
   window.XMLHttpRequest = papi.XMLHttpRequest;
@@ -2926,6 +2935,35 @@ export async function openOrReloadWebView(
           legacyTokenNames,
         );
 
+      // The bootstrap unmounts this document's React root when the document unloads. React comes
+      // from the parent window, so the root would otherwise outlive this document: a reload only
+      // swaps the iframe's `srcdoc`, and a root left mounted keeps rendering with `window` resolving
+      // to the replacement document.
+      //
+      // The bootstrap's `pagehide` handler registers a one-time `unload` listener rather than
+      // unmounting itself. The handler is registered before any web view effect runs, and
+      // unmounting runs every effect cleanup, so an unmount during `pagehide` would remove a
+      // listener the web view registered in an effect before the browser reached it, losing a last
+      // save made there. `unload` follows every `pagehide` listener and still precedes the
+      // replacement document. Being added during `pagehide`, the listener also follows any `unload`
+      // listener the web view added earlier, so those still see its React tree.
+      //
+      // The unmount is then a microtask, not a timer: on a navigation it runs as soon as the
+      // `unload` listener returns, before the replacement document exists. When the renderer's React
+      // removes the iframe, both events fire inside that commit, where an inline unmount would warn,
+      // so `web-view.component.tsx` unmounts the root as well: its deferred unmount on close, or its
+      // iframe load handler when a tab move re-inserts the iframe and a new document loads.
+      // Correctness does not depend on whether the queued microtask still runs in that case, because
+      // a second `root.unmount()` is a no-op.
+      //
+      // The component can only unmount a root it knows about, and a document replaced before it ever
+      // loads is never the iframe's document at a load. So the bootstrap hands each root to
+      // `registerWebViewRootById` as soon as it creates it, together with its document and a
+      // `hasUnloaded` flag that an `unload` listener added at that point sets, even if the first
+      // render throws. The component warns when it has to unmount a replaced root whose document
+      // loaded but whose flag is still false; a document replaced before it loaded may never see
+      // `unload`, so that case unmounts silently.
+      //
       // Add the component as a script
       // WARNING: DO NOT add anything between the closing of the script tag and the insertion of
       // reactWebView.contents. Doing so would mess up debugging web views
@@ -2949,6 +2987,24 @@ export async function openOrReloadWebView(
               function initializeReact() {
                 const container = document.getElementById('root');
                 const root = createRoot(container);
+                const unmountRoot = root.unmount.bind(root);
+                // Reported to the renderer so the web view component can unmount this root even if
+                // this document goes away before its unload-time unmount runs
+                const registeredRoot = { unmountRoot, document, hasUnloaded: false };
+                try {
+                  registerWebViewRootById?.('${webView.id}', registeredRoot);
+                } catch (e) {
+                  console.log('Error registering WebView React root', e);
+                }
+                // Added here, ahead of the first render, so a render that throws still leaves the
+                // flag to be set when the document unloads
+                window.addEventListener(
+                  'unload',
+                  () => {
+                    registeredRoot.hasUnloaded = true;
+                  },
+                  { once: true },
+                );
 
                 function renderRoot(savedDefinition) {
                   // Set up WebViewProps to pass into the WebView component
@@ -2990,23 +3046,36 @@ export async function openOrReloadWebView(
                   },
                 );
 
-                const unsubscriber = () => {
+                const handlePageHide = () => {
                   try {
                     unsubscribeUpdateWebView();
-                    window.removeEventListener('pagehide', unsubscriber);
+                    window.removeEventListener('pagehide', handlePageHide);
                   } catch (e) {
                     console.log('Error unsubscribing from WebView updates', e);
                   }
+                  // On unload, then queued: see the bootstrap comment in web-view.service-shard.ts
+                  window.addEventListener(
+                    'unload',
+                    () =>
+                      queueMicrotask(() => {
+                        try {
+                          root.unmount();
+                        } catch (e) {
+                          console.log('Error unmounting WebView React root', e);
+                        }
+                      }),
+                    { once: true },
+                  );
                 };
 
                 renderRoot();
 
                 // Store cleanup functions globally so they can be called from parent window
                 globalThis.webViewCleanup = {
-                  unmountRoot: root.unmount.bind(root),
+                  unmountRoot,
                 };
 
-                window.addEventListener('pagehide', unsubscriber);
+                window.addEventListener('pagehide', handlePageHide);
               }
 
               if (document.readyState === 'loading')

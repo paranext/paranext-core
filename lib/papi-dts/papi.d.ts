@@ -4219,6 +4219,18 @@ declare module 'shared/models/project-data-provider.model' {
    * Provider must implement
    */
   export const PROJECT_INTERFACE_PLATFORM_BASE = 'platform.base';
+  /**
+   * The name of the `projectInterface` a Project Data Provider serves when it can list the
+   * `dataQualifier`s an extension has data for in a project (`listExtensionDataQualifiers`).
+   *
+   * This is its own `projectInterface`, not a member of `platform.base`: not every PDP can enumerate
+   * its extension data (one over a remote store may not be able to), and a PDP method is never
+   * optional. A PDP that can enumerate advertises this interface and one that cannot leaves it off,
+   * so a consumer learns which it is from the project's metadata `projectInterfaces` instead of by
+   * calling and failing.
+   */
+  export const PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION =
+    'platform.extensionDataEnumeration';
   /** Indicates to a PDP what extension data is being referenced */
   export type ExtensionDataScope = {
     /** Name of an extension as provided in its manifest */
@@ -4236,6 +4248,11 @@ declare module 'shared/models/project-data-provider.model' {
      */
     dataQualifier: string;
   };
+  /**
+   * Indicates to a PDP whose `dataQualifier`s to list: the extension named, and nothing narrower. The
+   * whole list comes back; filter it at the call site.
+   */
+  export type ExtensionDataListScope = Pick<ExtensionDataScope, 'extensionName'>;
   /**
    * `DataProviderDataTypes` that each project data provider **must** implement. They are assumed to
    * exist and are used by other data providers.
@@ -4336,6 +4353,37 @@ declare module 'shared/models/project-data-provider.model' {
       dataScope: ExtensionDataScope,
       data: string,
     ): Promise<DataProviderUpdateInstructions<TProjectDataTypes>>;
+  };
+  /**
+   * `DataProviderDataTypes` for the `platform.extensionDataEnumeration` `projectInterface`. There are
+   * none: the interface is one method with no paired setter and nothing to subscribe to, so it
+   * contributes no `get*`/`set*`/`subscribe*` trio.
+   */
+  export type ExtensionDataEnumerationProjectDataTypes = {};
+  /**
+   * The method a Project Data Provider Engine provides to serve the
+   * `platform.extensionDataEnumeration` `projectInterface`
+   * ({@link PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION}). It is the interface's whole
+   * surface; an engine that claims the interface must implement it.
+   */
+  export type WithProjectDataProviderEngineExtensionDataEnumerationMethods = {
+    /**
+     * Lists the `dataQualifier`s an extension has data for in this project.
+     *
+     * Every returned string is a valid `dataQualifier` for `getExtensionData` under the same
+     * `extensionName`, exactly as it would be passed: forward slashes, relative to the extension's
+     * own data, nested paths included. The list is sorted and includes empty documents.
+     *
+     * Listing never creates anything, so an extension that has never written any data gets `[]`.
+     *
+     * Only a PDP that advertises `platform.extensionDataEnumeration` has this method. A consumer
+     * learns that from the project's metadata `projectInterfaces` before asking for the PDP; see
+     * `IExtensionDataEnumerationProjectDataProvider` in `papi-shared-types`.
+     *
+     * @param scope Which extension's `dataQualifier`s to list
+     * @returns Sorted `dataQualifier`s that exist for that extension in this project
+     */
+    listExtensionDataQualifiers(scope: ExtensionDataListScope): Promise<string[]>;
   };
 }
 declare module 'shared/models/data-provider.interface' {
@@ -4568,7 +4616,13 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
    *
    * Works with generic types `IDataProvider`, `DataProviderInternal`, `IDisposableDataProvider`, and
    * `IDataProviderEngine` along with the `papi-shared-types` extensible interfaces `DataProviders`
-   * and `DisposableDataProviders`
+   * and `DisposableDataProviders`.
+   *
+   * A data provider with no data types at all - a `projectInterface` made only of non-data methods,
+   * such as `platform.extensionDataEnumeration` - resolves to `{}`. The `infer` branches cannot
+   * recover `{}` on their own: the `get*`/`set*`/`subscribe*` mapped types over no keys simplify
+   * away, leaving nothing to infer from, so without the explicit branch the result would be `never`,
+   * which in a mapped type over its keys means _every_ key rather than none.
    */
   export type ExtractDataProviderDataTypes<TDataProvider> =
     TDataProvider extends IDataProvider<infer TDataProviderDataTypes>
@@ -4579,8 +4633,89 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
           ? TDataProviderDataTypes
           : TDataProvider extends IDataProviderEngine<infer TDataProviderDataTypes>
             ? TDataProviderDataTypes
-            : never;
+            : TDataProvider extends IDataProvider<{}>
+              ? {}
+              : never;
   export default ExtractDataProviderDataTypes;
+}
+declare module 'shared/models/extension-host-lifecycle.model' {
+  import type { Schema } from 'shared/models/openrpc.model';
+  /**
+   * Why the extension host stopped without main asking it to.
+   *
+   * - `'lost-connection'`: the extension host lost its connection to main and ended itself, since it
+   *   cannot do anything without that connection.
+   * - `'crashed'`: any other exit main did not request — an OS signal, an out-of-memory kill, a native
+   *   crash, or a non-zero exit during startup — and a restart that could not start a new process.
+   *
+   * @experimental
+   */
+  export type ExtensionHostStopReason = 'lost-connection' | 'crashed';
+  /**
+   * Payload of the {@link EVENT_NAME_ON_DID_STOP_EXTENSION_HOST} network event and the answer of
+   * `platform.getExtensionHostStoppedState`. Carries the reason only; the exit code, signal and pid
+   * stay in main's log.
+   *
+   * @experimental
+   */
+  export type ExtensionHostStoppedEvent = {
+    reason: ExtensionHostStopReason;
+  };
+  /**
+   * OpenRPC schema of an {@link ExtensionHostStoppedEvent}, shared by every registration that sends
+   * one over the network. Frozen throughout, so a registration cannot change it for the others.
+   *
+   * @experimental
+   */
+  export const EXTENSION_HOST_STOPPED_EVENT_SCHEMA: Schema;
+  /**
+   * Name of the network event main emits when the extension host stops without being asked to. Not
+   * emitted for a restart main itself requested (`platform.restartExtensionHost`, the dev-mode file
+   * watcher) or while the app is shutting down. Every window shows its "extensions have stopped"
+   * notice on it.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_DID_STOP_EXTENSION_HOST = 'platform.onDidStopExtensionHost';
+  /**
+   * Name of the network event the extension host emits once its extensions have initialized. No
+   * payload. Emitted by every extension host process, including the first; its use is the readiness
+   * signal a window waits for after `platform.restartExtensionHost`, since that command settles at
+   * fork time, long before the new process can serve anything.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_DID_START_EXTENSION_HOST = 'platform.onDidStartExtensionHost';
+  /**
+   * How long after a restart begins a new extension host may take to announce its start
+   * ({@link EVENT_NAME_ON_DID_START_EXTENSION_HOST}) before it is no longer waited for. A dev build
+   * needs about a minute to transpile and activate extensions; a packaged build is faster.
+   *
+   * Main and the windows share it so they give up at about the same time: main, timing from when the
+   * restart began, stops treating the restart as in flight (a further `platform.restartExtensionHost`
+   * call then starts a new restart instead of joining it), and a window's stopped notice stops
+   * waiting and shows the restart as unconfirmed.
+   *
+   * @experimental
+   */
+  export const EXTENSION_HOST_RESTART_READY_TIMEOUT_MS = 90000;
+  /**
+   * Name of the network event main emits when the app quits. No payload. On an explicit quit (Cmd+Q,
+   * the Quit menu item, `platform.quit` or `platform.restart`) it is emitted before any window is
+   * destroyed, and a window uses it to read the death of its own connection a moment later as the app
+   * going away rather than as a failure.
+   *
+   * When closing windows shuts the app down instead (a close-all from the primary window's close
+   * button, or closing the last window on Windows and Linux), it is emitted only after every window
+   * is gone, so no window sees it. Those windows need no hint: each one's connection was closed
+   * cleanly, as a normal close rather than a failure, before the window was destroyed. Other peers,
+   * such as the extension host, still receive it. Best effort even on an explicit quit: delivery is
+   * asynchronous and a window may be gone before it arrives, so a subscriber must still cope without
+   * it.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_WILL_SHUT_DOWN = 'platform.onWillShutDown';
 }
 declare module 'shared/models/docking-framework.model' {
   import { MutableRefObject, ReactNode } from 'react';
@@ -4836,11 +4971,35 @@ declare module 'shared/models/docking-framework.model' {
     | 'move'
     | 'active'
     | 'update';
-  /** Information about a panel */
+  /**
+   * Information about a panel: a tab opened beside the tab group holding `targetTabId`. When no
+   * `targetTabId` is given (or it is not in this window), the tab opens beside the tab group of the
+   * tab most recently opened as a `'tab'` or re-opened in this window, else of the first tab in it.
+   *
+   * When the target's tab group is docked, the tab is added, as its active tab, to the tab group
+   * directly on the `direction` side instead of a new group being created, if that group can take it:
+   * it sits beside the target's group (a group touching it only at a corner does not count), has at
+   * least one tab, holds the same kind of tab, is not one of Simple mode's fixed columns, and is at
+   * least as wide (as tall for `top` and `bottom`) as a new group beside the target would be.
+   * Otherwise the tab opens as a new group beside the target's group.
+   *
+   * When the target's tab group is floating or maximized, the tab opens as a new group at the
+   * reading-end edge of the dock area (the right, or the left in a right-to-left UI), whichever
+   * `direction` was asked for, and a floating target that would cover that group is moved aside.
+   * `left` and `right` are mirrored in a right-to-left UI. A target in another application window is
+   * placed by these same rules in the window that holds it.
+   */
   interface PanelLayout {
     type: 'panel';
+    /**
+     * The side of the target's tab group to open on, in reading order: `right` is the reading-end
+     * side, which is the left in a right-to-left UI
+     */
     direction?: PanelDirection;
-    /** If undefined, it will add in the `direction` relative to the previously added tab. */
+    /**
+     * If undefined (or not in this window), the panel is placed relative to the tab most recently
+     * opened as a `'tab'` or re-opened in this window, else the first tab in it.
+     */
     targetTabId?: string;
   }
   interface ReplaceTabLayout {
@@ -6087,9 +6246,12 @@ declare module 'papi-shared-types' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import type {
+    ExtensionDataEnumerationProjectDataTypes,
     ExtensionDataScope,
     MandatoryProjectDataTypes,
     PROJECT_INTERFACE_PLATFORM_BASE,
+    PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION,
+    WithProjectDataProviderEngineExtensionDataEnumerationMethods,
     WithProjectDataProviderEngineExtensionDataMethods,
   } from 'shared/models/project-data-provider.model';
   import type {
@@ -6102,6 +6264,7 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from 'shared/services/scroll-group.service-model';
+  import type { ExtensionHostStoppedEvent } from 'shared/models/extension-host-lifecycle.model';
   import type {
     AppWindowInputEvent,
     FocusedWindowIdEvent,
@@ -6138,7 +6301,27 @@ declare module 'papi-shared-types' {
     'test.echo': (message: string) => string;
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
+    /**
+     * Restart the extension host, which reloads and reinitializes TS/JS extensions. Resolves once
+     * the new process is forked, before it has started; `platform.onDidStartExtensionHost` says
+     * when it has.
+     *
+     * A call while a restart is already in flight (from its start until the new extension host
+     * announces its start) joins that restart and resolves with it, at once if the new process is
+     * already forked, rather than stopping the host that is still starting.
+     */
     'platform.restartExtensionHost': () => Promise<void>;
+    /**
+     * Whether the extension host is currently stopped without main having asked it to, and why. A
+     * window asks this once at startup, in case the stop happened before it was listening for
+     * `platform.onDidStopExtensionHost`.
+     *
+     * @returns The stop, or nothing while the extension host is running (or has been restarted
+     *   since). Over JSON-RPC that "nothing" arrives as `null`, not `undefined`, so test the result
+     *   for truthiness rather than comparing it with `undefined`.
+     * @experimental
+     */
+    'platform.getExtensionHostStoppedState': () => Promise<ExtensionHostStoppedEvent | undefined>;
     /** Shut down the application */
     'platform.quit': () => Promise<void>;
     /** Restart the application */
@@ -6837,6 +7020,26 @@ declare module 'papi-shared-types' {
           options?: DataProviderSubscriberOptions,
         ): Promise<UnsubscriberAsync>;
       };
+  /**
+   * A Project Data Provider that can list the `dataQualifier`s an extension has data for in its
+   * project. Returned from `papi.projectDataProviders.get('platform.extensionDataEnumeration',
+   * projectId)`.
+   *
+   * This is its own `projectInterface` rather than a member of `platform.base`, because not every
+   * PDP can enumerate its extension data (one over a remote store may not be able to) and a PDP
+   * method is never optional. A project whose PDP can enumerate lists
+   * `'platform.extensionDataEnumeration'` in its metadata `projectInterfaces`
+   * (`papi.projectLookup.getMetadataForProject`), so check there first:
+   * `papi.projectDataProviders.get` throws for a project that does not advertise the interface, and
+   * on a platform that predates the interface no project advertises it. Treat "not advertised" as
+   * "cannot enumerate", never as "no data".
+   *
+   * The qualifiers it lists are exactly the ones `getExtensionData` on the same project's
+   * `platform.base` PDP reads.
+   */
+  type IExtensionDataEnumerationProjectDataProvider =
+    IProjectDataProvider<ExtensionDataEnumerationProjectDataTypes> &
+      WithProjectDataProviderEngineExtensionDataEnumerationMethods;
   /** This is just a simple example so we have more than one. It's not intended to be real. */
   type NotesOnlyProjectDataTypes = MandatoryProjectDataTypes & {
     Notes: DataProviderDataType<string, string | undefined, string>;
@@ -6910,6 +7113,13 @@ declare module 'papi-shared-types' {
      * There should be a PDP that provides `platform.base` for all available project ids.
      */
     [PROJECT_INTERFACE_PLATFORM_BASE]: IBaseProjectDataProvider<MandatoryProjectDataTypes>;
+    /**
+     * `projectInterface` a PDP serves when it can list the `dataQualifier`s an extension has data
+     * for. Its one method is `listExtensionDataQualifiers`. Separate from `platform.base` because
+     * not every PDP can enumerate its extension data and a PDP method is never optional; see
+     * {@link IExtensionDataEnumerationProjectDataProvider} for how a consumer discovers it.
+     */
+    [PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION]: IExtensionDataEnumerationProjectDataProvider;
     'platform.notesOnly': IProjectDataProvider<NotesOnlyProjectDataTypes>;
     'platform.placeholder': IProjectDataProvider<PlaceholderDataTypes>;
   }
@@ -7195,6 +7405,32 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.onDidChangeFocusedWindowId': FocusedWindowIdEvent;
+    /**
+     * Emitted by the main process when the extension host stops without being asked to: it lost its
+     * connection to main (`'lost-connection'`) or exited for any other reason (`'crashed'`). Not
+     * emitted for a requested restart or during app shutdown.
+     *
+     * @experimental
+     */
+    'platform.onDidStopExtensionHost': ExtensionHostStoppedEvent;
+    /**
+     * Emitted by the extension host once its extensions have initialized, including on the first
+     * start. No payload. The readiness signal after `platform.restartExtensionHost`.
+     *
+     * @experimental
+     */
+    'platform.onDidStartExtensionHost': undefined;
+    /**
+     * Emitted by the main process when the app quits. On an explicit quit (Cmd+Q, the Quit menu
+     * item, `platform.quit` or `platform.restart`) it comes before any window is destroyed. When
+     * closing windows shuts the app down (close-all from the primary window, or the last window on
+     * Windows and Linux) it comes only after every window is gone, so no window sees it; those
+     * windows' connections were closed cleanly, as a normal close rather than a failure, before
+     * they were destroyed. No payload. Best effort: a window may be gone before it arrives.
+     *
+     * @experimental
+     */
+    'platform.onWillShutDown': undefined;
   }
   /** Union of all known network event names (keys of {@link NetworkEvents}). */
   type NetworkEventTypes = keyof NetworkEvents;
@@ -7483,6 +7719,35 @@ declare module 'shared/models/notification.service-model' {
    * @experimental
    */
   export const NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS: NetworkObjectDocumentation;
+}
+declare module 'shared/utils/paratext-error-notification.util' {
+  import { PlatformNotification } from 'shared/models/notification.service-model';
+  /**
+   * One id for every internet-block notification: a single block fails every subscription that
+   * reaches the network, and without a shared id each one would raise its own identical
+   * notification.
+   *
+   * `internet-block-notification.utils.ts` in the platform-get-resources extension sends the same
+   * message under this same literal, so a block noticed there and here shows once. The two cannot
+   * import each other across the extension boundary, so they are kept in step by hand; the tests
+   * beside each pin the value.
+   *
+   * @experimental This export is unstable and may change shape or disappear without notice
+   */
+  export const INTERNET_BLOCKED_NOTIFICATION_ID = 'platform.internetBlocked';
+  /**
+   * Builds the notification for a ParatextData failure the user can do something about — internet
+   * blocked, or a registration that is no longer valid — with an action that opens the setting
+   * responsible. Anything else gets no notification: its message describes ParatextData internals,
+   * and there is nothing for the user to act on.
+   *
+   * @param exception The error, or its message, to classify
+   * @returns The notification to send, or `undefined` if the error is not one the user can act on
+   * @experimental This export is unstable and may change shape or disappear without notice
+   */
+  export function constructParatextErrorNotification(
+    exception: unknown,
+  ): PlatformNotification | undefined;
 }
 declare module 'shared/services/notification.service' {
   import { type INotificationService } from 'shared/models/notification.service-model';
@@ -11979,11 +12244,16 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      *
      * Set this when an exact, predictable match list matters more than forgiving lookup — marker
      * palettes do, because the rendered list participates in commit semantics (typing a marker and
-     * pressing Space must agree byte-for-byte with what is displayed). Palettes with
-     * {@link CommandPaletteRequest.keyForwarding} and passive palettes always match by containment
-     * regardless of this option: their filtered list is resolved by the HOST (commits and forwarded
-     * keys are answered from it), and the host's filter must agree exactly with what is on screen —
-     * cmdk's scorer is not reimplemented host-side.
+     * pressing Space must agree byte-for-byte with what is displayed).
+     *
+     * Some palettes match host-side regardless of this option, because their filtered list is
+     * resolved by the HOST — commits and forwarded keys are answered from it, so the host's filter
+     * must agree exactly with what is on screen, and cmdk's scorer is not reimplemented host-side.
+     * Which rule they get depends on the palette:
+     *
+     * - `passive`, or {@link CommandPaletteRequest.focusTarget} `'list'` — label PREFIX match, mirroring
+     *   PT9's marker dropdown.
+     * - {@link CommandPaletteRequest.keyForwarding} WITHOUT `'list'` focus — containment.
      */
     disableFuzzyMatching?: boolean;
     /**
@@ -12022,6 +12292,36 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * shown, so matching always runs against the same label text the palette displays.
      */
     passive?: boolean;
+    /**
+     * Which element inside the palette takes keyboard focus when it opens. Defaults to `'input'` —
+     * the palette's search box, which owns the query and the arrow-key highlight itself.
+     *
+     * `'list'` focuses the palette's result list instead and renders the search box read-only,
+     * showing the host-driven {@link IOverlayService.updateCommandPalette} filter text exactly as
+     * {@link CommandPaletteRequest.passive} does. The requester keeps ownership of every key semantic:
+     * EVERY keydown the palette receives is handed to {@link PaletteKeyForwarding.onKey}, not only the
+     * keys named in {@link PaletteKeyForwarding.keys}, so one table decides what each key means.
+     *
+     * It also changes how the list MATCHES, for the same reason `passive` does: the host resolves the
+     * filtered list, so matching moves host-side and becomes a label PREFIX match rather than cmdk's
+     * fuzzy scoring or containment. A consumer adopting `'list'` for the focus behavior alone gets
+     * that change too.
+     *
+     * @remarks
+     * Focusing something that cannot be edited is what keeps composed input out: an IME or a dead key
+     * starts composing in any focused text box, no matter what the palette cancels, which would put
+     * candidate text in the palette and — once a composition is under way — out of reach of per-key
+     * rules. With focus on the list, no composition starts and a dead key arrives as an ordinary
+     * keydown.
+     *
+     * Ignored when `passive` is true, which takes no focus at all.
+     *
+     * `'list'` REQUIRES {@link CommandPaletteRequest.keyForwarding} (unless `passive`), and a request
+     * without it is rejected. A list-focused palette drives nothing itself: its filter renders
+     * read-only and it handles no key but Escape, so with no requester answering for the keys there
+     * is no way to type, navigate or commit.
+     */
+    focusTarget?: 'input' | 'list';
     /**
      * Keys the REQUESTING session claims while this palette is open, and where to send them.
      *
@@ -13034,6 +13334,10 @@ declare module '@papi/core' {
   } from 'shared/models/docking-framework.model';
   export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
   export type {
+    ExtensionHostStoppedEvent,
+    ExtensionHostStopReason,
+  } from 'shared/models/extension-host-lifecycle.model';
+  export type {
     HandleUri,
     RegisterUriHandler,
     UriHandler,
@@ -13061,8 +13365,11 @@ declare module '@papi/core' {
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
   export type {
+    ExtensionDataEnumerationProjectDataTypes,
+    ExtensionDataListScope,
     ExtensionDataScope,
     MandatoryProjectDataTypes,
+    WithProjectDataProviderEngineExtensionDataEnumerationMethods,
   } from 'shared/models/project-data-provider.model';
   export type { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
   export type {
@@ -14426,6 +14733,7 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
   import { type PaletteFilterMode } from 'platform-bible-react/experimental';
   import type {
     CommandPaletteItem,
+    CommandPaletteRequest,
     PaletteSearchField,
   } from 'renderer/services/overlays/overlay.service-model';
   /**
@@ -14435,6 +14743,24 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
    * identity (marker palettes) opt into `['label']` per request instead.
    */
   export const DEFAULT_PALETTE_SEARCH_FIELDS: readonly PaletteSearchField[];
+  /**
+   * Whether the REQUESTER resolves this palette's filtered list rather than the palette resolving it
+   * itself — true for a passive palette and for one that focuses its list.
+   *
+   * Both render a read-only search box over a host-supplied filter and answer commits from the
+   * requester's own list, so both must match HOST-SIDE rather than through cmdk: reimplementing
+   * cmdk's fuzzy scorer is the only way the two lists could otherwise agree, and a disagreement
+   * commits an item the user cannot see. That host-side rule is {@link PaletteFilterMode} `'passive'`
+   * — a label PREFIX match, mirroring PT9's marker dropdown. Derived in one place so the palette's
+   * display and the host's commit resolution can never drift apart.
+   */
+  export function isHostDrivenPalette(
+    request: Pick<CommandPaletteRequest, 'passive' | 'focusTarget'>,
+  ): boolean;
+  /** The {@link PaletteFilterMode} a request's palette filters by. */
+  export function getPaletteFilterMode(
+    request: Pick<CommandPaletteRequest, 'passive' | 'focusTarget'>,
+  ): PaletteFilterMode;
   /**
    * Filters command palette items by matching `filterText` against each item's text, with
    * per-{@link PaletteFilterMode} semantics and the request's `searchFields` deciding which fields

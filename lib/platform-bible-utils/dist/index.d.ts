@@ -1574,8 +1574,9 @@ export declare function getAllObjectFunctionNames(obj: {
  */
 export declare function createSyncProxyForAsyncObject<T extends object>(getObject: (args?: unknown[]) => Promise<T>, objectToProxy?: Partial<T>): T;
 /**
- * Indicates if the exception or error message provided appears to be from ParatextData.dll
- * indicating that Paratext is blocking internet access.
+ * Indicates if the exception or error message provided shows that Paratext refused internet access
+ * because of the user's internet setting — either ParatextData.dll's own block, or the .NET data
+ * provider's gate on Registry, Send/Receive, and Digital Bible Library access.
  *
  * @param errorMessage Error message or exception to check
  * @returns `true` if the message indicates Paratext is blocking internet access, `false` otherwise
@@ -1744,8 +1745,8 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	iconPathBefore?: string;
 	/**
 	 * Display text for the keyboard shortcut that runs this item's command (e.g. `⌃F` on macOS,
-	 * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: do not parse
-	 * it as a key binding.
+	 * `Ctrl+F` on Windows and Linux), shown at the end of the row. It is display-only: renderers
+	 * split it into one keycap per key, but never treat it as a key binding.
 	 *
 	 * The platform fills it in from its keyboard shortcuts catalog in the localized menus it serves;
 	 * the unlocalized main menu never has it. Key names are not localized, and only the first
@@ -3876,7 +3877,8 @@ export declare function isParagraphMarker(marker: string): boolean;
  * Clamping, rounding and stepping for a content-zoom factor, plus the range and step those
  * operations enforce. The platform's per-pane content zoom and the Interface scaling setting both
  * scale within the same `[0.5, 3]` range in steps of `0.1`, so both read these from here rather
- * than keeping their own copy.
+ * than keeping their own copy. Also the keyboard chords that zoom a pane's content, as menus show
+ * them.
  */
 /**
  * Smallest allowed zoom factor.
@@ -3896,6 +3898,54 @@ export declare const MAX_ZOOM_FACTOR = 3;
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export declare const ZOOM_STEP = 0.1;
+/**
+ * How each operating system spells a content-zoom keyboard chord for display: macOS symbols with no
+ * separator, Windows and Linux key names joined with `+`.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type ContentZoomShortcut = Readonly<{
+	/**
+	 * MacOS spelling, e.g. `⌘=`
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	macOS: string;
+	/**
+	 * Windows spelling, e.g. `Ctrl++`
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	windows: string;
+	/**
+	 * Linux spelling, e.g. `Ctrl++`
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	linux: string;
+}>;
+/**
+ * The chord that zooms a pane's content in, as a menu shows it on each operating system. Core's
+ * keyboard-shortcuts catalog and every menu that shows this hint read it from here, so a menu built
+ * outside the menu data service cannot drift from the catalog.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_IN_SHORTCUT: ContentZoomShortcut;
+/**
+ * The chord that zooms a pane's content out, as a menu shows it on each operating system. See
+ * {@link CONTENT_ZOOM_IN_SHORTCUT}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_OUT_SHORTCUT: ContentZoomShortcut;
+/**
+ * The chord that returns a pane's content to its default zoom, as a menu shows it on each operating
+ * system. See {@link CONTENT_ZOOM_IN_SHORTCUT}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const CONTENT_ZOOM_RESET_SHORTCUT: ContentZoomShortcut;
 /**
  * Clamps a zoom factor into `[MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR]`.
  *
@@ -4370,6 +4420,22 @@ export declare function collapseMiddleWords(text: string, numberOfTokensToKeepBe
  * @returns `text` surrounded by the isolate code points.
  */
 export declare function isolateBidi(text: string): string;
+/**
+ * Shortens `text` to at most `copyLimit` UTF-16 code units without splitting a grapheme cluster: a
+ * character outside the Basic Multilingual Plane, a base letter with its combining marks, or a
+ * conjunct. Clusters come from `unicode-segmenter`, as for the rest of this package. The result is
+ * the longest start of `text` that fits and ends at a cluster boundary, so it can be shorter than
+ * `copyLimit`.
+ *
+ * Segmentation contract: cuts only at grapheme-cluster boundaries as `unicode-segmenter` finds
+ * them, measured in UTF-16 code units, the same contract `EditorOptions.copyLimit` follows, so a
+ * copy cut here and one the editor cuts end at the same place.
+ *
+ * @param text The text to shorten.
+ * @param copyLimit The most UTF-16 code units the result may have, or `undefined` for no limit.
+ * @returns `text` itself when it fits or there is no limit, otherwise its longest start that fits.
+ */
+export declare function truncateToCopyLimit(text: string, copyLimit: number | undefined): string;
 /** Options for calculating resizable pane size limits. */
 export type PaneSizeLimitsOptions = {
 	/**

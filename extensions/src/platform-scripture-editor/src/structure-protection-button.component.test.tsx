@@ -312,15 +312,26 @@ describe('StructureProtectionButton — personal button', () => {
     expect(screen.queryByText('Unlock structure')).not.toBeInTheDocument();
   });
 
-  it('shows the Ctrl+Shift+L hint in the tooltip when enabled', async () => {
+  it('shows the Ctrl+Shift+L hint in the tooltip when enabled, as separate keycaps', async () => {
     setState({ isStructureProtected: true, canAdminToggle: false, isProtectedByAdmin: false });
     const { rerender } = render(
       <StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />,
     );
-    expect(screen.queryByText('Ctrl+Shift+L')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ctrl')).not.toBeInTheDocument();
     setState({ isStructureProtected: false });
     rerender(<StructureProtectionButton projectId="p1" localizedStrings={STRINGS} />);
-    expect((await screen.findAllByText('Ctrl+Shift+L')).length).toBeGreaterThan(0);
+    await screen.findByRole('tooltip');
+    // The chord renders as separate Ctrl/Shift/L keycaps joined by plus-separator spans, rather
+    // than one Kbd holding the whole "Ctrl+Shift+L" string. Radix Tooltip can render the content
+    // text more than once (a visually-hidden copy for screen readers), so assert "at least one".
+    (['Ctrl', 'Shift', 'L'] as const).forEach((keycap) => {
+      const matches = screen.getAllByText(keycap);
+      expect(matches.length).toBeGreaterThan(0);
+      matches.forEach((match) => expect(match.tagName).toBe('KBD'));
+    });
+    const separators = screen.getAllByText('+');
+    expect(separators.length).toBeGreaterThan(0);
+    separators.forEach((separator) => expect(separator.tagName).toBe('SPAN'));
   });
 
   it('auto-opens the "locked by admin" tooltip when an admin locks an already-protected project', async () => {
