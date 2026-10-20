@@ -15,6 +15,21 @@ export function isShowableCopyrightNotice(
   return notice?.kind === 'restrictedLicense' || notice?.kind === 'notification';
 }
 
+/** The paragraphs of a "Notification:" text's copyright after its notice, one per non-blank line */
+export function getCopyrightDetailsParagraphs(details: string): string[] {
+  return details.split('\n').filter((paragraph) => paragraph.trim().length > 0);
+}
+
+/**
+ * Whether the notice has details for "More info" to open: Biblica's terms always do, but a
+ * "Notification:" text whose copyright is only its notice has nothing more to show
+ */
+export function hasCopyrightDetails(notice: ShowableCopyrightNotice): boolean {
+  return (
+    notice.kind === 'restrictedLicense' || getCopyrightDetailsParagraphs(notice.details).length > 0
+  );
+}
+
 /** Gives each piece of a formatted string a key so it can be rendered as a list */
 export function keyed(parts: ReactNode[]): ReactNode {
   return parts.map((part, index) => (

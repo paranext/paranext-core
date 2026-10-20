@@ -109,6 +109,25 @@ public record ProjectSummary(
                 ProjectSettingsNames.PT_VERSIFICATION,
                 "4"
             ),
-            IsRestrictedAsBase: BiblicaLicensing.IsRestricted(scrText)
+            IsRestrictedAsBase: HasRestrictedLicense(scrText)
         );
+
+    /// <summary>
+    /// <see cref="BiblicaLicensing.IsRestricted"/>, or false when the project's settings cannot be
+    /// read, so one damaged resource does not cost every picker its project list.
+    /// </summary>
+    private static bool HasRestrictedLicense(ScrText scrText)
+    {
+        try
+        {
+            return BiblicaLicensing.IsRestricted(scrText);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine(
+                $"Could not check the license of project {scrText.Name} for the project list: {e}"
+            );
+            return false;
+        }
+    }
 }

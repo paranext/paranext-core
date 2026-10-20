@@ -25,14 +25,14 @@ describe('isEscapeForChapterContext', () => {
     expect(isEscapeForChapterContext(keyDownOn(verseItem, 'Enter'))).toBe(false);
   });
 
-  it.each(['dialog', 'alertdialog'])(
-    'leaves Escape pressed inside an open %s to that window, so it closes first',
+  it.each(['dialog', 'alertdialog', 'menu'])(
+    'leaves Escape pressed inside an open %s to it, so it closes first',
     (role) => {
-      const dialogElement = document.body.appendChild(document.createElement('div'));
-      dialogElement.setAttribute('role', role);
-      const closeButton = dialogElement.appendChild(document.createElement('button'));
+      const layerElement = document.body.appendChild(document.createElement('div'));
+      layerElement.setAttribute('role', role);
+      const control = layerElement.appendChild(document.createElement('button'));
 
-      expect(isEscapeForChapterContext(keyDownOn(closeButton, 'Escape'))).toBe(false);
+      expect(isEscapeForChapterContext(keyDownOn(control, 'Escape'))).toBe(false);
     },
   );
 });

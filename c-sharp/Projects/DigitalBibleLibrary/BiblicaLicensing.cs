@@ -123,8 +123,8 @@ public static partial class BiblicaLicensing
     )]
     private static partial Regex BiblicaOpen();
 
-    /// <summary>Four decimal digits in any script</summary>
-    [GeneratedRegex(@"\d{4}")]
+    /// <summary>A run of exactly four decimal digits in any script</summary>
+    [GeneratedRegex(@"(?<!\d)\d{4}(?!\d)")]
     private static partial Regex FourDigits();
 
     /// <summary>
