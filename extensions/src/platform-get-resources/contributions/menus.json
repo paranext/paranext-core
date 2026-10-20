@@ -4,12 +4,22 @@
     "groups": {},
     "items": [
       {
-        "label": "%mainMenu_open%",
+        "label": "%mainMenu_open_2%",
         "hiddenInterfaceModes": ["simple"],
         "localizeNotes": "Application main menu > Project > Open... (opens the Home view, which lists local and shared projects and launches the resource download dialog). Hidden in Simple mode: Simple reaches resources through the model text, Bible text and commentary pickers instead, and opens an installed project from the titlebar project selector",
+        "iconNameBefore": "house",
         "group": "platform.projectResources",
         "order": -100,
         "command": "platformGetResources.openHome"
+      },
+      {
+        "label": "%resources_getResources%",
+        "hiddenInterfaceModes": ["simple"],
+        "localizeNotes": "Application main menu > Project > Get resources (opens the dialog that downloads and installs resources). Hidden in Simple mode, which reaches resources through its own pickers",
+        "iconNameBefore": "download",
+        "group": "platform.projectProjects",
+        "order": -999999,
+        "command": "platformGetResources.openGetResources"
       }
     ]
   },
