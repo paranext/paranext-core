@@ -1633,16 +1633,9 @@ export interface MarkerMenuProps {
 	 * `%markerMenu_searchPlaceholder%` localized string.
 	 */
 	searchPlaceholder?: string;
-	/**
-	 * Optional marker whose row is highlighted when the menu opens, in place of the first row. Pass
-	 * the marker the selection already has, so that Enter on a freshly opened menu re-applies it
-	 * rather than picking whatever sorts first. Ignored when no selectable row has this marker, in
-	 * which case the first row is highlighted as usual. Read only on mount.
-	 */
-	defaultHighlightedMarker?: string;
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
-export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef, searchPlaceholder, defaultHighlightedMarker, }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
+export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef, searchPlaceholder, }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Whether a delta op is an UNCLOSED note: one written with no closing marker (`\f` with no `\f*`),
  * which USJ marks `closed: "false"`. Such a note is edited in place in the text, as PT9 does its
@@ -2754,8 +2747,6 @@ export type UiLanguageSelectorProps = {
 	className?: string;
 	/** Optional id for the root element */
 	id?: string;
-	/** When true, the language cannot be changed. Defaults to `false`. */
-	disabled?: boolean;
 };
 /**
  * A component for selecting the user interface language and managing fallback languages. Allows
@@ -2763,7 +2754,7 @@ export type UiLanguageSelectorProps = {
  *
  * @param {UiLanguageSelectorProps} props - The props for the component.
  */
-export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, disabled, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Immutable array of localization keys this component uses. Pass into `useLocalizedStrings` and
  * feed the result to the `localizedStrings` prop.
@@ -3194,6 +3185,26 @@ interface ResultsCardProps {
  * state, dropdown menus, and expandable content.
  */
 export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, selectedButtons, hoverButtons, dropdownContent, additionalContent, accentColor, showDropdownOnHover, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Names (lucide kebab-case) of the icons {@link LucideIcon} can render
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const LUCIDE_ICON_NAMES: readonly string[];
+export type LucideIconProps = {
+	/** Lucide icon name in kebab-case, e.g. `refresh-cw`. Must be one of {@link LUCIDE_ICON_NAMES}. */
+	name: string;
+	/** Extra classes for the svg, appended to the default 16px size */
+	className?: string;
+};
+/**
+ * Renders a lucide icon by name. The svg strokes with `currentColor`, so it follows the text colour
+ * of its surroundings (theme, hover, selected and disabled states). Renders nothing for a name that
+ * is not in {@link LUCIDE_ICON_NAMES}.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function LucideIcon({ name, className }: LucideIconProps): import("react/jsx-runtime").JSX.Element | undefined;
 /** Props for {@link EmptyState}. */
 export type EmptyStateProps = {
 	/** Localized message explaining why the region is empty and, ideally, what the user can do next. */
