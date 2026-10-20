@@ -1939,7 +1939,7 @@ export type ShortcutKeysProps = {
  */
 export declare function ShortcutKeys({ hint }: ShortcutKeysProps): import("react/jsx-runtime").JSX.Element;
 /**
- * Names (lucide kebab-case) of the icons {@link LucideIcon} can render
+ * Names (lucide kebab-case) of the icons `LucideIcon` can render
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
