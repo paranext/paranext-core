@@ -356,15 +356,24 @@ describe('UserProfilePopover action rows', () => {
     );
   });
 
-  test('Shift+Enter on the focused "Network settings" row sends the command with requestDeveloperSettings=true exactly once', async () => {
+  test('Shift+Enter on the focused "Network settings" row cancels the keydown and sends the command with requestDeveloperSettings=true exactly once', async () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const button = await screen.findByTestId('user-profile-action-network');
-    fireEvent.keyDown(button, { key: 'Enter', shiftKey: true });
+
+    // `fireEvent.keyDown` returns the same boolean a native `dispatchEvent` does: `false` once some
+    // handler calls `preventDefault()`. That return value IS the browser-level mechanism that decides
+    // whether a focused button also receives a synthesized click after Enter, so asserting on it
+    // directly is what pins the handler's `e.preventDefault()` call and fails if it is ever removed.
+    // (Firing a literal follow-up click instead cannot reach the handler here regardless of
+    // `preventDefault`: the first invocation's `setIsOpen(false)` unmounts this button before a second
+    // event could be dispatched on it — so that approach would pass unconditionally and prove
+    // nothing. Verified: commenting out `e.preventDefault()` turns the assertion below red.)
+    const keydownWasCanceled = !fireEvent.keyDown(button, { key: 'Enter', shiftKey: true });
+    expect(keydownWasCanceled).toBe(true);
+
     // Filtered to this one command (not a bare call count) because opening the popover itself fires
-    // a separate `getParatextRegistrationData` command — the "exactly once" guarantee this test is
-    // for is that the keydown handler's `preventDefault` stops jsdom (which, unlike a real browser,
-    // would not otherwise auto-synthesize a click here) from ever double-invoking this command.
+    // a separate `getParatextRegistrationData` command.
     const internetSettingsCalls = vi
       .mocked(sendCommand)
       .mock.calls.filter(([command]) => command === 'paratextRegistration.showInternetSettings');
