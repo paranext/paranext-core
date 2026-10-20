@@ -50,8 +50,9 @@ const ER_FRAME_SELECTOR = 'iframe[title="Enhanced Resource"]';
 const APP_MENU_NAME = /^Platform$/i;
 
 /**
- * Localized label for the launcher menu item. Matches just "Open Enhanced Resource" exactly to
- * avoid picking up "Open..." or "Open Dictionary: SDBH/SDBG" siblings.
+ * Localized label the launcher menu item had. Power's main menu hides that item on purpose, so this
+ * is only used to assert it is absent; the exact match avoids confusion with sibling items such as
+ * "Open" or "Open Dictionary: Hebrew/Greek".
  */
 const ER_MENU_ITEM_NAME = /^Open Enhanced Resource$/i;
 
@@ -78,15 +79,10 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-001 — MarbleForm)',
   // @scenario TS-044
   // Behaviors: BHV-616 (window creation/reuse). Covers the happy path: open ER from menu, dock
   // tab appears, WebView frame is reachable.
-  test('should open Enhanced Resource window via Platform.bible menu', async ({ mainPage }) => {
+  test('should open Enhanced Resource window via its command', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
-    // EVD-001a (intermediate): open the top-level menu so the launcher item is visible.
-    await mainPage.getByRole('menuitem', { name: APP_MENU_NAME }).click();
-    await mainPage.screenshot({ path: `${EVIDENCE_DIR}/EVD-001a-menu-open.png` });
-    await mainPage.keyboard.press('Escape');
-
-    // Open ER via the launcher (helper handles the auto-shown MarbleGuide on first session open).
+    // Open ER via its command (helper handles the auto-shown MarbleGuide on first session open).
     await openEnhancedResource(mainPage);
 
     // Verify the WebView iframe rendered the scripture pane.
@@ -111,17 +107,11 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-001 — MarbleForm)',
       if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
 
-    // Attempt to open ER when no Marble resource is available (test fixture sets up project
-    // with only standard translations). The launcher must surface a graceful error toast or
-    // disabled menu state — not crash the renderer.
+    // Power's main menu intentionally does not offer the launcher (the flag hiding it can be
+    // removed to bring it back), so with the menu open there is nothing to click.
     await mainPage.getByRole('menuitem', { name: APP_MENU_NAME }).click();
-    const launcher = mainPage.getByRole('menuitem', { name: ER_MENU_ITEM_NAME });
-
-    // Either the menu item is disabled, OR clicking it surfaces an alert/toast and no dock tab
-    // opens. Both are acceptable — assertion: no ER dock tab is created.
-    if (await launcher.isEnabled()) {
-      await launcher.click();
-    }
+    await expect(mainPage.getByRole('menuitem', { name: ER_MENU_ITEM_NAME })).toHaveCount(0);
+    await mainPage.keyboard.press('Escape');
 
     // Confirm no ER dock tab opened.
     await expect(mainPage.locator('.dock-tab', { hasText: ER_DOCK_TAB })).toHaveCount(0, {
