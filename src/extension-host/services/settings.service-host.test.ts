@@ -5,6 +5,7 @@ import { getJsonRpcRequestErrorMessagePrefix } from '@shared/data/rpc.model';
 import { LocalizationSelectors } from '@shared/services/localization.service-model';
 import { CATEGORY_EXTENSION_SETTING_VALIDATOR } from '@shared/services/settings.service-model';
 import { SettingNames } from 'papi-shared-types';
+import { getAllObjectFunctionNames } from 'platform-bible-utils';
 
 const mocks = vi.hoisted(() => ({ networkRequest: vi.fn() }));
 
@@ -197,4 +198,15 @@ describe('validateSetting for a setting with no core validator', () => {
 
     await expect(settingsProviderEngine.validateSetting(KEY, 'new', 'old')).rejects.toThrow();
   });
+});
+
+test('the engine does not publish its unsubscriber as a network method', () => {
+  const functionNames = getAllObjectFunctionNames(
+    // A class instance has no index signature, which getAllObjectFunctionNames asks for
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    settingsProviderEngine as unknown as { [property: string]: unknown },
+  );
+
+  expect(functionNames).toContain('get');
+  expect(functionNames).not.toContain('unsubscribeOnDidRebuildSettings');
 });
