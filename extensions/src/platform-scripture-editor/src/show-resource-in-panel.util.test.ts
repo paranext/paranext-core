@@ -787,6 +787,26 @@ describe('showResourceInReferencePanel', () => {
       await expect(third).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
     });
 
+    it('answers, and lets the next show start, without waiting for its warning to be sent', async () => {
+      // The warning invites a retry, which must not be held behind the warning itself.
+      mocks.notify.mockImplementation(() => holdUntilReleased('notification-1'));
+      let firstAnswer: unknown;
+      showResourceInReferencePanel('byz-project').then((answer) => {
+        firstAnswer = answer;
+        return undefined;
+      });
+      const next = showResourceInReferencePanel('byz-project');
+
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
+
+      // The deadline's warning is still held.
+      expect(firstAnswer).toEqual(NOT_SHOWN);
+      expect(mocks.getAllOpenWebViewDefinitions).toHaveBeenCalledTimes(2);
+      await releaseHeld();
+      await expect(next).resolves.toEqual(NOT_SHOWN);
+      expect(mocks.notify).toHaveBeenCalledTimes(2);
+    });
+
     it('opens nothing elsewhere for a show that finishes while its warning is being sent', async () => {
       // Told the tab could not be opened, the caller must not then open the viewer as well — even
       // when the show, stuck until now, finds while that warning is on its way that it should.

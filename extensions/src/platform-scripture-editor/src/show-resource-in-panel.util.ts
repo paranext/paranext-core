@@ -331,10 +331,12 @@ async function showResourceNow(
     getTeamReferences(panel.projectId),
     getPanelProjectKind(panel.projectId),
   ]);
+  // The same resource named by its project rather than its DBL entry: matched both against the
+  // team's list and when replacing the user's earlier copy, so the two agree.
+  const isProjectItemForResource = (item: ResourceReference) =>
+    isProjectReference(item) && item.id === resourceProjectId;
   const teamReference = teamReferences?.find(
-    (item) =>
-      isSameResource(item, reference) ||
-      (isProjectReference(item) && item.id === resourceProjectId),
+    (item) => isSameResource(item, reference) || isProjectItemForResource(item),
   );
   const selectedReference = teamReference ?? reference;
 
@@ -357,8 +359,7 @@ async function showResourceNow(
         reference,
         () => textConnections.getUserReferencedProjectsAndResources(),
         (list) => textConnections.setUserReferencedProjectsAndResources(list),
-        // The same resource named by its project, as the team-list lookup above also matches.
-        (item) => isProjectReference(item) && item.id === resourceProjectId,
+        isProjectItemForResource,
       );
     } catch (e) {
       logger.warn(
@@ -476,14 +477,16 @@ export function showResourceInReferencePanel(
 
   let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<ShowResourceInReferencePanelResult>((resolve) => {
-    deadlineTimer = setTimeout(async () => {
+    deadlineTimer = setTimeout(() => {
       // A committed show is saving or reloading by now, and a settled one has ended; each answers
       // for itself.
       if (state !== 'pending') return;
       state = 'abandoned';
       logger.warn(`Gave up showing resource ${resourceProjectId}: not ready in time`);
-      await warnTabCouldNotOpen();
+      // Answered without waiting for the warning, so the retry it invites is not held behind it.
+      // The warning reports its own failures.
       resolve(NOT_SHOWN);
+      warnTabCouldNotOpen();
     }, SHOW_DEADLINE_MS);
   });
   // The deadline only ever resolves for a show it abandoned, so the caller's answer waits out a
