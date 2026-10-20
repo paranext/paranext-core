@@ -6,6 +6,7 @@ import { describe, expect, test } from 'vitest';
 // Resolvable from this project: neither a `tsc -p ./tsconfig.json` typecheck nor `vitest`'s
 // module resolution treats `extensions` (excluded from the root tsconfig's `include`) any
 // differently for an explicit relative import than for a file this project owns.
+import { getMenuSectionsWithItems } from '../../../lib/platform-bible-react/src/components/advanced/menus/menu.util';
 import { EDIT_MENU_COMMANDS } from '../../../extensions/src/platform-scripture-editor/src/edit-menu-actions.util';
 import {
   EXTENSIONS_DIR,
@@ -255,13 +256,23 @@ describe("The scripture editor's Project menu, per mode", () => {
     expect(headings).toEqual(expectedHeadings);
   });
 
-  test('no served section is empty', async () => {
-    // Positive control: the served menus do have sections, so "none empty" is not vacuous
-    const power = describeSections(await getEditorTopMenuInMode('power'));
-    const simple = describeSections(await getEditorTopMenuInMode('simple'));
-    expect(power.length).toBeGreaterThan(0);
-    expect(simple.length).toBeGreaterThan(0);
-    [...power, ...simple].forEach(([, entries]) => expect(entries.length).toBeGreaterThan(0));
+  /**
+   * The renderer draws only the sections `getMenuSectionsWithItems` returns, so a column that holds
+   * no served item must not be among them: the emptied Edit column, the Info column and the other
+   * mode's Tools column would otherwise render as bare headings.
+   */
+  test.each([
+    ['power', 'platformScriptureEditor.simpleTools'],
+    ['simple', 'platformScriptureEditor.tools'],
+  ] as const)('%s renders no empty section', async (mode, otherModeToolsColumn) => {
+    const menu = await getEditorTopMenuInMode(mode);
+    const rendered = getMenuSectionsWithItems(menu).map(({ columnKey }) => columnKey);
+    expect(rendered).toEqual(describeSections(menu).map(([columnKey]) => columnKey));
+    // Positive control: sections do render, so the exclusions below are not vacuous
+    expect(rendered).toContain('platformScriptureEditor.insert');
+    expect(rendered).not.toContain('platformScriptureEditor.edit');
+    expect(rendered).not.toContain('platformScriptureEditor.info');
+    expect(rendered).not.toContain(otherModeToolsColumn);
   });
 
   /** Spec §3 icon table: each served item's `iconNameBefore`, per mode. */
