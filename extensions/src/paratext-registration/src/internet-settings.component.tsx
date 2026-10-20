@@ -50,7 +50,8 @@ export type InternetSettingsFormProps = {
   onSaveAndRestart: () => void;
   /**
    * Whether the hidden server-selection control should be shown — computed by the caller from
-   * whether Shift was held and whether the server is already non-Production; see PT-4647.
+   * whether Shift was held and whether the server is already non-Production (see
+   * `computeCanEditServer`).
    */
   canEditServer: boolean;
 };

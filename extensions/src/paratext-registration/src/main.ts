@@ -18,10 +18,29 @@ async function showParatextRegistration(): Promise<string | undefined> {
   );
 }
 
+/**
+ * Open (or refocus) the Internet Settings dialog.
+ *
+ * `requestDeveloperSettings` is checked with a strict `=== true` because this command is also the
+ * click-command target of two notifications (`src/shared/utils/paratext-error-notification.util.ts`
+ * and `extensions/src/platform-get-resources/src/internet-block-notification.utils.ts`), and the
+ * notification service invokes a click command with the notification's own id string as its first
+ * argument. A truthiness check would let that id unlock the server-selection control with no Shift
+ * held.
+ *
+ * Known, accepted gap: `existingId: '?'` refocuses an already-open dialog without reloading it, so
+ * a second Shift-click does not deliver `requestDeveloperSettings: true` to an instance that is
+ * already open and locked; closing and reopening it works. The usual probe-then-reload pattern for
+ * one-shot launch parameters is deliberately not used here: once PT-4869 makes the dialog modal, it
+ * cannot stay open while the user goes back and Shift-clicks the row.
+ */
 async function showInternetSettings(
   requestDeveloperSettings?: boolean,
 ): Promise<string | undefined> {
-  const options: InternetSettingsWebViewOptions = { existingId: '?', requestDeveloperSettings };
+  const options: InternetSettingsWebViewOptions = {
+    existingId: '?',
+    requestDeveloperSettings: requestDeveloperSettings === true,
+  };
   return papi.webViews.openWebView(
     internetSettingsWebViewType,
     { type: 'float', position: 'center', floatSize: { width: 450, height: 500 } },

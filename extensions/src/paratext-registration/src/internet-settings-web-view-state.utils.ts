@@ -14,6 +14,9 @@ import type { InternetSettingsWebViewOptions } from './internet-settings.web-vie
  * connectivity" row was clicked, a one-shot gesture rather than durable state; carrying a saved
  * `true` over would re-reveal the server-selection control on a restored layout that nobody asked
  * to unlock this session.
+ *
+ * Only a literal `true` unlocks: a caller can reach this with a non-boolean in that slot (a
+ * notification click passes its notification id string), and that must not read as a request.
  */
 export function buildInternetSettingsWebViewState(
   savedWebView: SavedWebViewDefinition,
@@ -21,7 +24,7 @@ export function buildInternetSettingsWebViewState(
 ): WebViewDefinition['state'] {
   return {
     ...savedWebView.state,
-    requestDeveloperSettings: options.requestDeveloperSettings ?? false,
+    requestDeveloperSettings: options.requestDeveloperSettings === true,
   };
 }
 
@@ -30,17 +33,16 @@ export function buildInternetSettingsWebViewState(
  * control. Combines the one-shot Shift-click request with a live read of whether the persisted
  * server is already something other than Production — the friction only guards leaving Production,
  * so a user already off it (or one who held Shift) can always reach the control. A failed
- * `internetSettings` read — a genuine `PlatformError`, or any other value that doesn't carry a
- * `selectedServer` — fails toward locked rather than guessing the control should show.
+ * `internetSettings` read (a `PlatformError`) fails toward locked rather than guessing the control
+ * should show, and so does any `requestDeveloperSettings` other than a literal `true` — web view
+ * state is not type-checked at runtime.
  */
 export function computeCanEditServer(
   requestDeveloperSettings: boolean,
   internetSettings: InternetSettings | PlatformError,
 ): boolean {
   return (
-    requestDeveloperSettings ||
-    (!isPlatformError(internetSettings) &&
-      'selectedServer' in internetSettings &&
-      internetSettings.selectedServer !== 'Production')
+    requestDeveloperSettings === true ||
+    (!isPlatformError(internetSettings) && internetSettings.selectedServer !== 'Production')
   );
 }

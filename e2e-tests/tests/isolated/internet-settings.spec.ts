@@ -34,6 +34,7 @@ import {
   saveAndRestartButton,
   selectTheOtherConnectivityOption,
   serverBadge,
+  serverBadgeTooltip,
   serverTypeRadio,
   setPersistedServer,
   waitForSettingsLoaded,
@@ -64,7 +65,7 @@ test.describe('Internet & Connectivity settings', () => {
   // that nothing key-shaped reaches the screen.
   //
   // Opened with Shift held so the server section (and its own localization keys) renders — a plain
-  // click on Production leaves it hidden; see PT-4647.
+  // click on Production leaves it hidden; see `computeCanEditServer`.
   test('renders no unresolved localization keys', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
     await openInternetSettings(mainPage, { shiftKey: true });
@@ -197,16 +198,22 @@ test.describe('Internet & Connectivity settings', () => {
 
   // The server-selection control is hidden unless the user held Shift while opening the panel, or
   // the persisted server is already something other than Production — the friction only guards
-  // leaving Production. See `computeCanEditServer` (PT-4647).
+  // leaving Production. See `computeCanEditServer`.
   test('a plain click while on Production opens the dialog with no server section', async ({
     mainPage,
   }) => {
-    // Assumes the persisted server is still Production (DEFAULT_INTERNET_SETTINGS.selectedServer),
-    // which holds for a dev machine nothing has switched off Production yet.
-    const frame = await openInternetSettingsPanel(mainPage);
-    await waitForSettingsLoaded(frame);
+    await waitForAppReady(mainPage);
+    // Seeded rather than assumed: a developer machine can legitimately be persisted on QA.
+    const originalServer = await setPersistedServer(mainPage, 'Production');
 
-    await expect(frame.getByRole('button', { name: /Developer only/ })).not.toBeVisible();
+    try {
+      const frame = await openInternetSettingsPanel(mainPage);
+      await waitForSettingsLoaded(frame);
+
+      await expect(frame.getByRole('button', { name: /Developer only/ })).not.toBeVisible();
+    } finally {
+      await setPersistedServer(mainPage, originalServer);
+    }
   });
 
   test('a Shift+click while on Production opens the dialog with the server section visible', async ({
@@ -225,11 +232,7 @@ test.describe('Internet & Connectivity settings', () => {
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    const action = await openUserProfilePopover(mainPage);
-    await action.focus();
-    await mainPage.keyboard.down('Shift');
-    await mainPage.keyboard.press('Enter');
-    await mainPage.keyboard.up('Shift');
+    await openInternetSettings(mainPage, { shiftKey: true, activation: 'keyboard' });
 
     const frame = internetSettingsFrame(mainPage);
     await waitForSettingsLoaded(frame);
@@ -248,10 +251,19 @@ test.describe('Internet & Connectivity settings', () => {
     try {
       // Reading the popover's own badge (rather than only the dialog) also pins that the badge
       // reflects a live, non-default server — not just a hardcoded "production" default.
-      const action = await openUserProfilePopover(mainPage);
-      await expect(serverBadge(mainPage)).toHaveText('QA');
+      // Retried as a whole for the same reason `openInternetSettings` is: a dock rebuild can take
+      // the open popover, and the badge with it, down between the hover and the assertion.
+      await expect(async () => {
+        await openUserProfilePopover(mainPage);
+        const badge = serverBadge(mainPage);
+        await expect(badge).toHaveText('QA', { timeout: 2_000 });
+        await badge.hover({ timeout: 5_000 });
+        await expect(serverBadgeTooltip(mainPage)).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 30_000 });
+      await expect(serverBadgeTooltip(mainPage)).toContainText('Quality assurance server');
 
-      await action.click();
+      // Reopens the popover if the hover or a dock rebuild closed it, and retries the click.
+      await openInternetSettings(mainPage);
       const frame = internetSettingsFrame(mainPage);
       await waitForSettingsLoaded(frame);
       await expect(frame.getByRole('button', { name: /Developer only/ })).toBeVisible();

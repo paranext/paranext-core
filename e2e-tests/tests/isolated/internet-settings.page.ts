@@ -34,16 +34,24 @@ export async function openUserProfilePopover(mainPage: Page): Promise<Locator> {
  * action button that was there a moment ago can be detached by the time the click lands. Reopening
  * is the recovery — the click cannot be retried against a popover that no longer exists.
  *
- * `shiftKey` reproduces holding Shift while clicking the row, which the web view reads as a
- * one-shot request to unlock the (otherwise hidden) server-selection control; see PT-4647.
+ * `shiftKey` reproduces holding Shift while activating the row, which the web view reads as a
+ * one-shot request to unlock the (otherwise hidden) server-selection control. `activation:
+ * 'keyboard'` activates the focused row with Enter (Shift+Enter when `shiftKey` is set) instead of
+ * clicking it.
  */
 export async function openInternetSettings(
   mainPage: Page,
-  { shiftKey = false }: { shiftKey?: boolean } = {},
+  {
+    shiftKey = false,
+    activation = 'click',
+  }: { shiftKey?: boolean; activation?: 'click' | 'keyboard' } = {},
 ): Promise<void> {
   await expect(async () => {
     const action = await openUserProfilePopover(mainPage);
-    await action.click({ timeout: 5_000, modifiers: shiftKey ? ['Shift'] : [] });
+    if (activation === 'keyboard')
+      // `Locator.press` focuses the row first and holds Shift for the whole chord.
+      await action.press(shiftKey ? 'Shift+Enter' : 'Enter', { timeout: 5_000 });
+    else await action.click({ timeout: 5_000, modifiers: shiftKey ? ['Shift'] : [] });
     await expect(internetSettingsFrame(mainPage).locator('h2')).toBeVisible({ timeout: 15_000 });
   }).toPass({ timeout: 90_000 });
 }
@@ -177,21 +185,48 @@ export function serverBadge(mainPage: Page): Locator {
   return mainPage.getByTestId('user-profile-server-badge');
 }
 
+/**
+ * The tooltip revealed by hovering the server badge. Targets the visible content rather than
+ * `getByRole('tooltip')`, for the reason {@link descriptionTooltip} gives.
+ */
+export function serverBadgeTooltip(mainPage: Page): Locator {
+  return mainPage.locator('[data-slot="tooltip-content"]');
+}
+
+/** The persisted ParatextData internet settings, as far as these helpers need to know them. */
+type PersistedInternetSettings = { selectedServer: string } & Record<string, unknown>;
+
 /** The renderer exposes `papi` on `globalThis`, untyped in the Playwright context. */
 type RendererPapi = {
   papi: {
-    commands: { sendCommand: <T = unknown>(command: string, ...args: unknown[]) => Promise<T> };
+    dataProviders: {
+      get: (providerName: string) => Promise<
+        | {
+            getInternetSettings: (selector: undefined) => Promise<PersistedInternetSettings>;
+            setInternetSettings: (
+              selector: undefined,
+              settings: PersistedInternetSettings,
+            ) => Promise<unknown>;
+          }
+        | undefined
+      >;
+    };
   };
 };
 
 /**
- * Reads the persisted ParatextData internet settings and rewrites only `selectedServer`, via the
- * same PAPI command path "Save and restart" uses to persist (`setParatextDataInternetSettings`) —
- * without the UI button's restart side effect, which this suite's tests deliberately never trigger
- * (see the file header: "'Save and restart' is NOT tested here"). The restart the button queues
- * afterward is for other settings (e.g. proxy) to take effect in the already-running ParatextData
- * connection; `selectedServer` itself is read live by `computeCanEditServer` through the same data
- * provider this command writes, with no restart needed for the gate to see the new value.
+ * Reads the persisted ParatextData internet settings and rewrites only `selectedServer`, through
+ * the `paratextRegistration.internetSettingsDataProvider` data provider's `setInternetSettings` —
+ * the same write the dialog's "Save and restart" makes — but without the restart that button then
+ * queues, which this suite's tests deliberately never trigger (see the spec's file header). That
+ * restart is for other settings (e.g. proxy) to take effect in the already-running ParatextData
+ * connection; the dialog reads `selectedServer` live from this same data provider, and its update
+ * event refreshes the profile popover's server badge, so neither needs a restart to see the
+ * change.
+ *
+ * Writes machine-wide ParatextData state that the fixture's settings backup does not cover: a
+ * caller must restore the returned value in a `finally`. A run killed before that leaves the
+ * machine on whatever server was set here.
  *
  * @returns The server that was persisted beforehand, so a test can restore it once it is done.
  */
@@ -200,13 +235,12 @@ export async function setPersistedServer(mainPage: Page, server: string): Promis
     // The renderer exposes `papi` on `globalThis`, untyped in the Playwright context.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const win = window as unknown as RendererPapi;
-    const current = await win.papi.commands.sendCommand<{ selectedServer: string }>(
-      'paratextRegistration.getParatextDataInternetSettings',
+    const provider = await win.papi.dataProviders.get(
+      'paratextRegistration.internetSettingsDataProvider',
     );
-    await win.papi.commands.sendCommand('paratextRegistration.setParatextDataInternetSettings', {
-      ...current,
-      selectedServer: nextServer,
-    });
+    if (!provider) throw new Error('Internet settings data provider is not registered');
+    const current = await provider.getInternetSettings(undefined);
+    await provider.setInternetSettings(undefined, { ...current, selectedServer: nextServer });
     return current.selectedServer;
   }, server);
 }

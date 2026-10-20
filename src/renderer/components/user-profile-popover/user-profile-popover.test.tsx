@@ -368,7 +368,7 @@ describe('UserProfilePopover action rows', () => {
     // (Firing a literal follow-up click instead cannot reach the handler here regardless of
     // `preventDefault`: the first invocation's `setIsOpen(false)` unmounts this button before a second
     // event could be dispatched on it — so that approach would pass unconditionally and prove
-    // nothing. Verified: commenting out `e.preventDefault()` turns the assertion below red.)
+    // nothing.)
     const keydownWasCanceled = !fireEvent.keyDown(button, { key: 'Enter', shiftKey: true });
     expect(keydownWasCanceled).toBe(true);
 
@@ -382,27 +382,35 @@ describe('UserProfilePopover action rows', () => {
 });
 
 describe('UserProfilePopover server badge', () => {
-  // The tooltip's open-state content (Radix TooltipContent, Presence-unmounted while closed) is not
-  // exercised here — this codebase has no established pattern for triggering a Radix tooltip's open
-  // state under jsdom/fireEvent (the real-browser hover/focus behavior the panel's own tooltips rely
-  // on is covered by the Playwright suite in internet-settings.spec.ts instead). The label and
-  // tooltip keys come from the same `SERVER_BADGE_KEYS[selectedServer]` entry, so asserting the
-  // label picked the right server also pins that the paired tooltip key is correct.
-  test('shows the "production" label for the Production server', async () => {
-    setMockSetting('internetSettings', { selectedServer: 'Production' });
-    render(<UserProfilePopover />);
-    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
-    const badge = await screen.findByTestId('user-profile-server-badge');
-    expect(badge).toHaveTextContent('Production badge text');
-  });
+  test.each<{ server: ServerType; label: string; tooltip: string }>([
+    {
+      server: 'Production',
+      label: 'Production badge text',
+      tooltip: 'Production server tooltip',
+    },
+    { server: 'QualityAssurance', label: 'QA badge text', tooltip: 'QA server tooltip' },
+    {
+      server: 'Development',
+      label: 'Development badge text',
+      tooltip: 'Development server tooltip',
+    },
+    { server: 'Test', label: 'Test badge text', tooltip: 'Test server tooltip' },
+  ])(
+    'names the $server server in its label and its tooltip',
+    async ({ server, label, tooltip }) => {
+      setMockSetting('internetSettings', { selectedServer: server });
+      render(<UserProfilePopover />);
+      fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+      const badge = await screen.findByTestId('user-profile-server-badge');
+      expect(badge).toHaveTextContent(label);
 
-  test('shows the "QA" label for the QualityAssurance server', async () => {
-    setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
-    render(<UserProfilePopover />);
-    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
-    const badge = await screen.findByTestId('user-profile-server-badge');
-    expect(badge).toHaveTextContent('QA badge text');
-  });
+      // Radix opens a tooltip on a non-touch pointer move over its trigger, after the provider's
+      // delay. Its `role="tooltip"` node is the screen-reader copy of the content.
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      fireEvent.pointerMove(badge);
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(tooltip);
+    },
+  );
 
   test('is absent while the internet settings data provider has not registered yet', async () => {
     setMockSetting('internetSettingsProviderAvailable', false);

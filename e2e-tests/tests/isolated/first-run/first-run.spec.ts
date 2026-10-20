@@ -10,7 +10,7 @@
  *
  * - Wizard appears and localisation resolves
  * - Forward navigation: Language → Internet Settings → Identify (Next hidden at Identify)
- * - Internet Settings step never shows a server picker (PT-4647)
+ * - Internet Settings step never shows a server picker
  * - Skip automatic sync on Sync consent closes the wizard (PT-4178)
  * - Sync progress step renders the syncing heading with Finish disabled (PT-4179)
  *
@@ -132,7 +132,7 @@ test.describe('First-run wizard', () => {
   });
 
   test('internet-settings step never shows a server picker', async ({ mainPage }) => {
-    // A first-run install never offers a server choice during setup (PT-4647): a user who needs a
+    // A first-run install never offers a server choice during setup: a user who needs a
     // non-Production server sets it afterward from the profile's Internet Settings dialog, where a
     // Shift-click gate applies.
     await injectDemoMode(mainPage);
