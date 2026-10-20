@@ -5,6 +5,7 @@ import { InternetSettings } from 'paratext-registration';
 import { getErrorMessage, isPlatformError, wait } from 'platform-bible-utils';
 import { useEffect, useRef, useState } from 'react';
 import { INTERNET_SETTINGS_STRING_KEYS, InternetSettingsForm } from './internet-settings.component';
+import { computeCanEditServer } from './internet-settings-web-view-state.utils';
 import { SaveState } from './utils';
 
 /** Time in milliseconds to wait before restarting the application after changing internet settings. */
@@ -70,6 +71,11 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   const [dpValue, setData, isLoadingSettings] = useData(
     INTERNET_SETTINGS_DATA_PROVIDER,
   ).InternetSettings(undefined, DEFAULT_INTERNET_SETTINGS);
+
+  // One-shot: whether the "Internet & connectivity" row was opened with Shift held. See
+  // `computeCanEditServer`.
+  const [requestDeveloperSettings] = useWebViewState<boolean>('requestDeveloperSettings', false);
+  const canEditServer = computeCanEditServer(requestDeveloperSettings, dpValue);
 
   // Once the staged draft + saved baseline have been synced from the first successful read.
   const hasSyncedFetch = useRef(false);
@@ -149,6 +155,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
       saveState={saveState}
       saveError={saveError}
       onSaveAndRestart={handleSaveAndRestart}
+      canEditServer={canEditServer}
     />
   );
 };

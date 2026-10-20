@@ -9,7 +9,8 @@
  * - Descriptions staying shut for a programmatic focus, which the panel takes on load
  * - Reset and Save and restart button state (disabled when no changes, enabled after change)
  * - Reset restores original selection (buttons become disabled again)
- * - Developer section expand/collapse and its Production/Development radio buttons
+ * - The server-selection control is gated: hidden on a plain click while on Production, shown after a
+ *   Shift+click
  *
  * "Save and restart" is NOT tested here — it triggers a real app restart. onSaveAndRestart callback
  * wiring is covered by unit tests.
@@ -55,8 +56,13 @@ test.describe('Internet & Connectivity settings', () => {
   // `%key%` as a debug safety net, which the panel then renders verbatim. Asserting the ABSENCE of
   // a retired English string cannot catch that — the raw key is absent too — so assert positively
   // that nothing key-shaped reaches the screen.
+  //
+  // Opened with Shift held so the server section (and its own localization keys) renders — a plain
+  // click on Production leaves it hidden; see PT-4647.
   test('renders no unresolved localization keys', async ({ mainPage }) => {
-    const frame = await openInternetSettingsPanel(mainPage);
+    await waitForAppReady(mainPage);
+    await openInternetSettings(mainPage, { shiftKey: true });
+    const frame = internetSettingsFrame(mainPage);
     await waitForSettingsLoaded(frame);
     await expandDeveloperSection(frame);
 
@@ -183,24 +189,29 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(discardChangesButton(frame)).toBeDisabled();
   });
 
-  test('developer section is collapsed by default and expands on click', async ({ mainPage }) => {
+  // The server-selection control is hidden unless the user held Shift while opening the panel, or
+  // the persisted server is already something other than Production — the friction only guards
+  // leaving Production. See `computeCanEditServer` (PT-4647).
+  test('a plain click while on Production opens the dialog with no server section', async ({
+    mainPage,
+  }) => {
+    // Assumes the persisted server is still Production (DEFAULT_INTERNET_SETTINGS.selectedServer),
+    // which holds for a dev machine nothing has switched off Production yet.
     const frame = await openInternetSettingsPanel(mainPage);
     await waitForSettingsLoaded(frame);
 
-    // Server radios are not visible initially
-    await expect(serverTypeRadio(frame, 'production')).not.toBeVisible({ timeout: 5_000 });
+    await expect(frame.getByRole('button', { name: /Developer only/ })).not.toBeVisible();
+  });
+
+  test('a Shift+click while on Production opens the dialog with the server section visible', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    await openInternetSettings(mainPage, { shiftKey: true });
+    const frame = internetSettingsFrame(mainPage);
+    await waitForSettingsLoaded(frame);
 
     await expandDeveloperSection(frame);
-
-    // Server radios become visible
-    await expect(serverTypeRadio(frame, 'production')).toBeVisible({ timeout: 5_000 });
-    await expect(serverTypeRadio(frame, 'quality-assurance')).toBeVisible();
-    await expect(serverTypeRadio(frame, 'development')).toBeVisible();
-    await expect(serverTypeRadio(frame, 'test')).toBeVisible();
-    // Every server environment is offered as its own radio, so any persisted value is selectable.
-    await expect(serverTypeRadio(frame, 'production')).toHaveRole('radio');
-    await expect(serverTypeRadio(frame, 'quality-assurance')).toHaveRole('radio');
-    await expect(serverTypeRadio(frame, 'development')).toHaveRole('radio');
-    await expect(serverTypeRadio(frame, 'test')).toHaveRole('radio');
+    await expect(serverTypeRadio(frame, 'production')).toBeVisible();
   });
 });

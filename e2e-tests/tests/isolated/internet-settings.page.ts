@@ -33,11 +33,17 @@ export async function openUserProfilePopover(mainPage: Page): Promise<Locator> {
  * rebuild after startup re-renders the toolbar and takes the open popover down with it, so an
  * action button that was there a moment ago can be detached by the time the click lands. Reopening
  * is the recovery — the click cannot be retried against a popover that no longer exists.
+ *
+ * `shiftKey` reproduces holding Shift while clicking the row, which the web view reads as a
+ * one-shot request to unlock the (otherwise hidden) server-selection control; see PT-4647.
  */
-export async function openInternetSettings(mainPage: Page): Promise<void> {
+export async function openInternetSettings(
+  mainPage: Page,
+  { shiftKey = false }: { shiftKey?: boolean } = {},
+): Promise<void> {
   await expect(async () => {
     const action = await openUserProfilePopover(mainPage);
-    await action.click({ timeout: 5_000 });
+    await action.click({ timeout: 5_000, modifiers: shiftKey ? ['Shift'] : [] });
     await expect(internetSettingsFrame(mainPage).locator('h2')).toBeVisible({ timeout: 15_000 });
   }).toPass({ timeout: 90_000 });
 }

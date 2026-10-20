@@ -38,6 +38,7 @@ type DecoratorConfig = {
   isFormDisabled?: boolean;
   saveState?: SaveState;
   saveError?: string;
+  canEditServer?: boolean;
 };
 
 /** Wraps the form in state so the radio list and developer toggle remain interactive. */
@@ -61,6 +62,7 @@ function createDecorator(config: DecoratorConfig) {
           isFormDisabled: config.isFormDisabled ?? false,
           saveState: config.saveState ?? SaveState.HasNotSaved,
           saveError: config.saveError ?? '',
+          canEditServer: config.canEditServer ?? true,
           onSaveAndRestart: () =>
             alertCommand(
               'paratextRegistration.internetSettingsDataProvider → setInternetSettings',
