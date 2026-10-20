@@ -912,6 +912,15 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'reveal-server-picker',
+    purpose:
+      'Reveal the hidden server-selection control when opening Internet & connectivity settings',
+    category: 'Settings',
+    context: 'User profile popover',
+    keys: { macOS: '⇧↵', windows: 'Shift+Enter', linux: 'Shift+Enter' },
+    locations: ['src/renderer/components/user-profile-popover/user-profile-popover.component.tsx'],
+  },
+  {
     id: 'tour-focus-cycle',
     purpose: 'Cycle keyboard focus through the onboarding tour card buttons',
     category: 'Navigation',

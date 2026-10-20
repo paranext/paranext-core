@@ -1,4 +1,5 @@
 import {
+  Badge,
   Button,
   cn,
   Popover,
@@ -43,7 +44,7 @@ import {
   LocalizeKey,
   type ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
-import type { RegistrationData } from 'paratext-registration';
+import type { InternetSettings, RegistrationData, ServerType } from 'paratext-registration';
 import { useEffect, useState } from 'react';
 import './user-profile-popover.component.css';
 
@@ -59,12 +60,57 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_profileAndRegistration%',
   '%userProfile_registrationNeeded%',
   '%userProfile_networkSettings_2%',
+  '%userProfile_server_badge_development%',
+  '%userProfile_server_badge_production%',
+  '%userProfile_server_badge_qualityAssurance%',
+  '%userProfile_server_badge_test%',
+  '%userProfile_server_tooltip_development%',
+  '%userProfile_server_tooltip_production%',
+  '%userProfile_server_tooltip_qualityAssurance%',
+  '%userProfile_server_tooltip_test%',
   '%userProfile_language%',
   '%userProfile_appearance%',
   '%userProfile_appearance_light%',
   '%userProfile_appearance_dark%',
   '%userProfile_appearance_system%',
 ];
+
+/**
+ * Maps each server environment to its badge label and tooltip localize keys, so the "Internet &
+ * connectivity" row can show which server `ParatextData.dll` currently targets.
+ */
+const SERVER_BADGE_KEYS: Record<ServerType, { label: LocalizeKey; tooltip: LocalizeKey }> = {
+  Production: {
+    label: '%userProfile_server_badge_production%',
+    tooltip: '%userProfile_server_tooltip_production%',
+  },
+  QualityAssurance: {
+    label: '%userProfile_server_badge_qualityAssurance%',
+    tooltip: '%userProfile_server_tooltip_qualityAssurance%',
+  },
+  Development: {
+    label: '%userProfile_server_badge_development%',
+    tooltip: '%userProfile_server_tooltip_development%',
+  },
+  Test: {
+    label: '%userProfile_server_badge_test%',
+    tooltip: '%userProfile_server_tooltip_test%',
+  },
+};
+
+const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDataProvider';
+
+// `useData`'s defaultValue is typed as the data type's getData (InternetSettings), so it cannot be
+// undefined. This value is never shown to the user — the badge only renders once a real value
+// replaces it, via the `isLoadingInternetSettings` check below. Intentionally duplicated (a third
+// copy, alongside the standalone dialog and the first-run wizard step): `paratext-registration` is
+// a types-only module, so there is no shared runtime module across the core/extension boundary to
+// hoist this into.
+const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
+  permittedInternetUse: 'VpnRequired',
+  selectedServer: 'Production',
+  proxyPort: 0,
+};
 
 /** Shown while the offered languages load, or if they cannot be read: exactly the offered languages. */
 const OFFERED_LANGUAGE_DEFAULTS = getOfferedLanguageDefaults();
@@ -180,14 +226,27 @@ export function UserProfilePopover() {
     }
   };
 
-  const handleNetworkSettings = async () => {
+  // The popover does not need to know the current server to decide whether the dialog should allow
+  // changing it — that is computed live, inside the dialog, from the server the data provider
+  // reports when it opens. This only forwards whether Shift was held, a one-shot request to reveal
+  // the (otherwise hidden) server-selection control.
+  const handleNetworkSettings = async (requestDeveloperSettings: boolean) => {
     setIsOpen(false);
     try {
-      await sendCommand('paratextRegistration.showInternetSettings');
+      await sendCommand('paratextRegistration.showInternetSettings', requestDeveloperSettings);
     } catch (e: unknown) {
       logger.warn(`UserProfilePopover: failed to open internet settings: ${getErrorMessage(e)}`);
     }
   };
+
+  const internetSettingsProvider = useDataProvider(INTERNET_SETTINGS_DATA_PROVIDER);
+  const [internetSettings, , isLoadingInternetSettings] = useData(
+    internetSettingsProvider,
+  ).InternetSettings(undefined, DEFAULT_INTERNET_SETTINGS);
+  const selectedServer: ServerType | undefined =
+    isLoadingInternetSettings || isPlatformError(internetSettings)
+      ? undefined
+      : internetSettings.selectedServer;
 
   const [interfaceLanguage, setInterfaceLanguage] = useSetting('platform.interfaceLanguage', [
     'en',
@@ -476,11 +535,43 @@ export function UserProfilePopover() {
             variant="ghost"
             size="sm"
             className="tw:w-full tw:justify-start tw:gap-2 tw:px-2 tw:font-normal"
-            onClick={handleNetworkSettings}
+            onClick={(e) => handleNetworkSettings(e.shiftKey)}
+            // A keyboard-activated click on a focused button carries the live modifier state in
+            // Chromium, so this duplicates that path defensively rather than depending on it:
+            // `preventDefault` stops the native click the Enter keypress would otherwise also
+            // trigger, so Shift+Enter calls the handler exactly once.
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && e.shiftKey) {
+                e.preventDefault();
+                handleNetworkSettings(true);
+              }
+            }}
             data-testid="user-profile-action-network"
           >
             <Wifi className="tw:size-3.5" />
             {localizedStrings['%userProfile_networkSettings_2%']}
+            {selectedServer !== undefined && (
+              // Narrowly scoped to just this badge — the file's other TooltipProvider only wraps the
+              // toolbar-trigger tooltip, not PopoverContent.
+              <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge
+                      variant="muted"
+                      data-testid="user-profile-server-badge"
+                      className="tw:ms-auto"
+                    >
+                      {localizedStrings[SERVER_BADGE_KEYS[selectedServer].label]}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="tw:font-light">
+                      {localizedStrings[SERVER_BADGE_KEYS[selectedServer].tooltip]}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </Button>
         </div>
         <div className="tw:flex tw:items-start tw:justify-between tw:gap-2 tw:px-2">

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { newPlatformError, type PlatformError } from 'platform-bible-utils';
+import type { ServerType } from 'paratext-registration';
 import { logger } from '@shared/services/logger.service';
 import { sendCommand } from '@shared/services/command.service';
 import {
@@ -47,6 +48,13 @@ type MockState = {
   setTheme: ReturnType<typeof vi.fn> | undefined;
   shouldMatchSystem: boolean;
   setShouldMatchSystem: ReturnType<typeof vi.fn>;
+  /** Undefined means the internet settings data provider has not registered yet (still loading). */
+  internetSettingsProviderAvailable: boolean;
+  /**
+   * Undefined means still loading (the hook reports `isLoading: true` regardless of this value); a
+   * `PlatformError` reproduces a failed read.
+   */
+  internetSettings: { selectedServer: ServerType } | PlatformError | undefined;
 };
 
 /**
@@ -74,6 +82,8 @@ const mockState: MockState = {
   setTheme: mockSetter(),
   shouldMatchSystem: false,
   setShouldMatchSystem: mockSetter(),
+  internetSettingsProviderAvailable: true,
+  internetSettings: { selectedServer: 'Production' },
 };
 
 const setMockSetting = <K extends keyof MockState>(key: K, value: MockState[K]) => {
@@ -98,6 +108,14 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%userProfile_interfaceMode_power_description%': 'All panels',
       '%userProfile_profileAndRegistration%': 'Profile and registration row',
       '%userProfile_networkSettings_2%': 'Internet and connectivity row',
+      '%userProfile_server_badge_development%': 'Development badge text',
+      '%userProfile_server_badge_production%': 'Production badge text',
+      '%userProfile_server_badge_qualityAssurance%': 'QA badge text',
+      '%userProfile_server_badge_test%': 'Test badge text',
+      '%userProfile_server_tooltip_development%': 'Development server tooltip',
+      '%userProfile_server_tooltip_production%': 'Production server tooltip',
+      '%userProfile_server_tooltip_qualityAssurance%': 'QA server tooltip',
+      '%userProfile_server_tooltip_test%': 'Test server tooltip',
       '%userProfile_language%': 'UI language',
       '%userProfile_appearance%': 'Appearance section',
       '%userProfile_appearance_light%': 'Light theme',
@@ -127,8 +145,19 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     AvailableInterfaceLanguages: vi.fn((_selector: undefined, defaultValue: unknown) => [
       mockState.availableLanguages ?? defaultValue,
     ]),
+    InternetSettings: vi.fn((_selector: undefined, defaultValue: unknown) => [
+      mockState.internetSettings ?? defaultValue,
+      mockSetter(),
+      // Mirrors the real hook: with no data provider, the subscription never resolves and
+      // `isLoading` stays `true` forever — not just until the mock state supplies a value.
+      !mockState.internetSettingsProviderAvailable || mockState.internetSettings === undefined,
+    ]),
   })),
-  useDataProvider: vi.fn(() => undefined),
+  useDataProvider: vi.fn((providerName: string) => {
+    if (providerName === 'paratextRegistration.internetSettingsDataProvider')
+      return mockState.internetSettingsProviderAvailable ? {} : undefined;
+    return undefined;
+  }),
 }));
 
 vi.mock('@shared/services/command.service', () => ({
@@ -179,6 +208,8 @@ beforeEach(() => {
   setMockSetting('setTheme', mockSetter());
   setMockSetting('shouldMatchSystem', false);
   setMockSetting('setShouldMatchSystem', mockSetter());
+  setMockSetting('internetSettingsProviderAvailable', true);
+  setMockSetting('internetSettings', { selectedServer: 'Production' });
   vi.mocked(sendCommand).mockClear();
   vi.mocked(logger.warn).mockClear();
   vi.mocked(offerRestartAfterInterfaceLanguageChange).mockClear();
@@ -302,15 +333,82 @@ describe('UserProfilePopover action rows', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  test('"Network settings" click sends the command and closes the popover', async () => {
+  test('"Network settings" plain click sends the command with requestDeveloperSettings=false and closes the popover', async () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const button = await screen.findByTestId('user-profile-action-network');
     fireEvent.click(button);
     expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
       'paratextRegistration.showInternetSettings',
+      false,
     );
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  test('"Network settings" Shift+click sends the command with requestDeveloperSettings=true', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const button = await screen.findByTestId('user-profile-action-network');
+    fireEvent.click(button, { shiftKey: true });
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showInternetSettings',
+      true,
+    );
+  });
+
+  test('Shift+Enter on the focused "Network settings" row sends the command with requestDeveloperSettings=true exactly once', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const button = await screen.findByTestId('user-profile-action-network');
+    fireEvent.keyDown(button, { key: 'Enter', shiftKey: true });
+    // Filtered to this one command (not a bare call count) because opening the popover itself fires
+    // a separate `getParatextRegistrationData` command — the "exactly once" guarantee this test is
+    // for is that the keydown handler's `preventDefault` stops jsdom (which, unlike a real browser,
+    // would not otherwise auto-synthesize a click here) from ever double-invoking this command.
+    const internetSettingsCalls = vi
+      .mocked(sendCommand)
+      .mock.calls.filter(([command]) => command === 'paratextRegistration.showInternetSettings');
+    expect(internetSettingsCalls).toEqual([['paratextRegistration.showInternetSettings', true]]);
+  });
+});
+
+describe('UserProfilePopover server badge', () => {
+  // The tooltip's open-state content (Radix TooltipContent, Presence-unmounted while closed) is not
+  // exercised here — this codebase has no established pattern for triggering a Radix tooltip's open
+  // state under jsdom/fireEvent (the real-browser hover/focus behavior the panel's own tooltips rely
+  // on is covered by the Playwright suite in internet-settings.spec.ts instead). The label and
+  // tooltip keys come from the same `SERVER_BADGE_KEYS[selectedServer]` entry, so asserting the
+  // label picked the right server also pins that the paired tooltip key is correct.
+  test('shows the "production" label for the Production server', async () => {
+    setMockSetting('internetSettings', { selectedServer: 'Production' });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const badge = await screen.findByTestId('user-profile-server-badge');
+    expect(badge).toHaveTextContent('Production badge text');
+  });
+
+  test('shows the "QA" label for the QualityAssurance server', async () => {
+    setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const badge = await screen.findByTestId('user-profile-server-badge');
+    expect(badge).toHaveTextContent('QA badge text');
+  });
+
+  test('is absent while the internet settings data provider has not registered yet', async () => {
+    setMockSetting('internetSettingsProviderAvailable', false);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-action-network');
+    expect(screen.queryByTestId('user-profile-server-badge')).not.toBeInTheDocument();
+  });
+
+  test('is absent when the internet settings read fails', async () => {
+    setMockSetting('internetSettings', newPlatformError('Internet settings unavailable'));
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-action-network');
+    expect(screen.queryByTestId('user-profile-server-badge')).not.toBeInTheDocument();
   });
 });
 

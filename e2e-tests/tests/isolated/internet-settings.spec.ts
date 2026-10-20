@@ -10,10 +10,14 @@
  * - Reset and Save and restart button state (disabled when no changes, enabled after change)
  * - Reset restores original selection (buttons become disabled again)
  * - The server-selection control is gated: hidden on a plain click while on Production, shown after a
- *   Shift+click
+ *   Shift+click, shown via Shift+Enter (keyboard equivalent), and shown on a plain click once the
+ *   persisted server is already something other than Production
+ * - The profile popover's server badge names the current server
  *
  * "Save and restart" is NOT tested here — it triggers a real app restart. onSaveAndRestart callback
- * wiring is covered by unit tests.
+ * wiring is covered by unit tests. The "already off Production" case below needs the persisted
+ * server changed without going through that button; see `setPersistedServer`'s doc comment for why
+ * that does not cross the same line.
  */
 import { test, expect } from '../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
@@ -29,7 +33,9 @@ import {
   optionInfoButton,
   saveAndRestartButton,
   selectTheOtherConnectivityOption,
+  serverBadge,
   serverTypeRadio,
+  setPersistedServer,
   waitForSettingsLoaded,
 } from './internet-settings.page';
 
@@ -213,5 +219,44 @@ test.describe('Internet & Connectivity settings', () => {
 
     await expandDeveloperSection(frame);
     await expect(serverTypeRadio(frame, 'production')).toBeVisible();
+  });
+
+  test('Shift+Enter on the focused row reveals the server section, matching Shift+click', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    const action = await openUserProfilePopover(mainPage);
+    await action.focus();
+    await mainPage.keyboard.down('Shift');
+    await mainPage.keyboard.press('Enter');
+    await mainPage.keyboard.up('Shift');
+
+    const frame = internetSettingsFrame(mainPage);
+    await waitForSettingsLoaded(frame);
+    await expandDeveloperSection(frame);
+    await expect(serverTypeRadio(frame, 'production')).toBeVisible();
+  });
+
+  // Complements the "while on Production" case above: once the persisted server is already
+  // something else, no modifier is needed — the friction only guards leaving Production.
+  test('a plain click while already off Production opens the dialog already unlocked, and the badge names the new server', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    const originalServer = await setPersistedServer(mainPage, 'QualityAssurance');
+
+    try {
+      // Reading the popover's own badge (rather than only the dialog) also pins that the badge
+      // reflects a live, non-default server — not just a hardcoded "production" default.
+      const action = await openUserProfilePopover(mainPage);
+      await expect(serverBadge(mainPage)).toHaveText('QA');
+
+      await action.click();
+      const frame = internetSettingsFrame(mainPage);
+      await waitForSettingsLoaded(frame);
+      await expect(frame.getByRole('button', { name: /Developer only/ })).toBeVisible();
+    } finally {
+      await setPersistedServer(mainPage, originalServer);
+    }
   });
 });

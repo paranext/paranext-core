@@ -171,3 +171,42 @@ export function serverTypeRadio(
 ): Locator {
   return frame.getByTestId(`server-type-${server}`);
 }
+
+/** The server badge shown next to "Internet & connectivity" in the profile popover row. */
+export function serverBadge(mainPage: Page): Locator {
+  return mainPage.getByTestId('user-profile-server-badge');
+}
+
+/** The renderer exposes `papi` on `globalThis`, untyped in the Playwright context. */
+type RendererPapi = {
+  papi: {
+    commands: { sendCommand: <T = unknown>(command: string, ...args: unknown[]) => Promise<T> };
+  };
+};
+
+/**
+ * Reads the persisted ParatextData internet settings and rewrites only `selectedServer`, via the
+ * same PAPI command path "Save and restart" uses to persist (`setParatextDataInternetSettings`) —
+ * without the UI button's restart side effect, which this suite's tests deliberately never trigger
+ * (see the file header: "'Save and restart' is NOT tested here"). The restart the button queues
+ * afterward is for other settings (e.g. proxy) to take effect in the already-running ParatextData
+ * connection; `selectedServer` itself is read live by `computeCanEditServer` through the same data
+ * provider this command writes, with no restart needed for the gate to see the new value.
+ *
+ * @returns The server that was persisted beforehand, so a test can restore it once it is done.
+ */
+export async function setPersistedServer(mainPage: Page, server: string): Promise<string> {
+  return mainPage.evaluate(async (nextServer) => {
+    // The renderer exposes `papi` on `globalThis`, untyped in the Playwright context.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as RendererPapi;
+    const current = await win.papi.commands.sendCommand<{ selectedServer: string }>(
+      'paratextRegistration.getParatextDataInternetSettings',
+    );
+    await win.papi.commands.sendCommand('paratextRegistration.setParatextDataInternetSettings', {
+      ...current,
+      selectedServer: nextServer,
+    });
+    return current.selectedServer;
+  }, server);
+}
