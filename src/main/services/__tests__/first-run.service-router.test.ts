@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
     getAbandonedWindowIds: vi.fn(),
     registerRequestHandler: vi.fn(),
     networkObjectGet: vi.fn(),
+    waitForNetworkObject: vi.fn(),
     settingsSet: vi.fn(async (key: string, value: unknown) => {
       steps.push(`setting ${key}=${JSON.stringify(value)}`);
     }),
@@ -63,6 +64,9 @@ vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet },
   onDidCreateNetworkObject: mocks.onDidCreateNetworkObject,
   onDidDisposeNetworkObject: mocks.onDidDisposeNetworkObject,
+}));
+vi.mock('@shared/services/network-object-status.service', () => ({
+  networkObjectStatusService: { waitForNetworkObject: mocks.waitForNetworkObject },
 }));
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { set: mocks.settingsSet },
@@ -108,6 +112,7 @@ describe('First-run service router', () => {
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
     mocks.networkObjectGet.mockResolvedValue(undefined);
+    mocks.waitForNetworkObject.mockResolvedValue({});
     mocks.registerRequestHandler.mockResolvedValue(vi.fn());
     mocks.userDataPath = mkdtempSync(path.join(tmpdir(), 'first-run-router-'));
     await startFirstRunServiceRouter();
@@ -161,19 +166,41 @@ describe('First-run service router', () => {
   test('a startup with no reset pending changes no settings', async () => {
     await applyPendingFirstRunReset();
 
+    // Nor waits on anything: this runs before every launch's first window.
+    expect(mocks.waitForNetworkObject).not.toHaveBeenCalled();
     expect(mocks.settingsSet).not.toHaveBeenCalled();
   });
 
-  test('a reset is finished only once, even when switching to Simple mode fails', async () => {
+  test('waits for the settings service before switching to Simple mode', async () => {
+    // Early in startup the extension host may not have registered it yet.
     withWindows({ 2: firstRunShard() });
     await resetHandler()();
-    mocks.settingsSet.mockRejectedValueOnce(new Error('extension host is gone'));
+    mocks.steps.length = 0;
+    mocks.waitForNetworkObject.mockImplementationOnce(async ({ id }: { id: string }) => {
+      mocks.steps.push(`wait for ${id}`);
+      return {};
+    });
+
+    await applyPendingFirstRunReset();
+
+    expect(mocks.steps).toEqual([
+      'wait for platform.settingsServiceDataProvider-data',
+      'setting platform.interfaceMode="simple"',
+    ]);
+  });
+
+  test('tries again on the next launch when switching to Simple mode fails', async () => {
+    withWindows({ 2: firstRunShard() });
+    await resetHandler()();
+    mocks.waitForNetworkObject.mockRejectedValueOnce('Timeout reached');
 
     await expect(applyPendingFirstRunReset()).resolves.toBeUndefined();
+    expect(isSimpleModePending()).toBe(true);
     mocks.settingsSet.mockClear();
     await applyPendingFirstRunReset();
 
-    expect(mocks.settingsSet).not.toHaveBeenCalled();
+    expect(mocks.settingsSet).toHaveBeenCalledWith('platform.interfaceMode', 'simple');
+    expect(isSimpleModePending()).toBe(false);
   });
 
   test.each(['copyFromParatext9', 'clear'])(
