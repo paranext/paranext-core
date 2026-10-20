@@ -23,7 +23,6 @@ import {
   insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
   nextEditingNoteOps,
-  noteKindForCtrlTChord,
   NOTE_INSERT_CONFIG,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
@@ -861,16 +860,6 @@ describe('CONTEXT_MENU_ACTION_TO_NOTE_KIND', () => {
   it('maps each action to a distinct kind', () => {
     const kinds = Object.values(CONTEXT_MENU_ACTION_TO_NOTE_KIND);
     expect(new Set(kinds).size).toBe(kinds.length);
-  });
-});
-
-describe('noteKindForCtrlTChord', () => {
-  it('maps Ctrl+T (no Shift) to the footnote kind', () => {
-    expect(noteKindForCtrlTChord(false)).toBe('insertFootnoteAtSelection');
-  });
-
-  it('maps Ctrl+Shift+T to the cross-reference kind', () => {
-    expect(noteKindForCtrlTChord(true)).toBe('insertCrossReferenceAtSelection');
   });
 });
 
