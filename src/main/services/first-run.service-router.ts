@@ -15,7 +15,7 @@
  */
 
 import { app } from 'electron';
-import { unlink, writeFile } from 'fs/promises';
+import { access, unlink, writeFile } from 'fs/promises';
 import path from 'path';
 import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
@@ -28,10 +28,13 @@ import {
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 import { FIRST_RUN_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import * as commandService from '@shared/services/command.service';
+import { getDataProviderObjectId } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
+import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import * as networkService from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
+import { settingsServiceDataProviderName } from '@shared/services/settings.service-model';
 import { serializeRequestType } from '@shared/utils/util';
 import type { ResetFirstRunOptions, ResetFirstRunRegistration } from 'papi-shared-types';
 import { getErrorMessage } from 'platform-bible-utils';
@@ -43,6 +46,12 @@ const REGISTRATION_MODES: ResetFirstRunRegistration[] = ['keep', 'copyFromParate
  * {@link applyPendingFirstRunReset}.
  */
 const SIMPLE_MODE_PENDING_FILE_NAME = 'first-run-reset-simple-mode-pending';
+
+/**
+ * How long the startup after a reset waits for the settings service before giving up on switching
+ * to Simple mode until the next launch. The first window waits too, so keep it bounded.
+ */
+const SETTINGS_SERVICE_WAIT_MS = 30000;
 
 function getSimpleModePendingFilePath(): string {
   return path.join(app.getPath('userData'), SIMPLE_MODE_PENDING_FILE_NAME);
@@ -119,25 +128,33 @@ async function resetFirstRun(options?: ResetFirstRunOptions): Promise<void> {
 /**
  * Finish a `platform.resetFirstRun` from the previous session by switching to Simple mode. Must run
  * at startup before any window is created, so the window restore and the renderer's first-run gate
- * both read the Simple mode. Never throws: a failure is logged and startup continues in the saved
- * mode.
+ * both read the Simple mode. Never throws: a failure is logged, startup continues in the saved
+ * mode, and the switch is tried again on the next launch.
  */
 export async function applyPendingFirstRunReset(): Promise<void> {
   const pendingFilePath = getSimpleModePendingFilePath();
   try {
-    // Removed before the switch, so a failed switch can't make every later launch switch again.
-    await unlink(pendingFilePath);
-  } catch (e) {
-    const isNoResetPending = !!e && typeof e === 'object' && 'code' in e && e.code === 'ENOENT';
-    if (!isNoResetPending)
-      logger.warn(`Could not remove ${pendingFilePath}: ${getErrorMessage(e)}`);
+    await access(pendingFilePath);
+  } catch {
     return;
   }
   try {
     logger.info('Switching to Simple mode to finish the first-run reset');
+    // This early in startup the extension host may not have registered the settings service yet,
+    // and the settings service's own lookup gives up long before it usually does.
+    await networkObjectStatusService.waitForNetworkObject(
+      { id: getDataProviderObjectId(settingsServiceDataProviderName) },
+      SETTINGS_SERVICE_WAIT_MS,
+    );
     await settingsService.set('platform.interfaceMode', 'simple');
   } catch (e) {
     logger.warn(`Could not switch to Simple mode for the first-run reset: ${getErrorMessage(e)}`);
+    return;
+  }
+  try {
+    await unlink(pendingFilePath);
+  } catch (e) {
+    logger.warn(`Could not remove ${pendingFilePath}: ${getErrorMessage(e)}`);
   }
 }
 
