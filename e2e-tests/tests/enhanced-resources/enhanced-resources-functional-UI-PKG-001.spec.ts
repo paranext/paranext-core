@@ -107,11 +107,34 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-001 — MarbleForm)',
       if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
 
-    // Power's main menu intentionally does not offer the launcher (the flag hiding it can be
-    // removed to bring it back), so with the menu open there is nothing to click.
-    await mainPage.getByRole('menuitem', { name: APP_MENU_NAME }).click();
-    await expect(mainPage.getByRole('menuitem', { name: ER_MENU_ITEM_NAME })).toHaveCount(0);
-    await mainPage.keyboard.press('Escape');
+    // Ask for the ER web view on a resource id that is not a Marble resource. The web view
+    // provider must decline; whether that surfaces as a rejection or as no web view id, the page
+    // must absorb it, so the evaluate itself never throws.
+    const openedId = await mainPage.evaluate(async () => {
+      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const win = window as unknown as {
+        papi: {
+          webViews: {
+            openWebView: (
+              webViewType: string,
+              layout: unknown,
+              options: unknown,
+            ) => Promise<string | undefined>;
+          };
+        };
+      };
+      try {
+        return await win.papi.webViews.openWebView(
+          'platformEnhancedResources.enhancedResource',
+          { type: 'tab' },
+          { resourceId: 'NOT-A-MARBLE-RESOURCE' },
+        );
+      } catch {
+        return undefined;
+      }
+    });
+    expect(openedId).toBeUndefined();
 
     // Confirm no ER dock tab opened.
     await expect(mainPage.locator('.dock-tab', { hasText: ER_DOCK_TAB })).toHaveCount(0, {
@@ -127,6 +150,18 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-001 — MarbleForm)',
         !e.includes('NOT_FOUND'),
     );
     expect(fatalErrors).toHaveLength(0);
+  });
+
+  // Power's main menu deliberately omits the launcher (removing the `hiddenInterfaceModes` flag
+  // brings it back), so the command is the only way in. The positive control proves the menu was
+  // open and populated before the absence is asserted.
+  test("Power's main menu does not offer Open Enhanced Resource", async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
+
+    await mainPage.getByRole('menuitem', { name: APP_MENU_NAME }).click();
+    await expect(mainPage.getByRole('menuitem', { name: /^Settings$/i })).toBeVisible();
+    await expect(mainPage.getByRole('menuitem', { name: ER_MENU_ITEM_NAME })).toHaveCount(0);
+    await mainPage.keyboard.press('Escape');
   });
 
   // @scenario TS-045
