@@ -39,7 +39,7 @@ describe('onboarding tour profile stop', () => {
 
   it('has the agreed English text', () => {
     expect(english['%onboardingTour_step_profile_description_2%']).toBe(
-      "Need to switch between Simple and Power mode, control your internet connection or change your registration? It's here, in the User menu.",
+      "Need to switch between Simple and Power mode, control your internet connection or change your registration? It's here, in the Profile menu.",
     );
   });
 

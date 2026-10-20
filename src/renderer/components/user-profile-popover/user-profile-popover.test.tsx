@@ -93,6 +93,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%userProfile_header_defaultName%': 'Default display name',
       '%userProfile_header_notRegistered%': 'Registration needed',
       '%userProfile_interfaceMode_simple_label%': 'Simplified UI',
+      // The deprecated description keys stay mocked so a test can assert they no longer render.
       '%userProfile_interfaceMode_simple_description%': 'Fewer panels',
       '%userProfile_interfaceMode_power_label%': 'Advanced UI',
       '%userProfile_interfaceMode_power_description%': 'All panels',
