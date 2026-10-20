@@ -363,6 +363,104 @@ describe('TabDropdownMenu', () => {
   });
 });
 
+describe('TabDropdownMenu icons', () => {
+  const ICON_MENU: Localized<MultiColumnMenu> = {
+    columns: { 'test.project': { label: 'Project', order: 1 } },
+    groups: {
+      'test.top': { column: 'test.project', order: 1 },
+      'test.editActions': { menuItem: 'test.editSubmenu', order: 1 },
+    },
+    items: [
+      {
+        label: 'Before',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 1,
+        command: 'test.before',
+        iconNameBefore: 'search',
+      },
+      {
+        label: 'After',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 2,
+        command: 'test.after',
+        iconNameAfter: 'external-link',
+      },
+      {
+        label: 'PathOnly',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 3,
+        command: 'test.pathOnly',
+        iconPathBefore: 'https://example.test/icon.svg',
+      },
+      {
+        label: 'Both',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 4,
+        command: 'test.both',
+        iconNameBefore: 'search',
+        iconPathBefore: 'https://example.test/icon.svg',
+      },
+      {
+        id: 'test.editSubmenu',
+        label: 'Edit',
+        localizeNotes: '',
+        group: 'test.top',
+        order: 5,
+        iconNameBefore: 'pencil',
+      },
+      {
+        label: 'Undo',
+        localizeNotes: '',
+        group: 'test.editActions',
+        order: 1,
+        command: 'test.undo',
+      },
+    ],
+  };
+
+  it('shows a lucide icon before the label for iconNameBefore', async () => {
+    await openMenu(ICON_MENU);
+    const item = screen.getByRole('menuitem', { name: /^Before/ });
+    const svg = item.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(item.firstElementChild).toBe(svg);
+  });
+
+  it('shows a lucide icon after the label for iconNameAfter', async () => {
+    await openMenu(ICON_MENU);
+    const item = screen.getByRole('menuitem', { name: /^After/ });
+    const svg = item.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(item.lastElementChild).toBe(svg);
+    expect(item.querySelector('img')).toBeNull();
+  });
+
+  it('still shows an image for an item that only has iconPathBefore', async () => {
+    await openMenu(ICON_MENU);
+    const item = screen.getByRole('menuitem', { name: /PathOnly/ });
+    expect(item.querySelector('img')).not.toBeNull();
+    expect(item.querySelector('svg')).toBeNull();
+  });
+
+  it('shows only the lucide icon when both a name and a path are set', async () => {
+    await openMenu(ICON_MENU);
+    const item = screen.getByRole('menuitem', { name: /^Both/ });
+    expect(item.querySelector('svg')).not.toBeNull();
+    expect(item.querySelector('img')).toBeNull();
+  });
+
+  it('shows the icon of a submenu root', async () => {
+    await openMenu(ICON_MENU);
+    const root = screen.getByRole('menuitem', { name: /^Edit/ });
+    // The sub-trigger also carries a tabler chevron, so look for the lucide pencil specifically
+    expect(root.querySelector('svg.lucide-pencil')).not.toBeNull();
+  });
+});
+
 const ITEM_LABEL = 'Show footnotes';
 
 const MENU_DATA: Localized<MultiColumnMenu> = {
