@@ -704,6 +704,7 @@
   "%webView_error_dump_header%": "Error Details",
   "%webView_error_dump_info_message%": "Need help? Share this with our tech support team to help resolve your issue.",
   "%webView_openProjectSettings%": "Open Project Settings...",
+  "%webView_openProjectSettings_2%": "Project settings",
   "%webView_project%": "Project",
   "%webView_projectAssignmentsAndProgress%": "Assignments and Progress",
   "%webView_title_type_formatString%": "{type} {defaultTitle}",

@@ -36,10 +36,10 @@
 import path from 'path';
 import type { FrameLocator, Locator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { sendOpenMarkersChecklistCommand, waitForAppReady } from '../../fixtures/helpers';
 
-// Markers Checklist is opened from the scripture editor's hamburger menu, which hides it in Simple
-// mode. Open Checks is reachable from that menu in both modes.
+// The suite's layout is written for Power mode, and the editor menu hides the Markers Checklist item
+// in both modes, so the checklist is opened by command. Basic checks is in Power's editor menu.
 test.use({ requiredInterfaceMode: 'power' });
 
 // ---------------------------------------------------------------------------
@@ -112,12 +112,7 @@ async function openMarkersChecklistViaToolsMenu(page: Page): Promise<void> {
     return;
   }
 
-  const editorFrame = page.frameLocator(`iframe[title*="${PROJECT_NAME}" i][title*="Editable" i]`);
-  await editorFrame.locator("button[aria-label='Project']").first().click();
-  await editorFrame
-    .getByRole('menuitem', { name: /Markers Checklist/i })
-    .first()
-    .click();
+  await sendOpenMarkersChecklistCommand(page);
 
   await expect(page.locator('.dock-tab').filter({ hasText: WEBVIEW_IFRAME_TITLE_RE })).toBeVisible({
     timeout: 15_000,
@@ -578,7 +573,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   // ═══════════════════════════════════════════════════════════════════════
   // The checks-side-panel uses `useOpenProjectTabs` and `handleSelectProject` (Task 14) to focus
   // an existing editor tab instead of opening a duplicate when the user re-selects a project
-  // that already has an editor open. Navigation: scripture editor → hamburger → "Open Checks...".
+  // that already has an editor open. Navigation: scripture editor → hamburger → "Basic checks".
   test('Test 8: re-selecting an open project in checks-side-panel focuses the editor tab without duplicating it', async ({
     mainPage,
   }) => {
@@ -590,7 +585,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
     );
     await editorFrame.locator("button[aria-label='Project']").first().click();
     await editorFrame
-      .getByRole('menuitem', { name: /Open Checks/i })
+      .getByRole('menuitem', { name: /Basic checks/i })
       .first()
       .click();
 

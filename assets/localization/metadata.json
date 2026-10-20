@@ -386,6 +386,15 @@
       "message": "Renamed to \"Internet & connectivity\" to match the internet settings panel. The new key is %userProfile_networkSettings_2%."
     }
   },
+  "%webView_openProjectSettings%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Relabeled to \"Project settings\" for every mode and web view. The new key is %webView_openProjectSettings_2%."
+    }
+  },
+  "%webView_openProjectSettings_2%": {
+    "fallbackKey": "%webView_openProjectSettings%"
+  },
   "%yes%": {
     "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",
     "fallbackKey": "%confirm%"

@@ -23,10 +23,10 @@
  */
 import type { FrameLocator, Locator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { sendOpenMarkersChecklistCommand, waitForAppReady } from '../../fixtures/helpers';
 
-// Markers Checklist is opened from the scripture editor's hamburger menu, which hides that item
-// in Simple mode.
+// The suite's layout is written for Power mode, and the editor menu hides the Markers Checklist item
+// in both modes, so the checklist is opened by command.
 test.use({ requiredInterfaceMode: 'power' });
 
 // ---------------------------------------------------------------------------
@@ -110,16 +110,7 @@ async function openDefaultProject(page: Page): Promise<void> {
  *    Checklist - {PROJECT_NAME}".
  */
 async function openMarkersChecklistViaToolsMenu(page: Page): Promise<void> {
-  const editorFrame = page.frameLocator(`iframe[title*="${PROJECT_NAME}" i][title*="Editable" i]`);
-
-  // Hamburger menu trigger in the top-left of the scripture editor web view.
-  await editorFrame.locator("button[aria-label='Project']").first().click();
-
-  // "Markers Checklist..." menuitem — rendered inside the iframe via Radix portal to its body.
-  await editorFrame
-    .getByRole('menuitem', { name: /Markers Checklist/i })
-    .first()
-    .click();
+  await sendOpenMarkersChecklistCommand(page);
 
   // The new web view's dock-tab is at the main-page level (not inside any iframe).
   await expect(page.locator('.dock-tab').filter({ hasText: WEBVIEW_IFRAME_TITLE_RE })).toBeVisible({
@@ -165,25 +156,22 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
 
   // @scenario TS-036
   // @behavior BHV-308 @wp UI-PKG-001
-  // EVD-001 — scripture editor's hamburger menu with "Markers Checklist..." visible
+  // EVD-001 — the editor's hamburger menu does not offer the Markers Checklist item
   // EVD-002 — Checklists Tool window loaded
-  test("opens Markers Checklist from the scripture editor's hamburger menu and shows the project in the tab title", async ({
+  test("opens Markers Checklist for the scripture editor's project and shows the project in the tab title", async ({
     mainPage,
   }) => {
     const editorFrame = mainPage.frameLocator(
       `iframe[title*="${PROJECT_NAME}" i][title*="Editable" i]`,
     );
 
-    // Open the editor's hamburger menu (top-left, aria-label="Project" inside the iframe).
+    // The editor's hamburger menu hides the item in both modes (hidden, not removed).
     await editorFrame.locator("button[aria-label='Project']").first().click();
-    // Capture EVD-001 — hamburger menu expanded with "Markers Checklist..." item visible.
+    await expect(editorFrame.getByRole('menuitem', { name: /Markers Checklist/i })).toHaveCount(0);
     await mainPage.screenshot({ path: `${EVD_DIR}/UI-PKG-002-EVD-001-menu-open.png` });
+    await mainPage.keyboard.press('Escape');
 
-    // Click the "Markers Checklist..." item — Radix portals the menu into the iframe body.
-    await editorFrame
-      .getByRole('menuitem', { name: /Markers Checklist/i })
-      .first()
-      .click();
+    await sendOpenMarkersChecklistCommand(mainPage);
 
     // Tab must appear with the "Markers Checklist" title prefix set by the provider.
     const tab = mainPage.locator('.dock-tab').filter({ hasText: WEBVIEW_IFRAME_TITLE_RE });

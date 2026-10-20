@@ -98,6 +98,9 @@ async function openFindPanel(mainPage: Page): Promise<FrameLocator> {
   await expect(hamburger).toBeVisible({ timeout: 15_000 });
   await hamburger.click();
 
+  // Power's Find item sits inside the Edit ▸ submenu, so open the submenu first.
+  await editorFrame.getByRole('menuitem', { name: /^edit/i }).click();
+
   // The item's accessible name is its label "Find" (%webView_platformScriptureEditor_openFind%)
   // followed by a keyboard shortcut hint, so the match cannot be anchored to the end of the name.
   // The trailing `(\s|$)` rules out only a longer single word, e.g. "Finder"; a sibling item whose

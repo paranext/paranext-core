@@ -2764,6 +2764,24 @@ export async function waitForOpenWebViewIdByType(
   );
 }
 
+/**
+ * Open the Markers Checklist for the open scripture editor by sending
+ * `platformScripture.openMarkersChecklist` with the editor's web view id, exactly as the editor
+ * menu item did. The editor menu hides that item in both interface modes, so the command is the
+ * only way in; the handler resolves the project from the web view definition.
+ */
+export async function sendOpenMarkersChecklistCommand(page: Page): Promise<void> {
+  const editorWebViewId = await waitForOpenWebViewIdByType(page, 'platformScriptureEditor.react');
+  await page.evaluate(async (webViewId) => {
+    // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const win = window as unknown as {
+      papi: { commands: { sendCommand: (command: string, id: string) => Promise<unknown> } };
+    };
+    await win.papi.commands.sendCommand('platformScripture.openMarkersChecklist', webViewId);
+  }, editorWebViewId);
+}
+
 /** Options accepted by {@link openFromEditorHamburger}. */
 export interface OpenFromEditorHamburgerOptions {
   /**
