@@ -6,7 +6,7 @@
       {
         "label": "%platformEnhancedResources_mainMenu_openEnhancedResource%",
         "hiddenInterfaceModes": ["simple", "power"],
-        "localizeNotes": "Application main menu > Platform.bible > Open Enhanced Resource. Hidden in Simple mode: enhanced resources are a Power-mode tool, and this item still opens a hard-coded resource rather than offering a picker",
+        "localizeNotes": "Application main menu > Project > Open enhanced resource. Hidden in both modes: this item still opens a hard-coded resource rather than offering a picker; remove \"power\" from hiddenInterfaceModes to restore it",
         "group": "platform.projectResources",
         "order": 200,
         "command": "platformEnhancedResources.openEnhancedResource"
