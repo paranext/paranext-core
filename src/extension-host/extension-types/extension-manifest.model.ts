@@ -22,7 +22,7 @@ export type ExtensionManifest = {
   /**
    * Services this extension may request Paratext Registry access tokens for, as exact resource
    * identifiers (for example `https://assistant.example.org`). Required, and must be non-empty,
-   * when `elevatedPrivileges` includes `paratextRegistryToken`; otherwise ignored.
+   * when `elevatedPrivileges` includes `requestRegistryTokens`; otherwise ignored.
    */
   paratextRegistryTokenResources?: string[];
   /**

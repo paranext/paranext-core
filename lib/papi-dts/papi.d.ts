@@ -2838,7 +2838,11 @@ declare module 'renderer/services/electron-papi-port-provider' {
   export function createElectronPapiPortProvider(win?: Window): PapiPortProvider;
 }
 declare module 'renderer/services/renderer-web-socket.service' {
-  /** Once our network is running, run this to stop extensions from connecting to it directly */
+  /**
+   * Once our network is running, run this so `PapiRendererWebSocket` (the `WebSocket` web views get)
+   * refuses connections to it. Web views can still reach the native `WebSocket` on `window.top`; see
+   * "The renderer's PAPI port" in `.context/standards/Security-Guide.md`.
+   */
   export const blockWebSocketsToPapiNetwork: () => void;
   /** This wraps the browser's WebSocket implementation to provide
    * better control over internet access. It is isomorphic with the standard WebSocket, so it should
@@ -9771,7 +9775,7 @@ declare module 'shared/models/elevated-privilege-names.model' {
     CreateProcess = 'createProcess',
     ManageExtensions = 'manageExtensions',
     HandleUri = 'handleUri',
-    ParatextRegistryToken = 'paratextRegistryToken',
+    RequestRegistryTokens = 'requestRegistryTokens',
   }
 }
 declare module 'extension-host/extension-types/extension-manifest.model' {
@@ -9798,7 +9802,7 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
     /**
      * Services this extension may request Paratext Registry access tokens for, as exact resource
      * identifiers (for example `https://assistant.example.org`). Required, and must be non-empty,
-     * when `elevatedPrivileges` includes `paratextRegistryToken`; otherwise ignored.
+     * when `elevatedPrivileges` includes `requestRegistryTokens`; otherwise ignored.
      */
     paratextRegistryTokenResources?: string[];
     /**
@@ -10046,7 +10050,7 @@ declare module 'shared/models/handle-uri-privilege.model' {
     redirectUri: string;
   };
 }
-declare module 'shared/models/paratext-registry-token-privilege.model' {
+declare module 'shared/models/request-registry-tokens-privilege.model' {
   /**
    * Every {@link RegistryReadScope}, as a list. Keep in sync with `AllowedScopes` in
    * `c-sharp/Users/RegistryAccessTokenService.cs`; a test on each side pins the same scopes.
@@ -10082,7 +10086,7 @@ declare module 'shared/models/paratext-registry-token-privilege.model' {
     accessToken: string;
     /**
      * When the token expires, in milliseconds since the Unix epoch. A token handed out by
-     * {@link ParatextRegistryToken.getAccessToken} has at least two minutes left unless the Registry
+     * {@link RequestRegistryTokens.getAccessToken} has at least two minutes left unless the Registry
      * issues shorter-lived tokens.
      */
     expiresAt: number;
@@ -10092,21 +10096,26 @@ declare module 'shared/models/paratext-registry-token-privilege.model' {
    * names, using the user's existing Paratext registration. The registration code never leaves
    * Platform.Bible.
    *
-   * To receive this, an extension lists `paratextRegistryToken` in its manifest's
+   * To receive this, an extension lists `requestRegistryTokens` in its manifest's
    * `elevatedPrivileges` and lists the services it may request tokens for in
    * `paratextRegistryTokenResources`:
    *
    * ```json
    * {
-   *   "elevatedPrivileges": ["paratextRegistryToken"],
+   *   "elevatedPrivileges": ["requestRegistryTokens"],
    *   "paratextRegistryTokenResources": ["https://assistant.example.org"]
    * }
    * ```
    */
-  export type ParatextRegistryToken = {
+  export type RequestRegistryTokens = {
     /**
      * Gets an access token for `request.resource`. Tokens are cached, so call this before each
      * request to the service instead of storing the token.
+     *
+     * Call this, and the service, from extension-host code. Never return the token from, or store it
+     * in, a command, network object, data provider, web view state or web view message: commands are
+     * callable by every extension and web views are same-origin, so any other extension could read it
+     * there.
      *
      * Rejects with a `PlatformError`. Its `code` says why; its `message` is an English diagnostic for
      * logs, so show users your own localized text based on the `code`:
@@ -10135,7 +10144,7 @@ declare module 'shared/models/elevated-privileges.model' {
   import type { CreateProcess } from 'shared/models/create-process-privilege.model';
   import type { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
   import type { HandleUri } from 'shared/models/handle-uri-privilege.model';
-  import type { ParatextRegistryToken } from 'shared/models/paratext-registry-token-privilege.model';
+  import type { RequestRegistryTokens } from 'shared/models/request-registry-tokens-privilege.model';
   /** Object that contains properties with special capabilities for extensions that required them */
   export type ElevatedPrivileges = {
     /** Functions that can be run to start new processes */
@@ -10151,7 +10160,7 @@ declare module 'shared/models/elevated-privileges.model' {
      * Functions for getting Paratext Registry access tokens for the services listed in the manifest's
      * `paratextRegistryTokenResources`
      */
-    paratextRegistryToken: ParatextRegistryToken | undefined;
+    requestRegistryTokens: RequestRegistryTokens | undefined;
   };
 }
 declare module 'extension-host/extension-types/extension-activation-context.model' {
@@ -13298,11 +13307,11 @@ declare module '@papi/core' {
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
   export type {
-    ParatextRegistryToken,
+    RequestRegistryTokens,
     RegistryAccessToken,
     RegistryAccessTokenRequest,
     RegistryReadScope,
-  } from 'shared/models/paratext-registry-token-privilege.model';
+  } from 'shared/models/request-registry-tokens-privilege.model';
   export type {
     ExtensionDataEnumerationProjectDataTypes,
     ExtensionDataListScope,

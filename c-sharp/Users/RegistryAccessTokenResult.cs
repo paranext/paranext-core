@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Paranext.DataProvider.Users;
 
 /// <summary>
-/// Result of the <c>paratextRegistryToken:getAccessToken</c> request: a token on success, or a
+/// Result of the <c>requestRegistryTokens:getAccessToken</c> request: a token on success, or a
 /// <see cref="PlatformErrorCodes"/> code and a message on an expected failure. Null members are left
 /// off the wire, so TypeScript sees either <c>{ accessToken, expiresAt }</c> or
 /// <c>{ errorCode, message }</c>.

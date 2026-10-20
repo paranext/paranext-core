@@ -6265,10 +6265,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`src/main/services/rpc-websocket-listener.ts`).
 - **Decision:** C# (`c-sharp/Users/RegistryAccessTokenService.cs`) mints and caches the tokens, so
   the registration code never leaves that process. It handles
-  `paratextRegistryToken:getAccessToken`, a request type outside the `command:` category that
-  extension code can't reach. The extension host
-  (`src/extension-host/services/paratext-registry-token.service.ts`) hands a getter only to
-  extensions that declare the `paratextRegistryToken` elevated privilege and list the services in
+  `requestRegistryTokens:getAccessToken`, a request type outside the `command:` category that
+  extension code can't send through PAPI. The extension host
+  (`src/extension-host/services/request-registry-tokens.service.ts`) hands a getter only to
+  extensions that declare the `requestRegistryTokens` elevated privilege and list the services in
   `paratextRegistryTokenResources` (exact match), following the `handleUri` pattern. C# requests
   only the five `:read` scopes. It follows ParatextData's internet rule for direct Registry calls,
   as registration does: it refuses only when the effective `InternetAccess.Status` is `Disabled`.
@@ -6285,16 +6285,21 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   code to the extension or the service: exposes a long-lived credential.
 - **Consequences:** A new service that wants Platform.Bible users' identity registers a resource
   with the Registry and is listed in the consuming extension's manifest, with no Platform.Bible
-  change. The gate is only as strong as extension review, as with `createProcess` and `handleUri`.
-  Local processes on the loopback WebSocket can also call the request type; they already run as the
-  user and can read the user's Paratext data directly. So can a web page in the user's browser,
-  because WebSocket connections are not authenticated and the server can't tell a page from
-  Platform.Bible's own processes; unlike the other PAPI methods such a page can call, this one
-  returns a credential that works off the machine. Rejecting browser connections is not the answer,
-  since browser clients are legitimate (the OpenRPC playground that
+  change. The gate is only as strong as extension review, as with `createProcess` and `handleUri`:
+  all extensions share one JavaScript realm in the extension host, so a malicious installed
+  extension can wrap shared built-ins and see another extension's tokens. The allowlist stops honest
+  mistakes; the real control is which extensions get installed. Local processes on the loopback
+  WebSocket can also call the request type; they already run as the user and can read the user's
+  Paratext data directly. So can a web page in the user's browser, because WebSocket connections are
+  not authenticated and the server can't tell a page from Platform.Bible's own processes; unlike the
+  other PAPI methods such a page can call, this one returns a credential that works off the machine.
+  So can any installed extension's web view, privilege or not, through the native
+  `window.top.WebSocket`, which bypasses the manifest allowlist. Rejecting browser connections is
+  not the answer, since browser clients are legitimate (the OpenRPC playground that
   `platform.openDeveloperDocumentationUrl` opens, and browser-based PAPI testing). Authenticating
-  the clients the main process launches, so sensitive request types can be limited to them, is open
-  work in PT-2893. Revisit when PT-4750 lands (throw codes instead of returning them), when the
+  the clients the main process launches, so sensitive request types can be limited to the extension
+  host, is open work in PT-2893, deferred as of 2026-10-20 until after the November release; a
+  renderer connection can't be trusted with them because a web view can drive it. Revisit when PT-4750 lands (throw codes instead of returning them), when the
   WebSocket authenticates its clients, or if a consent prompt becomes necessary.
 - **Source:** PT-4865 (design spec attached there).
 

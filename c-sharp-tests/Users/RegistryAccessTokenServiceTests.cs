@@ -69,14 +69,14 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         Assert.That(Client.IsHandlerRegistered(RegistryAccessTokenService.REQUEST_TYPE), Is.True);
         Assert.That(
             RegistryAccessTokenService.REQUEST_TYPE,
-            Is.EqualTo("paratextRegistryToken:getAccessToken")
+            Is.EqualTo("requestRegistryTokens:getAccessToken")
         );
     }
 
     [Test]
     public void AllowedScopes_AreTheFiveReadScopes()
     {
-        // REGISTRY_READ_SCOPES in src/shared/models/paratext-registry-token-privilege.model.ts pins
+        // REGISTRY_READ_SCOPES in src/shared/models/request-registry-tokens-privilege.model.ts pins
         // the same list, so a scope added on only one side breaks one of the two tests.
         Assert.That(
             RegistryAccessTokenService.AllowedScopes,

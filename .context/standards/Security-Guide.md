@@ -115,17 +115,26 @@ bridge on `window.top`. This is defence in depth rather than a boundary: main re
 do not come from the window's page frame, but a web view can drive that frame's bridge, so what
 stops a second channel is that main serves one open port per window and the page keeps the first
 port it is handed; an intercepted port gives an extension no capability it does not already hold
-through `window.papi`. The renderer itself opens no WebSocket to port 8876;
-`blockWebSocketsToPapiNetwork` still stops extension code from doing so.
+through `window.papi`. The renderer itself opens no WebSocket to port 8876.
+`blockWebSocketsToPapiNetwork` stops a web view's own `window.WebSocket` (replaced with
+`papi.WebSocket`) from connecting to it, but not the native constructor on `window.top`, which the
+web view can still reach: the web view preamble's `delete window.top` can't remove a
+non-configurable property.
 
 ### Paratext Registry access tokens
 
-The `paratextRegistryToken` elevated privilege hands extensions Paratext Registry access tokens
+The `requestRegistryTokens` elevated privilege hands extensions Paratext Registry access tokens
 made from the user's registration code. The code stays in the C# data provider. The extension host
 checks the caller's `paratextRegistryTokenResources` before forwarding a request on
-`paratextRegistryToken:getAccessToken`, a request type extension code can't reach directly. Tokens
-carry read scopes only, expire after the Registry-set lifetime (currently 20 minutes), and are valid
-only at the named service.
+`requestRegistryTokens:getAccessToken`, a request type extension code can't send through PAPI.
+Tokens carry read scopes only, expire after the Registry-set lifetime (currently 20 minutes), and
+are valid only at the named service.
+
+The allowlist stops honest mistakes, not a malicious installed extension. All extensions share one
+JavaScript realm in the extension host, so an installed extension can wrap shared built-ins (for
+example `JSON.parse`, `Promise.prototype.then`, the writable `globalThis.fetch`, or `Object.freeze`
+before activation) and see another extension's tokens without holding the privilege. `createProcess`
+has the same limit. The real control is which extensions get installed.
 
 The C# handler does not check the allowlist itself, so anything that can reach the unauthenticated
 PAPI WebSocket can call that request type for any resource registered with the Registry:
@@ -136,11 +145,18 @@ PAPI WebSocket can call that request type for any resource registered with the R
   not authenticated, so the server can't tell such a page from Platform.Bible's own processes. The
   page can already call every other PAPI method, but this is the first one whose result works off
   the machine.
+- Any installed extension's web view can too, whether or not the extension holds the privilege. It
+  can open a native WebSocket to port 8876 through `window.top.WebSocket` (see
+  [The renderer's PAPI port](#the-renderers-papi-port)), and the window's CSP allows `ws:`
+  connections. So the allowlist does not stop an extension with a web view from requesting a token
+  for any registered resource, with any of the five scopes.
 
 Rejecting browser connections is not the fix: browser clients are legitimate too.
 `platform.openDeveloperDocumentationUrl` opens the OpenRPC playground against this WebSocket, and
-developers test PAPI calls from browsers. Authenticating the clients the main process launches, so
-that sensitive request types like this one can be limited to them, is open work in PT-2893.
+developers test PAPI calls from browsers. As of 2026-10, authenticating the clients the main
+process launches, so that sensitive request types like this one can be limited to the extension
+host, is open work in PT-2893. A renderer connection can't be trusted with them even once
+identified, because a web view can drive its window's PAPI connection.
 
 Rationale: `adr-registry-tokens-via-elevated-privilege` in `Architecture-Decisions.md`.
 

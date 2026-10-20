@@ -63,19 +63,19 @@ describe('prepareElevatedPrivileges', () => {
     const manifest = parseManifest(
       manifestJson({
         name: 'assistant',
-        elevatedPrivileges: ['paratextRegistryToken'],
+        elevatedPrivileges: ['requestRegistryTokens'],
         paratextRegistryTokenResources: ['https://assistant.example.org'],
       }),
     );
 
     expect(
-      testingExtensionService.prepareElevatedPrivileges(manifest).paratextRegistryToken,
+      testingExtensionService.prepareElevatedPrivileges(manifest).requestRegistryTokens,
     ).toEqual({ getAccessToken: expect.any(Function) });
   });
 
   test.each([
     ['does not declare the privilege', [], ['https://assistant.example.org']],
-    ['lists no resources', ['paratextRegistryToken'], []],
+    ['lists no resources', ['requestRegistryTokens'], []],
   ])('gives no Registry token getter to a manifest that %s', (_, elevatedPrivileges, resources) => {
     const manifest = parseManifest(
       manifestJson({
@@ -86,7 +86,7 @@ describe('prepareElevatedPrivileges', () => {
     );
 
     expect(
-      testingExtensionService.prepareElevatedPrivileges(manifest).paratextRegistryToken,
+      testingExtensionService.prepareElevatedPrivileges(manifest).requestRegistryTokens,
     ).toBeUndefined();
   });
 });

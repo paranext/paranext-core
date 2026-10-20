@@ -36,7 +36,7 @@ export type RegistryAccessToken = {
   accessToken: string;
   /**
    * When the token expires, in milliseconds since the Unix epoch. A token handed out by
-   * {@link ParatextRegistryToken.getAccessToken} has at least two minutes left unless the Registry
+   * {@link RequestRegistryTokens.getAccessToken} has at least two minutes left unless the Registry
    * issues shorter-lived tokens.
    */
   expiresAt: number;
@@ -47,21 +47,26 @@ export type RegistryAccessToken = {
  * names, using the user's existing Paratext registration. The registration code never leaves
  * Platform.Bible.
  *
- * To receive this, an extension lists `paratextRegistryToken` in its manifest's
+ * To receive this, an extension lists `requestRegistryTokens` in its manifest's
  * `elevatedPrivileges` and lists the services it may request tokens for in
  * `paratextRegistryTokenResources`:
  *
  * ```json
  * {
- *   "elevatedPrivileges": ["paratextRegistryToken"],
+ *   "elevatedPrivileges": ["requestRegistryTokens"],
  *   "paratextRegistryTokenResources": ["https://assistant.example.org"]
  * }
  * ```
  */
-export type ParatextRegistryToken = {
+export type RequestRegistryTokens = {
   /**
    * Gets an access token for `request.resource`. Tokens are cached, so call this before each
    * request to the service instead of storing the token.
+   *
+   * Call this, and the service, from extension-host code. Never return the token from, or store it
+   * in, a command, network object, data provider, web view state or web view message: commands are
+   * callable by every extension and web views are same-origin, so any other extension could read it
+   * there.
    *
    * Rejects with a `PlatformError`. Its `code` says why; its `message` is an English diagnostic for
    * logs, so show users your own localized text based on the `code`:

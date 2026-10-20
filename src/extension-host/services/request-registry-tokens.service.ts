@@ -9,14 +9,14 @@ import * as networkService from '@shared/services/network.service';
 import { ElevatedPrivilegeNames } from '@shared/models/elevated-privilege-names.model';
 import type { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
 import type {
-  ParatextRegistryToken,
+  RequestRegistryTokens,
   RegistryAccessToken,
   RegistryAccessTokenRequest,
-} from '@shared/models/paratext-registry-token-privilege.model';
+} from '@shared/models/request-registry-tokens-privilege.model';
 import {
   REGISTRY_TOKEN_REQUEST_TYPE,
   RegistryAccessTokenWireResult,
-} from '@node/services/paratext-registry-token.service-model';
+} from '@node/services/request-registry-tokens.service-model';
 
 function isNonEmptyStringList(value: unknown): value is string[] {
   return (
@@ -27,32 +27,32 @@ function isNonEmptyStringList(value: unknown): value is string[] {
 }
 
 /**
- * Builds the `paratextRegistryToken` elevated privilege for one extension, or returns `undefined`
+ * Builds the `requestRegistryTokens` elevated privilege for one extension, or returns `undefined`
  * when the manifest doesn't declare the privilege or lists no valid resources.
  *
  * @param manifest The extension's manifest. Its `paratextRegistryTokenResources` is checked at
  *   runtime because manifests are parsed without schema validation.
  * @returns A frozen getter limited to the manifest's resources, or `undefined`
  */
-export function createParatextRegistryToken(
+export function createRequestRegistryTokens(
   manifest: Pick<
     ExtensionManifest,
     'name' | 'elevatedPrivileges' | 'paratextRegistryTokenResources'
   >,
-): ParatextRegistryToken | undefined {
-  if (!manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.ParatextRegistryToken))
+): RequestRegistryTokens | undefined {
+  if (!manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.RequestRegistryTokens))
     return undefined;
 
   const declared: unknown = manifest.paratextRegistryTokenResources;
   if (!isNonEmptyStringList(declared)) {
     logger.warn(
-      `Extension '${manifest.name}' declares the ${ElevatedPrivilegeNames.ParatextRegistryToken} privilege but no valid paratextRegistryTokenResources (a non-empty list of non-empty strings), so it gets no Registry tokens`,
+      `Extension '${manifest.name}' declares the ${ElevatedPrivilegeNames.RequestRegistryTokens} privilege but no valid paratextRegistryTokenResources (a non-empty list of non-empty strings), so it gets no Registry tokens`,
     );
     return undefined;
   }
   const allowedResources: readonly string[] = Object.freeze([...declared]);
 
-  const paratextRegistryToken: ParatextRegistryToken = {
+  const requestRegistryTokens: RequestRegistryTokens = {
     async getAccessToken({
       resource,
       scope,
@@ -79,5 +79,5 @@ export function createParatextRegistryToken(
       return { accessToken: result.accessToken, expiresAt: result.expiresAt };
     },
   };
-  return Object.freeze(paratextRegistryToken);
+  return Object.freeze(requestRegistryTokens);
 }

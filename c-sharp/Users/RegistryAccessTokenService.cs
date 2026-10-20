@@ -8,12 +8,14 @@ namespace Paranext.DataProvider.Users;
 
 /// <summary>
 /// Mints Paratext Registry access tokens for one named service (an RFC 8707 resource) from the
-/// user's registration, for extensions that hold the <c>paratextRegistryToken</c> elevated
+/// user's registration, for extensions that hold the <c>requestRegistryTokens</c> elevated
 /// privilege. The registration code never leaves this process.
 /// </summary>
 /// <remarks>
-/// The request type is outside the <c>command:</c> category, so extension code can't call it
-/// directly; the extension host checks the caller's manifest before forwarding a request here.
+/// The request type is outside the <c>command:</c> category, so extension code can't send it
+/// through PAPI; the extension host checks the caller's manifest before forwarding a request here.
+/// Raw WebSocket clients, extension web views included, can still reach it until PT-2893 lands; see
+/// "Paratext Registry access tokens" in <c>.context/standards/Security-Guide.md</c>.
 /// </remarks>
 internal sealed class RegistryAccessTokenService(
     PapiClient papiClient,
@@ -23,12 +25,12 @@ internal sealed class RegistryAccessTokenService(
     TimeSpan? snapshotTimeout = null
 )
 {
-    public const string REQUEST_TYPE = "paratextRegistryToken:getAccessToken";
+    public const string REQUEST_TYPE = "requestRegistryTokens:getAccessToken";
 
     /// <summary>
     /// The only scopes this service requests. The Registry would also issue write scopes to a
     /// registration-code caller, so read-only is enforced here. Keep in sync with
-    /// <c>RegistryReadScope</c> in <c>src/shared/models/paratext-registry-token-privilege.model.ts</c>.
+    /// <c>RegistryReadScope</c> in <c>src/shared/models/request-registry-tokens-privilege.model.ts</c>.
     /// </summary>
     public static readonly IReadOnlySet<string> AllowedScopes = new HashSet<string>(
         StringComparer.Ordinal
@@ -54,8 +56,8 @@ internal sealed class RegistryAccessTokenService(
 
     private readonly TimeSpan _snapshotTimeout = snapshotTimeout ?? SnapshotTimeout;
     private readonly object _lock = new();
-    private readonly Dictionary<string, CachedToken> _cache = [];
-    private readonly Dictionary<string, Task<RegistryAccessTokenResult>> _inFlight = [];
+    private readonly Dictionary<TokenCacheKey, CachedToken> _cache = [];
+    private readonly Dictionary<TokenCacheKey, Task<RegistryAccessTokenResult>> _inFlight = [];
 
     private PapiClient PapiClient { get; } = papiClient;
 
@@ -171,8 +173,7 @@ internal sealed class RegistryAccessTokenService(
 
         // The code's fingerprint makes a new registration code a new key, so a token minted with
         // the previous code is never handed out, or joined while in flight, after a change.
-        string key = string.Join(
-            '\n',
+        var key = new TokenCacheKey(
             user.RegistryUrl,
             user.UserName,
             Fingerprint(user.RegistrationCode),
@@ -231,11 +232,11 @@ internal sealed class RegistryAccessTokenService(
     private void PruneCache()
     {
         DateTimeOffset now = utcNow();
-        List<string> unusable = _cache
+        List<TokenCacheKey> unusable = _cache
             .Where(entry => entry.Value.ExpiresAt - now < MinimumRemainingLifetime)
             .Select(entry => entry.Key)
             .ToList();
-        foreach (string key in unusable)
+        foreach (TokenCacheKey key in unusable)
             _cache.Remove(key);
     }
 
@@ -254,7 +255,7 @@ internal sealed class RegistryAccessTokenService(
         );
 
     private async Task<RegistryAccessTokenResult> FetchAndCacheAsync(
-        string key,
+        TokenCacheKey key,
         string extensionName,
         RegistryUserSnapshot user,
         string resource,
@@ -293,6 +294,15 @@ internal sealed class RegistryAccessTokenService(
     // Keeps the registration code itself out of the long-lived cache keys.
     private static string Fingerprint(string registrationCode) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(registrationCode)));
+
+    /// <param name="Scopes">The requested scopes, de-duplicated, sorted and joined with spaces.</param>
+    private readonly record struct TokenCacheKey(
+        string RegistryUrl,
+        string UserName,
+        string RegistrationCodeFingerprint,
+        string Resource,
+        string Scopes
+    );
 
     /// <remarks>
     /// A class rather than a record, so no generated <c>ToString</c> can print the token. Only touched
