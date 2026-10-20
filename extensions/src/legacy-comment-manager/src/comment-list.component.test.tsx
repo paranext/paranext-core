@@ -12,7 +12,7 @@ import {
   CommentListPanelProps,
   COMMENT_LIST_STICKY_HEADER_ELEMENT_ID,
 } from './comment-list.component';
-import { DEFAULT_COMMENT_FILTERS, ALL_BOOKS_SCOPE_FILTER } from './comment-list-filters.model';
+import { ALL_BOOKS_SCOPE_FILTER, DEFAULT_COMMENT_FILTERS } from './comment-list-filters.model';
 
 // Radix Select scrolls its highlighted item into view on open and checks pointer capture on
 // pointerdown; jsdom implements neither. cmdk uses ResizeObserver, which jsdom also doesn't

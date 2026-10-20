@@ -5,7 +5,7 @@ import type {
   LegacyCommentFilters,
   ScopeFilter,
 } from './comment-list-filters.model';
-import { DEFAULT_COMMENT_FILTERS, ALL_BOOKS_SCOPE_FILTER } from './comment-list-filters.model';
+import { ALL_BOOKS_SCOPE_FILTER, DEFAULT_COMMENT_FILTERS } from './comment-list-filters.model';
 import { resolveSetFiltersMessage } from './comment-list-web-view-message.util';
 
 // This util is the web-view-side boundary that supplies the `warn` sink comment-list-filters.model.ts
