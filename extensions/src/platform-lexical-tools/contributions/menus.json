@@ -4,9 +4,10 @@
     "groups": {},
     "items": [
       {
-        "label": "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg%",
+        "label": "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%",
         "hiddenInterfaceModes": ["simple"],
         "localizeNotes": "Application main menu > Platform > Dictionary: SDBH/SDBG. Hidden in Simple mode: Simple has a pinned, non-closable Dictionary tab in Column 3 instead, so this Power-only command to open it as an ordinary tab is unneeded there",
+        "iconNameBefore": "book-a",
         "group": "platform.projectResources",
         "order": 100,
         "command": "platformLexicalTools.openDictionary"

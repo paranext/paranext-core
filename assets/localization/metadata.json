@@ -112,6 +112,24 @@
       "message": "Retired with no replacement key; the Feature roadmap item was removed from the Help menu because the roadmap page it opened is no longer published."
     }
   },
+  "%mainMenu_helpInfo_visitGettingStartedPage%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Relabeled to \"Browse help\". The new key is %mainMenu_helpInfo_visitGettingStartedPage_2%."
+    }
+  },
+  "%mainMenu_helpInfo_visitGettingStartedPage_2%": {
+    "fallbackKey": "%mainMenu_helpInfo_visitGettingStartedPage%"
+  },
+  "%mainMenu_openNewWindow%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Relabeled to \"New window\". The new key is %mainMenu_openNewWindow_2%."
+    }
+  },
+  "%mainMenu_openNewWindow_2%": {
+    "fallbackKey": "%mainMenu_openNewWindow%"
+  },
   "%mainMenu_visitSupportBible%": {
     "fallbackKey": "%mainMenu_helpInfo_visitCommunitySupportPage%"
   },
