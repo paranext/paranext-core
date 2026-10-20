@@ -340,6 +340,15 @@ test.describe('scripture editor annotation shapes', () => {
       await expect(paragraph.locator('span.closing[data-marker="wj"]')).not.toHaveClass(
         /(^|\s)display-annotation(\s|$)/,
       );
+      // One box over every element it paints: the start class on the mark before the span, the
+      // end class on the mark inside it, and neither anywhere else it paints.
+      const painted = paragraph.locator('.annotationId-into-char-span');
+      const startClass = `editor-typed-markStart-external-${ANNOTATION_TYPE}`;
+      const endClass = `editor-typed-markEnd-external-${ANNOTATION_TYPE}`;
+      await expect(painted.first()).toHaveClass(new RegExp(`(^|\\s)${startClass}(\\s|$)`));
+      await expect(painted.last()).toHaveClass(new RegExp(`(^|\\s)${endClass}(\\s|$)`));
+      await expect(paragraph.locator(`.annotationId-into-char-span.${startClass}`)).toHaveCount(1);
+      await expect(paragraph.locator(`.annotationId-into-char-span.${endClass}`)).toHaveCount(1);
 
       const saved = await saveAndReadChapter('probecharspan');
       expect(paragraphContent(saved, paragraphIndex)).toEqual(

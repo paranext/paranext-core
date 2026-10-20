@@ -2272,6 +2272,49 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the id scheme that replaced it.
 - **Source:** PT-4464.
 
+## adr-editor-annotation-edge-classes: An annotation's first and last painted element carry edge classes, and registered box styles are split across them
+
+- **Date:** 2026-10-20
+- **Status:** Accepted
+- **Context:** `adr-editor-annotations-paint-by-element` paints an annotation as classes on every
+  element it covers, and an annotation can cover several: a verse number and the text after it, text
+  on both sides of a char span's edge, a run across paragraphs. A box style on the annotation's
+  class — a border, a radius, horizontal padding or margin — is drawn once per element, so an
+  annotation over `15 In the beginning` reads as three boxes with seams between them. Content-only
+  annotations crossing a char span had the same seams before display bytes were painted at all.
+  Extensions style annotations only through `platformScriptureEditor.annotationStyle`'s
+  `registerAnnotationStyle`, a constrained style object the data provider turns into one rule on
+  `.editor-typed-mark-external-<type>`, so they cannot write a selector of their own.
+- **Decision:** The editor puts `<theme.typedMarkStart>-<type>` (`editor-typed-markStart-…`) on the
+  first element each annotation paints and `<theme.typedMarkEnd>-<type>` on its last, by document
+  order, across marks, display-byte pieces and decorator sub-spans, per annotation, so two
+  overlapping annotations of one type each get their own. The annotation style data provider splits
+  the box properties of a registered style across the three classes, so a registered style draws
+  one box with no change to the API: `border` becomes `border-block` on every element and
+  `border-inline-start`/`-end` on the first and last; a one-value `borderRadius` becomes the two
+  start corners on the first and the two end corners on the last; one- or two-value `padding` and
+  `margin` put the block part on every element and the inline part on the first's start and the
+  last's end. Every other form, and every other property, stays on the base class as before.
+  Logical properties put the start on the right in right-to-left text. Core's hard-coded Find
+  current-result style rounds only its outer corners the same way.
+- **Alternatives:** **Sibling selectors** (`.x + .x`, `.x:has(+ .x)`) — rejected: they work only
+  between adjacent siblings, not into or out of a char span or a note, and an extension cannot write
+  a selector through the style API. **`data-` attributes** — rejected: these are per-type style
+  hooks like the existing overlap class, and a class keeps hosts on one naming scheme;
+  `data-piece-continuation` is an attribute because it states structure, not a style. **Edges per
+  type** (one box around the union of a type's annotations) — rejected: overlapping annotations are
+  separate findings and read as separate boxes. **An edge-aware style object in the API** —
+  rejected: splitting inside the data provider keeps every extension's existing registration
+  correct.
+- **Consequences:** An annotation painting one element gets both classes and draws exactly as an
+  unsplit style would. A line wrap inside an annotation leaves the line ends open, as one long
+  inline element does. Elements of an annotation hidden inside a collapsed note still count as its
+  first or last, so a box crossing into a collapsed note's content shows no side there. A host
+  writing its own stylesheet (core's `_editor-overrides.scss`) uses the same three classes. Hover
+  stays per element: `:hover` on an annotation's class lights only the element under the pointer,
+  as before; lighting the whole annotation needs a host-set state class and is not done here.
+- **Source:** PT-4370.
+
 ## adr-editor-annotation-exact-locations: An annotation holds exactly the bytes its range names, and removal reporting follows whatever holds it now
 
 - **Date:** 2026-09-29
@@ -2436,9 +2479,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   painted element's contents, in document order — and a sub-span a React-rendered decorator draws
   appears only once React has rendered it. A box rule on a carrier class repeats on every piece
   unless it is scoped to the head piece with `:not([data-piece-continuation])`, as the table row
-  glyph's `padding-inline-start` is. A rule that reacts to one element lands on one piece only (the
-  `.attribute:hover` lift, the verse-arrival pulse on the first piece's `::before`); this is
-  cosmetic and open.
+  glyph's `padding-inline-start` is. A rule that reacts to one element lands on one piece only: the
+  verse-arrival pulse sits on the first piece's `::before`, which is cosmetic and open, and the
+  attribute run's hover lift reaches every piece through `:has(> .attribute:hover) > .attribute`. An
+  annotation's own box style over the several elements it can paint is drawn as one box through edge
+  classes (`adr-editor-annotation-edge-classes`).
 - **Source:** PT-4370.
 
 ## adr-editor-annotations-paint-exactly: An annotation paints exactly the bytes it holds, and hosts find it by its ranges
