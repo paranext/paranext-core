@@ -174,7 +174,10 @@ describe("The scripture editor's Project menu, per mode", () => {
    */
   test('Power serves its established layout', async () => {
     expect(describeSections(await getEditorTopMenuInMode('power'))).toEqual([
-      ['platform.app', ['platformScripture.openManageBooks', 'platform.openSettings']],
+      [
+        'platform.app',
+        ['platformScripture.openManageBooks', 'platform.openProjectSettingsForWebView'],
+      ],
       [
         'platformScriptureEditor.simpleEdit',
         [
@@ -210,7 +213,7 @@ describe("The scripture editor's Project menu, per mode", () => {
 
   test('Simple serves its shipped layout', async () => {
     expect(describeSections(await getEditorTopMenuInMode('simple'))).toEqual([
-      ['platform.app', ['platform.openSettings']],
+      ['platform.app', ['platform.openProjectSettingsForWebView']],
       [
         'platformScriptureEditor.simpleEdit',
         [
@@ -284,7 +287,7 @@ describe("The scripture editor's Project menu, per mode", () => {
 
   /** Spec §3 icon table: each served item's `iconNameBefore`, per mode. */
   const ICONS_IN_BOTH_MODES: [string, string | undefined][] = [
-    ['platform.openSettings', 'settings'],
+    ['platform.openProjectSettingsForWebView', 'settings'],
     ['platformScriptureEditor.editSubmenu', 'pencil'],
     ['platformScriptureEditor.undo', undefined],
     ['platformScriptureEditor.redo', undefined],
@@ -336,7 +339,7 @@ describe("The scripture editor's Project menu, per mode", () => {
   });
 
   test.each([
-    ['power', 'platform.openSettings', 'Project settings'],
+    ['power', 'platform.openProjectSettingsForWebView', 'Project settings'],
     ['power', 'platformScriptureEditor.toggleFootnotes', 'Show footnotes'],
     ['power', 'platformScriptureEditor.insertEndnoteAtSelection', 'Insert end note'],
     ['power', 'legacyCommentManager.openCommentList', 'Comments'],
@@ -344,7 +347,7 @@ describe("The scripture editor's Project menu, per mode", () => {
     ['power', 'platformScripture.openManageBooks', 'Manage books'],
     ['power', 'platformScriptureEditor.setViewStandard', 'Standard view'],
     ['power', 'platformScriptureEditor.setViewPreview', 'Preview'],
-    ['simple', 'platform.openSettings', 'Project settings'],
+    ['simple', 'platform.openProjectSettingsForWebView', 'Project settings'],
     ['power', 'platform.webViewContentZoomReset', 'Zoom 100%'],
     ['simple', 'platform.webViewContentZoomReset', 'Zoom 100%'],
     ['simple', 'legacyCommentManager.showCommentListPanel', 'Comments'],
@@ -479,6 +482,18 @@ describe("The scripture editor's Project menu, per mode", () => {
     },
   );
 
+  test.each(['power', 'simple'] as const)(
+    '%s shows the shortcut hint on Project settings',
+    async (mode) => {
+      const menu = await getEditorTopMenuInMode(mode);
+      const item = menu.items.find(
+        (candidate) =>
+          'command' in candidate && candidate.command === 'platform.openProjectSettingsForWebView',
+      );
+      expect(item).toHaveProperty('shortcut', expect.any(String));
+    },
+  );
+
   /**
    * Guards the regression class a mode-gated menu document invites: `hiddenInterfaceModes` can drop
    * a command from Simple with nothing failing — no type error, no missing-route crash, just a menu
@@ -541,7 +556,7 @@ describe("The scripture editor's Project menu, per mode", () => {
     // Nothing the editor declares is orphaned: every command reaches at least one mode, bar the
     // ones deliberately hidden in both. (The
     // served sets can be larger than `declared` — `includeDefaults: true` also serves items like
-    // `platform.openSettings` that no line in this editor's own menus.json declares — so this
+    // `platform.openProjectSettingsForWebView` that no line in this editor's own menus.json declares — so this
     // checks membership rather than set equality.)
     [...declared]
       .filter((id) => !HIDDEN_IN_BOTH_MODES.includes(id))

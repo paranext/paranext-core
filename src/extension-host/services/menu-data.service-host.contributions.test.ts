@@ -199,6 +199,11 @@ describe('The Power main menu is laid out as designed', () => {
     ]);
   });
 
+  test('Open shows its shortcut hint', async () => {
+    const { find } = await getPowerLayout();
+    expect(find('platformGetResources.openHome')).toHaveProperty('shortcut', expect.any(String));
+  });
+
   test('Get resources is absent in Simple', async () => {
     expect(
       hasCommand(await getMainMenuInMode('simple'), 'platformGetResources.openGetResources'),
@@ -277,6 +282,22 @@ describe('Simple main menu keeps what Saroj still needs', () => {
 
   test.each(KEPT_IN_SIMPLE)('"%s" is present in Simple', async (_, command) => {
     expect(hasCommand(await getMainMenuInMode('simple'), command)).toBe(true);
+  });
+});
+
+/**
+ * The main menu's Settings opens Settings for no particular project, while the Project settings
+ * chord opens them for the focused tab's project — so the chord's hint belongs only on the web view
+ * menus' Project settings item, which runs a command of its own.
+ */
+describe('The main menu Settings item shows no shortcut hint', () => {
+  test.each(['simple', 'power'] as const)('in %s', async (mode) => {
+    const menu = await getMainMenuInMode(mode);
+    const settings = menu.items.find(
+      (item) => 'command' in item && item.command === 'platform.openSettings',
+    );
+    expect(settings).toBeDefined();
+    expect(settings).not.toHaveProperty('shortcut');
   });
 });
 
