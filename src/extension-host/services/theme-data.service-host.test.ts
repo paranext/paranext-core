@@ -1,12 +1,15 @@
 import { onTestFinished, vi } from 'vitest';
 import { resyncContributions } from '@extension-host/services/contribution.service';
 import { testingThemeDataService } from '@extension-host/services/theme-data.service-host';
+import { getAllObjectFunctionNames } from 'platform-bible-utils';
 
 const { implementThemeDataDataProviderEngine } = testingThemeDataService;
 
 test('a live engine rebuilds its themes when contributions resync', async () => {
   const engine = implementThemeDataDataProviderEngine({});
-  onTestFinished(() => engine.dispose());
+  onTestFinished(async () => {
+    await engine.dispose();
+  });
   const notifyUpdateSpy = vi.spyOn(engine, 'notifyUpdate');
 
   await resyncContributions([]);
@@ -20,7 +23,9 @@ test('a disposed engine ignores contribution resyncs', async () => {
   const disposedEngine = implementThemeDataDataProviderEngine(initialThemes);
   const disposedNotifyUpdateSpy = vi.spyOn(disposedEngine, 'notifyUpdate');
   const liveEngine = implementThemeDataDataProviderEngine({});
-  onTestFinished(() => liveEngine.dispose());
+  onTestFinished(async () => {
+    await liveEngine.dispose();
+  });
   const liveNotifyUpdateSpy = vi.spyOn(liveEngine, 'notifyUpdate');
 
   await disposedEngine.dispose();
@@ -29,4 +34,20 @@ test('a disposed engine ignores contribution resyncs', async () => {
   expect(liveNotifyUpdateSpy).toHaveBeenCalledWith('*');
   expect(await disposedEngine.getAllThemes()).toBe(initialThemes);
   expect(disposedNotifyUpdateSpy).not.toHaveBeenCalled();
+});
+
+test('the engine does not publish its unsubscriber as a network method', async () => {
+  const engine = implementThemeDataDataProviderEngine({});
+  onTestFinished(async () => {
+    await engine.dispose();
+  });
+
+  const functionNames = getAllObjectFunctionNames(
+    // A class instance has no index signature, which getAllObjectFunctionNames asks for
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    engine as unknown as { [property: string]: unknown },
+  );
+
+  expect(functionNames).toContain('getAllThemes');
+  expect(functionNames).not.toContain('unsubscribeOnDidResyncContributions');
 });
