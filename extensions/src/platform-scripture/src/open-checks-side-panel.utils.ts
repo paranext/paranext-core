@@ -32,12 +32,16 @@ function isChecksSidePanelCurrent(
 /**
  * Opens the Checks side panel for an editor, placed according to `platform.interfaceMode`.
  *
- * - Power mode: a new panel docked to the right of the editor tab, on every call.
+ * - Power mode: a new Checks tab on every call. When the editor is docked, it goes beside the editor
+ *   on its reading-end side (right; left in a right-to-left UI): into the tab group there when it
+ *   can take it, otherwise into a new group. When the editor is floating or maximized, it gets a
+ *   new group at the reading-end edge of the dock.
  * - Simple mode: one Checks tab in Column 3, alongside the other Resources & Tools tabs. Simple's
- *   three columns are fixed, so a panel docked beside the editor would split the editor's column,
- *   and a new one per call would keep splitting it. The first call adds the tab to Column 3; later
- *   calls bring that same tab to the front. The tab is not part of Simple's starting layout — it
- *   joins Column 3 only once someone asks for it.
+ *   three columns are fixed, and a panel opened beside the editor never joins one of them, so it
+ *   would split the editor's column, and a new one per call would keep splitting it. Naming Column
+ *   3 as the tab's parent is what puts the tab there. The first call adds the tab to Column 3;
+ *   later calls bring that same tab to the front. The tab is not part of Simple's starting layout —
+ *   it joins Column 3 only once someone asks for it.
  *
  * In Simple mode an existing tab is reloaded when it shows a different project, or holds a
  * different editor id, from the call. A project switch replaces the editor tab and mints a new

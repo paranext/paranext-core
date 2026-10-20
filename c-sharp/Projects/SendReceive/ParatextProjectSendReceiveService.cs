@@ -1,4 +1,9 @@
+using System.Collections.Concurrent;
 using Paranext.DataProvider.Services;
+using Paranext.DataProvider.Users;
+using Paratext.Data;
+using Paratext.Data.Repository;
+using Paratext.Data.Users;
 using static Paranext.DataProvider.NetworkObjects.Documentation.ExperimentalMethodDocumentation;
 
 namespace Paranext.DataProvider.Projects.SendReceive;
@@ -64,6 +69,59 @@ internal class ParatextProjectSendReceiveService(
     /// </para>
     /// </summary>
     public SyncActivityState GetSyncActivity() => new(false, Array.Empty<string>());
+
+    /// <summary>
+    /// Whether <paramref name="scrText"/> holds local changes Send/Receive has not sent — see
+    /// <see cref="UnsyncedChangesRule"/>. Local repository reads only (an <c>hg status</c> and a tip
+    /// lookup); never contacts the server. Returns <see langword="null"/> when the repository cannot
+    /// be read (no Mercurial, a broken repository), so the caller can keep its previous answer; the
+    /// failure is logged once per project until a later check of that project succeeds. Read by
+    /// <see cref="UnsyncedChangesTracker"/>.
+    /// </summary>
+    public bool? HasUnsyncedLocalChanges(ScrText scrText)
+    {
+        try
+        {
+            if (!scrText.IsProjectShared)
+                return false;
+            bool hasUnsyncedChanges = ReadUnsyncedLocalChanges(scrText);
+            _unsyncedCheckWarned.TryRemove(scrText.Guid.ToString(), out _);
+            return hasUnsyncedChanges;
+        }
+        catch (Exception ex)
+        {
+            if (_unsyncedCheckWarned.TryAdd(scrText.Guid.ToString(), true))
+                Console.Error.WriteLine(
+                    $"Could not determine unsynced changes for project {scrText.Name}: {ex.Message}"
+                );
+            return null;
+        }
+    }
+
+    private bool ReadUnsyncedLocalChanges(ScrText scrText)
+    {
+        if (VersioningManager.Get(scrText).HasUncommittedChanges())
+            return true;
+        string? lastSynced = GetLastSyncedTipId(scrText);
+        if (string.IsNullOrEmpty(lastSynced))
+            return false;
+        return UnsyncedChangesRule.Evaluate(
+            true,
+            false,
+            Hg.Default.GetTipId(scrText.Directory),
+            lastSynced
+        );
+    }
+
+    /// <summary>
+    /// Projects whose check failure has been logged and whose checks have not succeeded since.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, bool> _unsyncedCheckWarned = new();
+
+    /// <summary>
+    /// 1 while a server tip lookup failure has been logged and no later lookup has succeeded.
+    /// </summary>
+    private int _serverTipLookupWarned;
 
     /// <summary>
     /// Raises <see cref="SyncActivityChanged"/> with <paramref name="snapshot"/>, invoking each
@@ -147,6 +205,108 @@ internal class ParatextProjectSendReceiveService(
     #region Protected properties and methods
 
     protected PapiClient PapiClient { get; } = papiClient;
+
+    /// <summary>
+    /// The local Mercurial tip id recorded after this project's last successful Send/Receive, or
+    /// <see langword="null"/> when unknown.
+    /// <para>
+    /// Scaffolding: public Platform.Bible runs no Send/Receive, so this is always unknown here. The
+    /// Paratext 10 patch replaces the body with a lookup in its own record of the local tip at each
+    /// project's last successful Send/Receive. Called on background threads while a sync may be
+    /// running; an implementation must be safe for that and must not contact the network or run
+    /// Mercurial. Do not remove — removing it breaks the patch.
+    /// </para>
+    /// </summary>
+    protected internal virtual string? GetLastSyncedTipId(ScrText scrText) => null;
+
+    /// <summary>
+    /// The Send/Receive server's current tip id for each of <paramref name="projects"/>, keyed by
+    /// upper-cased project id; a <see langword="null"/> value means the server reported no tip.
+    /// <paramref name="projects"/> is never empty and holds only shared projects
+    /// (<see cref="ScrText.IsProjectShared"/>).
+    /// One batched request. Callers do not start a lookup while a sync is known to be active, but a
+    /// sync may start while a lookup runs: the lookup must tolerate that, and a result that
+    /// overlapped a sync is superseded by a lookup after that sync ends. It runs unattended on a
+    /// timer, so it must not write project data (no project file, setting or license update).
+    /// <para>
+    /// Scaffolding: public Platform.Bible cannot reach the Send/Receive server, so this returns no
+    /// entries here. The Paratext 10 patch replaces the body with the repository source's batched
+    /// lookup. Do not remove — removing it breaks the patch.
+    /// </para>
+    /// </summary>
+    protected internal virtual IReadOnlyDictionary<string, string?> GetServerTipIds(
+        IReadOnlyCollection<ScrText> projects
+    ) => new Dictionary<string, string?>();
+
+    /// <summary>
+    /// Whether the Paratext internet setting allows contacting the Send/Receive server — see
+    /// <see cref="AllowsServerLookup"/>.
+    /// </summary>
+    protected internal virtual bool IsInternetUseEnabled() =>
+        AllowsServerLookup(InternetAccess.Status, InternetAccess.RawStatus);
+
+    /// <summary>
+    /// Whether internet use resolves to enabled (<paramref name="effectiveInternetUse"/>, ParatextData's
+    /// <c>InternetAccess.Status</c>) and the saved setting (<paramref name="savedInternetUse"/>,
+    /// <c>InternetAccess.RawStatus</c>) does not turn off Send/Receive. Both are needed:
+    /// ParatextData resolves the saved "Disable access to some Bible translation services" to enabled
+    /// outside sensitive locations, but <see cref="InternetServicesGate"/> refuses Send/Receive for it.
+    /// </summary>
+    internal static bool AllowsServerLookup(
+        InternetUse effectiveInternetUse,
+        InternetUse savedInternetUse
+    ) =>
+        effectiveInternetUse == InternetUse.Enabled
+        && !InternetServicesGate.IsBlocked(savedInternetUse);
+
+    /// <summary>
+    /// The projects among <paramref name="projects"/> for which the server holds changes not yet
+    /// received here — see <see cref="UnreceivedChangesRule"/>. Returns <see langword="null"/> when
+    /// the server lookup failed, so a caller can keep its previous answer; logs that failure once
+    /// until a later lookup succeeds. Only shared projects are looked up: an unshared project is
+    /// never reported, and with none shared no lookup is made and the result is empty.
+    /// </summary>
+    public IReadOnlyCollection<string>? GetProjectsWithUnreceivedChanges(
+        IReadOnlyCollection<ScrText> projects
+    )
+    {
+        ScrText[] sharedProjects = [.. projects.Where(scrText => scrText.IsProjectShared)];
+        if (sharedProjects.Length == 0)
+            return Array.Empty<string>();
+
+        IReadOnlyDictionary<string, string?> serverTips;
+        try
+        {
+            serverTips = GetServerTipIds(sharedProjects);
+        }
+        catch (Exception ex)
+        {
+            if (Interlocked.Exchange(ref _serverTipLookupWarned, 1) == 0)
+            {
+                Console.Error.WriteLine(
+                    $"Could not read server tip ids for the sync-direction indicator: {ex.GetType().Name}: {ex.Message}"
+                );
+            }
+            return null;
+        }
+        Interlocked.Exchange(ref _serverTipLookupWarned, 0);
+
+        // The implementer chooses the dictionary's comparer; a case-insensitive view keeps a key
+        // spelled in another case from silently reading as "no tip".
+        var tipsById = new Dictionary<string, string?>(
+            serverTips,
+            StringComparer.OrdinalIgnoreCase
+        );
+        var result = new List<string>();
+        foreach (ScrText scrText in sharedProjects)
+        {
+            string id = scrText.Guid.ToString().ToUpperInvariant();
+            tipsById.TryGetValue(id, out string? serverTip);
+            if (UnreceivedChangesRule.Evaluate(serverTip, GetLastSyncedTipId(scrText)))
+                result.Add(id);
+        }
+        return result;
+    }
 
     // The three properties below are read only by the closed-source Paratext 10 patch,
     // which replaces this class's stub bodies with real implementations. Do not remove them —

@@ -1,8 +1,16 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import type React from 'react';
-import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { act, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
+import {
+  act,
+  createEvent,
+  fireEvent,
+  getNodeText,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   BOOK_NOT_AVAILABLE_KEY,
@@ -67,6 +75,7 @@ describe('ResourceCellView row smoke', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={<span>Blessed are the poor in spirit</span>}
         />
         <ResourceCellView
@@ -75,6 +84,7 @@ describe('ResourceCellView row smoke', () => {
           label="ASV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={undefined}
         />
         <ResourceCellView
@@ -83,6 +93,7 @@ describe('ResourceCellView row smoke', () => {
           label="KJV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={undefined}
         />
       </>,
@@ -114,6 +125,7 @@ describe('ResourceCellView row smoke', () => {
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={undefined}
       />,
     );
@@ -131,6 +143,7 @@ describe('ResourceCellView row smoke', () => {
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={undefined}
       />,
     );
@@ -152,6 +165,7 @@ describe('ResourceCellView row smoke', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={<span>Blessed are the poor in spirit</span>}
         />
         <ResourceCellView
@@ -160,6 +174,7 @@ describe('ResourceCellView row smoke', () => {
           label="עברית"
           textDirection="rtl"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={<span>אַשְׁרֵי הָאִישׁ</span>}
         />
         <ResourceCellView
@@ -168,6 +183,7 @@ describe('ResourceCellView row smoke', () => {
           label="العربية"
           textDirection="rtl"
           localizedStrings={localizedStrings}
+          copyLimit={undefined}
           editor={<span>طُوبَى لِلْمَسَاكِينِ</span>}
         />
       </>,
@@ -195,6 +211,7 @@ describe('ResourceCellView name display', () => {
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<span>In the beginning</span>}
       />,
@@ -213,6 +230,7 @@ describe('ResourceCellView name display', () => {
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<span>In the beginning</span>}
       />,
@@ -232,6 +250,7 @@ describe('ResourceCellView name display', () => {
         label="עברית"
         textDirection="rtl"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<span>אַשְׁרֵי</span>}
       />,
@@ -252,6 +271,7 @@ describe('ResourceCellView name display', () => {
         label="KJV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={undefined}
       />,
@@ -268,6 +288,7 @@ describe('ResourceCellView name display', () => {
         label="ASV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={undefined}
       />,
@@ -284,6 +305,7 @@ describe('ResourceCellView name display', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         emptyMessage={localizedStrings[EMPTY_KEY]}
         editor={undefined}
@@ -301,6 +323,7 @@ describe('ResourceCellView name display', () => {
         label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         nameDisplay="inline"
         editor={<span>In the beginning</span>}
       />,
@@ -318,6 +341,7 @@ describe('ResourceCellView name display', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<span>Blessed</span>}
       />,
     );
@@ -346,15 +370,30 @@ const menuStrings = {
 const zoomMenuLabels = {
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
-  reset: 'Reset zoom',
+  reset: 'Zoom reset',
   options: 'Zoom options for {resourceName}',
 };
 
-/** The open menu's items and separators in document order, a separator shown as `—`. */
+/**
+ * The open menu's items and separators in document order, a separator shown as `—`. Each menuitem's
+ * own label only (its direct text nodes, per `getNodeText`), so a shortcut hint rendered beside it
+ * is invisible here; assert hint content separately.
+ */
 function menuEntries(menu: HTMLElement): string[] {
   return Array.from(menu.querySelectorAll('[role="menuitem"], [role="separator"]')).map((entry) =>
-    entry.getAttribute('role') === 'separator' ? '—' : (entry.textContent ?? ''),
+    entry.getAttribute('role') === 'separator' ? '—' : getNodeText(entry),
   );
+}
+
+/**
+ * The rendered menuitem whose own label text is exactly `label`, regardless of a shortcut hint
+ * rendered beside it as a sibling element: `getByText` matches only an element's own direct
+ * text-node children, so the hint's separate nested text does not affect this lookup.
+ */
+function zoomMenuItem(label: string): HTMLElement {
+  const item = screen.getByText(label).closest('[role="menuitem"]');
+  if (!(item instanceof HTMLElement)) throw new Error(`No menuitem rendered for "${label}"`);
+  return item;
 }
 
 /** Every element from `element` up to and including `root`, innermost first. */
@@ -378,6 +417,7 @@ describe('ResourceCellView right-click menu', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={menuStrings}
+          copyLimit={undefined}
           editor={<span>verse</span>}
           nameDisplay={nameDisplay}
         />,
@@ -399,6 +439,7 @@ describe('ResourceCellView right-click menu', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
         nameDisplay="header"
         showDragHandle
@@ -418,6 +459,7 @@ describe('ResourceCellView right-click menu', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={{ ...menuStrings, [NOT_INSTALLED_KEY]: 'Resource not installed' }}
+        copyLimit={undefined}
         editor={undefined}
       />,
     );
@@ -443,6 +485,7 @@ describe('ResourceCellView right-click menu', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
       />,
     );
@@ -470,6 +513,7 @@ describe('ResourceCellView right-click menu', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
       />,
     );
@@ -481,6 +525,42 @@ describe('ResourceCellView right-click menu', () => {
     expect(copyItem).toHaveAttribute('aria-disabled', 'true');
 
     getSelectionSpy.mockRestore();
+  });
+
+  it('still opens the menu, with Copy disabled, when the selection cannot be read', () => {
+    // A selection left anchored in nodes the editor has since replaced throws when it is read.
+    // The component reads only these members; the rest of `Selection` is irrelevant here.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      rangeCount: 1,
+      getRangeAt: () => {
+        throw new DOMException('The index is not in the allowed range.', 'IndexSizeError');
+      },
+      toString: () => 'selected text',
+    } as unknown as Selection);
+
+    try {
+      renderCells(
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>verse</span>}
+        />,
+      );
+
+      fireEvent.contextMenu(screen.getByText('verse'));
+
+      expect(screen.getByRole('menuitem', { name: 'Copy' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    } finally {
+      getSelectionSpy.mockRestore();
+    }
   });
 
   it('selecting Copy writes the selected text to the clipboard', async () => {
@@ -507,6 +587,7 @@ describe('ResourceCellView right-click menu', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
       />,
     );
@@ -519,11 +600,333 @@ describe('ResourceCellView right-click menu', () => {
 
     getSelectionSpy.mockRestore();
   });
+
+  it('shortens the copied text to the copy limit', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'abcdefgh',
+    } as Selection);
+
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        copyLimit={4}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText('verse'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('abcd');
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('writes nothing to the clipboard when the copy limit is 0', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'abcdefgh',
+    } as Selection);
+
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        copyLimit={0}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText('verse'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).not.toHaveBeenCalled();
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('copies only the part of a selection inside the right-clicked cell', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    renderCells(
+      <>
+        <ResourceCellView
+          state="ready"
+          zoomArea="resource-web"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>unlimited verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+        <ResourceCellView
+          state="ready"
+          zoomArea="resource-asv"
+          label="ASV"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          editor={<span>limited verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+          copyLimit={3}
+        />
+      </>,
+    );
+
+    // A selection dragged from the first cell's text into the second cell's.
+    const unlimitedText = screen.getByText('unlimited verse').firstChild;
+    const limitedText = screen.getByText('limited verse').firstChild;
+    if (!unlimitedText || !limitedText) throw new Error('verse text nodes not rendered');
+    const range = document.createRange();
+    range.setStart(unlimitedText, 0);
+    range.setEnd(limitedText, 'limited verse'.length);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    fireEvent.contextMenu(screen.getByText('unlimited verse'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('unlimited verse');
+
+    window.getSelection()?.removeAllRanges();
+  });
+
+  it.each([
+    ['a character outside the Basic Multilingual Plane', 'a\u{1E900}b', 'a'],
+    ['a base letter and its combining mark', 'aéb', 'a'],
+    ['a cluster that ends exactly at the copy limit', 'éab', 'é'],
+  ])('does not split %s at the copy limit', async (_name, selectedText, expectedText) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => selectedText,
+    } as Selection);
+
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+        copyLimit={2}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText('verse'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledWith(expectedText);
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('copies under the copy limit in force when the menu opened, even if it grows before Copy', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'abcdefgh',
+    } as Selection);
+
+    const cellWithLimit = (copyLimit: number | undefined) => (
+      <div>
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={copyLimit}
+          editor={<span>verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+      </div>
+    );
+    try {
+      const { rerender } = render(cellWithLimit(3));
+
+      fireEvent.contextMenu(screen.getByText('verse'));
+      // Another view moves the scroll group to a chapter with no limit while the menu is open.
+      rerender(cellWithLimit(undefined));
+      await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+      expect(writeText).toHaveBeenCalledWith('abc');
+    } finally {
+      getSelectionSpy.mockRestore();
+    }
+  });
+
+  it.each(['header', 'inline'] as const)(
+    "does not count the cell's own name when a selection is dragged in from another cell (%s layout)",
+    async (nameDisplay) => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        writable: true,
+        configurable: true,
+      });
+
+      renderCells(
+        <>
+          <ResourceCellView
+            state="ready"
+            zoomArea="resource-web"
+            label="WEB"
+            textDirection="ltr"
+            localizedStrings={menuStrings}
+            copyLimit={undefined}
+            editor={<span>first verse</span>}
+            zoomMenuLabels={zoomMenuLabels}
+            nameDisplay={nameDisplay}
+          />
+          <ResourceCellView
+            state="ready"
+            zoomArea="resource-asv"
+            label="ASV"
+            textDirection="ltr"
+            localizedStrings={menuStrings}
+            copyLimit={100}
+            editor={<span>second verse</span>}
+            zoomMenuLabels={zoomMenuLabels}
+            nameDisplay={nameDisplay}
+          />
+        </>,
+      );
+
+      // A selection dragged from the first cell's text to the end of the second cell's, crossing the
+      // second cell's name.
+      const firstText = screen.getByText('first verse').firstChild;
+      const secondText = screen.getByText('second verse').firstChild;
+      if (!firstText || !secondText) throw new Error('verse text nodes not rendered');
+      const range = document.createRange();
+      range.setStart(firstText, 0);
+      range.setEnd(secondText, 'second verse'.length);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+
+      fireEvent.contextMenu(screen.getByText('second verse'));
+      await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+      expect(writeText).toHaveBeenCalledWith('second verse');
+
+      window.getSelection()?.removeAllRanges();
+    },
+  );
+
+  it('keeps the direction of a backward selection that crosses cells', () => {
+    renderCells(
+      <>
+        <ResourceCellView
+          state="ready"
+          zoomArea="resource-web"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>first verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+        <ResourceCellView
+          state="ready"
+          zoomArea="resource-asv"
+          label="ASV"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          copyLimit={undefined}
+          editor={<span>second verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />
+      </>,
+    );
+
+    // Dragged upward: from the end of the second cell's text back into the first cell's.
+    const firstText = screen.getByText('first verse').firstChild;
+    const secondText = screen.getByText('second verse').firstChild;
+    if (!firstText || !secondText) throw new Error('verse text nodes not rendered');
+    const selection = window.getSelection();
+    if (!selection) throw new Error('no selection');
+    selection.setBaseAndExtent(secondText, 'second verse'.length, firstText, 2);
+
+    // jsdom moves the selection onto any element that takes focus, which a browser does not, and
+    // the menu takes focus as it opens.
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {});
+    try {
+      fireEvent.contextMenu(screen.getByText('first verse'));
+    } finally {
+      focusSpy.mockRestore();
+    }
+
+    expect(selection.anchorNode).toBe(secondText);
+    expect(selection.anchorOffset).toBe('second verse'.length);
+    expect(selection.focusNode).toBe(firstText);
+    expect(selection.focusOffset).toBe(2);
+
+    selection.removeAllRanges();
+  });
 });
 
 describe('ResourceCellView zoom menus', () => {
   it.each(['inline', 'header'] as const)(
-    '%s layout: the right-click menu offers Copy, a separator, Zoom in, Zoom out and Reset zoom, in that order',
+    '%s layout: the right-click menu offers Copy, a separator, Zoom in, Zoom out and Zoom reset, in that order',
     (nameDisplay) => {
       renderCells(
         <ResourceCellView
@@ -532,6 +935,7 @@ describe('ResourceCellView zoom menus', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={menuStrings}
+          copyLimit={undefined}
           editor={<span>verse</span>}
           nameDisplay={nameDisplay}
           zoomMenuLabels={zoomMenuLabels}
@@ -543,7 +947,7 @@ describe('ResourceCellView zoom menus', () => {
         '—',
         'Zoom in',
         'Zoom out',
-        'Reset zoom',
+        'Zoom reset',
       ]);
     },
   );
@@ -556,6 +960,7 @@ describe('ResourceCellView zoom menus', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
         zoomMenuLabels={zoomMenuLabels}
         canZoomIn={false}
@@ -564,19 +969,10 @@ describe('ResourceCellView zoom menus', () => {
       />,
     );
     fireEvent.contextMenu(screen.getByText('verse'));
-    let menu = screen.getByRole('menu');
-    expect(within(menu).getByRole('menuitem', { name: 'Zoom in' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    expect(within(menu).getByRole('menuitem', { name: 'Zoom out' })).not.toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    expect(within(menu).getByRole('menuitem', { name: 'Reset zoom' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    const menu = screen.getByRole('menu');
+    expect(zoomMenuItem('Zoom in')).toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Zoom out')).not.toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Zoom reset')).toHaveAttribute('aria-disabled', 'true');
     fireEvent.keyDown(menu, { key: 'Escape' });
 
     rerender(
@@ -587,6 +983,7 @@ describe('ResourceCellView zoom menus', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={menuStrings}
+          copyLimit={undefined}
           editor={<span>verse</span>}
           zoomMenuLabels={zoomMenuLabels}
           canZoomIn
@@ -596,19 +993,11 @@ describe('ResourceCellView zoom menus', () => {
       </div>,
     );
     fireEvent.contextMenu(screen.getByText('verse'));
-    menu = screen.getByRole('menu');
-    expect(within(menu).getByRole('menuitem', { name: 'Zoom in' })).not.toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    expect(within(menu).getByRole('menuitem', { name: 'Zoom out' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    expect(within(menu).getByRole('menuitem', { name: 'Reset zoom' })).not.toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    // Positive control: a menu re-opened after the rerender.
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(zoomMenuItem('Zoom in')).not.toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Zoom out')).toHaveAttribute('aria-disabled', 'true');
+    expect(zoomMenuItem('Zoom reset')).not.toHaveAttribute('aria-disabled', 'true');
   });
 
   it('choosing each zoom item calls its callback', async () => {
@@ -623,6 +1012,7 @@ describe('ResourceCellView zoom menus', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
         zoomMenuLabels={zoomMenuLabels}
         onZoomIn={onZoomIn}
@@ -631,11 +1021,11 @@ describe('ResourceCellView zoom menus', () => {
       />,
     );
     fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom in' }));
+    await user.click(zoomMenuItem('Zoom in'));
     fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom out' }));
+    await user.click(zoomMenuItem('Zoom out'));
     fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(screen.getByRole('menuitem', { name: 'Reset zoom' }));
+    await user.click(zoomMenuItem('Zoom reset'));
     expect(onZoomIn).toHaveBeenCalledTimes(1);
     expect(onZoomOut).toHaveBeenCalledTimes(1);
     expect(onResetZoom).toHaveBeenCalledTimes(1);
@@ -656,6 +1046,7 @@ describe('ResourceCellView zoom menus', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={menuStrings}
+          copyLimit={undefined}
           editor={<span>verse</span>}
           nameDisplay="inline"
           zoomMenuLabels={zoomMenuLabels}
@@ -664,7 +1055,7 @@ describe('ResourceCellView zoom menus', () => {
       </div>,
     );
     fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom in' }));
+    await user.click(zoomMenuItem('Zoom in'));
     // Positive control: the item was really chosen, so the silence below is about the bubbling.
     expect(onZoomIn).toHaveBeenCalledTimes(1);
     expect(onRowClick).not.toHaveBeenCalled();
@@ -686,6 +1077,7 @@ describe('ResourceCellView zoom menus', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={menuStrings}
+          copyLimit={undefined}
           editor={<span>verse</span>}
           nameDisplay="inline"
           zoomMenuLabels={zoomMenuLabels}
@@ -695,10 +1087,10 @@ describe('ResourceCellView zoom menus', () => {
       </div>,
     );
     fireEvent.contextMenu(screen.getByText('verse'));
-    screen.getByRole('menuitem', { name: 'Zoom in' }).focus();
+    zoomMenuItem('Zoom in').focus();
     await user.keyboard('{Enter}');
     fireEvent.contextMenu(screen.getByText('verse'));
-    screen.getByRole('menuitem', { name: 'Zoom out' }).focus();
+    zoomMenuItem('Zoom out').focus();
     await user.keyboard(' ');
     // Positive controls: both items were really chosen by key, so the silence below is about the
     // bubbling.
@@ -719,6 +1111,7 @@ describe('ResourceCellView zoom menus', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
         nameDisplay="header"
         zoomMenuLabels={zoomMenuLabels}
@@ -728,11 +1121,8 @@ describe('ResourceCellView zoom menus', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Zoom options for WEB' }));
     const menu = screen.getByRole('menu');
-    expect(menuEntries(menu)).toEqual(['Zoom in', 'Zoom out', 'Reset zoom']);
-    expect(within(menu).getByRole('menuitem', { name: 'Zoom in' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    expect(menuEntries(menu)).toEqual(['Zoom in', 'Zoom out', 'Zoom reset']);
+    expect(zoomMenuItem('Zoom in')).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('header layout: the "⋮" button sits after the name and shows only on hover or focus, except on touch screens', () => {
@@ -743,6 +1133,7 @@ describe('ResourceCellView zoom menus', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
         nameDisplay="header"
         zoomMenuLabels={zoomMenuLabels}
@@ -773,6 +1164,7 @@ describe('ResourceCellView zoom menus', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse</span>}
         nameDisplay="inline"
         zoomMenuLabels={zoomMenuLabels}
@@ -780,7 +1172,7 @@ describe('ResourceCellView zoom menus', () => {
     );
     // Positive control: the zoom labels are live, so the right-click menu carries zoom items.
     fireEvent.contextMenu(screen.getByText('verse'));
-    expect(screen.getByRole('menuitem', { name: 'Zoom in' })).toBeInTheDocument();
+    expect(zoomMenuItem('Zoom in')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /zoom options/i })).not.toBeInTheDocument();
   });
 
@@ -797,6 +1189,7 @@ describe('ResourceCellView zoom menus', () => {
           label="WEB"
           textDirection="ltr"
           localizedStrings={menuStrings}
+          copyLimit={undefined}
           editor={<span>verse</span>}
           nameDisplay="header"
           zoomMenuLabels={zoomMenuLabels}
@@ -806,6 +1199,102 @@ describe('ResourceCellView zoom menus', () => {
     await user.click(screen.getByRole('button', { name: 'Zoom options for WEB' }));
     expect(screen.getByRole('menu')).toBeInTheDocument();
     expect(onParentClick).not.toHaveBeenCalled();
+  });
+});
+
+describe('ResourceCellView zoom menu shortcut hints', () => {
+  const originalUserAgent = navigator.userAgent;
+
+  afterEach(() => {
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: originalUserAgent,
+      configurable: true,
+    });
+  });
+
+  it.each([
+    ['Linux', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'],
+    ['Windows', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'],
+  ])(
+    'shows each zoom item’s %s chord as separate keycaps, matching the content-zoom catalog entries',
+    (_os, userAgent) => {
+      Object.defineProperty(window.navigator, 'userAgent', {
+        value: userAgent,
+        configurable: true,
+      });
+      renderCells(
+        <ResourceCellView
+          state="ready"
+          zoomArea={ZOOM_AREA}
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={menuStrings}
+          editor={<span>verse</span>}
+          zoomMenuLabels={zoomMenuLabels}
+        />,
+      );
+      fireEvent.contextMenu(screen.getByText('verse'));
+
+      // content-zoom-in: Ctrl++ -> keycaps ['Ctrl', '+'], so one "+" is the separator (a SPAN) and
+      // the other is the second keycap's own Kbd.
+      const zoomIn = zoomMenuItem('Zoom in');
+      expect(within(zoomIn).getByText('Ctrl').tagName).toBe('KBD');
+      expect(
+        within(zoomIn)
+          .getAllByText('+')
+          .map((element) => element.tagName)
+          .sort(),
+      ).toEqual(['KBD', 'SPAN']);
+
+      // content-zoom-out: Ctrl+-
+      const zoomOut = zoomMenuItem('Zoom out');
+      expect(within(zoomOut).getByText('Ctrl').tagName).toBe('KBD');
+      expect(within(zoomOut).getByText('-').tagName).toBe('KBD');
+      expect(within(zoomOut).getByText('+').tagName).toBe('SPAN');
+
+      // content-zoom-reset: Ctrl+0
+      const reset = zoomMenuItem('Zoom reset');
+      expect(within(reset).getByText('Ctrl').tagName).toBe('KBD');
+      expect(within(reset).getByText('0').tagName).toBe('KBD');
+      expect(within(reset).getByText('+').tagName).toBe('SPAN');
+    },
+  );
+
+  it('shows each zoom item’s macOS chord as adjacent keycaps with no separator', () => {
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      configurable: true,
+    });
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={menuStrings}
+        editor={<span>verse</span>}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByText('verse'));
+
+    // content-zoom-in on macOS: ⌘=
+    const zoomIn = zoomMenuItem('Zoom in');
+    expect(within(zoomIn).getByText('⌘').tagName).toBe('KBD');
+    expect(within(zoomIn).getByText('=').tagName).toBe('KBD');
+    expect(within(zoomIn).queryByText('+')).not.toBeInTheDocument();
+
+    // content-zoom-out on macOS: ⌘-
+    const zoomOut = zoomMenuItem('Zoom out');
+    expect(within(zoomOut).getByText('⌘').tagName).toBe('KBD');
+    expect(within(zoomOut).getByText('-').tagName).toBe('KBD');
+    expect(within(zoomOut).queryByText('+')).not.toBeInTheDocument();
+
+    // content-zoom-reset on macOS: ⌘0
+    const reset = zoomMenuItem('Zoom reset');
+    expect(within(reset).getByText('⌘').tagName).toBe('KBD');
+    expect(within(reset).getByText('0').tagName).toBe('KBD');
+    expect(within(reset).queryByText('+')).not.toBeInTheDocument();
   });
 });
 
@@ -819,6 +1308,7 @@ describe('ResourceCellView reorder grip', () => {
         label="Genesis"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<span>In the beginning</span>}
         showDragHandle
         reorderHandleId="gen"
@@ -847,6 +1337,7 @@ describe('ResourceCellView reorder grip', () => {
         label="Genesis"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<span>In the beginning</span>}
         showDragHandle
         reorderHandleId="gen"
@@ -869,6 +1360,7 @@ describe('ResourceCellView reorder grip', () => {
         label="Genesis"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<span>In the beginning</span>}
         showDragHandle
       />,
@@ -888,6 +1380,7 @@ describe('ResourceCellView content zoom marker', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>marked verse</span>}
         nameDisplay={nameDisplay}
         showDragHandle
@@ -956,6 +1449,7 @@ describe('ResourceCellView content zoom marker', () => {
         label="WEB"
         textDirection="ltr"
         localizedStrings={menuStrings}
+        copyLimit={undefined}
         editor={<span>verse-blocks</span>}
         contentOverflow="visible"
         zoomTarget="blocks"
@@ -989,6 +1483,7 @@ describe('ResourceCellView header drag source', () => {
     label: 'Genesis',
     textDirection: 'ltr',
     localizedStrings,
+    copyLimit: undefined,
     editor: <span>In the beginning</span>,
   };
 
@@ -1023,13 +1518,19 @@ describe('ResourceCellView content scroll ownership', () => {
     label: 'WEB',
     textDirection: 'ltr',
     localizedStrings,
+    copyLimit: undefined,
     editor: <div data-testid="editor" />,
   };
 
-  it('scrolls its own content by default', () => {
+  it('scrolls its own content by default, with scroll anchoring off', () => {
+    // The reference scroll tells the reader's scrolling from its own by comparing `scrollTop`, and
+    // scroll anchoring rewrites `scrollTop` without either of them — the aligned grid's root turns
+    // it off for the same reason.
     const { container } = renderCells(<ResourceCellView {...baseProps} />);
 
-    expect(container.querySelector('[data-cell-content]')).toHaveClass('tw:overflow-auto');
+    const content = container.querySelector('[data-cell-content]');
+    expect(content).toHaveClass('tw:overflow-auto');
+    expect(content).toHaveClass('tw:[overflow-anchor:none]');
   });
 
   it('hands scrolling to an ancestor when asked, so an aligned grid can own the scroll port', () => {
@@ -1042,6 +1543,7 @@ describe('ResourceCellView content scroll ownership', () => {
     const content = container.querySelector('[data-cell-content]');
     expect(content).toHaveClass('tw:overflow-visible');
     expect(content).not.toHaveClass('tw:overflow-auto');
+    expect(content).not.toHaveClass('tw:[overflow-anchor:none]');
   });
 
   it('exposes the layout anchors the aligned grid styles hook onto', () => {
@@ -1051,5 +1553,16 @@ describe('ResourceCellView content scroll ownership', () => {
     expect(container.querySelector('[data-cell-root]')).toBeInTheDocument();
     expect(container.querySelector('[data-cell-header]')).toBeInTheDocument();
     expect(container.querySelector('[data-cell-pad]')).toBeInTheDocument();
+  });
+
+  it('keeps the header OUTSIDE the content box, which the chapter scroll depends on', () => {
+    // `getFirstVisibleY` treats any `[data-cell-header]` INSIDE the port as a sticky header covering
+    // its top. In a chapter cell the header is the port's sibling, so that lookup finds nothing and
+    // contributes no offset — which is the only reason the port math needs no per-layout branch.
+    // Moving the header inside the port as a NON-sticky element would offset every chapter-mode
+    // scroll by its height, since it scrolls away while still being counted as covering the top.
+    const { container } = renderCells(<ResourceCellView {...baseProps} />);
+
+    expect(container.querySelector('[data-cell-content] [data-cell-header]')).toBeNull();
   });
 });

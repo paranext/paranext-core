@@ -36,6 +36,7 @@ import {
   showFocusRing,
 } from '@/utils/focus.util';
 import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
+import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
   getMenuSectionsWithItems,
   getSubMenuGroupKeyForMenuItemId,
@@ -85,7 +86,11 @@ const getGroupContent = (
                   {item.iconPathAfter && (
                     <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
                   )}
-                  {item.shortcut && <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>}
+                  {item.shortcut && (
+                    <DropdownMenuShortcut>
+                      <ShortcutKeys hint={item.shortcut} />
+                    </DropdownMenuShortcut>
+                  )}
                 </DropdownMenuItem>
               </TooltipTrigger>
               {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}

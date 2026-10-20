@@ -13,17 +13,12 @@ import { markShuttingDown, reportConnectionLost } from './connection-lost-store'
  * on the way out. `pagehide` as well as `beforeunload` because a reload from within this state
  * takes the `pagehide` path.
  *
- * This covers a window closing while the app stays up, and a reload. It does NOT cover an app quit:
- * main destroys each window on the `isAppShuttingDown()` branch (`src/main/main.ts`), and
- * `destroy()` fires neither event — as main's own comment there records. What keeps the state off
- * screen on a quit is still teardown outrunning paint, unchanged by this latch and not guaranteed
- * by it. Closing that case needs main to tell the renderer it is going down, the same
- * main-to-renderer relay the keyboard gaps and the extension-host disconnect want.
- *
- * TODO(main-renderer-shutdown-relay): deferred to the follow-up work described in
- * `adr-connection-lost-is-renderer-local`. The marker is deliberately a slug rather than a
- * `PT-XXXX`, because the ticket does not exist yet; grep it to find all three deferrals that the
- * one relay closes, and swap in the real id when it is filed.
+ * This covers a window closing while the app stays up, and a reload. An app quit takes a different
+ * route: main destroys each window on the `isAppShuttingDown()` branch (`src/main/main.ts`), and
+ * `destroy()` fires neither event. That case is latched by `extension-host-stopped-service.ts`,
+ * which hears main's `platform.onWillShutDown` network event and calls `markShuttingDown` too. It
+ * is best effort (the event may arrive after the window is gone), so teardown outrunning paint
+ * remains the backstop.
  */
 export function initConnectionLostService(): () => void {
   const unsubscribe = onDidLoseConnection(() => {

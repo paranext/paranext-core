@@ -51,8 +51,8 @@ export class ChecksSidePanelWebViewProvider implements IWebViewProvider {
       projectId,
       // In Simple mode this is a Column 3 tab, pinned like its siblings there: `getTabGroup` routes
       // a non-closable tab of this type to Column 3's rc-dock group, which keeps it from being
-      // dragged into another column. Power mode docks it as an ordinary closable panel. Computed per
-      // provider, like its Column 3 siblings, until PT-4405 moves this into the renderer.
+      // dragged into another column. Power mode docks it as an ordinary closable panel.
+      // TODO(PT-4405) move this into the renderer.
       isClosable: interfaceMode !== 'simple',
       // Icon only in Simple mode, like the Find tab beside it: Column 3 collapses its tabs to icons
       // there, and a tab with no icon falls back to the generic app logo. Power mode tabs are labeled

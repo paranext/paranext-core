@@ -8,6 +8,7 @@ import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { notificationService } from '@shared/services/notification.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
+import { useUnsyncedChanges } from '@renderer/hooks/use-unsynced-changes.hook';
 import { resetSyncActivity, setSyncActivity } from '@renderer/services/sync-activity-store';
 import type {
   ResultInfo,
@@ -24,6 +25,7 @@ import {
 import {
   SYNC_SEED_RETRY_INTERVAL_MS,
   SYNC_SEED_RETRY_WINDOW_MS,
+  useSyncStatus,
 } from '../hooks/use-sync-status.hook';
 
 /**
@@ -33,6 +35,15 @@ import {
  * 2.5.3 Label in Name.
  */
 const UNKNOWN_ACCESSIBLE_NAME = 'Sync — Test Sync status unavailable';
+
+/**
+ * The button's accessible name in the `unsynced` state, per direction. Composed like
+ * {@link UNKNOWN_ACCESSIBLE_NAME}: the visible label first, then the direction in words, so the
+ * direction the icon shows is also available to a screen reader.
+ */
+const UNSYNCED_SEND_ACCESSIBLE_NAME = 'Test Unsynced changes — Test Changes to send';
+const UNSYNCED_RECEIVE_ACCESSIBLE_NAME = 'Test Unsynced changes — Test Changes to receive';
+const UNSYNCED_BOTH_ACCESSIBLE_NAME = 'Test Unsynced changes — Test Changes to send and receive';
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
@@ -46,10 +57,16 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_popover_idle%': 'Test no sync running',
       '%toolbar_sync_popover_synced%': 'Test last sync finished',
       '%toolbar_sync_popover_unknown%': 'Test status unavailable',
+      '%toolbar_sync_popover_unsynced_receive%': 'Test Changes to receive:',
+      '%toolbar_sync_popover_unsynced_send%': 'Test Changes to send:',
       '%toolbar_sync_progress_item%': '{item} — {percent}%',
       '%toolbar_sync_status_cancelled%': 'Test Sync cancelled',
       '%toolbar_sync_status_failed%': 'Test Sync failed',
       '%toolbar_sync_status_unknown%': 'Test Sync status unavailable',
+      '%toolbar_sync_status_unsynced%': 'Test Unsynced changes',
+      '%toolbar_sync_status_unsynced_both%': 'Test Changes to send and receive',
+      '%toolbar_sync_status_unsynced_receive%': 'Test Changes to receive',
+      '%toolbar_sync_status_unsynced_send%': 'Test Changes to send',
       '%toolbar_sync_status_synced%': 'Test Synced',
       '%toolbar_sync_status_syncing%': 'Test Syncing',
       '%toolbar_sync_status_syncing_project%': 'Test Syncing {projectName}',
@@ -59,6 +76,18 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     },
   ]),
 }));
+
+// The unsynced-changes signal reads project repositories and the server, which is not what this
+// suite exercises; each test names the unsynced project ids directly. Unset (reset to `undefined`)
+// means "not read yet", which contributes no `unsynced` status.
+vi.mock('@renderer/hooks/use-unsynced-changes.hook', () => ({ useUnsyncedChanges: vi.fn() }));
+
+// Wraps the real hook so a test can force a return shape the real one never produces (an `unsynced`
+// status with no direction); every other test runs the real implementation.
+vi.mock('@renderer/hooks/use-sync-status.hook', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@renderer/hooks/use-sync-status.hook')>();
+  return { ...actual, useSyncStatus: vi.fn(actual.useSyncStatus) };
+});
 
 vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 
@@ -2435,6 +2464,399 @@ describe('SyncStatusButton — accessibility', () => {
     render(<SyncStatusButton />);
 
     await screen.findByRole('button', { name: UNKNOWN_ACCESSIBLE_NAME });
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+});
+
+describe('SyncStatusButton — unsynced changes', () => {
+  const mockUnsyncedProjectIds = (projectIds: string[]) => {
+    vi.mocked(useUnsyncedChanges).mockReturnValue({
+      toSend: projectIds,
+      toReceive: [],
+      isRechecking: false,
+    });
+  };
+  const mockUnsyncedSets = (toSend: string[], toReceive: string[], isRechecking = false) => {
+    vi.mocked(useUnsyncedChanges).mockReturnValue({ toSend, toReceive, isRechecking });
+  };
+
+  it('labels the button and shows the unsynced icon', async () => {
+    mockSyncState(IDLE_STATE);
+    mockUnsyncedProjectIds(['a']);
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    expect(
+      await screen.findByRole('button', { name: UNSYNCED_SEND_ACCESSIBLE_NAME }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('toolbar-sync-unsynced-icon-send')).toBeInTheDocument();
+  });
+
+  it('lists each unsynced project in the popover, keeps View sync details, and offers no Cancel', async () => {
+    mockSyncState(IDLE_STATE);
+    mockUnsyncedProjectIds(['a', 'b']);
+    mockProjectNames({ a: 'AAA', b: 'BBB' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: UNSYNCED_SEND_ACCESSIBLE_NAME }));
+
+    expect(await screen.findByText('Test Changes to send:')).toBeInTheDocument();
+    const list = await screen.findByTestId('toolbar-sync-popover-projects-send');
+    await waitFor(() => {
+      expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+    });
+    expect(list.querySelector('li[data-project-id="a"]')).toHaveTextContent('AAA');
+    expect(list.querySelector('li[data-project-id="b"]')).toHaveTextContent('BBB');
+    expect(screen.getByTestId('toolbar-sync-view-details-button')).toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-sync-cancel-button')).not.toBeInTheDocument();
+  });
+
+  it('shows no heading or list while the project names are still unresolved', async () => {
+    mockSyncState(IDLE_STATE);
+    mockUnsyncedProjectIds(['a']);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockReturnValue(
+      new Promise(() => {}),
+    );
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: UNSYNCED_SEND_ACCESSIBLE_NAME }));
+
+    // Headings appear with their lists, so an unresolved name set shows neither; the way through to
+    // the details stays available.
+    expect(await screen.findByTestId('toolbar-sync-view-details-button')).toBeInTheDocument();
+    expect(screen.queryByText('Test Changes to send:')).not.toBeInTheDocument();
+    expect(screen.queryByText('Test Changes to receive:')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-sync-popover-projects-send')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the send icon when the direction is not known', async () => {
+    vi.mocked(useSyncStatus).mockReturnValue({
+      status: 'unsynced',
+      syncingProjects: [],
+      unsyncedProjects: [],
+      unsyncedDirection: undefined,
+    });
+    render(<SyncStatusButton />);
+
+    expect(await screen.findByTestId('toolbar-sync-unsynced-icon-send')).toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-sync-unsynced-icon-receive')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-sync-unsynced-icon-both')).not.toBeInTheDocument();
+  });
+
+  it('labels each unsynced list with its heading', async () => {
+    mockSyncState(IDLE_STATE);
+    mockUnsyncedSets(['a'], ['a']);
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: UNSYNCED_BOTH_ACCESSIBLE_NAME }));
+
+    const sendList = await screen.findByTestId('toolbar-sync-popover-projects-send');
+    const receiveList = await screen.findByTestId('toolbar-sync-popover-projects-receive');
+    const headingText = (list: HTMLElement) =>
+      document.getElementById(list.getAttribute('aria-labelledby') ?? '')?.textContent;
+    expect(headingText(sendList)).toBe('Test Changes to send:');
+    expect(headingText(receiveList)).toBe('Test Changes to receive:');
+  });
+
+  it('shows the receive icon, label and heading when changes are only waiting to be received', async () => {
+    mockSyncState(IDLE_STATE);
+    mockUnsyncedSets([], ['a']);
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: UNSYNCED_RECEIVE_ACCESSIBLE_NAME }));
+
+    expect(screen.getByTestId('toolbar-sync-unsynced-icon-receive')).toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-sync-unsynced-icon-send')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-sync-unsynced-icon-both')).not.toBeInTheDocument();
+    expect(await screen.findByText('Test Changes to receive:')).toBeInTheDocument();
+    expect(screen.queryByText('Test Changes to send:')).not.toBeInTheDocument();
+    const list = await screen.findByTestId('toolbar-sync-popover-projects-receive');
+    await waitFor(() => {
+      expect(list.querySelector('li[data-project-id="a"]')).toHaveTextContent('AAA');
+    });
+    expect(screen.queryByTestId('toolbar-sync-popover-projects-send')).not.toBeInTheDocument();
+  });
+
+  it('shows the both icon and lists a project under each heading when it is in both sets', async () => {
+    mockSyncState(IDLE_STATE);
+    mockUnsyncedSets(['a'], ['a']);
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: UNSYNCED_BOTH_ACCESSIBLE_NAME }));
+
+    expect(screen.getByTestId('toolbar-sync-unsynced-icon-both')).toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-sync-unsynced-icon-send')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-sync-unsynced-icon-receive')).not.toBeInTheDocument();
+    expect(await screen.findByText('Test Changes to send:')).toBeInTheDocument();
+    expect(await screen.findByText('Test Changes to receive:')).toBeInTheDocument();
+    const sendList = await screen.findByTestId('toolbar-sync-popover-projects-send');
+    const receiveList = await screen.findByTestId('toolbar-sync-popover-projects-receive');
+    await waitFor(() => {
+      expect(sendList.querySelector('li[data-project-id="a"]')).toHaveTextContent('AAA');
+      expect(receiveList.querySelector('li[data-project-id="a"]')).toHaveTextContent('AAA');
+    });
+  });
+
+  it('shows the send icon and only the send heading when changes are only waiting to be sent', async () => {
+    mockSyncState(IDLE_STATE);
+    mockUnsyncedSets(['a'], []);
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: UNSYNCED_SEND_ACCESSIBLE_NAME }));
+
+    expect(screen.getByTestId('toolbar-sync-unsynced-icon-send')).toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-sync-unsynced-icon-receive')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-sync-unsynced-icon-both')).not.toBeInTheDocument();
+    expect(await screen.findByText('Test Changes to send:')).toBeInTheDocument();
+    expect(screen.queryByText('Test Changes to receive:')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { direction: 'send', toSend: ['a'], toReceive: [], name: UNSYNCED_SEND_ACCESSIBLE_NAME },
+    { direction: 'receive', toSend: [], toReceive: ['a'], name: UNSYNCED_RECEIVE_ACCESSIBLE_NAME },
+    { direction: 'both', toSend: ['a'], toReceive: ['a'], name: UNSYNCED_BOTH_ACCESSIBLE_NAME },
+  ])(
+    'names the $direction direction in the accessible name, after the visible label',
+    async ({ toSend, toReceive, name }) => {
+      mockSyncState(IDLE_STATE);
+      mockUnsyncedSets(toSend, toReceive);
+      mockProjectNames({ a: 'AAA' });
+      render(<SyncStatusButton />);
+
+      const button = await screen.findByRole('button', { name });
+      expect(button).toHaveTextContent('Test Unsynced changes');
+    },
+  );
+
+  it('names the send direction when the direction is not known', async () => {
+    vi.mocked(useSyncStatus).mockReturnValue({
+      status: 'unsynced',
+      syncingProjects: [],
+      unsyncedProjects: [],
+      unsyncedDirection: undefined,
+    });
+    render(<SyncStatusButton />);
+
+    expect(
+      await screen.findByRole('button', { name: UNSYNCED_SEND_ACCESSIBLE_NAME }),
+    ).toBeVisible();
+  });
+
+  it('gives the unsynced button no accessible name of its own until the strings have loaded', async () => {
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    const unloadedStrings = Object.fromEntries(LOCALIZED_STRING_KEYS.map((key) => [key, key]));
+    vi.mocked(useLocalizedStrings).mockReturnValue([unloadedStrings, true]);
+    mockSyncState(IDLE_STATE);
+    mockUnsyncedSets(['a'], ['a']);
+    mockProjectNames({ a: 'AAA' });
+
+    render(<SyncStatusButton />);
+
+    const button = await screen.findByTestId('toolbar-sync-unsynced-icon-both');
+    expect(button).toBeInTheDocument();
+    const toolbarButton = screen.getByTestId('toolbar-sync-button');
+    expect(toolbarButton.getAttribute('aria-label') ?? '').not.toMatch(/%/);
+    // Positive control: the label is in its unloaded, key-for-value state.
+    expect(toolbarButton).toHaveTextContent('%toolbar_sync_status_unsynced%');
+  });
+
+  // The backend's lists can still describe the moment before a sync until it has rechecked, so the
+  // project the sync just sent is held out of the count: the button goes from Syncing straight to
+  // Synced, and a screen reader is never told "Unsynced changes" in between.
+  it('never shows or announces Unsynced changes between a sync that sent a project and Synced', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      IDLE_STATE,
+      { isSyncing: true, lastRequestedProjectIds: ['a'], syncingProjectIds: ['a'] },
+      completedState({ a: 'succeeded' }),
+    ]);
+    mockProjectNames({ a: 'AAA' });
+    mockUnsyncedSets(['a'], [], true);
+    const { rerender } = render(<SyncStatusButton />);
+    await screen.findByRole('button', { name: UNSYNCED_SEND_ACCESSIBLE_NAME });
+
+    fireSyncStateChanged(true);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing');
+    });
+
+    // Everything the button and the region hold from here on, recorded from `oldValue` and removed
+    // nodes: the callback runs after React has committed, so reading the nodes there would report
+    // only the final text.
+    const held: string[] = [];
+    const record = (records: MutationRecord[]) => {
+      records.forEach((entry) => {
+        if (entry.oldValue) held.push(entry.oldValue);
+        entry.removedNodes.forEach((node) => held.push(node.textContent ?? ''));
+      });
+    };
+    const button = screen.getByTestId('toolbar-sync-button');
+    const liveRegion = screen.getByRole('status');
+    const observer = new MutationObserver(record);
+    [button, liveRegion].forEach((target) =>
+      observer.observe(target, {
+        attributes: true,
+        attributeOldValue: true,
+        childList: true,
+        characterData: true,
+        characterDataOldValue: true,
+        subtree: true,
+      }),
+    );
+
+    // The sync ends while the backend is still rechecking.
+    fireSyncStateChanged(false);
+    await waitFor(() => {
+      expect(liveRegion).toHaveTextContent('Test Synced');
+    });
+    // The backend finishes rechecking and the project is clean.
+    mockUnsyncedSets([], [], false);
+    rerender(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(button).toHaveTextContent('Test Synced');
+    });
+    record(observer.takeRecords());
+    observer.disconnect();
+
+    expect(held.join('|')).not.toContain('Test Unsynced changes');
+    expect(liveRegion).toHaveTextContent('Test Synced');
+  });
+
+  // The outcome of a sync the user watched is worth saying even when it is "changes are still
+  // waiting", e.g. another project the sync did not exchange. No direction is spoken.
+  it('announces unsynced as the outcome of a sync that leaves another project unsynced', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: ['a'], syncingProjectIds: ['a'] },
+      completedState({ a: 'succeeded' }),
+    ]);
+    mockProjectNames({ a: 'AAA', b: 'BBB' });
+    mockUnsyncedSets(['b'], []);
+    render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing');
+    });
+
+    fireSyncStateChanged(false);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Unsynced changes');
+    });
+    expect(screen.getByRole('status')).not.toHaveTextContent('Test Changes to send');
+  });
+
+  it('does not announce unsynced when it appears after the sync outcome was spoken', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: ['a'], syncingProjectIds: ['a'] },
+      completedState({ a: 'succeeded' }),
+    ]);
+    mockProjectNames({ a: 'AAA' });
+    mockUnsyncedSets([], []);
+    const { rerender } = render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing');
+    });
+    fireSyncStateChanged(false);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Synced');
+    });
+
+    // An edit made after the sync leaves the project with changes to send.
+    mockUnsyncedSets(['a'], []);
+    rerender(<SyncStatusButton />);
+
+    await screen.findByRole('button', { name: UNSYNCED_SEND_ACCESSIBLE_NAME });
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('announces an unsynced outcome that arrived while the strings were still loading', async () => {
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    const loadedStrings = Object.fromEntries(
+      LOCALIZED_STRING_KEYS.map((key) => {
+        // `areStringsLoaded` is derived from this key.
+        if (key === '%toolbar_sync%') return [key, 'Sync'];
+        if (key === '%toolbar_sync_status_unsynced%') return [key, 'Test Unsynced changes'];
+        return [key, key];
+      }),
+    );
+    const unloadedStrings = Object.fromEntries(LOCALIZED_STRING_KEYS.map((key) => [key, key]));
+    vi.mocked(useLocalizedStrings).mockReturnValue([unloadedStrings, true]);
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: ['a'], syncingProjectIds: ['a'] },
+      completedState({ a: 'succeeded' }),
+    ]);
+    mockUnsyncedSets(['b'], []);
+
+    const { rerender } = render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent(
+        '%toolbar_sync_status_syncing%',
+      );
+    });
+    fireSyncStateChanged(false);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent(
+        '%toolbar_sync_status_unsynced%',
+      );
+    });
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+
+    vi.mocked(useLocalizedStrings).mockReturnValue([loadedStrings, false]);
+    rerender(<SyncStatusButton />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Unsynced changes');
+    });
+  });
+
+  it('re-announces an unsynced outcome in the new language after a locale switch', async () => {
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: ['a'], syncingProjectIds: ['a'] },
+      completedState({ a: 'succeeded' }),
+    ]);
+    mockUnsyncedSets(['b'], []);
+    const { rerender } = render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing');
+    });
+    fireSyncStateChanged(false);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Unsynced changes');
+    });
+
+    // Only the unsynced sentence differs from the English strings, so the announcement can be
+    // corrected for the switch only if that string is part of what the region is keyed on.
+    const [englishStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
+    const spanishStrings = {
+      ...englishStrings,
+      '%toolbar_sync_status_unsynced%': 'Cambios sin sincronizar',
+    };
+    vi.mocked(useLocalizedStrings).mockReturnValue([spanishStrings, false]);
+    rerender(<SyncStatusButton />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Cambios sin sincronizar');
+    });
+  });
+
+  it('does not announce the move from idle to unsynced', async () => {
+    mockSyncState(IDLE_STATE);
+    const { rerender } = render(<SyncStatusButton />);
+    await screen.findByRole('button', { name: 'Sync' });
+
+    mockUnsyncedProjectIds(['a']);
+    mockProjectNames({ a: 'AAA' });
+    rerender(<SyncStatusButton />);
+
+    await screen.findByRole('button', { name: UNSYNCED_SEND_ACCESSIBLE_NAME });
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 });
