@@ -1,4 +1,5 @@
 import type { CommandHandlers } from 'papi-shared-types';
+import type { InterfaceMode } from 'platform-bible-utils';
 import { FocusSubject, getWebViewIdFromFocusSubject } from '@shared/services/window.service-model';
 
 /** The subset of Electron.Input this mapping reads — keeps the function trivially testable */
@@ -20,13 +21,23 @@ export type AppChord = 'openHome' | 'openProjectSettings';
  * the chord — AltGr reports as Ctrl+Alt on Windows and Linux — and a held key (auto-repeat) never
  * matches, so holding a chord acts once.
  *
+ * Ctrl+O does not match in Simple mode, where the Open item it stands for is hidden, so the key
+ * reaches the page there. An interface mode not yet known counts as not Simple, the same way the
+ * main process refuses no extra window until it knows the mode.
+ *
  * Matches `input.key`, like every other chord in `main.ts`, so on a non-Latin layout these chords
  * follow the character the layout produces rather than the physical key.
  *
  * @param input The keyboard input to map
  * @param isMacOS Whether the app is running on macOS (`process.platform === 'darwin'`)
+ * @param interfaceMode The interface mode the main process last saw, or `undefined` if not yet
+ *   known
  */
-export function matchAppChord(input: AppChordInput, isMacOS: boolean): AppChord | undefined {
+export function matchAppChord(
+  input: AppChordInput,
+  isMacOS: boolean,
+  interfaceMode: InterfaceMode | undefined,
+): AppChord | undefined {
   if (input.isAutoRepeat) return undefined;
   const primaryModifier = isMacOS ? input.meta : input.control;
   const otherModifierPressed = input.alt || input.shift || (isMacOS ? input.control : input.meta);
@@ -36,7 +47,7 @@ export function matchAppChord(input: AppChordInput, isMacOS: boolean): AppChord 
     // CapsLock produces the capital letter without Shift, so match both cases
     case 'o':
     case 'O':
-      return 'openHome';
+      return interfaceMode === 'simple' ? undefined : 'openHome';
     case 'j':
     case 'J':
       return 'openProjectSettings';
