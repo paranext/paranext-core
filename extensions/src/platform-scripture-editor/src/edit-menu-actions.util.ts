@@ -1,15 +1,26 @@
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 
-/** The Project menu's Edit flyout commands, which the editor web view runs itself. */
+/**
+ * The Project menu's Edit flyout commands that the editor web view runs itself, from the menu's
+ * select handler: the clipboard is only reachable while the click still counts as user activation,
+ * so these cannot be PAPI commands.
+ */
 export const EDIT_MENU_COMMANDS = [
-  'platformScriptureEditor.undo',
-  'platformScriptureEditor.redo',
   'platformScriptureEditor.cutSelection',
   'platformScriptureEditor.copySelection',
   'platformScriptureEditor.pasteAtSelection',
 ] as const;
 
 export type EditMenuCommand = (typeof EDIT_MENU_COMMANDS)[number];
+
+/**
+ * Every action the Edit flyout can run on the editor: the intercepted clipboard commands plus Undo
+ * and Redo, which arrive as PAPI commands and share the same read-only guard.
+ */
+export type EditMenuActionCommand =
+  | EditMenuCommand
+  | 'platformScriptureEditor.undo'
+  | 'platformScriptureEditor.redo';
 
 /** The parts of the editor the Edit flyout drives. */
 export type EditMenuTarget = Pick<EditorRef, 'undo' | 'redo' | 'cut' | 'copy' | 'paste'>;
@@ -28,7 +39,7 @@ export function isEditMenuCommand(command: string): command is EditMenuCommand {
  * @returns Whether the action ran
  */
 export function runEditMenuAction(
-  command: EditMenuCommand,
+  command: EditMenuActionCommand,
   editor: EditMenuTarget,
   { isReadOnly }: { isReadOnly: boolean },
 ): boolean {
@@ -51,7 +62,7 @@ export function runEditMenuAction(
       editor.paste();
       return true;
     default: {
-      // Exhaustiveness guard: a command added to EDIT_MENU_COMMANDS without a case above fails to
+      // Exhaustiveness guard: a command added to EditMenuActionCommand without a case above fails to
       // compile here, instead of silently telling the user the action is unavailable.
       const unhandled: never = command;
       throw new Error(`Unhandled Edit flyout command: ${String(unhandled)}`);
@@ -96,7 +107,7 @@ export type EditMenuEffects<TEditor extends EditMenuTarget> = {
  * @param effects What to do around the action
  */
 export function handleEditMenuCommand<TEditor extends EditMenuTarget>(
-  command: EditMenuCommand,
+  command: EditMenuActionCommand,
   editor: TEditor | undefined,
   { isReadOnly, isDurablyReadOnly, isSyncBlocked }: EditMenuBlockState,
   effects: EditMenuEffects<TEditor>,
