@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { ColumnsWithHeaders, Localized, MultiColumnMenu } from 'platform-bible-utils';
 import {
   getColumnGroupKeys,
+  getItemsInGroups,
+  getLeadingIconSlot,
   getMenuSectionsWithItems,
   getSortedMenuColumns,
   getSubMenuGroupKeysForMenuItemId,
@@ -204,5 +206,51 @@ describe('getSubMenuGroupKeysForMenuItemId', () => {
 
   it('returns an empty list when no group points at the item', () => {
     expect(getSubMenuGroupKeysForMenuItemId(MENU_WITH_SUBMENU.groups, 'test.unknown')).toEqual([]);
+  });
+});
+
+describe('getLeadingIconSlot', () => {
+  it('reserves no slot for an empty list or a list without leading icons', () => {
+    expect(getLeadingIconSlot([])).toBe('none');
+    expect(getLeadingIconSlot([{}, { iconNameBefore: undefined }])).toBe('none');
+  });
+
+  it('reserves an icon slot when any item has a named leading icon', () => {
+    expect(getLeadingIconSlot([{}, { iconNameBefore: 'search' }])).toBe('icon');
+  });
+
+  it('reserves an image slot when only image paths are used', () => {
+    expect(getLeadingIconSlot([{}, { iconPathBefore: 'https://example.test/a.svg' }])).toBe(
+      'image',
+    );
+  });
+
+  it('prefers the named icon when both kinds appear, as MenuItemIcon does', () => {
+    expect(
+      getLeadingIconSlot([
+        { iconPathBefore: 'https://example.test/a.svg' },
+        { iconNameBefore: 'search' },
+      ]),
+    ).toBe('icon');
+  });
+
+  it('ignores trailing icons', () => {
+    const trailingOnly = [
+      { iconNameBefore: undefined, iconNameAfter: 'search' },
+      { iconNameBefore: undefined, iconPathAfter: 'x.svg' },
+    ];
+    expect(getLeadingIconSlot(trailingOnly)).toBe('none');
+  });
+});
+
+describe('getItemsInGroups', () => {
+  it('keeps only the items of the given groups', () => {
+    const items = [
+      { group: 'a', id: 1 },
+      { group: 'b', id: 2 },
+      { group: 'c', id: 3 },
+    ];
+    expect(getItemsInGroups(items, ['a', 'c']).map((item) => item.id)).toEqual([1, 3]);
+    expect(getItemsInGroups(items, [])).toEqual([]);
   });
 });

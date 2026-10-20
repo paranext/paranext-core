@@ -29,8 +29,11 @@ import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
   getColumnGroupKeys,
+  getItemsInGroups,
+  getLeadingIconSlot,
   getSortedMenuColumns,
   getSubMenuGroupKeysForMenuItemId,
+  LeadingIconSlot,
 } from './menu.util';
 import MenuItemIcon from './menu-icon.component';
 
@@ -56,6 +59,8 @@ const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEvent
  * @param groupKeys Keys of the groups to render, already sorted by the groups' `order`
  * @param isSubMenu Whether the groups fill a submenu. A submenu separates only groups that have
  *   items; a column puts a separator after every group but the last that has items.
+ * @param leadingSlot The leading icon slot of the list these items render in. A submenu works out
+ *   its own from its items.
  */
 const getMenubarContent = (
   groups: Localized<GroupsInMultiColumnMenu>,
@@ -63,6 +68,7 @@ const getMenubarContent = (
   groupKeys: string[],
   isSubMenu: boolean,
   onSelectMenuItem: SelectMenuItemHandler,
+  leadingSlot: LeadingIconSlot,
 ) => {
   let hasShownItems = false;
   return groupKeys.flatMap((groupKey, index) => {
@@ -70,6 +76,8 @@ const getMenubarContent = (
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
       .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
+        const subGroupKeys =
+          'command' in item ? [] : getSubMenuGroupKeysForMenuItemId(groups, item.id);
         return (
           <Tooltip key={`tooltip-${item.label}-${'command' in item ? item.command : item.id}`}>
             <TooltipTrigger asChild>
@@ -87,6 +95,7 @@ const getMenubarContent = (
                     icon={item.iconPathBefore}
                     menuLabel={item.label}
                     leading
+                    leadingSlot={leadingSlot}
                   />
                   {item.label}
                   <MenuItemIcon
@@ -95,7 +104,7 @@ const getMenubarContent = (
                     menuLabel={item.label}
                   />
                   {item.shortcut && (
-                    <MenubarShortcut>
+                    <MenubarShortcut className="tw:ps-4">
                       <ShortcutKeys hint={item.shortcut} />
                     </MenubarShortcut>
                   )}
@@ -103,7 +112,12 @@ const getMenubarContent = (
               ) : (
                 <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
                   <MenubarSubTrigger>
-                    <MenuItemIcon iconName={item.iconNameBefore} menuLabel={item.label} leading />
+                    <MenuItemIcon
+                      iconName={item.iconNameBefore}
+                      menuLabel={item.label}
+                      leading
+                      leadingSlot={leadingSlot}
+                    />
                     {item.label}
                     <MenuItemIcon iconName={item.iconNameAfter} menuLabel={item.label} />
                   </MenubarSubTrigger>
@@ -111,9 +125,10 @@ const getMenubarContent = (
                     {getMenubarContent(
                       groups,
                       items,
-                      getSubMenuGroupKeysForMenuItemId(groups, item.id),
+                      subGroupKeys,
                       true,
                       onSelectMenuItem,
+                      getLeadingIconSlot(getItemsInGroups(items, subGroupKeys)),
                     )}
                   </MenubarSubContent>
                 </MenubarSub>
@@ -268,24 +283,28 @@ export function PlatformMenubar({
 
   return (
     <Menubar ref={menubarRef} className="pr-twp tw:border-0 tw:bg-transparent" variant={variant}>
-      {getSortedMenuColumns(menuData.columns).map(({ columnKey, column }) => (
-        <MenubarMenu key={columnKey}>
-          <MenubarTrigger ref={getRefForColumn(columnKey)}>{column.label}</MenubarTrigger>
-          <MenubarContent
-            style={{ zIndex: Z_INDEX_ABOVE_DOCK }} // Need to get over the floating web view z-index 200
-          >
-            <TooltipProvider>
-              {getMenubarContent(
-                menuData.groups,
-                menuData.items,
-                getColumnGroupKeys(menuData.groups, columnKey),
-                false,
-                onSelectMenuItem,
-              )}
-            </TooltipProvider>
-          </MenubarContent>
-        </MenubarMenu>
-      ))}
+      {getSortedMenuColumns(menuData.columns).map(({ columnKey, column }) => {
+        const columnGroupKeys = getColumnGroupKeys(menuData.groups, columnKey);
+        return (
+          <MenubarMenu key={columnKey}>
+            <MenubarTrigger ref={getRefForColumn(columnKey)}>{column.label}</MenubarTrigger>
+            <MenubarContent
+              style={{ zIndex: Z_INDEX_ABOVE_DOCK }} // Need to get over the floating web view z-index 200
+            >
+              <TooltipProvider>
+                {getMenubarContent(
+                  menuData.groups,
+                  menuData.items,
+                  columnGroupKeys,
+                  false,
+                  onSelectMenuItem,
+                  getLeadingIconSlot(getItemsInGroups(menuData.items, columnGroupKeys)),
+                )}
+              </TooltipProvider>
+            </MenubarContent>
+          </MenubarMenu>
+        );
+      })}
     </Menubar>
   );
 }
