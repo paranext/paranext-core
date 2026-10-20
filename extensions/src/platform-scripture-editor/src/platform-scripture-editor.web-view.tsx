@@ -5161,9 +5161,10 @@ function PlatformScriptureEditor({
 
   const menuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
-      // The Edit flyout acts on this editor, and the clipboard needs the click's user activation,
-      // so it runs here rather than as a PAPI command. Its actions drive the editor directly, past
-      // the events `usePauseEditing` holds off, so a chapter still loading blocks them here instead.
+      // Cut, Copy and Paste act on this editor and need the click's user activation for the
+      // clipboard, so they run here rather than as a PAPI command (Undo and Redo go through PAPI).
+      // Their actions drive the editor directly, past the events `usePauseEditing` holds off, so a
+      // chapter still loading blocks them here instead.
       if (isEditMenuCommand(projectMenuCommand.command)) {
         runEditMenuCommand(projectMenuCommand.command);
         return;
