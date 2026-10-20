@@ -33,6 +33,13 @@ const source = collapseWhitespace(readFileSync(WEB_VIEW_FILE, 'utf-8'));
  */
 const USE_CALLBACK_END = String.raw`\}, \[[^[\]]*\],? ?\);`;
 
+/**
+ * Any React hook call. A callback body never contains one, so finding one means the extraction ran
+ * on past the callback's own end into the next hook — which may be a `useEffect` or `useMemo`, not
+ * only another `useCallback`.
+ */
+const HOOK_CALL = /\buse[A-Z]\w*\(/;
+
 function extractUseCallbackBody(name: string, paramsPattern: string): string {
   const match = source.match(
     new RegExp(`const ${name} = useCallback\\( ?${paramsPattern} => \\{(.*?)${USE_CALLBACK_END}`),
@@ -57,7 +64,7 @@ describe('onCommentEditorSave thread navigation (platform-scripture-editor.web-v
   it('stays within its own callback', () => {
     // Guards the extraction itself: a match that ran on into the next hook would let the
     // assertions below pass on someone else's code.
-    expect(saveBody).not.toContain('useCallback(');
+    expect(saveBody).not.toMatch(HOOK_CALL);
   });
 
   it('awaits the Power-mode list but not the Simple-mode select, reading the mode at save time', () => {
@@ -87,10 +94,10 @@ describe('createCommentAnnotationClickHandler (platform-scripture-editor.web-vie
   it('stays within its own callback', () => {
     // Guards the extraction itself: a match that ran on into the next hook would let the
     // assertions below pass on someone else's code.
-    expect(clickBody).not.toContain('useCallback(');
+    expect(clickBody).not.toMatch(HOOK_CALL);
   });
 
-  it('shows the thread where the interface mode read at click time keeps comments', () => {
+  it('routes the click through showCommentThreadForInterfaceMode using the mode read when the annotation is clicked', () => {
     expect(clickBody).toContain(
       'await showCommentThreadForInterfaceMode(papi, { isPowerMode: isPowerModeRef.current, editorWebViewId: webViewId, threadId, });',
     );
