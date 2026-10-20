@@ -39,7 +39,7 @@ afterAll(() => {
  */
 
 const STRINGS = {
-  '%data_loading_error_internetAccess_disabled_2%': 'Internet access is disabled, translated',
+  '%data_loading_error_internetAccess_disabled_3%': 'Internet access is disabled, translated',
   '%resources_noResults%': 'No resources found',
   '%resources_noResultsError%': 'Unable to search for resources',
   '%resources_retry%': 'Try again',
@@ -396,8 +396,8 @@ describe('GetResources', () => {
       <GetResources
         localizedStringsWithLoadingState={[
           {
-            '%data_loading_error_internetAccess_disabled_2%':
-              '%data_loading_error_internetAccess_disabled_2%',
+            '%data_loading_error_internetAccess_disabled_3%':
+              '%data_loading_error_internetAccess_disabled_3%',
             '%resources_get%': '%resources_get%',
           },
           true,
@@ -423,7 +423,7 @@ describe('GetResources', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText('%data_loading_error_internetAccess_disabled_2%'),
+      screen.queryByText('%data_loading_error_internetAccess_disabled_3%'),
     ).not.toBeInTheDocument();
   });
 });
