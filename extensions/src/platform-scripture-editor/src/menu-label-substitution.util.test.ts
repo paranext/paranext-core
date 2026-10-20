@@ -33,6 +33,43 @@ describe('substituteProjectNameInMenu', () => {
     expect(labelOf(substituteProjectNameInMenu(buildMenu('Sync {projectName}'), ''))).toBe('Sync');
   });
 
+  it('leaves the space after a leading placeholder when the name is empty', () => {
+    // The whitespace rule only absorbs the space BEFORE a placeholder, so a leading placeholder
+    // leaves a leading space.
+    expect(labelOf(substituteProjectNameInMenu(buildMenu('{projectName} sync'), ''))).toBe(' sync');
+  });
+
+  it('fills every placeholder when one string contains it twice', () => {
+    expect(
+      labelOf(substituteProjectNameInMenu(buildMenu('{projectName}: sync {projectName}'), 'HPUXR')),
+    ).toBe('HPUXR: sync HPUXR');
+  });
+
+  it('fills the placeholder in every item that contains it, including one in a submenu', () => {
+    const menu: Menu = {
+      columns: {},
+      groups: { 'a.sub': { menuItem: 'a.submenu', order: 1 } },
+      items: [
+        {
+          id: 'a.submenu',
+          label: 'Project {projectName}',
+          group: 'a.b',
+          order: 1,
+          localizeNotes: '',
+        },
+        {
+          label: 'Sync {projectName}',
+          group: 'a.sub',
+          order: 1,
+          command: 'a.sync',
+          localizeNotes: '',
+        },
+      ],
+    };
+    const result = substituteProjectNameInMenu(menu, 'HPUXR');
+    expect(result.items.map((item) => item.label)).toEqual(['Project HPUXR', 'Sync HPUXR']);
+  });
+
   it('inserts a name containing braces literally', () => {
     expect(labelOf(substituteProjectNameInMenu(buildMenu('Sync {projectName}'), 'A{b}c'))).toBe(
       'Sync A{b}c',
