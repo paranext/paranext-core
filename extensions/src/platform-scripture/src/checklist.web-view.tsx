@@ -40,6 +40,8 @@ import type {
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { projectNamesFromMetadata } from './project-names.util';
+import { getProjectOpenBlockedReasonKey } from './project-open-blocked.util';
+import { useProjectOpenBlockedMessage } from './hooks/use-project-open-blocked-message';
 import { ChecklistTool, CHECKLIST_STRING_KEYS } from './components/checklist.component';
 import type {
   ChecklistCell,
@@ -301,6 +303,10 @@ global.webViewComponent = function ChecklistWebView({
   const [data, setData] = useState<ChecklistData | undefined>(undefined);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [errorCode, setErrorCode] = useState<string | undefined>(undefined);
+  const openBlockedReasonKey = getProjectOpenBlockedReasonKey(error, errorCode);
+  const openBlockedMessage = useProjectOpenBlockedMessage(openBlockedReasonKey);
+  const displayedError = openBlockedReasonKey ? openBlockedMessage : error;
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [columnProjectFullNames, setColumnProjectFullNames] = useState<Record<string, string>>({});
   const [columnDirections, setColumnDirections] = useState<
@@ -377,15 +383,18 @@ global.webViewComponent = function ChecklistWebView({
           // so we can pass it through without further casting.
           setData(toChecklistData(response));
           setError(undefined);
+          setErrorCode(undefined);
         } else {
           setData(undefined);
           setError(response.message);
+          setErrorCode(response.code);
         }
       } catch (err) {
         if (cancelled || !isMountedRef.current) return;
         logger.warn(`ChecklistWebView: buildChecklistData failed: ${getErrorMessage(err)}`);
         setData(undefined);
         setError(getErrorMessage(err));
+        setErrorCode(undefined);
       } finally {
         if (!cancelled && isMountedRef.current) setIsLoading(false);
       }
@@ -629,11 +638,13 @@ global.webViewComponent = function ChecklistWebView({
         // up the same project set that the scripture editor shows.
         includeProjectInterfaces: ['platformScripture.USJ_Chapter', 'platformScripture.USFM_Book'],
       });
+      // Filtered once here for both the primary and comparative-texts pickers.
+      const openableMetadata = allMetadata.filter((metadata) => !metadata.unsupportedReason);
       // Names and language come off the metadata above rather than a `pdp.getSetting` fan-out —
       // see `projectNamesFromMetadata` for why. `language` lets the built-in `language` grouping
       // partition rows into real per-language buckets rather than everything under "Unknown
       // language".
-      return allMetadata.map((metadata): ChecklistRawProject => {
+      return openableMetadata.map((metadata): ChecklistRawProject => {
         const { language, ...names } = projectNamesFromMetadata(metadata);
         return { id: metadata.id, ...names, rawLanguage: language };
       });
@@ -1027,7 +1038,7 @@ global.webViewComponent = function ChecklistWebView({
         columnProjectFullNames={columnProjectFullNames}
         columnDirections={columnDirections}
         isLoading={isLoading}
-        error={error}
+        error={displayedError}
         helpText={undefined}
         primaryProjectSelector={primaryProjectSelectorNode}
         comparativeTextsSelector={comparativeTextsSelectorNode}

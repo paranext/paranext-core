@@ -47,12 +47,22 @@ export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
 
 type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
 
-/** Options to provide when showing the Select Project dialog */
+/**
+ * Options to provide when showing the Select Project dialog. Projects that cannot be opened (see
+ * `ProjectMetadata.unsupportedReason`) are never listed, even when named in `includeProjectIds`.
+ */
 export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
 
-/** Options to provide when showing the Select Multiple Project dialog */
+/**
+ * Options to provide when showing the Select Multiple Project dialog. Projects that cannot be
+ * opened (see `ProjectMetadata.unsupportedReason`) are never listed, even when named in
+ * `includeProjectIds`.
+ */
 export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
-  /** Project IDs that should start selected in the dialog */
+  /**
+   * Project IDs that should start selected in the dialog. The id of a project that cannot be opened
+   * has no row to unselect, so it is returned unchanged on submit.
+   */
   selectedProjectIds?: string[];
 };
 

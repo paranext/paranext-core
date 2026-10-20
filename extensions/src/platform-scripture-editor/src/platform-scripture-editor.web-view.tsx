@@ -207,6 +207,7 @@ import {
   selectCommentThreadInPanelSafe,
   shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
+  UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
@@ -248,6 +249,7 @@ import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
 } from './sync-blocked-banner.component';
+import { UnsupportedProjectGate } from './unsupported-project-gate.component';
 
 /**
  * Pass-through wrapper for the editor inside {@link InPortal}. `react-reverse-portal`'s `InPortal`
@@ -497,7 +499,7 @@ const PERMISSIONS_EXCEPTION_REGEX = /Permissions exception for projectId/;
 // when a project write is rejected because an automatic Send/Receive is syncing that project.
 const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
 
-globalThis.webViewComponent = function PlatformScriptureEditor({
+function PlatformScriptureEditor({
   id: webViewId,
   projectId,
   title,
@@ -5129,5 +5131,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         </PopoverContent>
       </Popover>
     </div>
+  );
+}
+
+/**
+ * Entry point. The web-view factory writes the project's `unsupportedReason` into this view's state
+ * on every build, including a layout restore; see {@link UnsupportedProjectGate}.
+ */
+globalThis.webViewComponent = function PlatformScriptureEditorWebView(props: WebViewProps) {
+  // Destructured here rather than in the parameter list because the editor receives every prop.
+  const { projectId, useWebViewState } = props;
+  const [unsupportedReason] = useWebViewState<string>(UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY, '');
+  return (
+    <UnsupportedProjectGate unsupportedReason={unsupportedReason} announcementKey={projectId}>
+      <PlatformScriptureEditor {...props} />
+    </UnsupportedProjectGate>
   );
 };

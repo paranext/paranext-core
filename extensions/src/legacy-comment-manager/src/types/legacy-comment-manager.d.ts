@@ -406,10 +406,12 @@ declare module 'legacy-comment-manager' {
       // #region Permission Check Functions
 
       /**
-       * Determines if the current user can create new comment threads in this project
+       * Determines if the current user can create new comment threads in this project. False for a
+       * project Platform.Bible can't open (see `ProjectMetadata.unsupportedReason`), because
+       * `createComment` refuses it.
        *
        * @param allowInSba Allow creating comments in Study Bible Additions projects (default:
-       *   false)
+       *   false). Has no effect while such projects can't be opened.
        * @returns Promise that resolves to true if the user can create comments, false otherwise
        */
       canUserCreateComments(allowInSba?: boolean): Promise<boolean>;

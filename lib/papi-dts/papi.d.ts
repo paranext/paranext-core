@@ -8203,6 +8203,23 @@ declare module 'shared/models/project-metadata.model' {
      * @experimental Recently added; may change as we learn how it is used.
      */
     isPublished?: boolean;
+    /**
+     * Localize key explaining why Platform.Bible cannot open the project (e.g. a Study Bible
+     * Additions project). **Absent or empty means the project can be opened**, and so does a failed
+     * metadata lookup, so an error never locks a user out of a real project.
+     *
+     * - Tool pickers leave such a project out. Surfaces where users open projects (Home, New Tab, the
+     *   Simple-mode project picker) show it disabled with the localized reason.
+     * - Platform.Bible refuses the project's Scripture text with an error containing
+     *   `(PROJECT_OPEN_BLOCKED)`. A web view of your own that opens projects must check this field.
+     * - The project's data stays available for Send/Receive, settings and metadata.
+     * - For producers: the value must be a registered localize key; omit the field rather than setting
+     *   `''`. When several factories serve a project, the first non-empty reason wins, and no factory
+     *   can clear it.
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    unsupportedReason?: string;
   };
   export type ProjectDataProviderFactoryMetadataInfo = {
     /**
@@ -9533,11 +9550,21 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    */
   export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
-  /** Options to provide when showing the Select Project dialog */
+  /**
+   * Options to provide when showing the Select Project dialog. Projects that cannot be opened (see
+   * `ProjectMetadata.unsupportedReason`) are never listed, even when named in `includeProjectIds`.
+   */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
-  /** Options to provide when showing the Select Multiple Project dialog */
+  /**
+   * Options to provide when showing the Select Multiple Project dialog. Projects that cannot be
+   * opened (see `ProjectMetadata.unsupportedReason`) are never listed, even when named in
+   * `includeProjectIds`.
+   */
   export type SelectMultipleProjectsDialogOptions = ProjectDialogOptionsBase & {
-    /** Project IDs that should start selected in the dialog */
+    /**
+     * Project IDs that should start selected in the dialog. The id of a project that cannot be opened
+     * has no row to unselect, so it is returned unchanged on submit.
+     */
     selectedProjectIds?: string[];
   };
   /**

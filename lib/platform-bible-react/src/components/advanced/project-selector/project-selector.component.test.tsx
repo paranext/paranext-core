@@ -1303,6 +1303,134 @@ describe('ProjectSelector — project name display', () => {
   });
 });
 
+describe('ProjectSelector — per-row disabled', () => {
+  const PROJECTS_WITH_DISABLED: ProjectSelectorProject[] = [
+    { id: 'first', shortName: 'FIRST', fullName: 'First enabled project' },
+    {
+      id: 'locked',
+      shortName: 'LOCKED',
+      fullName: 'A locked project',
+      isDisabled: true,
+      disabledReason: 'Cannot be opened here',
+    },
+    { id: 'last', shortName: 'LAST', fullName: 'Last enabled project' },
+  ];
+
+  function renderWithDisabledRow(onChangeSelection = vi.fn()) {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={PROJECTS_WITH_DISABLED}
+        openTabs={[]}
+        selection={{ projectId: undefined }}
+        onChangeSelection={onChangeSelection}
+        localizedStrings={HARNESS_STRINGS}
+      />,
+    );
+    return onChangeSelection;
+  }
+
+  it('restores pointer events on a disabled row so hovering it can open the reason tooltip', async () => {
+    const user = setupUser();
+    renderWithDisabledRow();
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
+
+    // jsdom applies no Tailwind CSS, so the shared CommandItem's `pointer-events: none` on disabled
+    // items never takes effect here and a hover test passes either way. Pin the override class
+    // itself, and that `cn` dropped the base class it overrides rather than emitting both.
+    const disabledRow = screen.getByRole('option', { name: /LOCKED/ });
+    expect(disabledRow).toHaveAttribute('data-disabled', 'true');
+    expect(disabledRow).toHaveClass('tw:data-[disabled=true]:pointer-events-auto');
+    expect(disabledRow).not.toHaveClass('tw:data-[disabled=true]:pointer-events-none');
+
+    const enabledRow = screen.getByRole('option', { name: /FIRST/ });
+    expect(enabledRow).not.toHaveClass('tw:data-[disabled=true]:pointer-events-auto');
+  });
+
+  it('shows the disabled reason when the disabled row is hovered', async () => {
+    const user = setupUser();
+    renderWithDisabledRow();
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
+
+    await user.hover(screen.getByText('A locked project'));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Cannot be opened here');
+
+    // The tooltip bubble inverts the theme (`bg-foreground`), so muted text on it is unreadable;
+    // the reason line inherits the bubble's text color like its sibling secondary lines.
+    const reasonLines = screen.getAllByText('Cannot be opened here');
+    reasonLines.forEach((reasonLine) => {
+      expect(reasonLine).toHaveClass('tw:italic');
+      expect(reasonLine).not.toHaveClass('tw:text-muted-foreground');
+    });
+  });
+
+  it('does not select the disabled row when it is clicked', async () => {
+    const user = setupUser();
+    const onChangeSelection = renderWithDisabledRow();
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
+
+    await user.click(screen.getByRole('option', { name: /LOCKED/ }));
+    expect(onChangeSelection).not.toHaveBeenCalled();
+
+    // Positive control: the same click on an enabled row does select it.
+    await user.click(screen.getByRole('option', { name: /LAST/ }));
+    expect(onChangeSelection).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'last' }));
+  });
+
+  it("does not reopen a disabled project from its bound-but-closed row's Open button", async () => {
+    const user = setupUser();
+    const onOpenProjectInGroup = vi.fn();
+    const { rerender } = render(
+      <ProjectSelector
+        mode="projectScrollGroup"
+        projects={PROJECTS_WITH_DISABLED}
+        openTabs={[]}
+        // Bound to group A with no tab open there, which is what gives the row its Open button.
+        selection={{ projectId: 'locked', scrollGroupId: 0 }}
+        onChangeSelection={vi.fn()}
+        onOpenProjectInGroup={onOpenProjectInGroup}
+        localizedStrings={HARNESS_STRINGS}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
+
+    // Only the bound-but-closed row carries an Open button.
+    await user.click(screen.getByRole('button', { name: 'Open' }));
+    expect(onOpenProjectInGroup).not.toHaveBeenCalled();
+
+    // Positive control: the same button on an enabled bound-but-closed row reopens it.
+    rerender(
+      <ProjectSelector
+        mode="projectScrollGroup"
+        projects={PROJECTS_WITH_DISABLED}
+        openTabs={[]}
+        selection={{ projectId: 'first', scrollGroupId: 0 }}
+        onChangeSelection={vi.fn()}
+        onOpenProjectInGroup={onOpenProjectInGroup}
+        localizedStrings={HARNESS_STRINGS}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Open' }));
+    expect(onOpenProjectInGroup).toHaveBeenCalledWith('first', 0);
+  });
+
+  it('does not move the highlight onto the disabled row when the pointer moves over it', async () => {
+    const user = setupUser();
+    renderWithDisabledRow();
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
+
+    // Positive control: hovering an enabled row moves cmdk's highlight to it.
+    const lastRow = screen.getByRole('option', { name: /LAST/ });
+    await user.hover(lastRow);
+    expect(lastRow).toHaveAttribute('aria-selected', 'true');
+
+    const disabledRow = screen.getByRole('option', { name: /LOCKED/ });
+    await user.hover(disabledRow);
+    expect(disabledRow).toHaveAttribute('aria-selected', 'false');
+    expect(lastRow).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
 describe('ProjectSelector — trigger accessible name', () => {
   it('names the selected project alongside the group label', () => {
     render(<ProjectSelectorHarness initialSelected="web" />);

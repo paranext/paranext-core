@@ -692,8 +692,12 @@ function ProjectRowView({
             size="sm"
             variant="ghost"
             className="tw:h-6 tw:gap-1 tw:px-2 tw:text-xs"
+            // A disabled row takes pointer events so its reason tooltip can open, which would also
+            // let this nested button be clicked.
+            disabled={row.isDisabled}
             onClick={(event) => {
               event.stopPropagation();
+              if (row.isDisabled) return;
               onOpen(row);
             }}
             onMouseDown={(event: MouseEvent) => event.stopPropagation()}
@@ -718,7 +722,15 @@ function ProjectRowView({
       disabled={row.isDisabled}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
-      className="tw:flex tw:items-center tw:gap-2 tw:pe-4"
+      // The shared `CommandItem` gives disabled items `pointer-events: none`, which blocks the hover
+      // that opens the reason tooltip; cmdk still never selects or highlights a disabled item. Using
+      // the base class's `data-[disabled]` variant lets `cn` replace it; a plain class would lose on
+      // specificity.
+      className={cn(
+        'tw:flex tw:items-center tw:gap-2 tw:pe-4',
+        row.isDisabled &&
+          'tw:data-[disabled=true]:pointer-events-auto tw:data-[disabled=true]:cursor-not-allowed',
+      )}
     >
       <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
         {leftCheck}
@@ -810,7 +822,7 @@ function ProjectRowView({
           </div>
         )}
         {row.isDisabled && row.disabledReason && (
-          <div className="tw:text-sm tw:italic tw:text-muted-foreground">{row.disabledReason}</div>
+          <div className="tw:text-sm tw:italic">{row.disabledReason}</div>
         )}
       </TooltipContent>
     </Tooltip>

@@ -2727,6 +2727,16 @@ declare module 'platform-scripture' {
     /** Names of admins on this project. Only filled if project is new */
     adminNames?: string[];
     warnings?: string[];
+    /**
+     * Localize key explaining why this project cannot be opened (see
+     * `ProjectMetadata.unsupportedReason`); omitted when it can be. Only opening is blocked:
+     * Send/Receive and download stay allowed, so mark the row with the reason rather than disabling
+     * its Send/Receive actions.
+     *
+     * Producers set it for local and server-only projects alike. When it is absent, callers fall
+     * back to the local project's metadata.
+     */
+    unsupportedReason?: string;
   };
 
   /**

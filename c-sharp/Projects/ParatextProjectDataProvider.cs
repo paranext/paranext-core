@@ -772,10 +772,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <returns>The auto-generated comment ID (format: "threadId/userName/date")</returns>
     /// <exception cref="InvalidOperationException">If the selected text is invalid or the comment's
     /// assigned (<see cref="PlatformCommentWrapper.AssignedUser"/>) cannot be assigned to threads
-    /// in this project.
+    /// in this project.</exception>
+    /// <exception cref="ProjectOpenBlockedException">If Platform.Bible can't open this project
+    /// (see <see cref="ScrTextExtensions.ThrowIfOpenBlocked"/>).</exception>
     public string CreateComment(PlatformCommentWrapper comment)
     {
         using var _ = EnterSyncWriteScope();
+        // A comment is anchored to verse text, which a project that can't be opened doesn't serve
+        ThrowIfProjectOpenBlocked();
         VerifyUserCanCreateComments();
 
         // Never let the "content could not be displayed" placeholder become a note's real content.
@@ -1024,6 +1028,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Named (not `_`) because this method later uses `out _` discards, which would bind to a
         // using variable named `_` and fail to compile.
         using var syncWriteScope = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         if (resolution != "accept" && resolution != "reject" && resolution != "merge")
             throw new InvalidDataException(
                 $"Invalid resolution '{resolution}' for ResolveConflict; expected 'accept', 'reject', or 'merge'."
@@ -1217,15 +1222,18 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// This resolvability policy mirrors a slice of PT9's <c>CommentHtmlBuilder.GetResolutionOptions</c>
     /// (the canonical version lives in ParatextInternalShared and is not referenceable here).
     /// Intentional divergences to keep in mind if that upstream method changes: (1) a Team-assigned
-    /// conflict is resolvable by any team member (see <see cref="IsThreadAssignedToUser"/>); (2) there
-    /// is no study-bible-additions gate; (3) staleness regularizes and trims whitespace before
-    /// comparing (see <see cref="IsConflictVerseStale"/>), so a pure leading/trailing whitespace
-    /// change is not treated as stale.
+    /// conflict is resolvable by any team member (see <see cref="IsThreadAssignedToUser"/>); (2)
+    /// staleness regularizes and trims whitespace before comparing (see
+    /// <see cref="IsConflictVerseStale"/>), so a pure leading/trailing whitespace change is not
+    /// treated as stale.
     /// </remarks>
     public string GetConflictResolutionOptions(string threadId)
     {
         try
         {
+            // A project that can't be opened offers no resolution. Its refusal is an
+            // InvalidOperationException, caught below as "none" before any verse text is read.
+            ThrowIfProjectOpenBlocked();
             // Verify proves the thread exists (throws otherwise) and returns it, so no re-find here.
             CommentThread thread = VerifyUserCanResolveConflict(threadId);
             if (IsConflictVerseStale(thread))
@@ -1437,14 +1445,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// Determines if the current user can create new comment threads in this project.
+    /// Determines if the current user can create new comment threads in this project. False for a
+    /// project Platform.Bible can't open, because <see cref="CreateComment"/> refuses it.
     /// </summary>
-    /// <param name="allowInSba">Allow creating comments in Study Bible Additions projects (default: false)</param>
+    /// <param name="allowInSba">Allow creating comments in Study Bible Additions projects (default:
+    /// false). Has no effect while such projects can't be opened.</param>
     /// <returns>True if the user can create comments, false otherwise</returns>
     public bool CanUserCreateComments(bool allowInSba = false)
     {
         try
         {
+            ThrowIfProjectOpenBlocked();
             VerifyUserCanCreateComments(allowInSba);
             return true;
         }
@@ -2696,6 +2707,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public bool SetBookUsfm(VerseRef verseRef, string data)
     {
         using var _ = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         return SetBookUsfmInScope(verseRef, data);
     }
 
@@ -2739,6 +2751,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public bool SetChapterUsfm(VerseRef verseRef, string data)
     {
         using var _ = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -3073,6 +3086,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // SetBookUsfmInScope (NOT the public SetBookUsfm) so the whole mutation sits under a single
         // scope — nesting is unsafe under an arm race; see SetBookUsfmInScope. Inert in public core.
         using var _ = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         // The ParatextData project write lock (RunWithinLock) is taken inside SetBookUsfmInScope —
         // unrelated to the S/R gate scope above, despite the similar name.
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -3083,6 +3097,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public bool SetChapterUsx(VerseRef verseRef, string data)
     {
         using var _ = EnterSyncWriteScope();
+        ThrowIfProjectOpenBlocked();
         string? failedMessage = null;
         bool didChange = true;
         try
@@ -3152,6 +3167,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+            // Before the book check, so a refused project isn't reported as missing a book
+            scrText.ThrowIfOpenBlocked();
             if (verseRef.Versification == null)
                 verseRef.Versification = scrText.Settings.Versification;
             if (!scrText.BookPresent(verseRef.BookNum))
@@ -3357,6 +3374,27 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private IDisposable EnterSyncWriteScope()
     {
         return SendReceiveWriteLock.EnterWrite(ProjectDetails.Metadata.Id);
+    }
+
+    /// <summary>
+    /// Refuses this project's text when Platform.Bible can't open the project (see
+    /// <see cref="ScrTextExtensions.ThrowIfOpenBlocked"/>). Methods that write text call it right
+    /// after <see cref="EnterSyncWriteScope"/>, which stays their first statement; the scope's
+    /// <c>using</c> releases it when the refusal throws. A project that can't be found passes, so
+    /// each method's own lookup reports it.
+    /// </summary>
+    private void ThrowIfProjectOpenBlocked()
+    {
+        ScrText scrText;
+        try
+        {
+            scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        }
+        catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
+        {
+            return;
+        }
+        scrText.ThrowIfOpenBlocked();
     }
 
     #endregion

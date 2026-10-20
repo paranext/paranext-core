@@ -45,7 +45,9 @@ internal sealed class InventoryWorker
         InventoryId = inventoryId;
         ProjectId = inputRanges[0].ProjectId;
         _inputRanges = inputRanges;
-        _dataSource = new ChecksDataSource(LocalParatextProjects.GetParatextProject(ProjectId))
+        ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectId);
+        scrText.ThrowIfOpenBlocked();
+        _dataSource = new ChecksDataSource(scrText)
         {
             SelectedPassageSet = new SelectedPassages(
                 new BookSet(inputRanges.Select(range => range.Start.BookNum).Distinct())

@@ -201,6 +201,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         ArgumentException.ThrowIfNullOrEmpty(projectId);
 
         var scrText = LocalParatextProjects.GetParatextProject(projectId);
+        scrText.ThrowIfOpenBlocked();
         var check = _createCheck(checkId, new ChecksDataSource(scrText));
         return CheckSetupStatusLookup.Lookup(checkId, check, scrText);
     }
@@ -223,6 +224,8 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         // Send/Receive is syncing this project, and keeps the sync's drain waiting until this
         // mutation completes. Inert in public core — see SendReceiveWriteLock.
         using var _ = SendReceiveWriteLock.EnterWrite(projectId);
+        // GetCheck refuses only when it builds the data source, which a cached check skips.
+        LocalParatextProjects.GetParatextProject(projectId).ThrowIfOpenBlocked();
 
         var check = _checkCache.GetCheck(checkId, projectId);
         var denials = GetOrCreateDenials(projectId);
@@ -246,6 +249,8 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         // Send/Receive is syncing this project, and keeps the sync's drain waiting until this
         // mutation completes. Inert in public core — see SendReceiveWriteLock.
         using var _ = SendReceiveWriteLock.EnterWrite(projectId);
+        // As in DenyCheckResult: GetCheck skips the refusal for a cached check.
+        LocalParatextProjects.GetParatextProject(projectId).ThrowIfOpenBlocked();
 
         var check = _checkCache.GetCheck(checkId, projectId);
         var denials = GetOrCreateDenials(projectId);
@@ -358,6 +363,11 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                     try
                     {
                         check = _checkCache.GetCheck(checkId, range.ProjectId);
+                    }
+                    catch (ProjectOpenBlockedException)
+                    {
+                        // No check can run on this project, so the job fails with the reason
+                        throw;
                     }
                     catch (Exception ex)
                     {

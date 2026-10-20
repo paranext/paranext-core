@@ -56,13 +56,16 @@ beforeAll(() => {
 // Hoisted mocks — must precede any import that touches the web view
 // ---------------------------------------------------------------------------
 
-type MockProject = { id: string; shortName: string; fullName?: string };
+type MockProject = {
+  id: string;
+  shortName: string;
+  fullName?: string;
+  unsupportedReason?: string;
+};
 type MockOpenTab = { projectId: string; scrollGroupId: number; webViewType: string };
 
 const { mockChecklistService, mockRecentProjects, mockProjects, mockOpenTabs } = vi.hoisted(() => {
-  const projects: { value: { id: string; shortName: string; fullName?: string }[] } = {
-    value: [],
-  };
+  const projects: { value: MockProject[] } = { value: [] };
   const openTabs: {
     value: { projectId: string; scrollGroupId: number; webViewType: string }[];
   } = { value: [] };
@@ -84,6 +87,7 @@ vi.mock('@papi/frontend', () => {
   return {
     default: {
       menuData: { dataProviderName: 'platform.menuData' },
+      localization: { dataProviderName: 'platform.localizationDataServiceDataProvider' },
       projectDataProviders: {
         get: vi.fn(async () => makeProjectDataProvider()),
       },
@@ -93,10 +97,11 @@ vi.mock('@papi/frontend', () => {
         // render as a real full name. Mirror that contract: `name`/`fullName` are optional, and a
         // fixture without a full name simply omits the field.
         getMetadataForAllProjects: vi.fn(async () =>
-          mockProjects.value.map(({ id, shortName, fullName }) => ({
+          mockProjects.value.map(({ id, shortName, fullName, unsupportedReason }) => ({
             id,
             name: shortName,
             ...(fullName ? { fullName } : {}),
+            ...(unsupportedReason ? { unsupportedReason } : {}),
             language: 'en',
           })),
         ),
@@ -124,25 +129,34 @@ vi.mock('@papi/frontend/react', async () => {
   const { isProjectSelectorSharedKey: isSharedKey, localizedValueFor: valueFor } = await import(
     './project-selector.test-utils'
   );
+  // Echo each requested key back as its own value, which is what useLocalizedStrings does before
+  // it resolves. Two exceptions: the picker treats a key echoed as its own value as unresolved,
+  // so the shared `%projectSelector_*%` block gets a resolved-looking value instead; and the
+  // column header's aria template is echoed back resolved because dropping its `{name}`
+  // placeholder would remove the only place the composed project name is observable.
+  const localize = (keys: string[]) =>
+    Object.fromEntries(
+      keys.map((key) => {
+        if (key === '%markersChecklist_columnHeader_aria%') return [key, 'Project: {name}'];
+        // Resolved so the refusal tests can tell the localized reason from the raw key.
+        if (key === '%project_unsupported_studyBibleAdditions%')
+          return [key, "Study Bible Additions projects aren't supported yet."];
+        if (key === '%project_unsupported_generic%') return [key, "This project can't be opened."];
+        return [key, isSharedKey(key) ? valueFor(key) : key];
+      }),
+    );
   return {
-    // Echo each requested key back as its own value, which is what useLocalizedStrings does before
-    // it resolves. Two exceptions: the picker treats a key echoed as its own value as unresolved,
-    // so the shared `%projectSelector_*%` block gets a resolved-looking value instead; and the
-    // column header's aria template is echoed back resolved because dropping its `{name}`
-    // placeholder would remove the only place the composed project name is observable.
-    useLocalizedStrings: (keys: string[]) => [
-      Object.fromEntries(
-        keys.map((key) => {
-          if (key === '%markersChecklist_columnHeader_aria%') return [key, 'Project: {name}'];
-          return [key, isSharedKey(key) ? valueFor(key) : key];
-        }),
-      ),
-      false,
-    ],
+    useLocalizedStrings: (keys: string[]) => [localize(keys), false],
     useProjectDataProvider: vi.fn(() => undefined),
     useData: vi.fn(() => ({
       RecentProjects: () => [mockRecentProjects.value, vi.fn(), false],
       WebViewMenu: (_selector: unknown, defaultValue: unknown) => [defaultValue, vi.fn(), false],
+      // The localization data type, which the refusal message reads through `useData`.
+      LocalizedStrings: ({ localizeKeys }: { localizeKeys: string[] }) => [
+        localize(localizeKeys),
+        vi.fn(),
+        false,
+      ],
     })),
   };
 });
@@ -460,6 +474,108 @@ describe('ChecklistWebView comparative-texts picker', () => {
     await user.click((await screen.findAllByRole('option', { name: /P2/ }))[0]);
     expect(comparativeTextsWrites).toHaveLength(2);
     expect(comparativeTextsWrites[1]).toEqual([]);
+  });
+});
+
+describe('ChecklistWebView unsupported projects', () => {
+  // The web view's own project is P1; P2 cannot be opened; P3 can. With the filter in place each
+  // picker opens with exactly one row (the comparative picker also excludes P1 as "self"), which
+  // keeps these popovers inside the single-row range the rest of this harness exercises.
+  const PRIMARY_AND_SBA: MockProject[] = [
+    { id: 'project-1', shortName: 'P1', fullName: 'Project One' },
+    {
+      id: 'project-2',
+      shortName: 'P2',
+      fullName: 'Project Two',
+      unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+    },
+  ];
+
+  it('excludes the unsupported project from the comparative-texts picker', async () => {
+    mockRecentProjects.value = [];
+    mockProjects.value = [
+      ...PRIMARY_AND_SBA,
+      { id: 'project-3', shortName: 'P3', fullName: 'Project Three' },
+    ];
+    mockOpenTabs.value = [];
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    // cmdk rows are click targets that fireEvent.click() does not drive; pointerEventsCheck off
+    // because jsdom does no layout.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const trigger = await screen.findByTestId('checklist-comparative-texts-trigger');
+    await user.click(within(trigger).getByRole('combobox'));
+
+    // P1 is excluded as "self" and P2 cannot be opened, so only P3 is offered.
+    const rows = await screen.findAllByRole('option');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('P3');
+    expect(screen.queryByText('P2')).not.toBeInTheDocument();
+  });
+
+  it('excludes the unsupported project from the primary-project picker', async () => {
+    mockRecentProjects.value = [];
+    mockProjects.value = PRIMARY_AND_SBA;
+    mockOpenTabs.value = [];
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const trigger = await screen.findByTestId('checklist-primary-project-trigger');
+    await user.click(within(trigger).getByRole('combobox'));
+
+    const rows = await screen.findAllByRole('option');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('P1');
+    expect(screen.queryByText('P2')).not.toBeInTheDocument();
+  });
+});
+
+describe('ChecklistWebView error banner', () => {
+  function serviceFailingWith(code: string, message: string) {
+    return { buildChecklistData: vi.fn(async () => ({ success: false, code, message })) };
+  }
+
+  it('shows why the backend refused a project that cannot be opened', async () => {
+    mockRecentProjects.value = [];
+    mockProjects.value = [{ id: 'project-1', shortName: 'P1' }];
+    const refusal =
+      "Project 'PROJECT-1' can't be opened in Platform.Bible: %project_unsupported_studyBibleAdditions% (PROJECT_OPEN_BLOCKED)";
+    mockChecklistService.value = serviceFailingWith('PROJECT_OPEN_BLOCKED', refusal);
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    expect(
+      await screen.findByText("Study Bible Additions projects aren't supported yet."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(refusal)).not.toBeInTheDocument();
+  });
+
+  it('recognizes a refusal by its error code alone', async () => {
+    mockRecentProjects.value = [];
+    mockProjects.value = [{ id: 'project-1', shortName: 'P1' }];
+    mockChecklistService.value = serviceFailingWith('PROJECT_OPEN_BLOCKED', 'Refused.');
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    expect(await screen.findByText("This project can't be opened.")).toBeInTheDocument();
+    expect(screen.queryByText('Refused.')).not.toBeInTheDocument();
+  });
+
+  it('shows any other error as the backend sent it', async () => {
+    mockRecentProjects.value = [];
+    mockProjects.value = [{ id: 'project-1', shortName: 'P1' }];
+    mockChecklistService.value = serviceFailingWith('MAX_ROWS_EXCEEDED', 'Too many rows to show.');
+
+    const ChecklistWebView = getChecklistWebView();
+    render(<ChecklistWebView {...makeProps()} />);
+
+    expect(await screen.findByText('Too many rows to show.')).toBeInTheDocument();
   });
 });
 
