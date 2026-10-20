@@ -818,6 +818,37 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-check-job-completes-with-per-check-errors: A check job completes with per-check errors, and check setup status has three states
+
+- **Date:** 2026-10-12
+- **Status:** Accepted
+- **Context:** One Basic check that threw (for example Quotation on a project with invalid or
+  "not used" quotation rules) ended the whole check job: `CheckCache.RunChecksForProject` had no
+  per-check guard and `CheckRunner.ProcessCheckJob` copied results only after the whole book ran, so
+  the Checks panel and the Checking Assistant lost every other check's results. Paratext 9 catches
+  only the settings exception (`RequiredCheckSettingsMissingException`) per check; any other
+  exception stops its run. A project that deliberately does not use quotation marks (quotes set to
+  `none`) also had no way to say "this check does not apply" short of an error.
+- **Decision:** Every check runner isolates each check and lists the ones that could not run on
+  `CheckJobStatusReport.checkErrors`; the job still ends `completed`, and `errored` means the job
+  itself failed. A check that failed is not cached, so the next job retries it after a settings fix.
+  `lookUpCheckSetupStatus(checkId, projectId)` reports `ready`, `setupRequired` or `notApplicable`
+  (with a `reason` localize key that each consumer localizes). Not applicable covers quotation rules set to `none`, Quotation types
+  switched off in Quotation rules, and Study Bible Additions projects. `isCheckSetupForProject`
+  counts not-applicable as set up, so existing "Setup required" filters stay correct. A
+  not-applicable check is skipped by the job with no result and no error.
+- **Alternatives:** Paratext 9 parity (settings exception only, other exceptions stop the run) —
+  rejected: background runs would silently lose all results (Matt Lyons, on PT-4761). A result row
+  with a fake reference carrying the message — rejected: `CheckRunResult` requires a verse. A
+  per-project available-checks list — rejected: a bigger API change, and the user cannot see why a
+  check vanished. A `get*` method name — rejected: `get`/`set`/`subscribe` are reserved
+  data-provider prefixes.
+- **Consequences:** Consumers that only read `status === 'errored'` no longer see check failures and
+  should read `checkErrors` (the Checking Assistant's per-check retry fallback stops firing, since
+  the job no longer errors). Quotation types now returns nothing on projects where the administrator
+  never enabled it, as in Paratext 9. Both new API items are experimental.
+- **Source:** PT-4761 "Handle errors from Basic checks gracefully".
+
 ## adr-closed-source-command-doc-altitude: Command docs for closed-source-backed PAPI commands describe caller-visible guarantees, not the current implementer's mechanism
 
 - **Date:** 2026-09-05

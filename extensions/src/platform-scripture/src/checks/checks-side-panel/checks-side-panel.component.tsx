@@ -1,5 +1,7 @@
 import {
   Button,
+  ERROR_POPOVER_STRING_KEYS,
+  ErrorPopover,
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
   Progress,
@@ -24,14 +26,17 @@ import {
 import {
   formatReplacementString,
   LanguageStrings,
+  LocalizeKey,
   makeProjectSelectorCustomData,
 } from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import {
   CHECK_SCOPE_FILTER_STRINGS,
   CheckInfo,
   CheckScopes,
+  getCheckDisplayName,
+  getCheckTypeSecondaryLabel,
   isValidCheckScope,
   LOCALIZED_STRINGS,
   ProjectOption,
@@ -48,7 +53,80 @@ export const CHECKS_SIDE_PANEL_STRING_KEYS = Object.freeze([
   // Shared ProjectSelector keys — every ProjectSelector in the app resolves the same block, then
   // the caller merges its own placeholder/ariaLabel on top.
   ...PROJECT_SELECTOR_STRING_KEYS,
+  // The popover that shows a failed check's raw error message
+  ...ERROR_POPOVER_STRING_KEYS,
 ] as const);
+
+/**
+ * Ids of the checks that fail with a Paratext 9 message naming a settings location (Quotation
+ * rules). Other checks' failures carry no such location, so only these show their messages inline
+ * when they need setup.
+ */
+const QUOTATION_CHECK_IDS: readonly string[] = ['Quotation', 'QuotationTypes'];
+
+/** Props for {@link CheckErrorBlock}. */
+type CheckErrorBlockProps = {
+  /** Display name of the check that could not run. */
+  checkName: string;
+  /** The distinct failure messages of the check. */
+  messages: string[];
+  /** Whether the check reports that it still needs setup. */
+  needsSetup: boolean;
+  /** Whether the check is a quotation check, whose setup lives in Paratext 9 only. */
+  isQuotationCheck: boolean;
+  /** Localized strings for the panel. */
+  localizedStrings: LanguageStrings;
+};
+
+/**
+ * The explanation of one check that could not run. A quotation check that needs setup shows its
+ * Paratext 9 messages, which name the settings to change there. Any other failure shows a short
+ * line and keeps the raw messages behind a "View error" popover.
+ */
+function CheckErrorBlock({
+  checkName,
+  messages,
+  needsSetup,
+  isQuotationCheck,
+  localizedStrings,
+}: CheckErrorBlockProps) {
+  const lineId = useId();
+
+  if (needsSetup && isQuotationCheck) {
+    return (
+      <div className="tw:flex tw:flex-col tw:gap-1">
+        <p className="tw:font-light">
+          {formatReplacementString(
+            localizedStrings['%webView_checksSidePanel_checkCouldNotRun_needsSetupInParatext9%'],
+            { checkName },
+          )}
+        </p>
+        {messages.map((message) => (
+          <p key={message} className="tw:font-light tw:whitespace-pre-line">
+            {message}
+          </p>
+        ))}
+      </div>
+    );
+  }
+
+  const lineKey = needsSetup
+    ? '%webView_checksSidePanel_checkCouldNotRun_needsSetup%'
+    : '%webView_checksSidePanel_checkCouldNotRun_unexpectedError%';
+
+  return (
+    <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-center tw:gap-2">
+      <p id={lineId} className="tw:font-light">
+        {formatReplacementString(localizedStrings[lineKey], { checkName })}
+      </p>
+      <ErrorPopover errorDetails={messages.join('\n\n')} localizedStrings={localizedStrings}>
+        <Button variant="link" className="tw:h-auto tw:p-0" aria-describedby={lineId}>
+          {localizedStrings['%settings_errorMessages_viewError%']}
+        </Button>
+      </ErrorPopover>
+    </div>
+  );
+}
 
 /** A project (or resource) the user can select to run checks against. */
 export type ChecksSidePanelProject = ProjectOption & {
@@ -189,6 +267,8 @@ export function ChecksSidePanel({
 }: ChecksSidePanelProps) {
   const [selectedCheckId, setSelectedCheckId] = useState<string>('');
   const [isCheckTypesOpen, setIsCheckTypesOpen] = useState(false);
+  const [areErrorDetailsShown, setAreErrorDetailsShown] = useState(false);
+  const errorDetailsId = useId();
 
   /**
    * Creates a unique identifier for a CheckRunResult, used to provide a unique key to the UI and to
@@ -270,12 +350,14 @@ export function ChecksSidePanel({
       checksInfo.map((check) => ({
         value: check.checkId,
         label: check.checkName,
-        secondaryLabel: check.isSetup
-          ? undefined
-          : localizedStrings['%webView_checksSidePanel_checkRequiresSetup%'],
+        secondaryLabel: getCheckTypeSecondaryLabel(
+          check,
+          jobStatusReport.checkErrors,
+          localizedStrings,
+        ),
         starred: false,
       })),
-    [checksInfo, localizedStrings],
+    [checksInfo, jobStatusReport.checkErrors, localizedStrings],
   );
 
   const selectedChecksCountLabel = useMemo(
@@ -288,6 +370,49 @@ export function ChecksSidePanel({
       ),
     [localizedStrings, selectedCheckTypeIds],
   );
+
+  const checkErrors = useMemo(
+    () => jobStatusReport.checkErrors ?? [],
+    [jobStatusReport.checkErrors],
+  );
+  // One group per failed check, in the order the checks first appear, holding its distinct messages
+  const checkErrorGroups = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    checkErrors.forEach((checkError) => {
+      const messages = groups.get(checkError.checkId);
+      if (!messages) groups.set(checkError.checkId, [checkError.message]);
+      else if (!messages.includes(checkError.message)) messages.push(checkError.message);
+    });
+    return [...groups].map(([checkId, messages]) => ({ checkId, messages }));
+  }, [checkErrors]);
+  // Taken from the same groups as the detail blocks, so the notice and the details always list the
+  // same checks, each once
+  const couldNotRunNames = useMemo(
+    () =>
+      checkErrorGroups
+        .map((group) => getCheckDisplayName(group.checkId, getLocalizedCheckDescription))
+        .join(', '),
+    [checkErrorGroups, getLocalizedCheckDescription],
+  );
+  // With nothing to show, the reason is that the checks failed, not that they found nothing
+  const hasJobFinished =
+    jobStatusReport.status === 'completed' || jobStatusReport.status === 'stopped';
+  const allSelectedChecksCouldNotRun = useMemo(
+    () =>
+      hasJobFinished &&
+      checkResults.length === 0 &&
+      selectedCheckTypeIds.length > 0 &&
+      selectedCheckTypeIds.every((checkTypeId) =>
+        checkErrors.some((checkError) => checkError.checkId === checkTypeId),
+      ),
+    [hasJobFinished, checkResults.length, selectedCheckTypeIds, checkErrors],
+  );
+
+  let emptyResultsKey: LocalizeKey = '%webView_checksSidePanel_noCheckResults%';
+  if (selectedCheckTypeIds.length === 0)
+    emptyResultsKey = '%webView_checksSidePanel_noChecksSelected%';
+  else if (allSelectedChecksCouldNotRun)
+    emptyResultsKey = '%webView_checksSidePanel_selectedChecksCouldNotRun%';
 
   if (isLoading) {
     return (
@@ -361,11 +486,7 @@ export function ChecksSidePanel({
       {/* Check results */}
       {checkResults.length === 0 ? (
         <div className="tw:min-h-48 tw:flex-1 tw:flex tw:flex-col tw:items-center tw:justify-center tw:w-full">
-          <div className="tw:mb-2">
-            {selectedCheckTypeIds.length === 0
-              ? localizedStrings['%webView_checksSidePanel_noChecksSelected%']
-              : localizedStrings['%webView_checksSidePanel_noCheckResults%']}
-          </div>
+          <div className="tw:mb-2">{localizedStrings[emptyResultsKey]}</div>
           <Button onClick={() => setIsCheckTypesOpen(true)}>
             {localizedStrings['%webView_checksSidePanel_selectChecks%']}
           </Button>
@@ -387,7 +508,8 @@ export function ChecksSidePanel({
               showBadge
               checkName={getLocalizedCheckDescription(result.checkId ?? result.checkResultType)}
               isCheckSetup={
-                checksInfo.find((check) => check.checkId === result.checkId)?.isSetup ?? true
+                checksInfo.find((check) => check.checkId === result.checkId)?.setupStatus !==
+                'setupRequired'
               }
               checkCardDescription={result.messageFormatString}
             />
@@ -410,28 +532,75 @@ export function ChecksSidePanel({
                 </div>
               ))}
           {/* The job has finished but not all results are loaded into the UI yet */}
-          {(jobStatusReport.status === 'completed' || jobStatusReport.status === 'stopped') &&
-            checkResults.length < jobStatusReport.totalResultsCount && (
-              <div className="tw:flex tw:items-center tw:gap-4">
-                <Progress
-                  value={(checkResults.length / jobStatusReport.totalResultsCount) * 100}
-                  className="tw:w-64"
-                />
-                {checkResults.length.toString()} / {jobStatusReport.totalResultsCount.toString()}
-                <Button onClick={onCancelOperation} disabled={isResultLoadingCancelled}>
-                  {localizedStrings['%general_cancel%']}
-                </Button>
-              </div>
-            )}
+          {hasJobFinished && checkResults.length < jobStatusReport.totalResultsCount && (
+            <div className="tw:flex tw:items-center tw:gap-4">
+              <Progress
+                value={(checkResults.length / jobStatusReport.totalResultsCount) * 100}
+                className="tw:w-64"
+              />
+              {checkResults.length.toString()} / {jobStatusReport.totalResultsCount.toString()}
+              <Button onClick={onCancelOperation} disabled={isResultLoadingCancelled}>
+                {localizedStrings['%general_cancel%']}
+              </Button>
+            </div>
+          )}
           {/* The job has finished and all results are loaded into the UI */}
-          {(jobStatusReport.status === 'completed' || jobStatusReport.status === 'stopped') &&
-            checkResults.length === jobStatusReport.totalResultsCount && (
+          {hasJobFinished &&
+            checkResults.length === jobStatusReport.totalResultsCount &&
+            // The "could not run" notice below says why there are no results
+            !allSelectedChecksCouldNotRun && (
               <p className="tw:font-light">
                 {checkResults.length > 0
                   ? checkResults.length.toString()
                   : localizedStrings['%webView_find_noResultsFound%']}
               </p>
             )}
+          {/* Some checks could not run; the other checks' results are shown as usual */}
+          {checkErrors.length > 0 && (
+            <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
+              <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-center tw:gap-2">
+                <p data-testid="checks-could-not-run-notice" className="tw:font-light">
+                  {formatReplacementString(
+                    localizedStrings['%webView_checksSidePanel_checksCouldNotRun_notice%'],
+                    { checkNames: couldNotRunNames },
+                  )}
+                </p>
+                <Button
+                  variant="link"
+                  size="sm"
+                  aria-expanded={areErrorDetailsShown}
+                  aria-controls={errorDetailsId}
+                  onClick={() => setAreErrorDetailsShown((wereShown) => !wereShown)}
+                >
+                  {areErrorDetailsShown
+                    ? localizedStrings['%webView_checksSidePanel_checkCouldNotRun_hideDetails%']
+                    : localizedStrings['%webView_checksSidePanel_checkCouldNotRun_showDetails%']}
+                </Button>
+              </div>
+              {/* Always rendered so the toggle's aria-controls resolves while collapsed. The class
+                  hides it too: a display utility would otherwise override the `hidden` attribute */}
+              <div
+                id={errorDetailsId}
+                hidden={!areErrorDetailsShown}
+                className={areErrorDetailsShown ? 'tw:flex tw:flex-col tw:gap-1' : 'tw:hidden'}
+              >
+                {areErrorDetailsShown &&
+                  checkErrorGroups.map((group) => (
+                    <CheckErrorBlock
+                      key={group.checkId}
+                      checkName={getCheckDisplayName(group.checkId, getLocalizedCheckDescription)}
+                      messages={group.messages}
+                      needsSetup={
+                        checksInfo.find((check) => check.checkId === group.checkId)?.setupStatus ===
+                        'setupRequired'
+                      }
+                      isQuotationCheck={QUOTATION_CHECK_IDS.includes(group.checkId)}
+                      localizedStrings={localizedStrings}
+                    />
+                  ))}
+              </div>
+            </div>
+          )}
           {/* The job encountered an error while running */}
           {jobStatusReport.status === 'errored' && jobStatusReport.error && (
             <p className="tw:font-light"> {jobStatusReport.error}</p>
