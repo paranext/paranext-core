@@ -77,7 +77,8 @@
           "platformScriptureEditor.checks": {
             "column": "platformScriptureEditor.tools",
             "order": 3,
-            "isExtensible": true
+            "isExtensible": true,
+            "isExperimental": true
           },
           "platformScriptureEditor.simpleEditMenu": {
             "column": "platformScriptureEditor.simpleEdit",
@@ -167,7 +168,7 @@
             "id": "platformScriptureEditor.viewSubmenu",
             "label": "%webView_platformScriptureEditor_switchScriptureView_2%",
             "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu (Power) > View > Switch scripture view ▸ — opens the Standard view / Preview flyout. Hidden in Simple mode, whose editor has a single view type",
+            "localizeNotes": "Scripture editor top menu (Power) > View > Switch scripture view ▸ — opens the Standard view / Preview flyout. Hidden in Simple mode, which shows only Preview",
             "iconNameBefore": "eye",
             "group": "platformScriptureEditor.layout",
             "order": 1
