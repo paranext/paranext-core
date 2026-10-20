@@ -29,6 +29,14 @@ const EXPECTED_MENU_HINTS: Record<
     hints: { darwin: '⌥⌘M', win32: 'Ctrl+Shift+N', linux: 'Ctrl+Shift+N' },
     menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
   },
+  'platformScriptureEditor.undo': {
+    hints: { darwin: '⌘Z', win32: 'Ctrl+Z', linux: 'Ctrl+Z' },
+    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+  },
+  'platformScriptureEditor.redo': {
+    hints: { darwin: '⇧⌘Z', win32: 'Ctrl+Y', linux: 'Ctrl+Y' },
+    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+  },
   'platform.webViewContentZoomIn': {
     hints: { darwin: '⌘=', win32: 'Ctrl++', linux: 'Ctrl++' },
     menus: [

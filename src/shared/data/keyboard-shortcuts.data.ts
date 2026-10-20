@@ -727,9 +727,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Undo the last edit in the editor',
     category: 'Editing',
     context: 'Editor (text editing)',
+    command: 'platformScriptureEditor.undo',
     keys: { macOS: '⌘Z', windows: 'Ctrl+Z', linux: 'Ctrl+Z' },
     locations: [
       'lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
   },
   {
@@ -737,9 +739,11 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Redo the last undone edit',
     category: 'Editing',
     context: 'Editor (text editing)',
+    command: 'platformScriptureEditor.redo',
     keys: { macOS: '⇧⌘Z', windows: 'Ctrl+Y / Ctrl+Shift+Z', linux: 'Ctrl+Y / Ctrl+Shift+Z' },
     locations: [
       'lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
   },
   {
