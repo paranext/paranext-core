@@ -1134,7 +1134,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     });
 
     const { submitDialog } = renderWrapper();
-    await screen.findByText('%shareLayoutDialog_modelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
 
     // A real edit elsewhere, so Save writes and the assertion below has something to be absent from.
     act(() => {
@@ -1184,7 +1184,7 @@ describe('TeamLayoutDialogWrapper confirm-write logic', () => {
     });
 
     renderWrapper();
-    await screen.findByText('%shareLayoutDialog_modelText_label%');
+    await screen.findByText(BODY_MOUNTED_TEXT);
     act(() => {
       screen.getByText('%shareLayoutDialog_modelText_none%').click();
     });

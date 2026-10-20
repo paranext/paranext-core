@@ -762,6 +762,7 @@ export const ReadyWithCopyrightNotice: Story = {
         label="NIV11"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        copyLimit={undefined}
         editor={<SampleChapter />}
         copyrightIndicator={copyrightIndicator}
       />
@@ -780,6 +781,7 @@ export const VerseWithCopyrightNotice: Story = {
         textDirection="ltr"
         localizedStrings={localizedStrings}
         nameDisplay="inline"
+        copyLimit={undefined}
         editor={<SampleVerse />}
         copyrightIndicator={copyrightIndicator}
       />
