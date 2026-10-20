@@ -15,6 +15,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_syncConsent_body%':
         'When working on shared projects, syncing updates your local copy and shares your changes with others.',
       '%firstRun_button_sync%': 'Sync',
+      '%firstRun_step_syncConsent_internetBlocked%': 'Internet access is disabled, translated',
     };
     const result: Record<string, string> = {};
     keys.forEach((k) => {
@@ -113,6 +114,23 @@ describe('SyncConsentStep', () => {
     await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
     expect(await screen.findByText(/network error/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^sync$/i })).not.toBeDisabled();
+  });
+
+  // The internet setting's refusal ends in a machine-readable sentinel that is not for the user.
+  it('shows the localized internet-disabled message, not the raw error, when the internet setting refuses sync', async () => {
+    const onSync = makeOnSync(() =>
+      Promise.reject(
+        new Error('Internet access is disabled, from the backend (INTERNET_SERVICES_BLOCKED)'),
+      ),
+    );
+    const setCanSkip = vi.fn();
+    render(<SyncConsentStep onNext={vi.fn()} setCanSkip={setCanSkip} onSync={onSync} />);
+    await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
+
+    expect(await screen.findByText('Internet access is disabled, translated')).toBeInTheDocument();
+    expect(screen.queryByText(/INTERNET_SERVICES_BLOCKED/)).not.toBeInTheDocument();
+    // Skip stays available so the user can finish setup and change the setting afterward.
+    expect(setCanSkip).toHaveBeenLastCalledWith(true);
   });
 
   it('does not call onNext when onSync throws', async () => {

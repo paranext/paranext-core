@@ -32,6 +32,22 @@ export const Syncing: Story = {
   },
 };
 
+/**
+ * "Sync" was refused because the internet setting turns sync off: the step says so and points to
+ * "Skip automatic sync", which is available again.
+ */
+export const InternetBlocked: Story = {
+  args: {
+    onSync: fn().mockRejectedValue(
+      new Error('Internet access is disabled. (INTERNET_SERVICES_BLOCKED)'),
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /^sync$/i }));
+  },
+};
+
 /** Back navigation is available when the user arrived from a preceding step. */
 export const WithBack: Story = {
   args: {

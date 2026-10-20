@@ -63,6 +63,16 @@ export class FirstRunPage {
     await this.dialog.getByRole('button', { name: /^(Next|Finish)$/i }).click({ timeout: 60_000 });
   }
 
+  /**
+   * Choose "Unrestricted" on the Internet Settings step. The step selects no option and keeps Next
+   * disabled until the user picks one, so this must come before {@link clickNext} there. Long
+   * timeout for the same reason as clickNext: the list renders only once the async settings read
+   * lands.
+   */
+  async chooseUnrestrictedInternetAccess(): Promise<void> {
+    await this.dialog.getByRole('radio', { name: 'Unrestricted' }).click({ timeout: 60_000 });
+  }
+
   /** Click the Back button (not present on the first step or on the SyncProgress interstitial). */
   async clickBack(): Promise<void> {
     await this.dialog.getByRole('button', { name: 'Back' }).click();

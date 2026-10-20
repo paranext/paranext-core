@@ -111,14 +111,24 @@ test.describe('First-run wizard', () => {
     ).not.toBeVisible();
     await frPage.clickNext(); // Language → Internet Settings
 
-    // Internet Settings step: Back appears; Skip automatic sync stays hidden. InternetSettingsStep
-    // loads settings asynchronously — clickNext() auto-waits for Next to be enabled.
+    // Internet Settings step: Back appears; Skip automatic sync stays hidden. No option is selected
+    // and Next stays disabled until the user picks one, whatever setting is already stored.
     await expect(frPage.dialog.getByRole('button', { name: 'Back' })).toBeVisible({
       timeout: 5_000,
     });
     await expect(
       frPage.dialog.getByRole('button', { name: 'Skip automatic sync' }),
     ).not.toBeVisible();
+    const unrestricted = frPage.dialog.getByRole('radio', { name: 'Unrestricted' });
+    await expect(unrestricted).toBeVisible({ timeout: 60_000 });
+    await expect(unrestricted).not.toBeChecked();
+    await expect(
+      frPage.dialog.getByRole('radio', {
+        name: 'Disable access to some Bible translation services',
+      }),
+    ).not.toBeChecked();
+    await expect(nextBtn).toBeDisabled();
+    await frPage.chooseUnrestrictedInternetAccess();
     await frPage.clickNext(); // Internet Settings → Identify
 
     // Identify step: Next is hidden entirely (setCanProceed(undefined)) — the step owns its own
@@ -138,6 +148,7 @@ test.describe('First-run wizard', () => {
 
     // Navigate to Sync consent.
     await frPage.clickNext(); // Language → Internet Settings
+    await frPage.chooseUnrestrictedInternetAccess();
     await frPage.clickNext(); // Internet Settings → Identify
     await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
 
@@ -161,6 +172,7 @@ test.describe('First-run wizard', () => {
 
     // Navigate to Sync progress (the step under test for PT-4179).
     await frPage.clickNext(); // Language → Internet Settings
+    await frPage.chooseUnrestrictedInternetAccess();
     await frPage.clickNext(); // Internet Settings → Identify
     await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
     // SyncConsentStep (PT-4178) hides Next and shows its own "Sync" primary button. In demo mode,
