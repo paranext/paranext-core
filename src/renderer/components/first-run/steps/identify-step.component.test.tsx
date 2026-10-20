@@ -191,6 +191,10 @@ function mockCommands(
     url?: string;
     /** The name on the existing registration (e.g. copied from Paratext 9). */
     existingName?: string;
+    /** The email address on the existing registration. */
+    existingEmail?: string;
+    /** The supporter name on the existing registration. */
+    existingSupporterName?: string;
     /** Reading the existing registration fails. */
     existingError?: Error;
   } = {},
@@ -202,8 +206,8 @@ function mockCommands(
         return Promise.resolve({
           name: overrides.existingName ?? '',
           code: overrides.existingName ? MASKED_CODE : '',
-          email: '',
-          supporterName: '',
+          email: overrides.existingEmail ?? '',
+          supporterName: overrides.existingSupporterName ?? '',
         });
       case 'paratextRegistration.getParatextRegistryUrl':
         return Promise.resolve(overrides.url ?? PRODUCTION_REGISTRY_URL);
@@ -894,6 +898,43 @@ describe('IdentifyStep with an existing registration', () => {
 
     expect(screen.getByText('Pat Translator')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+  });
+
+  it('keeps the email and supporter name on file when the registration is changed', async () => {
+    const user = setupUser();
+    mockCommands({
+      existingName: 'Pat Translator',
+      existingEmail: 'pat@example.org',
+      existingSupporterName: 'Sam Supporter',
+      validate: true,
+    });
+    await renderSettled(
+      <IdentifyStep
+        onNext={onNext}
+        setCanProceed={setCanProceed}
+        registrationValidAtStart
+        onRestartAfterSave={vi.fn().mockReturnValue(new Promise<never>(() => {}))}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Change registration' }));
+    await user.type(screen.getByLabelText(/registration name/i), 'Pat Translator');
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
+    );
+    await user.click(screen.getByRole('button', { name: /save and restart/i }));
+
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextRegistration.setParatextRegistrationData',
+      {
+        name: 'Pat Translator',
+        code: VALID_CODE,
+        email: 'pat@example.org',
+        supporterName: 'Sam Supporter',
+      },
+    );
   });
 
   it('moves focus into the view that replaced the button just pressed', async () => {

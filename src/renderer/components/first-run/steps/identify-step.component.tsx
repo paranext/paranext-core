@@ -68,10 +68,18 @@ async function fetchRegistryUrl() {
   }
 }
 
-/** The existing registration as the registered view shows it. */
-type ShownRegistration = { name: string; maskedCode: string };
+/**
+ * The existing registration as the registered view shows it, plus the email and supporter name a
+ * changed registration carries over (the form does not collect them).
+ */
+type ShownRegistration = { name: string; maskedCode: string; email: string; supporterName: string };
 
-const NO_SHOWN_REGISTRATION: ShownRegistration = { name: '', maskedCode: '' };
+const NO_SHOWN_REGISTRATION: ShownRegistration = {
+  name: '',
+  maskedCode: '',
+  email: '',
+  supporterName: '',
+};
 
 /**
  * The existing registration, for the registered view. The backend returns the code masked; it never
@@ -83,7 +91,12 @@ async function fetchShownRegistration(): Promise<ShownRegistration> {
     const registrationData = await commandService.sendCommand(
       'paratextRegistration.getParatextRegistrationData',
     );
-    return { name: registrationData.name, maskedCode: registrationData.code };
+    return {
+      name: registrationData.name,
+      maskedCode: registrationData.code,
+      email: registrationData.email,
+      supporterName: registrationData.supporterName,
+    };
   } catch (e) {
     logger.warn(`Could not read the existing registration: ${getErrorMessage(e)}`);
     return NO_SHOWN_REGISTRATION;
@@ -381,9 +394,11 @@ export function IdentifyStep({
       await commandService.sendCommand('paratextRegistration.setParatextRegistrationData', {
         name,
         code: registrationCode,
-        // email/supporterName are not collected in the first-run form (Paratext manages them separately).
-        email: '',
-        supporterName: '',
+        // The form does not collect email/supporterName. Send the ones already on file (blank when
+        // there is no existing registration) — the backend stores whatever is sent, so blanks here
+        // would erase them.
+        email: shownRegistration.email,
+        supporterName: shownRegistration.supporterName,
       });
       // Signal the next startup to treat a transient 'invalid' from the registration backend as
       // non-fatal: the user just registered successfully, so 'invalid' on the next launch is almost
