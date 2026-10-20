@@ -207,7 +207,6 @@ import {
   resolveNoteEditingSurface,
   resolveNoteVerseRef,
   resolveViewTypeForInterfaceMode,
-  viewTypeForSetScriptureMessage,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectableParagraphMarkers,
   selectCommentThreadInPanelSafe,
@@ -776,11 +775,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setViewType('standard');
   }, [hadPersistedViewTypeAtMount, isInterfaceModeLoading, isPowerMode, setViewType]);
 
-  // Standard view must never be shown in simple mode: simple mode pairs with structure
+  // Standard and markers views must never be shown in simple mode: simple mode pairs with structure
   // protection, which intentionally blocks the paragraph-marker edits standard view's editing
-  // affordances are built around (see `resolveViewTypeForInterfaceMode`). This covers both a
-  // 'standard' persisted during a power-mode session loading while the app is in simple mode and
-  // a live `platform.interfaceMode` flip to simple while this standard-view web view is open.
+  // affordances are built around, and it offers no way out of the read-only markers view (see
+  // `resolveViewTypeForInterfaceMode`). This covers both a 'standard' or 'markers' persisted during
+  // a power-mode session loading while the app is in simple mode and a live
+  // `platform.interfaceMode` flip to simple while such a web view is open.
   // The coercion is DERIVED for display, never written back: persisting it would destroy the
   // user's choice permanently — flipping back to power mode could not restore it, because the
   // one-shot power-default correction above is gated on `hadPersistedViewTypeAtMount` and its
@@ -2124,17 +2124,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         case 'changeScriptureView': {
           // Cycle through the available views for QA (a temporary affordance, to be replaced by
           // the polished power-default view + menu). The cycle is mode-aware: standard view is
-          // power-mode-only, so in simple mode the cycle skips it (see `getNextViewTypeInCycle`
-          // for the full cycle semantics and why it switches on `viewType` rather than
+          // power-mode-only, so simple mode stays on formatted (see `getNextViewTypeInCycle` for
+          // the full cycle semantics and why it switches on `viewType` rather than
           // `viewOptions.markerMode`).
           endPaneNoteEdit();
           setViewType(getNextViewTypeInCycle(viewType, isPowerMode));
           break;
         }
         case 'setScriptureView': {
-          // Standard view is Power-only, so a request for it outside Power lands on formatted.
+          // Standard and markers views are Power-only, so a request for one outside Power lands on
+          // formatted.
           endPaneNoteEdit();
-          setViewType(viewTypeForSetScriptureMessage(editorMessage.viewType, isPowerMode));
+          setViewType(resolveViewTypeForInterfaceMode(editorMessage.viewType, isPowerMode));
           break;
         }
         case 'undo': {

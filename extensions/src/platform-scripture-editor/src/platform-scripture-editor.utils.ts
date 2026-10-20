@@ -69,12 +69,16 @@ export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptu
 
 /**
  * Resolves the view type the editor is allowed to show under the current `platform.interfaceMode`.
- * Standard view is a power-mode-only surface: its PT9-parity editing affordances (the `\`/Enter
- * marker palettes, paragraph-marker editing) assume paragraph markers can be edited, but simple
- * mode pairs with structure protection, which intentionally blocks paragraph-marker edits — so a
- * simple-mode user must never land in standard view (e.g. via a `viewType` persisted during a
- * power-mode session). Coerces 'standard' to 'formatted' (the simple-mode default view) when not in
- * power mode; every other combination passes through unchanged.
+ * Standard and markers views are power-mode-only surfaces.
+ *
+ * Standard view's PT9-parity editing affordances (the `\`/Enter marker palettes, paragraph-marker
+ * editing) assume paragraph markers can be edited, but simple mode pairs with structure protection,
+ * which intentionally blocks paragraph-marker edits. Markers view is read-only, and simple mode
+ * offers no menu or shortcut back out of it. So a simple-mode user must never land in either (e.g.
+ * via a `viewType` persisted during a power-mode session). Coerces 'standard' and 'markers' to
+ * 'formatted' (the simple-mode view) when not in power mode; every other combination passes through
+ * unchanged. The result is for display only: callers must not write it back to the persisted view
+ * type, so returning to power mode restores the user's choice.
  *
  * @param viewType The current (requested or persisted) view type
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
@@ -84,7 +88,7 @@ export function resolveViewTypeForInterfaceMode(
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
 ): ScriptureEditorViewType {
-  if (viewType === 'standard' && !isPowerMode) return 'formatted';
+  if ((viewType === 'standard' || viewType === 'markers') && !isPowerMode) return 'formatted';
   return viewType;
 }
 
@@ -98,31 +102,16 @@ export const VIEW_TYPE_FOR_SET_VIEW_COMMAND = {
 } as const satisfies Record<string, ScriptureEditorViewType>;
 
 /**
- * The view type the editor shows after a `setScriptureView` message: the requested one, except that
- * Standard view resolves to the formatted view outside Power mode.
- *
- * @param requested The view type the message asks for
- * @param isPowerMode Whether `platform.interfaceMode` is 'power'
- * @returns The view type to apply
- */
-export function viewTypeForSetScriptureMessage(
-  requested: ScriptureEditorViewType,
-  isPowerMode: boolean,
-): ScriptureEditorViewType {
-  return resolveViewTypeForInterfaceMode(requested, isPowerMode);
-}
-
-/**
  * Computes the next view type for the view-cycling affordance (the `changeScriptureView` command).
- * Power mode cycles formatted -> standard -> markers -> formatted; simple mode skips 'standard'
- * entirely (see {@link resolveViewTypeForInterfaceMode}), cycling formatted <-> markers.
+ * Power mode cycles formatted -> standard -> markers -> formatted; simple mode only has the
+ * formatted view (see {@link resolveViewTypeForInterfaceMode}), so cycling there stays on it.
  *
  * Cycles on the view type rather than `ViewOptions.markerMode`: in non-power mode both 'formatted'
  * and 'markers' resolve to markerMode 'hidden' (the non-power markers view overrides only
  * noteMode), so a markerMode-based cycle would orphan 'formatted'.
  *
- * @param viewType The current view type (resolved for mode first, so a lingering 'standard' in
- *   simple mode advances as if it were already coerced)
+ * @param viewType The current view type (resolved for mode first, so a lingering 'standard' or
+ *   'markers' in simple mode advances as if it were already coerced)
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
  * @returns The next view type in the mode-appropriate cycle
  */
@@ -130,9 +119,9 @@ export function getNextViewTypeInCycle(
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
 ): ScriptureEditorViewType {
-  const current = resolveViewTypeForInterfaceMode(viewType, isPowerMode);
-  if (current === 'formatted') return isPowerMode ? 'standard' : 'markers';
-  if (current === 'standard') return 'markers';
+  if (!isPowerMode) return 'formatted';
+  if (viewType === 'formatted') return 'standard';
+  if (viewType === 'standard') return 'markers';
   return 'formatted';
 }
 
