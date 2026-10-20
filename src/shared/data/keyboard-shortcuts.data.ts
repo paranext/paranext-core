@@ -118,6 +118,26 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
   },
   {
+    id: 'open-home',
+    purpose: 'Open Home, which lists your projects and resources',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    keys: { macOS: '⌘O', windows: 'Ctrl+O', linux: 'Ctrl+O' },
+    locations: ['src/main/main.ts', 'src/main/app-chords.util.ts'],
+    command: 'platformGetResources.openHome',
+  },
+  {
+    id: 'open-project-settings',
+    purpose:
+      'Open the Settings of the project shown in the focused tab. Does nothing when no tab with a web view has focus',
+    category: 'Navigation',
+    // Per window: the focused tab is read from the window that received the keypress
+    context: 'Main process (per window)',
+    keys: { macOS: '⌘J', windows: 'Ctrl+J', linux: 'Ctrl+J' },
+    locations: ['src/main/main.ts', 'src/main/app-chords.util.ts'],
+    command: 'platform.openProjectSettingsForWebView',
+  },
+  {
     id: 'book-chapter-control-move-grid-highlight',
     purpose:
       'Move the highlighted chapter or verse in the Book Chapter Control grid (mirrored horizontally in right-to-left layouts). While the search box is on screen the horizontal arrows move the text caret first, and reach the preview grid either once the caret has nowhere left to go or once a vertical arrow has stepped into the grid; editing the query hands them back to the caret',
@@ -526,8 +546,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
     command: 'platformScriptureEditor.insertCommentAtSelection',
   },
-  // TODO(PT-4735): Show hints on the rest of Simple's Project menu. The design's ⌃J and ⌃E have no
-  // editor handler or entry here yet. A new `command` also needs its row in `EXPECTED_MENU_HINTS`.
+  // TODO(PT-4735): Show hints on the rest of Simple's Project menu. The design's ⌃E has no editor
+  // handler or entry here yet. A new `command` also needs its row in `EXPECTED_MENU_HINTS`.
   {
     id: 'scripture-insert-footnote',
     purpose:
