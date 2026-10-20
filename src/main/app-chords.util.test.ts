@@ -11,7 +11,7 @@ describe('matchAppChord on Windows/Linux', () => {
     [{ key: 'j', ...NO_MODIFIERS, control: true }, 'openProjectSettings'],
     [{ key: 'J', ...NO_MODIFIERS, control: true }, 'openProjectSettings'],
   ])('maps %o to %s', (input, expected) => {
-    expect(matchAppChord(input, false)).toBe(expected);
+    expect(matchAppChord(input, false, 'power')).toBe(expected);
   });
 
   test.each([
@@ -24,13 +24,13 @@ describe('matchAppChord on Windows/Linux', () => {
     [{ key: 'j', ...NO_MODIFIERS, control: true, meta: true }],
     [{ key: 'k', ...NO_MODIFIERS, control: true }],
   ])('returns undefined for %o', (input) => {
-    expect(matchAppChord(input, false)).toBeUndefined();
+    expect(matchAppChord(input, false, 'power')).toBeUndefined();
   });
 
   test.each(['o', 'j'])('ignores a held Ctrl+%s (auto-repeat)', (key) => {
-    expect(matchAppChord({ key, ...NO_MODIFIERS, control: true, isAutoRepeat: true }, false)).toBe(
-      undefined,
-    );
+    expect(
+      matchAppChord({ key, ...NO_MODIFIERS, control: true, isAutoRepeat: true }, false, 'power'),
+    ).toBeUndefined();
   });
 });
 
@@ -39,7 +39,7 @@ describe('matchAppChord on macOS', () => {
     [{ key: 'o', ...NO_MODIFIERS, meta: true }, 'openHome'],
     [{ key: 'j', ...NO_MODIFIERS, meta: true }, 'openProjectSettings'],
   ])('maps %o to %s', (input, expected) => {
-    expect(matchAppChord(input, true)).toBe(expected);
+    expect(matchAppChord(input, true, 'power')).toBe(expected);
   });
 
   test.each([
@@ -49,7 +49,29 @@ describe('matchAppChord on macOS', () => {
     [{ key: 'j', ...NO_MODIFIERS, meta: true, alt: true }],
     [{ key: 'o', ...NO_MODIFIERS, meta: true, isAutoRepeat: true }],
   ])('returns undefined for %o', (input) => {
-    expect(matchAppChord(input, true)).toBeUndefined();
+    expect(matchAppChord(input, true, 'power')).toBeUndefined();
+  });
+});
+
+describe('matchAppChord by interface mode', () => {
+  const ctrlO = { key: 'o', ...NO_MODIFIERS, control: true };
+  const ctrlJ = { key: 'j', ...NO_MODIFIERS, control: true };
+
+  test('leaves Ctrl+O unclaimed in Simple, where Open is hidden', () => {
+    expect(matchAppChord(ctrlO, false, 'simple')).toBeUndefined();
+    expect(matchAppChord({ ...ctrlO, control: false, meta: true }, true, 'simple')).toBeUndefined();
+  });
+
+  test('claims Ctrl+O in Power', () => {
+    expect(matchAppChord(ctrlO, false, 'power')).toBe('openHome');
+  });
+
+  test('claims Ctrl+O while the mode is not yet known, like the extra-window refusal', () => {
+    expect(matchAppChord(ctrlO, false, undefined)).toBe('openHome');
+  });
+
+  test.each(['simple', 'power', undefined] as const)('claims Ctrl+J in mode %s', (mode) => {
+    expect(matchAppChord(ctrlJ, false, mode)).toBe('openProjectSettings');
   });
 });
 

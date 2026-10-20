@@ -554,10 +554,10 @@ describe("The scripture editor's Project menu, per mode", () => {
     const simpleCommands = servedCommandIds(await getEditorTopMenuInMode('simple'));
 
     // Nothing the editor declares is orphaned: every command reaches at least one mode, bar the
-    // ones deliberately hidden in both. (The
-    // served sets can be larger than `declared` — `includeDefaults: true` also serves items like
-    // `platform.openProjectSettingsForWebView` that no line in this editor's own menus.json declares — so this
-    // checks membership rather than set equality.)
+    // ones deliberately hidden in both. (The served sets can be larger than `declared` —
+    // `includeDefaults: true` also serves items like `platform.openProjectSettingsForWebView` that
+    // no line in this editor's own menus.json declares — so this checks membership rather than set
+    // equality.)
     [...declared]
       .filter((id) => !HIDDEN_IN_BOTH_MODES.includes(id))
       .forEach((id) => {

@@ -1928,12 +1928,16 @@ async function main() {
         return;
       }
 
-      // Ctrl/Cmd+O opens Home and Ctrl/Cmd+J opens Project settings for the web view whose tab has
-      // focus in this window. Both send the command their menu item runs, so the chord and the item
-      // cannot drift apart.
+      // Ctrl/Cmd+O opens Home (not in Simple mode, which hides Open) and Ctrl/Cmd+J opens Project
+      // settings for the web view whose tab has focus in this window. Both send the command their
+      // menu item runs, so the chord and the item cannot drift apart.
       //
       // TODO (PT-4143): claimed regardless of focus, like the chords above.
-      const appChord = matchAppChord(input, process.platform === 'darwin');
+      const appChord = matchAppChord(
+        input,
+        process.platform === 'darwin',
+        getCachedInterfaceMode(),
+      );
       if (appChord) {
         event.preventDefault();
         runAppChord(appChord, {
