@@ -23,7 +23,7 @@
  */
 import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { closeAllNonHomeDockTabs } from './test-helpers';
+import { closeAllNonHomeDockTabs, sendOpenEnhancedResourceCommand } from './test-helpers';
 
 // Per the Test Contract in every ER ui-spec, the main window iframe is
 // titled "Enhanced Resource". The guide (UI-PKG-008) renders via the
@@ -31,23 +31,16 @@ import { closeAllNonHomeDockTabs } from './test-helpers';
 // selectors run on `mainPage`, while ER-window selectors run inside the
 // "Enhanced Resource" iframe.
 //
-// Strategic plan UI-PKG-009 / RF-SP-010 (resolved): the menu entry lives
-// in the main app `app.title` menu ("Platform.bible"). The localized label
-// for the command is the canonical "Open Enhanced Resource" wording from
-// PT9 (matching the legacy WindowCollection.OpenEnhancedResourceWindowFor
-// entry point); revisit during verify if the registered label differs.
-const APP_MENU_NAME = /Platform\.bible/i;
-const OPEN_ER_MENU_NAME = /Open\s+Enhanced\s+Resource/i;
+// The main menu no longer offers "Open Enhanced Resource" in either interface
+// mode, so the window is opened with the `platformEnhancedResources.openEnhancedResource`
+// command.
 
 /**
- * Open the ER window from the app menu. Idempotent: if a tab already exists (a previous test left
- * it open), this still works because the menu entry is a "create or reuse" command per BHV-616.
+ * Open the ER window with its command. Idempotent: if a tab already exists (a previous test left it
+ * open), this still works because the command is a "create or reuse" command per BHV-616.
  */
 async function openEnhancedResource(mainPage: import('@playwright/test').Page) {
-  const appMenu = mainPage.getByRole('menuitem', { name: APP_MENU_NAME });
-  await appMenu.click();
-  const openItem = mainPage.getByRole('menuitem', { name: OPEN_ER_MENU_NAME });
-  await openItem.click();
+  await sendOpenEnhancedResourceCommand(mainPage);
   // Tab title may include the resource name; match loosely.
   const tab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i });
   await expect(tab).toBeVisible({ timeout: 15_000 });

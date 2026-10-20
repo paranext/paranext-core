@@ -57,15 +57,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-002 DictionaryTab)', 
   }) => {
     await waitForAppReady(mainPage);
 
-    // Step 1: Open the menu group that hosts the Enhanced Resource launcher (UI-PKG-009).
-    await mainPage.getByRole('menuitem', { name: /^Platform$/i }).click();
-    // EVD-020 (pre): menu opened with launcher visible.
-    await mainPage.screenshot({
-      path: 'proofs/component-evidence/UI-PKG-002/EVD-020a-menu-open.png',
-    });
-    await mainPage.keyboard.press('Escape');
-
-    // Step 2 & 3: Open ER (helper handles menu navigation + auto-show guide dismissal).
+    // Steps 1-3: Open ER (helper sends its command and handles auto-show guide dismissal).
     await openEnhancedResource(mainPage);
 
     // Step 4: Switch to the Dictionary tab via visible UI (lower toolbar tabs).
