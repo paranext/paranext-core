@@ -130,7 +130,10 @@ export async function selectTheOtherConnectivityOption(frame: FrameLocator): Pro
   const startedUnrestricted = await unrestricted.isChecked();
   const original = startedUnrestricted ? unrestricted : someServicesDisabled;
   const target = startedUnrestricted ? someServicesDisabled : unrestricted;
-  await target.click();
+  // Each option's label stretches an overlay across its whole row, over the radio itself, so a
+  // pointer lands on the label (which selects the radio). Click the label the way a user does.
+  const targetId = await target.getAttribute('id');
+  await frame.locator(`label[for="${targetId}"]`).click();
   await expect(target).toBeChecked();
   return original;
 }
