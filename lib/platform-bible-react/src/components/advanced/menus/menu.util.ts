@@ -40,6 +40,23 @@ export function getSubMenuGroupKeysForMenuItemId(
     .map(([groupKey]) => groupKey);
 }
 
+/**
+ * Gets the keys of the groups whose items render under a column, sorted by the groups' `order`.
+ *
+ * @param groups The localized menu's groups
+ * @param columnKey The key of the column being rendered
+ * @returns The keys of the groups under the column, sorted by `order`
+ */
+export function getColumnGroupKeys(
+  groups: Localized<GroupsInMultiColumnMenu>,
+  columnKey: string,
+): string[] {
+  return Object.entries(groups)
+    .filter(([key, group]) => isGroupUnderColumnOrSubMenu(key, group, columnKey))
+    .sort(([, a], [, b]) => a.order - b.order)
+    .map(([key]) => key);
+}
+
 /** A column of a multi-column menu, paired with the key it is stored under */
 export type MenuColumnEntry = {
   /** Key of the column */
