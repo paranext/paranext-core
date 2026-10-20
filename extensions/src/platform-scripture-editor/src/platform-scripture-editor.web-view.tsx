@@ -225,6 +225,7 @@ import {
   resolveNoteEditingSurface,
   resolveNoteVerseRef,
   resolveViewTypeForInterfaceMode,
+  viewTypeForSetScriptureMessage,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectableParagraphMarkers,
   selectCommentThreadInPanelSafe,
@@ -2193,7 +2194,7 @@ function PlatformScriptureEditor({
         case 'setScriptureView': {
           // Standard view is Power-only, so a request for it outside Power lands on formatted.
           endPaneNoteEdit();
-          setViewType(resolveViewTypeForInterfaceMode(editorMessage.viewType, isPowerMode));
+          setViewType(viewTypeForSetScriptureMessage(editorMessage.viewType, isPowerMode));
           break;
         }
         case 'toggleFootnotesPaneVisibility': {

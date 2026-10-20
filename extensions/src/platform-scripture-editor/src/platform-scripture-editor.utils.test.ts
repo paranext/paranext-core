@@ -30,6 +30,8 @@ import {
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   resolveViewTypeForInterfaceMode,
+  VIEW_TYPE_FOR_SET_VIEW_COMMAND,
+  viewTypeForSetScriptureMessage,
   syncOnProjectSwitch,
   syncOnSwitchToPower,
   UNSENT_CHANGES_SYNC_WAIT_MS,
@@ -4993,18 +4995,23 @@ describe('resolveViewTypeForInterfaceMode (standard view is power-mode-only)', (
   });
 });
 
-describe('resolving the view type a setScriptureView message requests', () => {
-  it("setScriptureView with 'standard' sets standard in Power", () => {
-    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
+describe('direct view-setting commands', () => {
+  it('maps setViewStandard to standard and setViewPreview to formatted', () => {
+    expect(VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewStandard']).toBe(
+      'standard',
+    );
+    expect(VIEW_TYPE_FOR_SET_VIEW_COMMAND['platformScriptureEditor.setViewPreview']).toBe(
+      'formatted',
+    );
   });
 
-  it("setScriptureView with 'formatted' sets formatted", () => {
-    expect(resolveViewTypeForInterfaceMode('formatted', true)).toBe('formatted');
-    expect(resolveViewTypeForInterfaceMode('formatted', false)).toBe('formatted');
+  it("applies 'standard' as standard in Power and as formatted in Simple", () => {
+    expect(viewTypeForSetScriptureMessage('standard', true)).toBe('standard');
+    expect(viewTypeForSetScriptureMessage('standard', false)).toBe('formatted');
   });
 
-  it("setScriptureView with 'standard' in Simple resolves to formatted", () => {
-    expect(resolveViewTypeForInterfaceMode('standard', false)).toBe('formatted');
+  it("applies 'formatted' as formatted", () => {
+    expect(viewTypeForSetScriptureMessage('formatted', true)).toBe('formatted');
   });
 });
 
