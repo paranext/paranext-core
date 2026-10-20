@@ -30,8 +30,9 @@ export function isEditMenuCommand(command: string): command is EditMenuCommand {
 }
 
 /**
- * Runs an Edit flyout action on the editor. Call it synchronously from the menu's select handler:
- * the clipboard is only reachable while the click still counts as user activation.
+ * Runs an Edit flyout action on the editor. For Cut, Copy and Paste, call it synchronously from the
+ * menu's select handler: the clipboard is only reachable while the click still counts as user
+ * activation. Undo and Redo also arrive from a command message, where there is no click to keep.
  *
  * While the editor is read-only, only Copy runs: the editor's undo and redo don't check whether
  * editing is allowed, and its cut and paste throw.
@@ -99,7 +100,8 @@ export type EditMenuEffects<TEditor extends EditMenuTarget> = {
 
 /**
  * Handles an Edit flyout click: runs the action on the editor, or tells the user why it can't. Call
- * it synchronously from the menu's select handler, like {@link runEditMenuAction}.
+ * it synchronously from the menu's select handler for the clipboard actions, like
+ * {@link runEditMenuAction}; Undo and Redo also arrive from a command message.
  *
  * @param command The Edit flyout command that was clicked
  * @param editor The editor to act on, or `undefined` while none is loaded
