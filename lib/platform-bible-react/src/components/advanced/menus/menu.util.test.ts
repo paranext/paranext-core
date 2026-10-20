@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ColumnsWithHeaders, Localized, MultiColumnMenu } from 'platform-bible-utils';
-import { getMenuSectionsWithItems, getSortedMenuColumns } from './menu.util';
+import {
+  getMenuSectionsWithItems,
+  getSortedMenuColumns,
+  getSubMenuGroupKeysForMenuItemId,
+} from './menu.util';
 
 /** Columns carrying the extensibility flags a served menu puts alongside the columns themselves */
 const COLUMNS_WITH_FLAGS: Localized<ColumnsWithHeaders> = {
@@ -147,5 +151,35 @@ describe('getMenuSectionsWithItems', () => {
       'platform.app',
       'platformScriptureEditor.tools',
     ]);
+  });
+});
+
+describe('getSubMenuGroupKeysForMenuItemId', () => {
+  it('returns every group that points at the submenu item, sorted by `order`', () => {
+    // Stored out of order, so the result can only be right by sorting
+    const groups: Localized<MultiColumnMenu>['groups'] = {
+      'test.editFind': { menuItem: 'test.editSubmenu', order: 2 },
+      'test.other': { menuItem: 'test.otherSubmenu', order: 1 },
+      'test.top': { column: 'test.project', order: 1 },
+      'test.editActions': { menuItem: 'test.editSubmenu', order: 1 },
+    };
+
+    expect(getSubMenuGroupKeysForMenuItemId(groups, 'test.editSubmenu')).toEqual([
+      'test.editActions',
+      'test.editFind',
+    ]);
+  });
+
+  it('returns the single group of a submenu that has one', () => {
+    expect(
+      getSubMenuGroupKeysForMenuItemId(
+        MENU_WITH_SUBMENU.groups,
+        'platformScriptureEditor.inventoriesMenuItem',
+      ),
+    ).toEqual(['platformScriptureEditor.inventoriesSubmenu']);
+  });
+
+  it('returns an empty list when no group points at the item', () => {
+    expect(getSubMenuGroupKeysForMenuItemId(MENU_WITH_SUBMENU.groups, 'test.unknown')).toEqual([]);
   });
 });
