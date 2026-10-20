@@ -44,7 +44,14 @@ const UNSUPPORTED_PARATEXT9_SETTING_KEYS: Partial<Record<InternetUse, LocalizeKe
 // entry.
 const STRING_KEYS: LocalizeKey[] = [
   '%internetSettings_button_retry%',
-  '%firstRun_step_internetSettings_heading%',
+  // The core wizard keys, not the extension's panel strings: these are translated in every language
+  // core ships (fr, zh-hans, zh-hant as well as en/es; the new heading key falls back to the older
+  // one in languages that have not translated it), and their English reads "Internet connectivity"
+  // — the same headline the standalone panel shows, so the two surfaces match.
+  '%firstRun_step_internetSettings_heading_2%',
+  // Asks the user to choose, since Next waits for a choice. Shorter than the panel's subtitle: the
+  // wizard has a footer to keep in view, so it drops the app-scope/Paratext-9 caveats the roomier
+  // panel spells out.
   '%firstRun_step_internetSettings_body_2%',
   '%firstRun_step_internetSettings_connecting%',
   '%firstRun_step_internetSettings_loadError%',
@@ -131,7 +138,7 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
           same pairing the standalone dialog uses. */}
       <div>
         <WizardStepHeading>
-          {localizedStrings['%firstRun_step_internetSettings_heading%']}
+          {localizedStrings['%firstRun_step_internetSettings_heading_2%']}
         </WizardStepHeading>
         <p className="tw:text-sm tw:text-muted-foreground">
           {localizedStrings['%firstRun_step_internetSettings_body_2%']}

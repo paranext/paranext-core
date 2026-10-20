@@ -14,7 +14,7 @@ export const INTERNET_BLOCKED_NOTIFICATION_ID = 'platform.internetBlocked';
 
 /** Every message this module can produce, so a test can check each one is translated. */
 export const INTERNET_BLOCKED_MESSAGE_KEYS = [
-  '%data_loading_error_internetAccess_disabled_2%',
+  '%data_loading_error_internetAccess_disabled_3%',
 ] as const;
 
 /** The message shown when internet access is blocked. */
@@ -31,12 +31,12 @@ export function getInternetBlockedMessageKey(
   error: unknown,
 ): InternetBlockedMessageKey | undefined {
   if (isErrorMessageAboutParatextBlockingInternetAccess(error))
-    return '%data_loading_error_internetAccess_disabled_2%';
+    return '%data_loading_error_internetAccess_disabled_3%';
   return undefined;
 }
 
 /**
- * Builds the notification for an internet block, with an action that opens the Internet &
+ * Builds the notification for an internet block, with an action that opens the Internet
  * connectivity setting responsible.
  *
  * @param error The error, or its message, to classify

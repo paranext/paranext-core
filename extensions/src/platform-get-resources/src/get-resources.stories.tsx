@@ -332,7 +332,7 @@ export const BlockedByInternetSettings: Story = {
   decorators: [
     createDecorator({
       onInstallOrRemoveResource: rejectingMock(
-        'Internet access is disabled in “Internet & connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)',
+        'Internet access is disabled in “Internet connectivity”. Please enable it and try again. (INTERNET_SERVICES_BLOCKED)',
       ),
     }),
   ],

@@ -37,7 +37,7 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_button_saveAndRestart%': 'Save and restart sentinel',
   '%paratextRegistration_button_restarting%': 'Restarting sentinel',
   '%general_error_title%': 'Error sentinel',
-  '%paratextRegistration_alert_updatedInternetSettings_2%': 'Settings updated sentinel',
+  '%paratextRegistration_alert_updatedInternetSettings_3%': 'Settings updated sentinel',
   '%paratextRegistration_alert_updatedRegistration_description%': 'Restarting description sentinel',
   '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%': 'Restarted sentinel',
   // Minimum required for sub-components to render

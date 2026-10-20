@@ -122,9 +122,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   // fail — proving the localization wiring is real end to end.
   useLocalizedStrings: vi.fn(() => [
     {
-      '%toolbar_userProfile_label%': 'User profile button label',
-      '%toolbar_userProfile_label_registrationNeeded%':
-        'User profile button label needing registration',
+      '%toolbar_userProfile_label_2%': 'User menu',
+      '%toolbar_userProfile_label_registrationNeeded_2%': 'User menu — registration needed',
       '%userProfile_registrationNeeded%': 'Registration reminder row text',
       '%userProfile_header_defaultName%': 'Default display name',
       '%userProfile_header_notRegistered%': 'Registration needed',
@@ -136,8 +135,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%userProfile_interfaceMode_simple_description_2%': 'Basic work, short list',
       '%userProfile_interfaceMode_power_description_2%': 'Configurable, with PT9',
       '%userProfile_interfaceMode_power_labelWithPreview%': '{label} [early look]',
-      '%userProfile_profileAndRegistration%': 'Profile and registration row',
-      '%userProfile_networkSettings_2%': 'Internet and connectivity row',
+      '%userProfile_profileAndRegistration_2%': 'Registration information',
+      '%userProfile_networkSettings_3%': 'Internet connectivity',
       '%userProfile_server_badge_development%': 'Development badge text',
       '%userProfile_server_badge_production%': 'Production badge text',
       '%userProfile_server_badge_qualityAssurance%': 'QA badge text',
@@ -261,10 +260,52 @@ beforeEach(() => {
 });
 
 describe('UserProfilePopover', () => {
-  test('renders the trigger button with the user profile aria-label', () => {
+  test('the tooltip on the trigger reads "User menu" and matches the aria-label', async () => {
+    render(<UserProfilePopover />);
+    const trigger = screen.getByTestId('user-profile-popover-trigger');
+    fireEvent.focus(trigger);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('User menu');
+    expect(trigger).toHaveAttribute('aria-label', 'User menu');
+  });
+
+  test('the tooltip reads "User menu — registration needed" when the registration is invalid', async () => {
+    act(() => publishRegistrationValidity('invalid'));
+    render(<UserProfilePopover />);
+    const trigger = screen.getByTestId('user-profile-popover-trigger');
+    fireEvent.focus(trigger);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('User menu — registration needed');
+    expect(trigger).toHaveAttribute('aria-label', 'User menu — registration needed');
+  });
+
+  test('the row labels read "Registration information" and "Internet connectivity"', async () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    expect(await screen.findByTestId('user-profile-action-registration')).toHaveTextContent(
+      'Registration information',
+    );
+    expect(screen.getByTestId('user-profile-action-network')).toHaveTextContent(
+      'Internet connectivity',
+    );
+  });
+
+  test('the trigger icon has tw:text-primary in Power', () => {
+    setMockSetting('interfaceMode', 'power');
+    render(<UserProfilePopover />);
+    const icon = screen.getByTestId('user-profile-popover-trigger').querySelector('svg');
+    expect(icon).toHaveClass('tw:text-primary');
+  });
+
+  test('the trigger icon does not have tw:text-primary in Simple', () => {
+    setMockSetting('interfaceMode', 'simple');
+    render(<UserProfilePopover />);
+    const icon = screen.getByTestId('user-profile-popover-trigger').querySelector('svg');
+    expect(icon).not.toHaveClass('tw:text-primary');
+  });
+
+  test('renders the trigger button with the user menu aria-label', () => {
     render(<UserProfilePopover />);
     expect(screen.getByTestId('user-profile-popover-trigger')).toBeInTheDocument();
-    expect(screen.getByLabelText('User profile button label')).toBeInTheDocument();
+    expect(screen.getByLabelText('User menu')).toBeInTheDocument();
   });
 
   test('opens the popover when the trigger is clicked', async () => {
@@ -402,7 +443,7 @@ describe('UserProfilePopover interface mode', () => {
 });
 
 describe('UserProfilePopover action rows', () => {
-  test('"Profile & registration" click sends the command and closes the popover', async () => {
+  test('"Registration information" click sends the command and closes the popover', async () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const button = await screen.findByTestId('user-profile-action-registration');
@@ -413,7 +454,7 @@ describe('UserProfilePopover action rows', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  test('"Network settings" plain click sends the plain command and closes the popover', async () => {
+  test('"Internet connectivity" plain click sends the plain command and closes the popover', async () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const button = await screen.findByTestId('user-profile-action-network');
@@ -424,7 +465,7 @@ describe('UserProfilePopover action rows', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  test('"Network settings" Shift+click sends the server-selection command', async () => {
+  test('"Internet connectivity" Shift+click sends the server-selection command', async () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const button = await screen.findByTestId('user-profile-action-network');
@@ -434,7 +475,7 @@ describe('UserProfilePopover action rows', () => {
     );
   });
 
-  test('Shift+Enter on the focused "Network settings" row cancels the keydown and sends the server-selection command exactly once', async () => {
+  test('Shift+Enter on the focused "Internet connectivity" row cancels the keydown and sends the server-selection command exactly once', async () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const button = await screen.findByTestId('user-profile-action-network');
@@ -800,14 +841,14 @@ describe('UserProfilePopover registration reminder', () => {
   test('shows no dot and the plain label while validity is unknown', () => {
     render(<UserProfilePopover />);
     expect(screen.queryByTestId('user-profile-registration-dot')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('User profile button label')).toBeInTheDocument();
+    expect(screen.getByLabelText('User menu')).toBeInTheDocument();
   });
 
   test('shows no dot when the registration is valid', () => {
     render(<UserProfilePopover />);
     act(() => publishRegistrationValidity('valid'));
     expect(screen.queryByTestId('user-profile-registration-dot')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('User profile button label')).toBeInTheDocument();
+    expect(screen.getByLabelText('User menu')).toBeInTheDocument();
   });
 
   test('shows the dot and swaps the accessible label when the registration is invalid', () => {
@@ -815,10 +856,8 @@ describe('UserProfilePopover registration reminder', () => {
     act(() => publishRegistrationValidity('invalid'));
     expect(screen.getByTestId('user-profile-registration-dot')).toBeInTheDocument();
     // The dot must not be the only signal — the accessible name carries the state too.
-    expect(
-      screen.getByLabelText('User profile button label needing registration'),
-    ).toBeInTheDocument();
-    expect(screen.queryByLabelText('User profile button label')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('User menu — registration needed')).toBeInTheDocument();
+    expect(screen.queryByLabelText('User menu')).not.toBeInTheDocument();
   });
 
   test('the dot is decorative, so it is hidden from assistive technology', () => {
@@ -838,10 +877,10 @@ describe('UserProfilePopover registration reminder', () => {
     act(() => publishRegistrationValidity('valid'));
 
     expect(screen.queryByTestId('user-profile-registration-dot')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('User profile button label')).toBeInTheDocument();
+    expect(screen.getByLabelText('User menu')).toBeInTheDocument();
   });
 
-  test('marks the Profile & registration row with a dot and screen-reader text', async () => {
+  test('marks the Registration information row with a dot and screen-reader text', async () => {
     render(<UserProfilePopover />);
     act(() => publishRegistrationValidity('invalid'));
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
@@ -852,7 +891,7 @@ describe('UserProfilePopover registration reminder', () => {
     );
   });
 
-  test('leaves the Profile & registration row unmarked when the registration is valid', async () => {
+  test('leaves the Registration information row unmarked when the registration is valid', async () => {
     render(<UserProfilePopover />);
     act(() => publishRegistrationValidity('valid'));
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
