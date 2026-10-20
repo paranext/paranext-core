@@ -1,6 +1,12 @@
-import type { DblResourceReference, ProjectReference, ResourceReference } from 'platform-scripture';
+import type {
+  DblResourceReference,
+  EffectiveResourceReference,
+  ProjectReference,
+  ResourceReference,
+} from 'platform-scripture';
 import { formatProjectName } from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
+import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 
 /**
  * Returns true if the {@link DblResourceData} entry was synthesized from a locally-installed non-DBL
@@ -103,4 +109,26 @@ export function getResourceReferenceRowId(reference: ResourceReference): string 
 export function getResourceReferenceBareId(reference: ResourceReference): string | undefined {
   if (isDblResourceReference(reference) || isProjectReference(reference)) return reference.id;
   return undefined;
+}
+
+/**
+ * The project the model text `effectiveModelText` is read from: an installed DBL resource matched
+ * in `dblResources`, or a locally installed non-DBL resource that `dblResources` lists. `undefined`
+ * when there is no such project to read from.
+ */
+export function getModelResourceProjectId(
+  effectiveModelText: EffectiveResourceReference | undefined,
+  dblResources: DblResourceData[],
+): string | undefined {
+  const match = isDblResourceReference(effectiveModelText)
+    ? findCachedDblResource(effectiveModelText, dblResources)
+    : undefined;
+  if (match?.installed) return match.projectId;
+  // ProjectReferences are locally-installed non-DBL resources. Only treat the reference as
+  // resolvable if the project is confirmed present in dblResources — an admin-shared reference
+  // pointing at a project the user hasn't installed must fall through to the not-found guard.
+  return isProjectReference(effectiveModelText)
+    ? dblResources.find((r) => isNonDblResource(r) && r.projectId === effectiveModelText.id)
+        ?.projectId
+    : undefined;
 }

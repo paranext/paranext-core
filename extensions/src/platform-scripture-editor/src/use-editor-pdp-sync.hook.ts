@@ -272,8 +272,11 @@ export function useEditorPdpSync({
       // popover — `isEditingSessionActive`) still defers regardless of the window: typing inside
       // the popover's own editor never stamps the main editor's local-edit timestamp, and
       // replacing the main editor mid-session regenerates every Lexical key and kills the session.
-      // The session predicate carries its own staleness bound web-view-side, so a wedged session
-      // cannot hold this deferral open forever either.
+      // The predicate bounds only the footnote-popover session web-view-side (a wedged note session
+      // stops deferring once stale). A marker-palette session has no bound: while one stays open,
+      // every differing same-document update is deferred and the editor's content pushed over it,
+      // including a genuine external merge — a known gap documented on
+      // `resolveEditingSessionActivity`.
       //
       // When the editor is NOT focused (idle, blurred) and no session is active, the PDP update
       // replaces as before — genuine external co-edits land immediately.

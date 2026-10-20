@@ -3,9 +3,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
   Button,
   ContentZoomRoot,
+  isMacOs,
+  isWindows,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -13,9 +16,25 @@ import {
   TooltipTrigger,
   useTruncationTooltip,
 } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
 import { EllipsisVertical, GripVertical } from 'lucide-react';
-import { formatReplacementString } from 'platform-bible-utils';
-import { ReactNode, useCallback, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import {
+  CONTENT_ZOOM_IN_SHORTCUT,
+  CONTENT_ZOOM_OUT_SHORTCUT,
+  CONTENT_ZOOM_RESET_SHORTCUT,
+  formatReplacementString,
+  truncateToCopyLimit,
+  type ContentZoomShortcut,
+} from 'platform-bible-utils';
+import {
+  ReactNode,
+  useCallback,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type Ref,
+} from 'react';
 import { buildAlignedZoomStyle } from './aligned-grid.styles';
 import { ResourceCellState } from './resource-cell.utils';
 import {
@@ -72,6 +91,11 @@ export type ResourceCellViewProps = {
   textDirection: string;
   /** Localized strings; import `RESOURCE_CELL_STRING_KEYS` to resolve them. */
   localizedStrings: ResourceCellLocalizedStrings;
+  /**
+   * The most UTF-16 code units the right-click Copy item may write to the clipboard; `undefined` is
+   * unlimited. See `EditorOptions.copyLimit`. Required so a caller states it.
+   */
+  copyLimit: number | undefined;
   /** The editor rendered when `state` is `ready` (the connected cell supplies `Editorial`). */
   editor: ReactNode;
   /**
@@ -93,6 +117,14 @@ export type ResourceCellViewProps = {
    * ancestor's grid, and cells that scrolled separately would drift out of alignment anyway.
    */
   contentOverflow?: 'auto' | 'visible';
+  /**
+   * Ref to this cell's scrollable content box, for a caller that scrolls the cell itself
+   * (`contentOverflow="auto"`) — a chapter surface following the scroll-group reference.
+   *
+   * Only the header layout wires it. The inline layout's verse row has nothing to scroll to, since
+   * the cell is already reduced to the reference's verse.
+   */
+  contentRef?: Ref<HTMLDivElement>;
   /**
    * Where the zoom level lands. `'box'` (default) leaves it to the platform, which scales the
    * element marking this resource's text. `'blocks'` publishes the area's level as a custom
@@ -138,6 +170,59 @@ export type ResourceCellViewProps = {
   headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
 };
 
+/** The spelling of `shortcut` for the operating system the app is running on. */
+function getShortcutForThisOs(shortcut: ContentZoomShortcut): string {
+  if (isMacOs()) return shortcut.macOS;
+  if (isWindows()) return shortcut.windows;
+  return shortcut.linux;
+}
+
+/**
+ * The text of the page's current selection that lies inside `root`. A selection dragged across
+ * several cells is cut to this cell, so only text this cell's copy limit governs is copied. Reading
+ * it briefly replaces the live selection and then puts it back. A selection that cannot be read,
+ * such as one left anchored in nodes the editor has since replaced, reads as `''`.
+ */
+function getSelectedTextWithin(root: Node): string {
+  const selection = window.getSelection();
+  if (!selection) return '';
+  try {
+    const rootRange = document.createRange();
+    rootRange.selectNodeContents(root);
+    const ranges = Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i));
+    const isInsideRoot = (range: Range) =>
+      rootRange.comparePoint(range.startContainer, range.startOffset) === 0 &&
+      rootRange.comparePoint(range.endContainer, range.endOffset) === 0;
+    if (ranges.every(isInsideRoot)) return selection.toString();
+
+    // `Selection.toString` keeps the line breaks between blocks that `Range.toString` drops, so
+    // read the text through the selection itself, cut to `root`, and then put the original ranges
+    // back.
+    const clampedRanges = ranges
+      .filter((range) => range.intersectsNode(root))
+      .map((range) => {
+        const clamped = range.cloneRange();
+        if (rootRange.comparePoint(range.startContainer, range.startOffset) < 0)
+          clamped.setStart(rootRange.startContainer, rootRange.startOffset);
+        if (rootRange.comparePoint(range.endContainer, range.endOffset) > 0)
+          clamped.setEnd(rootRange.endContainer, rootRange.endOffset);
+        return clamped;
+      });
+    // A range has no direction, so put the original selection back from its anchor and focus,
+    // which keep a backward selection backward. A selection with a range has both.
+    const { anchorNode, anchorOffset, focusNode, focusOffset } = selection;
+    selection.removeAllRanges();
+    clampedRanges.forEach((range) => selection.addRange(range));
+    const text = selection.toString();
+    selection.removeAllRanges();
+    if (anchorNode && focusNode)
+      selection.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset);
+    return text;
+  } catch {
+    return '';
+  }
+}
+
 function ZoomItemsShared({
   labels,
   canZoomIn,
@@ -155,16 +240,32 @@ function ZoomItemsShared({
   onZoomOut?: () => void;
   onResetZoom?: () => void;
 }) {
+  // These items run the platform's own platform.webViewContentZoomIn/Out/Reset commands (see
+  // use-resource-content-zoom.hook.ts), so they show the chords core's keyboard-shortcuts catalog
+  // lists for those commands; both read them from platform-bible-utils.
+  const zoomInHint = getShortcutForThisOs(CONTENT_ZOOM_IN_SHORTCUT);
+  const zoomOutHint = getShortcutForThisOs(CONTENT_ZOOM_OUT_SHORTCUT);
+  const resetHint = getShortcutForThisOs(CONTENT_ZOOM_RESET_SHORTCUT);
+
   return (
     <>
       <DropdownMenuItem disabled={!canZoomIn} onSelect={onZoomIn}>
         {labels.zoomIn}
+        <DropdownMenuShortcut>
+          <ShortcutKeys hint={zoomInHint} />
+        </DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem disabled={!canZoomOut} onSelect={onZoomOut}>
         {labels.zoomOut}
+        <DropdownMenuShortcut>
+          <ShortcutKeys hint={zoomOutHint} />
+        </DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem disabled={!canReset} onSelect={onResetZoom}>
         {labels.reset}
+        <DropdownMenuShortcut>
+          <ShortcutKeys hint={resetHint} />
+        </DropdownMenuShortcut>
       </DropdownMenuItem>
     </>
   );
@@ -233,10 +334,12 @@ export function ResourceCellView({
   zoomArea,
   textDirection,
   localizedStrings,
+  copyLimit,
   editor,
   emptyMessage,
   nameDisplay = 'header',
   contentOverflow = 'auto',
+  contentRef,
   zoomTarget = 'box',
   canZoomIn = true,
   canZoomOut = true,
@@ -321,23 +424,41 @@ export function ResourceCellView({
     undefined,
   );
   const [selectedText, setSelectedText] = useState('');
+  // The content area, without the resource name, so a selection dragged in from another cell does
+  // not count the name toward this cell's limit. The inline and header layouts are exclusive, so
+  // one ref serves both.
+  // The ref needs to start out with null for it to work as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const copyAreaRef = useRef<HTMLDivElement>(null);
+  // The header layout's content area is also the caller's `contentRef`, so it takes both refs.
+  const setHeaderContentElement = useCallback(
+    (element: HTMLDivElement | null) => {
+      copyAreaRef.current = element;
+      if (typeof contentRef === 'function') contentRef(element);
+      else if (contentRef) contentRef.current = element;
+    },
+    [contentRef],
+  );
 
   // A resource that is not installed shows only a placeholder, so there is nothing to copy and the
   // browser's own menu is left alone there.
   const hasRightClickMenu = state !== 'unavailable';
 
-  const handleCellContextMenu = useCallback((event: MouseEvent) => {
-    // The editor owns `contextmenu` over its content, and its built-in menu clips and cannot flip
-    // near the viewport edge. Intercept in the capture phase (before the editor's handler) and open
-    // our own portaled, collision-aware menu at the cursor instead.
-    event.preventDefault();
-    event.stopPropagation();
-    // Capture selection now — focus moves to the menu when it opens, which clears the DOM
-    // selection, so we must grab it before setRightClickMenuPos triggers the re-render.
-    const selection = window.getSelection()?.toString().trim() ?? '';
-    setSelectedText(selection);
-    setRightClickMenuPos({ x: event.clientX, y: event.clientY });
-  }, []);
+  const handleCellContextMenu = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      // The editor owns `contextmenu` over its content, and its built-in menu clips and cannot flip
+      // near the viewport edge. Intercept in the capture phase (before the editor's handler) and open
+      // our own portaled, collision-aware menu at the cursor instead.
+      event.preventDefault();
+      event.stopPropagation();
+      // Capture the selection now, before the menu opens and takes focus. It is cut to the limit
+      // in force now, so a limit that grows while the menu is open cannot copy more of it.
+      const text = getSelectedTextWithin(copyAreaRef.current ?? event.currentTarget).trim();
+      setSelectedText(truncateToCopyLimit(text, copyLimit));
+      setRightClickMenuPos({ x: event.clientX, y: event.clientY });
+    },
+    [copyLimit],
+  );
 
   // Format the "⋮" aria-label with the resource name (the template uses {resourceName}).
   const zoomOptionsAriaLabel = zoomMenuLabels
@@ -345,8 +466,13 @@ export function ResourceCellView({
     : undefined;
 
   const contentStyle = zoomTarget === 'blocks' ? buildAlignedZoomStyle(zoomArea) : undefined;
+  // A scroll port has scroll anchoring off: the reference scroll tells the reader's scrolling from
+  // its own by comparing `scrollTop`, and anchoring rewrites it as content arrives above the verse,
+  // which is the case the re-check exists for. See the aligned grid root's `overflow-anchor` rule.
   const contentOverflowClass =
-    contentOverflow === 'visible' ? 'tw:overflow-visible' : 'tw:overflow-auto';
+    contentOverflow === 'visible'
+      ? 'tw:overflow-visible'
+      : 'tw:overflow-auto tw:[overflow-anchor:none]';
 
   return (
     <div
@@ -368,7 +494,11 @@ export function ResourceCellView({
         // remaining min-w-0 column. Only the verse text scales with zoom; the hanging name is fixed.
         <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
           <ResourceNameLabel label={label} className="tw:max-w-24 tw:min-w-0 tw:text-sm" />
-          <div className={`tw:min-w-0 tw:flex-1 ${contentOverflowClass}`} style={contentStyle}>
+          <div
+            ref={copyAreaRef}
+            className={`tw:min-w-0 tw:flex-1 ${contentOverflowClass}`}
+            style={contentStyle}
+          >
             <ContentZoomRoot area={zoomArea} label={label}>
               {stateContent}
             </ContentZoomRoot>
@@ -453,11 +583,16 @@ export function ResourceCellView({
             ) : undefined}
           </div>
           <div
+            ref={setHeaderContentElement}
             data-cell-content
             className={`tw:flex-1 ${contentOverflowClass}`}
             style={contentStyle}
             dir={textDirection}
           >
+            {/* The zoom root sits INSIDE the content box, never on it: that box is the scroll
+                port a chapter cell scrolls to a verse (`useReferenceScroll`), and `zoom` on the
+                port would leave the target's viewport rect and the port's `scrollTop` in
+                different coordinate spaces, so the port overshoots by the zoom factor. */}
             <div data-cell-pad className="tw:p-2">
               <ContentZoomRoot area={zoomArea} label={label}>
                 {stateContent}
@@ -496,7 +631,11 @@ export function ResourceCellView({
             <DropdownMenuItem
               disabled={!selectedText}
               onSelect={() => {
-                if (selectedText) navigator.clipboard?.writeText(selectedText).catch(() => {});
+                if (!selectedText) return;
+                // Cut again, in case the limit shrank while the menu was open.
+                const textToCopy = truncateToCopyLimit(selectedText, copyLimit);
+                if (!textToCopy) return;
+                navigator.clipboard?.writeText(textToCopy).catch(() => {});
               }}
             >
               {localizedStrings[COPY_KEY]}

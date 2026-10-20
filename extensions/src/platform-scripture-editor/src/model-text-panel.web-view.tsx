@@ -15,9 +15,10 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo } from 'react';
+import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
-import { isDblResourceReference } from './resource-reference.utils';
+import { getModelResourceProjectId, isDblResourceReference } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
@@ -169,30 +170,44 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   const getResourceChapter = useCallback(
     async (resourceProjectId: string, ref: SerializedVerseRef) => {
-      const usjPdp = await papi.projectDataProviders.get(
-        'platformScripture.USJ_Chapter',
-        resourceProjectId,
-      );
-      const usj =
-        (await usjPdp.getChapterUSJ({
-          book: ref.book,
-          chapterNum: ref.chapterNum,
-          verseNum: 1,
-          versificationStr: ref.versificationStr,
-        })) ?? defaultUsj;
+      const getUsj = async () => {
+        const usjPdp = await papi.projectDataProviders.get(
+          'platformScripture.USJ_Chapter',
+          resourceProjectId,
+        );
+        return (
+          (await usjPdp.getChapterUSJ({
+            book: ref.book,
+            chapterNum: ref.chapterNum,
+            verseNum: 1,
+            versificationStr: ref.versificationStr,
+          })) ?? defaultUsj
+        );
+      };
 
-      let textDirection: string = DEFAULT_TEXT_DIRECTION;
-      try {
-        const basePdp = await papi.projectDataProviders.get('platform.base', resourceProjectId);
-        const td = await basePdp.getSetting('platform.textDirection');
-        if (typeof td === 'string' && td) textDirection = td;
-      } catch (e) {
-        logger.warn(`Failed to read model text direction: ${getErrorMessage(e)}`);
-      }
+      const getTextDirection = async () => {
+        try {
+          const basePdp = await papi.projectDataProviders.get('platform.base', resourceProjectId);
+          const td = await basePdp.getSetting('platform.textDirection');
+          if (typeof td === 'string' && td) return td;
+        } catch (e) {
+          logger.warn(`Failed to read model text direction: ${getErrorMessage(e)}`);
+        }
+        return DEFAULT_TEXT_DIRECTION;
+      };
 
+      const [usj, textDirection] = await Promise.all([getUsj(), getTextDirection()]);
       return { usj, textDirection };
     },
     [],
+  );
+
+  // `ModelTextPanel` reads its text from the project `getModelResourceProjectId` resolves.
+  // `ModelTextPanel` blocks copying while its chapter text loads.
+  const resourceCopyLimit = useChapterCopyLimit(
+    getModelResourceProjectId(effectiveModelText, dblResources),
+    scrRef,
+    'applied-by-caller',
   );
 
   return (
@@ -211,6 +226,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       setUserModelTexts={setUserModelTexts}
       showResourcePicker={showResourcePicker}
       getResourceChapter={getResourceChapter}
+      resourceCopyLimit={resourceCopyLimit}
       logger={logger}
     />
   );

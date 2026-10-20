@@ -46,6 +46,7 @@ import {
   usfmMarkers,
   UsjDocumentLocation,
   UsjReaderWriter,
+  UsjTextContentLocation,
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
@@ -175,18 +176,17 @@ function isFinalItemOfDocument(usj: Usj, jsonPath: string): boolean {
  * text, or an offset further past the end, neither of which a location spells and which a caller
  * should treat as the defect it is.
  *
- * @param location The location, as the editor reported it.
+ * @param location The location on text, as the editor reported it.
  * @param textLength The length of the text node the location resolved to.
  * @param usj The document the location addresses.
  * @returns `location`, with the document-end offset brought onto the end of the text.
  */
-export function withDocumentEndOnText<T extends object>(
-  location: T,
+export function withDocumentEndOnText(
+  location: UsjTextContentLocation,
   textLength: number,
   usj: Usj,
-): T {
-  if (!('offset' in location) || location.offset !== textLength + 1) return location;
-  if (!('jsonPath' in location) || typeof location.jsonPath !== 'string') return location;
+): UsjTextContentLocation {
+  if (location.offset !== textLength + 1) return location;
   if (!isFinalItemOfDocument(usj, location.jsonPath)) return location;
   return { ...location, offset: textLength };
 }
