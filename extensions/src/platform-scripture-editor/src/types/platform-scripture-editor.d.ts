@@ -815,6 +815,11 @@ declare module 'papi-shared-types' {
     /**
      * Opens a new read-only editor WebView and returns the WebView id
      *
+     * In Simple mode this opens in the editor column, replacing the project there. To open a
+     * resource the user asked for in Simple mode, call
+     * `platformScriptureEditor.showResourceInReferencePanel` first, and this only when that answers
+     * `openElsewhere`.
+     *
      * @param projectId Optional project ID of the project/resource to open. If a project ID
      *   (editable) is provided, this will properly open the Scripture editor. Prompts the user to
      *   select a resource if this parameter is not provided.
