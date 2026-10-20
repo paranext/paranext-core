@@ -1,5 +1,14 @@
 {
   "metadata": {
+    "%mainMenu_openParatextRegistration%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Relabeled to \"Registration information\". The new key is %mainMenu_openParatextRegistration_2%."
+      }
+    },
+    "%mainMenu_openParatextRegistration_2%": {
+      "fallbackKey": "%mainMenu_openParatextRegistration%"
+    },
     "%paratextRegistration_commit_comment_changing_user%": {
       "fallbackKey": "%Paratext.&quot;Before changing registered user&quot;%"
     },
@@ -191,6 +200,7 @@
       "%mainMenu_openInternetSettings%": "Internet Settings...",
       "%mainMenu_openInternetSettings_2%": "Internet & connectivity",
       "%mainMenu_openParatextRegistration%": "Paratext Registration Information...",
+      "%mainMenu_openParatextRegistration_2%": "Registration information",
       "%paratextRegistration_alert_invalidRegistration%": "Registration information not found",
       "%paratextRegistration_alert_invalidRegistration_description%": "Check to make sure that the registration name and code you received are accurately entered here.",
       "%paratextRegistration_alert_unchangedRegistration%": "Unchanged registration information",
@@ -281,6 +291,7 @@
       "%mainMenu_openInternetSettings%": "Configuración de Internet...",
       "%mainMenu_openInternetSettings_2%": "Internet y conectividad",
       "%mainMenu_openParatextRegistration%": "Información de Registro Paratext...",
+      "%mainMenu_openParatextRegistration_2%": "Información de registro",
       "%paratextRegistration_alert_invalidRegistration%": "Información de registro no encontrada",
       "%paratextRegistration_alert_invalidRegistration_description%": "Verifique que el nombre y el código de registro que recibió estén ingresados correctamente aquí.",
       "%paratextRegistration_alert_unchangedRegistration%": "Información de registro sin cambios",
