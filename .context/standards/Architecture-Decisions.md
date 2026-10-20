@@ -3692,7 +3692,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     few dozen.
 - **Consequences:** Adding an icon means adding it to the map in `lucide-icon.component.tsx`; a
   menu or tab that names an icon outside the map shows none. The macOS native menubar ignores
-  icons, as it did the path fields. The new fields are `@experimental`.
+  icons, as it did the path fields. The new fields are `@experimental`. An extension that puts
+  `iconNameBefore` / `iconNameAfter` in its `menus.json` needs a core that has them: the menu
+  schema allows no unknown properties, so an older core rejects that whole menu document and the
+  extension's items disappear. A web-view definition's icon name is not schema-checked, so an older
+  core ignores it and keeps showing `iconUrl`.
 
 ## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
