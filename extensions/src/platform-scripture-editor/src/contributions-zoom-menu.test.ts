@@ -4,11 +4,11 @@ import localizedStringsFile from '../contributions/localizedStrings.json';
 
 /**
  * Guards the three zoom items the editor's own hamburger menu contributes, in the View column next
- * to the footnote items, in Simple mode only (the editor's Simple-mode tab bar is headless, so the
- * hamburger is its only menu route to zoom) — `menus.json` and `localizedStrings.json` have no
- * compile-time link to each other or to the command names the platform registers, so a rename or a
- * dropped locale on either side would otherwise only surface as a blank/broken menu item at
- * runtime.
+ * to the footnote items, in both Power and Simple mode (the editor's Simple-mode tab bar is
+ * headless, so the hamburger is its only menu route to zoom there; Power also offers the items on
+ * the tab's context menu) — `menus.json` and `localizedStrings.json` have no compile-time link to
+ * each other or to the command names the platform registers, so a rename or a dropped locale on
+ * either side would otherwise only surface as a blank/broken menu item at runtime.
  *
  * The commands are asserted as literal strings rather than imported from
  * `@shared/models/content-zoom.model`'s `CONTENT_ZOOM_COMMANDS`: this extension's tsconfig/vitest
@@ -61,11 +61,9 @@ describe('platform-scripture-editor zoom menu contribution', () => {
     ]);
   });
 
-  it('hides every zoom item in Power mode, where the tab menu carries them, and marks none experimental', () => {
+  it('shows every zoom item in both Power and Simple mode, and marks none experimental', () => {
     zoomItems.forEach((item) => {
-      expect('hiddenInterfaceModes' in item ? item.hiddenInterfaceModes : undefined).toEqual([
-        'power',
-      ]);
+      expect('hiddenInterfaceModes' in item).toBe(false);
       expect('isExperimental' in item).toBe(false);
     });
   });
