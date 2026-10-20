@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEADLINE_EXCEEDED, newPlatformError, UNKNOWN } from 'platform-bible-utils';
 import type { NetworkObjectDetails } from '@shared/models/network-object.model';
+
+/** Builds the PlatformError `waitForNetworkObject` rejects with on a genuine per-arm timeout. */
+function timeoutError() {
+  return newPlatformError(
+    'Timeout reached when waiting for wait-for-net-obj to settle',
+    DEADLINE_EXCEEDED,
+  );
+}
 
 // Each test re-imports the service (vi.resetModules) because it caches `isInitialized` /
 // `initializePromise` at module scope — see network-object-status.service.test.ts for the same
@@ -83,9 +92,7 @@ describe('getWebViewProvider — the fast, one-shot wait (default, no patient fl
 
   it('propagates the timeout rejection without retrying', async () => {
     const service = await loadService();
-    mockWaitForNetworkObject.mockRejectedValue(
-      new Error('Timeout reached when waiting for wait-for-net-obj to settle'),
-    );
+    mockWaitForNetworkObject.mockRejectedValue(timeoutError());
 
     await expect(service.getWebViewProvider('foo.view')).rejects.toThrow('Timeout reached');
 
@@ -97,8 +104,8 @@ describe('getWebViewProvider — the patient, re-arming wait (tab-restore path)'
   it('re-arms the wait after a timeout and returns the provider once it registers late', async () => {
     const service = await loadService();
     mockWaitForNetworkObject
-      .mockRejectedValueOnce(new Error('Timeout reached when waiting for wait-for-net-obj'))
-      .mockRejectedValueOnce(new Error('Timeout reached when waiting for wait-for-net-obj'))
+      .mockRejectedValueOnce(timeoutError())
+      .mockRejectedValueOnce(timeoutError())
       .mockResolvedValueOnce(makeDetails('foo.view-webViewProvider'));
 
     await expect(service.getWebViewProvider('foo.view', true)).resolves.toBe(PROVIDER);
@@ -119,7 +126,7 @@ describe('getWebViewProvider — the patient, re-arming wait (tab-restore path)'
     // re-arm again, not a real timer, so nothing here needs to actually wait 2 minutes.
     mockWaitForNetworkObject.mockImplementation(async () => {
       vi.advanceTimersByTime(20000);
-      throw new Error('Timeout reached when waiting for wait-for-net-obj');
+      throw timeoutError();
     });
 
     await expect(service.getWebViewProvider('foo.view', true)).rejects.toThrow('Timeout reached');
@@ -128,11 +135,24 @@ describe('getWebViewProvider — the patient, re-arming wait (tab-restore path)'
     expect(mockWaitForNetworkObject).toHaveBeenCalledTimes(6);
   });
 
+  it('does not re-arm a non-timeout rejection, even well within the patient budget', async () => {
+    const service = await loadService();
+    // An UNKNOWN-coded PlatformError (e.g. a failed network-object snapshot read) is not something
+    // re-arming will fix, so it must propagate from the very first arm, same as the one-shot path.
+    mockWaitForNetworkObject.mockRejectedValue(
+      newPlatformError('network object service unavailable', UNKNOWN),
+    );
+
+    await expect(service.getWebViewProvider('foo.view', true)).rejects.toMatchObject({
+      code: UNKNOWN,
+    });
+
+    expect(mockWaitForNetworkObject).toHaveBeenCalledTimes(1);
+  });
+
   it("doesn't affect a fresh openWebView request made without the patient flag", async () => {
     const service = await loadService();
-    mockWaitForNetworkObject.mockRejectedValue(
-      new Error('Timeout reached when waiting for wait-for-net-obj'),
-    );
+    mockWaitForNetworkObject.mockRejectedValue(timeoutError());
 
     await expect(service.getWebViewProvider('foo.view', false)).rejects.toThrow('Timeout reached');
 

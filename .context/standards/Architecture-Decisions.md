@@ -8406,6 +8406,48 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   Paratext 10 patch.
 - **Source:** PT-4558 (PR #2855).
 
+## adr-wait-for-network-object-rejects-with-platform-error: A bounded network-object wait distinguishes a genuine timeout from any other failure via `PlatformError.code`, not by inspecting the rejection's shape
+
+- **Date:** 2026-10-20
+- **Status:** Accepted
+- **Context:** `waitForWebViewProviderPatiently` (see `adr-web-view-provider-retry-scoped-to-tab-restore`)
+  re-arms a bounded `waitForNetworkObject` wait, up to a total budget, when a webview provider's
+  owning extension may still be activating. Its catch block could not tell a genuine per-arm timeout
+  apart from any other rejection — `waitForNetworkObject` collapsed both a timeout and a failed
+  `getAllNetworkObjectDetails()` snapshot read into one plain rejection reason string, by design
+  (`AsyncVariable` tracks `hasTimedOut` internally, but that flag never survived past
+  `waitForNetworkObject`'s own return). A loop that cannot tell the two apart either retries blindly
+  on any failure — hammering the main process with repeated IPC round trips and delaying a real,
+  non-recoverable error by the full patient budget instead of surfacing it immediately — or cannot
+  retry at all.
+- **Decision:** `waitForNetworkObject` (`network-object-status.service.ts`) now rejects with a
+  `PlatformError` instead of a bare string: `code` is `DEADLINE_EXCEEDED` when `asyncVar.hasTimedOut`,
+  `UNKNOWN` otherwise. This widens `waitForNetworkObject`'s public contract
+  (`NetworkObjectStatusServiceType`), used by multiple call sites (scroll-group
+  service, startup-readiness, etc.), but needs no change to `AsyncVariable` itself: `waitForNetworkObject` already holds the
+  `asyncVar` instance and can read `hasTimedOut` before it returns, so the wrapping happens entirely
+  at this one layer. A caller that needs to distinguish the two reasons checks `isPlatformError(e) && e.code === DEADLINE_EXCEEDED`;
+  any other caller is unaffected, since each either propagates the rejection untouched or formats
+  it through `getErrorMessage`, which already treats a `PlatformError` as a first-class message
+  source.
+- **Alternatives:** **Widen `AsyncVariable`'s rejection type directly** — rejected: `AsyncVariable`
+  is a generic utility with multiple unrelated consumers (not all network-object waits), so changing its
+  shared type would ripple through call sites that have nothing to do with this decision, for no
+  benefit to them. **Inspect the rejection message string** (e.g. match `/^Timeout reached/`) —
+  rejected: it is a string the function itself generates, so any future wording change would
+  silently re-break the distinction, exactly the brittleness `PlatformError.code` exists to avoid.
+  **Leave the retry loop retrying on any rejection** — rejected (the status quo this decision fixes):
+  it hammers the main process with repeated IPC round trips on a fast-failing, non-timeout error, and
+  delays that error from surfacing in ~20s to up to the full patient budget.
+- **Consequences:** `waitForNetworkObject`'s documented contract now promises a `PlatformError`, not
+  a bare string, on rejection — a new caller should rely on that rather than re-deriving a reason
+  string. This establishes the pattern for any future bounded-retry loop in this codebase that needs
+  to distinguish "the operation can still be retried" from "this failure will recur no matter how
+  many times we ask": reject with a `PlatformError` carrying the right `code`, rather than inventing
+  a new out-of-band signal or parsing a message string.
+- **Source:** PT-4734 (PR #2901); architect input mid-review on using `PlatformError`'s `code` field
+  for this.
+
 ## adr-web-view-content-zoom-in-iframe-shortcuts: Content-zoom chords are handled by a platform-injected bootstrap inside each web view
 
 - **Date:** 2026-09-15

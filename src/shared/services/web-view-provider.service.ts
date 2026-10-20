@@ -13,7 +13,14 @@ import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import { networkObjectService, overrideDispose } from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
-import { isSerializable } from 'platform-bible-utils';
+import {
+  DEADLINE_EXCEEDED,
+  isPlatformError,
+  isSerializable,
+  // Linked in TSDoc
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  type PlatformError,
+} from 'platform-bible-utils';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
 import { DisposableNetworkObject } from '@shared/models/network-object.model';
@@ -168,7 +175,10 @@ const PATIENT_PROVIDER_WAIT_TOTAL_MS = 2 * 60 * 1000;
 
 /**
  * Re-arms the bounded wait on timeout, up to {@link PATIENT_PROVIDER_WAIT_TOTAL_MS} total, for a
- * webview provider whose owning extension may still be activating.
+ * webview provider whose owning extension may still be activating. Only a genuine per-arm timeout
+ * (a {@link PlatformError} with `code` {@link DEADLINE_EXCEEDED}) is re-armed; any other rejection
+ * (e.g. a failed network-object snapshot read) propagates immediately, since retrying it won't
+ * help.
  *
  * Used only for the tab-restore path (a saved or baked-into-the-default-layout tab materializing):
  * the tab already visually exists, so waiting quietly longer while its provider catches up is
@@ -194,6 +204,10 @@ async function waitForWebViewProviderPatiently(
         PROVIDER_WAIT_ARM_MS,
       );
     } catch (e) {
+      // Only a genuine per-arm timeout is worth re-arming for. Any other rejection (e.g. a failed
+      // getAllNetworkObjectDetails() snapshot read) won't be fixed by waiting longer, so let it
+      // propagate immediately instead of silently spending the rest of the patient budget on it.
+      if (!isPlatformError(e) || e.code !== DEADLINE_EXCEEDED) throw e;
       // Budget spent: let this arm's rejection propagate exactly as the one-shot wait's would,
       // just later — same error shape, same caller-side handling.
       if (performance.now() >= deadline) throw e;
