@@ -35,6 +35,15 @@
       "message": "Updated error text to include a link to the internet settings panel. The new key is %data_loading_error_internetAccess_disabled_2%."
     }
   },
+  "%data_loading_error_internetAccess_disabled_2%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "The panel it names is now called \"Internet connectivity\". The new key is %data_loading_error_internetAccess_disabled_3%."
+    }
+  },
+  "%data_loading_error_internetAccess_disabled_3%": {
+    "fallbackKey": "%data_loading_error_internetAccess_disabled_2%"
+  },
   "%data_loading_error_paratextData_internet_disabled%": {
     "deprecationInfo": {
       "date": "2025-09-24",
@@ -61,6 +70,15 @@
       "date": "2026-07-30",
       "message": "Reworded to stop blaming the network: the registration check is local, so an unresolved probe means the provider is still starting up, not that the connection is down (PT-4302). The new key is %firstRun_error_body_providerStartingUp%."
     }
+  },
+  "%firstRun_step_internetSettings_heading%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"Internet connectivity\" to match the internet settings panel. The new key is %firstRun_step_internetSettings_heading_2%."
+    }
+  },
+  "%firstRun_step_internetSettings_heading_2%": {
+    "fallbackKey": "%firstRun_step_internetSettings_heading%"
   },
   "%firstRun_step_language_placeholder%": {
     "deprecationInfo": {
@@ -376,6 +394,24 @@
       "message": "The toolbar's standalone theme toggle button was replaced by the appearance toggle in the User Profile popover, which does not surface a separate theme-loading error tooltip."
     }
   },
+  "%toolbar_userProfile_label%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"User menu\". The new key is %toolbar_userProfile_label_2%."
+    }
+  },
+  "%toolbar_userProfile_label_2%": {
+    "fallbackKey": "%toolbar_userProfile_label%"
+  },
+  "%toolbar_userProfile_label_registrationNeeded%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"User menu — registration needed\". The new key is %toolbar_userProfile_label_registrationNeeded_2%."
+    }
+  },
+  "%toolbar_userProfile_label_registrationNeeded_2%": {
+    "fallbackKey": "%toolbar_userProfile_label_registrationNeeded%"
+  },
   "%undoButton_tooltip%": {
     "notes": "The tooltip text for the undo button in the common undo/redo control used in various editors.",
     "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiUndo.ToolTipText%"
@@ -385,6 +421,24 @@
       "date": "2026-07-26",
       "message": "Renamed to \"Internet & connectivity\" to match the internet settings panel. The new key is %userProfile_networkSettings_2%."
     }
+  },
+  "%userProfile_networkSettings_2%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"Internet connectivity\". The new key is %userProfile_networkSettings_3%."
+    }
+  },
+  "%userProfile_networkSettings_3%": {
+    "fallbackKey": "%userProfile_networkSettings_2%"
+  },
+  "%userProfile_profileAndRegistration%": {
+    "deprecationInfo": {
+      "date": "2026-10-20",
+      "message": "Renamed to \"Registration information\". The new key is %userProfile_profileAndRegistration_2%."
+    }
+  },
+  "%userProfile_profileAndRegistration_2%": {
+    "fallbackKey": "%userProfile_profileAndRegistration%"
   },
   "%webView_openProjectSettings%": {
     "deprecationInfo": {

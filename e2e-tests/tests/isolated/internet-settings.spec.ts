@@ -1,5 +1,5 @@
 /**
- * E2E tests for the Internet & Connectivity settings UI.
+ * E2E tests for the Internet connectivity settings UI.
  *
  * Covers:
  *
@@ -32,22 +32,22 @@ import {
   waitForSettingsLoaded,
 } from './internet-settings.page';
 
-test.describe('Internet & Connectivity settings', () => {
-  test('profile popover shows the "Internet & connectivity" label and opens settings panel', async ({
+test.describe('Internet connectivity settings', () => {
+  test('profile popover shows the "Internet connectivity" label and opens settings panel', async ({
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
 
-    // The button label is %userProfile_networkSettings_2% (superseding "Network settings")
-    await expect(await openUserProfilePopover(mainPage)).toContainText('Internet & connectivity');
+    // The button label is %userProfile_networkSettings_3% (superseding "Network settings")
+    await expect(await openUserProfilePopover(mainPage)).toContainText('Internet connectivity');
 
     await openInternetSettings(mainPage);
 
     const frame = internetSettingsFrame(mainPage);
     await expect(frame.locator('h2')).toBeVisible({ timeout: 15_000 });
-    // Lowercase "connectivity" — this is %internetSettings_webView_title_2%, and toContainText is
+    // Lowercase "connectivity" — this is %internetSettings_webView_title_3%, and toContainText is
     // case-sensitive for plain strings.
-    await expect(frame.locator('h2')).toContainText('Internet & connectivity');
+    await expect(frame.locator('h2')).toContainText('Internet connectivity');
     await expect(frame.locator('p').first()).toContainText('apply only to Paratext 10 —');
   });
 
@@ -64,7 +64,7 @@ test.describe('Internet & Connectivity settings', () => {
     expect(text).not.toMatch(/%[a-zA-Z0-9_]+%/);
     // Positive control: this corpus is the panel's real text, not an empty string that would
     // satisfy the assertion above no matter what.
-    expect(text).toContain('Internet & connectivity');
+    expect(text).toContain('Internet connectivity');
   });
 
   test('shows 2 active radio rows and 3 coming-soon rows with badges', async ({ mainPage }) => {
