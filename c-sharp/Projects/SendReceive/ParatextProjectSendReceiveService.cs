@@ -72,16 +72,18 @@ internal class ParatextProjectSendReceiveService(
     /// <summary>
     /// Whether <paramref name="scrText"/> holds local changes Send/Receive has not sent — see
     /// <see cref="UnsyncedChangesRule"/>. Local repository reads only (an <c>hg status</c> and a tip
-    /// lookup); never contacts the server. Always <see langword="false"/> when the current user's
-    /// role cannot change the project (an Observer, or not a member): Send/Receive neither commits
-    /// nor sends for such a user (ParatextData's <c>VersionedText.ShareChanges</c> gates both on
-    /// <see cref="PermissionManager.HaveRoleNotObserver"/>), so anything waiting locally, such as
-    /// extension data written into the project's <c>shared</c> folder, could never be sent and
-    /// would stay marked forever. Returns <see langword="null"/> when the repository cannot be read
-    /// (no Mercurial, a broken repository), so the caller can keep its previous answer; the failure
-    /// is logged once per project until a later check of that project succeeds. Read by
+    /// lookup); never contacts the server. Returns <see langword="null"/> when the repository cannot
+    /// be read (no Mercurial, a broken repository), so the caller can keep its previous answer; the
+    /// failure is logged once per project until a later check of that project succeeds. Read by
     /// <see cref="UnsyncedChangesTracker"/>.
     /// </summary>
+    /// <remarks>
+    /// Always <see langword="false"/> when the current user's role cannot change the project (an
+    /// Observer, or not a member): Send/Receive neither commits nor sends for such a user
+    /// (ParatextData's <c>VersionedText.ShareChanges</c> gates both on
+    /// <see cref="PermissionManager.HaveRoleNotObserver"/>), so anything waiting locally, such as
+    /// extension data written into the project's <c>shared</c> folder, could never be sent.
+    /// </remarks>
     public bool? HasUnsyncedLocalChanges(ScrText scrText)
     {
         try
