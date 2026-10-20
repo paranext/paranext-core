@@ -38,19 +38,12 @@ import {
 import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
 import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
+  getColumnGroupKeys,
   getMenuSectionsWithItems,
   getSubMenuGroupKeysForMenuItemId,
-  isGroupUnderColumnOrSubMenu,
 } from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
-
-/** Keys of the groups rendered under a column, sorted by the groups' `order` */
-const getColumnGroupKeys = (groups: Localized<GroupsInMultiColumnMenu>, columnKey: string) =>
-  Object.entries(groups)
-    .filter(([key, group]) => isGroupUnderColumnOrSubMenu(key, group, columnKey))
-    .sort(([, a], [, b]) => a.order - b.order)
-    .map(([key]) => key);
 
 /**
  * Renders the items of the given groups in the order given. Groups within a column are not
