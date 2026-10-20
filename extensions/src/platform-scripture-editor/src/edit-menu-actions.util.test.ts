@@ -11,8 +11,15 @@ function makeEditor() {
 }
 
 describe('Edit menu actions', () => {
-  it('recognizes only the Edit flyout commands', () => {
+  it('intercepts only the clipboard commands, which need the click’s user activation', () => {
     EDIT_MENU_COMMANDS.forEach((command) => expect(isEditMenuCommand(command)).toBe(true));
+    expect([...EDIT_MENU_COMMANDS]).toEqual([
+      'platformScriptureEditor.cutSelection',
+      'platformScriptureEditor.copySelection',
+      'platformScriptureEditor.pasteAtSelection',
+    ]);
+    expect(isEditMenuCommand('platformScriptureEditor.undo')).toBe(false);
+    expect(isEditMenuCommand('platformScriptureEditor.redo')).toBe(false);
     expect(isEditMenuCommand('platformScripture.openFind')).toBe(false);
   });
 
@@ -98,6 +105,46 @@ describe('handleEditMenuCommand', () => {
     );
     expect(effects.notifyActionBlocked).toHaveBeenCalledTimes(1);
     expect(effects.notifySyncEditBlocked).not.toHaveBeenCalled();
+  });
+
+  it.each(['platformScriptureEditor.undo', 'platformScriptureEditor.redo'] as const)(
+    '%s is refused and the user told while the editor is read-only',
+    (command) => {
+      const editor = makeEditor();
+      const effects = makeEffects();
+      handleEditMenuCommand(
+        command,
+        editor,
+        { isReadOnly: true, isDurablyReadOnly: true, isSyncBlocked: false },
+        effects,
+      );
+      Object.values(editor).forEach((method) => expect(method).not.toHaveBeenCalled());
+      expect(effects.notifyActionBlocked).toHaveBeenCalledTimes(1);
+      expect(effects.focusEditor).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('names Send/Receive when a sync is the only reason undo is blocked', () => {
+    const editor = makeEditor();
+    const effects = makeEffects();
+    handleEditMenuCommand(
+      'platformScriptureEditor.undo',
+      editor,
+      { isReadOnly: true, isDurablyReadOnly: false, isSyncBlocked: true },
+      effects,
+    );
+    expect(editor.undo).not.toHaveBeenCalled();
+    expect(effects.notifySyncEditBlocked).toHaveBeenCalledTimes(1);
+    expect(effects.notifyActionBlocked).not.toHaveBeenCalled();
+  });
+
+  it('runs redo on an editable editor after restoring the selection', () => {
+    const editor = makeEditor();
+    const effects = makeEffects();
+    handleEditMenuCommand('platformScriptureEditor.redo', editor, EDITABLE, effects);
+    expect(effects.restoreSelectionIfLost).toHaveBeenCalledWith(editor);
+    expect(editor.redo).toHaveBeenCalledTimes(1);
+    expect(effects.notifyActionBlocked).not.toHaveBeenCalled();
   });
 
   it('gives the generic notice and touches nothing else when no editor is loaded', () => {
