@@ -168,31 +168,35 @@ service it names.
 import papi from '@papi/backend';
 import type { ExecutionActivationContext, RequestRegistryTokens } from '@papi/core';
 
-// The token is cached, so getting one before each request is cheap. The resource is resolved
-// every time because the user can switch Registry server while Platform.Bible runs.
-async function getAssistantAccessToken(registryTokens: RequestRegistryTokens): Promise<string> {
+// The Assistant's resource identifier, which is also its address. Resolve it before each request,
+// because the user can switch Registry server while Platform.Bible runs.
+async function getAssistantResource(): Promise<string> {
   // Match the Registry this Platform.Bible talks to: registry-dev needs the dev identifier.
   const registryUrl = await papi.commands.sendCommand('paratextRegistration.getParatextRegistryUrl');
-  const resource = registryUrl.includes('registry-dev')
+  return registryUrl.includes('registry-dev')
     ? 'https://assistant-dev.example.org'
     : 'https://assistant.example.org';
+}
+
+// Takes a path on the Assistant, never a whole URL: whoever receives the token can use it at the
+// Assistant as this user until it expires, so it must go only to the Assistant. Every request gets
+// its token here (it's cached, so that's cheap), so a rejection (offline, unregistered, restricted
+// location) reaches the code that made the request.
+async function fetchFromAssistant(
+  registryTokens: RequestRegistryTokens,
+  path: string,
+): Promise<Response> {
+  const resource = await getAssistantResource();
+  // An absolute or `//host/...` path replaces the server in `new URL`, so check where it points.
+  const url = new URL(path, resource);
+  if (url.origin !== new URL(resource).origin) throw new Error(`Not an Assistant path: ${path}`);
 
   const { accessToken } = await registryTokens.getAccessToken({
     resource,
     scope: ['projects.members:read'],
   });
-  return accessToken;
-}
-
-// Every request to the service gets its token here, so a rejection (offline, unregistered,
-// restricted location) reaches the code that made the request.
-async function fetchFromAssistant(
-  registryTokens: RequestRegistryTokens,
-  url: string,
-): Promise<Response> {
-  const accessToken = await getAssistantAccessToken(registryTokens);
   // Never log the token.
-  return papi.fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  return papi.fetch(url.href, { headers: { Authorization: `Bearer ${accessToken}` } });
 }
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
@@ -201,8 +205,10 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const registryTokens = context.elevatedPrivileges.requestRegistryTokens;
   if (!registryTokens) return; // Not declared, or an older Platform.Bible
 
-  // Register what calls fetchFromAssistant(registryTokens, ...). Whatever you expose to web views
-  // or other extensions returns the service's data, never the token.
+  // Register what calls fetchFromAssistant(registryTokens, ...) with the paths it needs. Whatever
+  // you expose to web views or other extensions returns the service's data, never the token, and
+  // doesn't take a path or URL from its caller: that would let any extension call the Assistant as
+  // this user.
 }
 ```
 
@@ -213,6 +219,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   store it in, a command, network object, data provider, web view state or web view message:
   commands are callable by every extension and web views are same-origin, so any other extension
   could read it there. There's no reason to store it anyway, since it's cached and short-lived.
+- Send the token only to the service it names: whoever receives it can call that service as the
+  user until it expires. Build each request URL from the resource and check its origin, as
+  `fetchFromAssistant` does, rather than taking a URL from a caller.
 - Failures reject with a `PlatformError`. Branch on its `code`. Its `message` is an English
   diagnostic for logs, so show users your own localized text based on the `code`:
   - `UNAUTHENTICATED`: offer `paratextRegistration.showParatextRegistration`.

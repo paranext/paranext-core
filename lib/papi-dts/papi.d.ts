@@ -10117,6 +10117,10 @@ declare module 'shared/models/request-registry-tokens-privilege.model' {
      * callable by every extension and web views are same-origin, so any other extension could read it
      * there.
      *
+     * Send the token only to `request.resource`: whoever receives it can call that service as the
+     * user until it expires, so build request URLs from the resource instead of accepting them from
+     * callers.
+     *
      * Rejects with a `PlatformError`. Its `code` says why; its `message` is an English diagnostic for
      * logs, so show users your own localized text based on the `code`:
      *
