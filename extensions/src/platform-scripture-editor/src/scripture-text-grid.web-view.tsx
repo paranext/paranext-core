@@ -176,6 +176,8 @@ type ScriptureTextGridProjectViewProps = {
   hasCatalogSettled: boolean;
   hasCatalogError: boolean;
   refetchCatalog: () => void;
+  /** Bumped by each install from this web view, which changes what is on disk. */
+  refreshCounter: number;
   installingResourceNames: string[];
   /** Installs a picked resource; resolves whether the install succeeded. */
   installPickedResource: (resource: DblResourceData) => Promise<boolean>;
@@ -213,6 +215,7 @@ function ScriptureTextGridProjectView({
   hasCatalogSettled,
   hasCatalogError,
   refetchCatalog,
+  refreshCounter,
   installingResourceNames,
   installPickedResource,
   initializeOverlayOnce,
@@ -886,6 +889,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         hasCatalogSettled={hasCatalogSettled}
         hasCatalogError={hasCatalogError}
         refetchCatalog={refetchCatalog}
+        refreshCounter={refreshCounter}
         installingResourceNames={installingResourceNames}
         installPickedResource={installPickedResource}
         initializeOverlayOnce={initializeOverlayOnce}
