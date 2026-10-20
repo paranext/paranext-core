@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { LUCIDE_ICON_NAMES, LucideIcon } from './lucide-icon.component';
+import { isLucideIconName, LUCIDE_ICON_NAMES, LucideIcon } from './lucide-icon.component';
 
 describe('LucideIcon', () => {
   it('renders an svg for every name in LUCIDE_ICON_NAMES', () => {
@@ -19,6 +19,13 @@ describe('LucideIcon', () => {
   it('returns nothing for an unknown name', () => {
     const { container } = render(<LucideIcon name="not-a-real-icon" />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('isLucideIconName accepts listed names only, not undefined or inherited keys', () => {
+    expect(isLucideIconName('search')).toBe(true);
+    expect(isLucideIconName('not-a-real-icon')).toBe(false);
+    expect(isLucideIconName('constructor')).toBe(false);
+    expect(isLucideIconName(undefined)).toBe(false);
   });
 
   it('the svg strokes with currentColor', () => {

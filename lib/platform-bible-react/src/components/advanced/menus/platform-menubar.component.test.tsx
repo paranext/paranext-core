@@ -158,6 +158,23 @@ const ICON_MENU: Localized<MultiColumnMenu> = {
       iconPathBefore: 'https://example.test/icon.svg',
     },
     {
+      label: 'UnknownWithPath',
+      localizeNotes: '',
+      group: 'test.top',
+      order: 4.1,
+      command: 'test.unknownWithPath',
+      iconNameBefore: 'a-name-this-build-lacks',
+      iconPathBefore: 'https://example.test/icon.svg',
+    },
+    {
+      label: 'UnknownOnly',
+      localizeNotes: '',
+      group: 'test.top',
+      order: 4.2,
+      command: 'test.unknownOnly',
+      iconNameBefore: 'a-name-this-build-lacks',
+    },
+    {
       id: 'test.editSubmenu',
       label: 'Edit',
       localizeNotes: '',
@@ -212,6 +229,21 @@ describe('PlatformMenubar icons', () => {
     const item = screen.getByRole('menuitem', { name: /^Both/ });
     expect(item.querySelector('svg')).not.toBeNull();
     expect(item.querySelector('img')).toBeNull();
+  });
+
+  it('falls back to the image path when the icon name is not a known icon', async () => {
+    await openIconMenu();
+    const item = screen.getByRole('menuitem', { name: /UnknownWithPath/ });
+    expect(item.querySelector('img')).not.toBeNull();
+    expect(item.querySelector('svg')).toBeNull();
+  });
+
+  it('treats an unknown icon name without a path as no icon, keeping the label aligned', async () => {
+    await openIconMenu();
+    const item = screen.getByRole('menuitem', { name: /UnknownOnly/ });
+    expect(item.querySelector('img')).toBeNull();
+    expect(item.querySelector('svg')).toBeNull();
+    expect(item.querySelector('[data-slot="menu-icon-spacer"]')).not.toBeNull();
   });
 
   it('shows the icon of a submenu root', async () => {
