@@ -4064,3 +4064,39 @@ describe('React web view bootstrap teardown', () => {
     expect(unsubscribeUpdateWebView).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('web view tab icon names', () => {
+  const BASE_DEFINITION = {
+    id: 'icon-web-view',
+    webViewType: 'test.iconView',
+    contentType: 'react',
+    content: '',
+  } as const;
+
+  test('updating a definition with iconName merges it in', async () => {
+    const { mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent } = await importHost();
+
+    const merged = mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent(
+      { ...BASE_DEFINITION, iconUrl: 'icon.svg' },
+      { iconName: 'refresh-cw' },
+    );
+
+    expect(merged).toEqual({ ...BASE_DEFINITION, iconUrl: 'icon.svg', iconName: 'refresh-cw' });
+  });
+
+  test('saveTabInfoBase strips tabIconName like tabIconUrl', async () => {
+    const { saveTabInfoBase } = await importHost();
+
+    const saved = saveTabInfoBase({
+      id: 'icon-web-view',
+      tabType: TAB_TYPE_WEBVIEW,
+      tabTitle: 'Title',
+      tabIconUrl: 'icon.svg',
+      tabIconName: 'refresh-cw',
+      content: undefined,
+    });
+
+    expect(saved).not.toHaveProperty('tabIconUrl');
+    expect(saved).not.toHaveProperty('tabIconName');
+  });
+});

@@ -648,3 +648,74 @@ describe('PlatformTabTitle header id attribute', () => {
     expect(header).not.toHaveAttribute('data-tab-id');
   });
 });
+
+describe('PlatformTabTitle icon', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  function renderWithIcon(props: { iconName?: string; iconUrl?: string }) {
+    const { container } = render(
+      <div className="dock-panel">
+        <div className="dock-nav-wrap">
+          <div className="dock-nav-list">
+            <div className="dock-tab-active">
+              <PlatformTabTitle id="icon-tab" text="Tab title" {...props} />
+            </div>
+          </div>
+        </div>
+        <div className="dock-tabpane-active" />
+      </div>,
+    );
+    // The measure clone is an invisible duplicate used for sizing; the visible title is the first
+    return container.querySelector('.platform-tab-title');
+  }
+
+  it('renders the lucide icon when iconName is set', () => {
+    const title = renderWithIcon({ iconName: 'refresh-cw', iconUrl: 'icon.svg' });
+
+    expect(title?.querySelector('svg')).not.toBeNull();
+    // The lucide icon replaces the background-image icon box, so neither the url nor the default
+    // logo paints
+    expect(title?.querySelector('.tab-menu-icon')).toBeNull();
+  });
+
+  it('strokes the lucide icon with currentColor so it follows the text colour', () => {
+    const title = renderWithIcon({ iconName: 'refresh-cw' });
+
+    expect(title?.querySelector('svg')?.getAttribute('stroke')).toBe('currentColor');
+  });
+
+  it('falls back to iconUrl when only iconUrl is set', () => {
+    const title = renderWithIcon({ iconUrl: 'icon.svg' });
+
+    const iconBox = title?.querySelector<HTMLElement>('.tab-menu-icon');
+    expect(iconBox?.style.backgroundImage).toContain('icon.svg');
+    expect(title?.querySelector('svg')).toBeNull();
+  });
+
+  it('shows the default logo when neither is set', () => {
+    const title = renderWithIcon({});
+
+    const iconBox = title?.querySelector<HTMLElement>('.tab-menu-icon');
+    expect(iconBox).not.toBeNull();
+    expect(iconBox?.style.backgroundImage).toBe('');
+    expect(title?.querySelector('svg')).toBeNull();
+  });
+
+  it('falls back to iconUrl when iconName is unknown', () => {
+    const title = renderWithIcon({ iconName: 'not-a-real-icon', iconUrl: 'icon.svg' });
+
+    const iconBox = title?.querySelector<HTMLElement>('.tab-menu-icon');
+    expect(iconBox?.style.backgroundImage).toContain('icon.svg');
+    expect(title?.querySelector('svg')).toBeNull();
+  });
+
+  it('falls back to the default logo when iconName is unknown and there is no iconUrl', () => {
+    const title = renderWithIcon({ iconName: 'not-a-real-icon' });
+
+    const iconBox = title?.querySelector<HTMLElement>('.tab-menu-icon');
+    expect(iconBox).not.toBeNull();
+    expect(iconBox?.style.backgroundImage).toBe('');
+  });
+});

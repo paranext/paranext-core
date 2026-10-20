@@ -63,6 +63,20 @@
   vertical-align: middle;
 }
 
+// A lucide icon in the same 16px box as `.tab-menu-icon`. The svg strokes with currentColor, so it
+// follows the tab's text colour in every theme and state.
+.tab-lucide-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  margin-top: -1px;
+  padding: 0;
+  width: vars.$space--md;
+  height: vars.$space--md;
+  vertical-align: middle;
+}
+
 .platform-tab-tooltip {
   white-space: pre-wrap;
   z-index: vars.$z-index--above-dock;

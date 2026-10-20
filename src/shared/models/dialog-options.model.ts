@@ -12,6 +12,13 @@ export type DialogOptions = {
   /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
   iconUrl?: string;
   /**
+   * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to display in the header. Takes
+   * precedence over {@link DialogOptions.iconUrl}.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  iconName?: string;
+  /**
    * The message to show the user in the dialog. If you provide a {@link LocalizeKey}, it will be
    * localized before displaying.
    *

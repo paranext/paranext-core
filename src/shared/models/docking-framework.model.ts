@@ -65,6 +65,12 @@ export type TabInfo = SavedTabInfo & {
    */
   tabIconUrl?: string;
   /**
+   * Name of a lucide icon to show on the title bar of the tab instead of {@link tabIconUrl}.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  tabIconName?: string;
+  /**
    * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
    * tab
    */
