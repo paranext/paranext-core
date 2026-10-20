@@ -28,9 +28,9 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
+  getColumnGroupKeys,
   getSortedMenuColumns,
   getSubMenuGroupKeysForMenuItemId,
-  isGroupUnderColumnOrSubMenu,
 } from './menu.util';
 import MenuItemIcon from './menu-icon.component';
 
@@ -49,13 +49,6 @@ const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEvent
     });
   }, 0);
 };
-
-/** Keys of the groups rendered under a column, sorted by the groups' `order` */
-const getColumnGroupKeys = (groups: Localized<GroupsInMultiColumnMenu>, columnKey: string) =>
-  Object.entries(groups)
-    .filter(([key, group]) => isGroupUnderColumnOrSubMenu(key, group, columnKey))
-    .sort(([, a], [, b]) => a.order - b.order)
-    .map(([key]) => key);
 
 /**
  * Renders the items of the given groups in the order given, with a separator between groups.
@@ -132,6 +125,8 @@ const getMenubarContent = (
       });
 
     if (isSubMenu) {
+      // Columns keep the index-based rule below, whose output the menubar tests pin; a submenu can
+      // be fed by several groups that may each be empty, so it separates only groups with items.
       // The separator goes before a group's items, once an earlier group has shown some, so an
       // emptied group never leaves a stray separator
       const separator =
