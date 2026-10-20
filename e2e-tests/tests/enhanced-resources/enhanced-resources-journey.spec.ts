@@ -31,9 +31,8 @@ import { closeAllNonHomeDockTabs, sendOpenEnhancedResourceCommand } from './test
 // selectors run on `mainPage`, while ER-window selectors run inside the
 // "Enhanced Resource" iframe.
 //
-// The main menu no longer offers "Open Enhanced Resource" in either interface
-// mode, so the window is opened with the `platformEnhancedResources.openEnhancedResource`
-// command.
+// The main menu hides "Open enhanced resource" in both interface modes, so the window is
+// opened with the `platformEnhancedResources.openEnhancedResource` command.
 
 /**
  * Open the ER window with its command. Idempotent: if a tab already exists (a previous test left it

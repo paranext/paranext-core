@@ -122,8 +122,8 @@ async function openMarkerSettingsDialog(page: Page): Promise<FrameLocator> {
   const frame = page.frameLocator('iframe[title*="Markers Checklist"]');
   await frame.locator("button[aria-label='View Info']").first().click();
 
-  // Settings... menu item — match exactly to disambiguate from "Open Project Settings..."
-  // injected by default contributions.
+  // Settings... menu item. Matched exactly so it cannot match the default contributions'
+  // "Project settings" item.
   await frame.getByRole('menuitem', { name: 'Settings...', exact: true }).click();
 
   await expect(

@@ -528,8 +528,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
     command: 'platformScriptureEditor.insertCommentAtSelection',
   },
-  // TODO(PT-4735): Show hints on the rest of Simple's Project menu. The design's ⌃E has no editor
-  // handler or entry here yet. A new `command` also needs its row in `EXPECTED_MENU_HINTS`.
+  // TODO(PT-4777): The design's ⌃E has no editor handler or entry here yet. A new `command` also
+  // needs its row in `EXPECTED_MENU_HINTS`.
   {
     id: 'scripture-insert-footnote',
     purpose:
