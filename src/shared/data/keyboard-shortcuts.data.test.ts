@@ -37,6 +37,22 @@ const EXPECTED_MENU_HINTS: Record<
     hints: { darwin: '⇧⌘Z', win32: 'Ctrl+Y', linux: 'Ctrl+Y' },
     menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
   },
+  'platformScriptureEditor.toggleFootnotes': {
+    hints: { darwin: 'F7', win32: 'F7', linux: 'F7' },
+    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+  },
+  'platformScripture.openChecksSidePanel': {
+    hints: { darwin: '⌃⇧R', win32: 'Ctrl+Shift+R', linux: 'Ctrl+Shift+R' },
+    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+  },
+  'platformScriptureEditor.insertFootnoteAtSelection': {
+    hints: { darwin: '⌃T', win32: 'Ctrl+T', linux: 'Ctrl+T' },
+    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+  },
+  'platformScriptureEditor.insertCrossReferenceAtSelection': {
+    hints: { darwin: '⌃⇧T', win32: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
+    menus: ['platform-scripture-editor: webViewMenus.platformScriptureEditor.react.topMenu'],
+  },
   'platform.webViewContentZoomIn': {
     hints: { darwin: '⌘=', win32: 'Ctrl++', linux: 'Ctrl++' },
     menus: [
