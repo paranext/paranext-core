@@ -117,6 +117,9 @@ namespace TestParanextDataProvider.Projects.SendReceive
                     _service.LastSyncedTip = "t0";
                     _hg.TipId = "t1";
                     break;
+                default:
+                    Assert.Fail($"Unknown change '{change}'");
+                    break;
             }
 
             Assert.That(_service.HasUnsyncedLocalChanges(new SharedDummyScrText(role)), Is.False);
@@ -158,6 +161,11 @@ namespace TestParanextDataProvider.Projects.SendReceive
                     case "TipComparison":
                         _service.LastSyncedTip = "t0";
                         _hg.TipId = "t1";
+                        break;
+                    case "NoLastSyncedTip":
+                        break;
+                    default:
+                        Assert.Fail($"Unknown success path '{successPath}'");
                         break;
                 }
                 Assert.That(
