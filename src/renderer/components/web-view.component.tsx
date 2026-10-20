@@ -701,6 +701,7 @@ export function updateWebViewTab(savedTabInfo: SavedTabInfo, data: WebViewDefini
     ...savedTabInfo,
     data,
     tabIconUrl: data.iconUrl,
+    tabIconName: data.iconName,
     tabTitle: data.title ?? '%tab_title_unknown%',
     tabTooltip: data.tooltip ?? '',
     isClosable: data.isClosable,

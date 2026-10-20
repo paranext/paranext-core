@@ -442,6 +442,15 @@ declare module 'shared/models/web-view.model' {
      */
     iconUrl?: string;
     /**
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab. The
+     * icon follows the tab's text colour, so it suits every theme and tab state. Takes precedence
+     * over {@link WebViewDefinitionBase.iconUrl}. If the name is not one of the icons the platform can
+     * show, `iconUrl` is used instead (and then the software's standard logo).
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    iconName?: string;
+    /**
      * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
      * WebView
      */
@@ -776,6 +785,7 @@ declare module 'shared/models/web-view.model' {
    */
   export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS: readonly [
     'iconUrl',
+    'iconName',
     'title',
     'tooltip',
     'projectId',
@@ -4796,6 +4806,12 @@ declare module 'shared/models/docking-framework.model' {
      * Defaults to the software's standard logo.
      */
     tabIconUrl?: string;
+    /**
+     * Name of a lucide icon to show on the title bar of the tab instead of {@link tabIconUrl}.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    tabIconName?: string;
     /**
      * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
      * tab
@@ -9448,6 +9464,13 @@ declare module 'shared/models/dialog-options.model' {
     title?: string | LocalizeKey;
     /** Url of dialog icon to display in the header. Default is Platform.Bible logo */
     iconUrl?: string;
+    /**
+     * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to display in the header. Takes
+     * precedence over {@link DialogOptions.iconUrl}.
+     *
+     * @experimental This field is unstable and may change or disappear without notice
+     */
+    iconName?: string;
     /**
      * The message to show the user in the dialog. If you provide a {@link LocalizeKey}, it will be
      * localized before displaying.

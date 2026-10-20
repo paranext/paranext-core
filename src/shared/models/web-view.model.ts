@@ -104,6 +104,15 @@ type WebViewDefinitionBase = {
    */
   iconUrl?: string;
   /**
+   * Name of a lucide icon (kebab-case, e.g. `refresh-cw`) to show on the title bar of the tab. The
+   * icon follows the tab's text colour, so it suits every theme and tab state. Takes precedence
+   * over {@link WebViewDefinitionBase.iconUrl}. If the name is not one of the icons the platform can
+   * show, `iconUrl` is used instead (and then the software's standard logo).
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  iconName?: string;
+  /**
    * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
    * WebView
    */
@@ -474,6 +483,7 @@ export function findFirstEditorWebViewDefinition(
 // `web-view.service.ts` -> `mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent`
 export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS = [
   'iconUrl',
+  'iconName',
   'title',
   'tooltip',
   'projectId',
