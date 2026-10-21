@@ -524,8 +524,18 @@ export async function createCommentThreads(
  *    "unknown target tab"; the catch block returns `undefined` and the loop retries immediately on
  *    the next attempt, which succeeds once the race is resolved.
  * 3. Waits for the comment list iframe to appear in the UI before returning.
+ *
+ * A fresh list opens on the current chapter. Pass `options.scopeFilterToSet` to open it on a
+ * different scope (e.g. `'all-books'` when the test needs threads outside the current chapter
+ * listed); the override applies to that open only and is not stored as the user's selection.
  */
-export async function openCommentList(mainPage: Page, project: CommentTestProject): Promise<void> {
+export async function openCommentList(
+  mainPage: Page,
+  project: CommentTestProject,
+  options: {
+    scopeFilterToSet?: 'all-books' | 'current-book' | 'current-chapter' | 'current-verse';
+  } = {},
+): Promise<void> {
   // 1. Wait for the dock layout's initial loadLayout() to complete before opening any new webviews.
   //
   //    Why: `registerDockLayout` (called from the PlatformDockLayout `useEffect`) calls
@@ -617,7 +627,9 @@ export async function openCommentList(mainPage: Page, project: CommentTestProjec
 
     const commentListWebViewId = await sendPapiRequestOnce<string | undefined>(
       'command:legacyCommentManager.openCommentList',
-      [finalEditorWebViewId],
+      options.scopeFilterToSet
+        ? [finalEditorWebViewId, { scopeFilterToSet: options.scopeFilterToSet }]
+        : [finalEditorWebViewId],
       DEFAULT_WEBSOCKET_PORT,
       30_000,
     ).catch((e: unknown) => {
