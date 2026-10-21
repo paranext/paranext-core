@@ -1497,6 +1497,17 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * cases working against that backend. The outgoing `sendReceiveProjects` keeps its toast: its
  * `suppressNotification` would also hide the failure toast, which is this claimless sync's only
  * failure surface.
+ *
+ * Gated on first-run sync consent: neither Send/Receive command runs unless the
+ * `platform.getAutomaticSyncConsent` command answers `granted`. That command is the main process's
+ * `getAutomaticSyncConsent`, the one implementation of the rule, so this module does not restate
+ * it. The gate covers those two commands only — this module still reaches the network elsewhere
+ * during the wizard, e.g. `openDefaultActiveProjectIfApplicable`'s
+ * `paratextBibleSendReceive.getSharedProjects` registry lookup (see PT-4606).
+ *
+ * The gate applies in Simple mode only, so it checks `interfaceMode` rather than trusting every
+ * caller to be Simple-mode-only. An unreadable mode (`undefined`) is treated as Simple, so it
+ * cannot bypass the gate.
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,
@@ -1504,6 +1515,24 @@ export async function syncOnProjectSwitch(
   outgoingProjectId: string | undefined,
   interfaceMode: SettingTypes['platform.interfaceMode'] | undefined,
 ): Promise<void> {
+  // The first-run wizard is an overlay, so the project picker behind it can drive a switch through
+  // here before the user has answered its sync-consent step.
+  if (interfaceMode !== 'power') {
+    let consent;
+    try {
+      consent = await papi.commands.sendCommand('platform.getAutomaticSyncConsent');
+    } catch (e) {
+      papi.logger.warn(
+        `Project-switch sync: could not check first-run sync consent (${getErrorMessage(e)}); skipping sync`,
+      );
+      return;
+    }
+    if (consent !== 'granted') {
+      papi.logger.info(`Project-switch sync skipped: first-run sync consent is ${consent}`);
+      return;
+    }
+  }
+
   try {
     // Mode change mid-sync: intentionally not handled. The flag is fixed for the run, and the
     // toolbar indicator mounts only in Simple mode, so switching to Power while a suppressed sync
