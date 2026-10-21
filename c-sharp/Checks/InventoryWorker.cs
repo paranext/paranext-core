@@ -261,6 +261,7 @@ internal sealed class InventoryWorker
                     chapterToTokenize = range.Start.ChapterNum;
 
                 // Now tokenize
+                // open-block: exempt — _dataSource is built in the constructor, which refuses the project
                 _dataSource.GetText(range.Start.BookNum, chapterToTokenize, requiredFormat);
                 var textTokens = _dataSource.TextTokens.ToList();
 

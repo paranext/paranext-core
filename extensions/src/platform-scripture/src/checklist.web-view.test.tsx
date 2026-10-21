@@ -216,7 +216,10 @@ function getChecklistWebView(): ComponentType<WebViewProps> {
   return (globalThis as Record<string, unknown>).webViewComponent as ComponentType<WebViewProps>;
 }
 
-function makeProps(onStateChange?: (key: string, value: unknown) => void): WebViewProps {
+function makeProps(
+  onStateChange?: (key: string, value: unknown) => void,
+  savedState: Record<string, unknown> = {},
+): WebViewProps {
   // The literal supplies only the props the web view reads; the double cast avoids restating
   // every optional field of WebViewProps.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -230,7 +233,7 @@ function makeProps(onStateChange?: (key: string, value: unknown) => void): WebVi
         // Stateful so a selection written by the web view feeds straight back in as the picker's
         // `selection` prop — that round trip is what the comparative-texts tests exercise.
         // eslint-disable-next-line react-hooks/rules-of-hooks
-        const [value, setValue] = useState(defaultValue);
+        const [value, setValue] = useState(key in savedState ? savedState[key] : defaultValue);
         const setStateAndReport = (next: unknown) => {
           onStateChange?.(key, next);
           setValue(next);
@@ -531,6 +534,61 @@ describe('ChecklistWebView unsupported projects', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveTextContent('P1');
     expect(screen.queryByText('P2')).not.toBeInTheDocument();
+  });
+
+  it('drops a saved comparative text that cannot be opened, keeping the rest', async () => {
+    mockRecentProjects.value = [];
+    mockProjects.value = [
+      ...PRIMARY_AND_SBA,
+      { id: 'project-3', shortName: 'P3', fullName: 'Project Three' },
+    ];
+    mockOpenTabs.value = [];
+    const buildChecklistData = vi.fn(async () => ({
+      success: true,
+      rows: [],
+      columnHeaders: [],
+      columnProjectIds: [],
+      excludedCount: 0,
+      helpText: undefined,
+      truncated: false,
+      emptyResultMessage: undefined,
+    }));
+    mockChecklistService.value = { buildChecklistData };
+    const comparativeTextsWrites: unknown[] = [];
+
+    const ChecklistWebView = getChecklistWebView();
+    render(
+      <ChecklistWebView
+        {...makeProps(
+          (key, value) => {
+            if (key === 'checklistComparativeTexts') comparativeTextsWrites.push(value);
+          },
+          {
+            // Saved before the project could be recognized as unsupported. `project-4` is unknown
+            // to every factory (perhaps one that has not registered yet), so it is kept.
+            checklistComparativeTexts: [
+              { id: 'project-2', name: 'P2' },
+              { id: 'project-3', name: 'P3' },
+              { id: 'project-4', name: 'P4' },
+            ],
+          },
+        )}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(comparativeTextsWrites).toEqual([
+        [
+          { id: 'project-3', name: 'P3' },
+          { id: 'project-4', name: 'P4' },
+        ],
+      ]),
+    );
+    await waitFor(() =>
+      expect(buildChecklistData).toHaveBeenLastCalledWith(
+        expect.objectContaining({ comparativeTextIds: ['project-3', 'project-4'] }),
+      ),
+    );
   });
 });
 

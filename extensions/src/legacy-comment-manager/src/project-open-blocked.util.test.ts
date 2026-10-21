@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  getProjectOpenBlockedReasonKey,
-  notifyProjectOpenBlocked,
-} from './project-open-blocked.util';
+import { notifyProjectOpenBlocked } from './project-open-blocked.util';
 
 const mockSend = vi.fn<(notification: unknown) => Promise<number | undefined>>();
 const mockGetLocalizedString = vi.fn<(selector: { localizeKey: string }) => Promise<string>>();
@@ -23,25 +20,6 @@ vi.mock('@papi/frontend', () => ({
 }));
 
 const REASON_KEY = '%project_unsupported_studyBibleAdditions%';
-const REFUSAL = `JSON-RPC Request error (-32000): Project 'ABC' can't be opened in Platform.Bible: ${REASON_KEY} (PROJECT_OPEN_BLOCKED)`;
-
-describe('getProjectOpenBlockedReasonKey', () => {
-  it('reads the reason key out of the refusal', () => {
-    expect(getProjectOpenBlockedReasonKey(new Error(REFUSAL))).toBe(REASON_KEY);
-  });
-
-  it('falls back to the generic reason when the refusal carries no readable key', () => {
-    expect(getProjectOpenBlockedReasonKey(new Error('Refused (PROJECT_OPEN_BLOCKED)'))).toBe(
-      '%project_unsupported_generic%',
-    );
-  });
-
-  it('is undefined for any other error', () => {
-    expect(getProjectOpenBlockedReasonKey(new Error('Cannot save now (SR_EDIT_BLOCKED)'))).toBe(
-      undefined,
-    );
-  });
-});
 
 describe('notifyProjectOpenBlocked', () => {
   beforeEach(() => {

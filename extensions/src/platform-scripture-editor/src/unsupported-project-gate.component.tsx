@@ -1,15 +1,13 @@
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { Spinner } from 'platform-bible-react';
 import { resolveLocalizedString } from 'platform-bible-react/experimental';
-import { isLocalizeKey, type LocalizeKey } from 'platform-bible-utils';
+import {
+  PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
+  PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE,
+  toProjectOpenBlockedReasonKey,
+} from 'platform-bible-utils';
 import { PropsWithChildren, useMemo } from 'react';
 import { ResourceMessageView } from './resource-message-view.component';
-
-/** Shown for a reason that is not a localize key, or that has no translation. */
-const GENERIC_REASON_KEY: LocalizeKey = '%project_unsupported_generic%';
-
-/** Shown when not even {@link GENERIC_REASON_KEY} can be localized. */
-const GENERIC_REASON_FALLBACK = "This project can't be opened.";
 
 export type UnsupportedProjectGateProps = PropsWithChildren<{
   /**
@@ -45,18 +43,24 @@ export function UnsupportedProjectGate({
 }
 
 /** Localizes the reason for {@link UnsupportedProjectMessage}, never showing a raw key. */
-function LocalizedUnsupportedProjectMessage({
+export function LocalizedUnsupportedProjectMessage({
   unsupportedReason,
   announcementKey,
 }: Omit<UnsupportedProjectGateProps, 'children'>) {
-  const reasonKey = isLocalizeKey(unsupportedReason) ? unsupportedReason : GENERIC_REASON_KEY;
-  const localizeKeys = useMemo(() => [...new Set([reasonKey, GENERIC_REASON_KEY])], [reasonKey]);
+  const reasonKey = toProjectOpenBlockedReasonKey(unsupportedReason);
+  const localizeKeys = useMemo(
+    () => [...new Set([reasonKey, PROJECT_OPEN_BLOCKED_FALLBACK_KEY])],
+    [reasonKey],
+  );
   const [localizedStrings, isLoading] = useLocalizedStrings(localizeKeys);
   const message = isLoading
     ? undefined
     : resolveLocalizedString(
         localizedStrings[reasonKey],
-        resolveLocalizedString(localizedStrings[GENERIC_REASON_KEY], GENERIC_REASON_FALLBACK),
+        resolveLocalizedString(
+          localizedStrings[PROJECT_OPEN_BLOCKED_FALLBACK_KEY],
+          PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE,
+        ),
       );
   return <UnsupportedProjectMessage message={message} announcementKey={announcementKey} />;
 }

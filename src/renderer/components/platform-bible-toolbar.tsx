@@ -73,6 +73,7 @@ import {
   type LanguageStrings,
   LocalizeKey,
   normalizeProjectId,
+  PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE,
 } from 'platform-bible-utils';
 import { CSSProperties, useCallback, useMemo } from 'react';
 
@@ -147,6 +148,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%projectPicker_search_placeholder%',
   '%projectPicker_no_results%',
   '%projectPicker_readOnly_label%',
+  '%project_unsupported_generic%',
 ];
 
 /**
@@ -174,6 +176,7 @@ const PICKER_STRING_FALLBACKS = {
   '%projectPicker_toolbar_trigger_label_shortNameOnly%': 'Select project, {shortName}',
   '%projectPicker_toolbar_trigger_label_empty%': 'Select project, no projects on this computer',
   '%projectPicker_toolbar_trigger_label_error%': 'Select project, {errorMessage}',
+  '%project_unsupported_generic%': PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE,
 } as const;
 
 type PickerStringKey = keyof typeof PICKER_STRING_FALLBACKS;
@@ -211,6 +214,7 @@ function resolvePickerStrings(localizedStrings: LanguageStrings): Record<PickerS
     '%projectPicker_toolbar_trigger_label_error%': resolve(
       '%projectPicker_toolbar_trigger_label_error%',
     ),
+    '%project_unsupported_generic%': resolve('%project_unsupported_generic%'),
   };
 }
 
@@ -330,6 +334,23 @@ function ToolbarProjectSelector({
   const [unsupportedReasonStrings, isUnsupportedReasonLoading] =
     useLocalizedStrings(unsupportedReasonKeys);
 
+  // A disabled row always explains itself: a reason that is not a key, or that settles on its bare
+  // key (as a failed lookup can), shows the generic reason rather than nothing or the raw key.
+  // Nothing is shown while a real key is still loading, so the tooltip does not flash the generic
+  // text before the specific one.
+  const getDisabledReason = useCallback(
+    (unsupportedReason: string | undefined) => {
+      if (!unsupportedReason) return undefined;
+      if (!isLocalizeKey(unsupportedReason)) return strings['%project_unsupported_generic%'];
+      if (isUnsupportedReasonLoading) return undefined;
+      const localizedReason = unsupportedReasonStrings[unsupportedReason];
+      return localizedReason && !isLocalizeKey(localizedReason)
+        ? localizedReason
+        : strings['%project_unsupported_generic%'];
+    },
+    [strings, unsupportedReasonStrings, isUnsupportedReasonLoading],
+  );
+
   // `ProjectItem` and `ProjectSelectorProject` invert the meaning of `language`: the item's is a
   // BCP-47 tag and its `languageDisplayName` is the readable name, while the selector's `language`
   // is the readable name and `languageCode` is the tag. Mapping them straight across type-checks
@@ -337,14 +358,6 @@ function ToolbarProjectSelector({
   const selectorProjects = useMemo<ProjectSelectorProject[]>(
     () =>
       projects.map((project) => {
-        // Absent while loading, and absent when the lookup settles on the bare key (as the loading
-        // seed does, and a failed lookup can): a key would show verbatim as the tooltip.
-        const localizedReason =
-          project.unsupportedReason &&
-          !isUnsupportedReasonLoading &&
-          isLocalizeKey(project.unsupportedReason)
-            ? unsupportedReasonStrings[project.unsupportedReason]
-            : undefined;
         return {
           id: project.id,
           shortName: project.shortName,
@@ -352,11 +365,10 @@ function ToolbarProjectSelector({
           language: project.languageDisplayName,
           languageCode: project.language,
           isDisabled: !!project.unsupportedReason,
-          disabledReason:
-            localizedReason && !isLocalizeKey(localizedReason) ? localizedReason : undefined,
+          disabledReason: getDisabledReason(project.unsupportedReason),
         };
       }),
-    [projects, unsupportedReasonStrings, isUnsupportedReasonLoading],
+    [projects, getDisabledReason],
   );
 
   const recentIndex = useMemo(() => {

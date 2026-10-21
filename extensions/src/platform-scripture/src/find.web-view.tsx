@@ -46,10 +46,7 @@ import {
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { projectNamesFromMetadata } from './project-names.util';
-import {
-  getProjectOpenBlockedReasonKey,
-  toProjectOpenBlockedReasonKey,
-} from './project-open-blocked.util';
+import { getProjectOpenBlockedReasonKey } from './project-open-blocked.util';
 import { useProjectOpenBlockedMessage } from './hooks/use-project-open-blocked-message';
 import { Find, FIND_LOCALIZED_STRING_KEYS, FindProject } from './find/find.component';
 import { FIND_FOCUS_SEARCH_EVENT } from './find.model';
@@ -558,7 +555,9 @@ global.webViewComponent = function FindWebView({
   );
 
   // Set when Find is bound to a project that cannot be opened. Such a project is never searched or
-  // replaced in; the reason shows where a search error would.
+  // replaced in. Its tabs do not count as open, so the reassignment effect moves Find to another
+  // open project, or none is open and Find shows no status at all; either way there is no reason to
+  // show for it.
   const boundProjectUnsupportedReason = projectId
     ? unsupportedReasonByProjectId.get(normalizeProjectId(projectId))
     : undefined;
@@ -638,11 +637,9 @@ global.webViewComponent = function FindWebView({
     }, []),
   );
 
-  // Why the project cannot be searched: the bound project's own reason, or the one the backend gave
-  // when it refused a search. Shown in place of the raw error.
-  const openBlockedReasonKey = boundProjectUnsupportedReason
-    ? toProjectOpenBlockedReasonKey(boundProjectUnsupportedReason)
-    : getProjectOpenBlockedReasonKey(searchError);
+  // Why the backend refused a search of a project that cannot be opened, shown in place of the raw
+  // error.
+  const openBlockedReasonKey = getProjectOpenBlockedReasonKey(searchError);
   const openBlockedMessage = useProjectOpenBlockedMessage(openBlockedReasonKey);
 
   const isMountedRef = useRef(false);
@@ -2322,7 +2319,7 @@ global.webViewComponent = function FindWebView({
       results={results}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}
-      searchStatus={boundProjectUnsupportedReason ? 'errored' : searchStatus}
+      searchStatus={searchStatus}
       searchError={openBlockedReasonKey ? undefined : searchError}
       openBlockedMessage={openBlockedMessage}
       searchProgress={searchProgress}

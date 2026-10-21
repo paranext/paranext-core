@@ -160,6 +160,12 @@ export {
 export { createCachedInitializer } from './promises/cached-initializer';
 export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
 export { MODIFIER_KEYS, getLocalizeKeyForPhysicalKey } from './keyboard-util';
+export {
+  getProjectOpenBlockedReasonKey,
+  PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
+  PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE,
+  toProjectOpenBlockedReasonKey,
+} from './project-open-blocked-util';
 export { computeEffectiveStructureProtection } from './structure-protection.util';
 export { clampZoom, roundZoom, adjustZoomFactor } from './content-zoom.util';
 

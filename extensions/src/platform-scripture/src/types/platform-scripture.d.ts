@@ -2104,7 +2104,9 @@ declare module 'platform-scripture' {
    * - `running`: The job is currently running
    * - `stopped`: The job was stopped by the user
    * - `errored`: The job itself failed and is no longer running. A check that could not run does not
-   *   make the job errored; see {@link CheckJobStatusReport.checkErrors}.
+   *   make the job errored; see {@link CheckJobStatusReport.checkErrors}. A project that cannot be
+   *   opened in Platform.Bible does (see `ProjectMetadata.unsupportedReason`): the job stops there,
+   *   and its error message ends with the `(PROJECT_OPEN_BLOCKED)` sentinel.
    * - `completed`: The job finished. Checks that could not run are listed in
    *   {@link CheckJobStatusReport.checkErrors}
    */
@@ -3220,7 +3222,9 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the newly opened characters inventory web view, or `undefined` if no web view
-     *   id was provided or the web view has no project (nothing is opened in that case).
+     *   id was provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases.
      */
     'platformScripture.openCharactersInventory': (
       webViewId?: string | undefined,
@@ -3233,7 +3237,9 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the newly opened repeated-words inventory web view, or `undefined` if no web
-     *   view id was provided or the web view has no project (nothing is opened in that case).
+     *   view id was provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases.
      */
     'platformScripture.openRepeatedWordsInventory': (
       webViewId?: string | undefined,
@@ -3246,7 +3252,9 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the newly opened markers inventory web view, or `undefined` if no web view id
-     *   was provided or the web view has no project (nothing is opened in that case).
+     *   was provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases.
      */
     'platformScripture.openMarkersInventory': (
       webViewId?: string | undefined,
@@ -3259,7 +3267,9 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the newly opened punctuation inventory web view, or `undefined` if no web view
-     *   id was provided or the web view has no project (nothing is opened in that case).
+     *   id was provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases.
      */
     'platformScripture.openPunctuationInventory': (
       webViewId?: string | undefined,
@@ -3280,8 +3290,9 @@ declare module 'papi-shared-types' {
      *   `papi.webViews.getOpenWebViewDefinition`, and in Power mode the panel is placed relative to
      *   that editor tab.
      * @returns Id of the opened, re-pointed, or fronted checks side panel web view, or `undefined`
-     *   if no editor web view id was provided or the web view has no project (nothing is opened in
-     *   that case).
+     *   if no editor web view id was provided, the web view has no project, or the project cannot
+     *   be opened (see `ProjectMetadata.unsupportedReason`), in which case the user is told why.
+     *   Nothing is opened in those cases.
      */
     'platformScripture.openChecksSidePanel': (
       editorWebViewId?: string | undefined,
@@ -3375,8 +3386,9 @@ declare module 'papi-shared-types' {
      *   from) — not a project id. The target project is resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @returns Id of the opened markers checklist web view, or `undefined` if no web view id was
-     *   provided or the web view has no project (nothing is opened in that case), or if the
-     *   provider did not create one.
+     *   provided, the web view has no project, or the project cannot be opened (see
+     *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
+     *   in those cases. Also `undefined` if the provider did not create one.
      * @experimental
      */
     'platformScripture.openMarkersChecklist': (
@@ -3407,7 +3419,8 @@ declare module 'papi-shared-types' {
      * @param intent Pass `'createMissingBook'` to open the dialog on its Create-books section with
      *   the calling editor's current book pre-selected, instead of the default view.
      * @returns Id of the Manage Books web view — the existing one if reused, or a newly opened one
-     *   — or `undefined` if the provider did not create one.
+     *   — or `undefined` if the project cannot be opened (see `ProjectMetadata.unsupportedReason`;
+     *   the user is told why and nothing is opened) or the provider did not create one.
      * @experimental
      */
     'platformScripture.openManageBooks': (

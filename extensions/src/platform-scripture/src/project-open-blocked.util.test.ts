@@ -1,12 +1,15 @@
-import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import {
+  PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
+  type LanguageStrings,
+  type LocalizeKey,
+} from 'platform-bible-utils';
 import { describe, expect, it, vi } from 'vitest';
 import {
   getProjectOpenBlockedReasonKey,
   notifyProjectOpenBlocked,
-  PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
+  PROJECT_OPEN_LOOKUP_TIMEOUT_MS,
   refuseIfProjectUnsupported,
   selectProjectOpenBlockedMessage,
-  toProjectOpenBlockedReasonKey,
 } from './project-open-blocked.util';
 
 const REASON_KEY = '%project_unsupported_studyBibleAdditions%';
@@ -49,16 +52,6 @@ describe('getProjectOpenBlockedReasonKey', () => {
     expect(getProjectOpenBlockedReasonKey('Something else went wrong')).toBe(undefined);
     expect(getProjectOpenBlockedReasonKey('Too many rows', 'MAX_ROWS_EXCEEDED')).toBe(undefined);
     expect(getProjectOpenBlockedReasonKey(undefined)).toBe(undefined);
-  });
-});
-
-describe('toProjectOpenBlockedReasonKey', () => {
-  it('keeps a localize key', () => {
-    expect(toProjectOpenBlockedReasonKey(REASON_KEY)).toBe(REASON_KEY);
-  });
-
-  it('replaces anything that is not a localize key with the generic reason', () => {
-    expect(toProjectOpenBlockedReasonKey('not a key')).toBe(PROJECT_OPEN_BLOCKED_FALLBACK_KEY);
   });
 });
 
@@ -200,6 +193,44 @@ describe('refuseIfProjectUnsupported', () => {
     expect(dependencies.logWarning).toHaveBeenCalledWith(
       expect.stringContaining('No project found'),
     );
+  });
+
+  it('lets the project through when the lookup does not answer in time', async () => {
+    vi.useFakeTimers();
+    try {
+      const dependencies = makeDependencies(new Promise(() => {}));
+
+      const refusal = refuseIfProjectUnsupported('p-1', dependencies);
+      await vi.advanceTimersByTimeAsync(PROJECT_OPEN_LOOKUP_TIMEOUT_MS);
+
+      await expect(refusal).resolves.toBe(false);
+      expect(dependencies.sendNotification).not.toHaveBeenCalled();
+      expect(dependencies.logWarning).toHaveBeenCalledWith(expect.stringContaining('p-1'));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not decide before the timeout while the lookup is still pending', async () => {
+    vi.useFakeTimers();
+    try {
+      let resolveMetadata: (metadata: { unsupportedReason?: string }) => void = () => {};
+      const dependencies = makeDependencies(
+        new Promise((resolve) => {
+          resolveMetadata = resolve;
+        }),
+      );
+
+      const refusal = refuseIfProjectUnsupported('sba-1', dependencies);
+      await vi.advanceTimersByTimeAsync(PROJECT_OPEN_LOOKUP_TIMEOUT_MS - 1);
+      resolveMetadata({ unsupportedReason: REASON_KEY });
+
+      await expect(refusal).resolves.toBe(true);
+      // The lookup won, so its timer was cleared rather than left to fire later.
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('still refuses when the notification cannot be sent', async () => {

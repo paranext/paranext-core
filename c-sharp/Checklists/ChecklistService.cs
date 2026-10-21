@@ -728,6 +728,7 @@ internal static class ChecklistService
         HashSet<string> nonHeadingParagraphMarkers
     )
     {
+        // open-block: exempt — reached only via BuildChecklistData, which refuses every column's project
         List<UsfmToken> tokens = scrText.Parser.GetUsfmTokens(bookNum);
 
         var results = new List<ChecklistParagraphTokens>();

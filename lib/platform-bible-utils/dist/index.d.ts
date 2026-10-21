@@ -5024,6 +5024,32 @@ export type NameablePhysicalKey = "Backspace" | "Delete";
  * use this without an extension having to declare its own copy of the string.
  */
 export declare function getLocalizeKeyForPhysicalKey(key: NameablePhysicalKey): LocalizeKey;
+/**
+ * Shown instead of a project's `unsupportedReason` when that reason could not be read or has no
+ * translation, so the user never sees a raw key or message.
+ */
+export declare const PROJECT_OPEN_BLOCKED_FALLBACK_KEY: LocalizeKey;
+/** Shown when not even {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} can be localized. */
+export declare const PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE = "This project can't be opened.";
+/**
+ * A project's `unsupportedReason` as a key that can be localized. The field is always a localize
+ * key; anything else is replaced by {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} rather than shown
+ * raw.
+ *
+ * @param unsupportedReason The project's `unsupportedReason`
+ * @returns `unsupportedReason` if it is a localize key, otherwise the generic reason's key
+ */
+export declare function toProjectOpenBlockedReasonKey(unsupportedReason: string): LocalizeKey;
+/**
+ * The localize key explaining why the project was refused, when `error` is paranext-core's C#
+ * refusing a request on a project that cannot be opened (the message ends with the
+ * `(PROJECT_OPEN_BLOCKED)` sentinel).
+ *
+ * @param error Error, thrown value, or message string to inspect
+ * @returns The reason's localize key, {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} if the refusal names
+ *   no readable reason, or `undefined` if `error` is not such a refusal
+ */
+export declare function getProjectOpenBlockedReasonKey(error: unknown): LocalizeKey | undefined;
 /** Inputs to {@link computeEffectiveStructureProtection}. */
 export type EffectiveStructureProtectionInputs = {
 	/** Global `platform.interfaceMode` value; the feature applies only in `'simple'`. */

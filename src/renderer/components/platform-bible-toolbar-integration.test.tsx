@@ -440,6 +440,8 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
 describe('PlatformBibleToolbar — unsupported project rows', () => {
   const SBA_UNSUPPORTED_REASON_KEY = '%project_unsupported_studyBibleAdditions%';
   const SBA_UNSUPPORTED_REASON_TEXT = "Study Bible Additions projects aren't supported yet.";
+  /** The English fallback, since `TOOLBAR_STRINGS` does not localize the generic key. */
+  const GENERIC_UNSUPPORTED_REASON_TEXT = "This project can't be opened.";
 
   const ROW_PROJECTS: ProjectItem[] = [
     { id: 'p1', shortName: 'P1', fullName: 'Openable Project' },
@@ -501,16 +503,31 @@ describe('PlatformBibleToolbar — unsupported project rows', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent(SBA_UNSUPPORTED_REASON_TEXT);
   });
 
-  it('never shows the raw localize key when the reason resolves to its own key', async () => {
+  it('shows the generic reason, never the raw key, when the reason resolves to its own key', async () => {
     // A failed lookup settles on the key-to-key seed with `isLoading` false.
     const user = await renderAndOpenPicker(SBA_UNSUPPORTED_REASON_KEY);
 
-    const sbaOption = await screen.findByRole('option', { name: /SBA/ });
-    // Positive control: the row is still disabled, so a reason would have been offered for it.
-    expect(sbaOption).toHaveAttribute('aria-disabled', 'true');
-    await user.hover(sbaOption);
+    await user.hover(await screen.findByRole('option', { name: /SBA/ }));
 
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(GENERIC_UNSUPPORTED_REASON_TEXT);
     expect(screen.queryByText(SBA_UNSUPPORTED_REASON_KEY)).toBeNull();
-    expect(screen.queryByRole('tooltip', { name: /%/ })).toBeNull();
+  });
+
+  it('shows the generic reason for a reason that is not a localize key', async () => {
+    vi.mocked(useLocalizedStrings).mockImplementation(() => [TOOLBAR_STRINGS, false]);
+    const user = await renderSimpleToolbarWith({
+      allProjects: [
+        { id: 'p1', shortName: 'P1', fullName: 'Openable Project' },
+        { id: 'bad', shortName: 'BAD', fullName: 'Odd Reason', unsupportedReason: 'oops' },
+      ],
+    });
+    await user.click(await screen.findByRole('combobox', { name: /^Test select a project/ }));
+
+    const badOption = await screen.findByRole('option', { name: /BAD/ });
+    expect(badOption).toHaveAttribute('aria-disabled', 'true');
+    await user.hover(badOption);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(GENERIC_UNSUPPORTED_REASON_TEXT);
+    expect(screen.queryByText('oops')).toBeNull();
   });
 });

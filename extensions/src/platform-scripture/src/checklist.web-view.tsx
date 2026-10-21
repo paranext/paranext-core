@@ -631,7 +631,7 @@ global.webViewComponent = function ChecklistWebView({
   // tabs for the "Open tabs" section in the popover. On selection change, map the returned
   // `ProjectSelectorProjectPair[]` back to our `ChecklistComparativeTextRef[]` persistence shape.
 
-  const [allProjectsRaw] = usePromise(
+  const [{ rows: allProjectsRaw, unsupportedProjectIds }] = usePromise(
     useCallback(async () => {
       const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
         // Scripture + Paratext project interfaces — mirrors checks-side-panel's filter so we pick
@@ -644,13 +644,31 @@ global.webViewComponent = function ChecklistWebView({
       // see `projectNamesFromMetadata` for why. `language` lets the built-in `language` grouping
       // partition rows into real per-language buckets rather than everything under "Unknown
       // language".
-      return openableMetadata.map((metadata): ChecklistRawProject => {
-        const { language, ...names } = projectNamesFromMetadata(metadata);
-        return { id: metadata.id, ...names, rawLanguage: language };
-      });
+      return {
+        rows: openableMetadata.map((metadata): ChecklistRawProject => {
+          const { language, ...names } = projectNamesFromMetadata(metadata);
+          return { id: metadata.id, ...names, rawLanguage: language };
+        }),
+        unsupportedProjectIds: new Set(
+          allMetadata
+            .filter((metadata) => metadata.unsupportedReason)
+            .map((metadata) => normalizeProjectId(metadata.id)),
+        ),
+      };
     }, []),
-    useMemo<ChecklistRawProject[]>(() => [], []),
+    useMemo(() => ({ rows: [], unsupportedProjectIds: new Set<string>() }), []),
   );
+
+  // A comparative text saved before its project was known to be unsupported would make the backend
+  // refuse the whole checklist, and the picker has no row to deselect it from. Only projects whose
+  // metadata names a reason are dropped: one no factory has answered for yet is kept.
+  useEffect(() => {
+    const openableComparativeTexts = comparativeTexts.filter(
+      (ref) => !unsupportedProjectIds.has(normalizeProjectId(ref.id)),
+    );
+    if (openableComparativeTexts.length !== comparativeTexts.length)
+      setComparativeTexts(openableComparativeTexts);
+  }, [comparativeTexts, unsupportedProjectIds, setComparativeTexts]);
 
   // Recency input the built-in `lastUsed` grouping reads as its "recently used" presence flag.
   const recencyMap = useProjectRecencyMap('ChecklistWebView');

@@ -292,6 +292,9 @@ declare module 'legacy-comment-manager' {
        *   value based on the previous three properties.
        * @returns Promise that resolves to the auto-generated comment ID (format:
        *   "threadId/userName/date")
+       * @throws If the project can't be opened in Platform.Bible (see
+       *   `ProjectMetadata.unsupportedReason`). The message ends with the `(PROJECT_OPEN_BLOCKED)`
+       *   sentinel.
        */
       createComment(comment: NewLegacyComment): Promise<string>;
 
@@ -333,6 +336,9 @@ declare module 'legacy-comment-manager' {
        * @throws If the current user is neither a project administrator nor the assigned resolver
        * @throws If resolution is `'reject'` or `'merge'` and the verse text has changed since the
        *   conflict was recorded (stale)
+       * @throws If the project can't be opened in Platform.Bible (see
+       *   `ProjectMetadata.unsupportedReason`). The message ends with the `(PROJECT_OPEN_BLOCKED)`
+       *   sentinel.
        */
       resolveConflict(threadId: string, resolution: 'accept' | 'reject' | 'merge'): Promise<void>;
 
@@ -340,8 +346,9 @@ declare module 'legacy-comment-manager' {
        * The resolution actions the current user may take on the given conflict thread - the
        * capability query for {@link resolveConflict}. Never rejects; failures map to `'none'`.
        *
-       * - `'none'`: not an unresolved `verseText` conflict, or the current user is neither a project
-       *   administrator nor the assigned resolver. UIs should hide the accept/reject controls
+       * - `'none'`: not an unresolved `verseText` conflict, the current user is neither a project
+       *   administrator nor the assigned resolver, or the project can't be opened in Platform.Bible
+       *   (see `ProjectMetadata.unsupportedReason`). UIs should hide the accept/reject controls
        *   entirely.
        * - `'accept'`: the user may resolve, but the verse has been edited since the conflict was
        *   recorded (stale), so only `'accept'` (keep the current text) is available -

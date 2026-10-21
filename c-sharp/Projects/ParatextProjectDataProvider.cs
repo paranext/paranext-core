@@ -1188,6 +1188,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             // PT9 reads verse-only USFM via Parser.GetVerseUsfmText (CommentHtmlBuilder
             // .GetResolutionOptions); ScrText.GetText returns the whole chapter, which never
             // matches the verse-only text recorded on Comment.Verse. A missing verse -> stale.
+            // open-block: exempt — reached only via ResolveConflict and GetConflictResolutionOptions, which refuse
             string? currentRaw = scrText.Parser.GetVerseUsfmText(vref, true, true);
             if (currentRaw == null)
                 return true;
@@ -2733,6 +2734,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 BookSet localBooksPresentSet = scrText.Settings.LocalBooksPresentSet;
                 isNewBook = !localBooksPresentSet.IsSelected(verseRef.BookNum);
                 // Set with chapter 0 sets the whole book
+                // open-block: exempt — un-gated core; reached only via SetBookUsfm/SetBookUsx, which refuse
                 // SR-write-gate: exempt — un-gated core; the whole mutation runs inside SetBookUsfm/SetBookUsx's write scope (nesting a 2nd gate is unsafe; see SendReceiveWriteLock).
                 scrText.PutText(verseRef.BookNum, 0, false, data, writeLock);
             }
@@ -3194,6 +3196,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private static VerseRef FindMatchingVerseRefInScrText(VerseRef verseRef, ScrText scrText)
     {
         // Limit the search scope to the chapter of the provided VerseRef
+        // open-block: exempt — reached only via GetFromScrText, which refuses
         var allVerses = scrText.Parser.GetVersesInText(verseRef, true);
         foreach (var v in allVerses)
         {
@@ -3217,6 +3220,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private static string ConvertUsfmToUsx(ScrText scrText, VerseRef verseRef, bool chapterOnly)
     {
+        // open-block: exempt — reached only via GetFromScrText, which refuses
         string usfmData = scrText.GetText(verseRef, chapterOnly, true) ?? string.Empty;
         XmlDocument xmlDoc = UsfmToUsx.ConvertToXmlDocument(
             scrText,
@@ -3307,6 +3311,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // It's more likely that a successful approach would require walking the XmlDocument DOM
 
         vRef = FindMatchingVerseRefInScrText(vRef, scrText);
+        // open-block: exempt — reached only via GetFromScrText, which refuses
         string usfmData = scrText.GetText(vRef, true, true) ?? string.Empty;
         XmlDocument usxData = UsfmToUsx.ConvertToXmlDocument(scrText, vRef.BookNum, usfmData);
         var chapterNode = usxData.SelectSingleNode(VerseXPath(vRef.ChapterNum, 1));

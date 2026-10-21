@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import type { WebViewProps } from '@papi/core';
+import { newPlatformError } from 'platform-bible-utils';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — must be before any import that touches the component
@@ -15,9 +16,11 @@ const GENERIC_KEY = '%project_unsupported_generic%';
 const GENERIC_SENTENCE = "This project can't be opened.";
 const PROJECT_ID = 'PROJECT1';
 
-const { mockUseProjectData, mockUseLocalizedStrings } = vi.hoisted(() => ({
+const { mockUseProjectData, mockUseLocalizedStrings, chapterUsjValue } = vi.hoisted(() => ({
   mockUseProjectData: vi.fn(),
   mockUseLocalizedStrings: vi.fn(),
+  /** What the chapter subscription delivers instead of its default, when set. */
+  chapterUsjValue: { current: undefined as unknown },
 }));
 
 /** What each key localizes to by default; any other key echoes itself, as an unresolved one does. */
@@ -36,12 +39,21 @@ function localizeWith(translations: Record<string, string>) {
 
 /**
  * Stands in for the data-type-keyed hook objects `useProjectData` and `useData` return: every data
- * type answers with the default value its caller passed, settled and not loading.
+ * type answers with the default value its caller passed, settled and not loading, except that
+ * `ChapterUSJ` answers with {@link chapterUsjValue} when one is set.
  */
 function dataHooks() {
   return new Proxy(
     {},
-    { get: () => (_selector: unknown, defaultValue: unknown) => [defaultValue, vi.fn(), false] },
+    {
+      get: (_target, dataType) => (_selector: unknown, defaultValue: unknown) => [
+        dataType === 'ChapterUSJ' && chapterUsjValue.current !== undefined
+          ? chapterUsjValue.current
+          : defaultValue,
+        vi.fn(),
+        false,
+      ],
+    },
   );
 }
 
@@ -147,6 +159,7 @@ function getEditorWebView(): React.ComponentType<WebViewProps> {
 
 beforeEach(() => {
   mockUseProjectData.mockClear();
+  chapterUsjValue.current = undefined;
   mockUseLocalizedStrings.mockReset();
   mockUseLocalizedStrings.mockImplementation(localizeWith(TRANSLATIONS));
   // The web view host supplies this global; the editor reads its persisted view type through it.
@@ -231,5 +244,41 @@ describe('Scripture editor web view entry point', () => {
 
     expect(screen.getByText(GENERIC_SENTENCE)).toBeInTheDocument();
     expect(screen.queryByText('not a key')).not.toBeInTheDocument();
+  });
+});
+
+describe('Scripture editor when the backend refuses the project', () => {
+  /** The chapter read's failure as the C# refusal delivers it over JSON-RPC. */
+  const REFUSAL = newPlatformError(
+    new Error(
+      `JSON-RPC Request error (-32000): Project '${PROJECT_ID}' can't be opened in Platform.Bible: ${UNSUPPORTED_KEY} (PROJECT_OPEN_BLOCKED)`,
+    ),
+  );
+
+  it('shows the reason instead of loading forever when the tab has no reason saved', async () => {
+    chapterUsjValue.current = REFUSAL;
+    const EditorWebView = getEditorWebView();
+
+    await act(async () => {
+      render(<EditorWebView {...makeProps('')} />);
+    });
+
+    // Positive control: the editor asked for the text, so the refusal is what it got back.
+    expect(mockUseProjectData).toHaveBeenCalledWith('platformScripture.USJ_Chapter', PROJECT_ID);
+    expect(screen.getByTestId('unsupported-project-message')).toHaveTextContent(
+      UNSUPPORTED_SENTENCE,
+    );
+  });
+
+  it('keeps loading for any other failure', async () => {
+    chapterUsjValue.current = newPlatformError(new Error('Something else went wrong'));
+    const EditorWebView = getEditorWebView();
+
+    await act(async () => {
+      render(<EditorWebView {...makeProps('')} />);
+    });
+
+    expect(mockUseProjectData).toHaveBeenCalledWith('platformScripture.USJ_Chapter', PROJECT_ID);
+    expect(screen.queryByTestId('unsupported-project-message')).not.toBeInTheDocument();
   });
 });
