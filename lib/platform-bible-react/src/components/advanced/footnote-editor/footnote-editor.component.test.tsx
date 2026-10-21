@@ -271,6 +271,57 @@ describe('FootnoteEditor width lock', () => {
   });
 });
 
+describe('FootnoteEditor Copy button', () => {
+  function clickCopy(
+    copyLimit: number | undefined,
+    writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined),
+  ) {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+    const { editorInput, getByRole } = renderFootnoteEditor({
+      view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+      copyLimit,
+    });
+    editorInput.textContent = 'note text';
+    act(() => {
+      getByRole('button', { name: '%footnoteEditor_copyButton_tooltip%' }).click();
+    });
+    return writeText;
+  }
+
+  it('copies the whole note when there is no copy limit', () => {
+    expect(clickCopy(undefined)).toHaveBeenCalledWith('note text');
+  });
+
+  it('copies only as much of the note as the copy limit allows', () => {
+    const writeText = clickCopy(4);
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('note');
+  });
+
+  it('copies nothing while the copy limit is 0', () => {
+    expect(clickCopy(0)).not.toHaveBeenCalled();
+  });
+
+  it('reports a clipboard write that fails rather than leaving it unhandled', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const writeText = clickCopy(
+        undefined,
+        vi.fn<(text: string) => Promise<void>>().mockRejectedValue(new Error('denied')),
+      );
+      expect(writeText).toHaveBeenCalledWith('note text');
+      await act(async () => {});
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('denied'));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
 describe('FootnoteEditor context menu', () => {
   it('hands its editor no context-menu container, so the menu stays at interface scale', () => {
     renderFootnoteEditor({ view: editableView });
@@ -1658,6 +1709,28 @@ describe('stray caret snap (wrapper-para dead-space normalization)', () => {
     (editorRef.focus as ReturnType<typeof vi.fn>).mockClear();
 
     editorInput.ownerDocument.dispatchEvent(new Event('selectionchange'));
+
+    expect(editorRef.selectNote).not.toHaveBeenCalled();
+    expect(editorRef.focus).not.toHaveBeenCalled();
+  });
+
+  it('leaves a stray caret alone on selectionchange while an overlay in another document holds focus', () => {
+    // A palette click moves focus to an overlay outside this document: the editor stays this
+    // document's active element, but the document itself no longer has focus. A snap here would
+    // move the caret a pending palette commit is about to restore.
+    const { editorInput, editorRef } = renderFootnoteEditor({
+      view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+    });
+    placeDomCaretOutsideNote(editorInput);
+    expect(editorInput.ownerDocument.activeElement).toBe(editorInput);
+    vi.mocked(editorRef.focus).mockClear();
+    const hasFocusSpy = vi.spyOn(editorInput.ownerDocument, 'hasFocus').mockReturnValue(false);
+
+    try {
+      editorInput.ownerDocument.dispatchEvent(new Event('selectionchange'));
+    } finally {
+      hasFocusSpy.mockRestore();
+    }
 
     expect(editorRef.selectNote).not.toHaveBeenCalled();
     expect(editorRef.focus).not.toHaveBeenCalled();

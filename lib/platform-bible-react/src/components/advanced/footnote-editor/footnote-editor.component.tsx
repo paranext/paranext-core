@@ -54,6 +54,7 @@ import {
   deepEqual,
   getErrorMessage,
   isPlatformError,
+  truncateToCopyLimit,
   type PaletteItem,
 } from 'platform-bible-utils';
 import type { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
@@ -1109,10 +1110,16 @@ export default function FootnoteEditor({
     }
   }, [scrRef.book, scrRef.chapterNum]);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     const editorInput = editorParentRef.current?.getElementsByClassName('editor-input')[0];
-    if (editorInput?.textContent) {
-      navigator.clipboard.writeText(editorInput.textContent);
+    if (!editorInput?.textContent) return;
+    // The Copy button honors the same copy limit as a copy from the editor itself.
+    const text = truncateToCopyLimit(editorInput.textContent, editorOptions.copyLimit);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.warn(`Could not copy the footnote to the clipboard: ${getErrorMessage(error)}`);
     }
   };
 
@@ -1652,6 +1659,11 @@ export default function FootnoteEditor({
       const editorInput =
         editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
       if (!editorInput || document.activeElement !== editorInput) return;
+      // Focus held by an overlay in ANOTHER document (the marker palette) leaves this document's
+      // active element on the editor, so the check above still passes. Snapping then would
+      // re-select the note end under a palette commit that is about to restore the caret the user
+      // last saw, so the commit would keep the snapped caret instead.
+      if (!document.hasFocus()) return;
       // Only a COLLAPSED caret is snapped. A drag-select that merely STARTS in the wrapper
       // dead space is a selection the user is still building (its live end may be inside the
       // note), and collapsing it via selectNote(0) destroyed the drag mid-gesture — in every

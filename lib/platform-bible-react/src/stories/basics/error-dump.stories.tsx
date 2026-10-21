@@ -43,6 +43,7 @@ const defaultLocalizedStrings: ErrorDumpLocalizedStrings = {
   '%webView_error_dump_header%': 'Error Details',
   '%webView_error_dump_info_message%':
     'An error occurred. You can copy the details below for troubleshooting.',
+  '%webView_error_dump_copy_button%': 'Copy error details',
 };
 
 export const Default: Story = {
@@ -121,6 +122,7 @@ export const CustomLocalizedStrings: Story = {
       '%webView_error_dump_header%': 'Erreur Système',
       '%webView_error_dump_info_message%':
         'Une erreur est survenue. Vous pouvez copier les détails ci-dessous pour le dépannage.',
+      '%webView_error_dump_copy_button%': "Copier les détails de l'erreur",
     },
   },
   parameters: {

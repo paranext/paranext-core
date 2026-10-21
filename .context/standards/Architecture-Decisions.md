@@ -1041,6 +1041,37 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-check-job-completes-with-per-check-errors: A check job completes with per-check errors, and check setup status has three states
+
+- **Date:** 2026-10-12
+- **Status:** Accepted
+- **Context:** One Basic check that threw (for example Quotation on a project with invalid or
+  "not used" quotation rules) ended the whole check job: `CheckCache.RunChecksForProject` had no
+  per-check guard and `CheckRunner.ProcessCheckJob` copied results only after the whole book ran, so
+  the Checks panel and the Checking Assistant lost every other check's results. Paratext 9 catches
+  only the settings exception (`RequiredCheckSettingsMissingException`) per check; any other
+  exception stops its run. A project that deliberately does not use quotation marks (quotes set to
+  `none`) also had no way to say "this check does not apply" short of an error.
+- **Decision:** Every check runner isolates each check and lists the ones that could not run on
+  `CheckJobStatusReport.checkErrors`; the job still ends `completed`, and `errored` means the job
+  itself failed. A check that failed is not cached, so the next job retries it after a settings fix.
+  `lookUpCheckSetupStatus(checkId, projectId)` reports `ready`, `setupRequired` or `notApplicable`
+  (with a `reason` localize key that each consumer localizes). Not applicable covers quotation rules set to `none`, Quotation types
+  switched off in Quotation rules, and Study Bible Additions projects. `isCheckSetupForProject`
+  counts not-applicable as set up, so existing "Setup required" filters stay correct. A
+  not-applicable check is skipped by the job with no result and no error.
+- **Alternatives:** Paratext 9 parity (settings exception only, other exceptions stop the run) —
+  rejected: background runs would silently lose all results (Matt Lyons, on PT-4761). A result row
+  with a fake reference carrying the message — rejected: `CheckRunResult` requires a verse. A
+  per-project available-checks list — rejected: a bigger API change, and the user cannot see why a
+  check vanished. A `get*` method name — rejected: `get`/`set`/`subscribe` are reserved
+  data-provider prefixes.
+- **Consequences:** Consumers that only read `status === 'errored'` no longer see check failures and
+  should read `checkErrors` (the Checking Assistant's per-check retry fallback stops firing, since
+  the job no longer errors). Quotation types now returns nothing on projects where the administrator
+  never enabled it, as in Paratext 9. Both new API items are experimental.
+- **Source:** PT-4761 "Handle errors from Basic checks gracefully".
+
 ## adr-closed-source-command-doc-altitude: Command docs for closed-source-backed PAPI commands describe caller-visible guarantees, not the current implementer's mechanism
 
 - **Date:** 2026-09-05
@@ -1777,6 +1808,49 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Only the zoomability is held per open menu, not the whole item list, because Power mode's window targets arrive after the menu opens.
 - **Source:** UX feedback 2026-09-22; epic PT-4575.
 
+## adr-copy-limit-rule-lives-downstream: The copy-limit mechanism ships in public code; the rule that drives it ships in a private patch
+
+- **Date:** 2026-09-24
+- **Status:** Accepted
+- **Context:** Paratext 9 limits how much text can be copied at once from some texts, and its rule
+  was in closed code. Platform.Bible (`paranext-core`) is open source, so the rule cannot live in
+  this repo in any form.
+- **Decision:** Public code provides only the mechanism, and answers "no limit" everywhere:
+  - a read-only project data type, `platformScripture.CopyLimit` / `BookCopyLimits`, one array per
+    book with one entry per chapter, each a count of UTF-16 code units;
+  - a core hook, `useChapterCopyLimit`, that subscribes once per book and resolves the limit for
+    the chapter on screen;
+  - the editor option `EditorOptions.copyLimit`, whose plugin shortens an over-limit copy or cut
+    and blocks the Select All shortcut while a limit is set;
+  - an unknown limit — still loading, or the request failed — blocks copying for every text.
+
+  The Paratext 10 Studio patch supplies the actual rule by replacing the public "no limit" answer.
+- **Alternatives:**
+  - **A private extension implementing the whole feature** — rejected: it cannot tell "no
+    provider is installed" apart from "the answer just hasn't arrived yet."
+  - **The rule itself in public code** — rejected per the Product Owner's preference, given P10 is
+    open source.
+  - **Limiting the selection as it is made**, rather than at copy time — not chosen: Paratext 9
+    limits at copy time, and this keeps parity with it.
+  - **A per-chapter data type** (one request per chapter instead of per book) — rejected: it would
+    cause a blocked moment on every chapter change while the new chapter's limit is fetched.
+- **Consequences:**
+  - TSDoc and other public-facing docs describe only what a caller can observe — never the rule
+    itself. See `adr-closed-source-command-doc-altitude` for the same altitude discipline applied
+    to a different closed-source-backed command.
+  - Public tests exercise the mechanism with arbitrary limits, not real ones.
+  - Copy limits are refetched on every update the Paratext project data provider sends.
+  - A view passes a limit of `0` while its displayed chapter's text is still loading, because the
+    per-book limit can arrive before the new chapter's text does — so a chapter navigation blocks
+    copying for a moment even on an unlimited text.
+  - `BookCopyLimits` is indexed like the chapter-text endpoints, by the project's own chapter
+    numbers: only the selector's book is read, and its versification, chapter and verse are
+    ignored. The chapter-text endpoints fetch a chapter by its number in the project's own
+    versification, so a view indexes the limits with the same chapter number it fetches text with.
+  - A view showing chapter 0 (a book's introduction, shown with chapter 1) uses chapter 1's limit.
+
+- **Source:** [PT-4730](https://paratextstudio.atlassian.net/browse/PT-4730).
+
 ## adr-core-dialog-reuses-panel-strings: A core dialog that explains what an extension panel explains renders a shared library component from the extension's own keys
 
 - **Date:** 2026-10-02
@@ -1895,6 +1969,37 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   mismatched result where the two projects' versifications diverge at that reference. That gap is
   accepted as a consequence of this decision, not a defect in it, until PT-4031 lands.
 - **Source:** external code review, finding 16.
+## adr-data-update-scope-hook: A data type every update must refresh is added by an overridable hook on the base data provider
+
+- **Date:** 2026-09-30
+- **Status:** Accepted
+- **Context:** Some data a C# data provider serves is derived from other data it serves, so any
+  change to the provider's data may change it. `BookCopyLimits` on `ParatextProjectDataProvider`
+  is one: its subscribers must refetch it whenever the provider sends an update, and the provider
+  sends updates from dozens of call sites, each naming only the data types it changed.
+- **Decision:** `DataProvider.SendDataUpdateEventAsync` (`c-sharp/NetworkObjects/DataProvider.cs`)
+  calls a protected virtual hook, `ExpandDataUpdateScope(List<string> dataTypes)`, on every
+  update that names data types, and sends the list it returns. The base class decodes the scope
+  first: `"*"` already refreshes every data type, so it is sent without reaching the hook, and
+  nothing is sent for a blank data type or an empty list, before or after the hook. The hook gets a
+  list the base class owns, so an override may add to it and return it. A subclass adds the data
+  types it must always refresh there.
+- **Alternatives:**
+  - **A wrapper that call sites use instead of `SendDataUpdateEvent`** — rejected: every existing
+    call site would have to change, and a new one that calls the base method directly would skip
+    the refresh with nothing to catch it.
+  - **Naming the derived data type at every call site** — rejected for the same reason.
+  - **A test that scans the source for update calls that leave the data type out** — rejected: a
+    text match catches only the call shapes it was written for, while the hook makes the refresh
+    structural, so no call site can leave it out.
+- **Consequences:**
+  - Each subscriber to a data type added this way refetches it on every update the provider sends.
+    Narrow the hook to the scopes that can change the derived data if that cost starts to matter.
+  - An override should call `base.ExpandDataUpdateScope` first, so that a hook added lower in the
+    hierarchy keeps working; nothing enforces it.
+  - The hook sees decoded data types, never the wire encoding of the scope, so a change to that
+    encoding (see issue #443 in `paranext/paranext-core`) touches only the base class.
+
 ## adr-dbl-cache-recompute-on-read: The DBL resource cache recomputes derived flags on read, not on write
 
 - **Date:** 2026-09-01
@@ -8086,6 +8191,69 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   which matters because project CSS is layered over a base sheet.
 - **Source:** PT-4187 standard-view branch (core #2565 ∥ scripture-editors #545).
 
+## adr-sync-surface-per-interface-mode: Each sync gets one persistent progress surface per interface mode, chosen by its caller
+
+- **Date:** 2026-10-13
+- **Status:** Accepted
+- **Context:** A sync can surface in two persistent places: core's toolbar sync indicator (Simple
+  mode only; fed by the dotnet sync-activity signal) and the dotnet process's in-progress toast
+  with Cancel (owned by the Paratext 10 patch). In Simple mode both appeared for the same sync —
+  two cancellable surfaces that do not know about each other. A first attempt suppressed the toast
+  inside the patch by caching `platform.interfaceMode` in the dotnet process. Review rejected it:
+  the callers already know the mode, and the cache added its own state machine (seed and refresh
+  loops, a coalescing gate, read tickets, a settings-change subscription, a mid-sync reconcile)
+  whose races were most of that review's blockers — a reconcile that double-created toasts, a
+  cancelled sync resurrecting its toast, a mode sampled outside the lock — plus an unknown-mode
+  default opposite to the renderer's and a test-fixture subscription leak. It was also a standing
+  conflict against a public file, carried in a private patch.
+- **Decision:** One persistent surface per mode: the indicator in Simple mode, the toast in Power
+  mode. The caller decides, per call, through `syncProjects`' optional
+  `suppressProgressNotification` (default `false`). It hides only the persistent in-progress toast;
+  the other notifications, such as the failure and role-change toasts, still show, because some
+  callers that pass it (the startup sync, the project switch) raise no Send/Receive claim, and the
+  indicator cannot report a claimless sync's failure. That is why it is a new parameter and not
+  `sendReceiveProjects`' broader `suppressNotification`. A caller suppresses only when it knows the
+  mode is exactly `'simple'`; unknown, a failed read, Power, or a covered indicator keeps the toast,
+  because the indicator mounts only for a known Simple mode and two surfaces beat none. Callers send
+  the flag only when it is `true` and otherwise omit it, never sending `false` or `undefined`: a
+  `SyncProjects` that predates the parameter rejects a two-argument call, and `undefined` serializes
+  to `null`, which does not bind to the dotnet `bool`. Likewise `projectIds` has no default, so a
+  call with no arguments (`params: []`) does not bind; the no-ID form passes `undefined` explicitly.
+  Core's declaration types `projectIds` as `string[] | undefined` and the flag as `true` so the
+  rejected shapes do not compile, and the C# stub tests pin both the accepted and the rejected wire
+  shapes. Core today: `main/startup-tasks.ts` passes `true`; `syncOnProjectSwitch` passes `true`
+  only for a known `'simple'` and omits it otherwise; the first-run consent step omits it (the
+  wizard covers the indicator). The Send/Receive extension, as of 2026-10-20 only in
+  paranext/paratext-bible-internal-extensions#206 (open, unmerged), sends every call through
+  `sendSyncProjects`: `syncOpenProjects` passes `true` only for a known `'simple'`;
+  `syncScheduledProjects` (the interval engine and the session syncs) omits it, since those run only
+  in Power mode, and the engine re-checks the mode at fire time. Core's Power-mode startup trigger
+  of the session sync likewise re-reads the mode before each boot-race retry and skips unless it is
+  still `'power'`. An implementation must not honor the flag without also raising the sync-activity
+  signal for the run.
+- **Alternatives:** **Cache the mode in the dotnet process** — rejected for the reasons above. **A
+  core `protected virtual` hook the patch overrides** (`ShouldShowPersistentSyncToast`) — removed:
+  nothing overrode it, and a per-call flag needs no per-run state on the class. **Reuse
+  `suppressNotification` on `syncProjects`** — rejected: it would also hide the failure toasts.
+  **Treat an unknown mode as Simple** (as `useIsPowerMode()` does) — rejected for this decision:
+  the toolbar indicator falls back to the last known mode, not to Simple, so it can be absent.
+- **Consequences:** This change and the patch that implements the flag must merge together: Studio
+  builds core `main` unpinned, and a one-parameter `SyncProjects` rejects the two-argument
+  Simple-mode calls. Accepted costs: a mode change mid-sync is not reconciled (Simple→Power leaves
+  that sync with no persistent surface; Power→Simple shows both); the outgoing `sendReceiveProjects`
+  half of a project switch, and Home's per-project Sync/Get (`sendReceiveProjects`, reachable in
+  Simple mode from the toolbar picker's "More projects…"), still show both in Simple mode; the
+  first-run consent sync keeps the toast. Until #206 merges, the extension's `syncOpenProjects`
+  also shows both in Simple mode. A flagged `syncOpenProjects` that fails shows its failure twice:
+  its claim turns the indicator to "Sync failed" and the dotnet failure toast still shows. The
+  extension host and the renderer read the mode independently, and the renderer's
+  `useInterfaceMode` reports its last known mode as known after a failed read (so that simple-only
+  UI is not hidden for the session); if that read fails with a stale `'power'` while the setting is
+  `'simple'`, the indicator is not mounted but a host-side caller passes `true`, and the sync has no
+  progress surface. That needs two independent read failures in a set order, so it is accepted
+  rather than closed by an "unknown" state in the hook.
+- **Source:** PT-4398; paranext/paratext-10-studio#177 and its review.
+
 ## adr-tab-bar-drop-zone-app-side-target: The whole tab bar accepts tab drops through an app-registered rc-dock drop target, not a patched or stretched rc-dock tab
 
 - **Date:** 2026-09-16
@@ -8584,6 +8752,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Formerly:** ADR-0024
 - **Date:** 2026-08-17
 - **Status:** Accepted
+- **Amended 2026-10-13:** Follow-up 2 is decided in `adr-sync-surface-per-interface-mode`: the
+  parameter is `suppressProgressNotification` on `syncProjects`, declared in core and implemented by
+  the Paratext 10 patch, not added by the patch alone. The overlap table and the paragraph saying
+  `syncProjects` has no such parameter describe the state before that decision.
 - **Context:** PT-4336 NN-4 asks for a single truthful sync status with a one-click cancel. Two
   obstacles surfaced while implementing PT-4348. First, the existing toolbar button's only action was
   `paratextBibleSendReceive.openSyncStatus`, which opens a second sync surface — a web view that

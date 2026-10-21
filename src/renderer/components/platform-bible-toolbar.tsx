@@ -844,8 +844,9 @@ export function PlatformBibleToolbar() {
   // reported a sync. `useSendReceiveAvailability` asks whether the send/receive EXTENSION is
   // present, but syncs also start from paths that never touch it — `startup-tasks.ts` calls the
   // dotnet `syncProjects` command directly — so an extension that is missing or failed to activate
-  // would otherwise leave a multi-minute sync with no surface at all in Simple mode, where the
-  // persistent toast is suppressed in favour of this indicator.
+  // would otherwise leave a multi-minute sync with no surface at all in Simple mode, where those
+  // callers suppress the dotnet progress toast in favour of this indicator (`syncProjects`'
+  // `suppressProgressNotification`).
   //
   // Sticky, not live: a gate on "is syncing right now" unmounts the control in the same commit the
   // sync finishes, so the outcome the user was waiting for is never painted and never announced, and

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Paranext.DataProvider.NetworkObjects;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Checks;
@@ -45,19 +46,39 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
     private readonly ConcurrentDictionary<string, ErrorMessageDenials> _denialsByProjectId = new();
     private readonly ConcurrentDictionary<string, CheckJobStatus> _activeCheckJobsByJobId = new();
     private readonly ConcurrentQueue<string> _queuedCheckJobs = new();
+    private readonly ConcurrentDictionary<
+        (string CheckId, string ProjectId),
+        string
+    > _lastFullyLoggedFailureByCheck = new();
     private readonly CheckCache _checkCache;
+    private readonly Func<string, ChecksDataSource, ScriptureCheckBase> _createCheck;
     private readonly object _runChecksLock = new();
+
+    // Read access for tests that need to reach the runner's checks and jobs
+    internal CheckCache CheckCache => _checkCache;
+    internal IEnumerable<CheckJobStatus> ActiveJobs => _activeCheckJobsByJobId.Values;
 
     #endregion
 
     #region Constructor
 
     public CheckRunner(PapiClient papiClient, InventoryDataProvider inventoryDataProvider)
+        : this(papiClient, inventoryDataProvider, CheckFactory.CreateCheck) { }
+
+    /// <param name="createCheck">
+    /// Creates and initializes the check for a check ID. Tests substitute checks that misbehave.
+    /// </param>
+    internal CheckRunner(
+        PapiClient papiClient,
+        InventoryDataProvider inventoryDataProvider,
+        Func<string, ChecksDataSource, ScriptureCheckBase> createCheck
+    )
         : base("dotNetCheckRunner", papiClient, NetworkObjectType.CHECK_RUNNER)
     {
+        _createCheck = createCheck;
         _allCheckIds = _checkDetailsByCheckId.Keys.ToList();
         _allCheckDetails = _checkDetailsByCheckId.Values.ToList();
-        _checkCache = new CheckCache(_allCheckIds, papiClient);
+        _checkCache = new CheckCache(_allCheckIds, papiClient, createCheck);
     }
 
     #endregion
@@ -76,9 +97,42 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             ("getAvailableChecks", GetAvailableChecks),
             ("retrieveCheckJobUpdate", RetrieveCheckJobUpdate),
             ("isCheckSetupForProject", IsCheckSetupForProject),
+            ("lookUpCheckSetupStatus", LookUpCheckSetupStatus),
             ("stopCheckJob", StopCheckJob),
         ];
     }
+
+    /// <summary>
+    /// Marks only <c>lookUpCheckSetupStatus</c> experimental (<c>x-experimental: true</c>); the rest
+    /// of the check runner contract is stable. Mirrors the <c>@experimental</c> tag on
+    /// <c>CheckConfigurationProvider.lookUpCheckSetupStatus</c> in <c>platform-scripture.d.ts</c>.
+    /// </summary>
+    protected override NetworkObjectDocumentation GetNetworkObjectDocumentation() =>
+        new()
+        {
+            Methods = new Dictionary<string, OpenRpcSingleMethodDocumentation>
+            {
+                ["lookUpCheckSetupStatus"] = ExperimentalMethodDocumentation.Create(
+                    "Whether a check is ready to run on a project, needs setup first, or does not apply to it.",
+                    [
+                        ExperimentalMethodDocumentation.Param(
+                            "checkId",
+                            "ID of the check.",
+                            "string"
+                        ),
+                        ExperimentalMethodDocumentation.Param(
+                            "projectId",
+                            "ID of the project.",
+                            "string"
+                        ),
+                    ],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "object",
+                        "CheckSetupState: { status, reason? }"
+                    )
+                ),
+            },
+        };
 
     protected override Task StartDataProviderAsync()
     {
@@ -94,7 +148,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         return _allCheckDetails;
     }
 
-    private string BeginCheckJob(CheckJobScope jobScope)
+    internal string BeginCheckJob(CheckJobScope jobScope)
     {
         var job = new CheckJobStatus(jobScope);
         _activeCheckJobsByJobId[job.JobId] = job;
@@ -133,7 +187,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             Console.WriteLine($"Failed to remove check job {jobId} from active jobs");
     }
 
-    private CheckJobStatusReport RetrieveCheckJobUpdate(string jobId, int maxResultsToInclude)
+    internal CheckJobStatusReport RetrieveCheckJobUpdate(string jobId, int maxResultsToInclude)
     {
         var job =
             (_activeCheckJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
@@ -141,15 +195,19 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         return job.GenerateStatusReport(maxResultsToInclude);
     }
 
-    private bool IsCheckSetupForProject(string checkId, string projectId)
+    internal CheckSetupState LookUpCheckSetupStatus(string checkId, string projectId)
     {
         ArgumentException.ThrowIfNullOrEmpty(checkId);
         ArgumentException.ThrowIfNullOrEmpty(projectId);
 
-        var dataSource = new ChecksDataSource(LocalParatextProjects.GetParatextProject(projectId));
-        var check = CheckFactory.CreateCheck(checkId, dataSource);
-        return check.SetupComplete;
+        var scrText = LocalParatextProjects.GetParatextProject(projectId);
+        var check = _createCheck(checkId, new ChecksDataSource(scrText));
+        return CheckSetupStatusLookup.Lookup(checkId, check, scrText);
     }
+
+    // A check that does not apply to the project counts as set up: the project has made its choice.
+    internal bool IsCheckSetupForProject(string checkId, string projectId) =>
+        LookUpCheckSetupStatus(checkId, projectId).Status != CheckSetupStatus.SetupRequired;
 
     private bool DenyCheckResult(
         string checkId,
@@ -236,6 +294,44 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
         double itemsToComplete = job.JobScope.InputRanges.Length * job.JobScope.CheckIds.Length;
         var completedItems = 0;
+        void AdvanceProgress() => job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+
+        // Adds the check's results for the range to the job, unless they are not ready
+        bool TryCollectResults(CheckForProject check, InputRange range)
+        {
+            var collected = false;
+            check.AccessResults(
+                range.Start.BookNum,
+                recorder =>
+                {
+                    if (!recorder.ResultsReady)
+                        return;
+                    job.AllResults.AddRange(recorder.GetResultsInRange(range));
+                    collected = true;
+                }
+            );
+            return collected;
+        }
+
+        // Computed once per job and check: cheap, and settings changes apply from the next job on
+        var setupStatesByCheckAndProject = new Dictionary<(string, string), CheckSetupState?>();
+        CheckSetupState? SetupStateFor(string checkId, string projectId)
+        {
+            if (!setupStatesByCheckAndProject.TryGetValue((checkId, projectId), out var state))
+            {
+                try
+                {
+                    state = LookUpCheckSetupStatus(checkId, projectId);
+                }
+                catch (Exception)
+                {
+                    // Not known to be not applicable: the creation path below records the failure
+                    state = null;
+                }
+                setupStatesByCheckAndProject[(checkId, projectId)] = state;
+            }
+            return state;
+        }
 
         try
         {
@@ -248,7 +344,29 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                     if (job.StopRequested)
                         break;
 
-                    var check = _checkCache.GetCheck(checkId, range.ProjectId);
+                    if (
+                        CheckSetupStatusLookup.CanBeNotApplicable(checkId)
+                        && SetupStateFor(checkId, range.ProjectId)?.Status
+                            == CheckSetupStatus.NotApplicable
+                    )
+                    {
+                        AdvanceProgress();
+                        continue;
+                    }
+
+                    CheckForProject check;
+                    try
+                    {
+                        check = _checkCache.GetCheck(checkId, range.ProjectId);
+                    }
+                    catch (Exception ex)
+                    {
+                        // A check that cannot be created must not end the job
+                        RecordCheckFailure(job, checkId, range.ProjectId, ex);
+                        AdvanceProgress();
+                        continue;
+                    }
+
                     if (check.SettingsChanged)
                         check.ClearResults();
 
@@ -261,7 +379,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                             if (areResultsCached)
                             {
                                 job.AllResults.AddRange(recorder.GetResultsInRange(range));
-                                job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                                AdvanceProgress();
                             }
                         }
                     );
@@ -275,22 +393,55 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                 if (checkIdsToRun.Count == 0)
                     continue;
 
-                _checkCache.RunChecksForProject(range, checkIdsToRun, denials);
+                var failedCheckIds = RunChecksAndRecordFailures(job, range, checkIdsToRun, denials);
+
+                // An edit to the book clears its results in the background (the TextChanged
+                // handler in CheckCache). That can land after a check ran and before its results
+                // are read here: one edit clears the book for every check of the project. Once
+                // that clear has reached a check, a check that ran on text read before the edit is
+                // not marked ready either. These checks run once more, together, so the job still
+                // delivers their results. If another edit leaves them not ready again, they are
+                // left out of this job with a log line and no error: each edit tells consumers to
+                // run their checks again.
+                var clearedCheckIds = new List<string>();
                 foreach (var checkId in checkIdsToRun)
                 {
-                    var check = _checkCache.GetCheck(checkId, range.ProjectId);
-                    check.AccessResults(
-                        range.Start.BookNum,
-                        recorder =>
-                        {
-                            if (!recorder.ResultsReady)
-                                throw new Exception(
-                                    $"Check {checkId} did not complete running properly."
-                                );
-                            job.AllResults.AddRange(recorder.GetResultsInRange(range));
-                            job.PercentComplete = 100 * ++completedItems / itemsToComplete;
-                        }
-                    );
+                    if (
+                        failedCheckIds.Contains(checkId)
+                        || TryCollectResults(_checkCache.GetCheck(checkId, range.ProjectId), range)
+                    )
+                        AdvanceProgress();
+                    else
+                        clearedCheckIds.Add(checkId);
+                }
+
+                if (clearedCheckIds.Count == 0)
+                    continue;
+                // Best effort: a job abandoned because of the edit should not hold up the one
+                // replacing it. The Checks panel waits a second before abandoning a job after an
+                // edit, so the re-run usually goes ahead, and its results are cached for the job
+                // that replaces this one.
+                if (job.StopRequested)
+                    break;
+
+                var rerunFailedCheckIds = RunChecksAndRecordFailures(
+                    job,
+                    range,
+                    clearedCheckIds,
+                    denials
+                );
+                foreach (var checkId in clearedCheckIds)
+                {
+                    if (
+                        !rerunFailedCheckIds.Contains(checkId)
+                        && !TryCollectResults(_checkCache.GetCheck(checkId, range.ProjectId), range)
+                    )
+                        Console.WriteLine(
+                            $"Check {checkId} on project {range.ProjectId} was left out of job "
+                                + $"{jobId}: an edit cleared its results for book "
+                                + $"{range.Start.BookNum} again while it ran"
+                        );
+                    AdvanceProgress();
                 }
             }
 
@@ -307,6 +458,68 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             // Avoid problems with floating point precision
             job.PercentComplete = Math.Round(job.PercentComplete, 0);
         }
+    }
+
+    /// <summary>
+    /// Runs the checks on the range, records each failure on the job, and returns the IDs of the
+    /// checks that failed.
+    /// </summary>
+    private HashSet<string> RunChecksAndRecordFailures(
+        CheckJobStatus job,
+        InputRange range,
+        IReadOnlyCollection<string> checkIds,
+        ErrorMessageDenials denials
+    )
+    {
+        var failedCheckIds = new HashSet<string>();
+        foreach (
+            var (failedCheckId, exception) in _checkCache.RunChecksForProject(
+                range,
+                checkIds,
+                denials
+            )
+        )
+        {
+            RecordCheckFailure(job, failedCheckId, range.ProjectId, exception);
+            failedCheckIds.Add(failedCheckId);
+        }
+        return failedCheckIds;
+    }
+
+    /// <summary>
+    /// Reports a check failure on the job. The job logs a failure once per check and message,
+    /// since a check that fails in one book usually fails the same way in every book. The full
+    /// exception is logged only when its message differs from the last one logged in full for this
+    /// check and project, since a check that cannot run on a project fails the same way in every
+    /// job until its settings change. Otherwise one short line is logged.
+    /// </summary>
+    private void RecordCheckFailure(
+        CheckJobStatus job,
+        string checkId,
+        string projectId,
+        Exception ex
+    )
+    {
+        if (!job.AddCheckError(new CheckJobError(checkId, ex.Message)))
+            return;
+
+        // A check whose message varies from book to book logs in full in every job. Jobs run one
+        // at a time, so there is no race between the read and the write.
+        var key = (checkId, projectId);
+        if (
+            _lastFullyLoggedFailureByCheck.TryGetValue(key, out var lastMessage)
+            && lastMessage == ex.Message
+        )
+        {
+            Console.WriteLine(
+                $"Check {checkId} still cannot run on project {projectId}: {ex.Message} "
+                    + "(full error logged earlier)"
+            );
+            return;
+        }
+
+        _lastFullyLoggedFailureByCheck[key] = ex.Message;
+        Console.WriteLine($"Check {checkId} could not run on project {projectId}: {ex}");
     }
 
     private ErrorMessageDenials GetOrCreateDenials(string projectId)

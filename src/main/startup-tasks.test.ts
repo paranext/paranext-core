@@ -122,12 +122,13 @@ describe('performStartupTasks', () => {
     expect(mockSendCommand).not.toHaveBeenCalled();
   });
 
-  it('fires syncProjects with no project IDs when interface mode is simple', async () => {
+  it('fires syncProjects with no project IDs and the progress toast suppressed when interface mode is simple', async () => {
     stubSettings({ mode: 'simple', firstRunComplete: true });
     await performStartupTasks();
     expect(mockSendCommand).toHaveBeenCalledWith(
       'paratextBibleSendReceive.syncProjects',
       undefined,
+      true,
     );
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
   });
@@ -158,6 +159,7 @@ describe('performStartupTasks', () => {
     expect(mockSendCommand).toHaveBeenCalledWith(
       'paratextBibleSendReceive.syncProjects',
       undefined,
+      true,
     );
   });
 
@@ -184,6 +186,7 @@ describe('performStartupTasks', () => {
     expect(mockSendCommand).toHaveBeenCalledWith(
       'paratextBibleSendReceive.syncProjects',
       undefined,
+      true,
     );
     expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('platform.syncOnStartup'));
   });
@@ -378,6 +381,54 @@ describe('performStartupTasks', () => {
       // Budget exhausted on MethodNotFound means the command never registered — the message says so.
       expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('never registered'));
     });
+
+    it('stops retrying without firing once the user has switched to Simple mode', async () => {
+      // The Power-only sync keeps its progress toast; fired after a switch to Simple it would run
+      // beside the Simple-mode toolbar indicator, giving one sync two cancellable surfaces.
+      let mode = 'power';
+      mockSettingsGet.mockImplementation(async () => mode);
+      mockRequestNoRetry.mockImplementation(async () => {
+        mode = 'simple';
+        throw methodNotFoundError();
+      });
+
+      vi.useFakeTimers();
+      try {
+        const startupPromise = performStartupTasks();
+        await vi.advanceTimersByTimeAsync(5_000);
+        await expect(startupPromise).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringContaining('no longer in Power mode'),
+      );
+    });
+
+    it('stops retrying without firing when re-reading the mode fails', async () => {
+      mockSettingsGet
+        .mockResolvedValueOnce('power')
+        .mockRejectedValue(new Error('settings unavailable'));
+      mockRequestNoRetry.mockRejectedValue(methodNotFoundError());
+
+      vi.useFakeTimers();
+      try {
+        const startupPromise = performStartupTasks();
+        await vi.advanceTimersByTimeAsync(5_000);
+        await expect(startupPromise).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+      expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Could not read platform.interfaceMode'),
+      );
+    });
   });
 
   // #endregion
@@ -405,6 +456,7 @@ describe('performStartupTasks', () => {
       expect(mockSendCommand).toHaveBeenCalledWith(
         'paratextBibleSendReceive.syncProjects',
         undefined,
+        true,
       );
     });
 
@@ -422,6 +474,7 @@ describe('performStartupTasks', () => {
       expect(mockSendCommand).toHaveBeenCalledWith(
         'paratextBibleSendReceive.syncProjects',
         undefined,
+        true,
       );
       expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('did not become ready'));
     });
@@ -526,6 +579,7 @@ describe('performStartupTasks', () => {
       expect(mockSendCommand).toHaveBeenCalledWith(
         'paratextBibleSendReceive.syncProjects',
         undefined,
+        true,
       );
     });
 
@@ -592,6 +646,7 @@ describe('performStartupTasks', () => {
       expect(mockSendCommand).toHaveBeenCalledWith(
         'paratextBibleSendReceive.syncProjects',
         undefined,
+        true,
       );
     });
 

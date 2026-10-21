@@ -948,6 +948,7 @@ export declare function MarkdownRenderer({ id, markdown, className, anchorTarget
  * localized strings and pass them into the localizedStrings prop of this component
  */
 export declare const ERROR_DUMP_STRING_KEYS: readonly [
+	"%webView_error_dump_copy_button%",
 	"%webView_error_dump_header%",
 	"%webView_error_dump_info_message%"
 ];
@@ -976,6 +977,7 @@ export declare function ErrorDump({ errorDetails, handleCopyNotify, localizedStr
  * localized strings and pass them into the localizedStrings prop of this component
  */
 export declare const ERROR_POPOVER_STRING_KEYS: readonly [
+	"%webView_error_dump_copy_button%",
 	"%webView_error_dump_header%",
 	"%webView_error_dump_info_message%",
 	"%webView_error_dump_copied_message%"
