@@ -32,6 +32,11 @@ import {
   SAMPLE_WEB_PROJECT_ID,
   sendPapiCommandWhenRegistered,
 } from '../../../fixtures/scripture-editor-helpers';
+import {
+  readSavedInternetSettings,
+  restoreSavedInternetSettings,
+  type SavedInternetSettings,
+} from '../internet-settings.page';
 import { captureAppOutput } from '../multi-window/multi-window.util';
 import { FirstRunPage } from './first-run.page';
 
@@ -92,6 +97,22 @@ test.describe('First-run wizard', () => {
   // timeouts unreachable paper limits; 240 s lets the documented probe worst case actually
   // complete while still failing in bounded time.
   test.describe.configure({ timeout: 240_000 });
+
+  // The Internet Settings step saves the chosen option to ParatextData's own InternetSettings.xml,
+  // which the fixture's settings restore does not cover. Put the developer's saved settings back
+  // after each test, so running this spec cannot leave a "Disable access to some Bible translation
+  // services" machine on Unrestricted.
+  let savedInternetSettings: SavedInternetSettings | undefined;
+  // `mainPage` is requested only so the app is running before the settings are read; a hook that
+  // names no fixture would run before the app launches.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  test.beforeEach(async ({ mainPage }) => {
+    savedInternetSettings = await readSavedInternetSettings();
+  });
+  test.afterEach(async () => {
+    if (savedInternetSettings) await restoreSavedInternetSettings(savedInternetSettings);
+    savedInternetSettings = undefined;
+  });
 
   // Every test runs in demo mode, including these first two: only demo mode makes the wizard's
   // content machine-independent (see injectDemoMode). The real routing decisions are pinned by
