@@ -818,6 +818,37 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-check-job-completes-with-per-check-errors: A check job completes with per-check errors, and check setup status has three states
+
+- **Date:** 2026-10-12
+- **Status:** Accepted
+- **Context:** One Basic check that threw (for example Quotation on a project with invalid or
+  "not used" quotation rules) ended the whole check job: `CheckCache.RunChecksForProject` had no
+  per-check guard and `CheckRunner.ProcessCheckJob` copied results only after the whole book ran, so
+  the Checks panel and the Checking Assistant lost every other check's results. Paratext 9 catches
+  only the settings exception (`RequiredCheckSettingsMissingException`) per check; any other
+  exception stops its run. A project that deliberately does not use quotation marks (quotes set to
+  `none`) also had no way to say "this check does not apply" short of an error.
+- **Decision:** Every check runner isolates each check and lists the ones that could not run on
+  `CheckJobStatusReport.checkErrors`; the job still ends `completed`, and `errored` means the job
+  itself failed. A check that failed is not cached, so the next job retries it after a settings fix.
+  `lookUpCheckSetupStatus(checkId, projectId)` reports `ready`, `setupRequired` or `notApplicable`
+  (with a `reason` localize key that each consumer localizes). Not applicable covers quotation rules set to `none`, Quotation types
+  switched off in Quotation rules, and Study Bible Additions projects. `isCheckSetupForProject`
+  counts not-applicable as set up, so existing "Setup required" filters stay correct. A
+  not-applicable check is skipped by the job with no result and no error.
+- **Alternatives:** Paratext 9 parity (settings exception only, other exceptions stop the run) —
+  rejected: background runs would silently lose all results (Matt Lyons, on PT-4761). A result row
+  with a fake reference carrying the message — rejected: `CheckRunResult` requires a verse. A
+  per-project available-checks list — rejected: a bigger API change, and the user cannot see why a
+  check vanished. A `get*` method name — rejected: `get`/`set`/`subscribe` are reserved
+  data-provider prefixes.
+- **Consequences:** Consumers that only read `status === 'errored'` no longer see check failures and
+  should read `checkErrors` (the Checking Assistant's per-check retry fallback stops firing, since
+  the job no longer errors). Quotation types now returns nothing on projects where the administrator
+  never enabled it, as in Paratext 9. Both new API items are experimental.
+- **Source:** PT-4761 "Handle errors from Basic checks gracefully".
+
 ## adr-closed-source-command-doc-altitude: Command docs for closed-source-backed PAPI commands describe caller-visible guarantees, not the current implementer's mechanism
 
 - **Date:** 2026-09-05
@@ -3027,6 +3058,53 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   (`PreserveConsecutiveSpacesInTextTokens`); this decision is unaffected by that, since it never
   relied on the normalization holding.
 - **Source:** PT-3408, review of PR #2715.
+
+## adr-first-run-existing-registration-is-prefill: An existing registration prefills the first-run wizard; it never skips it
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** The first-run gate (`first-run-store.ts` / `first-run.reducer.ts`) originally treated
+  a valid registration with no wizard in progress as "a pre-existing install" and silently marked
+  first run complete. Every Paratext 9 user has exactly that state on their first Platform.Bible
+  launch, because Platform.Bible's ParatextData folder is seeded from Paratext 9's (see
+  `adr-paratextdata-app-data-folder-pinned`), so they never saw the wizard. They skipped the
+  language, internet-settings and sync-consent choices, and the next launch passed every startup
+  auto-sync gate (`startup-tasks.ts`) and ran an account-wide sync nobody consented to. A stale
+  `firstRunWizardActive` flag on a registered machine also resumed the wizard at sync consent with
+  no way back. PT-4795 asked for the full wizard, with Paratext 9's values shown for the user to
+  confirm.
+- **Decision:** An unfinished first run always starts at the first step. The one exception is the
+  launch right after the wizard's own "Save and restart" (wizard active **and** the one-launch
+  just-registered flag), which resumes at sync consent. Back reaches every earlier step, except
+  in re-register mode, whose "Continue without registration" escape hatch replaces Back. A
+  registration that is valid when the wizard starts counts language, internet settings and identify
+  as complete (check marks; Next moves through them). The Identify step shows it read-only,
+  because the backend only returns the code masked and a masked code cannot be validated; it
+  follows the gate's startup answer instead of re-asking the backend, so it agrees with a resume
+  the gate's just-registered allowance drove. Its primary action is Next, or "Restart and
+  continue" when the internet settings saved in the wizard differ from the ones it started with:
+  those settings only take effect after a restart, which the registering path's "Save and restart"
+  otherwise provides, and that restart resumes at sync consent too. A banner says the registration
+  was copied from Paratext 9 when the data provider recorded that copy
+  (`paratextRegistration.isRegistrationCopiedFromParatext9`); it forgets the copy whenever the
+  registration is changed or cleared, so a registration entered in Platform.Bible never reads as
+  copied. Only finishing the wizard
+  completes first run. The OS-language seed now only replaces the default `['en']`, since a fresh
+  start can follow a real language choice. A developer reset (`platform.resetFirstRun`) restores
+  the first-run state, optionally re-copying or clearing the registration.
+- **Alternatives:** **Keep skipping, but prefill the settings screens instead** — rejected: users
+  would never see the choices, and sync consent is exactly what must not be skipped. **Detect
+  Paratext 9 directly** (registry, install folder) — rejected: "a valid registration this wizard did
+  not create" is what the product cares about, and needs no platform-specific probing. **Resume at
+  the first incomplete step instead of the first step** — rejected by the ticket: users should see
+  the carried-over values before confirming them.
+- **Consequences:** Profiles with a valid registration but no `platform.firstRunComplete` now get the
+  full wizard on upgrade — mainly installs from before the wizard existed that ran in Power mode and
+  later switch to Simple. Accepted: they have never been through Simple onboarding or sync consent.
+  Users already silently completed on earlier builds keep auto-syncing without having consented;
+  they are not re-onboarded. Installs seeded before the copy was recorded never show the banner.
+  `platform.resetFirstRun` is callable by any PAPI client and can delete the registration; it is
+  documented as a developer and tester tool.
 
 ## adr-focus-in-a-background-window-is-latent: A `focus()` call inside a backgrounded window sets the active element without raising the window
 
@@ -5335,6 +5413,44 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** manage-books port (`AlertCapture` introduced for `ImportBooks`). See
   `Paranext-Core-Patterns.md` for the code pattern.
 
+## adr-paratextdata-app-data-folder-pinned: Platform.Bible pins its ParatextData app-data folder and seeds it from Paratext 9 itself
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** ParatextData keeps per-user files (`RegistrationInfo.xml`, `InternetSettings.xml`,
+  Mercurial and feedback files) in `<local app data>/Paratext<Major><Minor>`, named after
+  `ParatextInfo.ParatextVersion`, which `Program.cs` sets to `10.<app semver major>.…` — so
+  `Paratext100` today. When that folder is missing or empty, ParatextData copies those files from
+  the highest-*named* `Paratext*` folder at or above `Paratext80`. That had three problems. First, an
+  app major version bump renames the folder, and because the names sort as strings `Paratext95`
+  beats `Paratext100`, so the new folder would be re-seeded from Paratext 9 and silently drop every
+  registration or internet-settings change made in Platform.Bible. Second, the folder is cached on
+  first access, so any read before the version override pins Platform.Bible to Paratext 9's own
+  folder. Third, if copying is denied, ParatextData falls back to using the Paratext 9 folder
+  directly. Product rule (PT-4795): Platform.Bible may read Paratext 9's registration once, to
+  populate its own, but must never change it.
+- **Decision:** `PlatformParatextInfo` (`c-sharp/ParatextUtils/`) subclasses `ParatextInfo` and is
+  installed as `ParatextInfo.Default` at the top of `Program.Main`, before anything touches
+  ParatextData. Its `GetAppDataFolder()` returns a fixed `Paratext100`, independent of the version,
+  kept because existing installs already store their data there. When that folder has none of the
+  four files ParatextData would carry over (other files, such as the auto-replace list, do not
+  count), it copies them from the numerically newest `Paratext8x`/`Paratext9x` folder with a
+  registration and writes a `CopiedFromParatext9.txt` marker. It never reads a `Paratext10x`
+  folder, never overwrites, and never uses the Paratext 9 folder itself. It never throws either:
+  `AppDataFolder` is read at startup and the result is cached, so a file-system failure is logged
+  and ParatextData's own reads and writes fail later instead. Decompiled
+  ParatextData 9.5.0.24 confirms that only `ParatextInfo` builds this path and that every consumer
+  goes through the virtual method.
+- **Alternatives:** **Pin the version's minor instead** — rejected: `ParatextVersion` also drives
+  version reporting and compatibility checks. **Copy forward from the previous `Paratext10x` folder
+  on each major bump** — rejected: more moving parts, and it keeps ParatextData's string sort and
+  fall-back-to-Paratext-9 behaviour. **Fix it in ParatextData** — not needed for Platform.Bible and
+  would change Paratext 9; could still be offered upstream.
+- **Consequences:** The folder no longer follows the version, so a future need for a fresh folder
+  is an explicit change to `APP_DATA_FOLDER_NAME` plus a migration. Tests never run `Program.Main`,
+  so they keep ParatextData's default folder; tests that install `PlatformParatextInfo` must restore
+  the previous `Default`.
+
 ## adr-paste-inserts-only-what-was-pasted: A paste never invents or deletes a paragraph marker
 
 - **Date:** 2026-09-17
@@ -6804,6 +6920,63 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4325 (registration reminder dot), sub-task of PT-4323; retry-cost evidence from
   `requestWithRetry` and `MAX_REQUEST_ATTEMPTS` in `src/shared/data/rpc.model.ts`.
 
+## adr-registry-tokens-via-elevated-privilege: Extensions get Paratext Registry access tokens only through an elevated privilege with a manifest resource allowlist
+
+- **Date:** 2026-10-16
+- **Status:** Accepted
+- **Context:** The Translator's Assistant extension needs to identify the user to the Assistant
+  server. Our users are not technical enough for an OAuth sign-in or a general credential API, and
+  what services need is the existing registration turned into a token. The Registry already issues
+  audience-bound tokens: `POST /api8/token` with Basic auth (username and registration code),
+  `grant_type=client_credentials` and an RFC 8707 `resource` returns a token whose only audience is
+  that resource (ptreg PRs #514, #527). Only the C# data provider holds the registration code. PAPI
+  commands are callable by every extension, and the PAPI WebSocket is unauthenticated
+  (`src/main/services/rpc-websocket-listener.ts`).
+- **Decision:** C# (`c-sharp/Users/RegistryAccessTokenService.cs`) mints and caches the tokens, so
+  the registration code never leaves that process. It handles
+  `requestRegistryTokens:getAccessToken`, a request type outside the `command:` category that
+  extension code can't send through PAPI. The extension host
+  (`src/extension-host/services/request-registry-tokens.service.ts`) hands a getter only to
+  extensions that declare the `requestRegistryTokens` elevated privilege and list the services in
+  `paratextRegistryTokenResources` (exact match), following the `handleUri` pattern. C# requests
+  only the five `:read` scopes. It follows ParatextData's internet rule for direct Registry calls,
+  as registration does: it refuses only when the effective `InternetAccess.Status` is `Disabled`.
+  `InternetServicesGate`'s saved-setting check, which also refuses "Disable access to some Bible
+  translation services", is for Send/Receive and the DBL, so it doesn't apply here. Failures come
+  back from C# as a result object and become
+  `PlatformError` codes in the extension host, because C# codes don't cross the RPC boundary yet
+  (PT-4750).
+- **Alternatives:** An open `paratextRegistration.*` command: every extension could impersonate the
+  user to every registered service. A one-time user-consent prompt: the extra step we want to avoid,
+  though it can be layered on later. The OAuth browser flow: users don't know their Registry login.
+  The signed `userinfo` JWT: no `exp`, `aud` or scopes. Plain `client_credentials` without
+  `resource`: a token usable at the Registry, and refused in production. Handing the registration
+  code to the extension or the service: exposes a long-lived credential.
+- **Consequences:** A new service that wants Platform.Bible users' identity registers a resource
+  with the Registry and is listed in the consuming extension's manifest, with no Platform.Bible
+  change. The gate is only as strong as extension review, as with `createProcess` and `handleUri`:
+  all extensions share one JavaScript realm in the extension host, so a malicious installed
+  extension can wrap shared built-ins and see another extension's tokens. The allowlist stops honest
+  mistakes; the real control is which extensions get installed. Local processes on the loopback
+  WebSocket can also call the request type; they already run as the user and can read the user's
+  Paratext data directly. A web page in the user's browser could too, because
+  WebSocket connections are not authenticated, and so could any installed extension's web view,
+  privilege or not, through the native `window.top.WebSocket` or its window's PAPI connection;
+  unlike the other PAPI methods they can call, this one returns a credential that works off the
+  machine. So, as an insecure temporary stopgap that is not a security boundary, main refuses this
+  request type from any WebSocket connection whose handshake carried an `Origin` header (browsers
+  always send one) and from renderer connections. It trusts a header instead of identifying the
+  caller, and PT-2893's caller identification must replace it. Rejecting browser connections
+  outright is not the answer, since browser clients are legitimate (the OpenRPC playground that
+  `platform.openDeveloperDocumentationUrl` opens, and browser-based PAPI testing); the stopgap
+  refuses them only this request type. Authenticating the clients the main process launches, so
+  sensitive request types can be limited to the extension host, is open work in PT-2893, deferred
+  as of 2026-10-20 until after the November release; a renderer connection can't be trusted with
+  them because a web view can drive it. Revisit when PT-4750 lands (throw codes instead of
+  returning them), when the WebSocket authenticates its clients (and remove the `Origin` stopgap
+  then), or if a consent prompt becomes necessary.
+- **Source:** PT-4865 (design spec attached there).
+
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path
 
 - **Date:** 2026-09-04
@@ -8257,6 +8430,69 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   which matters because project CSS is layered over a base sheet.
 - **Source:** PT-4187 standard-view branch (core #2565 ∥ scripture-editors #545).
 
+## adr-sync-surface-per-interface-mode: Each sync gets one persistent progress surface per interface mode, chosen by its caller
+
+- **Date:** 2026-10-13
+- **Status:** Accepted
+- **Context:** A sync can surface in two persistent places: core's toolbar sync indicator (Simple
+  mode only; fed by the dotnet sync-activity signal) and the dotnet process's in-progress toast
+  with Cancel (owned by the Paratext 10 patch). In Simple mode both appeared for the same sync —
+  two cancellable surfaces that do not know about each other. A first attempt suppressed the toast
+  inside the patch by caching `platform.interfaceMode` in the dotnet process. Review rejected it:
+  the callers already know the mode, and the cache added its own state machine (seed and refresh
+  loops, a coalescing gate, read tickets, a settings-change subscription, a mid-sync reconcile)
+  whose races were most of that review's blockers — a reconcile that double-created toasts, a
+  cancelled sync resurrecting its toast, a mode sampled outside the lock — plus an unknown-mode
+  default opposite to the renderer's and a test-fixture subscription leak. It was also a standing
+  conflict against a public file, carried in a private patch.
+- **Decision:** One persistent surface per mode: the indicator in Simple mode, the toast in Power
+  mode. The caller decides, per call, through `syncProjects`' optional
+  `suppressProgressNotification` (default `false`). It hides only the persistent in-progress toast;
+  the other notifications, such as the failure and role-change toasts, still show, because some
+  callers that pass it (the startup sync, the project switch) raise no Send/Receive claim, and the
+  indicator cannot report a claimless sync's failure. That is why it is a new parameter and not
+  `sendReceiveProjects`' broader `suppressNotification`. A caller suppresses only when it knows the
+  mode is exactly `'simple'`; unknown, a failed read, Power, or a covered indicator keeps the toast,
+  because the indicator mounts only for a known Simple mode and two surfaces beat none. Callers send
+  the flag only when it is `true` and otherwise omit it, never sending `false` or `undefined`: a
+  `SyncProjects` that predates the parameter rejects a two-argument call, and `undefined` serializes
+  to `null`, which does not bind to the dotnet `bool`. Likewise `projectIds` has no default, so a
+  call with no arguments (`params: []`) does not bind; the no-ID form passes `undefined` explicitly.
+  Core's declaration types `projectIds` as `string[] | undefined` and the flag as `true` so the
+  rejected shapes do not compile, and the C# stub tests pin both the accepted and the rejected wire
+  shapes. Core today: `main/startup-tasks.ts` passes `true`; `syncOnProjectSwitch` passes `true`
+  only for a known `'simple'` and omits it otherwise; the first-run consent step omits it (the
+  wizard covers the indicator). The Send/Receive extension, as of 2026-10-20 only in
+  paranext/paratext-bible-internal-extensions#206 (open, unmerged), sends every call through
+  `sendSyncProjects`: `syncOpenProjects` passes `true` only for a known `'simple'`;
+  `syncScheduledProjects` (the interval engine and the session syncs) omits it, since those run only
+  in Power mode, and the engine re-checks the mode at fire time. Core's Power-mode startup trigger
+  of the session sync likewise re-reads the mode before each boot-race retry and skips unless it is
+  still `'power'`. An implementation must not honor the flag without also raising the sync-activity
+  signal for the run.
+- **Alternatives:** **Cache the mode in the dotnet process** — rejected for the reasons above. **A
+  core `protected virtual` hook the patch overrides** (`ShouldShowPersistentSyncToast`) — removed:
+  nothing overrode it, and a per-call flag needs no per-run state on the class. **Reuse
+  `suppressNotification` on `syncProjects`** — rejected: it would also hide the failure toasts.
+  **Treat an unknown mode as Simple** (as `useIsPowerMode()` does) — rejected for this decision:
+  the toolbar indicator falls back to the last known mode, not to Simple, so it can be absent.
+- **Consequences:** This change and the patch that implements the flag must merge together: Studio
+  builds core `main` unpinned, and a one-parameter `SyncProjects` rejects the two-argument
+  Simple-mode calls. Accepted costs: a mode change mid-sync is not reconciled (Simple→Power leaves
+  that sync with no persistent surface; Power→Simple shows both); the outgoing `sendReceiveProjects`
+  half of a project switch, and Home's per-project Sync/Get (`sendReceiveProjects`, reachable in
+  Simple mode from the toolbar picker's "More projects…"), still show both in Simple mode; the
+  first-run consent sync keeps the toast. Until #206 merges, the extension's `syncOpenProjects`
+  also shows both in Simple mode. A flagged `syncOpenProjects` that fails shows its failure twice:
+  its claim turns the indicator to "Sync failed" and the dotnet failure toast still shows. The
+  extension host and the renderer read the mode independently, and the renderer's
+  `useInterfaceMode` reports its last known mode as known after a failed read (so that simple-only
+  UI is not hidden for the session); if that read fails with a stale `'power'` while the setting is
+  `'simple'`, the indicator is not mounted but a host-side caller passes `true`, and the sync has no
+  progress surface. That needs two independent read failures in a set order, so it is accepted
+  rather than closed by an "unknown" state in the hook.
+- **Source:** PT-4398; paranext/paratext-10-studio#177 and its review.
+
 ## adr-tab-bar-drop-zone-app-side-target: The whole tab bar accepts tab drops through an app-registered rc-dock drop target, not a patched or stretched rc-dock tab
 
 - **Date:** 2026-09-16
@@ -8755,6 +8991,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Formerly:** ADR-0024
 - **Date:** 2026-08-17
 - **Status:** Accepted
+- **Amended 2026-10-13:** Follow-up 2 is decided in `adr-sync-surface-per-interface-mode`: the
+  parameter is `suppressProgressNotification` on `syncProjects`, declared in core and implemented by
+  the Paratext 10 patch, not added by the patch alone. The overlap table and the paragraph saying
+  `syncProjects` has no such parameter describe the state before that decision.
 - **Context:** PT-4336 NN-4 asks for a single truthful sync status with a one-click cancel. Two
   obstacles surfaced while implementing PT-4348. First, the existing toolbar button's only action was
   `paratextBibleSendReceive.openSyncStatus`, which opens a second sync surface — a web view that

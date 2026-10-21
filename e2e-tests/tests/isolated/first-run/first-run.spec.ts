@@ -46,21 +46,21 @@ test.use({
  * - IdentifyStep's "Save and restart" calls onNext() directly instead of restarting the app.
  * - Completion is not persisted, so the wizard re-runs on every launch.
  *
- * The reload is what makes this deterministic. Setting the flag alone raced the initial
- * `resolveInternal()` (the old comment called it "exploiting the gap"), and on any machine with a
- * VALID Paratext registration the race doesn't even matter: the real resolution path skips the
- * wizard entirely (registered users get no setup wizard, by design — the store's unit tests cover
- * that routing). localStorage survives the reload, so the reloaded renderer computes its initial
- * status with demo mode already on and lands on the wizard's language step every time, on every
- * machine.
+ * The reload is what makes this deterministic: setting the flag alone races the initial
+ * `resolveInternal()`. Without demo mode, what the wizard shows depends on the machine's Paratext
+ * registration (a registered machine gets the Identify step's read-only registered view, an
+ * unregistered one the form, and an unreachable registration service the error screen), and Save
+ * and restart would really restart the app. localStorage survives the reload, so the reloaded
+ * renderer computes its initial status with demo mode already on and lands on the wizard's language
+ * step every time, on every machine.
  */
 async function injectDemoMode(mainPage: import('@playwright/test').Page): Promise<void> {
   // Let the initial boot fully settle BEFORE reloading. Reloading mid-boot intermittently left the
   // reloaded renderer with unresolved LocalizeKeys (`%firstRun_button_next%`) for over a minute —
   // the re-fetch raced the still-starting services. Wait for RESOLVED LOCALIZED TEXT, which proves
   // the localization pipeline is actually serving strings: the first boot terminates either in the
-  // app shell (registered machine — localized "Platform" menu) or in an interactive wizard
-  // (unregistered machine — localized "Next"). Once either shows, the post-reload boot is warm.
+  // app shell (localized "Platform" menu) or in an interactive wizard (localized "Next"). Once
+  // either shows, the post-reload boot is warm.
   await mainPage
     .locator('button:has-text("Platform"), [role="dialog"] button:has-text("Next")')
     .first()
@@ -82,11 +82,10 @@ test.describe('First-run wizard', () => {
   // complete while still failing in bounded time.
   test.describe.configure({ timeout: 240_000 });
 
-  // Every test runs in demo mode, including these first two: on a machine with a valid Paratext
-  // registration the REAL resolution path never shows the wizard at all (registered users skip
-  // setup by design), so only demo mode makes the wizard reachable machine-independently. The
-  // real routing decisions are pinned by first-run-store's unit tests; what e2e adds is the
-  // wizard actually mounting, localizing, and navigating inside the running app.
+  // Every test runs in demo mode, including these first two: only demo mode makes the wizard's
+  // content machine-independent (see injectDemoMode). The real routing decisions are pinned by
+  // first-run-store's unit tests; what e2e adds is the wizard actually mounting, localizing, and
+  // navigating inside the running app.
   test('shows wizard dialog on a clean launch', async ({ mainPage }) => {
     await injectDemoMode(mainPage);
     const frPage = new FirstRunPage(mainPage);

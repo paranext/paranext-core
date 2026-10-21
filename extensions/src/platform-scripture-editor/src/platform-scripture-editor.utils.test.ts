@@ -2505,17 +2505,39 @@ describe('syncOnProjectSwitch', () => {
   it('calls syncProjects with the incoming project ID', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'simple');
+
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextBibleSendReceive.syncProjects',
+      ['proj-incoming'],
+      true,
+    );
+  });
+
+  it('keeps the progress toast for the incoming sync in Power mode', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'power');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
       'proj-incoming',
     ]);
   });
 
-  it('calls sendReceiveProjects with the outgoing project ID when provided', async () => {
+  it('keeps the progress toast for the incoming sync when the mode is unknown', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-incoming',
+    ]);
+  });
+
+  it('calls sendReceiveProjects with only the outgoing project ID when provided, even in Simple mode', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
       'proj-outgoing',
@@ -2529,7 +2551,7 @@ describe('syncOnProjectSwitch', () => {
       callOrder.push(commandName);
     });
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(callOrder).toEqual([
       'paratextBibleSendReceive.syncProjects',
@@ -2540,7 +2562,7 @@ describe('syncOnProjectSwitch', () => {
   it('does not call sendReceiveProjects when outgoingProjectId is undefined', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'simple');
 
     expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
       'paratextBibleSendReceive.sendReceiveProjects',
@@ -2553,7 +2575,7 @@ describe('syncOnProjectSwitch', () => {
       if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
     });
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
       'proj-outgoing',
@@ -2565,7 +2587,7 @@ describe('syncOnProjectSwitch', () => {
     mockSendCommand.mockRejectedValue(new Error('network error'));
 
     await expect(
-      syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing'),
+      syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple'),
     ).resolves.toBeUndefined();
   });
 
@@ -2575,7 +2597,7 @@ describe('syncOnProjectSwitch', () => {
       if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
     });
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'simple');
 
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-incoming'));
   });
@@ -2587,7 +2609,7 @@ describe('syncOnProjectSwitch', () => {
         throw new Error('S/R failed');
     });
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-outgoing'));
   });
@@ -2596,7 +2618,7 @@ describe('syncOnProjectSwitch', () => {
     // `Editable=F` locks the Scripture text, not comments, so the project can hold new work.
     const { papi, mockSendCommand } = createSyncMockPapi(READ_ONLY_PROJECT);
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
       'proj-outgoing',
@@ -2608,10 +2630,10 @@ describe('syncOnProjectSwitch', () => {
     // Classifies the outgoing project, not the incoming one.
     setProjectKind('proj-outgoing', PUBLISHED_RESOURCE);
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand.mock.calls).toEqual([
-      ['paratextBibleSendReceive.syncProjects', ['proj-incoming']],
+      ['paratextBibleSendReceive.syncProjects', ['proj-incoming'], true],
     ]);
   });
 
@@ -2621,7 +2643,7 @@ describe('syncOnProjectSwitch', () => {
     const { papi, mockSendCommand, mockProjectDataProvidersGet } = createSyncMockPapi();
     mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
       'proj-outgoing',
@@ -2692,12 +2714,50 @@ describe('finalizeProjectSwitch', () => {
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
-      'proj-1',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextBibleSendReceive.syncProjects',
+      ['proj-1'],
+      true,
+    );
     expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
       'paratextBibleSendReceive.sendReceiveProjects',
     );
+  });
+
+  it('keeps the progress toast when the user has switched back to Power mode', async () => {
+    const { papi, mockSendCommand, mockSettingsGet } = createFinalizeMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-1',
+    ]);
+  });
+
+  it('still syncs, with the progress toast, when the mode read rejects', async () => {
+    const { papi, mockSendCommand, mockSettingsGet, mockWarn } = createFinalizeMockPapi();
+    mockSettingsGet.mockRejectedValue(new Error('settings unavailable'));
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-1',
+    ]);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('platform.interfaceMode'));
+  });
+
+  it('skips the Simple-only work but still records the project when the mode read rejects', async () => {
+    const { papi, mockSettingsGet, mockReloadWebView, mockRecordProjectOpened } =
+      createFinalizeMockPapi();
+    mockSettingsGet.mockRejectedValue(new Error('settings unavailable'));
+    const applyForProject = vi.fn().mockResolvedValue(undefined);
+
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+    expect(applyForProject).not.toHaveBeenCalled();
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
   });
 
   it('does not await the sync before returning - a hung sync must not block applyForProject or recordProjectOpened', async () => {

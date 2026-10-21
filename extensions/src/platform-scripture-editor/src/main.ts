@@ -360,7 +360,7 @@ async function open(
       // for a published resource — an `Editable=F` translation project can still hold new comments.
       // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
       // require tracking a dirty flag in the editor controller, which doesn't exist yet).
-      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoing?.projectId);
+      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoing?.projectId, interfaceMode);
     }
 
     const emitDidFinish = () => {

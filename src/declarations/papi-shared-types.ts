@@ -49,6 +49,31 @@ declare module 'papi-shared-types' {
 
   // #region Commands
 
+  /**
+   * What `platform.resetFirstRun` does with the Paratext registration in Platform.Bible's own
+   * ParatextData folder. Paratext 9's registration is never changed.
+   *
+   * - `keep`: leave the registration as it is
+   * - `copyFromParatext9`: on the restart, replace Platform.Bible's registration and internet
+   *   settings with fresh copies of Paratext 9's, the way a Paratext 9 user's first launch does.
+   *   With no registered Paratext 8 or 9 on the machine, this leaves Platform.Bible unregistered
+   *   and on default internet settings.
+   * - `clear`: remove the registration, like a Paratext 9 user who never registered
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ResetFirstRunRegistration = 'keep' | 'copyFromParatext9' | 'clear';
+
+  /**
+   * Options for `platform.resetFirstRun`
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type ResetFirstRunOptions = {
+    /** What to do with the registration. Defaults to `keep`. */
+    registration?: ResetFirstRunRegistration;
+  };
+
   // TODO: Adding an index type removes type checking on the key :( How do we make sure extensions provide only functions?
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
@@ -311,6 +336,21 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.showOnboardingTour': () => Promise<void>;
+
+    // This command is provided in `first-run.service-router.ts` (main)
+    /**
+     * Developer and tester tool, not for extensions to call: it can delete the user's registration.
+     *
+     * Forget first-run progress and restart into the first-run wizard, in Simple mode, as a new
+     * user — or a Paratext 9 user launching Platform.Bible for the first time — would see it. Also
+     * clears the orientation tour's completion and turns `platform.syncOnStartup` and
+     * `platform.showRegistrationReminderOnStartup` back on. Works in installed builds: press F12
+     * and run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     *
+     * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.resetFirstRun': (options?: ResetFirstRunOptions) => Promise<void>;
 
     // These commands are provided in `scroll-group-navigation.commands.ts` (main)
     /**

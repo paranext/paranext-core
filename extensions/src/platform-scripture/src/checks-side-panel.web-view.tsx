@@ -23,12 +23,16 @@ import {
   CheckJobScope,
   CheckJobStatusReport,
   CheckResultsInvalidated,
-  CheckRunnerCheckDetails,
   CheckRunResult,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { projectNamesFromMetadata } from './project-names.util';
-import { CheckInfo, CheckScopes, ProjectOption } from './checks-side-panel.utils';
+import {
+  CheckScopes,
+  defaultCheckRunnerCheckDetails,
+  ProjectOption,
+  shouldRefreshChecksInfo,
+} from './checks-side-panel.utils';
 import { callControllerSafely } from './find/find.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
 import {
@@ -40,6 +44,7 @@ import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { useProjectRecencyMap } from './hooks/use-project-recency-map';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
+import { useChecksInfo } from './use-checks-info.hook';
 
 /**
  * Web-view types that should count as "open" project tabs for the picker's "Open Tabs" grouping.
@@ -48,12 +53,6 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.
  * side panel itself) would falsely mark a project as open.
  */
 const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>([SCRIPTURE_EDITOR_WEBVIEW_TYPE]);
-
-const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
-  checkDescription: '',
-  checkId: '',
-  checkName: '',
-};
 
 const defaultJobStatusReport: CheckJobStatusReport = {
   jobId: '',
@@ -89,6 +88,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useState<CheckJobStatusReport>(defaultJobStatusReport);
   const activeJobIdRef = useRef<string | undefined>(undefined);
   const [forceNewCheckRun, setForceNewCheckRun] = useState(1);
+  const [checksInfoRefreshKey, setChecksInfoRefreshKey] = useState(0);
   const [checkResults, setCheckResults] = useState<CheckRunResult[]>(() => defaultCheckResults);
   const checkResultsRef = useRef<CheckRunResult[]>(checkResults);
   /** The result id the editor was last asked to select, so a late failure knows if it is stale. */
@@ -435,6 +435,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
     (details: CheckResultsInvalidated) => {
       if (!checkAggregator || !isMountedRef.current) return;
 
+      // This is not debounced or filtered by the selected checks: a later event would cancel the
+      // debounce, and an unselected check's label must refresh too.
+      if (shouldRefreshChecksInfo(details, projectId)) setChecksInfoRefreshKey((key) => key + 1);
+
       // Clear any existing timeout
       if (invalidateTimeoutRef.current) {
         clearTimeout(invalidateTimeoutRef.current);
@@ -463,7 +467,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
         if (applies) setForceNewCheckRun((x) => x + 1);
       }, 1000); // Debounce for 1 second
     },
-    [activeRanges, checkAggregator, selectedCheckTypeIds],
+    [activeRanges, checkAggregator, projectId, selectedCheckTypeIds],
   );
 
   useEvent(network.getNetworkEvent(CHECK_RESULTS_INVALIDATED_EVENT), invalidateResultsIfNecessary);
@@ -514,36 +518,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [availableChecks],
   );
 
-  const [checksInfo, setChecksInfo] = useState<CheckInfo[]>([]);
-
-  useEffect(() => {
-    if (
-      !checkAggregator ||
-      !projectId ||
-      isPlatformError(availableChecks) ||
-      availableChecks.length === 0 ||
-      availableChecks[0] === defaultCheckRunnerCheckDetails
-    ) {
-      setChecksInfo([]);
-      return;
-    }
-
-    const fetchChecksInfo = async () => {
-      const promises = availableChecks.map(async (check) => {
-        const isSetup = await checkAggregator.isCheckSetupForProject(check.checkId, projectId);
-        return {
-          checkId: check.checkId,
-          checkName: getLocalizedCheckDescription(check.checkId),
-          isSetup,
-          setUpLink: undefined, // TODO: Add setUpLink when available from backend
-        };
-      });
-      const results = await Promise.all(promises);
-      setChecksInfo(results);
-    };
-
-    fetchChecksInfo();
-  }, [checkAggregator, projectId, availableChecks, getLocalizedCheckDescription]);
+  const checksInfo = useChecksInfo(
+    checkAggregator,
+    projectId,
+    availableChecks,
+    getLocalizedCheckDescription,
+    checksInfoRefreshKey,
+  );
 
   /**
    * Selects the check result in the editor and focuses the editor.
