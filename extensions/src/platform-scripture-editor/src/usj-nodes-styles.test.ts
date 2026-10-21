@@ -201,14 +201,9 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
   // style would draw an empty sliver beside the caller.
   describe('collapsed note content', () => {
     it('draws no box on an annotation mark inside it', () => {
-      for (const declaration of [
-        'margin: 0',
-        'padding: 0',
-        'border: none',
-        'outline: none',
-        'box-shadow: none',
-      ])
-        expect(scss).toMatch(rule(['.note.collapsed mark'], declaration));
+      ['margin: 0', 'padding: 0', 'border: none', 'outline: none', 'box-shadow: none'].forEach(
+        (declaration) => expect(scss).toMatch(rule(['.note.collapsed mark'], declaration)),
+      );
     });
   });
 
