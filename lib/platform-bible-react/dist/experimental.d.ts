@@ -1860,8 +1860,11 @@ export declare const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[];
 export type InternetAccessOptionListProps = {
 	/** Localized strings; pass strings resolved from `INTERNET_ACCESS_OPTION_LIST_STRING_KEYS`. */
 	localizedStrings: LanguageStrings;
-	/** The currently selected internet use value. */
-	value: InternetUse;
+	/**
+	 * The currently selected internet use value, or `undefined` to select no option — for a caller
+	 * that needs the user to make an explicit choice rather than accept the stored value.
+	 */
+	value: InternetUse | undefined;
 	/** Called when the user selects an active (non-coming-soon) option. */
 	onChange: (value: InternetUse) => void;
 	/** When true, all rows are non-interactive (loading or saving in progress). */

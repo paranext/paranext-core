@@ -97,6 +97,7 @@ const SETTINGS_RESET = [
   'setting platform.firstRunComplete=false',
   'setting platform.syncOnStartup=true',
   'setting platform.showRegistrationReminderOnStartup=true',
+  'setting platform.internetUseChoiceAsked=false',
 ];
 
 function isSimpleModePending(): boolean {

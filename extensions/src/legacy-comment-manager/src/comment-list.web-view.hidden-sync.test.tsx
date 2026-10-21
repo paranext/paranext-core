@@ -8,6 +8,8 @@ import type { UseWebViewScrollGroupScrRefHook, UseWebViewStateHook } from '@papi
 import type { SerializedVerseRef } from '@sillsdev/scripture';
 import { useViewVisibility } from 'platform-bible-react';
 import type { LegacyCommentThread } from 'platform-bible-utils';
+import { saveFilterSelection } from './comment-filter-store';
+import { ALL_BOOKS_SCOPE_FILTER } from './comment-list-filters.model';
 
 // The hidden-tab race between the two deferred scrolls (the BCV sync scroll and a thread
 // selection's scroll) only exists when both catch-ups are real, so unlike
@@ -182,6 +184,9 @@ describe('comment list catch-up when its hidden tab is shown', () => {
   let scrolledElementIds: string[];
 
   beforeEach(() => {
+    // The mocked query returns both threads whatever scope it is asked for, so the list must be on
+    // a scope under which both are genuinely listed.
+    saveFilterSelection('project-1', { preset: 'all', scopeFilter: ALL_BOOKS_SCOPE_FILTER });
     mocks.commentThreads = [THREAD_AT_MRK_1_1, THREAD_AT_MRK_2_5];
     scrolledElementIds = [];
     // jsdom implements no layout, and so no `scrollIntoView`
@@ -192,6 +197,7 @@ describe('comment list catch-up when its hidden tab is shown', () => {
 
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     // Removes the stub installed above; jsdom has no implementation of its own to restore
     Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
     document.documentElement.style.scrollPaddingTop = '';

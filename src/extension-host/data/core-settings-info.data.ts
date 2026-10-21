@@ -60,6 +60,11 @@ export const platformSettings: SettingsContribution = [
         default: true,
         isHidden: true,
       },
+      'platform.internetUseChoiceAsked': {
+        label: '%settings_platform_internetUseChoiceAsked_label%',
+        default: false,
+        isHidden: true,
+      },
     },
   },
   // Settings a support person adjusts when helping a user troubleshoot, rather than settings a
@@ -112,6 +117,7 @@ const booleanValidator: SettingValidator<
   | 'platform.firstRunComplete'
   | 'platform.syncOnStartup'
   | 'platform.showRegistrationReminderOnStartup'
+  | 'platform.internetUseChoiceAsked'
 > = async (newValue): Promise<boolean> => {
   return typeof newValue === 'boolean';
 };
@@ -198,4 +204,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.firstRunComplete': booleanValidator,
   'platform.syncOnStartup': booleanValidator,
   'platform.showRegistrationReminderOnStartup': booleanValidator,
+  'platform.internetUseChoiceAsked': booleanValidator,
 };

@@ -232,7 +232,7 @@ describe('useCommentDrafts', () => {
     expect(result.current.drafts[threadA.id]).toEqual({ editorState: halfAThought });
   });
 
-  it('keeps a draft when the SCOPE widens back to default before the query has caught up', () => {
+  it('keeps a draft when the SCOPE widens back to all-books before the query has caught up', () => {
     // The scope-axis twin of the test above: with `preset: 'all'`, widening `scopeFilter` from
     // 'current-chapter' back to 'all-books' hits the identical race, because
     // `isShowingAllCommentThreads` folds both the preset and scope axes into one boolean (see
