@@ -113,7 +113,7 @@ describe('CommentListPanel sync-blocked notice', () => {
 
 describe('CommentListPanel empty state', () => {
   it('shows the generic empty message when no filters are active', () => {
-    renderPanel(); // default filters: preset 'all', scope 'all-books'
+    renderPanel(); // unfiltered: preset 'all', scope 'all-books'
     expect(screen.getByText(EN_STRINGS['%no_comments%'])).toBeInTheDocument();
     expect(screen.queryByText(EN_STRINGS['%no_comments_match_filter%'])).not.toBeInTheDocument();
   });

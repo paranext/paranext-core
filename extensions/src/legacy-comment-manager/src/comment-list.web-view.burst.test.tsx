@@ -496,6 +496,7 @@ describe('setFilters messages replayed in a burst', () => {
   });
 
   it('applies a message equal to the pre-burst state instead of skipping it', async () => {
+    // Stored all-books, so the reset message ({} resolves to all-books) equals the pre-burst state.
     seedStoredSelection('project-1', { preset: 'all', scopeFilter: ALL_BOOKS_SCOPE_FILTER });
     renderCommentListWebView();
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
@@ -533,6 +534,8 @@ describe('setFilters messages replayed in a burst', () => {
   });
 
   it('applies a message equal to the scope a panel change just left behind', async () => {
+    // Stored all-books, so the panel change to current-chapter leaves behind the scope the message
+    // resolves to.
     seedStoredSelection('project-1', { preset: 'all', scopeFilter: ALL_BOOKS_SCOPE_FILTER });
     renderCommentListWebView();
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
@@ -634,7 +637,7 @@ describe('setFilters message — legacy shapes and unrecognized values', () => {
     await waitFor(() => expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS));
   });
 
-  it('resolves an unrecognized scope to the default instead of reaching scopeFieldsUsed', async () => {
+  it('resolves an unrecognized scope to all-books instead of reaching scopeFieldsUsed', async () => {
     renderCommentListWebView();
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
 
@@ -729,7 +732,35 @@ describe('current-* scope scrRef wiring', () => {
     });
   });
 
+  it('opens a fresh list on a chapter query that a verse move does not resubscribe', async () => {
+    // Nothing stored or requested, so this is the scope every new list opens on.
+    const scrRefControls = makeControllableScrRef({ book: 'MRK', chapterNum: 1, verseNum: 1 });
+    renderCommentListWebView(scrRefControls.hook);
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+    const selectorBeforeMove = latestCommentThreadSelector();
+    expect(selectorBeforeMove.scriptureRanges).toEqual([
+      expect.objectContaining({
+        granularity: 'chapter',
+        start: expect.objectContaining({ book: 'MRK', chapterNum: 1 }),
+      }),
+    ]);
+
+    act(() => {
+      scrRefControls.setScrRef({ book: 'MRK', chapterNum: 1, verseNum: 5 });
+    });
+    expect(latestCommentThreadSelector()).toBe(selectorBeforeMove);
+
+    // Positive control: the query does follow the reference, at chapter granularity.
+    act(() => {
+      scrRefControls.setScrRef({ book: 'MRK', chapterNum: 2, verseNum: 1 });
+    });
+    expect(latestCommentThreadSelector().scriptureRanges?.[0]?.start).toEqual(
+      expect.objectContaining({ book: 'MRK', chapterNum: 2 }),
+    );
+  });
+
   it('does not resubscribe on a verse move when scoped to all-books', async () => {
+    // All-books must be stored: a fresh list opens on the current chapter.
     seedStoredSelection('project-1', { preset: 'all', scopeFilter: ALL_BOOKS_SCOPE_FILTER });
     const scrRefControls = makeControllableScrRef({ book: 'MRK', chapterNum: 1, verseNum: 1 });
     renderCommentListWebView(scrRefControls.hook);
@@ -1096,6 +1127,8 @@ describe('unsaved preset filtering', () => {
       },
     });
 
+    // Draft pruning, which removes threadC's edit to a nonexistent comment, runs only while the list
+    // shows every thread: preset 'all' and scope all-books.
     seedStoredSelection('project-1', { preset: 'all', scopeFilter: ALL_BOOKS_SCOPE_FILTER });
     renderCommentListWebView();
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
@@ -1145,9 +1178,9 @@ describe('unsaved preset filtering', () => {
     // The query mock here only simulates `isResolved` (see `commentThreadsFixture`'s doc), not scope,
     // so a real scope exclusion is stood in for by leaving threadB out of the query result entirely
     // while still giving it a draft -- exactly what a scope-excluded, drafted thread looks like from
-    // this web view's perspective. The scope is mounted as `current-book` (not the default
-    // `all-books`) so this is genuinely a narrowed-scope scenario -- at the default scope the query
-    // result IS the complete thread list, and useCommentDrafts' pruning would (correctly, for that
+    // this web view's perspective. The scope is mounted as `current-book` (not `all-books`) so this
+    // is genuinely a narrowed-scope scenario -- at `all-books` the query result IS the complete
+    // thread list, and useCommentDrafts' pruning would (correctly, for that
     // case) delete threadB's "stale" draft before this test ever gets to exercise the unsaved filter.
     //
     // threadC is in scope (it's part of the query result) but never drafted. Without it, this
@@ -1224,12 +1257,14 @@ describe('legacy per-web-view scopeFilter migration', () => {
   it('migrates the pre-localStorage scopeFilter web-view state when this project has nothing stored yet', async () => {
     // Simulates a user upgrading mid-session: the merge base persisted scope under this exact
     // per-web-view-state key, and this project's new localStorage-backed store has never seen it.
+    // 'unfiltered' is the released value that differs from DEFAULT_SCOPE_FILTER (the only other
+    // one, 'current-chapter', now equals it), and the one `scopeFieldsUsed` throws on unmapped.
     renderCommentListWebView(useWebViewScrollGroupScrRefFake, 'project-1', {
-      scopeFilter: 'current-chapter',
+      scopeFilter: 'unfiltered',
     });
 
     await waitFor(() => expect(latestPanelProps()).toBeDefined());
-    expect(latestPanelProps().scopeFilter).toBe('current-chapter');
+    expect(latestPanelProps().scopeFilter).toBe(ALL_BOOKS_SCOPE_FILTER);
     expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS);
   });
 

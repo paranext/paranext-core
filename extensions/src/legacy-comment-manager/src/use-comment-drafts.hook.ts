@@ -209,9 +209,9 @@ export function useCommentDrafts({
   // filter/scope state, but `commentThreads` comes from a query subscription that only catches up
   // later -- and `isLoadingCommentThreads` can't fill the gap because it too lags: it is raised by
   // a passive effect (create-use-data-hook.util.ts) that has not run yet on the very render a
-  // narrowed preset or scope widens back to default. On that render `isShowingAllCommentThreads`
-  // and `isLoadingCommentThreads` both already look "safe to prune", while `commentThreads` is
-  // still the stale, narrow array the old selection produced. Advancing this only when
+  // narrowed preset or scope widens back to showing every thread. On that render
+  // `isShowingAllCommentThreads` and `isLoadingCommentThreads` both already look "safe to prune",
+  // while `commentThreads` is still the stale, narrow array the old selection produced. Advancing this only when
   // `commentThreads` itself changes -- never merely because the selection changed -- means a
   // selection flip on its own can never be mistaken for data that has caught up with it.
   const [settledIsShowingAllCommentThreads, setSettledIsShowingAllCommentThreads] = useState(

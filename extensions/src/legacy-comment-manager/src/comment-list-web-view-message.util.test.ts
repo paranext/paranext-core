@@ -69,12 +69,12 @@ describe('resolveSetFiltersMessage', () => {
     expect(resolved.filtersChanged).toBe(false);
   });
 
-  it('treats an omitted scope as the default for comparison, not as "unchanged"', () => {
+  it('treats an omitted scope as all-books for comparison, not as "unchanged"', () => {
     const current = { filters: DEFAULT_COMMENT_FILTERS, scopeFilter: 'current-chapter' as const };
 
     const resolved = resolveSetFiltersMessage({}, current);
 
-    // An omitted scope resets to the default (matching applyFilterOverrides/setFilters' documented
+    // An omitted scope resets to all-books (matching applyFilterOverrides/setFilters' documented
     // "sets the ENTIRE view deterministically" contract) — since that differs from the view's
     // current 'current-chapter', this IS a real change, not a no-op.
     expect(resolved.scopeFilterChanged).toBe(true);
@@ -96,7 +96,7 @@ describe('resolveSetFiltersMessage', () => {
     expect(resolved.filters).toEqual(DEFAULT_COMMENT_FILTERS);
   });
 
-  it('resolves an omitted scope to the all-books default, never undefined, when only the preset is set', () => {
+  it('resolves an omitted scope to all-books, never undefined, when only the preset is set', () => {
     // Pins the crash this function guards against: a setFilters message that narrows only the
     // preset (e.g. a Send/Receive conflict link) must still leave the view on a valid scope. The
     // 'conflict' preset is representative of that real caller but has no bearing on the scope
@@ -208,7 +208,7 @@ describe('resolveSetFiltersMessage — unrecognized values', () => {
     expect(resolved.filters).toEqual({ preset: 'all' });
   });
 
-  it('resolves an unrecognized scope to the default instead of passing it through', () => {
+  it('resolves an unrecognized scope to all-books instead of passing it through', () => {
     // Guards scopeFieldsUsed[scopeFilter] downstream, which throws a TypeError reading `.book` off
     // `undefined` for any key outside the ScopeFilter union (see comment-list.web-view.burst.test.tsx
     // for the reproduction of that actual throw).

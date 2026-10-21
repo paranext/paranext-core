@@ -91,19 +91,25 @@ const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
  *   who upgrades mid-session has a real "Current chapter"-style preference sitting in their saved
  *   layout that the new store has never recorded for this project; consulted ONLY when
  *   `hasStoredFilterSelection` says this project's new store is genuinely empty, so a real (even
- *   default-valued) stored selection always wins over this one-time migration fallback. There is no
- *   equivalent migration for the preset axis: the merge base kept `filters` as plain, unpersisted
- *   `useState`, so there is nothing under any old key to read back for it.
+ *   default-valued) stored selection always wins over this one-time migration fallback. Released
+ *   builds stored the deprecated {@link LegacyScopeFilter} `'unfiltered'` here, so the value goes
+ *   through `resolveScopeFilter` before it reaches `scopeFieldsUsed`. There is no equivalent
+ *   migration for the preset axis: the merge base kept `filters` as plain, unpersisted `useState`,
+ *   so there is nothing under any old key to read back for it.
  */
 function loadInitialSelection(
   projectId: string | undefined,
-  legacyPersistedScopeFilter: ScopeFilter | undefined,
+  legacyPersistedScopeFilter: ScopeFilter | LegacyScopeFilter | undefined,
 ): CurrentCommentListView {
   if (!projectId) return { filters: DEFAULT_COMMENT_FILTERS, scopeFilter: DEFAULT_SCOPE_FILTER };
   if (!hasStoredFilterSelection(projectId)) {
     return {
       filters: DEFAULT_COMMENT_FILTERS,
-      scopeFilter: legacyPersistedScopeFilter ?? DEFAULT_SCOPE_FILTER,
+      // Resolved only when present: `resolveScopeFilter(undefined)` is all-books, not the default.
+      scopeFilter:
+        legacyPersistedScopeFilter === undefined
+          ? DEFAULT_SCOPE_FILTER
+          : resolveScopeFilter(legacyPersistedScopeFilter),
     };
   }
   const stored = loadFilterSelection(projectId);
@@ -282,7 +288,7 @@ global.webViewComponent = function CommentListWebView({
   // see that function's `legacyPersistedScopeFilter` param doc. Never written back through this
   // setter: this view no longer owns that key going forward, it only reads whatever a prior build
   // left there.
-  const [legacyPersistedScopeFilter] = useWebViewState<ScopeFilter | undefined>(
+  const [legacyPersistedScopeFilter] = useWebViewState<ScopeFilter | LegacyScopeFilter | undefined>(
     'scopeFilter',
     undefined,
   );
