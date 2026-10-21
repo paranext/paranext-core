@@ -7968,6 +7968,69 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   which matters because project CSS is layered over a base sheet.
 - **Source:** PT-4187 standard-view branch (core #2565 ∥ scripture-editors #545).
 
+## adr-sync-surface-per-interface-mode: Each sync gets one persistent progress surface per interface mode, chosen by its caller
+
+- **Date:** 2026-10-13
+- **Status:** Accepted
+- **Context:** A sync can surface in two persistent places: core's toolbar sync indicator (Simple
+  mode only; fed by the dotnet sync-activity signal) and the dotnet process's in-progress toast
+  with Cancel (owned by the Paratext 10 patch). In Simple mode both appeared for the same sync —
+  two cancellable surfaces that do not know about each other. A first attempt suppressed the toast
+  inside the patch by caching `platform.interfaceMode` in the dotnet process. Review rejected it:
+  the callers already know the mode, and the cache added its own state machine (seed and refresh
+  loops, a coalescing gate, read tickets, a settings-change subscription, a mid-sync reconcile)
+  whose races were most of that review's blockers — a reconcile that double-created toasts, a
+  cancelled sync resurrecting its toast, a mode sampled outside the lock — plus an unknown-mode
+  default opposite to the renderer's and a test-fixture subscription leak. It was also a standing
+  conflict against a public file, carried in a private patch.
+- **Decision:** One persistent surface per mode: the indicator in Simple mode, the toast in Power
+  mode. The caller decides, per call, through `syncProjects`' optional
+  `suppressProgressNotification` (default `false`). It hides only the persistent in-progress toast;
+  the other notifications, such as the failure and role-change toasts, still show, because some
+  callers that pass it (the startup sync, the project switch) raise no Send/Receive claim, and the
+  indicator cannot report a claimless sync's failure. That is why it is a new parameter and not
+  `sendReceiveProjects`' broader `suppressNotification`. A caller suppresses only when it knows the
+  mode is exactly `'simple'`; unknown, a failed read, Power, or a covered indicator keeps the toast,
+  because the indicator mounts only for a known Simple mode and two surfaces beat none. Callers send
+  the flag only when it is `true` and otherwise omit it, never sending `false` or `undefined`: a
+  `SyncProjects` that predates the parameter rejects a two-argument call, and `undefined` serializes
+  to `null`, which does not bind to the dotnet `bool`. Likewise `projectIds` has no default, so a
+  call with no arguments (`params: []`) does not bind; the no-ID form passes `undefined` explicitly.
+  Core's declaration types `projectIds` as `string[] | undefined` and the flag as `true` so the
+  rejected shapes do not compile, and the C# stub tests pin both the accepted and the rejected wire
+  shapes. Core today: `main/startup-tasks.ts` passes `true`; `syncOnProjectSwitch` passes `true`
+  only for a known `'simple'` and omits it otherwise; the first-run consent step omits it (the
+  wizard covers the indicator). The Send/Receive extension, as of 2026-10-20 only in
+  paranext/paratext-bible-internal-extensions#206 (open, unmerged), sends every call through
+  `sendSyncProjects`: `syncOpenProjects` passes `true` only for a known `'simple'`;
+  `syncScheduledProjects` (the interval engine and the session syncs) omits it, since those run only
+  in Power mode, and the engine re-checks the mode at fire time. Core's Power-mode startup trigger
+  of the session sync likewise re-reads the mode before each boot-race retry and skips unless it is
+  still `'power'`. An implementation must not honor the flag without also raising the sync-activity
+  signal for the run.
+- **Alternatives:** **Cache the mode in the dotnet process** — rejected for the reasons above. **A
+  core `protected virtual` hook the patch overrides** (`ShouldShowPersistentSyncToast`) — removed:
+  nothing overrode it, and a per-call flag needs no per-run state on the class. **Reuse
+  `suppressNotification` on `syncProjects`** — rejected: it would also hide the failure toasts.
+  **Treat an unknown mode as Simple** (as `useIsPowerMode()` does) — rejected for this decision:
+  the toolbar indicator falls back to the last known mode, not to Simple, so it can be absent.
+- **Consequences:** This change and the patch that implements the flag must merge together: Studio
+  builds core `main` unpinned, and a one-parameter `SyncProjects` rejects the two-argument
+  Simple-mode calls. Accepted costs: a mode change mid-sync is not reconciled (Simple→Power leaves
+  that sync with no persistent surface; Power→Simple shows both); the outgoing `sendReceiveProjects`
+  half of a project switch, and Home's per-project Sync/Get (`sendReceiveProjects`, reachable in
+  Simple mode from the toolbar picker's "More projects…"), still show both in Simple mode; the
+  first-run consent sync keeps the toast. Until #206 merges, the extension's `syncOpenProjects`
+  also shows both in Simple mode. A flagged `syncOpenProjects` that fails shows its failure twice:
+  its claim turns the indicator to "Sync failed" and the dotnet failure toast still shows. The
+  extension host and the renderer read the mode independently, and the renderer's
+  `useInterfaceMode` reports its last known mode as known after a failed read (so that simple-only
+  UI is not hidden for the session); if that read fails with a stale `'power'` while the setting is
+  `'simple'`, the indicator is not mounted but a host-side caller passes `true`, and the sync has no
+  progress surface. That needs two independent read failures in a set order, so it is accepted
+  rather than closed by an "unknown" state in the hook.
+- **Source:** PT-4398; paranext/paratext-10-studio#177 and its review.
+
 ## adr-tab-bar-drop-zone-app-side-target: The whole tab bar accepts tab drops through an app-registered rc-dock drop target, not a patched or stretched rc-dock tab
 
 - **Date:** 2026-09-16
@@ -8466,6 +8529,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Formerly:** ADR-0024
 - **Date:** 2026-08-17
 - **Status:** Accepted
+- **Amended 2026-10-13:** Follow-up 2 is decided in `adr-sync-surface-per-interface-mode`: the
+  parameter is `suppressProgressNotification` on `syncProjects`, declared in core and implemented by
+  the Paratext 10 patch, not added by the patch alone. The overlap table and the paragraph saying
+  `syncProjects` has no such parameter describe the state before that decision.
 - **Context:** PT-4336 NN-4 asks for a single truthful sync status with a one-click cancel. Two
   obstacles surfaced while implementing PT-4348. First, the existing toolbar button's only action was
   `paratextBibleSendReceive.openSyncStatus`, which opens a second sync surface — a web view that
