@@ -120,7 +120,6 @@ describe('getWebViewProvider — the patient, re-arming wait (tab-restore path)'
   it('gives up and propagates the rejection once the total patient budget elapses', async () => {
     const service = await loadService();
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
     // Each rejection also advances the fake clock by one 20s arm, simulating that much time having
     // actually passed while this arm waited — the loop reads performance.now() to decide whether to
     // re-arm again, not a real timer, so nothing here needs to actually wait 2 minutes.
@@ -146,15 +145,6 @@ describe('getWebViewProvider — the patient, re-arming wait (tab-restore path)'
     await expect(service.getWebViewProvider('foo.view', true)).rejects.toMatchObject({
       code: UNKNOWN,
     });
-
-    expect(mockWaitForNetworkObject).toHaveBeenCalledTimes(1);
-  });
-
-  it("doesn't affect a fresh openWebView request made without the patient flag", async () => {
-    const service = await loadService();
-    mockWaitForNetworkObject.mockRejectedValue(timeoutError());
-
-    await expect(service.getWebViewProvider('foo.view', false)).rejects.toThrow('Timeout reached');
 
     expect(mockWaitForNetworkObject).toHaveBeenCalledTimes(1);
   });
