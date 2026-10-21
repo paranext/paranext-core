@@ -185,10 +185,23 @@ describe('platformGetResources activation', () => {
     vi.useFakeTimers();
     neverAnswerModelTextRestrictions();
     await activateWithFreshModule();
-    // With the catalog in memory, the read below joins a flag sync whose restrictions step hangs
+    // With the catalog in memory, the read below joins a flag sync, and the restrictions fetch that
+    // sync starts hangs
     expect(await hasSettledWithin(getCachedResources(), 0)).toBe(true);
 
     expect(await hasSettledWithin(getLocalNonDblResources(true), 2000)).toBe(true);
+  });
+
+  it('settles a flag refresh without waiting for the model-text restrictions', async () => {
+    // Text panels and the Get Resources list await this before reading the catalog, and none of
+    // them reads the restrictions
+    vi.useFakeTimers();
+    neverAnswerModelTextRestrictions();
+    await activateWithFreshModule();
+    expect(await hasSettledWithin(getCachedResources(), 0)).toBe(true);
+
+    expect(await hasSettledWithin(refreshResourceFlags(false), 0)).toBe(true);
+    expect(await hasSettledWithin(refreshResourceFlags(true), 0)).toBe(true);
   });
 
   it('re-reads the derived flags when the set of projects changes', async () => {
