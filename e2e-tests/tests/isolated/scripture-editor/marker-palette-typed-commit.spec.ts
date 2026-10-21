@@ -51,7 +51,7 @@ test.describe('scripture editor marker palette typed commit', () => {
           ).some((span) => span.textContent?.includes(typed)),
         text,
       );
-    /** Whether the editor holds a verse with the given number. */
+    /** Whether the editor holds a verse with the given number. Jonah 1 ends at verse 17. */
     const hasVerse = async (number: string) =>
       editorEvalFrame.evaluate(
         (verseNumber) =>
@@ -81,18 +81,20 @@ test.describe('scripture editor marker palette typed commit', () => {
     });
 
     await test.step('a number typed after \\v becomes the verse number', async () => {
+      expect(await hasVerse('91')).toBe(false);
       await mainPage.keyboard.press('End');
-      await typeMarker('v', '9 Z');
-      await expect.poll(() => hasVerse('9'), { timeout: 20_000 }).toBe(true);
+      await typeMarker('v', '91 Z');
+      await expect.poll(() => hasVerse('91'), { timeout: 20_000 }).toBe(true);
     });
 
     await test.step('typed straight through, without waiting for the palette', async () => {
       await mainPage.keyboard.press('End');
       await mainPage.keyboard.type('\\nd Rx');
       await expect.poll(() => isInNdSpan('Rx'), { timeout: 20_000 }).toBe(true);
+      expect(await hasVerse('92')).toBe(false);
       await mainPage.keyboard.press('End');
-      await mainPage.keyboard.type('\\v 8 Y');
-      await expect.poll(() => hasVerse('8'), { timeout: 20_000 }).toBe(true);
+      await mainPage.keyboard.type('\\v 92 Y');
+      await expect.poll(() => hasVerse('92'), { timeout: 20_000 }).toBe(true);
     });
   });
 });
