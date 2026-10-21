@@ -17,6 +17,8 @@ export type InterfaceScalingWindow = {
     send(channel: string, ...args: unknown[]): void;
   };
   once(event: 'ready-to-show', listener: () => void): unknown;
+  /** Whether the window is closed. Its other members can throw once it is. */
+  isDestroyed(): boolean;
   isVisible(): boolean;
 };
 
@@ -29,6 +31,10 @@ export type ZoomFactorSetting = {
    * when a document loads, so a first delivery would only repeat it.
    */
   subscribe: (callback: (value: number | PlatformError) => void) => Promise<UnsubscriberAsync>;
+  /** Hear announcements of new network objects, the settings provider's among them */
+  onDidCreateNetworkObject: (callback: (details: { id: string }) => void) => unknown;
+  /** The settings provider's name, which prefixes its network object id */
+  settingsProviderName: string;
 };
 
 /**
@@ -49,6 +55,8 @@ export type ZoomFactorSetting = {
  */
 export function createInterfaceScaling(setting: ZoomFactorSetting) {
   let lastKnown: number | undefined;
+  /** How many changes have been heard, so a read that one overtook can tell */
+  let changeCount = 0;
   /** Windows that have painted or been shown, which a change reaches through their page */
   const zoomableWindows = new Set<InterfaceScalingWindow>();
   let unsubscribe: UnsubscriberAsync | undefined;
@@ -60,8 +68,9 @@ export function createInterfaceScaling(setting: ZoomFactorSetting) {
    * shown.
    */
   function apply(window: InterfaceScalingWindow, factor: number): void {
-    if (window.webContents.isDestroyed()) return;
     try {
+      // A closed window stays in `zoomableWindows` until main's close teardown removes it
+      if (window.isDestroyed() || window.webContents.isDestroyed()) return;
       window.webContents.send(INTERFACE_SCALING_CHANNEL, factor);
     } catch (e) {
       logger.error(`Failed to apply interface scaling ${factor}: ${getErrorMessage(e)}`);
@@ -70,9 +79,12 @@ export function createInterfaceScaling(setting: ZoomFactorSetting) {
 
   /** Read the setting, falling back to the last value seen (then the default) if it cannot be */
   async function read(): Promise<number> {
+    const changeCountAtStart = changeCount;
     try {
-      lastKnown = await setting.get();
-      return lastKnown;
+      const value = await setting.get();
+      // A change heard while this read was in flight is newer than the value it answered
+      if (changeCount === changeCountAtStart) lastKnown = value;
+      return lastKnown ?? value;
     } catch (e) {
       logger.warn(`Failed to read interface scaling: ${getErrorMessage(e)}`);
       return lastKnown ?? DEFAULT_ZOOM_FACTOR;
@@ -84,6 +96,7 @@ export function createInterfaceScaling(setting: ZoomFactorSetting) {
       logger.warn(`Interface scaling change arrived as an error: ${getErrorMessage(value)}`);
       return;
     }
+    changeCount += 1;
     lastKnown = value;
     zoomableWindows.forEach((window) => apply(window, value));
   }
@@ -125,7 +138,7 @@ export function createInterfaceScaling(setting: ZoomFactorSetting) {
       };
       window.webContents.on('did-finish-load', async () => {
         const factor = await read();
-        if (isRemoved) return;
+        if (isRemoved || window.isDestroyed()) return;
         // Asked at each load, not once: a hidden window whose page failed to load is shown anyway
         if (!isZoomable && window.isVisible()) makeZoomable();
         if (isZoomable) apply(window, factor);
@@ -141,23 +154,20 @@ export function createInterfaceScaling(setting: ZoomFactorSetting) {
         zoomableWindows.delete(window);
       };
     },
-    followSetting,
     /**
      * Follow the setting now, and again whenever the settings provider is announced: it lives in
      * another process, which can start after this one. A replaced provider is not recovered from
      * yet (PT-4807).
      *
-     * @param onDidCreateNetworkObject Subscribes to announcements of new network objects
-     * @param settingsProviderName The settings provider's name, which prefixes its network object
-     *   id
+     * Following it now succeeds only if the provider is already registered. Until it is, that
+     * attempt spends the whole RPC retry budget failing, and the re-subscribe an announcement
+     * queues waits behind it; changes made meanwhile reach a window only when it next loads a
+     * document.
      */
-    startFollowingSetting(
-      onDidCreateNetworkObject: (callback: (details: { id: string }) => void) => unknown,
-      settingsProviderName: string,
-    ): Promise<void> {
+    startFollowingSetting(): Promise<void> {
       // Matched on the prefix because a provider's network object id is its name plus a suffix
-      onDidCreateNetworkObject((details) => {
-        if (startsWith(details.id, settingsProviderName)) followSetting();
+      setting.onDidCreateNetworkObject((details) => {
+        if (startsWith(details.id, setting.settingsProviderName)) followSetting();
       });
       return followSetting();
     },

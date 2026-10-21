@@ -10,9 +10,9 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 
 /**
- * A window as far as interface scaling uses it: `ready-to-show` and whether it is shown on the
- * window, and its `webContents`' load event and IPC to its page. Hidden unless `isVisible` says
- * otherwise, as a window is when created with `show: false`.
+ * A window as far as interface scaling uses it: `ready-to-show`, whether it is shown and whether it
+ * is closed on the window, and its `webContents`' load event and IPC to its page. Hidden unless
+ * `isVisible` says otherwise, as a window is when created with `show: false`.
  */
 function createWindow({ isVisible = false } = {}) {
   const webContents = Object.assign(new EventEmitter(), {
@@ -23,11 +23,22 @@ function createWindow({ isVisible = false } = {}) {
   });
   return Object.assign(new EventEmitter(), {
     webContents,
+    isDestroyed: vi.fn(() => false),
     isVisible: vi.fn(() => isVisible),
   });
 }
 
 type TestWindow = ReturnType<typeof createWindow>;
+
+/** Close the window the way a `BrowserWindow` closes: reading anything else off it then throws */
+function destroy(window: TestWindow) {
+  const throwDestroyed = () => {
+    throw new Error('Object has been destroyed');
+  };
+  window.isDestroyed.mockReturnValue(true);
+  window.isVisible.mockImplementation(throwDestroyed);
+  Object.defineProperty(window, 'webContents', { get: throwDestroyed });
+}
 
 /** The zoom factors main has sent the window's page to set on itself */
 const sentToPage = (window: TestWindow) =>
@@ -35,13 +46,16 @@ const sentToPage = (window: TestWindow) =>
     .filter(([channel]) => channel === INTERFACE_SCALING_CHANNEL)
     .map(([, factor]) => factor);
 
+const SETTINGS_PROVIDER_NAME = 'platform.settingsServiceDataProvider';
+
 /**
  * `platform.zoomFactor` as the settings service exposes it: `get` answers `values` in turn (an
- * `Error` rejects, and so does running out), and `change` delivers a value to the current
- * subscriber
+ * `Error` rejects, and so does running out), `change` delivers a value to the current subscriber,
+ * and `announce` announces a new network object with the given id
  */
 function createSetting(values: (number | Error)[] = []) {
   let subscriber: ((value: number | PlatformError) => void) | undefined;
+  let announcementListener: ((details: { id: string }) => void) | undefined;
   const unsubscribe = vi.fn(async () => true);
   const setting = {
     get: vi.fn(async () => {
@@ -53,8 +67,29 @@ function createSetting(values: (number | Error)[] = []) {
       subscriber = callback;
       return unsubscribe;
     }),
+    onDidCreateNetworkObject: (callback: (details: { id: string }) => void) => {
+      announcementListener = callback;
+    },
+    settingsProviderName: SETTINGS_PROVIDER_NAME,
   };
-  return { setting, unsubscribe, change: (value: number | PlatformError) => subscriber?.(value) };
+  return {
+    setting,
+    unsubscribe,
+    change: (value: number | PlatformError) => subscriber?.(value),
+    announce: (id: string) => announcementListener?.({ id }),
+  };
+}
+
+/** Have the next read of the setting wait until the returned function answers it */
+function holdNextRead(setting: ReturnType<typeof createSetting>['setting']) {
+  let answer: (value: number) => void = () => {};
+  setting.get.mockImplementationOnce(
+    () =>
+      new Promise<number>((resolve) => {
+        answer = resolve;
+      }),
+  );
+  return (value: number) => answer(value);
 }
 
 /** Let the async `did-finish-load` listener and the subscription settle */
@@ -132,7 +167,7 @@ describe('createInterfaceScaling', () => {
   test('has every painted window take a change', async () => {
     const { setting, change } = createSetting();
     const interfaceScaling = createInterfaceScaling(setting);
-    await interfaceScaling.followSetting();
+    await interfaceScaling.startFollowingSetting();
     const { window: first } = await addPaintedWindow(interfaceScaling);
     const { window: second } = await addPaintedWindow(interfaceScaling);
 
@@ -145,7 +180,7 @@ describe('createInterfaceScaling', () => {
   test('leaves a window that has not painted alone on a change, then gives it the change', async () => {
     const { setting, change } = createSetting([1.2]);
     const interfaceScaling = createInterfaceScaling(setting);
-    await interfaceScaling.followSetting();
+    await interfaceScaling.startFollowingSetting();
     const window = createWindow();
     interfaceScaling.addWindow(window);
     window.webContents.emit('did-finish-load');
@@ -174,7 +209,7 @@ describe('createInterfaceScaling', () => {
   test('has a shown window that has not painted take a change once its document has loaded', async () => {
     const { setting, change } = createSetting([1.2]);
     const interfaceScaling = createInterfaceScaling(setting);
-    await interfaceScaling.followSetting();
+    await interfaceScaling.startFollowingSetting();
     const window = createWindow({ isVisible: true });
     interfaceScaling.addWindow(window);
     window.webContents.emit('did-finish-load');
@@ -204,7 +239,7 @@ describe('createInterfaceScaling', () => {
   test('keeps the last value it had when the setting cannot be read', async () => {
     const { setting, change } = createSetting([new Error('Settings service undefined')]);
     const interfaceScaling = createInterfaceScaling(setting);
-    await interfaceScaling.followSetting();
+    await interfaceScaling.startFollowingSetting();
     change(1.3);
 
     expect(await interfaceScaling.read()).toBe(1.3);
@@ -220,7 +255,7 @@ describe('createInterfaceScaling', () => {
   test('leaves windows as they are when a change arrives as an error', async () => {
     const { setting, change } = createSetting();
     const interfaceScaling = createInterfaceScaling(setting);
-    await interfaceScaling.followSetting();
+    await interfaceScaling.startFollowingSetting();
     const { window } = await addPaintedWindow(interfaceScaling);
     change(1.3);
 
@@ -233,7 +268,7 @@ describe('createInterfaceScaling', () => {
   test('stops applying changes to a window once it is removed', async () => {
     const { setting, change } = createSetting();
     const interfaceScaling = createInterfaceScaling(setting);
-    await interfaceScaling.followSetting();
+    await interfaceScaling.startFollowingSetting();
     const kept = await addPaintedWindow(interfaceScaling);
     const removed = await addPaintedWindow(interfaceScaling);
 
@@ -247,7 +282,7 @@ describe('createInterfaceScaling', () => {
   test('applies nothing to a window removed while its first load was still being read', async () => {
     const { setting, change } = createSetting([1.2]);
     const interfaceScaling = createInterfaceScaling(setting);
-    await interfaceScaling.followSetting();
+    await interfaceScaling.startFollowingSetting();
     const window = createWindow();
     const remove = interfaceScaling.addWindow(window);
 
@@ -272,12 +307,15 @@ describe('createInterfaceScaling', () => {
     expect(sentToPage(window)).toEqual([]);
   });
 
-  test('takes one subscription at a time when asked to follow the setting twice at once', async () => {
-    const { setting, unsubscribe, change } = createSetting();
+  test('takes one subscription at a time when the provider is announced while following it', async () => {
+    const { setting, unsubscribe, change, announce } = createSetting();
     const interfaceScaling = createInterfaceScaling(setting);
     const { window } = await addPaintedWindow(interfaceScaling);
 
-    await Promise.all([interfaceScaling.followSetting(), interfaceScaling.followSetting()]);
+    const started = interfaceScaling.startFollowingSetting();
+    announce(`${SETTINGS_PROVIDER_NAME}-data`);
+    await started;
+    await settle();
     change(1.6);
 
     expect(setting.subscribe).toHaveBeenCalledTimes(2);
@@ -285,26 +323,28 @@ describe('createInterfaceScaling', () => {
     expect(sentToPage(window)).toEqual([1.6]);
   });
 
-  test('takes a new subscription each time it follows the setting, releasing the old one', async () => {
-    const { setting, unsubscribe } = createSetting();
+  test('takes a new subscription each time the provider is announced, releasing the old one', async () => {
+    const { setting, unsubscribe, announce } = createSetting();
     const interfaceScaling = createInterfaceScaling(setting);
 
-    await interfaceScaling.followSetting();
-    await interfaceScaling.followSetting();
+    await interfaceScaling.startFollowingSetting();
+    announce(`${SETTINGS_PROVIDER_NAME}-data`);
+    await settle();
 
     expect(setting.subscribe).toHaveBeenCalledTimes(2);
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
   test('follows the setting on a later attempt after subscribing fails', async () => {
-    const { setting, change } = createSetting();
+    const { setting, change, announce } = createSetting();
     setting.subscribe.mockRejectedValueOnce(new Error('Settings service undefined'));
     const interfaceScaling = createInterfaceScaling(setting);
     const { window } = await addPaintedWindow(interfaceScaling);
 
-    await interfaceScaling.followSetting();
+    await interfaceScaling.startFollowingSetting();
     expect(logger.warn).toHaveBeenCalled();
-    await interfaceScaling.followSetting();
+    announce(`${SETTINGS_PROVIDER_NAME}-data`);
+    await settle();
     change(1.8);
 
     expect(sentToPage(window)).toEqual([1.8]);
@@ -313,7 +353,7 @@ describe('createInterfaceScaling', () => {
   test('leaves a closed window alone and logs a window that cannot be reached', async () => {
     const { setting, change } = createSetting();
     const interfaceScaling = createInterfaceScaling(setting);
-    await interfaceScaling.followSetting();
+    await interfaceScaling.startFollowingSetting();
     const closed = await addPaintedWindow(interfaceScaling);
     closed.window.webContents.isDestroyed.mockReturnValue(true);
     const broken = await addPaintedWindow(interfaceScaling);
@@ -330,21 +370,67 @@ describe('createInterfaceScaling', () => {
   });
 
   test('follows the setting now and again only when the settings provider is announced', async () => {
-    const { setting } = createSetting();
+    const { setting, announce } = createSetting();
     const interfaceScaling = createInterfaceScaling(setting);
-    let announce: ((details: { id: string }) => void) | undefined;
 
-    await interfaceScaling.startFollowingSetting((callback) => {
-      announce = callback;
-    }, 'platform.settingsServiceDataProvider');
+    await interfaceScaling.startFollowingSetting();
     expect(setting.subscribe).toHaveBeenCalledTimes(1);
 
-    announce?.({ id: 'platform.themeServiceDataProvider-data' });
+    announce('platform.themeServiceDataProvider-data');
     await settle();
     expect(setting.subscribe).toHaveBeenCalledTimes(1);
 
-    announce?.({ id: 'platform.settingsServiceDataProvider-data' });
+    announce(`${SETTINGS_PROVIDER_NAME}-data`);
     await settle();
     expect(setting.subscribe).toHaveBeenCalledTimes(2);
+  });
+
+  test('skips a closed window without stopping a change reaching the windows after it', async () => {
+    // A closed window stays added until main's close teardown, which runs after an async write
+    const { setting, change } = createSetting();
+    const interfaceScaling = createInterfaceScaling(setting);
+    await interfaceScaling.startFollowingSetting();
+    const closed = await addPaintedWindow(interfaceScaling);
+    const open = await addPaintedWindow(interfaceScaling);
+    const closedSend = closed.window.webContents.send;
+    destroy(closed.window);
+    vi.mocked(logger.error).mockClear();
+
+    change(1.5);
+
+    expect(closedSend).not.toHaveBeenCalled();
+    expect(sentToPage(open.window)).toEqual([1.5]);
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  test('applies nothing to a window closed while its load was being read', async () => {
+    const { setting } = createSetting();
+    const answerRead = holdNextRead(setting);
+    const window = createWindow({ isVisible: true });
+    createInterfaceScaling(setting).addWindow(window);
+    const { send } = window.webContents;
+
+    window.webContents.emit('did-finish-load');
+    destroy(window);
+    answerRead(1.4);
+    await settle();
+
+    expect(send).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  test('keeps a change heard while a read was in flight over the older value that read answers', async () => {
+    const { setting, change } = createSetting();
+    const answerRead = holdNextRead(setting);
+    const interfaceScaling = createInterfaceScaling(setting);
+    await interfaceScaling.startFollowingSetting();
+
+    const reading = interfaceScaling.read();
+    change(1.6);
+    answerRead(1.2);
+
+    expect(await reading).toBe(1.6);
+    // The next read fails, so it answers the last value it kept
+    expect(await interfaceScaling.read()).toBe(1.6);
   });
 });

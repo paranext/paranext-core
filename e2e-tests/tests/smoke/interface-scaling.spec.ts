@@ -7,6 +7,11 @@
  * `http://localhost` page cannot show the failure. Each zoom case also runs a control window
  * without the preload, which must lose its zoom: proof that this setup still reproduces the
  * failure.
+ *
+ * What it does not cover: main's own wiring. `openWindow` copies the gating in
+ * `createInterfaceScaling` (`src/main/interface-scaling.util.ts`, unit-tested there) and
+ * `appWindowOptions` copies `createWindow`'s options, so this stays green if `main.ts` stops adding
+ * its windows to interface scaling or sends the zoom at a different moment.
  */
 import {
   _electron as electron,
@@ -28,7 +33,7 @@ import {
 const ROOT_DIR = path.resolve(__dirname, '../../..');
 /** The preload the dev app loads; globalSetup builds it when it is missing or stale */
 const PRELOAD_PATH = path.join(ROOT_DIR, '.erb', 'dll', 'preload.js');
-const FIXTURE_DIR = path.join(__dirname, 'window-zoom');
+const FIXTURE_DIR = path.join(__dirname, 'interface-scaling');
 const PAGE_URL = `${pathToFileURL(path.join(FIXTURE_DIR, 'page.html')).href}?state=1`;
 /** Any query other than `PAGE_URL`'s, the way `refreshWindowCreationState` rewrites it */
 const REWRITTEN_QUERY = '?state=2';
@@ -37,7 +42,7 @@ const REWRITTEN_QUERY = '?state=2';
  * `INTERFACE_SCALING_CHANNEL` in `src/shared/data/interface-scaling.model.ts`, which e2e code
  * cannot import. Keep the two in step.
  */
-const INTERFACE_SCALING_CHANNEL = 'platform.interfaceScaling.setPageZoomFactor';
+const INTERFACE_SCALING_CHANNEL = 'electronAPI:interfaceScaling.setZoomFactor';
 
 /** Interface scaling. Not 1, so a snap to 100 % is visible. */
 const USER_ZOOM = 1.5;
@@ -79,7 +84,7 @@ const test = base.extend<{ electronApp: ElectronApplication }>({
   // Playwright fixtures require a destructured parameter even when no dependencies are needed
   // eslint-disable-next-line no-empty-pattern
   electronApp: async ({}, use) => {
-    const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paranext-e2e-window-zoom-'));
+    const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paranext-e2e-interface-scaling-'));
     let electronApp: ElectronApplication;
     try {
       electronApp = await electron.launch({

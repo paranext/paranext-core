@@ -42,7 +42,8 @@ ipcRenderer.on(PAPI_PORT_ERROR_CHANNEL, (_event, error: { reason: string }) => {
 // drops to 100 % on its next resize. Main sends it to a hidden window only once it has painted: set
 // earlier, it can stop the window from ever showing. See `adr-interface-scaling-is-per-window-zoom`.
 ipcRenderer.on(INTERFACE_SCALING_CHANNEL, (_event, zoomFactor: unknown) => {
-  if (typeof zoomFactor === 'number' && zoomFactor > 0) webFrame.setZoomFactor(zoomFactor);
+  if (typeof zoomFactor === 'number' && Number.isFinite(zoomFactor) && zoomFactor > 0)
+    webFrame.setZoomFactor(zoomFactor);
 });
 
 export type ElectronAPIHandler = typeof electronAPIHandler;

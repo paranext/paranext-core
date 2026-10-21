@@ -7,6 +7,7 @@
  * `src/main/interface-scaling.util.ts` for when main sends it.
  *
  * Kept free of imports so the preload bundle can use it without pulling in the logger or
- * `electron`. `e2e-tests/tests/smoke/window-zoom.spec.ts` repeats the name; keep the two in step.
+ * `electron`. `e2e-tests/tests/smoke/interface-scaling.spec.ts` repeats the name; keep the two in
+ * step.
  */
-export const INTERFACE_SCALING_CHANNEL = 'platform.interfaceScaling.setPageZoomFactor';
+export const INTERFACE_SCALING_CHANNEL = 'electronAPI:interfaceScaling.setZoomFactor';

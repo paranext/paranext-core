@@ -8,9 +8,10 @@ function measureInsets(
 ): WindowControlsOverlayInsets | undefined {
   if (!windowControlsOverlay?.visible) return undefined;
   const titlebarAreaRect = windowControlsOverlay.getTitlebarAreaRect();
+  // Clamped: until `resize` catches up, a maximize's titlebar area reaches past `innerWidth`
   return {
-    left: titlebarAreaRect.left,
-    right: window.innerWidth - titlebarAreaRect.right,
+    left: Math.max(0, titlebarAreaRect.left),
+    right: Math.max(0, window.innerWidth - titlebarAreaRect.right),
   };
 }
 
@@ -41,7 +42,14 @@ export function useWindowControlsOverlay(): WindowControlsOverlayInsets | undefi
   useEffect(() => {
     if (!windowControlsOverlay) return;
 
-    const updateInsets = () => setInsets(measureInsets(windowControlsOverlay));
+    const updateInsets = () => {
+      const next = measureInsets(windowControlsOverlay);
+      // Keeps the same object when nothing moved, so a drag's stream of `resize` events does not
+      // re-render the toolbar
+      setInsets((previous) =>
+        previous?.left === next?.left && previous?.right === next?.right ? previous : next,
+      );
+    };
 
     updateInsets();
     windowControlsOverlay.addEventListener('geometrychange', updateInsets);

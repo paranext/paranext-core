@@ -3262,13 +3262,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     layout (`OnFirstNonEmptyLayout` in Electron's `electron_api_web_contents.cc`), and a window
     covered by other windows is occluded, so its page is hidden and does not lay out. Every window
     someone asks for is created shown (`planWindowActivation`), and one that opens behind another
-    app's window has no `ready-to-show` until it is uncovered. Measured 2026-10-14 on Electron
-    39.8.8 on Windows: a covered shown window had none for as long as it stayed covered (the packaged
-    app: none in 4.5 minutes), and with occlusion tracking off it had one every time. Waiting for it
-    showed the first frame at 100 % at the moment the window was uncovered. A shown window that took
-    the setting at load while still covered laid out and showed the setting once uncovered in every
-    run: 12 of 12 in bare Electron, 4 of them with all cores but one busy, and the packaged app,
-    which was at the setting while still covered.
+    app's window has no `ready-to-show` until it is uncovered. Measured on Electron 39.8.8 on
+    Windows: a covered shown window had none for as long as it stayed covered, and with occlusion
+    tracking off it had one every time. Waiting for it showed the first frame at 100 % at the moment
+    the window was uncovered, while a shown window that took the setting at load while still covered
+    showed the setting once uncovered, in bare Electron (under CPU load too) and the packaged app.
 - **Alternatives:** (a) Reapply the zoom on every main-frame `did-navigate-in-page`: rejected,
   because it was measured to persist one `Preferences` entry per distinct URL, and each URL carries
   serialized scroll-group and theme state, so a zoomed user would grow the profile with every verse
@@ -3279,10 +3277,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `webPreferences.zoomFactor`: measured not to survive the rewrite. (e) Set any zoom on a hidden
   window before its first frame: rejected, because every variant measured can stop that frame, so
   `ready-to-show` never fires and main never reveals a window nobody asked for. The page setting its
-  zoom while the preload runs did so in bare Electron (0 of 27). The page setting it at
+  zoom while the preload runs did so in every bare-Electron run. The page setting it at
   `DOMContentLoaded` did so in the smoke suite with another app window open, and together with a
   main-side apply at `dom-ready` it did so in the real app (isolated
-  `web-view-move-between-windows.spec.ts`, 3 of 3 failed). Main's own `setZoomFactor` at
+  `web-view-move-between-windows.spec.ts` failed every run). Main's own `setZoomFactor` at
   `did-finish-load`, which the app long used, did so intermittently under load. (f) Seed the zoom
   on the window's URL, like the theme and scroll group, so the first frame is at the setting:
   deferred as the bigger change, and it would still have to wait for the first frame.
@@ -3290,15 +3288,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the query, and main writes no per-URL zoom to the profile. Electron's own docs describe zoom as
   same-origin and suggest distinct URLs for per-window zoom, which is exactly what breaks here; the
   temporary-zoom behavior was measured on Electron 39.8.8 and is not documented.
-  `e2e-tests/tests/smoke/window-zoom.spec.ts` reproduces the failure with a control window, for
-  windows both shown and hidden at creation, and requires `ready-to-show` of the hidden ones. As of
-  2026-09-29 it gates merges only on CI's Linux smoke job, since the Windows and macOS smoke steps
-  are `continue-on-error`.
+  `e2e-tests/tests/smoke/interface-scaling.spec.ts` reproduces the failure with a control window, for
+  windows both shown and hidden at creation, and requires `ready-to-show` of the hidden ones.
   - **First frame:** a window's first document renders at its starting zoom until it takes the
     setting: a hidden window's at `ready-to-show`, a shown window's at `did-finish-load`, which can
     come after its first frames, and a crash-reloaded one's at `did-finish-load`. The starting zoom
-    is 100 % in the packaged app, as before; in dev mode it is the zoom Chromium stored for
-    `localhost`, which main no longer updates.
+    is 100 % in the packaged app; in dev mode it is the zoom Chromium stored for `localhost`, which
+    main no longer updates. For a hidden window this is a change: main reveals it at its own
+    `ready-to-show`, before the setting reaches the page, so its first visible frame is at the
+    starting zoom, where it used to take the setting at `did-finish-load`, before being shown.
+    Alternative (f) would close this.
   - **Stale entries:** existing profiles keep whatever per-URL entries they had, and nothing
     overwrites them any more. A packaged window whose launch URL happens to match one starts at that
     zoom until it takes the setting.

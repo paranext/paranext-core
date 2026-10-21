@@ -265,6 +265,8 @@ const interfaceScaling = createInterfaceScaling({
   get: () => settingsService.get('platform.zoomFactor'),
   subscribe: (callback) =>
     settingsService.subscribe('platform.zoomFactor', callback, { retrieveDataImmediately: false }),
+  onDidCreateNetworkObject,
+  settingsProviderName: settingsServiceDataProviderName,
 });
 
 /**
@@ -494,10 +496,11 @@ async function main() {
     );
 
   // Follow the zoom factor setting. Not awaited, as in the theme service host: resolving a provider
-  // that is not registered yet spends the whole RPC retry budget.
+  // that is not registered yet spends the whole RPC retry budget, and the extension host that
+  // registers this one is only spawned below.
   // TODO(PT-4807): after an extension-host restart the settings service still holds the old
   // provider, so re-subscribing fails and zoom changes stop until the app restarts.
-  interfaceScaling.startFollowingSetting(onDidCreateNetworkObject, settingsServiceDataProviderName);
+  interfaceScaling.startFollowingSetting();
 
   // Window layout persistence must register its request handlers before any window exists so a
   // renderer's layout load can never race the registration
@@ -904,7 +907,7 @@ async function main() {
     // against the renderer's own naming. Until the renderer's first title arrives, Electron answers
     // `getTitle()` with its own default, which is why `summarizeWindows` reads a window's readiness
     // rather than trusting its title.
-    // window-zoom.spec.ts's `appWindowOptions` mirrors `show`, the title bar options and
+    // interface-scaling.spec.ts's `appWindowOptions` mirrors `show`, the title bar options and
     // `webPreferences` here, so keep the two in step
     const newWindow = new BrowserWindow({
       show: activation.showOnCreate,

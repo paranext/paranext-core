@@ -91,6 +91,7 @@ describe('preload interface scaling', () => {
 
   test('ignores a zoom it cannot set', () => {
     ipcListeners.get(INTERFACE_SCALING_CHANNEL)?.({}, 0);
+    ipcListeners.get(INTERFACE_SCALING_CHANNEL)?.({}, Infinity);
     ipcListeners.get(INTERFACE_SCALING_CHANNEL)?.({}, 'large');
 
     expect(setZoomFactor).not.toHaveBeenCalled();

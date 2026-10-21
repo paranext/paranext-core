@@ -104,6 +104,30 @@ describe('useWindowControlsOverlay', () => {
     expect(result.current).toEqual({ left: 0, right: 136 });
   });
 
+  it('reports no space rather than negative space while the window width lags a maximize', () => {
+    setInnerWidth(900);
+    const { fireGeometryChange } = installMockOverlay(true, new DOMRect(0, 0, 764, 32));
+    const { result } = renderHook(() => useWindowControlsOverlay());
+
+    act(() => fireGeometryChange(true, new DOMRect(0, 0, 1400, 32)));
+
+    expect(result.current).toEqual({ left: 0, right: 0 });
+  });
+
+  it('keeps the same insets object across a resize that moves nothing', () => {
+    setInnerWidth(1000);
+    installMockOverlay(true, new DOMRect(0, 0, 860, 32));
+    const { result } = renderHook(() => useWindowControlsOverlay());
+    const before = result.current;
+
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    expect(result.current).toBe(before);
+    expect(before).toEqual({ left: 0, right: 140 });
+  });
+
   it('returns undefined after a geometrychange event reports the overlay went invisible', () => {
     const { fireGeometryChange } = installMockOverlay(true, new DOMRect(0, 0, 860, 32));
     const { result } = renderHook(() => useWindowControlsOverlay());

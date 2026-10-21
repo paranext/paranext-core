@@ -771,9 +771,10 @@ export async function launchElectronApp(
   if (pinnedAppGlobalState) pinAppGlobalState();
 
   // NODE_ENV=development so the renderer loads from the webpack dev server.
-  // Also strip PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: the C# backend honors it, so an ambient value
-  // from the dev/CI shell would silently redirect the project root of suites that did not opt into
-  // isolatedProjectRoot. Only the isolatedProjectRoot branch (or an explicit envOverride) below sets it.
+  // Strip PLATFORM_BIBLE_PROJECT_ROOT_FOLDER as well as what electronChildEnv always omits: the C#
+  // backend honors it, so an ambient value from the dev/CI shell would silently redirect the project
+  // root of suites that did not opt into isolatedProjectRoot. Only the isolatedProjectRoot branch (or
+  // an explicit envOverride) below sets it.
   const restEnv = electronChildEnv('PLATFORM_BIBLE_PROJECT_ROOT_FOLDER');
   isolatedProjectRootDir = opts.isolatedProjectRoot
     ? path.join(userDataDir, 'projects')
