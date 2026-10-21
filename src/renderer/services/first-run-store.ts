@@ -526,7 +526,6 @@ export function clearFirstRunLocalState(): void {
     WIZARD_ACTIVE_KEY,
     JUST_REGISTERED_KEY,
     WIZARD_RESTARTED_KEY,
-    SYNC_ON_STARTUP_DISABLED_CACHE_KEY,
   ].forEach(clearBooleanFlag);
 }
 

@@ -53,7 +53,6 @@ describe('clearing local state', () => {
       'platform-bible.firstRunComplete',
       'platform-bible.firstRunWizardActive',
       'platform-bible.firstRunJustRegistered',
-      'platform-bible.syncOnStartupDisabled',
       'platform-bible.onboardingTourComplete',
     ];
     cleared.forEach((key) => localStorage.setItem(key, 'true'));
