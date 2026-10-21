@@ -1179,7 +1179,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   **Amended 2026-10-21:** a new comment list now opens on the Current chapter scope, so `unsaved`
   alone shows only the drafts in that chapter; finding a draft elsewhere also takes the All books
   scope. Draft pruning still runs only at preset `all` with All books, so a user who never picks All
-  books keeps drafts for deleted threads and comments until they do.
+  books keeps drafts for deleted threads and comments until they do (open work: PT-4887).
 
 ## adr-comment-filter-presets-over-axes: Four orthogonal comment-filter axes collapse into one closed preset set
 

@@ -245,6 +245,10 @@ export function useCommentDrafts({
    * just the whole-draft level.
    */
   const prunableThreads = useMemo<readonly PrunableThread[] | undefined>(() => {
+    // TODO(PT-4887): Prune under any filter and scope. A list opens on the current chapter, so this
+    // guard keeps most users from ever pruning; a narrowed query can't be trusted even at the
+    // `commentEdits` level, because the provider filters a same-id thread's pieces before merging
+    // them, so a returned thread can lack comments that still exist.
     if (!isShowingAllCommentThreads || isLoadingCommentThreads) return undefined;
     // The guard must be satisfied by the data, not by state that leads the query: until
     // `settledIsShowingAllCommentThreads` catches up with `isShowingAllCommentThreads`, the held
