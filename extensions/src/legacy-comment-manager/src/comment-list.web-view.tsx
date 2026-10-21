@@ -411,6 +411,8 @@ global.webViewComponent = function CommentListWebView({
 
   // A published resource advertises no comments interface, so `commentsPdp` never arrives for one
   // and the panel would stay loading. A failed read counts as not published, the setting's default.
+  // That is safe here, unlike in the Text Collection, which binds nothing on a failed read: a
+  // resource has no comments provider to write through, so the worst case is the loading state.
   const [isPublishedPossiblyError] = useProjectSetting(projectId, 'platform.isPublished', false);
   const isPublishedResource = useMemo(() => {
     if (!isPlatformError(isPublishedPossiblyError)) return isPublishedPossiblyError;

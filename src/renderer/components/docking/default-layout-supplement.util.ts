@@ -109,8 +109,8 @@ export async function filterEnabledSupplementEntries(
   getFlag: (flagSetting: string) => Promise<unknown>,
   onFlagError?: (entry: DefaultLayoutSupplementEntry, error: unknown) => void,
 ): Promise<DefaultLayoutSupplementEntry[]> {
-  // Vanilla Platform.Bible ships an empty supplement. Bail out before any flag reads so the common
-  // case does no work and never risks a rejected `getFlag`.
+  // An empty supplement needs no flag reads. Bail out before any, so that case does no work and
+  // never risks a rejected `getFlag`.
   if (entries.length === 0) return [];
   const resolved = await Promise.all(
     entries.map(async (entry) => {

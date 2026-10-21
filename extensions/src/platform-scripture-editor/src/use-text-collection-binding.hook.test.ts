@@ -90,6 +90,24 @@ describe('useTextCollectionBinding', () => {
     expect(bindings.some((binding) => binding.collectionProjectId !== undefined)).toBe(false);
   });
 
+  it.each([
+    ['undefined', undefined],
+    // A truthy non-boolean too: a provider answering outside the setting's contract must not be
+    // read as "published", which a coercion to boolean would do.
+    ['a truthy non-boolean', 'no'],
+  ])(
+    'binds a project whose isPublished reading is %s, since only true is published',
+    async (_label, reading) => {
+      const readings = deferIsPublishedReads();
+      const { result } = renderBinding('proj-a');
+      await flush();
+
+      await act(async () => readings.get('proj-a')?.resolve(reading));
+
+      expect(result.current).toEqual({ collectionProjectId: 'proj-a', isPublishedResource: false });
+    },
+  );
+
   it('binds nothing while the kind of project cannot be read, and reads it again after a delay', async () => {
     // A resource whose provider registers late fails this read too, and binding it would let the
     // Text Collection write into its folder.

@@ -218,7 +218,13 @@ export function CommentListPanel({
   if (isPublishedResource)
     return (
       <div className="tw:m-4 tw:flex tw:justify-center">
-        <Label>{localizedStrings['%webView_legacyCommentManager_resourceHasNoComments%']}</Label>
+        <Label>
+          {localizeOrFallback(
+            '%webView_legacyCommentManager_resourceHasNoComments%',
+            localizedStrings,
+            "Resources don't have comments.",
+          )}
+        </Label>
       </div>
     );
 

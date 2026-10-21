@@ -4366,6 +4366,29 @@ describe('updateRelatedChecksSidePanel', () => {
     expect(mockSendCommand).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['rejects', () => Promise.reject(new Error('setting read failed'))],
+    ['resolves undefined', async () => undefined],
+    // A truthy non-boolean too: a provider that answers outside the setting's contract must not be
+    // read as "published", which a coercion to boolean would do.
+    ['resolves a truthy non-boolean', async () => 'no'],
+  ])('follows a project whose isPublished read %s', async (_label, reading) => {
+    // Only an explicit `true` keeps the panel where it is; anything else is a project to follow.
+    // The project is otherwise a published resource, so a gate that read `platform.isEditable`
+    // instead would stay put and fail here.
+    const { papi, mockSendCommand, overrideIsPublished } = createRelatedPanelsMockPapi(
+      [],
+      PUBLISHED_RESOURCE,
+    );
+    overrideIsPublished(reading);
+
+    await updateRelatedChecksSidePanel(papi, 'proj-b', 'editor-2');
+
+    expect(mockSendCommand.mock.calls).toEqual([
+      ['platformScripture.updateChecksSidePanelProject', 'proj-b', 'editor-2'],
+    ]);
+  });
+
   it('does nothing in Power mode, where each Checks panel belongs to the editor it was opened for', async () => {
     const { papi, mockSendCommand, mockSettingsGet } = createRelatedPanelsMockPapi();
     mockSettingsGet.mockResolvedValue('power');

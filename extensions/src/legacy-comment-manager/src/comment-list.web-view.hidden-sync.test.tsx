@@ -6,9 +6,10 @@ import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UseWebViewScrollGroupScrRefHook, UseWebViewStateHook } from '@papi/core';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
+import { logger } from '@papi/frontend';
 import { useProjectSetting } from '@papi/frontend/react';
 import { useViewVisibility } from 'platform-bible-react';
-import type { LegacyCommentThread } from 'platform-bible-utils';
+import { newPlatformError, type LegacyCommentThread } from 'platform-bible-utils';
 import { saveFilterSelection } from './comment-filter-store';
 import { ALL_BOOKS_SCOPE_FILTER } from './comment-list-filters.model';
 
@@ -272,6 +273,24 @@ describe('comment list on a published resource', () => {
       'data-published-resource',
       'true',
     );
+  });
+
+  it('treats a project whose platform.isPublished cannot be read as not one, and says so', () => {
+    // A resource has no comments provider to write through, so showing the panel is safe.
+    vi.mocked(useProjectSetting).mockImplementation(() => [
+      newPlatformError('setting read failed'),
+      undefined,
+      undefined,
+      false,
+    ]);
+
+    renderHiddenCommentList(MRK_1_1);
+
+    expect(document.getElementById('comment-list')).toHaveAttribute(
+      'data-published-resource',
+      'false',
+    );
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('setting read failed'));
   });
 
   it('tells the panel a translation project is not one', () => {

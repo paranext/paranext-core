@@ -1102,12 +1102,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     Checks side panel still stays on the translation project, for its own reason: a resource is not
     something the user checks. The rest of this bullet — `isPublished` rather than `isEditable`, the
     outgoing sync, Find — still holds.)*
-  - **Added 2026-09-18 — what a followed `Editable=F` project's grid offers is unchecked.** Whether
-    the Text Collection exposes controls that write to such a project is an open question, tracked on
-    PT-4724, which should first settle where to run that check: `default-layout-supplement.json` lists
-    the Scripture Text Grid behind `platformScriptureEditor.enableScriptureTextGrid` (contributed
-    default `true`), while `default-layout-supplement.model.ts` and `filterEnabledSupplementEntries`
-    describe the supplement as empty in vanilla builds.
+  - **Added 2026-09-18, checked 2026-10-21 — a followed `Editable=F` project's grid writes into
+    it, and that is accepted.** The grid runs in core: `default-layout-supplement.json` lists it
+    behind `platformScriptureEditor.enableScriptureTextGrid` (contributed default `true`), and a
+    Simple-mode run showed the tab. With the WEB sample (`Editable=F`) open, the grid bound it,
+    offered its add, remove and reorder controls, and wrote `Extensions/UserSettings-<user>.xml`
+    into WEB's folder on mount (`initializeTextCollectionOverlay`) and again when a text was added.
+    The file holds one user's view of the panel, and `Editable=F` no more stops that than it stops
+    new comments. The published-resource case could not be run in core, which cannot open a DBL
+    resource without Paratext 10 Studio's DBL key; the binding tests cover it, and a manual run in
+    Studio stays open on PT-4724.
   - **The re-point targets one window.** `getAllOpenWebViewDefinitions()` flattens across every
     window, so `.find()` returns whichever Text Collection comes first, not the one in the window
     that switched. If that panel already shows the target project the skip guard returns early and a

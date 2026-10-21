@@ -5,6 +5,7 @@ import '@testing-library/jest-dom';
 import { useRef, useState } from 'react';
 import type { WebViewProps } from '@papi/core';
 import type { DblResourceData } from 'platform-bible-utils';
+import { NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY } from 'platform-bible-utils/experimental';
 import type { ResourceReferenceList } from 'platform-scripture';
 // Importing the web view assigns its component to `globalThis.webViewComponent` — that assignment
 // is the module's only "export", so this import is loaded for its side effect.
@@ -79,7 +80,7 @@ const STRINGS: Record<string, string> = {
   '%webView_resourcePanel_noProject%': 'No project selected.',
   '%general_loading%': 'Loading',
   '%webView_scriptureTextGrid_resourceHasNoTextCollection%':
-    "Resources don't have a Text Collection. Switch to a project to see its texts.",
+    "Resources don't have a text collection. Switch to a project to see its texts.",
   '%webView_scriptureTextGrid_viewOptions_notSupported%':
     'Text Collection settings could not be loaded for this project.',
   '%webView_scriptureTextGrid_viewOptions_settingsUnavailable%': "Couldn't load your texts.",
@@ -422,7 +423,7 @@ describe('View Options disabled reason', () => {
 
     // Read from the panel itself: the grid body shows the same sentence.
     expect(screen.getByText(TEXTS_HEADER).parentElement?.textContent).toContain(
-      "Resources don't have a Text Collection. Switch to a project to see its texts.",
+      "Resources don't have a text collection. Switch to a project to see its texts.",
     );
     expect(screen.queryByText('No project selected.')).not.toBeInTheDocument();
   });
@@ -620,5 +621,40 @@ describe('first-open overlay initialization', () => {
     rerender(<ScriptureTextGridWebView {...makeProps({ projectId: 'projectTwo' })} />);
 
     await waitFor(() => expect(secondPdp.initializeTextCollectionOverlay).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('published resource', () => {
+  it('says so in the grid body and publishes that it offers no projects to navigate', async () => {
+    // A list published earlier, with no owner recorded, is adopted rather than cleared, so only a
+    // ready publish replaces it. A resource assembles no sources, yet it is ready at once.
+    const values = new Map<string, unknown>([
+      [NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY, [ALPHA.id]],
+    ]);
+    function useSeededWebViewState<T>(
+      stateKey: string,
+      defaultStateValue: T,
+    ): [T, (value: T) => void, () => void] {
+      // A double for a generic hook has to hand back the value it stores as the caller's `T`;
+      // TypeScript cannot relate a stored value to an unresolved type parameter any other way.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const [value, setValue] = useState<T>((values.get(stateKey) as T) ?? defaultStateValue);
+      return [
+        value,
+        (newValue: T) => {
+          values.set(stateKey, newValue);
+          setValue(newValue);
+        },
+        () => setValue(defaultStateValue),
+      ];
+    }
+    fallbackHookResult = { ...unboundResult('noSource'), isPublishedResource: true };
+
+    await renderWebView({ projectId: 'resourceOne', useWebViewState: useSeededWebViewState });
+
+    expect(screen.getByTestId('scripture-text-grid-resource-state')).toHaveTextContent(
+      STRINGS['%webView_scriptureTextGrid_resourceHasNoTextCollection%'],
+    );
+    await waitFor(() => expect(values.get(NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY)).toEqual([]));
   });
 });
