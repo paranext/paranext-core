@@ -4601,8 +4601,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   gains optional `iconNameBefore` / `iconNameAfter` lucide kebab-case names, and web-view
   definitions gain a matching optional icon name. `LucideIcon` in `platform-bible-react` resolves
   a name through a curated map of named `lucide-react` imports (`LUCIDE_ICON_NAMES` lists the
-  keys) and renders an svg that strokes with `currentColor`; an unknown name renders nothing. When
-  a name and a path are both set, the name wins. The path fields keep working unchanged.
+  keys) and renders an svg that strokes with `currentColor`; a bare `LucideIcon` given an unknown
+  name renders nothing. When a name and a path are both set, a known name wins; an unknown name
+  falls back to the path (`MenuItemIcon` for menus, `PlatformTabTitle` for tabs). The path fields
+  keep working unchanged.
 - **Alternatives:**
   - *SVG files tinted through a CSS mask.* Works for arbitrary files, but needs a mask per icon,
     gives no per-icon stroke control, and keeps one asset per icon to ship.
@@ -4612,8 +4614,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     of being absent from a list.
   - *The full `icons` map from `lucide-react`.* Pulls every icon into the dist for the sake of a
     few dozen.
-- **Consequences:** Adding an icon means adding it to the map in `lucide-icon.component.tsx`; a
-  menu or tab that names an icon outside the map shows none. The macOS native menubar ignores
+- **Consequences:** Adding an icon means adding it to `LUCIDE_ICON_COMPONENTS` in
+  `lucide-icons.util.ts`; a menu or tab that names an icon outside the map shows its path or URL
+  icon instead, or none if it has no path. The macOS native menubar ignores
   icons, as it did the path fields. The new fields are `@experimental`. An extension that puts
   `iconNameBefore` / `iconNameAfter` in its `menus.json` needs a core that has them: the menu
   schema allows no unknown properties, so an older core rejects that whole menu document and the
