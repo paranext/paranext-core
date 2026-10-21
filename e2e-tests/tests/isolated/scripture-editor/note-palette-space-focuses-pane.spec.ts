@@ -31,9 +31,6 @@ test.use({
 
 const FOOTNOTES_PANE_SELECTOR = '[data-footnotes-pane]';
 
-/** Time for the opened chapter to stop changing before the test edits it. */
-const SETTLE_MS = 3_000;
-
 test.describe('Standard view marker palette: Space on a note marker', () => {
   test('`\\` `f` Space at a paragraph end puts the caret in the new footnote in the pane', async ({
     mainPage,
@@ -50,9 +47,6 @@ test.describe('Standard view marker palette: Space on a note marker', () => {
 
     const editorInput = editorFrame.locator('.editor-input.marker-editable');
     await expect(editorInput).toContainText('preach against it', { timeout: 60_000 });
-    // Let the chapter finish arriving: a load that lands after the insert replaces the document,
-    // taking the new note with it.
-    await mainPage.waitForTimeout(SETTLE_MS);
     const pane = editorFrame.locator(FOOTNOTES_PANE_SELECTOR);
     await expect(pane).toHaveCount(0);
     // The marker palette renders in the renderer (parent doc), not the editor iframe.
