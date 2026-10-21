@@ -162,6 +162,10 @@ internal static class SettingsService
     /// and one still unanswered then is abandoned: its own request timeout doesn't end it, as main
     /// ignores cancellation.
     /// </summary>
+    /// <typeparam name="T">
+    /// A reference type or <see cref="Nullable{T}"/>. For any other value type, a
+    /// <see langword="null"/> answer reads as <see langword="default"/> and counts as answered.
+    /// </typeparam>
     /// <returns>
     /// <see langword="false"/> when <paramref name="deadline"/> is canceled or the client
     /// disconnects first.
