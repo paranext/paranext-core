@@ -2090,7 +2090,6 @@ describe('useEditorPdpSync', () => {
         isFocused = true,
         isEditingSessionActive,
         isFootnotesPaneOwner,
-        lastPaneEditTimestamp,
         flushPendingDebouncedSave,
         initialIsSyncBlocked,
         omitFocusAndSyncParams = false,
@@ -2099,7 +2098,6 @@ describe('useEditorPdpSync', () => {
         isFocused?: boolean;
         isEditingSessionActive?: () => boolean;
         isFootnotesPaneOwner?: () => boolean;
-        lastPaneEditTimestamp?: { current: number | undefined };
         flushPendingDebouncedSave?: () => Promise<void> | undefined;
         initialIsSyncBlocked?: boolean;
         omitFocusAndSyncParams?: boolean;
@@ -2136,7 +2134,6 @@ describe('useEditorPdpSync', () => {
               flushPendingDebouncedSave,
               isEditingSessionActive,
               isFootnotesPaneOwner,
-              lastPaneEditTimestamp,
               ...(omitFocusAndSyncParams
                 ? {}
                 : { getFocusLocation, focusLocationKey, isSyncBlocked }),
@@ -2335,8 +2332,8 @@ describe('useEditorPdpSync', () => {
         expect(vi.getTimerCount()).toBe(0);
       });
 
-      // The pane's edits stamp their own clock rather than `lastLocalEditTimestamp`, and its focus
-      // does not count as the text having focus, so it reaches the hold through its own predicate.
+      // The pane's focus does not count as the text having focus, so it reaches the hold through its
+      // own predicate.
       describe('while the footnotes pane owns the chapter', () => {
         // The web view's session check claims the chapter for the pane only at `'thisEditor'`.
         const paneSession = (getFocusLocation: () => EditorFocusLocation) => ({
@@ -2414,17 +2411,14 @@ describe('useEditorPdpSync', () => {
           expect(vi.getTimerCount()).toBe(0);
         });
 
-        describe('and its claim comes from a recent pane edit', () => {
-          // Mirrors the web view: the pane's claim lasts as long as its edit is remembered.
+        describe('and its claim comes from the recent edit in this view', () => {
+          // Mirrors the web view: the pane reads the same stamp as the text, so its claim lasts as
+          // long as that edit is remembered, whichever surface made it.
           function panePredicates(getFocusLocation: () => EditorFocusLocation) {
-            const lastPaneEditTimestamp: { current: number | undefined } = {
-              current: Date.now(),
-            };
-            const isFootnotesPaneOwner = () => lastPaneEditTimestamp.current !== undefined;
+            const isFootnotesPaneOwner = () => lastLocalEditTimestamp.current !== undefined;
             return {
               getFocusLocation,
               isFocused: false,
-              lastPaneEditTimestamp,
               isFootnotesPaneOwner,
               isEditingSessionActive: () =>
                 getFocusLocation() === 'thisEditor' && isFootnotesPaneOwner(),

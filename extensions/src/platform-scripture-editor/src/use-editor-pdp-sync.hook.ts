@@ -23,8 +23,9 @@ import { useForgetEditsWhen } from './use-forget-edits-when.hook';
 export const NON_CONVERGENCE_WARN_THRESHOLD = 25;
 
 /**
- * How long, in milliseconds, the focused editor OWNS the chapter's data after the user's last LOCAL
- * edit — the ownership contract for the focused-editor deferral below.
+ * How long, in milliseconds, the focused editor OWNS the chapter's data after the user's last edit
+ * in this view (in the text or in a footnotes-pane row) — the ownership contract for the
+ * focused-editor deferral below.
  *
  * While the editor is focused and the last local edit is more recent than this window, an incoming
  * same-document PDP update that differs from the editor is deferred (kept unapplied) and the
@@ -156,7 +157,6 @@ export function useEditorPdpSync({
   flushPendingDebouncedSave,
   isEditingSessionActive,
   isFootnotesPaneOwner,
-  lastPaneEditTimestamp,
   lastLocalEditTimestamp,
   editorDocumentSelector,
   getFocusLocation,
@@ -205,24 +205,21 @@ export function useEditorPdpSync({
    */
   isEditingSessionActive?: () => boolean;
   /**
-   * Whether the footnotes pane owns the chapter's content: focus in the pane and an edit there
-   * within {@link EDITOR_OWNERSHIP_WINDOW_MS}. Its edits never stamp `lastLocalEditTimestamp`, and
-   * `editorRef` reports no focus while the pane has it, so without this the pane would not get the
-   * settle hold the Scripture text gets. Must be stable and free of side effects.
+   * Whether the footnotes pane owns the chapter's content: focus in the pane and an edit in this
+   * view (the text or a pane row) within {@link EDITOR_OWNERSHIP_WINDOW_MS}, read from
+   * `lastLocalEditTimestamp`. `editorRef` reports no focus while the pane has it, so without this
+   * the pane would not get the settle hold the Scripture text gets. Must be stable and free of side
+   * effects.
    */
   isFootnotesPaneOwner?: () => boolean;
   /**
-   * `Date.now()` of the last edit in the footnotes pane, which `isFootnotesPaneOwner` reads. This
-   * hook clears it when it clears `lastLocalEditTimestamp`, so the pane gives up its claim with the
-   * Scripture text.
-   */
-  lastPaneEditTimestamp?: MutableRefObject<number | undefined>;
-  /**
-   * `Date.now()` of the last LOCAL editor edit (a change the user originated in this editor —
-   * stamped where the web view schedules the debounced PDP save for a `'local'`-source change), or
-   * `undefined` when none has happened yet. Applying an incoming PDP update must NOT refresh this:
-   * the editor loads external content under a change-suppression tag, so external applies never
-   * reach the stamping path (see the web view's `handleEditorialUsjChange`). Drives the
+   * `Date.now()` of the last edit the user made in this view, or `undefined` when none has happened
+   * yet: a LOCAL edit in the Scripture editor (stamped where the web view schedules the debounced
+   * PDP save for a `'local'`-source change), or an edit in a footnotes-pane row editor (stamped by
+   * the web view's `onFootnoteEditorNoteEdit`). So a pane row edit within the window also holds
+   * updates back for the focused Scripture editor. Applying an incoming PDP update must NOT refresh
+   * this: the editor loads external content under a change-suppression tag, so external applies
+   * never reach the stamping path (see the web view's `handleEditorialUsjChange`). Drives the
    * {@link EDITOR_OWNERSHIP_WINDOW_MS} ownership contract — focus alone, with no local edit inside
    * the window, no longer defers incoming updates. This hook clears it when `isSyncBlocked` turns
    * true and when focus moves to another web view, so every reader of the ref sees no recent edit
@@ -333,7 +330,7 @@ export function useEditorPdpSync({
   // outlasts the write gate by the store's `HIDE_GRACE_MS` to make the second unlikely, but nothing
   // here rules it out. Called before the sync effect so a block and a delivery in the same render
   // are handled in that order.
-  useForgetEditsWhen(isSyncBlocked, lastLocalEditTimestamp, lastPaneEditTimestamp);
+  useForgetEditsWhen(isSyncBlocked, lastLocalEditTimestamp);
   // Leaving for another web view ends the claim for good, rather than only while focus is away:
   // an update from that web view (a Find replacement) can arrive after the user has clicked back,
   // and the editor must not push its older copy over it. The next edit claims the chapter again.
@@ -341,11 +338,7 @@ export function useEditorPdpSync({
   // Hidden case: a hidden editor tab releases its claim the same way, since this reads the focus
   // subject rather than anything laid out. A non-web-view tab (Settings, About) and a move to
   // another window do not name another web view, so neither releases it.
-  useForgetEditsWhen(
-    getFocusLocation?.() === 'anotherWebView',
-    lastLocalEditTimestamp,
-    lastPaneEditTimestamp,
-  );
+  useForgetEditsWhen(getFocusLocation?.() === 'anotherWebView', lastLocalEditTimestamp);
 
   useEffect(() => {
     if (!editorRef.current) {
@@ -467,7 +460,7 @@ export function useEditorPdpSync({
       // `\`).
       //
       // THE CONTRACT: the editor owns the chapter's data for EDITOR_OWNERSHIP_WINDOW_MS after the
-      // user's last LOCAL edit, while focused. Inside that window a differing same-document
+      // user's last edit in this view (in the text or in a footnotes-pane row), while focused. Inside that window a differing same-document
       // incoming is deferred (kept unapplied) and the editor's newer content is pushed back up
       // instead; an incoming that equals the editor is a pure confirmation (nothing to do —
       // replacing would still reset the selection). Once typing rests, well-formed USJ round-trips

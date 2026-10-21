@@ -3231,8 +3231,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - The block outlasts the write gate by `HIDE_GRACE_MS` (1000 ms, in
     `auto-sync-blocking-store.ts`), because the merged chapter's delivery and the gate's clear race
     to the web view, and a keystroke between them would claim the chapter again.
-  - The footnotes pane claims on the same terms (`isFootnotesPaneOwner`): another web view ends its
-    claim, a Send/Receive ends it, and a delivery is held while focus settles.
+  - The footnotes pane claims on the same terms (`isFootnotesPaneOwner`), from the same last edit:
+    a pane row edit stamps it as a text edit does, so moving between the text and a row (inserting a
+    footnote, clicking a row) keeps the claim. Another web view ends it, a Send/Receive ends it, and
+    a delivery is held while focus settles.
 - **Alternatives:** `document.hasFocus()` as the release test: rejected, because menus and overlays
   outside the iframe also clear it, so the editor would give up its copy while the user is still
   working in it. Asking where focus is only when a delivery arrives: rejected, because a replacement
