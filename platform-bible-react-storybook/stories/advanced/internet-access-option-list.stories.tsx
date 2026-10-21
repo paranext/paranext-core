@@ -36,10 +36,12 @@ const ENABLED_DESCRIPTION =
   localizedStrings['%paratextRegistration_description_internetUse_option_Enabled_details_2%'];
 
 function Controlled(
-  props: Omit<InternetAccessOptionListProps, 'value' | 'onChange'> & { initialValue: InternetUse },
+  props: Omit<InternetAccessOptionListProps, 'value' | 'onChange'> & {
+    initialValue: InternetUse | undefined;
+  },
 ) {
   const { initialValue, ...rest } = props;
-  const [value, setValue] = useState<InternetUse>(initialValue);
+  const [value, setValue] = useState<InternetUse | undefined>(initialValue);
   return <InternetAccessOptionList {...rest} value={value} onChange={setValue} />;
 }
 
@@ -170,6 +172,15 @@ export const NarrowColumn: Story = {
 /** Option 2 selected — "Disable access to some Bible translation services". */
 export const DisabledAccess: Story = {
   render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
+};
+
+/**
+ * No option selected — how the first-run wizard shows the list until the user picks one, so a
+ * stored value they never chose is not presented as their choice. No banner: nothing unsupported is
+ * selected.
+ */
+export const NothingSelected: Story = {
+  render: (args) => <Controlled {...args} initialValue={undefined} />,
 };
 
 /**
