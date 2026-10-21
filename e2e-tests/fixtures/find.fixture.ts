@@ -133,6 +133,8 @@ export const test = appTest.extend<
       // - showRegistrationReminderOnStartup: pinned alongside firstRunComplete for the same reason
       //   as smokeAppSettingsOverrides in helpers.ts — otherwise the background registration
       //   recheck can still swap this suite's already-loaded app onto the wizard mid-run.
+      // - internetUseChoiceAsked: see smokeAppSettingsOverrides in helpers.ts — otherwise a
+      //   Power-mode launch can open the Internet & connectivity settings on its own.
       // - interfaceMode: the Find UI differs by mode — Simple mode hides the Find/Replace toggle
       //   and the whole Replace surface (`hideModeToggle`), and makes Find a permanent,
       //   non-closable tab. This suite is written against Simple mode and must declare it rather
@@ -141,6 +143,7 @@ export const test = appTest.extend<
       const restoreSettings = preConfigureSettings({
         'platform.firstRunComplete': true,
         'platform.showRegistrationReminderOnStartup': false,
+        'platform.internetUseChoiceAsked': true,
         'platform.interfaceMode': interfaceMode,
         'platform.interfaceLanguage': ['en'],
       });

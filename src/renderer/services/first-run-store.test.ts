@@ -25,6 +25,7 @@ import {
   resolveFirstRunState,
   retryFirstRunResolution,
 } from './first-run-store';
+import { askForInternetUseChoiceIfNeeded } from './internet-use-choice-store';
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn(), set: vi.fn() },
@@ -41,6 +42,9 @@ vi.mock('./resolve-registration-validity', () => ({
 vi.mock('@shared/services/localization.service', () => ({
   localizationService: { getSetupDialogLanguages: vi.fn() },
 }));
+// What the Power-mode question does is covered by internet-use-choice-store.test.ts; here only
+// whether startup asks it.
+vi.mock('./internet-use-choice-store', () => ({ askForInternetUseChoiceIfNeeded: vi.fn() }));
 vi.mock('platform-bible-utils', async (importOriginal) => ({
   ...(await importOriginal<typeof import('platform-bible-utils')>()),
   getCurrentLocale: vi.fn(() => 'en-US'),
@@ -53,6 +57,7 @@ const mockGetCurrentLocale = vi.mocked(getCurrentLocale);
 const mockGetSetupDialogLanguages = vi.mocked(localizationService.getSetupDialogLanguages);
 const mockLogger = vi.mocked(logger);
 const mockSendCommand = vi.mocked(commandService.sendCommand);
+const mockAskForInternetUseChoice = vi.mocked(askForInternetUseChoiceIfNeeded);
 
 /** SettingsService.get is keyed; return the right value per setting. */
 function stubSettings({
@@ -108,6 +113,20 @@ describe('resolveFirstRunState', () => {
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockResolveReg).not.toHaveBeenCalled();
+  });
+
+  it('asks a power-mode user for an internet-use choice, since the wizard never does', async () => {
+    stubSettings({ mode: 'power' });
+    await resolveFirstRunState();
+    expect(mockAskForInternetUseChoice).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the internet-use question to the wizard in simple mode', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard' });
+    expect(mockAskForInternetUseChoice).not.toHaveBeenCalled();
   });
 
   it('shows the app when first run is already complete', async () => {
@@ -703,6 +722,7 @@ describe('resolveFirstRunState — power mode cache fallback (FIX 3)', () => {
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockResolveReg).not.toHaveBeenCalled();
+    expect(mockAskForInternetUseChoice).toHaveBeenCalledTimes(1);
   });
 });
 

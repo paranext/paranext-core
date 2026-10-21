@@ -23,6 +23,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_dontSyncYet%': "Don't sync yet",
       '%firstRun_button_back%': 'Back',
       '%firstRun_step_syncProgress_heading%': 'Syncing your projects.',
+      '%firstRun_step_syncConsent_internetBlocked%': 'Internet access is disabled, translated',
     };
     const result: Record<string, string> = {};
     keys.forEach((k) => {
@@ -204,6 +205,25 @@ describe('SyncConsentStep', () => {
       undefined,
     );
     await waitFor(() => expect(onNext).toHaveBeenCalledOnce());
+  });
+
+  // The internet setting's refusal ends in a machine-readable sentinel that is not for the user.
+  it('shows the localized internet-disabled message, not the raw error, when the internet setting refuses sync', async () => {
+    const onSync = makeOnSync(() =>
+      Promise.reject(
+        new Error('Internet access is disabled, from the backend (INTERNET_SERVICES_BLOCKED)'),
+      ),
+    );
+    const setCanDeclineSync = vi.fn();
+    render(
+      <SyncConsentStep onNext={vi.fn()} setCanDeclineSync={setCanDeclineSync} onSync={onSync} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
+
+    expect(await screen.findByText('Internet access is disabled, translated')).toBeInTheDocument();
+    expect(screen.queryByText(/INTERNET_SERVICES_BLOCKED/)).not.toBeInTheDocument();
+    // "Don't sync yet" stays available so the user can finish setup and change the setting afterward.
+    expect(setCanDeclineSync).toHaveBeenLastCalledWith(true);
   });
 
   it('does not call onNext when onSync throws', async () => {

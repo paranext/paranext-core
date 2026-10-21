@@ -32,6 +32,11 @@ import {
   SAMPLE_WEB_PROJECT_ID,
   sendPapiCommandWhenRegistered,
 } from '../../../fixtures/scripture-editor-helpers';
+import {
+  readSavedInternetSettings,
+  restoreSavedInternetSettings,
+  type SavedInternetSettings,
+} from '../internet-settings.page';
 import { captureAppOutput } from '../multi-window/multi-window.util';
 import { FirstRunPage } from './first-run.page';
 
@@ -93,6 +98,22 @@ test.describe('First-run wizard', () => {
   // complete while still failing in bounded time.
   test.describe.configure({ timeout: 240_000 });
 
+  // The Internet Settings step saves the chosen option to ParatextData's own InternetSettings.xml,
+  // which the fixture's settings restore does not cover. Put the developer's saved settings back
+  // after each test, so running this spec cannot leave a "Disable access to some Bible translation
+  // services" machine on Unrestricted.
+  let savedInternetSettings: SavedInternetSettings | undefined;
+  // `mainPage` is requested only so the app is running before the settings are read; a hook that
+  // names no fixture would run before the app launches.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  test.beforeEach(async ({ mainPage }) => {
+    savedInternetSettings = await readSavedInternetSettings();
+  });
+  test.afterEach(async () => {
+    if (savedInternetSettings) await restoreSavedInternetSettings(savedInternetSettings);
+    savedInternetSettings = undefined;
+  });
+
   // Every test runs in demo mode, including these first two: only demo mode makes the wizard's
   // content machine-independent (see injectDemoMode). The real routing decisions are pinned by
   // first-run-store's unit tests; what e2e adds is the wizard actually mounting, localizing, and
@@ -119,12 +140,22 @@ test.describe('First-run wizard', () => {
     await expect(frPage.dontSyncYetButton).not.toBeVisible();
     await frPage.clickNext(); // Language → Internet Settings
 
-    // Internet Settings step: Back appears; "Don't sync yet" stays hidden. InternetSettingsStep
-    // loads settings asynchronously — clickNext() auto-waits for Next to be enabled.
+    // Internet Settings step: Back appears; "Don't sync yet" stays hidden. No option is selected
+    // and Next stays disabled until the user picks one, whatever setting is already stored.
     await expect(frPage.dialog.getByRole('button', { name: 'Back' })).toBeVisible({
       timeout: 5_000,
     });
     await expect(frPage.dontSyncYetButton).not.toBeVisible();
+    const unrestricted = frPage.dialog.getByRole('radio', { name: 'Unrestricted' });
+    await expect(unrestricted).toBeVisible({ timeout: 60_000 });
+    await expect(unrestricted).not.toBeChecked();
+    await expect(
+      frPage.dialog.getByRole('radio', {
+        name: 'Disable access to some Bible translation services',
+      }),
+    ).not.toBeChecked();
+    await expect(nextBtn).toBeDisabled();
+    await frPage.chooseUnrestrictedInternetAccess();
     await frPage.clickNext(); // Internet Settings → Identify
 
     // Identify step: Next is hidden entirely (setCanProceed(undefined)) — the step owns its own
@@ -144,6 +175,7 @@ test.describe('First-run wizard', () => {
 
     // Navigate to Sync consent.
     await frPage.clickNext(); // Language → Internet Settings
+    await frPage.chooseUnrestrictedInternetAccess();
     await frPage.clickNext(); // Internet Settings → Identify
     await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
 
@@ -167,6 +199,7 @@ test.describe('First-run wizard', () => {
 
     // Navigate to Sync progress (the step under test for PT-4179).
     await frPage.clickNext(); // Language → Internet Settings
+    await frPage.chooseUnrestrictedInternetAccess();
     await frPage.clickNext(); // Internet Settings → Identify
     await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
     // SyncConsentStep (PT-4178) hides Next and shows its own "Sync" primary button. In demo mode,

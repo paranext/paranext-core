@@ -113,8 +113,11 @@ export const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[] = [
 export type InternetAccessOptionListProps = {
   /** Localized strings; pass strings resolved from `INTERNET_ACCESS_OPTION_LIST_STRING_KEYS`. */
   localizedStrings: LanguageStrings;
-  /** The currently selected internet use value. */
-  value: InternetUse;
+  /**
+   * The currently selected internet use value, or `undefined` to select no option — for a caller
+   * that needs the user to make an explicit choice rather than accept the stored value.
+   */
+  value: InternetUse | undefined;
   /** Called when the user selects an active (non-coming-soon) option. */
   onChange: (value: InternetUse) => void;
   /** When true, all rows are non-interactive (loading or saving in progress). */
@@ -149,7 +152,7 @@ export function InternetAccessOptionList({
   // value rather than from a matching row, so a value with no row at all — which selects nothing
   // and would otherwise leave the wizard's Next disabled with nothing on screen explaining why —
   // is announced too. Such a value can only be named by its raw form.
-  const isUnsupported = !isSupportedInternetUse(value);
+  const isUnsupported = value !== undefined && !isSupportedInternetUse(value);
   const unsupportedRow = OPTION_ROWS.find((row) => row.value === value);
 
   return (
@@ -179,7 +182,10 @@ export function InternetAccessOptionList({
       )}
       <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
         <RadioGroup
-          value={value}
+          // '' rather than `undefined` for no selection: Radix treats an undefined `value` as
+          // uncontrolled, and would then select the clicked row itself instead of leaving that to
+          // the caller's `onChange`.
+          value={value ?? ''}
           onValueChange={(v) => {
             // BlockInSensitiveLocations is UI-only; isInternetUse excludes it.
             if (isInternetUse(v)) onChange(v);

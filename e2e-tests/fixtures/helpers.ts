@@ -1944,6 +1944,11 @@ export function restoreLeakedSettings(): string[] | undefined {
  * registration to give it and nothing under test that exercises that reminder, so this keeps the
  * recheck from ever firing rather than leaving the suite to race its async resolution.
  *
+ * `platform.internetUseChoiceAsked: true` is pinned so a Power-mode launch does not open the
+ * Internet & connectivity settings on its own: `internet-use-choice-store.ts`'s
+ * `askForInternetUseChoiceIfNeeded` opens them once when the saved internet setting turns off sync
+ * and the Digital Bible Library, which ParatextData's default does.
+ *
  * Exported as a plain function, separate from the fixture that calls it, so its exact contents can
  * be pinned by a unit test without booting Electron.
  */
@@ -1955,6 +1960,7 @@ export function smokeAppSettingsOverrides(
     'platform.interfaceMode': interfaceMode,
     'platform.interfaceLanguage': ['en'],
     'platform.showRegistrationReminderOnStartup': false,
+    'platform.internetUseChoiceAsked': true,
   };
 }
 
@@ -1972,6 +1978,9 @@ export function smokeAppSettingsOverrides(
  * first-run-wizard specs deliberately seed it `false` to exercise the wizard, and the recheck this
  * suppresses only ever runs once it is `true`.
  *
+ * `platform.internetUseChoiceAsked: true` is pinned for the same reason as
+ * {@link smokeAppSettingsOverrides}.
+ *
  * Exported as a plain function, separate from the fixture that calls it, so its exact contents can
  * be pinned by a unit test without booting Electron.
  */
@@ -1982,6 +1991,7 @@ export function isolatedFixtureBaseSettings(
     'platform.interfaceMode': interfaceMode,
     'platform.interfaceLanguage': ['en'],
     'platform.showRegistrationReminderOnStartup': false,
+    'platform.internetUseChoiceAsked': true,
   };
 }
 

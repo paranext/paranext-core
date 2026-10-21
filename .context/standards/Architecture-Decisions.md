@@ -6031,6 +6031,34 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - Live anchoring stays, because anchors captured once go stale on scroll even at 100 %.
 - **Source:** UX feedback 2026-09-22; reverses PT-4712 and PT-4713; epic PT-4575.
 
+## adr-power-mode-internet-use-prompt: Power-mode startup asks once for an internet choice instead of changing the saved default
+
+- **Date:** 2026-10-21
+- **Status:** Accepted
+- **Context:** Since `adr-internet-services-gate`, the saved `VpnRequired` turns off Send/Receive and
+  the DBL everywhere. ParatextData saves that value on first startup when nothing is stored, and a
+  Paratext 9 upgrade copies over whatever Paratext 9 had, usually the same unchosen default. Once
+  saved, nothing tells a chosen `VpnRequired` from an unchosen one. The first-run wizard asks
+  every Simple-mode user to choose, but Power mode never shows the wizard, so a Power-mode user had
+  these services off from the first launch without ever being asked.
+- **Decision:** A hidden setting, `platform.internetUseChoiceAsked`, records that the question is
+  settled. The wizard sets it when it saves an internet-use choice. On a Power-mode launch with it
+  unset, the renderer reads the saved value and, if `InternetServicesGate` would block on it
+  (`VpnRequired` or `Disabled`), opens the Internet & connectivity settings. It then sets the flag
+  whether or not it opened them, so the user is asked at most once. A failed read or open records
+  nothing, so the next launch tries again.
+- **Alternatives:** **Save Unrestricted when nothing is stored** — rejected: it does not reach
+  Paratext 9 upgraders, whose value is copied over, and it quietly drops the protective default for
+  users in sensitive locations. **A startup notification with a "Choose" action** — rejected: easy
+  to dismiss, which leaves the services off. **Ask until the user saves a choice** — rejected: the
+  settings panel only saves a change, so a user who wants to keep the blocking value has no way to
+  answer, and would be asked on every launch.
+- **Consequences:** A Power-mode user who closes the panel without changing anything keeps the
+  blocking value, and is told why when a sync or DBL request is refused. Simple-mode users who
+  completed first run before the wizard asked for a choice are not asked again. E2E fixtures that
+  can launch in Power mode pin the flag `true`, so the panel does not open mid-suite.
+- **Source:** PT-4590 (paranext-core #2905 review).
+
 ## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
 
 - **Date:** 2026-08-27

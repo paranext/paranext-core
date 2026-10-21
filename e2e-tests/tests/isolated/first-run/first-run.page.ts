@@ -79,6 +79,20 @@ export class FirstRunPage {
     await this.dialog.getByRole('button', { name: /^(Next|Finish)$/i }).click({ timeout: 60_000 });
   }
 
+  /**
+   * Choose "Unrestricted" on the Internet Settings step. The step selects no option and keeps Next
+   * disabled until the user picks one, so this must come before {@link clickNext} there. Long
+   * timeout for the same reason as clickNext: the list renders only once the async settings read
+   * lands.
+   *
+   * Clicks the option's label, as a user does. The label stretches over the whole row so the row is
+   * clickable, which makes Playwright treat the radio button itself as covered and never click it.
+   */
+  async chooseUnrestrictedInternetAccess(): Promise<void> {
+    await this.dialog.locator('label', { hasText: /^Unrestricted$/ }).click({ timeout: 60_000 });
+    await expect(this.dialog.getByRole('radio', { name: 'Unrestricted' })).toBeChecked();
+  }
+
   /** Click the Back button (not present on the first step or on the SyncProgress interstitial). */
   async clickBack(): Promise<void> {
     await this.dialog.getByRole('button', { name: 'Back' }).click();

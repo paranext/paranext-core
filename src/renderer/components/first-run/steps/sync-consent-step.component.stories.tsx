@@ -40,6 +40,22 @@ export const Syncing: Story = {
   },
 };
 
+/**
+ * "Sync" was refused because the internet setting turns sync off: the step says so and points to
+ * "Don't sync yet", which is offered again.
+ */
+export const InternetBlocked: Story = {
+  args: {
+    onSync: fn().mockRejectedValue(
+      new Error('Internet access is disabled. (INTERNET_SERVICES_BLOCKED)'),
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /^sync$/i }));
+  },
+};
+
 /** "Sync" failed: the error shows above the buttons, and "Don't sync yet" is offered again. */
 export const SyncFailed: Story = {
   args: {

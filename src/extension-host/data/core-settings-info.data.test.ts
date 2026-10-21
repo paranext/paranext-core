@@ -230,6 +230,7 @@ describe('settings layout', () => {
       'platform.interfaceMode',
       'platform.firstRunComplete',
       'platform.syncOnStartup',
+      'platform.internetUseChoiceAsked',
       'platform.requestTimeout',
       'platform.showRegistrationReminderOnStartup',
     ];
