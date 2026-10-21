@@ -68,7 +68,7 @@ export const SYNC_ACTIVITY_RECHECK_INTERVAL_MS = 30 * 1000;
  * finds no projects. Fixed by its `Settings.xml` (`c-sharp/assets/WEB/Settings.xml`); upper-cased
  * because project IDs arrive in either case.
  */
-const SAMPLE_PROJECT_ID = '32664DC3288A28DF2E2BB75DED887FC8F17A15FB';
+export const SAMPLE_PROJECT_ID = '32664DC3288A28DF2E2BB75DED887FC8F17A15FB';
 
 /**
  * Whether the metadata is a project of the user's own: neither a resource (`isPublished`) nor the

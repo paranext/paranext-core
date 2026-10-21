@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'fs';
+import path from 'path';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import papi from '@papi/frontend';
@@ -7,6 +9,7 @@ import {
   LOOKUP_RETRY_DELAY_MS,
   MAX_LOOKUP_RETRIES,
   PDP_FACTORY_REGISTRATION_DEBOUNCE_MS,
+  SAMPLE_PROJECT_ID,
   SYNC_ACTIVITY_RECHECK_INTERVAL_MS,
   SYNC_ACTIVITY_SEED_RETRY_DELAY_MS,
   useProjectPresence,
@@ -76,6 +79,20 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+// Nothing else ties the hook's copy of the ID to the sample core installs, and a mismatch would
+// count the sample as the user's own project, hiding the guidance from everyone it is for.
+describe('SAMPLE_PROJECT_ID', () => {
+  it('is the ID of the sample project core installs', () => {
+    const settingsXml = readFileSync(
+      path.resolve(__dirname, '../../../../c-sharp/assets/WEB/Settings.xml'),
+      'utf-8',
+    );
+    const sampleGuid = /<Guid>\s*([^<\s]+)\s*<\/Guid>/.exec(settingsXml)?.[1];
+
+    expect(sampleGuid?.toUpperCase()).toBe(SAMPLE_PROJECT_ID);
+  });
 });
 
 describe('useProjectPresence', () => {

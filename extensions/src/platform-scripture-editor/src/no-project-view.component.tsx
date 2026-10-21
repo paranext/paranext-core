@@ -40,8 +40,8 @@ export type NoProjectViewProps = {
 /**
  * Replaces the editor canvas when the editor has no project. When the user has no projects at all
  * it explains how to get one — register Paratext, or ask a project administrator; or, for a
- * registered user, have a project shared with them or create one in Paratext 9 — and otherwise it
- * says no project is selected.
+ * registered user, have a project shared with them or create one in Paratext 9, then Sync to get it
+ * — and otherwise it says no project is selected.
  *
  * Accessibility: only the guidance is announced. It renders into a `role="status"` region that
  * stays mounted, empty, in the other state, so its arrival is announced as a change. The plain "No
