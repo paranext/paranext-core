@@ -556,10 +556,16 @@ export function UserProfilePopover() {
               <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
                 <Tooltip>
                   <TooltipTrigger asChild>
+                    {/* tabIndex makes the badge a separate focus stop from the enclosing button
+                        (Tab reaches the row, a second Tab reaches the badge) so a keyboard or
+                        screen-reader user can still reach the tooltip — the one case that matters
+                        is a non-English speaker on a non-Production server, where the badge alone
+                        isn't enough context but the (localized) tooltip is. */}
                     <Badge
                       variant="muted"
                       data-testid="user-profile-server-badge"
                       className="tw:ms-auto"
+                      tabIndex={0}
                     >
                       {localizedStrings[SERVER_BADGE_KEYS[selectedServer].label]}
                     </Badge>

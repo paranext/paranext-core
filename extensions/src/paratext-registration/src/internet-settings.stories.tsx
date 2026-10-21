@@ -124,6 +124,15 @@ export const UnsavedChanges: Story = {
   ],
 };
 
+/**
+ * Server selection hidden — the default state for everyone except a Shift-click/Shift-Enter on
+ * "Internet & connectivity" (or an already non-Production server). No locked label, no hint of any
+ * kind: the control is simply absent.
+ */
+export const ServerSelectionHidden: Story = {
+  decorators: [createDecorator({ canEditServer: false })],
+};
+
 /** Developer section expanded — Production/Development toggle visible. */
 export const DeveloperSectionExpanded: Story = {
   decorators: [createDecorator({})],
