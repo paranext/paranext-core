@@ -643,9 +643,13 @@ export function scrollToRange(
  * on every measurement, since the ranges are over the editor's current DOM and go stale with the
  * next edit.
  *
- * Ranges rather than elements, because the editor paints part of a display byte (a verse number, a
- * marker glyph, an attribute run) with a CSS Custom Highlight: no element carries the annotation's
- * class there, so looking it up by class misses it.
+ * Ranges rather than elements, so a host measures what the editor reports it paints without
+ * repeating the editor's painting rules. The editor paints an annotation as classes on several
+ * kinds of element: a `<mark>` around the content text it holds, the piece of a display-byte
+ * carrier (a verse number, a marker glyph, an attribute run) cut out where it holds only part of
+ * that carrier, filler whitespace between two held bytes, and a read-only decorator — whole, or the
+ * sub-spans it draws over just the characters held. Each range covers one painted element's
+ * contents.
  */
 export type AnnotationRangesSource = () => Range[];
 
@@ -681,8 +685,8 @@ export function measureAnnotation(getRanges: AnnotationRangesSource): DOMRect | 
 type TextSlice = { node: Text; start: number; end: number };
 
 /**
- * The parts of text nodes `range` covers, in document order. A range over a `<mark>`'s contents
- * covers its text nodes whole; a range a highlight paints can start or end inside one.
+ * The parts of text nodes `range` covers, in document order. A range over a painted element's
+ * contents covers its text nodes whole; any other range can start or end inside one.
  */
 function textSlicesIn(range: Range): TextSlice[] {
   const root = range.commonAncestorContainer;

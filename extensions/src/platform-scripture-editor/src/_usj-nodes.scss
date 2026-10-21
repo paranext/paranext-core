@@ -2193,8 +2193,11 @@
 
 /* Hovering an attribute run lifts it out of its dim resting color to the host's ordinary text
    color. The literal is only the fallback for a host that defines no `--foreground`: a fixed
-   near-black would be all but invisible against a dark theme. */
-.attribute:hover {
+   near-black would be all but invisible against a dark theme. An annotation that holds part of a
+   run cuts it into sibling pieces, so the hover lifts every `.attribute` child of the hovered
+   piece's parent: a char span or other owner holds one attribute run, so those are its pieces. */
+.attribute:hover,
+:has(> .attribute:hover) > .attribute {
   color: var(--foreground, rgba(25, 25, 25, 1));
 }
 
@@ -2226,6 +2229,17 @@
 .note.collapsed .marker[data-lexical-decorator='true'],
 .note.collapsed span[data-lexical-text='true'] {
   display: none;
+}
+
+/* A collapsed note shows only its caller, so a `<mark>` an annotation puts in its content holds no
+   visible text; any box an annotation style gives it (a border, padding, a margin) would draw a
+   sliver beside the caller. The caller is never a mark, so its own painting is untouched. */
+.note.collapsed mark {
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 
 /* Expanded NoteNode background styling */
@@ -2438,8 +2452,11 @@
   border-style: none;
 }
 
-.usfm .table-row > .opening,
-.usfm .table-row > .marker {
+/* The head piece only: a row glyph an annotation cuts into pieces (`data-piece-continuation` on
+   every piece after the first, displayAnnotations.index.ts) keeps the one gap the uncut glyph has,
+   in front of it, rather than one in front of every piece. */
+.usfm .table-row > .opening:not([data-piece-continuation]),
+.usfm .table-row > .marker:not([data-piece-continuation]) {
   padding-inline-start: 0.28em;
 }
 

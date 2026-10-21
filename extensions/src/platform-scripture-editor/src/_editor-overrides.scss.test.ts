@@ -31,4 +31,20 @@ describe('_editor-overrides.scss', () => {
 
     expect(scss).toContain('overscroll-behavior: contain;');
   });
+
+  // A match the editor paints as several elements keeps one rounded outline: a radius on the base
+  // class would round every element's corners and notch the match where two elements meet.
+  it("rounds only a find match's outer corners", () => {
+    const scss = readFileSync(EDITOR_OVERRIDES_SCSS_PATH, 'utf8');
+    const base = /\.editor-typed-mark-external-find-result-highlight \{([^}]*)\}/.exec(scss)?.[1];
+
+    expect(base).toBeDefined();
+    expect(base).not.toMatch(/radius/);
+    expect(scss).toMatch(
+      /\.editor-typed-markStart-external-find-result-highlight \{\s*border-start-start-radius: 2px;\s*border-end-start-radius: 2px;\s*\}/,
+    );
+    expect(scss).toMatch(
+      /\.editor-typed-markEnd-external-find-result-highlight \{\s*border-start-end-radius: 2px;\s*border-end-end-radius: 2px;\s*\}/,
+    );
+  });
 });

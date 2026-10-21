@@ -56,7 +56,19 @@ $find-current-result-highlight-bg: rgb(255 213 0 / 40%);
 // primary/secondary selection in both light and dark mode.
 .editor-typed-mark-external-find-result-highlight {
   background-color: $find-current-result-highlight-bg;
-  border-radius: 2px;
+}
+
+// A match the editor paints as several elements (a verse number and the text after it, text on both
+// sides of a character style's edge) rounds only its outer corners: the leading corners of its
+// first element and the trailing corners of its last.
+.editor-typed-markStart-external-find-result-highlight {
+  border-start-start-radius: 2px;
+  border-end-start-radius: 2px;
+}
+
+.editor-typed-markEnd-external-find-result-highlight {
+  border-start-end-radius: 2px;
+  border-end-end-radius: 2px;
 }
 
 // The Find web view also calls selectRange on the current match, so the native ::selection color

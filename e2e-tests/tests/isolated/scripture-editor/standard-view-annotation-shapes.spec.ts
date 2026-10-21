@@ -278,7 +278,23 @@ test.describe('scripture editor annotation shapes', () => {
 
       await expectMarkTexts('across-verse', [lastWord, firstWord]);
       const paragraph = paragraphWith('wedding in Cana');
-      await expect(paragraph.locator('span.verse[data-number="2"]')).toHaveCount(1);
+      // The comment holds the verse glyph's `\v<NBSP>2` but not its trailing separator, which no
+      // range can hold, so the editor cuts the glyph into two pieces of its own class where the
+      // hold ends. It paints both: the held piece, and the separator as filler between two held
+      // bytes. Together the pieces still spell the whole glyph, in order.
+      const verseTwoPieces = paragraph.locator('span.verse[data-number="2"]');
+      await expect
+        .poll(async () => (await verseTwoPieces.allTextContents()).join(''), { timeout: 30_000 })
+        .toBe(`\\v${NBSP}2 `);
+      await expect
+        .poll(
+          async () =>
+            paragraph
+              .locator('span.verse[data-number="2"].annotationId-across-verse')
+              .allTextContents(),
+          { timeout: 30_000 },
+        )
+        .toEqual([`\\v${NBSP}2`, ' ']);
       await expect(editorInput.locator('mark [data-marker="v"]')).toHaveCount(0);
       // Exactly one space between "there." and the verse number: the verse glyph renders as
       // `\v<NBSP>2 `, so any space the verse brought along in addition shows up as a second one.
@@ -324,6 +340,15 @@ test.describe('scripture editor annotation shapes', () => {
       await expect(paragraph.locator('span.closing[data-marker="wj"]')).not.toHaveClass(
         /(^|\s)display-annotation(\s|$)/,
       );
+      // One box over every element it paints: the start class on the mark before the span, the
+      // end class on the mark inside it, and neither anywhere else it paints.
+      const painted = paragraph.locator('.annotationId-into-char-span');
+      const startClass = `editor-typed-markStart-external-${ANNOTATION_TYPE}`;
+      const endClass = `editor-typed-markEnd-external-${ANNOTATION_TYPE}`;
+      await expect(painted.first()).toHaveClass(new RegExp(`(^|\\s)${startClass}(\\s|$)`));
+      await expect(painted.last()).toHaveClass(new RegExp(`(^|\\s)${endClass}(\\s|$)`));
+      await expect(paragraph.locator(`.annotationId-into-char-span.${startClass}`)).toHaveCount(1);
+      await expect(paragraph.locator(`.annotationId-into-char-span.${endClass}`)).toHaveCount(1);
 
       const saved = await saveAndReadChapter('probecharspan');
       expect(paragraphContent(saved, paragraphIndex)).toEqual(
