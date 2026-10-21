@@ -19,9 +19,9 @@ async function isSimpleMode(): Promise<boolean> {
  *
  * Simple mode's middle column only ever shows the project, so there a resource goes to its
  * reference tab instead — Bible texts or Commentaries — and is added to this user's own list for
- * the project that tab shows unless the team's list has it. It opens in the resource viewer only
- * when no project is open, and so there is nothing in that column to replace, or when it is of a
- * kind neither tab lists. If the tab could not be shown, nothing else is opened in its place.
+ * the project that tab shows unless the team's list has it; with no project open it is shown there
+ * all the same, just not saved. It opens in the resource viewer only when there is no reference tab
+ * to show it in. If the tab could not be shown, nothing else is opened in its place.
  *
  * @param projectId The resource's local project id
  * @throws If the resource could not be opened and the user has not been told

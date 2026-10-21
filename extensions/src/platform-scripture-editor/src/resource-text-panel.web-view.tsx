@@ -39,7 +39,11 @@ import {
   isDblResourceReference,
   isProjectReference,
 } from './resource-reference.utils';
-import { resolveResourceSelection } from './resource-selection.utils';
+import {
+  findSelectedRow,
+  resolveResourceSelection,
+  type ResourceSelectionResolution,
+} from './resource-selection.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
 import { selectTextConnection } from './select-dbl-resource';
@@ -215,7 +219,11 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // This panel also offers locally-downloaded resources that are not referenced yet, so an empty
   // referenced list is only genuinely empty once those rows have arrived and none of them matched.
   let readiness: ResourcePanelReadiness = listReadiness;
-  if (listReadiness === 'empty') {
+  if (!projectId) {
+    // No project, so no referenced list to wait for: the rows are the downloaded resources alone.
+    if (arePickerResourcesLoading) readiness = 'loading';
+    else readiness = filteredResources.length > 0 ? 'configured' : 'empty';
+  } else if (listReadiness === 'empty') {
     if (arePickerResourcesLoading) readiness = 'loading';
     else if (filteredResources.length > 0) readiness = 'configured';
   }
@@ -244,11 +252,17 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // the `usjPossiblyError` this passes DOWN to the panel, so a callback would close a cycle. That
   // constraint is what fixes the direction of the whole boundary, and it is why there is exactly
   // one answer to "which resource is on screen" rather than two derivations to keep in step.
-  const selection = resolveResourceSelection(
-    filteredResources,
-    selectedResourceId,
-    pendingResourceId,
-  );
+  //
+  // With no project open the panel shows only a resource it was asked for — one opened from Home —
+  // and never picks one by itself: there is no list of the user's texts to pick from, so a fallback
+  // would put an arbitrary download on screen instead of "open a project".
+  const selection: ResourceSelectionResolution = projectId
+    ? resolveResourceSelection(filteredResources, selectedResourceId, pendingResourceId)
+    : {
+        nextSelectedResourceId: undefined,
+        shouldClearPending: false,
+        selectedRow: findSelectedRow(filteredResources, selectedResourceId),
+      };
   const selectedRef = selection.selectedRow;
 
   useEffect(() => {

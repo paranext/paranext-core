@@ -7547,18 +7547,25 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   forwards to the provider (`ResourceTextPanelOptions`). Shows run one at a time, and each has 20 s
   from the request to reach the point of saving: past that it is dropped and the user warned, so the
   caller hears how it ended before PAPI's request timeout. It answers with a status: `shown`,
-  `notShown` (the user has been told; open nothing else), or `openElsewhere` (no project open, or a
-  kind neither tab lists — source-language, enhanced, XML), on which the caller opens the viewer.
+  `notShown` (the user has been told; open nothing else), or `openElsewhere` (no reference tab open,
+  or a kind neither tab lists), on which the caller opens the viewer. Resources never open in
+  Simple mode's middle column (Sebastian, PT-3182, 2026-10-21): with no project open the tab still
+  shows the resource, from the downloaded ones, and nothing is saved. The catalog types every
+  resource as a Bible text or a commentary — source-language texts included — so every resource has
+  a tab.
 - **Alternatives:** **Add it to the project's (team) list** — rejected: every teammate would see
   one user's pick. **Show it without saving** — rejected by Ian: an opened text should stay
   available to that user. **Lock Simple-mode Home to projects only** — the fallback Sebastian
-  defined in case this didn't land; not needed once it did. **A pending-selection slot in module
+  defined in case this didn't land; not added, as with this in place he sees no need for it (Ian to
+  confirm on PT-3182). **A pending-selection slot in module
   state**, as `currentResourceTextPanelProjectIds` is — rejected: reload options carry the value to
   the one build it was asked for.
 - **Consequences:** The personal list is per project (`UserSettings-{user}.xml`); "available in any
   project" comes from the tabs listing every downloaded resource. A show reloads the tab unless it
   already shows the resource, which discards anything in progress in it (PT-4510). An open early in
-  a launch can wait on the catalog's installed-flag sync and be dropped at the deadline.
+  a launch can wait on the catalog's installed-flag sync and be dropped at the deadline. With no
+  project open, a reference tab lists the downloaded resources but shows only one it was asked to
+  show, and offers no download, since there is no project's list to add to.
 
 ## adr-simple-mode-tab-menu-offers-zoom-only: Simple mode's tab menu is the platform's own contributed menu, narrowed to the content-zoom group
 

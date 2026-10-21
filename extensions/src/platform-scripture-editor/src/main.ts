@@ -1393,7 +1393,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         result: {
           name: 'return value',
           summary:
-            "How the show ended: 'shown' (with the tab's webViewId), 'notShown' (the user has been told; open nothing else) or 'openElsewhere' (no tab is showing a project, or neither tab lists its kind). Never rejects",
+            "How the show ended: 'shown' (with the tab's webViewId), 'notShown' (the user has been told; open nothing else) or 'openElsewhere' (no reference tab is open, or neither tab lists its kind). Never rejects",
           schema: {
             type: 'object',
             properties: {

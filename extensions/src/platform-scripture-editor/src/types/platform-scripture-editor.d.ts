@@ -98,8 +98,9 @@ declare module 'platform-scripture-editor' {
      */
     | { status: 'notShown' }
     /**
-     * Neither reference tab is showing a project to add the resource to, or the resource is of a
-     * kind neither tab lists (source-language, enhanced or XML resources). Open it some other way.
+     * Neither reference tab is open (outside Simple mode's layout), or the resource is of a kind
+     * neither tab lists, which the catalog does not produce today. Open it some other way. With no
+     * project open the resource is still shown in its tab — just not saved to any list.
      */
     | { status: 'openElsewhere' };
 

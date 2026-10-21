@@ -358,19 +358,24 @@ describe('showResourceInReferencePanel', () => {
     expect(mocks.warn).toHaveBeenCalled();
   });
 
-  it('does nothing when no tab is showing a project, and says so by resolving empty', async () => {
+  it('shows the resource in its tab, unsaved, when no project is open', async () => {
+    // Resources never open in the middle column; with no project there is just no list to add to.
     mocks.getAllOpenWebViewDefinitions.mockResolvedValue([
       { id: 'bible-texts-tab', webViewType: BIBLE_TEXTS, projectId: undefined },
+      { id: 'commentaries-tab', webViewType: COMMENTARIES, projectId: undefined },
     ]);
 
-    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(OPEN_ELSEWHERE);
+    await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(
+      SHOWN_IN_BIBLE_TEXTS,
+    );
 
+    expect(mocks.getPdp).not.toHaveBeenCalled();
     expect(mocks.setUserList).not.toHaveBeenCalled();
-    expect(mocks.reloadWebView).not.toHaveBeenCalled();
+    expect(selectionSeenByProvider).toBe('dbl:uid-byz');
   });
 
-  it('tells the user when only the other reference tab shows a project', async () => {
-    // Not the no-project case, so opening the resource some other way would replace the project.
+  it('tells the user when the tab for its kind is not open', async () => {
+    // Opening the resource some other way would put it in the middle column, where it never goes.
     mocks.getAllOpenWebViewDefinitions.mockResolvedValue([OPEN_PANELS[1]]);
 
     await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(NOT_SHOWN);
@@ -379,11 +384,8 @@ describe('showResourceInReferencePanel', () => {
     expect(mocks.reloadWebView).not.toHaveBeenCalled();
   });
 
-  it('answers that no project is open without waiting on the catalog', async () => {
-    mocks.getAllOpenWebViewDefinitions.mockResolvedValue([
-      { id: 'bible-texts-tab', webViewType: BIBLE_TEXTS, projectId: undefined },
-      { id: 'commentaries-tab', webViewType: COMMENTARIES, projectId: undefined },
-    ]);
+  it('answers that there is no reference tab without waiting on the catalog', async () => {
+    mocks.getAllOpenWebViewDefinitions.mockResolvedValue([]);
 
     await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(OPEN_ELSEWHERE);
 
@@ -700,9 +702,7 @@ describe('showResourceInReferencePanel', () => {
     });
 
     it('does not warn later about a show that already ended', async () => {
-      mocks.getAllOpenWebViewDefinitions.mockResolvedValue([
-        { id: 'bible-texts-tab', webViewType: BIBLE_TEXTS, projectId: undefined },
-      ]);
+      mocks.getAllOpenWebViewDefinitions.mockResolvedValue([]);
       await expect(showResourceInReferencePanel('byz-project')).resolves.toEqual(OPEN_ELSEWHERE);
 
       await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS * 2);
@@ -832,11 +832,7 @@ describe('showResourceInReferencePanel', () => {
     it('opens nothing elsewhere for a show that finishes while its warning is being sent', async () => {
       // Told the tab could not be opened, the caller must not then open the viewer as well — even
       // when the show, stuck until now, finds while that warning is on its way that it should.
-      mocks.getAllOpenWebViewDefinitions.mockImplementation(() =>
-        holdUntilReleased([
-          { id: 'bible-texts-tab', webViewType: BIBLE_TEXTS, projectId: undefined },
-        ]),
-      );
+      mocks.getAllOpenWebViewDefinitions.mockImplementation(() => holdUntilReleased([]));
       mocks.notify.mockImplementation(() => holdUntilReleased('notification-1'));
       const show = showResourceInReferencePanel('byz-project');
 

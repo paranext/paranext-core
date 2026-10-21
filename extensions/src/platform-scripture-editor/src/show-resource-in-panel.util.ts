@@ -208,6 +208,9 @@ async function getTeamReferences(projectId: string): Promise<ResourceReference[]
   }
 }
 
+/** What a panel's project is: see {@link getPanelProjectKind}. */
+type PanelProjectKind = 'project' | 'resource' | 'unknown';
+
 /**
  * What a panel's project is. In Simple mode the reference panels follow whatever the middle column
  * opens, which can be a resource opened in its viewer; a list saved there would belong to that
@@ -217,7 +220,7 @@ async function getTeamReferences(projectId: string): Promise<ResourceReference[]
  * @returns `'project'` for a project the user's list can belong to, `'resource'` for a published
  *   resource, or `'unknown'` if that could not be read
  */
-async function getPanelProjectKind(projectId: string): Promise<'project' | 'resource' | 'unknown'> {
+async function getPanelProjectKind(projectId: string): Promise<PanelProjectKind> {
   try {
     const projectSettings = await papi.projectDataProviders.get('platform.base', projectId);
     return (await projectSettings.getSetting('platform.isPublished')) ? 'resource' : 'project';
@@ -323,11 +326,10 @@ async function showResourceNow(
       definition.webViewType === BIBLE_TEXTS_PANEL_WEBVIEW_TYPE ||
       definition.webViewType === COMMENTARIES_PANEL_WEBVIEW_TYPE,
   );
-  // The panels list the resources of the project they show; with none, there is no list to add to.
-  // In Simple mode these panels are always open, so this is the case of no project being open —
-  // and then the middle column has no project for the resource to replace either. Checked before
-  // the catalog, which can be slow to read, since the answer does not depend on it.
-  if (!panels.some((definition) => definition.projectId)) return undefined;
+  // Simple mode always has these panels open, project or no project. With neither open there is no
+  // tab to show the resource in. Checked before the catalog, which can be slow to read, since the
+  // answer does not depend on it.
+  if (panels.length === 0) return undefined;
 
   const { entry, isKindKnown, isReferenceKindKnown } = await findCatalogEntry(resourceProjectId);
   // Not guessed: a panel asked for a resource it cannot list shows another one in its place.
@@ -346,11 +348,10 @@ async function showResourceNow(
     return undefined;
   }
   const panel = panels.find((definition) => definition.webViewType === webViewType);
-  if (!panel?.projectId)
-    return failToShow(
-      progress,
-      `The ${webViewType} tab is not open on a project to show the resource in`,
-    );
+  if (!panel) return failToShow(progress, `The ${webViewType} tab is not open`);
+  // With no project open the panel still shows the resource, from the downloaded ones; there is
+  // just no project whose list it could be added to.
+  const panelProjectId = panel.projectId;
 
   const reference: DblResourceReference | ProjectReference | undefined = entry
     ? toResourceReference(entry)
@@ -361,10 +362,12 @@ async function showResourceNow(
   // Already on the team's list, the resource is available to this user too, and is selected under
   // the team's own reference — which may spell its DBL entry UID in other casing than the catalog,
   // or name the resource by its project rather than its DBL entry.
-  const [teamReferences, panelProjectKind] = await Promise.all([
-    getTeamReferences(panel.projectId),
-    getPanelProjectKind(panel.projectId),
-  ]);
+  const [teamReferences, panelProjectKind]: [
+    ResourceReference[] | undefined,
+    PanelProjectKind | 'none',
+  ] = panelProjectId
+    ? await Promise.all([getTeamReferences(panelProjectId), getPanelProjectKind(panelProjectId)])
+    : [undefined, 'none'];
   // The same resource named by its project rather than its DBL entry: matched both against the
   // team's list and when replacing the user's earlier copy, so the two agree.
   const isProjectItemForResource = (item: ResourceReference) =>
@@ -383,11 +386,17 @@ async function showResourceNow(
   // reference, nor when the reference's kind is uncertain (see `isReferenceKindKnown`), nor when the
   // panel is showing a resource rather than a project (see `getPanelProjectKind`). The panel still
   // lists the resource among the downloaded ones, so it is shown either way.
-  if (teamReferences && !teamReference && isReferenceKindKnown && panelProjectKind === 'project') {
+  if (
+    panelProjectId &&
+    teamReferences &&
+    !teamReference &&
+    isReferenceKindKnown &&
+    panelProjectKind === 'project'
+  ) {
     try {
       const textConnections = await papi.projectDataProviders.get(
         'platformScripture.textConnectionSettings',
-        panel.projectId,
+        panelProjectId,
       );
       await addToUserTextConnections(
         reference,
@@ -397,16 +406,18 @@ async function showResourceNow(
       );
     } catch (e) {
       logger.warn(
-        `Could not add resource ${resourceProjectId} to the personal list of project ${panel.projectId}: ${getErrorMessage(e)}`,
+        `Could not add resource ${resourceProjectId} to the personal list of project ${panelProjectId}: ${getErrorMessage(e)}`,
       );
     }
   } else if (!teamReference) {
     let reason = "the team's list could not be read";
-    if (panelProjectKind === 'resource') reason = 'the tab is showing a resource, not a project';
+    if (panelProjectKind === 'none') reason = 'no project is open';
+    else if (panelProjectKind === 'resource')
+      reason = 'the tab is showing a resource, not a project';
     else if (panelProjectKind === 'unknown') reason = "the tab's project could not be read";
     else if (teamReferences) reason = 'its catalog entry could not be confirmed';
     logger.info(
-      `Not adding resource ${resourceProjectId} to the personal list of ${panel.projectId}: ${reason}`,
+      `Not adding resource ${resourceProjectId} to a personal list (tab project ${panelProjectId}): ${reason}`,
     );
   }
 
@@ -454,11 +465,11 @@ const NOT_SHOWN: ShowResourceInReferencePanelResult = { status: 'notShown' };
  * Commentaries tab, Bible texts (and resources the catalog does not describe) in Bible texts — and,
  * unless the team's list already has it, adds it to the current user's personal list for the
  * project that panel shows. It is shown but not added when that cannot be settled safely: the
- * team's list or the resource's catalog entry cannot be read yet. The shared (team) list is never
- * written, so the resource is added for this user only.
+ * team's list or the resource's catalog entry cannot be read yet, or no project is open. The shared
+ * (team) list is never written, so the resource is added for this user only.
  *
- * Simple mode's middle column only ever shows the project, so this is how a resource is opened
- * there rather than in a Scripture editor.
+ * Simple mode's middle column only ever shows the project, and resources never open there — not
+ * even with no project open — so this is how a resource is opened in Simple mode.
  *
  * Shows run one at a time: two at once would race over the same personal list, and the later one
  * the user asked for could lose. Each has {@link SHOW_DEADLINE_MS} from the request, time spent
