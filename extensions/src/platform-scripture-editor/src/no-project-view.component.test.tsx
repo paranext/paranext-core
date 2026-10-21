@@ -34,7 +34,7 @@ describe('NoProjectView', () => {
         localizedStrings={{
           ...STRINGS,
           '%webView_platformScriptureEditor_emptyState_noProjects_description_registered%':
-            'It is not yet possible to create a project in {%product_name%}. Either someone needs to share a project with you, or you need to create a project in Paratext 9.',
+            'It is not yet possible to create a project in {%product_name%}. Either someone needs to share a project with you, or you need to create a project in Paratext 9. Then use Sync to get it.',
           '%product_name%': 'Paratext 10',
         }}
         presence="none"
@@ -47,7 +47,7 @@ describe('NoProjectView', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'It is not yet possible to create a project in Paratext 10. Either someone needs to share a project with you, or you need to create a project in Paratext 9.',
+        'It is not yet possible to create a project in Paratext 10. Either someone needs to share a project with you, or you need to create a project in Paratext 9. Then use Sync to get it.',
       ),
     ).toBeInTheDocument();
     expect(

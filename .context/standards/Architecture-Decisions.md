@@ -4857,9 +4857,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   excluded by its fixed ID along with resources (`isPublished`).
   A registered user (`paratextRegistration.doesUserHaveValidRegistration`) cannot fix "none" by
   registering, so they are told instead that projects cannot be created here yet: have one shared
-  with them, or create one in Paratext 9. A registration that cannot be determined keeps the
-  "register" wording, and the guidance waits for the answer so it never swaps text in front of the
-  user.
+  with them, or create one in Paratext 9, then Sync to get it. Paratext 10 and Platform.Bible share
+  this wording, naming the product through `{%product_name%}`, although Platform.Bible has no Sync:
+  wording of its own there was judged not worth a separate branch. A registration that cannot be
+  determined keeps the "register" wording, and the guidance waits for the answer so it never swaps
+  text in front of the user.
   `startDefaultProjectPicker` also re-runs on `platform.onDidChangeProjects`, so an arriving project
   opens in the editor if the picker can find it (a recent project, or one Send/Receive lists).
 - **Alternatives:** Count only editable projects, which also excludes the read-only sample —

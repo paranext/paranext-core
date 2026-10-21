@@ -18,16 +18,17 @@ const STRINGS = {
     "You don't have any projects of your own yet",
   '%webView_platformScriptureEditor_emptyState_noProjects_description%': UNREGISTERED_DESCRIPTION,
   '%webView_platformScriptureEditor_emptyState_noProjects_description_registered%':
-    'It is not yet possible to create a project in {%product_name%}. Either someone needs to share a project with you, or you need to create a project in Paratext 9.',
+    'It is not yet possible to create a project in {%product_name%}. Either someone needs to share a project with you, or you need to create a project in Paratext 9. Then use Sync to get it.',
   '%product_name%': 'Paratext 10',
 };
 
-function renderSimpleMode() {
-  render(
+function renderSimpleMode({ isViewVisible = true } = {}) {
+  return render(
     <NoProjectPanel
       localizedStrings={STRINGS}
       isPowerMode={false}
       isInterfaceModeLoading={false}
+      isViewVisible={isViewVisible}
     />,
   );
 }
@@ -55,7 +56,7 @@ describe('NoProjectPanel', () => {
 
     expect(
       screen.getByText(
-        'It is not yet possible to create a project in Paratext 10. Either someone needs to share a project with you, or you need to create a project in Paratext 9.',
+        'It is not yet possible to create a project in Paratext 10. Either someone needs to share a project with you, or you need to create a project in Paratext 9. Then use Sync to get it.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(UNREGISTERED_DESCRIPTION)).not.toBeInTheDocument();
@@ -78,20 +79,43 @@ describe('NoProjectPanel', () => {
     expect(screen.queryByRole('heading')).not.toBeInTheDocument();
   });
 
-  it.each(['unknown', 'some'] as const)(
-    'asks about registration only once the user is known to have no projects, not when %s',
+  it.each(['unknown', 'none'] as const)(
+    'asks about registration alongside presence when presence is %s',
     (presence) => {
       vi.mocked(useProjectPresence).mockReturnValue(presence);
 
       renderSimpleMode();
 
-      expect(useRegistrationValidity).toHaveBeenLastCalledWith({ enabled: false });
+      expect(useRegistrationValidity).toHaveBeenLastCalledWith({ enabled: true });
     },
   );
 
-  it('asks about registration when the user has no projects', () => {
+  it('stops asking about registration once the user is known to have projects', () => {
+    vi.mocked(useProjectPresence).mockReturnValue('some');
+
     renderSimpleMode();
 
+    expect(useRegistrationValidity).toHaveBeenLastCalledWith({ enabled: false });
+  });
+
+  it('pauses both lookups while the view is hidden and resumes them when it is shown', () => {
+    // What a disabled hook answers; the hook's own tests pin that.
+    vi.mocked(useProjectPresence).mockReturnValue('unknown');
+    const { rerender } = renderSimpleMode({ isViewVisible: false });
+
+    expect(useProjectPresence).toHaveBeenLastCalledWith({ enabled: false });
+    expect(useRegistrationValidity).toHaveBeenLastCalledWith({ enabled: false });
+
+    rerender(
+      <NoProjectPanel
+        localizedStrings={STRINGS}
+        isPowerMode={false}
+        isInterfaceModeLoading={false}
+        isViewVisible
+      />,
+    );
+
+    expect(useProjectPresence).toHaveBeenLastCalledWith({ enabled: true });
     expect(useRegistrationValidity).toHaveBeenLastCalledWith({ enabled: true });
   });
 
@@ -111,18 +135,30 @@ describe('NoProjectPanel', () => {
     // What a disabled hook answers; the hook's own tests pin that.
     vi.mocked(useProjectPresence).mockReturnValue('unknown');
     render(
-      <NoProjectPanel localizedStrings={STRINGS} isPowerMode isInterfaceModeLoading={false} />,
+      <NoProjectPanel
+        localizedStrings={STRINGS}
+        isPowerMode
+        isInterfaceModeLoading={false}
+        isViewVisible
+      />,
     );
 
     expect(useProjectPresence).toHaveBeenLastCalledWith({ enabled: false });
+    expect(useRegistrationValidity).toHaveBeenLastCalledWith({ enabled: false });
     expect(screen.getByText('No project selected')).toBeInTheDocument();
   });
 
   it('does not ask while the interface mode is still loading', () => {
     render(
-      <NoProjectPanel localizedStrings={STRINGS} isPowerMode={false} isInterfaceModeLoading />,
+      <NoProjectPanel
+        localizedStrings={STRINGS}
+        isPowerMode={false}
+        isInterfaceModeLoading
+        isViewVisible
+      />,
     );
 
     expect(useProjectPresence).toHaveBeenLastCalledWith({ enabled: false });
+    expect(useRegistrationValidity).toHaveBeenLastCalledWith({ enabled: false });
   });
 });

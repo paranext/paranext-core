@@ -4616,8 +4616,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // a pre-selected project. `NoProjectPanel` also tells a user with no projects at all how to get
     // one.
     //
-    // Hidden case: needs no catch-up. The view is rendered from current state, not layout, so it is
-    // correct whenever it is shown.
+    // Hidden case: `NoProjectPanel` pauses its lookups while hidden and asks again on activation.
     if (!projectId) {
       return (
         <>
@@ -4626,6 +4625,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             localizedStrings={localizedStrings}
             isPowerMode={isPowerMode}
             isInterfaceModeLoading={isInterfaceModeLoading}
+            isViewVisible={isViewVisible}
           />
         </>
       );

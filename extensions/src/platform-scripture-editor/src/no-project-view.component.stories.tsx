@@ -5,7 +5,8 @@ import { NoProjectView, NO_PROJECT_VIEW_STRING_KEYS } from './no-project-view.co
 /**
  * Replaces the editor canvas when the editor has no project. A Simple-mode user with no projects at
  * all is told how to get one — register Paratext, or ask a project administrator to add them; a
- * registered user is told to have a project shared with them or to create one in Paratext 9.
+ * registered user is told to have a project shared with them or to create one in Paratext 9, then
+ * to Sync to get it.
  */
 const meta: Meta<typeof NoProjectView> = {
   title: 'Bundled Extensions/platform-scripture-editor/NoProjectView',

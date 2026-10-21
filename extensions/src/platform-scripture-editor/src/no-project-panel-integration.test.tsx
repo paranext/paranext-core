@@ -23,14 +23,14 @@ vi.mock('platform-bible-react', async (importOriginal) => ({
 const UNREGISTERED_DESCRIPTION =
   'To get a project, set up your Paratext registration in your user profile, or ask your project administrator to add you to a project.';
 const REGISTERED_DESCRIPTION =
-  'It is not yet possible to create a project in Paratext 10. Either someone needs to share a project with you, or you need to create a project in Paratext 9.';
+  'It is not yet possible to create a project in Paratext 10. Either someone needs to share a project with you, or you need to create a project in Paratext 9. Then use Sync to get it.';
 const STRINGS = {
   '%webView_platformScriptureEditor_emptyState_noProject%': 'No project selected',
   '%webView_platformScriptureEditor_emptyState_noProjects_title%':
     "You don't have any projects of your own yet",
   '%webView_platformScriptureEditor_emptyState_noProjects_description%': UNREGISTERED_DESCRIPTION,
   '%webView_platformScriptureEditor_emptyState_noProjects_description_registered%':
-    'It is not yet possible to create a project in {%product_name%}. Either someone needs to share a project with you, or you need to create a project in Paratext 9.',
+    'It is not yet possible to create a project in {%product_name%}. Either someone needs to share a project with you, or you need to create a project in Paratext 9. Then use Sync to get it.',
   '%product_name%': 'Paratext 10',
 };
 // What the lookup reports for the sample project core installs when it finds no projects.
@@ -58,6 +58,7 @@ describe('NoProjectPanel with its real hooks', () => {
         localizedStrings={STRINGS}
         isPowerMode={false}
         isInterfaceModeLoading={false}
+        isViewVisible
       />,
     );
     await act(async () => {});
