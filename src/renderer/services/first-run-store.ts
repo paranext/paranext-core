@@ -19,6 +19,7 @@ import {
   refreshRegistrationValidity,
 } from './registration-validity-store';
 import { pickBestSetupLanguage } from './pick-best-setup-language';
+import { askForInternetUseChoiceIfNeeded } from './internet-use-choice-store';
 
 /** What the app should currently render for first-run gating. */
 export type FirstRunStatus =
@@ -242,6 +243,8 @@ async function resolveInternal(generation: number): Promise<void> {
     }
     if (interfaceMode !== undefined && interfaceMode !== 'simple') {
       applyStatus({ kind: 'app' });
+      // Power mode never shows the wizard, so its internet-use question is asked here instead.
+      askForInternetUseChoiceIfNeeded();
       return;
     }
 

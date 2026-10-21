@@ -361,7 +361,8 @@ declare module 'papi-shared-types' {
      *
      * Forget first-run progress and restart into the first-run wizard, in Simple mode, as a new
      * user — or a Paratext 9 user launching Platform.Bible for the first time — would see it. Also
-     * clears the orientation tour's completion and turns `platform.syncOnStartup` and
+     * clears the orientation tour's completion and whether the user was asked for an internet-use
+     * choice (`platform.internetUseChoiceAsked`), and turns `platform.syncOnStartup` and
      * `platform.showRegistrationReminderOnStartup` back on. Works in installed builds: press F12
      * and run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
      *
@@ -584,6 +585,14 @@ declare module 'papi-shared-types' {
      * checkbox). Only consulted for completed users; the fresh-user onboarding flow ignores it.
      */
     'platform.showRegistrationReminderOnStartup': boolean;
+    /**
+     * Whether the user has been asked to choose how Paratext accesses the internet, or did not need
+     * to be. Hidden; set by the first-run wizard when it saves the user's internet-use choice, and
+     * by Power-mode startup once it has checked the saved value (opening the Internet &
+     * connectivity settings if that value turns off sync and the Digital Bible Library). `false`
+     * (default) means the next Power-mode startup checks.
+     */
+    'platform.internetUseChoiceAsked': boolean;
   }
 
   /**

@@ -18,6 +18,7 @@ describe('smokeAppSettingsOverrides', () => {
       'platform.interfaceMode': 'power',
       'platform.interfaceLanguage': ['en'],
       'platform.showRegistrationReminderOnStartup': false,
+      'platform.internetUseChoiceAsked': true,
     });
   });
 });

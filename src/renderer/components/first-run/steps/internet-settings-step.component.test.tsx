@@ -7,6 +7,7 @@ import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { useDataProvider, useData } from '@renderer/hooks/papi-hooks';
 import { logger } from '@shared/services/logger.service';
+import { settingsService } from '@shared/services/settings.service';
 import { newPlatformError } from 'platform-bible-utils';
 import {
   noteInternetSettingsLoaded,
@@ -45,6 +46,9 @@ vi.mock('@renderer/services/first-run-store', () => ({
 }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn() },
+}));
+vi.mock('@shared/services/settings.service', () => ({
+  settingsService: { get: vi.fn(), set: vi.fn().mockResolvedValue(undefined) },
 }));
 
 vi.mock('platform-bible-react', () => ({
@@ -244,6 +248,30 @@ describe('InternetSettingsStep', () => {
 
       expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Enabled');
       await waitFor(() => expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(true));
+    });
+
+    // So a later switch to Power mode does not ask again (internet-use-choice-store).
+    it('records durably that the user was asked once a choice saves', async () => {
+      configureHooks({ value: MOCK_SETTINGS, isLoading: false });
+      renderStep();
+
+      await userEvent.click(screen.getByTestId('option-list'));
+
+      await waitFor(() =>
+        expect(settingsService.set).toHaveBeenCalledWith('platform.internetUseChoiceAsked', true),
+      );
+    });
+
+    it('does not record that the user was asked when only the server changes', async () => {
+      const { setData } = configureHooks({ value: MOCK_SETTINGS, isLoading: false });
+      renderStep();
+
+      await userEvent.click(screen.getByTestId('dev-section'));
+
+      await waitFor(() => expect(setData).toHaveBeenCalled());
+      // The list is disabled while the save runs, so enabled again means the save has finished.
+      await waitFor(() => expect(screen.getByTestId('option-list')).not.toBeDisabled());
+      expect(settingsService.set).not.toHaveBeenCalled();
     });
 
     it('keeps showing the choice while the provider still reports the value from before the save', async () => {
