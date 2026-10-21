@@ -1,3 +1,4 @@
+import vm from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
 import { ProcessType } from '@shared/global-this.model';
 import { TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
@@ -3512,5 +3513,225 @@ describe('a layout load that drops a web view', () => {
         webView: expect.objectContaining({ id: mintedTargetWebViewId }),
       }),
     );
+  });
+});
+
+describe('React web view bootstrap teardown', () => {
+  /**
+   * Runs the generated React bootstrap script of `content` in a fresh context standing in for the
+   * iframe's window, with a fake `createRoot`, and returns the root it created plus a way to fire
+   * events on that window.
+   */
+  function runReactBootstrap(
+    content: string,
+    registerWebViewRootById: unknown = vi.fn(),
+    { canRender = true }: { canRender?: boolean } = {},
+  ) {
+    const bootstrapScript = [...content.matchAll(/<script nonce="[^"]*">([\s\S]*?)<\/script>/g)]
+      .map((match) => match[1])
+      .find((script) => script.includes('function initializeReact'));
+    if (!bootstrapScript) throw new Error('no React bootstrap script in the web view content');
+
+    const root = { render: vi.fn(), unmount: vi.fn() };
+    const unsubscribeUpdateWebView = vi.fn(() => true);
+    const windowEvents = new EventTarget();
+    const container = {};
+    const iframeDocument = { readyState: 'complete', getElementById: () => container };
+    const iframeWindow: Record<string, unknown> = {
+      addEventListener: windowEvents.addEventListener.bind(windowEvents),
+      removeEventListener: windowEvents.removeEventListener.bind(windowEvents),
+      document: iframeDocument,
+      // The `imports` block of the web view captures this from the parent before it deletes the parent
+      registerWebViewRootById,
+      createRoot: vi.fn(() => root),
+      React: { createElement: vi.fn(() => ({})) },
+      WebViewErrorBoundary: () => undefined,
+      papi: { webViews: { onDidUpdateWebView: vi.fn(() => unsubscribeUpdateWebView) } },
+      getSavedWebViewDefinition: () =>
+        canRender ? { id: 'wv-react', webViewType: 'test.type' } : undefined,
+      console,
+      queueMicrotask,
+    };
+    // The bootstrap reads `window` and `globalThis` interchangeably, as it can inside an iframe
+    iframeWindow.window = iframeWindow;
+    try {
+      vm.runInNewContext(bootstrapScript, vm.createContext(iframeWindow));
+    } catch (error) {
+      // A web view that cannot render throws out of the bootstrap; the document stays in place
+      if (canRender) throw error;
+    }
+
+    return {
+      root,
+      iframeWindow,
+      iframeDocument,
+      unsubscribeUpdateWebView,
+      dispatch: (eventName: string) => windowEvents.dispatchEvent(new Event(eventName)),
+    };
+  }
+
+  async function openReactWebViewContent(): Promise<string> {
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') return { kind: 'empty' };
+      if (requestType === 'windowLayout:emptied') return { action: 'stay' };
+      return undefined;
+    });
+    const module = await primeWebViewOpenPath();
+    getWebViewProviderMock.mockImplementation(async () => ({
+      getWebView: async (saved: { id: string; webViewType: string }) => ({
+        id: saved.id,
+        webViewType: saved.webViewType,
+        contentType: 'react',
+        content: 'globalThis.webViewComponent = function StubWebView() { return null; };',
+        state: {},
+      }),
+    }));
+    const { dockLayout, addWebViewToDockCalls } = makeDockLayoutThatTracksAdds(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+
+    await module.openWebView('test.type', { type: 'tab' });
+
+    expect(addWebViewToDockCalls).toHaveLength(1);
+    return String(addWebViewToDockCalls[0].content);
+  }
+
+  test('unmounts the React root when its document unloads, after its pagehide listeners', async () => {
+    const { root, unsubscribeUpdateWebView, dispatch } = runReactBootstrap(
+      await openReactWebViewContent(),
+    );
+    // Control: the bootstrap really mounted, so the assertions below are about its teardown
+    expect(root.render).toHaveBeenCalledTimes(1);
+    expect(root.unmount).not.toHaveBeenCalled();
+
+    dispatch('pagehide');
+    await Promise.resolve();
+    // The web view's own pagehide listeners come after the bootstrap's, and unmounting runs every
+    // effect cleanup, which may remove them; so the root must still be mounted after pagehide
+    expect(root.unmount).not.toHaveBeenCalled();
+    expect(unsubscribeUpdateWebView).toHaveBeenCalledTimes(1);
+
+    dispatch('unload');
+    await Promise.resolve();
+
+    // A replaced document's root would otherwise keep rendering inside the parent's React, with
+    // `window` now resolving to the replacement document's half-initialized globals
+    expect(root.unmount).toHaveBeenCalledTimes(1);
+  });
+
+  test('captures the root registration function before it deletes the parent window', async () => {
+    const content = await openReactWebViewContent();
+
+    const captureIndex = content.indexOf(
+      'var registerWebViewRootById = window.parent.registerWebViewRootById;',
+    );
+    expect(captureIndex).toBeGreaterThanOrEqual(0);
+    expect(captureIndex).toBeLessThan(content.indexOf('delete window.parent;'));
+  });
+
+  test('registers its root with the renderer, marking the document as unloaded before the unmount is queued', async () => {
+    const registerWebViewRootById = vi.fn();
+    const content = await openReactWebViewContent();
+    const webViewId = /window\.webViewId = '([^']+)'/.exec(content)?.[1];
+    expect(webViewId).toBeTruthy();
+    const { root, iframeDocument, dispatch } = runReactBootstrap(content, registerWebViewRootById);
+
+    expect(registerWebViewRootById).toHaveBeenCalledTimes(1);
+    const [registeredId, record] = registerWebViewRootById.mock.calls[0];
+    expect(registeredId).toBe(webViewId);
+    expect(record.document).toBe(iframeDocument);
+    expect(record.hasUnloaded).toBe(false);
+
+    dispatch('pagehide');
+    expect(record.hasUnloaded).toBe(false);
+
+    // The flag is set synchronously inside the `unload` listener, ahead of the queued unmount
+    dispatch('unload');
+    expect(record.hasUnloaded).toBe(true);
+    expect(root.unmount).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(root.unmount).toHaveBeenCalledTimes(1);
+
+    // The registered unmount is the root's own
+    record.unmountRoot();
+    expect(root.unmount).toHaveBeenCalledTimes(2);
+  });
+
+  test.each([
+    ['is missing', undefined],
+    [
+      'throws',
+      () => {
+        throw new Error('registry is gone');
+      },
+    ],
+  ])(
+    'still mounts and tears down when the root registration function %s',
+    async (_label, registrar) => {
+      const { root, iframeWindow, dispatch } = runReactBootstrap(
+        await openReactWebViewContent(),
+        registrar,
+      );
+
+      expect(root.render).toHaveBeenCalledTimes(1);
+      expect(iframeWindow.webViewCleanup).toBeDefined();
+
+      dispatch('pagehide');
+      dispatch('unload');
+      await Promise.resolve();
+      expect(root.unmount).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test('marks its document as unloaded even when the first render throws before pagehide is handled', async () => {
+    const registerWebViewRootById = vi.fn();
+    const { root, dispatch } = runReactBootstrap(
+      await openReactWebViewContent(),
+      registerWebViewRootById,
+      { canRender: false },
+    );
+    // Control: the bootstrap got as far as registering its root, and the render did throw
+    expect(registerWebViewRootById).toHaveBeenCalledTimes(1);
+    expect(root.render).not.toHaveBeenCalled();
+    const [, record] = registerWebViewRootById.mock.calls[0];
+
+    dispatch('unload');
+
+    expect(record.hasUnloaded).toBe(true);
+  });
+
+  test('logs a root that fails to unmount instead of throwing out of the unload', async () => {
+    const { root, dispatch } = runReactBootstrap(await openReactWebViewContent());
+    const unmountError = new Error('root failed to unmount');
+    root.unmount.mockImplementation(() => {
+      throw unmountError;
+    });
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      dispatch('pagehide');
+      dispatch('unload');
+      // An error escaping the queued unmount would surface as an unhandled error and fail the run
+      await Promise.resolve();
+
+      expect(root.unmount).toHaveBeenCalledTimes(1);
+      expect(consoleLog).toHaveBeenCalledWith('Error unmounting WebView React root', unmountError);
+    } finally {
+      consoleLog.mockRestore();
+    }
+  });
+
+  test('tears down only once if the document is hidden and unloaded again', async () => {
+    const { root, unsubscribeUpdateWebView, dispatch } = runReactBootstrap(
+      await openReactWebViewContent(),
+    );
+
+    dispatch('pagehide');
+    dispatch('unload');
+    await Promise.resolve();
+    dispatch('pagehide');
+    dispatch('unload');
+    await Promise.resolve();
+
+    expect(root.unmount).toHaveBeenCalledTimes(1);
+    expect(unsubscribeUpdateWebView).toHaveBeenCalledTimes(1);
   });
 });

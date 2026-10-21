@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.ParatextUtils;
@@ -106,7 +105,6 @@ internal class DblResourcesDataProvider(
     //   • _resources — reassigned by FetchResourcesCore, read by FindResource and by
     //     RecomputeDblResourcesUpdateStatus
     //   • the Paratext ScrTextCollection — mutated by install/uninstall, read by the fetch's projection
-    //   • the process-global Trace.Listeners 401-detection bracket in FetchResourcesCore
     // GetDblResources/InstallDblResource/UninstallDblResource/RecomputeDblResourcesUpdateStatus do
     // their blocking work inside Task.Run and take this lock there — never on the JSON-RPC reading
     // thread — so the reading loop stays responsive while an operation runs. See PT-4222.
@@ -191,7 +189,8 @@ internal class DblResourcesDataProvider(
             new DBLRESTClientFactory(),
             new DblProjectDeleter(),
             new DblMigrationOperations(),
-            new DblResourcePasswordProvider()
+            new DblResourcePasswordProvider(),
+            runWithProgress: false
         );
         _resources = allResources.Where(r => DblResourceWhiteList.IsValidResource(r)).ToList();
         var excludedResources = allResources.Except(_resources).Select(r => r.Name).ToList();
@@ -204,8 +203,8 @@ internal class DblResourcesDataProvider(
     /// <summary>
     /// Loads the DBL catalog into <see cref="_resources"/>, surfacing Paratext's trace-only 401 as
     /// <see cref="INVALID_USER_REGISTRATION_MESSAGE"/>. Call only while holding
-    /// <see cref="_providerGate"/> (it touches the global Trace.Listeners bracket) and from a
-    /// background thread (the network call blocks and has no timeout).
+    /// <see cref="_providerGate"/> and from a background thread (the network call blocks and has
+    /// no timeout).
     /// </summary>
     private void FetchResourcesCore()
     {
@@ -214,17 +213,16 @@ internal class DblResourcesDataProvider(
         if (!RegistrationInfo.DefaultUser.IsValid)
             throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
 
-        TextSearchingTraceListener traceListener = new("REST ProtocolError = 401");
-        Trace.Listeners.Add(traceListener);
-        try
-        {
-            FetchAvailableDBLResources();
-        }
-        finally
-        {
-            Trace.Listeners.Remove(traceListener);
-        }
-        if (traceListener.FoundText)
+        // Watches this thread only, so a 401 traced by an unrelated REST call on another thread is
+        // not mistaken for this user's invalid registration. Assumes ParatextData traces the 401 on
+        // the thread that made the request, which this call runs on directly.
+        if (
+            TextSearchingTraceListener.WasTracedDuring(
+                "REST ProtocolError = 401",
+                FetchAvailableDBLResources,
+                currentThreadOnly: true
+            )
+        )
             throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
 
         _hasFetchedResources = true;

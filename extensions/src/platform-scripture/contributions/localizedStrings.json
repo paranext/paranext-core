@@ -1,5 +1,23 @@
 {
   "metadata": {
+    "%manageBooks_delete_confirmBodyAllShared%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %manageBooks_delete_confirmBodyAllShared_2%."
+      }
+    },
+    "%manageBooks_delete_confirmBodyAllShared_2%": {
+      "fallbackKey": "%manageBooks_delete_confirmBodyAllShared%"
+    },
+    "%manageBooks_delete_confirmBodySharedSendReceive%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %manageBooks_delete_confirmBodySharedSendReceive_2%."
+      }
+    },
+    "%manageBooks_delete_confirmBodySharedSendReceive_2%": {
+      "fallbackKey": "%manageBooks_delete_confirmBodySharedSendReceive%"
+    },
     "%webView_find_allBooks%": {
       "fallbackKey": "%comment_filter_scope_all_books%"
     },
@@ -132,7 +150,7 @@
       "fallbackKey": "%manageBooks_import_onlyNonExistingChapters%"
     },
     "%manageBooks_delete_confirmBodyShared%": {
-      "fallbackKey": "%manageBooks_delete_confirmBodySharedSendReceive%"
+      "fallbackKey": "%manageBooks_delete_confirmBodySharedSendReceive_2%"
     },
     "%manageBooks_copy_confirmBody%": {
       "fallbackKey": "%manageBooks_copy_confirmBodyWithBooks_other%"
@@ -220,10 +238,21 @@
     },
     "%webView_checksSidePanel_projectFilter_projectsAndResources%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
+    },
+    "%webView_platformScripture_error_syncEditBlocked%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScripture_error_syncEditBlocked_2%."
+      }
+    },
+    "%webView_platformScripture_error_syncEditBlocked_2%": {
+      "fallbackKey": "%webView_platformScripture_error_syncEditBlocked%"
     }
   },
   "localizedStrings": {
     "en": {
+      "%checkSetup_notApplicable_quotationMarksNotUsed%": "Not used in this project",
+      "%checkSetup_notApplicable_quotationTypesNotEnabled%": "Not enabled for this project",
       "%inventoryName_Character%": "Characters inventory",
       "%inventoryName_Marker%": "Markers inventory",
       "%inventoryName_MatchedPairs%": "Unmatched pairs of punctuation",
@@ -334,7 +363,9 @@
       "%manageBooks_delete_confirmBodyAll%": "All books will be deleted from {0}. The project itself will not be deleted. This cannot be undone.",
       "%manageBooks_delete_confirmBodyPartial%": "{0} book(s) will be deleted from {1}. This cannot be undone.",
       "%manageBooks_delete_confirmBodyAllShared%": "All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. The project itself will not be deleted. This cannot be undone.",
+      "%manageBooks_delete_confirmBodyAllShared_2%": "All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next sync. The project itself will not be deleted. This cannot be undone.",
       "%manageBooks_delete_confirmBodySharedSendReceive%": "{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. This cannot be undone.",
+      "%manageBooks_delete_confirmBodySharedSendReceive_2%": "{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next sync. This cannot be undone.",
       "%manageBooks_delete_confirmCancel%": "Cancel",
       "%manageBooks_delete_confirmTitle%": "Delete books from {0}?",
       "%manageBooks_delete_emptyState_noBooks%": "This project has no books to delete.",
@@ -530,12 +561,19 @@
       "%webView_book_selector_select_all%": "Select all",
       "%webView_book_selector_select_books%": "Select books...",
       "%webView_characterInventory_title%": "Character Inventory: {projectName}",
+      "%webView_checksSidePanel_checkCouldNotRun%": "Couldn't run",
+      "%webView_checksSidePanel_checkCouldNotRun_hideDetails%": "Hide details",
+      "%webView_checksSidePanel_checkCouldNotRun_needsSetup%": "{checkName} needs setup.",
+      "%webView_checksSidePanel_checkCouldNotRun_needsSetupInParatext9%": "{checkName} needs setup. These settings can't be changed in Paratext 10 yet. In Paratext 9:",
+      "%webView_checksSidePanel_checkCouldNotRun_showDetails%": "Show details",
+      "%webView_checksSidePanel_checkCouldNotRun_unexpectedError%": "{checkName}: An error occurred.",
+      "%webView_checksSidePanel_checkRequiresSetup%": "Setup required",
+      "%webView_checksSidePanel_checkRequiresSetup_tooltip%": "For reliable results, complete the inventory or settings for this check",
       "%webView_checksSidePanel_checkTypeFilter_countLabel%": "Checks ({resultsCount} selected)",
       "%webView_checksSidePanel_checkTypeFilter_label%": "Check Type",
       "%webView_checksSidePanel_checkTypeFilter_searchPlaceholder%": "Search check types…",
       "%webView_checksSidePanel_checkingBadge_title%": "Checking...",
-      "%webView_checksSidePanel_checkRequiresSetup%": "Setup required",
-      "%webView_checksSidePanel_checkRequiresSetup_tooltip%": "For reliable results, complete the inventory or settings for this check",
+      "%webView_checksSidePanel_checksCouldNotRun_notice%": "Couldn't run: {checkNames}",
       "%webView_checksSidePanel_deniedBadge_title%": "Denied",
       "%webView_checksSidePanel_fixedBadge_title%": "Fixed",
       "%webView_checksSidePanel_focusedCheckDropdown_allowItem%": "Allow",
@@ -552,6 +590,7 @@
       "%webView_checksSidePanel_scopeFilter_chapter%": "Chapter",
       "%webView_checksSidePanel_scopeFilter_label%": "Scope",
       "%webView_checksSidePanel_selectChecks%": "Select checks",
+      "%webView_checksSidePanel_selectedChecksCouldNotRun%": "No results — the selected checks couldn't run",
       "%webView_checksSidePanel_title%": "Checks",
       "%webView_checksSidePanel_unspecifiedCheckDescription%": "Unspecified check description",
       "%webView_checksSidePanel_unspecifiedCheckId%": "Unspecified check ID",
@@ -686,6 +725,7 @@
       "%webView_inventory_unknown_marker%": "Unknown Marker",
       "%webView_markersInventory_title%": "Markers Inventory: {projectName}",
       "%webView_platformScripture_error_syncEditBlocked%": "Editing is paused while an automatic Send/Receive is in progress. Your change was not saved.",
+      "%webView_platformScripture_error_syncEditBlocked_2%": "Editing is paused while an automatic sync is in progress. Your change was not saved.",
       "%webView_platformScripture_showCheckResults%": "Show Check Results...",
       "%webView_platformScripture_tools%": "Tools",
       "%webView_punctuationInventory_title%": "Punctuation Inventory: {projectName}",
@@ -754,6 +794,8 @@
       "%manageBooks_sidebar_projectPlaceholder%": "Select project"
     },
     "es": {
+      "%checkSetup_notApplicable_quotationMarksNotUsed%": "No se usa en este proyecto",
+      "%checkSetup_notApplicable_quotationTypesNotEnabled%": "No está habilitado para este proyecto",
       "%inventoryName_Character%": "Inventario de caracteres",
       "%inventoryName_Marker%": "Inventario de marcadores",
       "%inventoryName_MatchedPairs%": "Puntuación sin par coincidente",
@@ -852,10 +894,19 @@
       "%webView_checkResultsList_title%": "Resultados de verificación ({resultsCount}): {projectName}",
       "%webView_checkResultsList_unspecifiedCheckDescription%": "Descripción de verificación no especificada",
       "%webView_checkResultsList_unspecifiedCheckId%": "ID de verificación no especificado",
+      "%webView_checksSidePanel_checkCouldNotRun%": "No se pudo ejecutar",
+      "%webView_checksSidePanel_checkCouldNotRun_hideDetails%": "Ocultar detalles",
+      "%webView_checksSidePanel_checkCouldNotRun_needsSetup%": "{checkName} necesita configuración.",
+      "%webView_checksSidePanel_checkCouldNotRun_needsSetupInParatext9%": "{checkName} necesita configuración. Esta configuración aún no se puede cambiar en Paratext 10. En Paratext 9:",
+      "%webView_checksSidePanel_checkCouldNotRun_showDetails%": "Mostrar detalles",
+      "%webView_checksSidePanel_checkCouldNotRun_unexpectedError%": "{checkName}: se produjo un error.",
+      "%webView_checksSidePanel_checkRequiresSetup%": "Configuración requerida",
+      "%webView_checksSidePanel_checkRequiresSetup_tooltip%": "Para obtener resultados confiables, complete el inventario o la configuración de esta verificación",
       "%webView_checksSidePanel_checkTypeFilter_countLabel%": "Verificaciones ({resultsCount} seleccionados)",
       "%webView_checksSidePanel_checkTypeFilter_label%": "Tipo de verificación",
       "%webView_checksSidePanel_checkTypeFilter_searchPlaceholder%": "Buscar tipos de verificación…",
       "%webView_checksSidePanel_checkingBadge_title%": "Verificando...",
+      "%webView_checksSidePanel_checksCouldNotRun_notice%": "No se pudo ejecutar: {checkNames}",
       "%webView_checksSidePanel_deniedBadge_title%": "Denegado",
       "%webView_checksSidePanel_fixedBadge_title%": "Corregido",
       "%webView_checksSidePanel_focusedCheckDropdown_allowItem%": "Permitir",
@@ -866,11 +917,13 @@
       "%webView_checksSidePanel_projectFilter_label%": "Proyecto",
       "%webView_checksSidePanel_projectFilter_noProjectSelected%": "Ningún proyecto",
       "%webView_checksSidePanel_projectFilter_noProjectsFound%": "No se encontraron proyectos",
+      "%webView_checksSidePanel_projectFilter_projectsAndResources%": "Sus proyectos y recursos",
       "%webView_checksSidePanel_scopeFilter_all%": "Todo",
       "%webView_checksSidePanel_scopeFilter_book%": "Libro",
       "%webView_checksSidePanel_scopeFilter_chapter%": "Capítulo",
       "%webView_checksSidePanel_scopeFilter_label%": "Ámbito",
       "%webView_checksSidePanel_selectChecks%": "Seleccione verificaciones",
+      "%webView_checksSidePanel_selectedChecksCouldNotRun%": "Sin resultados: no se pudieron ejecutar las verificaciones seleccionadas",
       "%webView_checksSidePanel_title%": "Verificaciones",
       "%webView_checksSidePanel_unspecifiedCheckDescription%": "Descripción de verificación no especificado",
       "%webView_checksSidePanel_unspecifiedCheckId%": "ID de verificación no especificado",
@@ -984,6 +1037,7 @@
       "%webView_inventory_unknown_marker%": "Marcador desconocido",
       "%webView_markersInventory_title%": "Inventario de marcadores: {projectName}",
       "%webView_platformScripture_error_syncEditBlocked%": "La edición está pausada mientras se realiza un Enviar/Recibir automático. Su cambio no se guardó.",
+      "%webView_platformScripture_error_syncEditBlocked_2%": "La edición está pausada mientras se realiza una sincronización automática. Su cambio no se guardó.",
       "%webView_platformScripture_showCheckResults%": "Mostrar resultados de verificación...",
       "%webView_platformScripture_tools%": "Herramientas",
       "%webView_repeatedWordsInventory_title%": "Inventario de palabras repetidas: {projectName}",

@@ -161,7 +161,7 @@ export class RpcServer implements IRpcHandler {
     return true;
   }
 
-  // TODO(PT-4435): Nothing calls this. `RpcWebSocketListener.disconnect()` closes the WebSocket
+  // TODO(PT-4495): Nothing calls this. `RpcWebSocketListener.disconnect()` closes the WebSocket
   // server without iterating its `RpcServer`s, so live client sockets are never closed and
   // `IRpcHandler.disconnect`'s documented "on servers: disconnects from all clients" is unmet —
   // which is also why `INTENTIONAL_CLOSE_CODE` never leaves main. Fixing it means changing what

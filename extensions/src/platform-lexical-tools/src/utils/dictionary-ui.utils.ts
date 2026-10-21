@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 
 import { ERROR_POPOVER_STRING_KEYS } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
+import { DICTIONARY_TITLE_KEY } from './dictionary.utils';
 
 export const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   ...ERROR_POPOVER_STRING_KEYS,
+  DICTIONARY_TITLE_KEY,
   '%platformLexicalTools_dictionary_allOccurrencesLabel%',
   '%platformLexicalTools_dictionary_backToList%',
   '%platformLexicalTools_dictionary_definitionLabel%',

@@ -187,6 +187,7 @@
       "%webView_platformScriptureEditor_bookNotAvailable_readOnlyTooltip%": "This project is read-only. Books cannot be added.",
       "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%": "This book is not part of this project. Ask your project administrator to add it.",
       "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%": "Books cannot be added while an automatic Send/Receive is in progress.",
+      "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%": "Books cannot be added while an automatic sync is in progress.",
       "%webView_platformScriptureEditor_bookNotAvailable_title%": "Book not in this project",
       "%webView_platformScriptureEditor_characterMarkerControl_ariaLabel%": "Character marker",
       "%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%": "{name}: {value}",
@@ -215,6 +216,7 @@
       "%webView_platformScriptureEditor_error_selectionContainsMarkers%": "Invalid selection. Selected text must be a simple word or phrase with no markers.",
       "%webView_platformScriptureEditor_error_structureProtected%": "Structure is locked. Paragraph and verse markers cannot be changed.",
       "%webView_platformScriptureEditor_error_syncEditBlocked%": "Editing is paused while an automatic Send/Receive is in progress. Your change was not saved.",
+      "%webView_platformScriptureEditor_error_syncEditBlocked_2%": "Editing is paused while an automatic sync is in progress. Your change was not saved.",
       "%webView_platformScriptureEditor_hiddenContentDelete_delete%": "Delete",
       "%webView_platformScriptureEditor_hiddenContentDelete_keep%": "Don't delete",
       "%webView_platformScriptureEditor_hiddenContentDelete_prompt%": "Your edit would delete content that this view cannot display ({markers}). It is hidden here, but it is part of your text.",
@@ -245,6 +247,7 @@
       "%webView_platformScriptureEditor_showCheckResults%": "Show Check Results...",
       "%webView_platformScriptureEditor_showCommentariesPanel%": "Commentaries",
       "%webView_platformScriptureEditor_showCommentsPanel%": "Comments",
+      "%webView_platformScriptureEditor_showDictionaryPanel%": "Dictionary",
       "%webView_platformScriptureEditor_showFootnotes%": "Show footnotes",
       "%webView_platformScriptureEditor_showTextCollectionPanel%": "Text collection",
       "%webView_platformScriptureEditor_structureProtection_ariaLabel%": "Toggle structure protection",
@@ -259,6 +262,7 @@
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Unlock structure for project",
       "%webView_platformScriptureEditor_switchScriptureView%": "Switch Scripture view",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Editing paused — Send/Receive in progress",
+      "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": "Editing paused — sync in progress",
       "%webView_platformScriptureEditor_tabCouldNotOpen%": "That tab couldn't be opened. Please try again.",
       "%webView_platformScriptureEditor_teamLayout_ariaLabel%": "Edit team layout",
       "%webView_platformScriptureEditor_textCollectionNotOpen%": "Text collection isn't available, so there's no tab to show.",
@@ -337,7 +341,9 @@
       "%webView_scriptureTextGrid_viewOptions_grid%": "Grid",
       "%webView_scriptureTextGrid_viewOptions_installing%": "Installing {resourceName}…",
       "%webView_scriptureTextGrid_viewOptions_openPanel%": "View Options",
+      "%webView_scriptureTextGrid_viewOptions_notSupported%": "Text Collection settings could not be loaded for this project.",
       "%webView_scriptureTextGrid_viewOptions_persistFailed%": "Failed to save your changes. Please try again.",
+      "%webView_scriptureTextGrid_viewOptions_settingsUnavailable%": "Couldn't load your texts.",
       "%webView_scriptureTextGrid_viewOptions_pickerNoProjectNotice%": "No project is selected, so a resource you choose here will be downloaded to this computer but not added to a text collection.",
       "%webView_scriptureTextGrid_viewOptions_removeFromList%": "Remove {resourceName} from list",
       "%webView_scriptureTextGrid_viewOptions_textsHeader%": "Texts",
@@ -528,6 +534,7 @@
       "%webView_platformScriptureEditor_bookNotAvailable_readOnlyTooltip%": "Este proyecto es de solo lectura. No se pueden añadir libros.",
       "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%": "Este libro no forma parte de este proyecto. Pida al administrador del proyecto que lo añada.",
       "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%": "No se pueden añadir libros mientras se realiza un Enviar/Recibir automático.",
+      "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%": "No se pueden añadir libros mientras se realiza una sincronización automática.",
       "%webView_platformScriptureEditor_bookNotAvailable_title%": "Libro no incluido en este proyecto",
       "%webView_platformScriptureEditor_characterMarkerControl_ariaLabel%": "Marcador de carácter",
       "%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%": "{name}: {value}",
@@ -556,6 +563,7 @@
       "%webView_platformScriptureEditor_error_selectionContainsMarkers%": "Selección inválida. El texto seleccionado debe ser una palabra o frase simple sin marcadores.",
       "%webView_platformScriptureEditor_error_structureProtected%": "La estructura está bloqueada. Los marcadores de párrafo y versículo no se pueden cambiar.",
       "%webView_platformScriptureEditor_error_syncEditBlocked%": "La edición está pausada mientras se realiza un Enviar/Recibir automático. Su cambio no se guardó.",
+      "%webView_platformScriptureEditor_error_syncEditBlocked_2%": "La edición está pausada mientras se realiza una sincronización automática. Su cambio no se guardó.",
       "%webView_platformScriptureEditor_hiddenContentDelete_delete%": "Eliminar",
       "%webView_platformScriptureEditor_hiddenContentDelete_keep%": "No eliminar",
       "%webView_platformScriptureEditor_hiddenContentDelete_prompt%": "Su cambio eliminaría contenido que esta vista no puede mostrar ({markers}). Está oculto aquí, pero forma parte de su texto.",
@@ -586,6 +594,7 @@
       "%webView_platformScriptureEditor_showCheckResults%": "Mostrar resultados de verificación...",
       "%webView_platformScriptureEditor_showCommentariesPanel%": "Comentarios bíblicos",
       "%webView_platformScriptureEditor_showCommentsPanel%": "Comentarios de proyecto",
+      "%webView_platformScriptureEditor_showDictionaryPanel%": "Diccionario",
       "%webView_platformScriptureEditor_showFootnotes%": "Mostrar notas al pie",
       "%webView_platformScriptureEditor_showTextCollectionPanel%": "Colección de textos",
       "%webView_platformScriptureEditor_structureProtection_ariaLabel%": "Alternar protección de estructura",
@@ -600,6 +609,7 @@
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Desbloquear estructura para el proyecto",
       "%webView_platformScriptureEditor_switchScriptureView%": "Cambiar vista de escrituras",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Edición pausada — Enviar/Recibir en curso",
+      "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": "Edición pausada — sincronización en curso",
       "%webView_platformScriptureEditor_tabCouldNotOpen%": "No se pudo abrir esa pestaña. Inténtelo de nuevo.",
       "%webView_platformScriptureEditor_teamLayout_ariaLabel%": "Editar el diseño del equipo",
       "%webView_platformScriptureEditor_textCollectionNotOpen%": "La colección de textos no está disponible, así que no hay ninguna pestaña que mostrar.",
@@ -678,7 +688,9 @@
       "%webView_scriptureTextGrid_viewOptions_grid%": "Cuadrícula",
       "%webView_scriptureTextGrid_viewOptions_installing%": "Instalando {resourceName}…",
       "%webView_scriptureTextGrid_viewOptions_openPanel%": "Opciones de vista",
+      "%webView_scriptureTextGrid_viewOptions_notSupported%": "No se pudo cargar la configuración de Colección de textos para este proyecto.",
       "%webView_scriptureTextGrid_viewOptions_persistFailed%": "No se pudieron guardar los cambios. Vuelva a intentarlo.",
+      "%webView_scriptureTextGrid_viewOptions_settingsUnavailable%": "No se pudieron cargar sus textos.",
       "%webView_scriptureTextGrid_viewOptions_pickerNoProjectNotice%": "No hay ningún proyecto seleccionado, así que el recurso que elija aquí se descargará a esta computadora, pero no se agregará a una colección de textos.",
       "%webView_scriptureTextGrid_viewOptions_removeFromList%": "Quitar {resourceName} de la lista",
       "%webView_scriptureTextGrid_viewOptions_textsHeader%": "Textos",
@@ -1211,8 +1223,26 @@
         "message": "The empty state now explains both Base and Model texts rather than the model text alone. The new key is %webView_modelTextPanel_emptyState_baseOrModel_prompt%."
       }
     },
+    "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%"
+    },
     "%webView_platformScriptureEditor_error_bookNotFoundProject%": {
       "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%"
+    },
+    "%webView_platformScriptureEditor_error_syncEditBlocked%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_error_syncEditBlocked_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_error_syncEditBlocked_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_error_syncEditBlocked%"
     },
     "%webView_platformScriptureEditor_insert%": {
       "fallbackKey": "%Paratext.EditMenu.ListForm.insertToolStripMenuItem.Text%"
@@ -1258,6 +1288,15 @@
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
       "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
+    },
+    "%webView_platformScriptureEditor_syncEditBlocked_banner%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_syncEditBlocked_banner_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_syncEditBlocked_banner%"
     }
   }
 }
