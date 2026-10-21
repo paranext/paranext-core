@@ -438,8 +438,9 @@ internal sealed class ManageBooksService : NetworkObject
     /// Target vs model lookups differ only in the error code they throw
     /// (NOT_FOUND for target, FAILED_PRECONDITION for model per Theme 7).
     /// A project Platform.Bible can't open is refused with
-    /// <see cref="ProjectOpenBlockedException"/> (FAILED_PRECONDITION) whichever
-    /// role it has. In the mutating methods this runs inside their write scope,
+    /// <see cref="ProjectOpenBlockedException"/> whichever role it has; TypeScript
+    /// recognizes it by its message's sentinel, since its FAILED_PRECONDITION code
+    /// stays in C#. In the mutating methods this runs inside their write scope,
     /// which they open first per the write-gate rule.
     /// </summary>
     private static ScrText ResolveProjectOrThrow(
@@ -471,7 +472,7 @@ internal sealed class ManageBooksService : NetworkObject
         }
 
         // Every Manage Books operation reads or writes the resolved project's books, so refuse a
-        // project Platform.Bible can't open. The exception carries FAILED_PRECONDITION.
+        // project Platform.Bible can't open.
         scrText.ThrowIfOpenBlocked();
         return scrText;
     }
@@ -601,6 +602,7 @@ internal sealed class ManageBooksService : NetworkObject
     {
         try
         {
+            // open-block: exempt — reads only whether the project is shared, never its text
             ScrText scrText = LocalParatextProjects.GetParatextProject(projectId);
             return Task.FromResult(scrText.IsProjectShared && scrText.Permissions.UserCount > 1);
         }

@@ -1,28 +1,13 @@
-import { getErrorMessage, isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  getProjectOpenBlockedReasonKey as getReasonKeyFromRefusalMessage,
+  LanguageStrings,
+  LocalizeKey,
+  PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
+  toProjectOpenBlockedReasonKey,
+} from 'platform-bible-utils';
 
 // Imports nothing from `@papi`, so both the web views and the extension host (`main.ts`) can use it.
-
-/**
- * Sentinel that paranext-core's C# puts at the end of the message of any request it refuses because
- * the project cannot be opened (`ScrTextExtensions.ThrowIfOpenBlocked`). Unanchored so it still
- * matches behind a JSON-RPC prefix or inside the quotes `getErrorMessage` puts around a bare
- * string.
- */
-const PROJECT_OPEN_BLOCKED_REGEX = /\(PROJECT_OPEN_BLOCKED\)/;
-
-/** The reason's localize key, which the C# message places immediately before the sentinel. */
-const PROJECT_OPEN_BLOCKED_REASON_KEY_REGEX = /(%[^%\s]+%)\s*\(PROJECT_OPEN_BLOCKED\)/;
-
-/** Shown instead of a reason that could not be read, so the user never sees a raw message. */
-export const PROJECT_OPEN_BLOCKED_FALLBACK_KEY: LocalizeKey = '%project_unsupported_generic%';
-
-/**
- * A project's `unsupportedReason` as a key that can be localized. The field is always a localize
- * key; anything else is replaced by the generic reason rather than shown raw.
- */
-export function toProjectOpenBlockedReasonKey(unsupportedReason: string): LocalizeKey {
-  return isLocalizeKey(unsupportedReason) ? unsupportedReason : PROJECT_OPEN_BLOCKED_FALLBACK_KEY;
-}
 
 /** The error code a service reporting structured errors (the checklist) gives such a refusal. */
 export const PROJECT_OPEN_BLOCKED_ERROR_CODE = 'PROJECT_OPEN_BLOCKED';
@@ -40,13 +25,10 @@ export function getProjectOpenBlockedReasonKey(
   errorCode?: string,
 ): LocalizeKey | undefined {
   if (error === undefined) return undefined;
-  const message = getErrorMessage(error);
-  if (!PROJECT_OPEN_BLOCKED_REGEX.test(message))
-    return errorCode === PROJECT_OPEN_BLOCKED_ERROR_CODE
-      ? PROJECT_OPEN_BLOCKED_FALLBACK_KEY
-      : undefined;
-  const reasonKey = PROJECT_OPEN_BLOCKED_REASON_KEY_REGEX.exec(message)?.[1];
-  return reasonKey ? toProjectOpenBlockedReasonKey(reasonKey) : PROJECT_OPEN_BLOCKED_FALLBACK_KEY;
+  return (
+    getReasonKeyFromRefusalMessage(error) ??
+    (errorCode === PROJECT_OPEN_BLOCKED_ERROR_CODE ? PROJECT_OPEN_BLOCKED_FALLBACK_KEY : undefined)
+  );
 }
 
 /**
@@ -107,25 +89,49 @@ export type RefuseIfProjectUnsupportedDependencies = NotifyProjectOpenBlockedDep
 };
 
 /**
+ * How long {@link refuseIfProjectUnsupported} waits for the metadata lookup before letting the
+ * project through. The lookup runs ahead of `openWebView`, so an unbounded wait would hold the tool
+ * (and, for Manage Books, every click queued behind it) until every factory answers.
+ */
+export const PROJECT_OPEN_LOOKUP_TIMEOUT_MS = 1500;
+
+/**
  * Whether a tool must not open on `projectId` because the project cannot be opened. When it cannot,
  * the user is told why (see {@link notifyProjectOpenBlocked}).
  *
  * One metadata lookup, which is a fan-out: call it once per user action, never from a reactive
- * loop. A failed lookup lets the project through, so a transient error never locks a user out of a
- * real project; the backend still refuses an unsupported project's text.
+ * loop. A lookup that fails, or does not answer within {@link PROJECT_OPEN_LOOKUP_TIMEOUT_MS}, lets
+ * the project through, so a transient error or a slow factory never locks a user out of a real
+ * project; the backend still refuses an unsupported project's text.
  */
 export async function refuseIfProjectUnsupported(
   projectId: string,
   dependencies: RefuseIfProjectUnsupportedDependencies,
 ): Promise<boolean> {
   let unsupportedReason: string | undefined;
+  let cancelTimeout = () => {};
   try {
-    ({ unsupportedReason } = await dependencies.getMetadataForProject(projectId));
+    const metadata = await Promise.race([
+      dependencies.getMetadataForProject(projectId),
+      new Promise<undefined>((resolve) => {
+        const timeoutId = setTimeout(resolve, PROJECT_OPEN_LOOKUP_TIMEOUT_MS);
+        cancelTimeout = () => clearTimeout(timeoutId);
+      }),
+    ]);
+    if (!metadata) {
+      dependencies.logWarning(
+        `Looking up whether ${projectId} can be opened took over ${PROJECT_OPEN_LOOKUP_TIMEOUT_MS} ms; treating it as openable`,
+      );
+      return false;
+    }
+    ({ unsupportedReason } = metadata);
   } catch (e) {
     dependencies.logWarning(
       `Could not look up whether ${projectId} can be opened (${getErrorMessage(e)}); treating it as openable`,
     );
     return false;
+  } finally {
+    cancelTimeout();
   }
   if (!unsupportedReason) return false;
 

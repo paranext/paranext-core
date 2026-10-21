@@ -2,7 +2,12 @@
 
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PROJECT_OPEN_BLOCKED_FALLBACK_KEY } from '../project-open-blocked.util';
+import {
+  newPlatformError,
+  PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
+  PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE,
+  type LocalizeKey,
+} from 'platform-bible-utils';
 import { useProjectOpenBlockedMessage } from './use-project-open-blocked-message';
 
 const LOCALIZATION_DATA_PROVIDER_NAME = 'platform.localizationDataServiceDataProvider';
@@ -85,5 +90,65 @@ describe('useProjectOpenBlockedMessage', () => {
     rerender();
 
     expect(mockLocalizedStrings.mock.lastCall?.[0]).toBe(firstSelector);
+  });
+
+  it('stays subscribed while the error clears, so the next refusal shows its reason at once', () => {
+    const { result, rerender } = renderHook(
+      ({ reasonKey }: { reasonKey: LocalizeKey | undefined }) =>
+        useProjectOpenBlockedMessage(reasonKey),
+      { initialProps: { reasonKey: REASON_KEY } },
+    );
+    const firstSelector = mockLocalizedStrings.mock.calls[0][0];
+
+    // A reload clears the error before the backend refuses again.
+    rerender({ reasonKey: undefined });
+    expect(result.current).toBeUndefined();
+    expect(mockUseData).toHaveBeenLastCalledWith(LOCALIZATION_DATA_PROVIDER_NAME);
+    expect(mockLocalizedStrings.mock.lastCall?.[0]).toBe(firstSelector);
+
+    rerender({ reasonKey: REASON_KEY });
+    expect(result.current).toBe(REASON_TEXT);
+    expect(mockLocalizedStrings.mock.lastCall?.[0]).toBe(firstSelector);
+  });
+
+  it('follows a new reason', () => {
+    const OTHER_KEY = '%project_unsupported_other%';
+    localizeWith({
+      [REASON_KEY]: REASON_TEXT,
+      [OTHER_KEY]: 'Other reason.',
+      [PROJECT_OPEN_BLOCKED_FALLBACK_KEY]: FALLBACK_TEXT,
+    });
+    const { result, rerender } = renderHook(
+      ({ reasonKey }: { reasonKey: LocalizeKey | undefined }) =>
+        useProjectOpenBlockedMessage(reasonKey),
+      { initialProps: { reasonKey: REASON_KEY } },
+    );
+
+    rerender({ reasonKey: OTHER_KEY });
+
+    expect(result.current).toBe('Other reason.');
+    expect(mockLocalizedStrings.mock.lastCall?.[0]).toEqual({
+      localizeKeys: [OTHER_KEY, PROJECT_OPEN_BLOCKED_FALLBACK_KEY],
+    });
+  });
+
+  it('shows the built-in generic text when localization fails', () => {
+    mockLocalizedStrings.mockImplementation(() => [
+      newPlatformError('localization unavailable'),
+      vi.fn(),
+      false,
+    ]);
+
+    const { result } = renderHook(() => useProjectOpenBlockedMessage(REASON_KEY));
+
+    expect(result.current).toBe(PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE);
+  });
+
+  it('shows the built-in generic text when neither the reason nor the generic reason resolves', () => {
+    localizeWith({});
+
+    const { result } = renderHook(() => useProjectOpenBlockedMessage(REASON_KEY));
+
+    expect(result.current).toBe(PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE);
   });
 });

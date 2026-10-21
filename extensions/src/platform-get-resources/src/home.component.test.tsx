@@ -466,6 +466,8 @@ describe('Home unsynced changes marker', () => {
 describe('Home unsupported projects', () => {
   const UNSUPPORTED_REASON_KEY = '%project_unsupported_studyBibleAdditions%';
   const UNSUPPORTED_REASON_TEXT = "Study Bible Additions projects aren't supported yet.";
+  const GENERIC_REASON_KEY = '%project_unsupported_generic%';
+  const GENERIC_REASON_TEXT = "This project can't be opened.";
 
   const UNSUPPORTED_LOCAL_PROJECT: LocalProjectInfo = {
     projectId: 'sba1',
@@ -588,6 +590,23 @@ describe('Home unsupported projects', () => {
     // name and an empty bubble.
     expect(screen.queryByRole('group')).toBeNull();
     expect(screen.queryByText(UNSUPPORTED_REASON_KEY)).toBeNull();
+  });
+
+  it.each([
+    ['resolves to its own key', UNSUPPORTED_REASON_KEY],
+    ['is not a localize key', 'oops'],
+  ])('shows the generic reason when the reason %s', (_case, unsupportedReason) => {
+    renderHomeList({
+      localProjectsInfo: [{ ...UNSUPPORTED_LOCAL_PROJECT, unsupportedReason }],
+      localizedUnsupportedReasons: {
+        [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_KEY,
+        [GENERIC_REASON_KEY]: GENERIC_REASON_TEXT,
+      },
+    });
+
+    expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled();
+    expect(screen.getByRole('group', { name: GENERIC_REASON_TEXT })).toBeInTheDocument();
+    expect(screen.queryByText('oops')).toBeNull();
   });
 
   it('keeps Open disabled when the server reports an empty reason and the local one is real', () => {
@@ -730,6 +749,38 @@ describe('Home unsupported projects', () => {
 
       expect(openItem).toHaveAttribute('aria-disabled', 'true');
       expect(openItem).not.toHaveTextContent(UNSUPPORTED_REASON_KEY);
+    });
+
+    // Radix's arrow-key navigation skips a `disabled` item, which would leave the reason written
+    // inside it unreachable for a keyboard user.
+    it('lets keyboard focus reach the blocked Open item, and selecting it opens nothing', async () => {
+      const onOpenProject = vi.fn();
+      renderHomeList({
+        localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+        sharedProjectsInfo: editedSharedCopyOf(UNSUPPORTED_LOCAL_PROJECT),
+        localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_TEXT },
+        onOpenProject,
+      });
+      const user = userEvent.setup();
+
+      const openItem = await openRowMenu(UNSUPPORTED_LOCAL_PROJECT.name, 'first');
+      const itemCount = screen.getAllByRole('menuitem').length;
+      // Positive control: the menu holds another item, so focus has somewhere else it could go.
+      expect(itemCount).toBeGreaterThan(1);
+      const focusedItems = new Set<EventTarget | null>();
+      const recordFocus = (event: FocusEvent) => focusedItems.add(event.target);
+      document.addEventListener('focusin', recordFocus);
+      // Walk the whole menu, so the blocked item is passed whichever position it holds.
+      await user.keyboard(`{ArrowDown>${itemCount}/}`);
+      document.removeEventListener('focusin', recordFocus);
+
+      expect(focusedItems).toContain(openItem);
+      expect(openItem).toHaveAttribute('aria-disabled', 'true');
+      expect(openItem).toHaveTextContent(UNSUPPORTED_REASON_TEXT);
+
+      openItem.focus();
+      await user.keyboard('{Enter}');
+      expect(onOpenProject).not.toHaveBeenCalled();
     });
 
     it('keeps Open enabled in the action cell menu of an openable project (positive control)', async () => {

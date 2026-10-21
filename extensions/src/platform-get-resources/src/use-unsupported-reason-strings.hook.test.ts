@@ -34,6 +34,9 @@ const sharedProject = (
   ...overrides,
 });
 
+const GENERIC_REASON_KEY = '%project_unsupported_generic%';
+const GENERIC_REASON_FALLBACK_TEXT = "This project can't be opened.";
+
 describe('useUnsupportedReasonStrings', () => {
   beforeEach(() => {
     mockUseLocalizedStrings.mockClear();
@@ -64,11 +67,12 @@ describe('useUnsupportedReasonStrings', () => {
     renderHook(() => useUnsupportedReasonStrings(localProjectsInfo, sharedProjectsInfo));
 
     const keys = lastRequestedKeys();
-    expect(keys).toHaveLength(2);
+    expect(keys).toHaveLength(3);
     expect(keys).toEqual(
       expect.arrayContaining([
         '%project_unsupported_studyBibleAdditions%',
         '%project_unsupported_other%',
+        GENERIC_REASON_KEY,
       ]),
     );
   });
@@ -83,7 +87,7 @@ describe('useUnsupportedReasonStrings', () => {
       }),
     );
 
-    expect(lastRequestedKeys()).toEqual([key]);
+    expect(lastRequestedKeys()).toEqual([GENERIC_REASON_KEY, key]);
   });
 
   it('keeps the same key list when a refresh brings new lists with the same reasons', () => {
@@ -131,7 +135,7 @@ describe('useUnsupportedReasonStrings', () => {
     });
 
     expect(lastRequestedKeys()).not.toBe(firstKeys);
-    expect(lastRequestedKeys()).toEqual(['%project_unsupported_b%']);
+    expect(lastRequestedKeys()).toEqual(['%project_unsupported_b%', GENERIC_REASON_KEY]);
   });
 
   it('keeps the same empty key list across refreshes when no project has a reason', () => {
@@ -148,7 +152,7 @@ describe('useUnsupportedReasonStrings', () => {
     expect(lastRequestedKeys()).toBe(firstKeys);
   });
 
-  it('excludes a value that is not itself a localize key from the request', () => {
+  it('asks only for the generic reason for a value that is not itself a localize key', () => {
     mockUseLocalizedStrings.mockReturnValue([{}, false]);
     const localProjectsInfo: LocalProjectInfo[] = [
       localProject({ projectId: 'p1', unsupportedReason: 'not-a-localize-key' }),
@@ -156,7 +160,7 @@ describe('useUnsupportedReasonStrings', () => {
 
     renderHook(() => useUnsupportedReasonStrings(localProjectsInfo));
 
-    expect(lastRequestedKeys()).toEqual([]);
+    expect(lastRequestedKeys()).toEqual([GENERIC_REASON_KEY]);
   });
 
   it('returns the localized strings once they have resolved', () => {
@@ -177,6 +181,7 @@ describe('useUnsupportedReasonStrings', () => {
 
     expect(result.current).toEqual({
       '%project_unsupported_studyBibleAdditions%': "Study Bible Additions aren't supported yet.",
+      [GENERIC_REASON_KEY]: GENERIC_REASON_FALLBACK_TEXT,
     });
   });
 
@@ -190,5 +195,28 @@ describe('useUnsupportedReasonStrings', () => {
     const { result } = renderHook(() => useUnsupportedReasonStrings(localProjectsInfo));
 
     expect(result.current).toEqual({});
+  });
+
+  it("keeps the generic reason's translation when it has one", () => {
+    mockUseLocalizedStrings.mockReturnValue([
+      { [GENERIC_REASON_KEY]: 'Ce projet ne peut pas être ouvert.' },
+      false,
+    ]);
+
+    const { result } = renderHook(() =>
+      useUnsupportedReasonStrings([localProject({ projectId: 'p1', unsupportedReason: 'oops' })]),
+    );
+
+    expect(result.current[GENERIC_REASON_KEY]).toBe('Ce projet ne peut pas être ouvert.');
+  });
+
+  it('falls back to English for the generic reason when it resolves to its own key', () => {
+    mockUseLocalizedStrings.mockReturnValue([{ [GENERIC_REASON_KEY]: GENERIC_REASON_KEY }, false]);
+
+    const { result } = renderHook(() =>
+      useUnsupportedReasonStrings([localProject({ projectId: 'p1', unsupportedReason: 'oops' })]),
+    );
+
+    expect(result.current[GENERIC_REASON_KEY]).toBe(GENERIC_REASON_FALLBACK_TEXT);
   });
 });

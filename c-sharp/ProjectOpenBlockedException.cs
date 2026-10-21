@@ -12,8 +12,11 @@ namespace Paranext.DataProvider;
 /// it. The words before the key may change; the key and the sentinel must stay last.
 /// <c>OpenBlockedReasonTests</c> pins this.
 /// <para>
-/// It also carries <see cref="PlatformErrorCodes.FailedPrecondition"/> in <c>Exception.Data</c> for
-/// the services that report PlatformError codes.
+/// It also carries <see cref="PlatformErrorCodes.FailedPrecondition"/> in <c>Exception.Data</c>, for
+/// C# callers that read it with <see cref="PlatformErrorCodes.TryGetCode"/>. The code does not
+/// cross JSON-RPC: <c>PapiClient</c> uses StreamJsonRpc's default <c>CommonErrorData</c> exception
+/// strategy, which sends the type, message, stack and inner exception but not <c>Exception.Data</c>.
+/// TypeScript therefore relies on <see cref="Sentinel"/>.
 /// </para>
 /// </remarks>
 public class ProjectOpenBlockedException : InvalidOperationException

@@ -1642,6 +1642,11 @@ export async function openDefaultActiveProjectIfApplicable(
  * lookup's retry delay, since a user whose every candidate is unsupported keeps an empty editor,
  * and so re-runs the picker, on every trigger.
  *
+ * After a `'no-candidate'` run, the web-view triggers are skipped until something that can add a
+ * candidate happens: a sync ending, `platform.onDidChangeProjects`, a project data provider factory
+ * registering, or a Scripture Editor showing a project (which records it as recent). Each skipped
+ * run would otherwise ask for the shared projects again for the same answer.
+ *
  * Mirrors the simple-function pattern used in `home.web-view.tsx` rather than a class wrapper.
  */
 export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscriber {
@@ -1655,6 +1660,19 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
   // Read via a helper to defeat TypeScript's flow narrowing — the listeners below can mutate
   // pickerState concurrently across awaits, which TS's flow analysis can't model.
   const getPickerState = () => pickerState;
+  // Bumped by each event that can add a candidate. A run that found none records the version it
+  // started at, so an event landing while it is in flight is not swallowed by its result.
+  let candidateInputsVersion = 0;
+  let noCandidateAtVersion: number | undefined;
+  const candidateInputsChanged = () => {
+    candidateInputsVersion += 1;
+  };
+  /** Whether a web view opening or updating should run the picker. */
+  const shouldRunForWebView = (webView: SavedWebViewDefinition) => {
+    if (webView.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && webView.projectId)
+      candidateInputsChanged();
+    return noCandidateAtVersion !== candidateInputsVersion;
+  };
 
   const tryPicker = async (): Promise<void> => {
     if (pickerState !== 'idle') {
@@ -1662,8 +1680,10 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
       return;
     }
     pickerState = 'running';
+    const versionAtStart = candidateInputsVersion;
     try {
       const outcome = await openDefaultActiveProjectIfApplicable(papi, unsupportedProjectIds);
+      noCandidateAtVersion = outcome === 'no-candidate' ? versionAtStart : undefined;
       if (outcome !== 'filled') {
         papi.logger.debug(
           `Default active project picker: unexpected outcome received: '${outcome}'`,
@@ -1672,6 +1692,7 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     } catch (e) {
       // `openDefaultActiveProjectIfApplicable` catches its own errors and returns 'failed'; this
       // catch only fires on unexpected throws (e.g. PAPI plumbing bugs).
+      noCandidateAtVersion = undefined;
       papi.logger.warn(
         `Default active project picker: tryPicker threw unexpectedly: ${getErrorMessage(e)}`,
       );
@@ -1691,7 +1712,8 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 
   // `tryPicker()` catches its own errors internally; the `.catch` blocks below are defensive
   // against a future change that could leak a rejection — matches the `finally`-block retry above.
-  const unsubFromWebViewOpen = papi.webViews.onDidOpenWebView(() => {
+  const unsubFromWebViewOpen = papi.webViews.onDidOpenWebView(({ webView }) => {
+    if (!shouldRunForWebView(webView)) return;
     tryPicker().catch((e) =>
       papi.logger.warn(
         `Default active project picker: webView-open handler threw unexpectedly: ${getErrorMessage(e)}`,
@@ -1702,7 +1724,8 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
   const unsubFromWebViewUpdate = papi.webViews.onDidUpdateWebView(({ webView }) => {
     // Only Scripture Editor updates can change the picker's outcome — any other webview's update
     // can't reveal or remove an empty editor.
-    if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
+    if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE || !shouldRunForWebView(webView))
+      return;
     tryPicker().catch((e) =>
       papi.logger.warn(
         `Default active project picker: webView-update handler threw unexpectedly: ${getErrorMessage(e)}`,
@@ -1713,17 +1736,19 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
   const unsubFromSync = papi.network.getNetworkEvent<{ isSyncing: boolean }>(
     'paratextBibleSendReceive.onSyncStateChanged',
   )(({ isSyncing }) => {
-    if (!isSyncing)
-      tryPicker().catch((e) =>
-        papi.logger.warn(
-          `Default active project picker: sync-state handler threw unexpectedly: ${getErrorMessage(e)}`,
-        ),
-      );
+    if (isSyncing) return;
+    candidateInputsChanged();
+    tryPicker().catch((e) =>
+      papi.logger.warn(
+        `Default active project picker: sync-state handler threw unexpectedly: ${getErrorMessage(e)}`,
+      ),
+    );
   });
 
   const unsubFromProjectsChanged = papi.network.getNetworkEvent('platform.onDidChangeProjects')(
     () => {
       unsupportedProjectIds.invalidate();
+      candidateInputsChanged();
       tryPicker().catch((e) =>
         papi.logger.warn(
           `Default active project picker: projects-changed handler threw unexpectedly: ${getErrorMessage(e)}`,
@@ -1736,7 +1761,9 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
   const unsubFromNetworkObjectCreated = papi.network.getNetworkEvent(
     'object:onDidCreateNetworkObject',
   )(({ objectType }) => {
-    if (objectType === PDP_FACTORY_OBJECT_TYPE) unsupportedProjectIds.invalidate();
+    if (objectType !== PDP_FACTORY_OBJECT_TYPE) return;
+    unsupportedProjectIds.invalidate();
+    candidateInputsChanged();
   });
 
   // Cover the case where the empty editor and an eligible synced project are already in place
@@ -1931,13 +1958,20 @@ export async function finalizeProjectSwitch(
  *
  * A metadata lookup is a fan-out, so keep this out of reactive loops. Any failure counts as
  * openable, so a transient error never replaces a real project's text with the reason.
+ *
+ * Asks through an interface every Paratext project serves and only the C# factory provides, so at
+ * startup the lookup waits for that factory, whose answer carries the reason, instead of polling
+ * whichever factory registered first.
  */
 export async function getProjectUnsupportedReason(
   papi: typeof PapiBackend,
   projectId: string,
 ): Promise<string> {
   try {
-    const metadata = await papi.projectLookup.getMetadataForProject(projectId);
+    const metadata = await papi.projectLookup.getMetadataForProject(
+      projectId,
+      'platformScripture.scriptureEditPermissions',
+    );
     return metadata.unsupportedReason ?? '';
   } catch (e) {
     papi.logger.warn(

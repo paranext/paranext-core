@@ -321,14 +321,27 @@ describe('Find web view — never searches a project that cannot be opened', () 
     expect(capturedFindProps.value?.noOpenProjects).toBe(false);
   });
 
-  it('never searches a bound project that cannot be opened, and passes Find its reason', async () => {
+  // Find can still be bound to such a project, for instance by a layout saved before the project was
+  // known to be unsupported.
+  it('moves off a bound project that cannot be opened, without searching it', async () => {
+    mockMetadata();
+    vi.mocked(useOpenProjectTabs).mockReturnValue([editorTab('P2', 0), editorTab('P1', 1)]);
+
+    // The spy does not feed the new id back in, so Find stays bound to P2 for the whole test: any
+    // search it began would be a search of P2.
+    const { updateWebViewDefinition } = renderFind({ projectId: 'P2', searchTerm: 'grace' });
+
+    await waitFor(() => expect(updateWebViewDefinition).toHaveBeenCalledWith({ projectId: 'P1' }));
+    expect(findPdp.beginFindJob).not.toHaveBeenCalled();
+  });
+
+  it('never searches a bound project that cannot be opened when no other project is open', async () => {
     mockMetadata();
     vi.mocked(useOpenProjectTabs).mockReturnValue([editorTab('P2', 0)]);
 
     renderFind({ projectId: 'P2', searchTerm: 'grace' });
 
-    await waitFor(() => expect(capturedFindProps.value?.openBlockedMessage).toBe(SBA_REASON_TEXT));
-    expect(capturedFindProps.value?.searchStatus).toBe('errored');
+    await waitFor(() => expect(capturedFindProps.value?.noOpenProjects).toBe(true));
     expect(findPdp.beginFindJob).not.toHaveBeenCalled();
   });
 

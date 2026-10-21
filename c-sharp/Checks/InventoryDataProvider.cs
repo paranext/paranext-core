@@ -84,6 +84,7 @@ internal sealed class InventoryDataProvider(
         }
 
         var scrText = LocalParatextProjects.GetParatextProject(anyProjectDetails.Metadata.Id);
+        // open-block: exempt — anyProjectDetails has no unsupported reason; only lists inventory options
         var dataSource = new ChecksDataSource(scrText);
         foreach (var inventoryId in InventoryFactory.GetAvailableInventoryIds())
         {

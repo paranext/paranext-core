@@ -36,6 +36,7 @@ import {
   getErrorMessage,
   isLocalizeKey,
   normalizeFullName,
+  PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
 } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useState } from 'react';
@@ -243,8 +244,9 @@ export type HomeProps = {
   /** Array of project IDs that are currently being sent/received. */
   activeSendReceiveProjects?: string[];
   /**
-   * Localized text for each `unsupportedReason` key in the list; a key with no entry shows no
-   * tooltip text.
+   * Localized text for each `unsupportedReason` key in the list, plus
+   * `%project_unsupported_generic%`, which is shown for a reason that is not a key or has no entry.
+   * With neither, no reason text is shown.
    */
   localizedUnsupportedReasons?: LanguageStrings;
   /**
@@ -277,7 +279,7 @@ export type HomeProps = {
  *   send/receive server.
  * @param {activeSendReceiveProjects} - Array of project IDs that are currently being sent/received.
  * @param {localizedUnsupportedReasons} - Localized text for each `unsupportedReason` key in the
- *   list.
+ *   list, plus `%project_unsupported_generic%` for a reason that cannot be shown itself.
  * @param {headerContent} - Content for the header, e.g. <><HomeIcon
  *   size={36}/><CardTitle>{localizedDialogTitleText}</CardTitle></>
  * @returns
@@ -539,28 +541,37 @@ export function Home({
   };
 
   const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
-    const rawUnsupportedReasonText =
-      project.unsupportedReason && isLocalizeKey(project.unsupportedReason)
-        ? localizedUnsupportedReasons[project.unsupportedReason]
-        : undefined;
+    const isOpenBlocked = !!project.unsupportedReason;
     // A key with no translation can resolve to itself (the loading seed, and possibly the
     // fallback chain's last resort), so a value that is still a localize key is treated as
-    // missing rather than shown verbatim as tooltip text.
-    const unsupportedReasonText =
-      rawUnsupportedReasonText && !isLocalizeKey(rawUnsupportedReasonText)
-        ? rawUnsupportedReasonText
-        : undefined;
-    const isOpenBlocked = !!project.unsupportedReason;
-    // A disabled menu item takes no pointer events, so it cannot show a hover tooltip; the reason
-    // is written inside the item instead, where it is also part of the item's accessible name.
-    // `onSelect` rather than `onClick`, because Radix withholds `onSelect` from a disabled item.
+    // missing rather than shown verbatim as tooltip text. A reason that is missing that way, or
+    // is not a key at all, falls back to the generic reason.
+    const toShowableText = (text: string | undefined) =>
+      text && !isLocalizeKey(text) ? text : undefined;
+    const unsupportedReasonText = isOpenBlocked
+      ? (toShowableText(
+          project.unsupportedReason && isLocalizeKey(project.unsupportedReason)
+            ? localizedUnsupportedReasons[project.unsupportedReason]
+            : undefined,
+        ) ?? toShowableText(localizedUnsupportedReasons[PROJECT_OPEN_BLOCKED_FALLBACK_KEY]))
+      : undefined;
+    // The reason is written inside the item, since a menu item cannot show a hover tooltip. The
+    // item is `aria-disabled` rather than Radix-`disabled` so keyboard navigation still reaches
+    // it and the reason is read as part of its accessible name; selecting it does nothing.
     if (isMenuItem)
       return (
         <DropdownMenuItem
-          disabled={isOpenBlocked}
-          onSelect={() => onOpenProject(project.projectId, project.isPublished)}
+          aria-disabled={isOpenBlocked || undefined}
+          className={cn({ 'tw:opacity-50': isOpenBlocked })}
+          onSelect={(event) => {
+            if (isOpenBlocked) {
+              event.preventDefault();
+              return;
+            }
+            onOpenProject(project.projectId, project.isPublished);
+          }}
         >
-          {/* Not muted: the disabled item is already drawn at half opacity, and muted text under
+          {/* Not muted: the blocked item is already drawn at half opacity, and muted text under
               that is unreadable. `min-w-0` lets a long reason wrap instead of widening the menu. */}
           <div className="tw:flex tw:min-w-0 tw:flex-col">
             <span>{openText}</span>

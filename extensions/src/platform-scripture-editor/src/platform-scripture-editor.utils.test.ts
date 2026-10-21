@@ -593,14 +593,18 @@ interface PickerMocks {
   fireNetworkObjectCreated: (objectType: string) => void;
   /** `true` once the driver has unsubscribed from `object:onDidCreateNetworkObject`. */
   isNetworkObjectCreatedUnsubscribed: () => boolean;
-  /** Synthesize a `webViews.onDidOpenWebView` event from within a test. */
-  fireWebViewOpen: () => void;
+  /**
+   * Synthesize a `webViews.onDidOpenWebView` event from within a test. By default the opened web
+   * view is an empty Scripture Editor; pass `projectId` for one opened on a project.
+   */
+  fireWebViewOpen: (projectId?: string) => void;
   /**
    * Synthesize a `webViews.onDidUpdateWebView` event from within a test. The driver filters to
    * Scripture Editor updates, so the default `webViewType` is `SCRIPTURE_EDITOR_WEBVIEW_TYPE`; pass
-   * another value to simulate an unrelated webview update.
+   * another value to simulate an unrelated webview update, and `projectId` for an editor showing a
+   * project.
    */
-  fireWebViewUpdate: (webViewType?: string) => void;
+  fireWebViewUpdate: (webViewType?: string, projectId?: string) => void;
   /** Synthesize a `paratextBibleSendReceive.onSyncStateChanged` event from within a test. */
   fireSync: (event: { isSyncing: boolean }) => void;
   /** Synthesize a `platform.onDidChangeProjects` event from within a test. */
@@ -744,13 +748,16 @@ function createPickerMocks(): PickerMocks {
     },
     isNetworkObjectCreatedUnsubscribed: () =>
       unsubscribedNetworkEvents.has('object:onDidCreateNetworkObject'),
-    fireWebViewOpen: () => {
+    fireWebViewOpen: (projectId?: string) => {
       if (!webViewOpenListener) throw new Error('fireWebViewOpen: no listener captured');
-      webViewOpenListener({});
+      webViewOpenListener({ webView: { webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId } });
     },
-    fireWebViewUpdate: (webViewType: string = SCRIPTURE_EDITOR_WEBVIEW_TYPE) => {
+    fireWebViewUpdate: (
+      webViewType: string = SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+      projectId: string | undefined = undefined,
+    ) => {
       if (!webViewUpdateListener) throw new Error('fireWebViewUpdate: no listener captured');
-      webViewUpdateListener({ webView: { webViewType } });
+      webViewUpdateListener({ webView: { webViewType, projectId } });
     },
     fireSync: (event) => {
       const listener = networkEventListeners.get('paratextBibleSendReceive.onSyncStateChanged');
@@ -2769,7 +2776,7 @@ describe('startDefaultProjectPicker', () => {
 
       startDefaultProjectPicker(mocks.papi);
       await vi.waitFor(() => expect(finishedRuns()).toBe(1));
-      mocks.fireWebViewOpen();
+      mocks.fireSync({ isSyncing: false });
       await vi.waitFor(() => expect(finishedRuns()).toBe(2));
       mocks.fireSync({ isSyncing: false });
       await vi.waitFor(() => expect(finishedRuns()).toBe(3));
@@ -2779,6 +2786,92 @@ describe('startDefaultProjectPicker', () => {
         'platformScriptureEditor.openScriptureEditor',
         expect.anything(),
       );
+    });
+
+    const sharedProjectsQueries = (mocks: PickerMocks) =>
+      mocks.mockSendCommand.mock.calls.filter(
+        ([commandName]) => commandName === 'paratextBibleSendReceive.getSharedProjects',
+      ).length;
+
+    /** Lets any run a trigger started finish, so a count that should not move has had the chance. */
+    const settle = () =>
+      new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
+
+    it('does not ask for shared projects again when an empty editor opens or updates', async () => {
+      const mocks = createPickerMocks();
+      setUpOnlyUnsupportedProjects(mocks);
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(1));
+      mocks.fireWebViewOpen();
+      mocks.fireWebViewUpdate();
+      await settle();
+
+      expect(sharedProjectsQueries(mocks)).toBe(1);
+    });
+
+    it.each([
+      {
+        label: 'a sync ends',
+        fire: (mocks: PickerMocks) => mocks.fireSync({ isSyncing: false }),
+      },
+      {
+        label: 'the set of projects changes',
+        fire: (mocks: PickerMocks) => {
+          mocks.fireProjectsChanged();
+          mocks.fireWebViewOpen();
+        },
+      },
+      {
+        label: 'a project data provider factory registers',
+        fire: (mocks: PickerMocks) => {
+          mocks.fireNetworkObjectCreated('pdpFactory');
+          mocks.fireWebViewOpen();
+        },
+      },
+      {
+        // Opening a project records it as recent, which can give the next empty editor a candidate.
+        label: 'a project opens in the editor',
+        fire: (mocks: PickerMocks) =>
+          mocks.fireWebViewUpdate(SCRIPTURE_EDITOR_WEBVIEW_TYPE, 'other-project'),
+      },
+    ])('asks for shared projects again once $label', async ({ fire }) => {
+      const mocks = createPickerMocks();
+      setUpOnlyUnsupportedProjects(mocks);
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(1));
+      fire(mocks);
+
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(2));
+    });
+
+    it('keeps reacting to a change of projects that lands while a run is finding no candidate', async () => {
+      const mocks = createPickerMocks();
+      setUpOnlyUnsupportedProjects(mocks);
+      let releaseSharedProjects: () => void = () => {};
+      const sendCommand = mocks.mockSendCommand.getMockImplementation();
+      mocks.mockSendCommand.mockImplementationOnce(
+        (commandName: string) =>
+          new Promise((resolve) => {
+            releaseSharedProjects = () => resolve(sendCommand?.(commandName));
+          }),
+      );
+
+      startDefaultProjectPicker(mocks.papi);
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(1));
+      mocks.fireProjectsChanged();
+      releaseSharedProjects();
+      await vi.waitFor(() =>
+        expect(mocks.mockDebug).toHaveBeenCalledWith(
+          "Default active project picker: unexpected outcome received: 'no-candidate'",
+        ),
+      );
+      mocks.fireWebViewOpen();
+
+      await vi.waitFor(() => expect(sharedProjectsQueries(mocks)).toBe(2));
     });
 
     it('looks up again once the set of projects changes', async () => {
@@ -5639,6 +5732,24 @@ describe('getProjectUnsupportedReason', () => {
       },
     });
     await expect(getProjectUnsupportedReason(papi, 'P1')).resolves.toBe('');
+  });
+
+  // An interface only C#'s Paratext factory serves makes the lookup wait for that factory, whose
+  // answer carries the reason, rather than settling on whichever factory registered first.
+  it('asks for the project through the interface every Paratext project serves', async () => {
+    const getMetadataForProject = vi.fn(async () => ({
+      id: 'P1',
+      projectInterfaces: [],
+      pdpFactoryInfo: {},
+    }));
+    const papi = stubPapi({ getMetadataForProject });
+
+    await getProjectUnsupportedReason(papi, 'P1');
+
+    expect(getMetadataForProject).toHaveBeenCalledWith(
+      'P1',
+      'platformScripture.scriptureEditPermissions',
+    );
   });
 });
 

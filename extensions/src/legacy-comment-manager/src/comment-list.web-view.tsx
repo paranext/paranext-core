@@ -25,6 +25,7 @@ import {
 } from '@papi/frontend/react';
 import {
   getErrorMessage,
+  getProjectOpenBlockedReasonKey,
   isPlatformError,
   LegacyCommentThread,
   serialize,
@@ -73,10 +74,7 @@ import { useBcvSyncScroll } from './use-bcv-sync-scroll.hook';
 import { useCommentDrafts } from './use-comment-drafts.hook';
 import { useFrozenPresetThreadIds } from './use-frozen-preset-thread-ids.hook';
 import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel.utils';
-import {
-  getProjectOpenBlockedReasonKey,
-  notifyProjectOpenBlocked,
-} from './project-open-blocked.util';
+import { notifyProjectOpenBlocked } from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { gateCommentWriteCapabilities } from './comment-list-capability-gating.util';
 

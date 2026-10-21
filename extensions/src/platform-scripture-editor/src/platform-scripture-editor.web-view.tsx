@@ -101,6 +101,7 @@ import {
   formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
+  getProjectOpenBlockedReasonKey,
   isPlatformError,
   LocalizeKey,
   serialize,
@@ -253,7 +254,10 @@ import {
 } from './sync-blocked-banner.component';
 import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
 import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
-import { UnsupportedProjectGate } from './unsupported-project-gate.component';
+import {
+  LocalizedUnsupportedProjectMessage,
+  UnsupportedProjectGate,
+} from './unsupported-project-gate.component';
 
 /**
  * Pass-through wrapper for the editor inside {@link InPortal}. `react-reverse-portal`'s `InPortal`
@@ -2982,6 +2986,9 @@ function PlatformScriptureEditor({
       message: getErrorMessage(usjFromPdpPossiblyError),
       isMissingBook: isMissingBookError(usjFromPdpPossiblyError),
       identities: parseMissingBookError(usjFromPdpPossiblyError),
+      // The backend refusing a project that cannot be opened. Needs no check against the project on
+      // screen: this subscription is for one project, and changing it reloads the web view.
+      openBlockedReasonKey: getProjectOpenBlockedReasonKey(usjFromPdpPossiblyError),
     };
   }, [usjFromPdpPossiblyError]);
 
@@ -4692,6 +4699,20 @@ function PlatformScriptureEditor({
                   logger.warn(`Failed to open Manage Books from the book-not-available view: ${e}`),
                 );
             }}
+          />
+        </>
+      );
+    }
+    // Reached when the tab opened without the factory's reason (its lookup failed open). The
+    // refusal is not a missing book, so without this the editor would wait on the spinner below
+    // for text that never arrives.
+    if (usjFromPdpError?.openBlockedReasonKey) {
+      return (
+        <>
+          {workaround}
+          <LocalizedUnsupportedProjectMessage
+            unsupportedReason={usjFromPdpError.openBlockedReasonKey}
+            announcementKey={projectId}
           />
         </>
       );
