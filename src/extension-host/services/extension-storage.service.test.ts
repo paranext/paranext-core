@@ -11,11 +11,11 @@ import {
 } from './extension-storage.service';
 
 const extensionName = 'storageTestExtName';
-// Outside the source tree: other tests walk `src/`, and a folder that appears and vanishes under
-// them while they read it makes them fail at random
-const extensionsBasePath = fs.mkdtempSync(path.join(os.tmpdir(), 'extension-storage-test-'));
-const thisExtensionBasePath = path.join(extensionsBasePath, 'extensions', extensionName);
-const thisUserBasePath = path.join(extensionsBasePath, extensionName);
+// Set in `beforeAll`, outside the source tree: other tests walk `src/`, and a folder that appears
+// and vanishes under them while they read it makes them fail at random. The service keeps user
+// data under `globalThis.resourcesPath`, so it lands in this folder too.
+let extensionsBasePath = '';
+let thisExtensionBasePath = '';
 
 const resourcesUri = 'resources://extensions';
 const testData = 'TEST DATA';
@@ -23,9 +23,10 @@ const testData = 'TEST DATA';
 const token: ExecutionToken = executionTokenService.registerExtension(extensionName);
 
 beforeAll(() => {
+  extensionsBasePath = fs.mkdtempSync(path.join(os.tmpdir(), 'extension-storage-test-'));
+  thisExtensionBasePath = path.join(extensionsBasePath, 'extensions', extensionName);
   globalThis.resourcesPath = extensionsBasePath;
   fs.mkdirSync(thisExtensionBasePath, { recursive: true });
-  fs.mkdirSync(thisUserBasePath, { recursive: true });
 
   setExtensionUris(new Map([[extensionName, `${resourcesUri}/${extensionName}`]]));
 });
@@ -36,21 +37,11 @@ afterAll(() => {
   } catch {
     // do nothing
   }
-  try {
-    fs.rmSync(thisUserBasePath, { recursive: true });
-  } catch {
-    // do nothing
-  }
 });
 
 beforeEach(() => {
   try {
     fs.rmSync(path.join(thisExtensionBasePath, '*.*'), { recursive: false });
-  } catch {
-    // do nothing
-  }
-  try {
-    fs.rmSync(path.join(thisUserBasePath, '*.*'), { recursive: false });
   } catch {
     // do nothing
   }
