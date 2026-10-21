@@ -121,6 +121,10 @@ export class MarkersViewNotifier {
       // Only need to send a notification if this is the markers view which is currently readonly
       if (viewType !== 'markers') return;
 
+      // Outside Power the editor shows a saved markers view as the editable formatted view (see
+      // `resolveViewTypeForInterfaceMode`), so there is nothing read-only to announce
+      if ((await this.papiInstance.settings.get('platform.interfaceMode')) !== 'power') return;
+
       const { projectId, state } = webViewDefinition;
       // If no projectId, can't proceed. Just warn and be done
       if (!projectId) {

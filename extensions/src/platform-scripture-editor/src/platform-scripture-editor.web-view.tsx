@@ -2231,10 +2231,11 @@ function PlatformScriptureEditor({
           break;
         }
         case 'setScriptureView': {
-          // Standard and markers views are Power-only, so a request for one outside Power lands on
-          // formatted.
+          // The request is persisted as is. Standard and markers views are Power-only, so outside
+          // Power the displayed `viewType` above coerces it to formatted while the saved choice
+          // survives a switch back to Power.
           endPaneNoteEdit();
-          setViewType(resolveViewTypeForInterfaceMode(editorMessage.viewType, isPowerMode));
+          setViewType(editorMessage.viewType);
           break;
         }
         case 'undo': {
@@ -3006,10 +3007,10 @@ function PlatformScriptureEditor({
         // See `isEditorContextMenuOpen`.
         if (!isEditorContextMenuOpen(editorContainerRef.current)) insertCommentAtCurrentSelection();
       } else {
-        const chord = matchEditorChord(event);
+        const chordMatch = matchEditorChord(event);
         if (
-          !chord ||
-          !shouldRunEditorChord(chord, {
+          !chordMatch ||
+          !shouldRunEditorChord(chordMatch.chord, {
             isReadOnly: isReadOnlyEffective,
             // Scoped to the main editor via `isFocused()`, so the insert chords don't fire while the
             // FootnoteEditor/CommentEditor popovers (which have their own `.editor-input`) have focus
@@ -3020,6 +3021,10 @@ function PlatformScriptureEditor({
           return;
 
         event.preventDefault();
+        // A held chord is swallowed so its default action (macOS Ctrl+T transposes characters)
+        // cannot fire, but it acts only once.
+        if (chordMatch.isRepeat) return;
+        const { chord } = chordMatch;
         runEditorChord(chord, {
           webViewId,
           sendCommand: (command, id) => {

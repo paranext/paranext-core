@@ -2,6 +2,7 @@ import {
   matchEditorChord,
   runEditorChord,
   shouldRunEditorChord,
+  type EditorChord,
   type EditorChordEffects,
 } from './editor-chords.util';
 
@@ -19,49 +20,50 @@ function keyEvent(key: string, modifiers: Partial<Omit<ChordEvent, 'key'>> = {})
   };
 }
 
+/** The chord a keydown spells, ignoring whether it is a repeat. */
+function chordOf(event: ChordEvent): EditorChord | undefined {
+  return matchEditorChord(event)?.chord;
+}
+
 describe('matchEditorChord', () => {
   it('maps F7 with no modifiers to showFootnotes', () => {
-    expect(matchEditorChord(keyEvent('F7'))).toBe('showFootnotes');
+    expect(chordOf(keyEvent('F7'))).toBe('showFootnotes');
   });
 
   it('does not map F7 with a modifier', () => {
-    expect(matchEditorChord(keyEvent('F7', { ctrlKey: true }))).toBeUndefined();
-    expect(matchEditorChord(keyEvent('F7', { shiftKey: true }))).toBeUndefined();
+    expect(chordOf(keyEvent('F7', { ctrlKey: true }))).toBeUndefined();
+    expect(chordOf(keyEvent('F7', { shiftKey: true }))).toBeUndefined();
   });
 
   it('maps Control+Shift+R to basicChecks, which is also the macOS chord', () => {
-    expect(matchEditorChord(keyEvent('R', { ctrlKey: true, shiftKey: true }))).toBe('basicChecks');
-    expect(matchEditorChord(keyEvent('r', { ctrlKey: true, shiftKey: true }))).toBe('basicChecks');
+    expect(chordOf(keyEvent('R', { ctrlKey: true, shiftKey: true }))).toBe('basicChecks');
+    expect(chordOf(keyEvent('r', { ctrlKey: true, shiftKey: true }))).toBe('basicChecks');
   });
 
   it('leaves Command+Shift+R to the macOS menu bar (force reload)', () => {
-    expect(matchEditorChord(keyEvent('R', { metaKey: true, shiftKey: true }))).toBeUndefined();
+    expect(chordOf(keyEvent('R', { metaKey: true, shiftKey: true }))).toBeUndefined();
   });
 
   it('does not map Ctrl+R or Ctrl+Alt+Shift+R to basicChecks', () => {
-    expect(matchEditorChord(keyEvent('r', { ctrlKey: true }))).toBeUndefined();
-    expect(
-      matchEditorChord(keyEvent('R', { ctrlKey: true, shiftKey: true, altKey: true })),
-    ).toBeUndefined();
+    expect(chordOf(keyEvent('r', { ctrlKey: true }))).toBeUndefined();
+    expect(chordOf(keyEvent('R', { ctrlKey: true, shiftKey: true, altKey: true }))).toBeUndefined();
   });
 
   it('maps Ctrl+T to insertFootnote', () => {
-    expect(matchEditorChord(keyEvent('t', { ctrlKey: true }))).toBe('insertFootnote');
+    expect(chordOf(keyEvent('t', { ctrlKey: true }))).toBe('insertFootnote');
   });
 
   it('maps Ctrl+Shift+T to insertCrossReference', () => {
-    expect(matchEditorChord(keyEvent('T', { ctrlKey: true, shiftKey: true }))).toBe(
-      'insertCrossReference',
-    );
+    expect(chordOf(keyEvent('T', { ctrlKey: true, shiftKey: true }))).toBe('insertCrossReference');
   });
 
   it('does not map Ctrl+Alt+T, which AltGr types on some European layouts', () => {
-    expect(matchEditorChord(keyEvent('t', { ctrlKey: true, altKey: true }))).toBeUndefined();
+    expect(chordOf(keyEvent('t', { ctrlKey: true, altKey: true }))).toBeUndefined();
   });
 
   it('does not map Meta+T', () => {
-    expect(matchEditorChord(keyEvent('t', { metaKey: true }))).toBeUndefined();
-    expect(matchEditorChord(keyEvent('t', { ctrlKey: true, metaKey: true }))).toBeUndefined();
+    expect(chordOf(keyEvent('t', { metaKey: true }))).toBeUndefined();
+    expect(chordOf(keyEvent('t', { ctrlKey: true, metaKey: true }))).toBeUndefined();
   });
 
   it.each([
@@ -69,12 +71,31 @@ describe('matchEditorChord', () => {
     keyEvent('R', { ctrlKey: true, shiftKey: true, repeat: true }),
     keyEvent('t', { ctrlKey: true, repeat: true }),
     keyEvent('T', { ctrlKey: true, shiftKey: true, repeat: true }),
-  ])('ignores auto-repeat of a held $key chord', (event) => {
-    expect(matchEditorChord(event)).toBeUndefined();
+  ])('reports auto-repeat of a held $key chord as a repeat', (event) => {
+    expect(matchEditorChord(event)).toEqual({
+      chord: chordOf({ ...event, repeat: false }),
+      isRepeat: true,
+    });
+  });
+
+  it('reports a first press as not a repeat', () => {
+    expect(matchEditorChord(keyEvent('t', { ctrlKey: true }))).toEqual({
+      chord: 'insertFootnote',
+      isRepeat: false,
+    });
+  });
+
+  it('leaves a repeat of an unclaimed key unmatched', () => {
+    expect(matchEditorChord(keyEvent('t', { repeat: true }))).toBeUndefined();
+    expect(matchEditorChord(keyEvent('r', { ctrlKey: true, repeat: true }))).toBeUndefined();
+    expect(
+      matchEditorChord(keyEvent('t', { ctrlKey: true, altKey: true, repeat: true })),
+    ).toBeUndefined();
+    expect(matchEditorChord(keyEvent('t', { metaKey: true, repeat: true }))).toBeUndefined();
   });
 
   it('does not map a plain t', () => {
-    expect(matchEditorChord(keyEvent('t'))).toBeUndefined();
+    expect(chordOf(keyEvent('t'))).toBeUndefined();
   });
 });
 
@@ -155,16 +176,19 @@ describe('runEditorChord', () => {
   });
 });
 
-/** The web view's keydown path: match, guard, run. */
+/** The web view's keydown path: match, guard, swallow, run. Returns whether the key is swallowed. */
 function pressKey(
   event: ChordEvent,
   state: { isReadOnly: boolean; isPowerMode: boolean; isEditorFocused?: boolean },
   effects: EditorChordEffects,
-): void {
-  const chord = matchEditorChord(event);
-  if (!chord) return;
-  if (!shouldRunEditorChord(chord, { isEditorFocused: true, ...state })) return;
-  runEditorChord(chord, effects);
+): { preventedDefault: boolean } {
+  const match = matchEditorChord(event);
+  if (!match) return { preventedDefault: false };
+  if (!shouldRunEditorChord(match.chord, { isEditorFocused: true, ...state })) {
+    return { preventedDefault: false };
+  }
+  if (!match.isRepeat) runEditorChord(match.chord, effects);
+  return { preventedDefault: true };
 }
 
 describe('Ctrl+T through match, guard and run', () => {
@@ -191,9 +215,27 @@ describe('Ctrl+T through match, guard and run', () => {
     expect(effects.sendCommand).not.toHaveBeenCalled();
   });
 
-  it('does nothing for a held key', () => {
+  it('swallows a held key without running it again', () => {
     const effects = makeEffects();
-    pressKey({ ...ctrlT, repeat: true }, { isReadOnly: false, isPowerMode: true }, effects);
+    const first = pressKey(ctrlT, { isReadOnly: false, isPowerMode: true }, effects);
+    const held = pressKey(
+      { ...ctrlT, repeat: true },
+      { isReadOnly: false, isPowerMode: true },
+      effects,
+    );
+    expect(first.preventedDefault).toBe(true);
+    expect(held.preventedDefault).toBe(true);
+    expect(effects.insertNote).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a held unclaimed key alone', () => {
+    const effects = makeEffects();
+    const held = pressKey(
+      keyEvent('t', { repeat: true }),
+      { isReadOnly: false, isPowerMode: true },
+      effects,
+    );
+    expect(held.preventedDefault).toBe(false);
     expect(effects.insertNote).not.toHaveBeenCalled();
   });
 });
