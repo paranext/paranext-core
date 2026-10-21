@@ -84,3 +84,28 @@ export function buildLocalNonDblResources(
     }),
   );
 }
+
+/**
+ * Waits for `work` to finish, but no longer than `ms`.
+ *
+ * @param work The work to wait for. A rejection before the limit is passed on; one after it is
+ *   ignored, since nothing is waiting for it any more.
+ * @param ms The longest to wait, in milliseconds
+ * @returns `true` if `work` finished in time, `false` if the limit was reached first
+ */
+export async function waitAtMost(work: Promise<unknown>, ms: number): Promise<boolean> {
+  const finished = work.then(() => true);
+  // Settled on its own so a rejection after the limit is not reported as unhandled.
+  finished.catch(() => undefined);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      finished,
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}

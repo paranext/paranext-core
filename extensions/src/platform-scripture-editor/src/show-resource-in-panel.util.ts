@@ -75,6 +75,33 @@ type CatalogLookup = {
   isReferenceKindKnown: boolean;
 };
 
+/** How long a show waits for the DBL catalog before treating it as unread. */
+const CATALOG_READ_WAIT_MS = 5000;
+
+/**
+ * The value `work` settles to, or `undefined` if it has not settled within `ms`.
+ *
+ * @param work The work to wait for. A rejection before the limit is passed on; one after it is
+ *   ignored, since nothing is waiting for it any more.
+ * @param ms The longest to wait, in milliseconds
+ * @returns What `work` resolved to, or `undefined` once the limit has passed
+ */
+async function withinTime<T>(work: Promise<T>, ms: number): Promise<T | undefined> {
+  // Settled on its own so a rejection after the limit is not reported as unhandled.
+  work.catch(() => undefined);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => resolve(undefined), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Finds the catalog entry for a locally-installed resource the way the panels build their rows: the
  * DBL catalog followed by the locally-installed resources that are not in it, with the installed
@@ -85,16 +112,23 @@ type CatalogLookup = {
  * @returns See {@link CatalogLookup}
  */
 async function findCatalogEntry(resourceProjectId: string): Promise<CatalogLookup> {
-  // Awaited in full, with no timeout: the local list below waits for the same sync anyway, and
-  // reading the catalog before it finishes could mislabel a just-installed resource.
+  // Awaited in full: reading the catalog before the sync finishes could mislabel a just-installed
+  // resource. With no catalog cached yet there is nothing to sync, and it returns at once.
   try {
     await papi.commands.sendCommand('platformGetResources.refreshResourceFlags', false);
   } catch (e) {
     logger.warn(`Could not refresh resource flags before reading: ${getErrorMessage(e)}`);
   }
+  // Bounded: with no catalog cached yet, the read queues behind the startup fetch and its retries,
+  // which can outlast the show's deadline. Past the limit the catalog counts as unread, so the
+  // resource is still shown but not saved (see `isReferenceKindKnown`).
   let catalog: DblResourceCatalog | undefined;
   try {
-    catalog = await papi.commands.sendCommand('platformGetResources.getCachedResources');
+    catalog = await withinTime(
+      papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      CATALOG_READ_WAIT_MS,
+    );
+    if (!catalog) logger.warn('Gave up waiting for the DBL resource catalog');
   } catch (e) {
     logger.warn(`Could not read the DBL resource catalog: ${getErrorMessage(e)}`);
   }

@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
 import {
   buildLocalNonDblResources,
   LOCAL_COMMENTARY_UIDS,
+  waitAtMost,
 } from './get-local-non-dbl-resources.utils';
 
 /** Minimal DblResourceData for use in the DBL catalog argument. */
@@ -157,5 +158,43 @@ describe('LOCAL_COMMENTARY_UIDS', () => {
 
   it('has exactly 14 entries (13 from C# whitelist + 1 legacy TNN UID)', () => {
     expect(LOCAL_COMMENTARY_UIDS.size).toBe(14);
+  });
+});
+
+describe('waitAtMost', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('reports work that finishes in time', async () => {
+    await expect(waitAtMost(Promise.resolve('done'), 1000)).resolves.toBe(true);
+  });
+
+  it('stops waiting at the limit for work that does not finish', async () => {
+    const waited = waitAtMost(new Promise(() => {}), 1000);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await expect(waited).resolves.toBe(false);
+  });
+
+  it('passes on a rejection that comes before the limit', async () => {
+    await expect(waitAtMost(Promise.reject(new Error('offline')), 1000)).rejects.toThrow('offline');
+  });
+
+  it('ignores a rejection that comes after the limit', async () => {
+    let fail: (error: Error) => void = () => {};
+    const work = new Promise((_resolve, reject) => {
+      fail = reject;
+    });
+    const waited = waitAtMost(work, 1000);
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(waited).resolves.toBe(false);
+
+    fail(new Error('too late'));
+    // Nothing is waiting for it, and it must not surface as an unhandled rejection.
+    await vi.advanceTimersByTimeAsync(0);
   });
 });

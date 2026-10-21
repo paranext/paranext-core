@@ -15,7 +15,7 @@ import type {
 import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-utils';
 import { resolveDblCatalog, shouldStopBackgroundFetch } from './dbl-catalog.utils';
-import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
+import { buildLocalNonDblResources, waitAtMost } from './get-local-non-dbl-resources.utils';
 import {
   buildHomeWebViewState,
   type HomeWebViewOptions,
@@ -106,6 +106,11 @@ let hasWaitedForLocalResourceProjects = false;
 
 const RESOURCE_PROJECT_WAIT_ATTEMPTS = 5;
 const RESOURCE_PROJECT_WAIT_DELAY_MS = 500;
+/**
+ * How long the local non-DBL resource list waits for the catalog before it is built without it.
+ * Well inside the Simple-mode show's 20 s deadline, which reads this list.
+ */
+const LOCAL_RESOURCES_CATALOG_WAIT_MS = 5000;
 
 /**
  * Reads local project metadata, waiting for the C# Paratext PDPF to register its resource projects.
@@ -347,12 +352,21 @@ async function getCachedResources(): Promise<DblResourceCatalog> {
  */
 async function getLocalNonDblResources(): Promise<DblResourceData[]> {
   try {
-    await getCachedResources();
     // The exclusion below is only as good as the catalog's `installed`/`projectId` flags, and
     // `getCachedResources` returns before its background sync finishes. Wait for that sync and read
     // `cachedResources` afterwards, so a resource already on disk is excluded as a DBL entry rather
-    // than emitted a second time as a synthetic non-DBL one.
-    await ensureInstalledFlagsSynced();
+    // than emitted a second time as a synthetic non-DBL one. Bounded: with no catalog cached yet,
+    // the read queues behind the startup fetch and its retries, and a caller opening a side-loaded
+    // resource would wait them all out.
+    const isCatalogCurrent = await waitAtMost(
+      (async () => {
+        await getCachedResources();
+        await ensureInstalledFlagsSynced();
+      })(),
+      LOCAL_RESOURCES_CATALOG_WAIT_MS,
+    );
+    if (!isCatalogCurrent)
+      logger.warn('Building local non-DBL resources without waiting longer for the catalog');
   } catch (error: unknown) {
     logger.warn(
       `Building local non-DBL resources without the catalog, which failed: ${getErrorMessage(error)}`,

@@ -787,19 +787,45 @@ describe('showResourceInReferencePanel', () => {
       await expect(third).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
     });
 
+    it('shows a side-loaded resource, unsaved, while the catalog is still being fetched', async () => {
+      // A profile with no catalog cached yet: the read queues behind the startup fetch, which may
+      // not finish before the show's deadline.
+      mocks.sendCommand.mockImplementation(async (command: string) => {
+        if (command === 'platformGetResources.getCachedResources') return new Promise(() => {});
+        if (command === 'platformGetResources.getLocalNonDblResources')
+          return [
+            catalogEntry({ dblEntryUid: 'VULGP83', projectId: 'VULGP83', displayName: 'VULGP83' }),
+          ];
+        return undefined;
+      });
+      const show = showResourceInReferencePanel('VULGP83');
+
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS / 2);
+
+      await expect(show).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
+      expect(mocks.setUserList).not.toHaveBeenCalled();
+      expect(mocks.notify).not.toHaveBeenCalled();
+    });
+
     it('answers, and lets the next show start, without waiting for its warning to be sent', async () => {
       // The warning invites a retry, which must not be held behind the warning itself.
       mocks.notify.mockImplementation(() => holdUntilReleased('notification-1'));
       const first = showResourceInReferencePanel('byz-project');
-      const next = showResourceInReferencePanel('byz-project');
 
       await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
 
       // The deadline's warning is still held: an answer that waited for it would never come.
       await expect(first).resolves.toEqual(NOT_SHOWN);
+
+      // The retry the warning invites, made after the deadline and before the warning is sent.
+      const retry = showResourceInReferencePanel('byz-project');
+      await vi.advanceTimersByTimeAsync(0);
       expect(mocks.getAllOpenWebViewDefinitions).toHaveBeenCalledTimes(2);
+
+      // It has its own deadline, and is stuck on the same held step, so it runs out of time too.
+      await vi.advanceTimersByTimeAsync(SHOW_DEADLINE_MS);
       await releaseHeld();
-      await expect(next).resolves.toEqual(NOT_SHOWN);
+      await expect(retry).resolves.toEqual(NOT_SHOWN);
       expect(mocks.notify).toHaveBeenCalledTimes(2);
     });
 

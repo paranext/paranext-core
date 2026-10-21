@@ -439,6 +439,25 @@ describe('platformGetResources.getLocalNonDblResources', () => {
     }
   });
 
+  it('does not wait out a catalog fetch that hangs', async () => {
+    // With no catalog cached yet, the read queues behind the startup fetch; a Simple-mode open of a
+    // side-loaded resource would otherwise wait it all out and run out of time.
+    provider.getDblResources.mockImplementation(() => new Promise(() => {}));
+    mocks.getMetadataForAllProjects.mockResolvedValue([
+      { id: 'VULGP83', name: 'VULGP83', isEditable: false },
+    ]);
+    await activateWithFreshModule();
+    vi.useFakeTimers();
+    try {
+      const resources = getLocalNonDblResources();
+      await vi.advanceTimersByTimeAsync(5000);
+
+      await expect(resources).resolves.toEqual([expect.objectContaining({ projectId: 'VULGP83' })]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('rejects when the local projects cannot be read', async () => {
     mocks.getMetadataForAllProjects.mockRejectedValue(new Error('project lookup failed'));
     await activateWithFreshModule();
