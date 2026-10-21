@@ -5,6 +5,13 @@ export type EditorChord =
   | 'insertFootnote'
   | 'insertCrossReference';
 
+/** A keydown that spells an editor chord. */
+export type EditorChordMatch = {
+  chord: EditorChord;
+  /** Whether the key is held down and auto-repeating. A repeat is swallowed but does not run. */
+  isRepeat: boolean;
+};
+
 /**
  * Maps a keydown to the editor chord it spells, or `undefined` for any other key.
  *
@@ -16,13 +23,21 @@ export type EditorChord =
  *
  * Alt is never part of a chord: AltGr reports as Ctrl+Alt on Windows/Linux and types `t` and `r`
  * characters on several European layouts. Meta never is either, since a Meta chord is the OS's or
- * the macOS menu bar's. A held key (auto-repeat) never matches, so holding a chord acts once.
+ * the macOS menu bar's. A held key (auto-repeat) still matches but is reported as a repeat, so the
+ * caller can keep the key's default action (macOS Ctrl+T transposes characters) from firing while
+ * holding a chord acts once.
  */
 export function matchEditorChord(
   event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'repeat'>,
-): EditorChord | undefined {
-  if (event.repeat || event.altKey || event.metaKey) return undefined;
+): EditorChordMatch | undefined {
+  if (event.altKey || event.metaKey) return undefined;
+  const chord = findChord(event);
+  return chord ? { chord, isRepeat: event.repeat } : undefined;
+}
 
+function findChord(
+  event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey'>,
+): EditorChord | undefined {
   if (event.key === 'F7') {
     return event.ctrlKey || event.shiftKey ? undefined : 'showFootnotes';
   }
