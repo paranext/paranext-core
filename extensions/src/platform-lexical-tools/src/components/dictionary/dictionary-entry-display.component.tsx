@@ -162,7 +162,7 @@ export function DictionaryEntryDisplay({
         handleBackToListButton={handleBackToListButton}
       />
       <div className="tw:mb-4">
-        <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-2">
+        <div className="tw:flex tw:flex-wrap tw:items-baseline tw:justify-between tw:gap-2">
           <span className="tw:flex tw:flex-row tw:items-baseline tw:gap-2">
             <TitleComponent className="tw:text-2xl tw:font-normal scripture-font">
               <ContentZoomRoot as="span">{dictionaryEntry.lemma}</ContentZoomRoot>
@@ -171,7 +171,7 @@ export function DictionaryEntryDisplay({
               <ContentZoomRoot as="span">{formattedGlosses}</ContentZoomRoot>
             </DescriptionComponent>
           </span>
-          <ul className="tw:flex tw:flex-row tw:gap-1">
+          <ul className="tw:flex tw:flex-row tw:flex-wrap tw:gap-1">
             {dictionaryEntry.strongsCodes.map((strongsCode) => (
               <li
                 key={strongsCode}
