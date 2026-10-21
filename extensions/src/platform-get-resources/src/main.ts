@@ -55,12 +55,6 @@ let cachedResources: DblResourceData[] | undefined;
 const fetchMutex = new Mutex();
 let hasFetchStarted = false;
 let syncInFlight: Promise<void> | undefined;
-/**
- * The install-flag step of `syncInFlight`, which settles before the model-text restrictions step
- * that follows it. That step has no time bound, so a caller that needs only the flags waits on
- * this.
- */
-let flagSyncInFlight: Promise<void> | undefined;
 /** Whether `syncInFlight` refreshes `updateAvailable` as well as the install flags. */
 let doesSyncInFlightRecomputeUpdateStatus = false;
 
@@ -296,44 +290,36 @@ async function syncFlags(shouldRecomputeUpdateStatus: boolean): Promise<boolean>
  * only need the catalog let it run in the background; callers whose answer depends on the flags
  * being current await it and re-read `cachedResources` afterwards.
  *
- * The sync also brings the model-text restrictions up to date: it fetches them if none are known
- * (so a failed fetch is retried here), and fetches them afresh after local state changed, since a
- * newly installed restricted text is only reported once it is on disk.
+ * Once the flags are synced it also starts bringing the model-text restrictions up to date, without
+ * waiting for them: it fetches them if none are known (so a failed fetch is retried here), and
+ * fetches them afresh after local state changed, since a newly installed restricted text is only
+ * reported once it is on disk. That fetch reads every installed project and is bounded only by the
+ * request timeout, and no caller that waits on the flags reads the restrictions; the readers that
+ * do wait for them through a bounded wait of their own.
  *
- * @param shouldRecomputeUpdateStatus Whether the sync should also refresh `updateAvailable` and the
- *   model-text restrictions. A caller that needs it may still join an in-flight sync that does not
- *   refresh them, so ask for it through {@link refreshResourceFlags}, which never settles for one of
- *   those.
+ * @param shouldRecomputeUpdateStatus Whether the sync should also refresh `updateAvailable` and
+ *   fetch the model-text restrictions afresh. A caller that needs it may still join an in-flight
+ *   sync that does not, so ask for it through {@link refreshResourceFlags}, which never settles for
+ *   one of those.
  */
 function ensureInstalledFlagsSynced(shouldRecomputeUpdateStatus = false): Promise<void> {
   if (!syncInFlight) {
     doesSyncInFlightRecomputeUpdateStatus = shouldRecomputeUpdateStatus;
-    // syncFlags never rejects, so a caller waiting on the flag step alone cannot see a rejection
-    const flagSync = syncFlags(shouldRecomputeUpdateStatus);
-    flagSyncInFlight = flagSync.then(() => undefined);
     syncInFlight = (async () => {
-      const isAnyFlagChanged = await flagSync;
-      await syncModelTextRestrictionsAfterFlagSync(modelTextRestrictions, {
+      const isAnyFlagChanged = await syncFlags(shouldRecomputeUpdateStatus);
+      syncModelTextRestrictionsAfterFlagSync(modelTextRestrictions, {
         isRefreshRequested: shouldRecomputeUpdateStatus,
         isAnyFlagChanged,
-      });
+      }).catch((e) =>
+        logger.warn(`Background model text restrictions sync failed: ${getErrorMessage(e)}`),
+      );
     })()
       .catch((e) => logger.warn(`Background flag sync failed: ${getErrorMessage(e)}`))
       .finally(() => {
         syncInFlight = undefined;
-        flagSyncInFlight = undefined;
       });
   }
   return syncInFlight;
-}
-
-/**
- * {@link ensureInstalledFlagsSynced}, resolving once the flags are synced rather than after the
- * model-text restrictions step too, which waits on the backend with no time bound.
- */
-function ensureInstalledFlagsOnlySynced(): Promise<void> {
-  const sync = ensureInstalledFlagsSynced();
-  return flagSyncInFlight ?? sync;
 }
 
 /**
@@ -435,11 +421,11 @@ async function getLocalNonDblResources(
   try {
     await readCatalog();
     // The exclusion below is only as good as the catalog's `installed`/`projectId` flags, and
-    // `readCatalog` returns before its background sync finishes. Wait for that sync's flags and read
+    // `readCatalog` returns before its background sync finishes. Wait for that sync and read
     // `cachedResources` afterwards, so a resource already on disk is excluded as a DBL entry rather
-    // than emitted a second time as a synthetic non-DBL one. Only its flags: the bounded wait below
-    // is this read's one wait on the model-text restrictions.
-    await ensureInstalledFlagsOnlySynced();
+    // than emitted a second time as a synthetic non-DBL one. The sync does not wait for the
+    // model-text restrictions, so the bounded wait below is this read's one wait on them.
+    await ensureInstalledFlagsSynced();
     // An absent catalog means one has never been fetched on this profile (a fetched catalog is
     // persisted and reloaded on activation), so there is nothing for these projects to duplicate
     // and no reason to withhold them. Suppressing them here would hide side-loaded resources from
@@ -734,8 +720,9 @@ export async function activate(context: ExecutionActivationContext) {
     // single cheap backend call.
     // The model-text restrictions are fetched afresh afterwards rather than left to the sync. A
     // resource copied in by hand has no catalog row, so no flag changes and the sync keeps the
-    // cached restrictions, which cannot name a project they have not seen. Fetched after the sync
-    // settles, so a read the sync started before the change cannot overwrite the new list.
+    // cached restrictions, which cannot name a project they have not seen. `refresh` starts its
+    // fetch only once any fetch already running has settled, so a read started before the change
+    // cannot overwrite the new list.
     // Neither step rejects
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     (async () => {
