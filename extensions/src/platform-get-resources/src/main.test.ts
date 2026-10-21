@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
     reloadWebView: vi.fn(async (): Promise<string | undefined> => 'wv-1'),
     dataProvidersGet: vi.fn(),
     getMetadataForAllProjects: vi.fn(async (): Promise<unknown[]> => []),
-    getSetting: vi.fn(async (_key: string): Promise<unknown> => 'power'),
+    getSetting: vi.fn(async (): Promise<unknown> => 'power'),
     readUserData: vi.fn(),
     writeUserData: vi.fn(),
     projectsChangedHandlers,
