@@ -1566,3 +1566,357 @@ describe('ResourceCellView content scroll ownership', () => {
     expect(container.querySelector('[data-cell-content] [data-cell-header]')).toBeNull();
   });
 });
+
+describe('ResourceCellView verse row layout', () => {
+  it('renders the reorder grip in verse mode, not only in the header', () => {
+    const onReorderKeyDown = vi.fn();
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        showDragHandle
+        reorderHandleId="web"
+        reorderHandleLabel="Reorder WEB"
+        onReorderKeyDown={onReorderKeyDown}
+      />,
+    );
+    const grip = screen.getByRole('button', { name: 'Reorder WEB' });
+    expect(grip).toHaveAttribute('data-reorder-handle-id', 'web');
+    fireEvent.keyDown(grip, { key: 'ArrowDown' });
+    expect(onReorderKeyDown).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders no grip in verse mode without showDragHandle', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        reorderHandleId="web"
+      />,
+    );
+    // Positive control: the verse row itself rendered, so the absences below are meaningful.
+    expect(document.querySelector('.stg-verse-row')).not.toBeNull();
+    expect(document.querySelector('[data-reorder-handle-id]')).toBeNull();
+    expect(document.querySelector('.stg-verse-row-with-grip')).toBeNull();
+  });
+
+  it('leads the row with the grip, before the name, as the chapter header does', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        showDragHandle
+        reorderHandleId="web"
+        reorderHandleLabel="Reorder WEB"
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="WEB"
+      />,
+    );
+    const grip = screen.getByRole('button', { name: 'Reorder WEB' });
+    const name = screen.getByRole('button', { name: 'WEB' });
+    // Document order is the tab order; the stylesheet places the name past the grip's lane only
+    // for a row carrying the with-grip class.
+    const row = grip.closest('.stg-verse-row');
+    expect(row).toHaveClass('stg-verse-row-with-grip');
+    const buttons = [...(row?.querySelectorAll<HTMLElement>('button') ?? [])];
+    expect(buttons.indexOf(grip)).toBeLessThan(buttons.indexOf(name));
+  });
+
+  it("publishes the name's rendered width so line 1 starts right after it", () => {
+    // jsdom does no layout, so stand in for the browser's measurement of the name alone.
+    const measure = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function measureElement(this: HTMLElement) {
+        return new DOMRect(0, 0, this.classList.contains('stg-verse-name') ? 41.5 : 0, 20);
+      });
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const row = document.querySelector<HTMLElement>('.stg-verse-row');
+    expect(row?.style.getPropertyValue('--stg-name-width')).toBe('41.5px');
+    measure.mockRestore();
+  });
+
+  it('carries the classes the verse stylesheet scopes its float exclusion on', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const name = screen.getByText('WEB');
+    const row = name.parentElement;
+    expect(row).toHaveClass('stg-verse-row');
+    expect(name).toHaveClass('stg-verse-name');
+    expect(screen.getByText('In the beginning').closest('.stg-verse-content')).not.toBeNull();
+  });
+
+  it('keeps the row flush at the inline edge so the reclaimed width is not given back', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const row = screen.getByText('WEB').parentElement;
+    const inlinePadding = [...(row?.classList ?? [])].filter((className) =>
+      /^tw:(p|px|ps|pl)-/.test(className),
+    );
+    expect(inlinePadding).toEqual([]);
+  });
+
+  it("hands the resource's zoom level to the row from outside the zoomed text", () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    const row = screen.getByText('WEB').parentElement;
+    // The float exclusion inside the zoomed text divides by this, so it must read the same level the
+    // platform's own rule zooms the area's marker by.
+    expect(row?.style.getPropertyValue('--stg-zoom')).toBe(
+      `var(--platform-content-zoom-${ZOOM_AREA},var(--platform-content-zoom-default,1))`,
+    );
+    // The name stays unzoomed, or rows at different zooms stop aligning with each other.
+    expect(row?.style.zoom).toBeFalsy();
+    const marker = screen
+      .getByText('In the beginning')
+      .closest('[data-platform-content-zoom-root]');
+    expect(marker?.closest('.stg-verse-content')).not.toBeNull();
+    expect(marker?.contains(screen.getByText('WEB'))).toBe(false);
+  });
+
+  it('reserves the name width on placeholders, which have no line boxes to shorten', () => {
+    const { unmount } = renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="downloading"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    expect(document.querySelector('.stg-verse-name-reserve')).not.toBeNull();
+    unmount();
+
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        emptyMessage={localizedStrings[EMPTY_KEY]}
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    expect(document.querySelector('.stg-verse-name-reserve')).not.toBeNull();
+  });
+
+  it('does not reserve placeholder width in header mode, which has no hanging name', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="downloading"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    // Positive control: the placeholder rendered, so its missing reserve is meaningful.
+    expect(screen.getByText(localizedStrings[LOADING_KEY])).toBeInTheDocument();
+    expect(document.querySelector('.stg-verse-name-reserve')).toBeNull();
+  });
+});
+
+describe('ResourceCellView verse row disclosure control', () => {
+  it("makes the name the row's focusable disclosure control when wired", () => {
+    const onDisclosureActivate = vi.fn();
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={onDisclosureActivate}
+        disclosureAccessibleName="WEB, MAT 5:3"
+        isDisclosureExpanded={false}
+        disclosureControlsId="panel-1"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+    expect(control).toHaveAttribute('aria-expanded', 'false');
+    // Absent while collapsed: a dangling idref is an ARIA error.
+    expect(control).not.toHaveAttribute('aria-controls');
+    control.focus();
+    expect(control).toHaveFocus();
+    fireEvent.click(control);
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(1);
+  });
+
+  it('points aria-controls at the panel only while expanded', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="WEB, MAT 5:3"
+        isDisclosureExpanded
+        disclosureControlsId="panel-1"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+    expect(control).toHaveAttribute('aria-expanded', 'true');
+    expect(control).toHaveAttribute('aria-controls', 'panel-1');
+  });
+
+  it("cancels a held Enter's auto-repeats, so holding it toggles once", () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="WEB, MAT 5:3"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+    // user-event never flags a held key's keydowns as repeats, so assert the cancellation the
+    // browser relies on instead: a cancelled Enter keydown does not activate the button.
+    // `fireEvent` returns false when the event was cancelled.
+    expect(fireEvent.keyDown(control, { key: 'Enter' })).toBe(true);
+    expect(fireEvent.keyDown(control, { key: 'Enter', repeat: true })).toBe(false);
+  });
+
+  /** Renders a disclosure control whose name is (or is not) clipped, as jsdom never lays text out. */
+  function renderDisclosureWithName({ isTruncated }: { isTruncated: boolean }) {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="Berean Standard Bible 2024"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={vi.fn()}
+        disclosureAccessibleName="Berean Standard Bible 2024, MAT 5:3"
+      />,
+    );
+    const name = screen.getByText('Berean Standard Bible 2024');
+    Object.defineProperty(name, 'clientWidth', { configurable: true, value: 96 });
+    Object.defineProperty(name, 'scrollWidth', {
+      configurable: true,
+      value: isTruncated ? 180 : 96,
+    });
+    return screen.getByRole('button', { name: 'Berean Standard Bible 2024, MAT 5:3' });
+  }
+
+  it('shows a truncated name in full on keyboard focus, and Escape dismisses it', async () => {
+    const user = userEvent.setup();
+    renderDisclosureWithName({ isTruncated: true });
+
+    await user.tab();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Berean Standard Bible 2024');
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('shows no tooltip on focus when the name already fits', async () => {
+    const user = userEvent.setup();
+    const control = renderDisclosureWithName({ isTruncated: false });
+
+    await user.tab();
+    // Positive control: focus did land on the control, so the missing tooltip is meaningful.
+    expect(control).toHaveFocus();
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('keeps the name a presentational label when no disclosure is wired', () => {
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+      />,
+    );
+    // The row itself is named by the parent listitem in that case, so the visible copy stays hidden.
+    expect(screen.getByText('WEB')).toHaveAttribute('aria-hidden', 'true');
+    expect(document.querySelector('[data-disclosure-control]')).toBeNull();
+  });
+});

@@ -714,6 +714,26 @@ describe('ResourceCell name display', () => {
     // inline row shared with the editor.
     expect(name.parentElement?.parentElement).toBe(cellRoot);
   });
+
+  it('forwards the disclosure props, so verse mode renders the name as the disclosure control', () => {
+    setUsjResult(chapter, false);
+    const onDisclosureActivate = vi.fn();
+    render(
+      <ResourceCell
+        {...props}
+        viewMode="verse"
+        onDisclosureActivate={onDisclosureActivate}
+        disclosureAccessibleName="WEB, GEN 1:1"
+        isDisclosureExpanded
+        disclosureControlsId="chapter-context-panel"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, GEN 1:1' });
+    expect(control).toHaveAttribute('aria-expanded', 'true');
+    expect(control).toHaveAttribute('aria-controls', 'chapter-context-panel');
+    fireEvent.click(control);
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('ResourceCell right-click menu', () => {

@@ -1,0 +1,140 @@
+// Verse-row layout for the Text Collection.
+//
+// The `stg-` class prefix and the `--stg-*` custom properties below stand for "scripture text
+// grid", this web view's component directory.
+//
+// The row hangs the name at the inline-start (after the reorder grip, when there is one)
+// and reserves the same width on line 1 of the verse text with a generated float, so line 2+ tuck
+// beneath the name. Three facts this depends on:
+//
+//   1. The `::before` float and the verse's blocks are siblings inside `.editor-input`, so they share a
+//      block formatting context and the float shortens the first block's line boxes. That holds
+//      whatever `.editor-input` or `.editor-inner` set for `overflow`, but breaks if `.editor-input`
+//      becomes a flex or grid container (the float stops floating) or if the first block becomes its
+//      own formatting context, e.g. `display: flow-root` or a non-`visible` `overflow` (the whole
+//      block then sits beside the float, so line 2+ stay indented).
+//   2. A float leaves the marker indents in `_usj-nodes.scss` alone on every line it does not sit
+//      beside (`.usfm_q1`'s hanging indent and the other poetry and list markers). Reserving the
+//      space with `text-indent` instead would fight them and destroy every poetry indent.
+//   3. `float: inline-start` resolves against the element's own `direction`, which `.editor-input`
+//      carries from the editor's `textDirection` — the same source as the row's `dir`. RTL therefore
+//      needs no second rule, which is why this file contains no `[dir]` selectors.
+//
+// This reserves space by shortening line boxes, unlike the inline-end marker-bar gutter in
+// `_simple-mode.scss`, which reserves with padding because an element floated over already-laid-out
+// text would overlap it. Both reserve; only this one can use a float, because the float is generated
+// inside the text's own flow.
+
+.stg-verse-row {
+  // The numbers this layout is built from. Everything else below is derived, so changing the name's
+  // width, the gaps or the grip cannot leave the exclusion, the grip or the text edge behind.
+  // The name is as wide as its text, as in PT9, up to this cap; a longer one truncates.
+  --stg-name-max-width: 6rem;
+  // The name's rendered width. ResourceCellView measures the name and sets this on the row; the
+  // name's cap (see `.stg-verse-name`) stands in until that first measurement, so line 1 never
+  // starts under the name.
+  --stg-name-width: min(var(--stg-name-max-width), 40%);
+  // The inset from the row's inline-start edge, and the gap between the name and line 1.
+  --stg-name-gap: 0.5rem;
+  // The grip's box and the icon centred in it; these match its `tw:h-6`/`tw:w-6` and the icon's
+  // `tw:h-4`/`tw:w-4` in resource-cell-view.component.tsx.
+  --stg-grip-size: 1.5rem;
+  --stg-grip-icon-size: 1rem;
+  // How far the icon's visible dots start inside the grip's box. Lucide's GripVertical draws them,
+  // stroke included, from 7 to 17 of its 24-unit viewBox.
+  --stg-grip-ink-start: calc(
+    (var(--stg-grip-size) - var(--stg-grip-icon-size)) / 2 + var(--stg-grip-icon-size) * 7 / 24
+  );
+  // Where the grip's box starts: far enough out that its dots, not its box, line up with line 2+.
+  --stg-grip-start: calc(var(--stg-name-gap) - var(--stg-grip-ink-start));
+  // Where the name starts; a row with a reorder grip moves it past the grip's lane.
+  --stg-name-start: var(--stg-name-gap);
+  // Where line 1 of the verse text starts, measured from the row's inline-start edge.
+  --stg-text-start: calc(var(--stg-name-start) + var(--stg-name-width) + var(--stg-name-gap));
+  padding-block: 0.5rem;
+}
+
+// The grip leads the row, before the name, matching the chapter view's header line.
+.stg-verse-row-with-grip {
+  --stg-name-start: calc(var(--stg-grip-start) + var(--stg-grip-size) + 0.25rem);
+}
+
+// The name and grip come before the editor in the DOM, and the editor's `.editor-inner` is positioned,
+// so without a z-index it stacks above both and takes their clicks, hover and tooltips (even though
+// it is transparent in a verse cell, below).
+.stg-verse-name {
+  z-index: 10;
+  inset-inline-start: var(--stg-name-start);
+  inset-block-start: 0.5rem;
+  inline-size: max-content;
+  // The share of the row keeps a narrow column (the split at its minimum) from losing line 1 to the
+  // name: the name truncates instead, and the measured float follows it.
+  max-inline-size: min(var(--stg-name-max-width), 40%);
+}
+
+// `--stg-grip-start` comes out slightly negative, which would push the box past the row's edge: clipped
+// in an LTR row, and a horizontal scrollbar on the list for an RTL row. The box stops at the edge
+// instead, and the icon takes the remainder so the dots still line up with line 2. The icon is
+// centred, so a start margin moves it by half its size; hence the doubling.
+.stg-verse-grip {
+  z-index: 10;
+  inset-inline-start: max(0px, var(--stg-grip-start));
+  // Centred on the name's first line (`text-sm`, 1.25rem tall).
+  inset-block-start: calc(0.5rem + (1.25rem - var(--stg-grip-size)) / 2);
+
+  > svg {
+    margin-inline-start: calc(2 * min(0px, var(--stg-grip-start)));
+  }
+}
+
+// Everything inside `.stg-verse-content` is in the zoomed subtree, where used lengths are multiplied,
+// so each length below divides by the factor the row published outside it. The name and grip are
+// unzoomed, so both sides end up the same width.
+
+// `.editor-inner` paints the panel background; in a verse cell it would hide the row's hover and
+// open-row tint, so the row's own background shows through instead.
+.stg-verse-content .editor-inner {
+  background: transparent;
+}
+
+// `.editor-input` carries a `min-height` and padding from `_editor.scss` sized for the full-panel
+// editors. In a verse cell the floor sets every row at that height regardless of content, the top
+// padding drops line 1 below the name it has to sit beside, the bottom padding leaves the row
+// bottom-heavy (and grows with zoom), and the inline padding adds to the gap after the name. The
+// row's own block padding spaces it instead, and the inline padding is replaced with the row's own
+// inset so line 2+ sit flush with the grip or name above them. Scoped to verse cells so the panel
+// editors keep all three.
+.stg-verse-content .editor-input {
+  min-block-size: 0;
+  padding-block: 0;
+  padding-inline: calc(var(--stg-name-gap) / var(--stg-zoom, 1));
+}
+
+// The first block's line 1 is the slot beside the name, so it starts at the top of the content and
+// right after the exclusion:
+// - Its top margin goes: marker stylesheets give paragraphs and headings one (commentary styles put
+//   `6pt` on `\p`; `\s1` and `\c` carry one in every style), which would drop line 1 below the name.
+// - Its first-line indent goes: a positive one (`\p`) only widens the gap after the name, and a
+//   negative one (`\q1`'s hanging indent) is applied after the float shortens the line, so it would
+//   pull line 1 back under the name.
+// Later blocks in the same verse keep both, so a second poetry line or a new paragraph keeps its shape.
+.stg-verse-content .editor-input > :first-child {
+  margin-block-start: 0;
+  text-indent: 0;
+}
+
+// The exclusion starts at the editor's content edge, which already sits `--stg-name-gap` in. It is
+// as tall as the name's line (`text-sm`, 1.25rem), so every text line that starts beside the name
+// starts after it — at a small zoom, line 2 starts while the unzoomed name is still beside it.
+.stg-verse-content .editor-input::before {
+  content: '';
+  float: inline-start;
+  inline-size: calc((var(--stg-text-start) - var(--stg-name-gap)) / var(--stg-zoom, 1));
+  block-size: calc(1.25rem / var(--stg-zoom, 1));
+}
+
+// Centered placeholders (downloading / unavailable / bookNotAvailable / failed / empty verse) have no
+// line boxes for the float to shorten, so reserve the width with padding, compensated the same way.
+.stg-verse-name-reserve {
+  padding-inline-start: calc(var(--stg-text-start) / var(--stg-zoom, 1));
+}

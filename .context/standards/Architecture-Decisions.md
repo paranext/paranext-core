@@ -9181,6 +9181,121 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4576 (PR #2803, the bootstrap and the injected stylesheet) and PT-4577 (PR #2821,
   chord ownership), epic PT-4575.
 
+## adr-verse-row-name-is-the-disclosure-control: The Text Collection verse row's name is its disclosure control, beside the content rather than around it
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** Each Text Collection verse row discloses a chapter-context panel. The row is a
+  `listitem` in a list of resources, so the obvious move was to put `aria-expanded`/`aria-controls`
+  and the tab stop on the row itself. `aria-expanded` is not in ARIA 1.2's supported set for
+  `listitem` (that role takes the globals plus `aria-level`/`aria-posinset`/`aria-setsize`), and
+  `jsx-a11y`'s `role-supports-aria-props` enforces it. An assistive technology that maps attributes
+  strictly per role can drop the state, leaving a screen-reader user with no indication the row is
+  toggleable or currently open.
+- **Decision:** The row's **name** is the disclosure control — a real `<button>` rendered by the cell
+  as a sibling of the verse content. It owns the accessible name, the tab stop, `aria-expanded`, and
+  `aria-controls` while open, and carries `data-disclosure-control`, which the grid's focus-restore
+  effects query. The `listitem` keeps `data-resource-id` (the zoom hook and drag handlers resolve
+  through it) and takes an `aria-label` only when no control exists to name it, so the name is never
+  announced twice. The row retains a click handler as a pointer-only convenience for the enlarged hit
+  area; that alone still needs `no-noninteractive-element-interactions` suppressed, which is correct,
+  because the row deliberately is not the control.
+- **Alternatives:** **`aria-expanded` on the `listitem`, with the lint rule suppressed** — rejected:
+  it trades a real accessibility guarantee for an untested assumption about AT behaviour. **A control
+  wrapping the row content** — not available: the row contains the reorder grip and the editor's
+  contenteditable surface, so wrapping nests interactive content inside a button, invalid for
+  `<button>` and the `nested-interactive` anti-pattern for `role="button"`. **`role="treeitem"` in a
+  `role="tree"`** — rejected: it supports `aria-expanded` natively but imports a keyboard contract
+  where arrow keys navigate, and arrow keys here already reorder. **Dropping `aria-expanded`** —
+  rejected: spec-clean but strictly less informative than either working alternative.
+- **Consequences:** Moving the disclosure off the row is tab-stop-neutral: the name control replaces
+  the row as the row's single stop. (A reorder-enabled verse row does end up with two — grip then
+  name control — but the second one comes from giving verse mode a grip at all, not from this decision.)
+  Enter and Space work with no key handler of our own, because the control is a native button. Anything that needs to focus a row must
+  target `[data-disclosure-control]` rather than the row element. A test double for the cell has to
+  forward the disclosure props or the control disappears from the tree, which is the same failure
+  mode the reorder grip's mock had.
+- **Source:** PT-4544 (WI-18), after `jsx-a11y/role-supports-aria-props` flagged the row-level
+  `aria-expanded`.
+
+## adr-verse-row-name-sized-to-its-text: The Text Collection verse row's name is as wide as its text, measured and published to the stylesheet
+
+- **Date:** 2026-10-14
+- **Status:** Accepted
+- **Context:** `adr-verse-row-reserves-with-a-generated-float` gave every verse row's name a fixed
+  6rem area so rows would start line 1 on the same column. Seen in Storybook, that leaves a wide gap
+  between a short name (`WEB`, `KJV`) and the verse, which is most rows. The requirement is "flow
+  content after and beneath shortname — same as PT9", and PT9's Text Collection
+  (`ParatextBase/TextCollection/TextCollectionCss.css`, `.abbrev`) floats the abbreviation at its
+  own width with an 8px margin, so the text starts right after it.
+- **Decision:** The name is `inline-size: max-content` up to a `--stg-name-max-width` cap (6rem,
+  past which it truncates with the full-name tooltip). The float that reserves line 1 lives inside
+  the zoomed editor, which CSS cannot size from the unzoomed name beside it, so `ResourceCellView`
+  measures the name with a `ResizeObserver` and sets `--stg-name-width` on the row; every derived
+  length (`--stg-text-start`, the float, the placeholder reserve) follows it. Until the first
+  measurement the cap stands in, so line 1 never starts under the name. A zero measurement (a row in
+  a hidden tab, which has no layout) is ignored; the observer fires again when the row is shown.
+- **Alternatives:** **Size every row to the widest name in the collection** — keeps rows aligned
+  with far less gap, but is not what PT9 does; not chosen. **A smaller fixed width** — still wastes
+  space for three-letter names and truncates more. **Keep the fixed 6rem** — the gap this replaces.
+- **Consequences:** Rows with different names start line 1 on different columns, as in PT9; the
+  e2e geometry spec now asserts line 1 starts right after each row's own name rather than on a
+  shared column. Rows with the same name still align at any zoom, because the name is unzoomed and
+  the float divides by `--stg-zoom`. The layout now depends on a measurement in JavaScript rather
+  than CSS alone.
+- **Source:** PT-4544 review follow-up.
+
+## adr-verse-row-reserves-with-a-generated-float: The Text Collection verse row reserves its name width with a generated float inside the editor's own block flow
+
+- **Date:** 2026-09-18
+- **Status:** Accepted; the **fixed** name width is superseded by
+  `adr-verse-row-name-sized-to-its-text` (the float mechanism stands)
+- **Context:** The Text Collection's verse rows put a resource short name beside the verse text.
+  Laid out as a two-column flex split, each name sized to its own content under a `max-w-24` cap, so
+  rows did not align with each other, and wrapped lines stayed in the right-hand column leaving a
+  band of empty space under every name. The requirement is the PT9 shape: the name in a fixed-size
+  area, content flowing after it on line 1 and *beneath* it on line 2+. That is a text-wrap-around
+  shape, which no flex or grid split produces — a split necessarily keeps line 2 in the text column.
+  Zoom is per-resource: the platform applies CSS `zoom` to the element marking the resource's text
+  (`ContentZoomRoot`), so anything sized inside that subtree is multiplied while the name beside it
+  is not.
+- **Decision:** The name is `position: absolute` at the row's inline-start with a **fixed**
+  `inline-size` (not a cap — an exact width is what makes rows align), and the space it occupies is
+  reserved inside the text's own flow by `.stg-verse-content .editor-input::before`, a float of the
+  same width. The float shortens line 1's line box and nothing else, so line 2+ start at the row's
+  flush inline edge. The row hands its resource's zoom level (the platform's
+  `--platform-content-zoom-<area>` variable, with the same fallback the platform's own rule uses) to
+  `--stg-zoom` from **outside** the zoomed subtree and the exclusion divides by it, so a row at any zoom reserves the same device pixels as
+  the unzoomed name beside it. Centered placeholders have no line boxes for a float to shorten, so
+  they reserve the same width with `padding-inline-start`, compensated identically. The rules live in
+  their own `_scripture-text-grid-verse.scss`, used only by the grid web view, because they target
+  `.editor-input` and `_editor-overrides.scss` reaches four web views. `.editor-input`'s
+  `min-height`, sized for the full-panel editors, is reset to `0` for verse cells only: measured in
+  the running app it floors every verse row at 150px regardless of content, which defeats the
+  alignment the change exists to produce.
+- **Alternatives:** **A `text-indent` on the first line** — rejected: `_usj-nodes.scss` already sets
+  `text-indent` per paragraph marker (`.usfm_p`, and `.usfm_q1`'s hanging indent), so an override
+  would silently destroy every poetry indent. A float composes with them instead, shortening the line
+  box while the marker's own indent still applies. **A flex or grid split** — rejected: it is what
+  ships today and it cannot put line 2 under the name. **Reserving with padding on the editor**, as
+  `_simple-mode.scss` does for the inline-end marker-bar gutter — viable, but it indents *every*
+  line rather than only line 1, which is the opposite of the required shape. That rule's reasoning
+  ("no right margin to float over") is about an element floated *over* laid-out text, which does not
+  shorten line boxes; a float generated inside the flow does, so the two decisions do not conflict.
+- **Consequences:** The float and the verse's blocks are siblings inside `.editor-input`, so the
+  shape survives any `overflow` on `.editor-input` or `.editor-inner`. It breaks if `.editor-input`
+  becomes a flex or grid container (the float stops floating), or if the first block establishes its
+  own formatting context (`display: flow-root`, a non-`visible` `overflow`): that block then sits
+  beside the float as a whole, so line 2+ stay indented. A local-only e2e geometry spec asserts those
+  computed values and the resulting line rects so that failure is loud rather than a subtle
+  misrender. `float: inline-start` resolves against the element's own `direction`, so
+  RTL needs no second rule; the stylesheet containing no `[dir]` selector is the check that this
+  holds. Short names now leave whitespace to their inline-end inside the reserved area — the
+  deliberate cost of rows aligning. Storybook needs a stand-in carrying the real class chain to show
+  any of this; the stories import the real stylesheet, but only the e2e spec checks the cascade
+  against the real editor styles.
+- **Source:** PT-4544 (WI-18), serving TODD-NTH-1.1/1.2 and TODD-NTH-1.3's residual grip.
+
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 
 - **Date:** 2026-08-27

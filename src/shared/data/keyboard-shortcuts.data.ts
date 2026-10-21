@@ -627,22 +627,23 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   // natural way is expected editor behavior, not a keyboard shortcut.
   {
     id: 'scripture-text-grid-open-chapter-context',
-    purpose: 'Open the chapter-context view for the focused cell',
+    purpose: "Open or close the chapter-context view from the focused row's name control",
     category: 'View',
     context: 'Scripture Text Grid web view',
     keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
     locations: [
-      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
     ],
   },
   {
     id: 'scripture-text-grid-move-between-cells',
-    purpose: 'Move to the next or previous cell in the Scripture Text Grid',
+    purpose:
+      "Move to the next or previous control in the Scripture Text Grid — each verse row's name control, plus its reorder grip when reordering is enabled",
     category: 'Navigation',
     context: 'Scripture Text Grid web view',
     keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
     locations: [
-      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
     ],
   },
   {
