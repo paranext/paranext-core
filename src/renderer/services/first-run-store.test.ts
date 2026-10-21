@@ -87,13 +87,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetCurrentLocale.mockReturnValue('en-US');
   mockGetSetupDialogLanguages.mockResolvedValue({ en: { autonym: 'English' } });
-  // Registration entered in Platform.Bible unless a test says it came from Paratext 9.
-  mockSendCommand.mockResolvedValue(false);
   localStorage.clear();
   // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
   mockSet.mockResolvedValue(undefined);
   // clearAllMocks keeps implementations, so a rejection set by one test would leak into the next.
   mockSendCommand.mockReset();
+  // Registration entered in Platform.Bible unless a test says it came from Paratext 9.
+  mockSendCommand.mockResolvedValue(false);
   resetFirstRunStore();
   // Required, not hygiene: the gate now resolves registration through the shared store, which caches
   // a definitive answer for the session. Without this reset a value cached by one test would be
@@ -898,7 +898,6 @@ describe('clearFirstRunLocalState', () => {
       'platform-bible.firstRunWizardActive',
       'platform-bible.firstRunJustRegistered',
       'platform-bible.firstRunWizardRestarted',
-      'platform-bible.syncOnStartupDisabled',
     ];
     firstRunKeys.forEach((key) => localStorage.setItem(key, 'true'));
     localStorage.setItem('platform-bible.firstRunDemoMode', 'true');
