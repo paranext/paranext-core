@@ -1146,6 +1146,61 @@ describe('footerAction', () => {
 
     await waitFor(() => expect(screen.queryByTestId('project-selector-footer-action')).toBeNull());
   });
+
+  describe('shouldRunFooterActionWhenEmpty', () => {
+    function renderRunWhenEmpty(projects: ProjectSelectorProject[], onSelect: () => void) {
+      return render(
+        <ProjectSelector
+          mode="project"
+          projects={projects}
+          openTabs={[]}
+          selection={{ projectId: undefined }}
+          onChangeSelection={() => {}}
+          localizedStrings={{ ariaLabel: 'Project' }}
+          footerAction={{ label: 'More projects…', onSelect }}
+          shouldRunFooterActionWhenEmpty
+        />,
+      );
+    }
+
+    it('runs the action from the trigger instead of opening an empty popover', async () => {
+      const user = setupUser();
+      const onSelect = vi.fn();
+      renderRunWhenEmpty([], onSelect);
+
+      await user.click(screen.getByRole('combobox', { name: 'Project' }));
+
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('project-selector-footer-action')).toBeNull();
+      expect(screen.getByRole('combobox', { name: 'Project' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    });
+
+    it('runs the action from the keyboard too', async () => {
+      const user = setupUser();
+      const onSelect = vi.fn();
+      renderRunWhenEmpty([], onSelect);
+
+      await user.tab();
+      expect(screen.getByRole('combobox', { name: 'Project' })).toHaveFocus();
+      await user.keyboard('{Enter}');
+
+      expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens the popover as usual once there is a row to show', async () => {
+      const user = setupUser();
+      const onSelect = vi.fn();
+      renderRunWhenEmpty(SAMPLE_PROJECTS, onSelect);
+
+      await user.click(screen.getByRole('combobox', { name: 'Project' }));
+
+      expect(await screen.findByTestId('project-selector-footer-action')).toBeInTheDocument();
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('ProjectSelector — trigger label id casing', () => {

@@ -43,6 +43,11 @@ vi.mock('@papi/frontend', () => ({
     dialogs: {
       showDialog: vi.fn(),
     },
+    // `useResolvedContainerProjectId` confirms the container project exists, so the saved project
+    // id is kept, which is the state these renders assume.
+    projectLookup: {
+      getMetadataForProject: vi.fn(async () => ({})),
+    },
   },
   logger: { warn: mockLoggerWarn, error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
@@ -52,6 +57,12 @@ vi.mock('@papi/frontend/react', () => ({
   useLocalizedStrings: () => [{}, false],
   useDataProvider: vi.fn(() => undefined),
   useProjectDataProvider: vi.fn(() => undefined),
+  useSetting: vi.fn((_key: string, defaultValue: unknown) => [
+    defaultValue,
+    vi.fn(),
+    vi.fn(),
+    false,
+  ]),
   useScrollGroupScrRef: vi.fn(() => [
     { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
     vi.fn(),
@@ -59,7 +70,9 @@ vi.mock('@papi/frontend/react', () => ({
 }));
 
 // Local hooks — mock at module boundaries so tests don't need real PAPI subscriptions
-vi.mock('./use-effective-resource-reference-list.hook', () => ({
+// Partial: `useResourceReferenceSource` also reads this module's pure `mergeResourceReferenceLists`.
+vi.mock('./use-effective-resource-reference-list.hook', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./use-effective-resource-reference-list.hook')>()),
   useEffectiveResourceReferenceList: (...args: unknown[]) =>
     mockUseEffectiveResourceReferenceList(...args),
   default: (...args: unknown[]) => mockUseEffectiveResourceReferenceList(...args),

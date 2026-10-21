@@ -53,13 +53,14 @@ function mockCommands(
   );
 }
 
-function renderWrapper() {
+function renderWrapper(allowedResourceIds?: string[]) {
   render(
     <Dialog open>
       <ResourcePickerDialogWrapper
         isDialog
         resourceType="ScriptureResource"
         selectedResourceIds={[]}
+        allowedResourceIds={allowedResourceIds}
         submitDialog={vi.fn()}
         cancelDialog={vi.fn()}
         rejectDialog={vi.fn()}
@@ -190,5 +191,149 @@ describe('RESOURCE_PICKER_DIALOG registration', () => {
   it('declares that it provides its own title and description', () => {
     expect(RESOURCE_PICKER_DIALOG.providesOwnTitle).toBe(true);
     expect(RESOURCE_PICKER_DIALOG.providesOwnDescription).toBe(true);
+  });
+});
+
+// `allowedResourceIds` is what makes a non-free resource UNREACHABLE from a restricted entry point,
+// rather than merely refused after the pick, so what the list lets the user see is what is pinned.
+describe('ResourcePickerDialogWrapper resource restriction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function catalogResource(dblEntryUid: string) {
+    return {
+      dblEntryUid,
+      displayName: dblEntryUid,
+      fullName: `${dblEntryUid} full name`,
+      bestLanguageName: 'English',
+      type: 'ScriptureResource',
+      size: 1,
+      installed: false,
+      updateAvailable: false,
+      projectId: '',
+    };
+  }
+
+  const CATALOG = [
+    catalogResource('AAAA1111'),
+    catalogResource('cccc3333'),
+    catalogResource('NOTFREE9'),
+  ];
+
+  /** A locally-installed non-DBL resource: `dblEntryUid === projectId` marks it as such. */
+  const LOCAL_RESOURCE = {
+    ...catalogResource('proj-local'),
+    installed: true,
+    projectId: 'proj-local',
+  };
+
+  function mockCatalog(localResources: unknown[] = []) {
+    mockCommands(
+      async () => ({ status: 'available', resources: CATALOG }),
+      async () => localResources,
+    );
+  }
+
+  it('offers the whole combined list when no restriction is given', async () => {
+    mockCatalog([LOCAL_RESOURCE]);
+
+    renderWrapper();
+
+    await waitFor(() => expect(screen.getByText('NOTFREE9')).toBeInTheDocument());
+    expect(screen.getByText('AAAA1111')).toBeInTheDocument();
+    expect(screen.getByText('proj-local')).toBeInTheDocument();
+  });
+
+  it('offers only the allowed resources, matched case-insensitively', async () => {
+    // The allowlist is hand-curated while `dblEntryUid` arrives in whatever case the DBL catalog
+    // supplies, so a case-sensitive match would silently drop a resource the team meant to offer.
+    mockCatalog();
+
+    renderWrapper(['aaaa1111', 'CCCC3333']);
+
+    await waitFor(() => expect(screen.getByText('AAAA1111')).toBeInTheDocument());
+    expect(screen.getByText('cccc3333')).toBeInTheDocument();
+    expect(screen.queryByText('NOTFREE9')).not.toBeInTheDocument();
+  });
+
+  it('offers nothing for an empty allowed list rather than treating it as "no restriction"', async () => {
+    // A MISSING list means unrestricted; an EMPTY one means this caller may offer nothing.
+    // Collapsing them would hand a restricted entry point the entire catalog.
+    mockCatalog();
+
+    renderWrapper([]);
+
+    await waitFor(() =>
+      expect(screen.getByText('%resourcePicker_no_results%')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('AAAA1111')).not.toBeInTheDocument();
+  });
+
+  it('narrows the locally-installed rows too, which no allowlist entry can match', async () => {
+    mockCatalog([LOCAL_RESOURCE]);
+
+    renderWrapper(['AAAA1111']);
+
+    await waitFor(() => expect(screen.getByText('AAAA1111')).toBeInTheDocument());
+    expect(screen.queryByText('proj-local')).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourcePickerDialogWrapper notice command', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCommands(async () => ({ status: 'available', resources: [] }));
+  });
+
+  function renderWithNoticeCommand(cancelDialog: () => void) {
+    render(
+      <Dialog open>
+        <ResourcePickerDialogWrapper
+          isDialog
+          resourceType="ScriptureResource"
+          selectedResourceIds={[]}
+          notice="Only free texts."
+          noticeCommandLabel="Register"
+          noticeCommand="paratextRegistration.showParatextRegistration"
+          submitDialog={vi.fn()}
+          cancelDialog={cancelDialog}
+          rejectDialog={vi.fn()}
+        />
+      </Dialog>,
+    );
+  }
+
+  it('closes the picker, then sends the command, so what it opens is not left behind the modal', async () => {
+    const order: string[] = [];
+    const cancelDialog = vi.fn(() => order.push('cancel'));
+    renderWithNoticeCommand(cancelDialog);
+    vi.mocked(sendCommand).mockImplementation(async (command: unknown) => {
+      order.push(String(command));
+      return undefined;
+    });
+
+    act(() => screen.getByRole('button', { name: 'Register' }).click());
+
+    expect(order).toEqual(['cancel', 'paratextRegistration.showParatextRegistration']);
+  });
+
+  it('shows no button without a command to send', () => {
+    render(
+      <Dialog open>
+        <ResourcePickerDialogWrapper
+          isDialog
+          resourceType="ScriptureResource"
+          selectedResourceIds={[]}
+          notice="Only free texts."
+          noticeCommandLabel="Register"
+          submitDialog={vi.fn()}
+          cancelDialog={vi.fn()}
+          rejectDialog={vi.fn()}
+        />
+      </Dialog>,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Register' })).toBeNull();
   });
 });

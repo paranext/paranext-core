@@ -51,6 +51,7 @@ import { PanelReadinessView } from './panel-readiness-view.component';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { SCROLL_MAX_WAIT_MS, scrollToVerse } from './editor-dom.util';
 import { blockCopyWhileChapterLoads } from './copy-limit/resolve-copy-limit.util';
+import { ResourceMessageView } from './resource-message-view.component';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { ResourceBlankChapter } from './resource-blank-chapter.component';
 import { ResourceTextUnavailable } from './resource-text-unavailable.component';
@@ -97,11 +98,69 @@ const localize = (strings: ModelTextPanelLocalizedStrings, key: ModelTextPanelLo
 
 const DEFAULT_SCR_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
 
+/** The project-scoped keys that have a no-project counterpart. */
+type NoProjectWordingKey =
+  | '%webView_modelTextPanel_bookNotAvailable%'
+  | '%webView_modelTextPanel_emptyState_baseOrModel_prompt%'
+  | '%webView_modelTextPanel_emptyState_pickText%'
+  | '%webView_modelTextPanel_installFailed%'
+  | '%webView_modelTextPanel_installFailedOffline%'
+  | '%webView_modelTextPanel_installedButUnavailable%'
+  | '%webView_modelTextPanel_pickModelText%'
+  | '%webView_modelTextPanel_settingsUnavailable%'
+  | '%webView_modelTextPanel_unknownResource%';
+
+/**
+ * Project-scoped message key -> its no-project counterpart.
+ *
+ * A TOTAL `Record` over {@link NoProjectWordingKey}, not a `Partial` one: with `Partial` an omitted
+ * mapping is exactly the silent runtime fallthrough this map exists to prevent, because `wording()`
+ * would quietly render the project-scoped string. Adding a key to the union without adding its
+ * mapping here is a compile error.
+ */
+const NO_PROJECT_WORDING: Record<NoProjectWordingKey, ModelTextPanelLocalizedStringKey> = {
+  '%webView_modelTextPanel_bookNotAvailable%':
+    '%webView_modelTextPanel_noProject_bookNotAvailable%',
+  '%webView_modelTextPanel_emptyState_baseOrModel_prompt%':
+    '%webView_resourcePanel_noProject_emptyState_prompt%',
+  '%webView_modelTextPanel_emptyState_pickText%': '%webView_resourcePanel_noProject_pick%',
+  '%webView_modelTextPanel_installFailed%': '%webView_modelTextPanel_noProject_installFailed%',
+  '%webView_modelTextPanel_installFailedOffline%':
+    '%webView_modelTextPanel_noProject_installFailedOffline%',
+  '%webView_modelTextPanel_installedButUnavailable%':
+    '%webView_modelTextPanel_noProject_installedButUnavailable%',
+  '%webView_modelTextPanel_settingsUnavailable%':
+    '%webView_modelTextPanel_noProject_settingsUnavailable%',
+  '%webView_modelTextPanel_pickModelText%': '%webView_resourcePanel_noProject_pick%',
+  '%webView_modelTextPanel_unknownResource%': '%webView_modelTextPanel_noProject_unknownResource%',
+};
+
+/** Whether a key has a no-project counterpart in {@link NO_PROJECT_WORDING}. */
+const hasNoProjectWording = (key: ModelTextPanelLocalizedStringKey): key is NoProjectWordingKey =>
+  key in NO_PROJECT_WORDING;
+
 export type ModelTextPanelProps = {
   /** Localized strings; import `MODEL_TEXT_PANEL_STRING_KEYS` to resolve them. */
   localizedStrings: ModelTextPanelLocalizedStrings;
   /** Whether the panel has a project context (opened with a project id). */
   hasProject: boolean;
+  /**
+   * Whether the panel is running as the no-project free-resource entry point, where it offers free
+   * / openly-licensed texts instead of a project's configured model text.
+   *
+   * Distinct from `!hasProject`: with an empty allowlist there is nothing to offer, so the panel
+   * falls back to the plain no-project message rather than a picker that cannot be populated.
+   *
+   * Only the wording depends on this. The list itself arrives through `modelTextsState` exactly as
+   * it does with a project, because `useResourceReferenceSource` has already chosen where to read
+   * it from.
+   */
+  isFreeResourceEntryPoint: boolean;
+  /**
+   * Whether the DBL catalog failed specifically because the user's Paratext registration is missing
+   * or invalid. Folded into `readiness`; see `getResourcePanelReadiness`.
+   */
+  hasRegistrationError: boolean;
   /**
    * Readiness of the configured model-text list, passed as the whole discriminated state rather
    * than unpacked into a list plus a status.
@@ -126,6 +185,11 @@ export type ModelTextPanelProps = {
   hasCatalogError: boolean;
   /** Re-runs the DBL resource catalog fetch. */
   onRetryCatalog: () => void;
+  /**
+   * Opens the Paratext registration UI. Shown only in the registration-required state, where a
+   * retry cannot succeed but registering can.
+   */
+  onOpenRegistration: () => void;
   /** The function to get the user-level model-text setting (used when writing a user choice). */
   getUserModelTexts: () => Promise<ResourceReferenceList | undefined>;
   /** Current Scripture reference for the editor. */
@@ -174,11 +238,14 @@ export type ModelTextPanelProps = {
 export function ModelTextPanel({
   localizedStrings,
   hasProject,
+  isFreeResourceEntryPoint,
+  hasRegistrationError,
   modelTextsState,
   dblResources,
   isCatalogReady,
   hasCatalogError,
   onRetryCatalog,
+  onOpenRegistration,
   getUserModelTexts,
   scrRef = DEFAULT_SCR_REF,
   onScrRefChange = () => {},
@@ -189,6 +256,19 @@ export function ModelTextPanel({
   resourceCopyLimit,
   logger,
 }: ModelTextPanelProps) {
+  /**
+   * Resolves a message key, swapping in its no-project variant at the free-resource entry point.
+   *
+   * Centralized because every one of these messages names a "model text" — a relationship that only
+   * exists when a project is open. Resolving them one ternary at a time at each render site is how
+   * a newly-added message silently keeps the project-scoped wording.
+   */
+  const wording = (key: ModelTextPanelLocalizedStringKey) =>
+    localize(
+      localizedStrings,
+      isFreeResourceEntryPoint && hasNoProjectWording(key) ? NO_PROJECT_WORDING[key] : key,
+    );
+
   // --- Resolve the configured model text against the DBL resource list ---
 
   // Derived from the narrowed union, so it can only be non-undefined when the list is genuinely
@@ -529,19 +609,21 @@ export function ModelTextPanel({
     <div
       className={`tw:flex tw:flex-col tw:items-center tw:gap-4 tw:p-8 tw:text-center ${PANEL_FILL_CLASSES}`}
     >
-      <p>{localize(localizedStrings, '%webView_modelTextPanel_unknownResource%')}</p>
+      <p>{wording('%webView_modelTextPanel_unknownResource%')}</p>
       <Button onClick={() => handlePickModelText()}>
-        {localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
+        {wording('%webView_modelTextPanel_pickModelText%')}
       </Button>
     </div>
   );
 
-  // No project: opened without a project id (expected to be brief).
-  if (!hasProject) {
+  // No project AND nothing free to offer — an empty allowlist, or a project that simply has not
+  // opened yet. There is no picker worth showing, so say only what is true.
+  if (!hasProject && !isFreeResourceEntryPoint) {
     return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <p>{localize(localizedStrings, '%webView_modelTextPanel_noProject%')}</p>
-      </div>
+      <ResourceMessageView
+        message={localize(localizedStrings, '%webView_modelTextPanel_noProject%')}
+        testId="model-text-panel-no-project"
+      />
     );
   }
 
@@ -553,6 +635,12 @@ export function ModelTextPanel({
     listState: modelTextsState,
     isCatalogReady,
     hasCatalogError,
+    // Scoped to the free-resource entry point: with a project open the panel may still have an
+    // installed resource to show, so the retryable catalog error stays the better answer there.
+    hasRegistrationError: isFreeResourceEntryPoint && hasRegistrationError,
+    // The free-resource prompt can only offer what the catalog supplies, so it must not appear
+    // before the catalog has settled.
+    needsCatalogBeforeEmpty: isFreeResourceEntryPoint,
     // `matchingCount` is omitted: this panel shows the first configured model text whatever its
     // type, so every configured item matches — unlike the Resource panel, which filters by type.
   });
@@ -561,14 +649,19 @@ export function ModelTextPanel({
     return (
       <PanelReadinessView
         readiness={readiness}
-        errorMessage={localize(localizedStrings, '%webView_modelTextPanel_settingsUnavailable%')}
+        errorMessage={wording('%webView_modelTextPanel_settingsUnavailable%')}
         catalogErrorMessage={localize(
           localizedStrings,
           '%webView_modelTextPanel_catalogUnavailable%',
         )}
+        registrationRequiredMessage={localize(
+          localizedStrings,
+          '%webView_resourcePanel_noProject_registrationRequired%',
+        )}
+        registerLabel={localize(localizedStrings, '%webView_resourcePanel_noProject_register%')}
         loadingLabel={localize(localizedStrings, '%webView_modelTextPanel_loading%')}
         emptyPrompt={formatReplacementString(
-          localize(localizedStrings, '%webView_modelTextPanel_emptyState_baseOrModel_prompt%'),
+          wording('%webView_modelTextPanel_emptyState_baseOrModel_prompt%'),
           {
             summary: localize(
               localizedStrings,
@@ -577,23 +670,28 @@ export function ModelTextPanel({
           },
         )}
         moreInfo={
-          <ExpandableInfo
-            moreLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_moreInfo%')}
-            lessLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_lessInfo%')}
-            body={
-              // Start-aligned and normally wrapped, unlike the centered, balanced empty state
-              // around it, so the bold terms line up and it reads like the Team layout dialog's.
-              <BaseOrModelTextExplanation
-                localizedStrings={localizedStrings}
-                className="tw:text-start tw:text-wrap"
-              />
-            }
-          />
+          // The disclosure explains who chooses a project's Base or Model text, which means nothing
+          // when no project is open.
+          isFreeResourceEntryPoint ? undefined : (
+            <ExpandableInfo
+              moreLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_moreInfo%')}
+              lessLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_lessInfo%')}
+              body={
+                // Start-aligned and normally wrapped, unlike the centered, balanced empty state
+                // around it, so the bold terms line up and it reads like the Team layout dialog's.
+                <BaseOrModelTextExplanation
+                  localizedStrings={localizedStrings}
+                  className="tw:text-start tw:text-wrap"
+                />
+              }
+            />
+          )
         }
-        pickLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_pickText%')}
+        pickLabel={wording('%webView_modelTextPanel_emptyState_pickText%')}
         retryLabel={localize(localizedStrings, '%webView_modelTextPanel_retry%')}
         onPick={() => handlePickModelText()}
         onRetryCatalog={onRetryCatalog}
+        onOpenRegistration={onOpenRegistration}
       />
     );
   }
@@ -611,8 +709,7 @@ export function ModelTextPanel({
   if (installFailed) {
     return (
       <PanelRetryableErrorView
-        message={localize(
-          localizedStrings,
+        message={wording(
           getInstallFailureMessageKey(
             installFailureReason,
             isOnline,
@@ -671,7 +768,7 @@ export function ModelTextPanel({
       if (isBookMissing)
         return (
           <ResourceBookNotAvailable
-            message={localize(localizedStrings, '%webView_modelTextPanel_bookNotAvailable%')}
+            message={wording('%webView_modelTextPanel_bookNotAvailable%')}
             announcementKey={`${resourceProjectId}:${scrRef.book}`}
           />
         );

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
@@ -266,15 +266,15 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
   it('names the control as a picker in the accessible name when there is nothing to list', async () => {
     await renderSimpleToolbarWith({ currentSimpleProject: undefined });
 
-    // The bare placeholder would make the whole accessible name "No projects", which says nothing
-    // about the control still opening a picker — and an empty list is exactly when a user needs to
-    // reach the "More projects…" escape hatch behind it.
+    // The accessible name says why activating the trigger opens Home rather than a list.
     const trigger = await screen.findByRole('combobox', {
       name: 'Test select a project, no projects here',
     });
-    // The VISIBLE text is still the short placeholder; only the accessible name is expanded, so
-    // the toolbar does not grow a sentence where a two-word label belongs.
-    expect(trigger).toHaveTextContent('Test no projects');
+    // The VISIBLE text is the same short invitation shown when there are projects; only the
+    // accessible name is expanded, so the toolbar does not grow a sentence where a two-word label
+    // belongs.
+    expect(trigger).toHaveTextContent('Test select a project');
+    expect(trigger).not.toHaveTextContent('Test no projects');
   });
 
   it('names the error in the accessible name when the current project cannot be resolved', async () => {
@@ -326,7 +326,7 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
   it('leaves the rendered trigger enabled on a settled but empty project list', async () => {
     await renderSimpleToolbarWith({ recentProjects: [], allProjects: [], isLoading: false });
 
-    // An empty list must not disable the trigger: "More projects…" is the only way out of it.
+    // An empty list must not disable the trigger: opening Home from it is the only way out.
     expect(
       await screen.findByRole('combobox', { name: 'Test select a project, no projects here' }),
     ).toBeEnabled();
@@ -404,28 +404,24 @@ describe('PlatformBibleToolbar — real ProjectSelector integration', () => {
     });
   });
 
-  it('offers more-projects AND the empty message with zero local projects', async () => {
+  it('opens Home straight from the trigger with zero local projects', async () => {
     const user = await renderSimpleToolbarWith({
       currentSimpleProject: undefined,
       recentProjects: [],
       allProjects: [],
     });
 
-    // The trigger stays enabled with nothing to list: "More projects…" is the only way out of an
-    // empty list, so this is the state the escape hatch matters most in.
     const trigger = await screen.findByRole('combobox', {
       name: 'Test select a project, no projects here',
     });
     expect(trigger).toBeEnabled();
     await user.click(trigger);
 
-    // Both, against the REAL component under the toolbar's own prop combination: `forceMount` keeps
-    // the footer out of cmdk's registered-item set, so `filtered.count` stays 0 and CommandEmpty
-    // still renders. An ordinarily-registered footer row would satisfy the first assertion and
-    // silently break the second, which the prop-level test against the stub cannot see.
-    expect(await screen.findByTestId('project-selector-footer-action')).toHaveTextContent(
-      'Test more projects',
+    // A popover here could only offer "More projects…", so the trigger runs it instead: Home, with
+    // projects only, which is where server projects not yet on this computer can be reached.
+    await waitFor(() =>
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith('platformGetResources.openHome', true),
     );
-    expect(screen.getByText('Test no projects found')).toBeInTheDocument();
+    expect(screen.queryByTestId('project-selector-footer-action')).toBeNull();
   });
 });
