@@ -1,8 +1,7 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import { vi } from 'vitest';
 import { createUuid } from '@node/utils/crypto-util';
-import { getAppDir } from '@node/utils/util';
 import { ExecutionToken } from '@node/models/execution-token.model';
 import { executionTokenService } from '@node/services/execution-token.service';
 import {
@@ -11,24 +10,12 @@ import {
   setExtensionUris,
 } from './extension-storage.service';
 
-vi.mock('@node/utils/util', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@node/utils/util')>();
-  // __dirname is a module global available in the factory closure
-  return {
-    ...actual,
-    /**
-     * Gets the dev app directory relative to this file instead of using `getAppDir` because
-     * `getAppDir` uses `globalThis.resourcesPath`, which is set to the repo root via command line
-     * argument in dev but is not set while testing
-     */
-    getAppDir: () => path.join(__dirname, '../..'),
-  };
-});
-
 const extensionName = 'storageTestExtName';
-const extensionsBasePath = path.join(getAppDir(), 'test-extensions');
+// Outside the source tree: other tests walk `src/`, and a folder that appears and vanishes under
+// them while they read it makes them fail at random
+const extensionsBasePath = fs.mkdtempSync(path.join(os.tmpdir(), 'extension-storage-test-'));
 const thisExtensionBasePath = path.join(extensionsBasePath, 'extensions', extensionName);
-const thisUserBasePath = path.join(getAppDir(), extensionName);
+const thisUserBasePath = path.join(extensionsBasePath, extensionName);
 
 const resourcesUri = 'resources://extensions';
 const testData = 'TEST DATA';
