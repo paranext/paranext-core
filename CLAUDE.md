@@ -29,6 +29,7 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | PT9 Feature Inventory   | [paratext-9-features/](.context/research/paratext-9-features/README.md) | Catalogue of Paratext 9 features (entry points, forms, classes, sources) — used by `/investigate-prd` |
 | Capability Designs      | [designs/](.context/designs/)                                             | Design specs + implementation plans for capabilities (e.g. `/investigate-prd`) |
 | Startup performance     | [README.md](README.md#startup-performance-timing)                         | Enable `PT_STARTUP_MARKS`, capture marks, render the waterfall (`npm run startup-waterfall`), packaged-vs-dev caveat |
+| First-run wizard reset  | [README.md](README.md#resetting-the-first-run-wizard)                     | Bring the setup wizard back (`platform.resetFirstRun`, registered/unregistered Paratext 9 user), demo mode, where the registration lives |
 
 ## Terminology
 

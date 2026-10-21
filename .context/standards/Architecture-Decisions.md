@@ -2739,6 +2739,53 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   relied on the normalization holding.
 - **Source:** PT-3408, review of PR #2715.
 
+## adr-first-run-existing-registration-is-prefill: An existing registration prefills the first-run wizard; it never skips it
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** The first-run gate (`first-run-store.ts` / `first-run.reducer.ts`) originally treated
+  a valid registration with no wizard in progress as "a pre-existing install" and silently marked
+  first run complete. Every Paratext 9 user has exactly that state on their first Platform.Bible
+  launch, because Platform.Bible's ParatextData folder is seeded from Paratext 9's (see
+  `adr-paratextdata-app-data-folder-pinned`), so they never saw the wizard. They skipped the
+  language, internet-settings and sync-consent choices, and the next launch passed every startup
+  auto-sync gate (`startup-tasks.ts`) and ran an account-wide sync nobody consented to. A stale
+  `firstRunWizardActive` flag on a registered machine also resumed the wizard at sync consent with
+  no way back. PT-4795 asked for the full wizard, with Paratext 9's values shown for the user to
+  confirm.
+- **Decision:** An unfinished first run always starts at the first step. The one exception is the
+  launch right after the wizard's own "Save and restart" (wizard active **and** the one-launch
+  just-registered flag), which resumes at sync consent. Back reaches every earlier step, except
+  in re-register mode, whose "Continue without registration" escape hatch replaces Back. A
+  registration that is valid when the wizard starts counts language, internet settings and identify
+  as complete (check marks; Next moves through them). The Identify step shows it read-only,
+  because the backend only returns the code masked and a masked code cannot be validated; it
+  follows the gate's startup answer instead of re-asking the backend, so it agrees with a resume
+  the gate's just-registered allowance drove. Its primary action is Next, or "Restart and
+  continue" when the internet settings saved in the wizard differ from the ones it started with:
+  those settings only take effect after a restart, which the registering path's "Save and restart"
+  otherwise provides, and that restart resumes at sync consent too. A banner says the registration
+  was copied from Paratext 9 when the data provider recorded that copy
+  (`paratextRegistration.isRegistrationCopiedFromParatext9`); it forgets the copy whenever the
+  registration is changed or cleared, so a registration entered in Platform.Bible never reads as
+  copied. Only finishing the wizard
+  completes first run. The OS-language seed now only replaces the default `['en']`, since a fresh
+  start can follow a real language choice. A developer reset (`platform.resetFirstRun`) restores
+  the first-run state, optionally re-copying or clearing the registration.
+- **Alternatives:** **Keep skipping, but prefill the settings screens instead** — rejected: users
+  would never see the choices, and sync consent is exactly what must not be skipped. **Detect
+  Paratext 9 directly** (registry, install folder) — rejected: "a valid registration this wizard did
+  not create" is what the product cares about, and needs no platform-specific probing. **Resume at
+  the first incomplete step instead of the first step** — rejected by the ticket: users should see
+  the carried-over values before confirming them.
+- **Consequences:** Profiles with a valid registration but no `platform.firstRunComplete` now get the
+  full wizard on upgrade — mainly installs from before the wizard existed that ran in Power mode and
+  later switch to Simple. Accepted: they have never been through Simple onboarding or sync consent.
+  Users already silently completed on earlier builds keep auto-syncing without having consented;
+  they are not re-onboarded. Installs seeded before the copy was recorded never show the banner.
+  `platform.resetFirstRun` is callable by any PAPI client and can delete the registration; it is
+  documented as a developer and tester tool.
+
 ## adr-focus-in-a-background-window-is-latent: A `focus()` call inside a backgrounded window sets the active element without raising the window
 
 - **Date:** 2026-09-09
@@ -5045,6 +5092,44 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   The cost is remembering to open a scope around the call — outside a scope, alerts still vanish.
 - **Source:** manage-books port (`AlertCapture` introduced for `ImportBooks`). See
   `Paranext-Core-Patterns.md` for the code pattern.
+
+## adr-paratextdata-app-data-folder-pinned: Platform.Bible pins its ParatextData app-data folder and seeds it from Paratext 9 itself
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** ParatextData keeps per-user files (`RegistrationInfo.xml`, `InternetSettings.xml`,
+  Mercurial and feedback files) in `<local app data>/Paratext<Major><Minor>`, named after
+  `ParatextInfo.ParatextVersion`, which `Program.cs` sets to `10.<app semver major>.…` — so
+  `Paratext100` today. When that folder is missing or empty, ParatextData copies those files from
+  the highest-*named* `Paratext*` folder at or above `Paratext80`. That had three problems. First, an
+  app major version bump renames the folder, and because the names sort as strings `Paratext95`
+  beats `Paratext100`, so the new folder would be re-seeded from Paratext 9 and silently drop every
+  registration or internet-settings change made in Platform.Bible. Second, the folder is cached on
+  first access, so any read before the version override pins Platform.Bible to Paratext 9's own
+  folder. Third, if copying is denied, ParatextData falls back to using the Paratext 9 folder
+  directly. Product rule (PT-4795): Platform.Bible may read Paratext 9's registration once, to
+  populate its own, but must never change it.
+- **Decision:** `PlatformParatextInfo` (`c-sharp/ParatextUtils/`) subclasses `ParatextInfo` and is
+  installed as `ParatextInfo.Default` at the top of `Program.Main`, before anything touches
+  ParatextData. Its `GetAppDataFolder()` returns a fixed `Paratext100`, independent of the version,
+  kept because existing installs already store their data there. When that folder has none of the
+  four files ParatextData would carry over (other files, such as the auto-replace list, do not
+  count), it copies them from the numerically newest `Paratext8x`/`Paratext9x` folder with a
+  registration and writes a `CopiedFromParatext9.txt` marker. It never reads a `Paratext10x`
+  folder, never overwrites, and never uses the Paratext 9 folder itself. It never throws either:
+  `AppDataFolder` is read at startup and the result is cached, so a file-system failure is logged
+  and ParatextData's own reads and writes fail later instead. Decompiled
+  ParatextData 9.5.0.24 confirms that only `ParatextInfo` builds this path and that every consumer
+  goes through the virtual method.
+- **Alternatives:** **Pin the version's minor instead** — rejected: `ParatextVersion` also drives
+  version reporting and compatibility checks. **Copy forward from the previous `Paratext10x` folder
+  on each major bump** — rejected: more moving parts, and it keeps ParatextData's string sort and
+  fall-back-to-Paratext-9 behaviour. **Fix it in ParatextData** — not needed for Platform.Bible and
+  would change Paratext 9; could still be offered upstream.
+- **Consequences:** The folder no longer follows the version, so a future need for a fresh folder
+  is an explicit change to `APP_DATA_FOLDER_NAME` plus a migration. Tests never run `Program.Main`,
+  so they keep ParatextData's default folder; tests that install `PlatformParatextInfo` must restore
+  the previous `Default`.
 
 ## adr-paste-inserts-only-what-was-pasted: A paste never invents or deletes a paragraph marker
 
