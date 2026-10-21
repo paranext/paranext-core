@@ -13,9 +13,11 @@ import {
 const extensionName = 'storageTestExtName';
 // Set in `beforeAll`, outside the source tree: other tests walk `src/`, and a folder that appears
 // and vanishes under them while they read it makes them fail at random. The service keeps user
-// data under `globalThis.resourcesPath`, so it lands in this folder too.
+// data under `getAppDir()`, which is `<resourcesPath>/dev-appdata` while `isPackaged` is false, so
+// it lands in this folder too.
 let extensionsBasePath = '';
 let thisExtensionBasePath = '';
+const originalIsPackaged = globalThis.isPackaged;
 
 const resourcesUri = 'resources://extensions';
 const testData = 'TEST DATA';
@@ -26,12 +28,15 @@ beforeAll(() => {
   extensionsBasePath = fs.mkdtempSync(path.join(os.tmpdir(), 'extension-storage-test-'));
   thisExtensionBasePath = path.join(extensionsBasePath, 'extensions', extensionName);
   globalThis.resourcesPath = extensionsBasePath;
+  // A packaged app dir is the user's real data folder
+  globalThis.isPackaged = false;
   fs.mkdirSync(thisExtensionBasePath, { recursive: true });
 
   setExtensionUris(new Map([[extensionName, `${resourcesUri}/${extensionName}`]]));
 });
 
 afterAll(() => {
+  globalThis.isPackaged = originalIsPackaged;
   try {
     fs.rmSync(extensionsBasePath, { recursive: true });
   } catch {
