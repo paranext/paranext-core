@@ -8744,40 +8744,66 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   remount the panel.
 - **Source:** PT-4534 (review of #2847), found checking the Checks tab in the running app.
 
-## adr-web-view-provider-retry-scoped-to-tab-restore: Only a tab-restore request gets the webview provider's patient retry; a fresh `openWebView()` keeps the fast 20s failure
+## adr-web-view-provider-retry-scoped-to-tab-restore: Only a tab-restore request gets the webview provider's patient retry; a fresh `openWebView()` keeps the shorter 20s failure
 
 - **Date:** 2026-10-20
-- **Status:** Accepted
-- **Context:** `getWebViewProvider` (`web-view-provider.service.ts`) waited a single, fixed 20 seconds
-  for a webview provider's network object to register, then gave up permanently. On a cold launch, several bundled extensions can take long enough to that any tab whose provider did not complete its registration in time could render with a empty placeholder,unconditionally mounted at layout load on
-  every Simple-mode launch, exposed to this race on
-  every cold start. `waitForNetworkObject` already listens for `onDidCreateNetworkObject`; the gap
-  was that `getWebViewProvider`'s single wait never re-armed after giving up. On Windows, it was confirmed empirically that Windows Defender's real-time scan on a cold file read was responsible for the extra delay. This was during `require()`, not `activate()`. 
-- **Decision:** A new `shouldWaitPatientlyForProvider` flag is threaded through
-  `retrieveWebViewContent` → `reloadWebView` → `openOrReloadWebView` → `getWebViewProvider`
-  (`web-view.component.tsx`, `web-view.service-shard.ts`, `web-view-provider.service.ts`), only when restoring  tabs. When set, `waitForWebViewProviderPatiently` re-arms the same 20-second wait up to a
-  2-minute total budget before letting the final rejection propagate unchanged. The flag is kept off
-  the public `ReloadWebViewOptions` type and the `WebViewServiceShard` interface, so it is
-  unreachable through `papi.webViews.reloadWebView` or any extension-triggered reload. Every other
-  caller — a fresh `openWebView()` request, the error boundary's retry, a PAPI-triggered reload —
-  keeps today's single fast 20-second wait untouched.
-- **Alternatives:** Re-arm the wait uniformly inside `getWebViewProvider` itself, with no flag
-  threading (one function changes instead of four across two files) — rejected because it would
-  apply the same ~2-minute patience to a fresh, explicit `openWebView()` request too: a Power-mode
-  user choosing "Open X" from a menu would see that request silently resolve minutes later instead of
-  failing within 20 seconds, a regression in its own right, not just a missed improvement. A
-  genuinely missing or mistyped `webViewType` would also take up to 2 minutes to surface an error
-  instead of 20 seconds, for every caller. Reusing the existing `isReloadOfAnOpenWebView` flag
-  (already threaded through the same call chain, distinguishing "found in dock, asking again" from a
-  fresh create) — rejected after checking its actual callers: the error boundary's retry and
-  `main/services/web-view.service-router.ts`'s pass-through of arbitrary PAPI-triggered reloads both
-  set it, and both are call shapes that should keep failing fast, so reusing it would have wrongly
-  granted extended patience to them too.
-- **Consequences:** The extra threading cost (4 functions, 2 files) turned out smaller than estimated
-  once `isReloadOfAnOpenWebView` was ruled out as reusable. Any future caller of this chain must
-  explicitly opt into the extended wait rather than inheriting it by default — the flag defaults to
-  `false` everywhere. Revisit the 2-minute budget if cold-start activation times grow enough (more
-  bundled extensions, slower disks) to approach it.
+- **Status:** Accepted — the 2-minute budget is a bounded patch, not a full fix; see the deferred
+  alternative at the end of Alternatives.
+- **Context:** `getWebViewProvider` (`web-view-provider.service.ts`) waited a single, fixed 20
+  seconds for a webview provider's network object to register, then gave up permanently. On a cold
+  launch, several bundled extensions can take long enough that any tab whose provider did not
+  complete its registration in time could render as an empty placeholder — unconditionally mounted
+  at layout load on every Simple-mode launch, and so exposed to this race on every cold start.
+  `waitForNetworkObject` already listens for `onDidCreateNetworkObject`; the gap was that
+  `getWebViewProvider`'s single wait never re-armed after giving up. On Windows, it was confirmed
+  empirically that Windows Defender's real-time scan on a cold file read was responsible for the
+  extra delay, during `require()` rather than `activate()`.
+- **Decision:** `retrieveWebViewContent` (`web-view.component.tsx`) calls
+  `waitForWebViewProviderToRegister` (`web-view.service-shard.ts`) BEFORE calling `reloadWebView`,
+  only for a tab-restore request. `waitForWebViewProviderToRegister` re-arms the same 20-second wait
+  up to a 2-minute total budget before propagating the final rejection; once it resolves,
+  `reloadWebView` → `openOrReloadWebView` → `getWebViewProvider` run exactly as they always have, with
+  a single, shorter 20-second wait. Every other caller — a fresh
+  `openWebView()` request, the error boundary's retry, a PAPI-triggered reload — never calls
+  `waitForWebViewProviderToRegister` and so uses the shorter 20-second wait.
+- **Alternatives:** Re-arm the wait uniformly inside `getWebViewProvider` itself, with no caller-side
+  opt-in — rejected because it would apply the same ~2-minute patience to a fresh, explicit
+  `openWebView()` request too: a Power-mode user choosing "Open X" from a menu would see that request
+  silently resolve minutes later instead of failing within 20 seconds, a regression in its own right,
+  not just a missed improvement. A genuinely missing or mistyped `webViewType` would also take up to
+  2 minutes to surface an error instead of 20 seconds, for every caller.
+
+  Thread a dedicated `shouldWaitPatientlyForProvider` flag through `reloadWebView` →
+  `openOrReloadWebView` → `getWebViewProvider` instead, so the patient wait runs inside that chain
+  rather than ahead of it — the first version of this fix took this approach (reusing the existing
+  `isReloadOfAnOpenWebView` flag for the same purpose was considered and rejected first, since the
+  error boundary's retry and `main/services/web-view.service-router.ts`'s pass-through of arbitrary
+  PAPI-triggered reloads both already set it for an unrelated reason, so reusing it would have
+  wrongly granted extended patience to those call shapes too) — replaced after review reproduced
+  two bugs that trace directly to applying patience AFTER `openOrReloadWebView` had already read
+  the dock and minted a nonce:
+  a tab that left the dock mid-wait left behind a `WebViewController` the extension host had by then
+  registered, which the existing "left the dock" bail-out never disposed (it only ever cleaned up the
+  nonce, the right fix for a provider that was never created, not one that was); and the saved
+  definition `reloadWebView` reads before the wait went stale across the stretched-out window, so a
+  change made to the tab's definition while it waited was silently reverted once the wait resolved
+  and the stale snapshot was finally written into the dock. Both bugs existed in the pre-PT-4734
+  code too, in a 20-second window narrow enough that nobody had hit them; widening that window to up
+  to 2 minutes made them easy to reproduce. Waiting entirely before the dock is ever read removes the
+  precondition for either: by the time `reloadWebView` runs, its own read-then-write sequence is back
+  to its original short size regardless of how long the provider took to register.
+
+  Replace the bounded budget with an open-ended, event-driven recovery instead — subscribe to
+  `onDidCreateNetworkObject` for this provider's id and re-run `retrieveWebViewContent` whenever it
+  fires, dropping the subscription when the tab closes, the way `use-project-picker-data.hook.ts`
+  already heals a late PDP factory — deferred, not rejected. It would close the residual gap the
+  2-minute budget still leaves (a provider that is merely slower than 2 minutes, not broken, still
+  leaves its tab permanently blank), but it removes the flag/budget/loop shape entirely, which is a
+  bigger change than this decision's scope; tracked separately rather than folded in here.
+- **Consequences:** Any future caller that wants this patience must call
+  `waitForWebViewProviderToRegister` itself before its own reload/open — nothing inherits it by
+  default. Revisit the 2-minute budget if cold-start activation times grow enough (more bundled
+  extensions, slower disks) to approach it.
 - **Source:** PT-4734.
 
 ## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it

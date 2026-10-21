@@ -2699,6 +2699,27 @@ async function admitContentToDock(operation: string): Promise<void> {
 }
 
 /**
+ * Waits, re-arming up to the full patient budget, for a web view provider whose owning extension
+ * may still be activating — see {@link webViewProviderService.getWebViewProvider}'s
+ * `shouldWaitPatiently` parameter. Resolves once the provider registers (discarding the value —
+ * callers that need the provider itself ask for it again, cheaply, once it is known to exist) or
+ * throws once the budget is spent.
+ *
+ * Called by `retrieveWebViewContent`'s tab-restore path BEFORE `reloadWebView`, rather than
+ * threading a patience flag through `reloadWebView`/`openOrReloadWebView` to wait internally,
+ * because `openOrReloadWebView` reads the dock and mints the nonce the web view provider's
+ * `getWebView` call relies on — and both are supposed to describe the dock as it is right now, not
+ * as it was whenever the provider wait finally settles. Waiting here first keeps the window between
+ * that read and the write it leads to at its ordinary short size regardless of how long the
+ * provider takes, so a tab that leaves the dock mid-wait is simply gone by the time `reloadWebView`
+ * reads it (bailing out before any controller is ever created) instead of leaving one orphaned by a
+ * dock-membership check that only ever cleaned up a nonce.
+ */
+export async function waitForWebViewProviderToRegister(webViewType: string): Promise<void> {
+  await webViewProviderService.getWebViewProvider(webViewType, true);
+}
+
+/**
  * Creates a new WebView or reloads an existing one based on the saved WebView definition.
  *
  * @param savedWebViewDefinition Saved WebView definition to pass to
@@ -2718,13 +2739,6 @@ async function admitContentToDock(operation: string): Promise<void> {
  *   inside a window that does not hold OS focus sets that document's active element without
  *   activating the window — latently, until the window is next activated — so it would still claim
  *   the caret for a window that was deliberately opened in the background.
- * @param shouldWaitPatientlyForProvider Whether to keep re-arming the wait for the webview provider
- *   if its extension is still activating, instead of failing after the first 20 seconds — see
- *   {@link getWebViewProvider}. Set only by `retrieveWebViewContent`'s tab-restore call
- *   (`reloadWebView`'s own 4th parameter, not part of the public `ReloadWebViewOptions`): the tab
- *   already visually exists there, so patience is free. Left `false` here for a fresh
- *   `openWebView()` request, which should keep failing fast — an explicit action silently resolving
- *   minutes later would be bad UX in its own right.
  * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
  *   not create a WebView for this request.
  *
@@ -2739,7 +2753,6 @@ export async function openOrReloadWebView(
   optionsDefaulted: OpenWebViewOptions = {},
   isReloadOfAnOpenWebView = false,
   activateWithoutDocumentFocus: boolean | undefined = undefined,
-  shouldWaitPatientlyForProvider = false,
 ): Promise<WebViewId | undefined> {
   const { webViewType } = savedWebViewDefinition;
   // A load that starts and finishes entirely inside the provider await below, with nothing left in
@@ -2747,11 +2760,11 @@ export async function openOrReloadWebView(
   // trace once it is over — recorded here, ahead of both, so the recheck further down can tell.
   const layoutLoadGenerationBeforeProvider = layoutLoadGeneration;
 
-  // Get the WebView definition from the webview provider
-  const webViewProvider = await webViewProviderService.getWebViewProvider(
-    webViewType,
-    shouldWaitPatientlyForProvider,
-  );
+  // Get the WebView definition from the webview provider. A caller who can afford to wait longer
+  // for a still-activating extension (tab restore) does so itself, via
+  // `waitForWebViewProviderToRegister`, before ever reaching here — see that function's doc for why
+  // the wait does not belong on this side of the dock read.
+  const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType, false);
   if (!webViewProvider)
     throw new Error(`getWebView: Cannot find Web View Provider for webview type ${webViewType}`);
 
@@ -3613,23 +3626,12 @@ export async function handleDockEmptiedByRemoval(layout: LayoutInfo): Promise<vo
   await dockHomeInThisWindowLoggingFailure();
 }
 
-/**
- * See {@link WebViewServiceShard.reloadWebView}
- *
- * @param shouldWaitPatientlyForProvider Internal-only, not part of {@link ReloadWebViewOptions} (and
- *   so unreachable through the public `papi.webViews.reloadWebView`/`WebViewServiceShard` surface,
- *   which declares only the 3 public parameters above): set `true` only by
- *   `retrieveWebViewContent`'s tab-restore call. See {@link openOrReloadWebView}'s matching
- *   parameter for why this must stay off for every other reload caller (an error-boundary retry, or
- *   a reload requested over PAPI) — those are explicit actions that should keep failing fast, not
- *   ambient restoration that can afford to wait. Defaults to `false`
- */
+/** See {@link WebViewServiceShard.reloadWebView} */
 export async function reloadWebView(
   // Keeping this parameter for the likelihood that we will add options per WebViewType sometime
   _webViewType: WebViewType,
   webViewId: WebViewId,
   options: ReloadWebViewOptions = {},
-  shouldWaitPatientlyForProvider = false,
 ): Promise<WebViewId | undefined> {
   await waitForInitialize();
 
@@ -3645,8 +3647,6 @@ export async function reloadWebView(
     undefined,
     getWebViewOptionsDefaults(options),
     true,
-    undefined,
-    shouldWaitPatientlyForProvider,
   );
 }
 

@@ -167,9 +167,13 @@ async function registerWebViewProvider(
 const PROVIDER_WAIT_ARM_MS = 20000;
 
 /**
- * Total time {@link waitForWebViewProviderPatiently} spends re-arming the wait before giving up —
- * comfortably past the ~28s worst-case cold-start activation time observed in practice, with room
- * as more extensions get bundled.
+ * Total time {@link waitForWebViewProviderPatiently} spends re-arming the wait for THIS webview
+ * provider's own extension to register before giving up — greater than the ~28s worst-case
+ * cold-start activation time observed in practice, with extra allowance for more extensions.
+ *
+ * Similar in magnitude and rationale to `STARTUP_SYNC_RETRY_BUDGET_MS` (`startup-tasks.ts`) and
+ * `STARTUP_SYNC_READINESS_BUDGET_MS` (`startup-readiness.util.ts`) — to give cold-boot activation
+ * time to finish. Deliberately not aliased to each other, allowing them to be tuned independently.
  */
 const PATIENT_PROVIDER_WAIT_TOTAL_MS = 2 * 60 * 1000;
 
@@ -182,7 +186,7 @@ const PATIENT_PROVIDER_WAIT_TOTAL_MS = 2 * 60 * 1000;
  *
  * Used only for the tab-restore path (a saved or baked-into-the-default-layout tab materializing):
  * the tab already visually exists, so waiting quietly longer while its provider catches up is
- * exactly right. A fresh `openWebView()` request keeps the single fast-failing
+ * exactly right. A fresh `openWebView()` request keeps the single, shorter
  * {@link PROVIDER_WAIT_ARM_MS} wait instead — silently resolving minutes later would be bad UX for
  * an action the user is actively waiting on.
  */

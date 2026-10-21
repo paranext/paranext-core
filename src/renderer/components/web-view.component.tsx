@@ -15,6 +15,7 @@ import {
   reloadWebView,
   updateTabPartialSync,
   getSavedWebViewDefinitionSync,
+  waitForWebViewProviderToRegister,
 } from '@renderer/services/web-view.service-shard';
 import {
   applyContentZoomForWebView,
@@ -88,22 +89,21 @@ const CROSS_ORIGIN_REMOVE_EVENT_LISTENER_ERROR_REGEX =
  *
  * Both callers (`loadWebViewTab` restoring a saved/baked tab, and the
  * `platform.onDidReloadExtensions` handler below) are the extension-still-activating race this
- * product's serial extension-host startup can hit, not a user action — so this passes
- * `reloadWebView`'s patient-wait flag, re-arming the provider wait instead of failing after the
- * first 20 seconds. An explicit user-initiated reload (the error boundary, or a PAPI-triggered one)
- * goes through `reloadWebView` directly instead of through here, and keeps the fast failure.
+ * product's serial extension-host startup can hit, not a user action — so this waits patiently for
+ * the provider to register, re-arming instead of failing after the first 20 seconds, BEFORE calling
+ * `reloadWebView` — see {@link waitForWebViewProviderToRegister} for why the wait happens here
+ * rather than inside `reloadWebView` itself. An explicit user-initiated reload (the error boundary,
+ * or a PAPI-triggered one) goes through `reloadWebView` directly instead of through here, and keeps
+ * the shorter, one-shot wait.
  *
  * @param data Web view definition to load
  */
 async function retrieveWebViewContent(webViewType: string, id: string): Promise<void> {
-  const loadedId = await reloadWebView(
-    webViewType,
-    id,
-    {
-      bringToFront: false,
-    },
-    true,
-  );
+  await waitForWebViewProviderToRegister(webViewType);
+
+  const loadedId = await reloadWebView(webViewType, id, {
+    bringToFront: false,
+  });
 
   if (!loadedId) {
     // Two very different answers arrive as the same `undefined`, and the dock tells them apart. A
