@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     reloadWebView: vi.fn(async (): Promise<string | undefined> => 'wv-1'),
     dataProvidersGet: vi.fn(),
     getMetadataForAllProjects: vi.fn(async (): Promise<unknown[]> => []),
+    getSetting: vi.fn(async (_key: string): Promise<unknown> => 'power'),
     readUserData: vi.fn(),
     writeUserData: vi.fn(),
     projectsChangedHandlers,
@@ -43,7 +44,10 @@ vi.mock('@papi/backend', () => ({
         return () => mocks.projectsChangedHandlers.delete(handler);
       }),
     },
-    settings: { registerValidator: vi.fn(async () => async () => true) },
+    settings: {
+      registerValidator: vi.fn(async () => async () => true),
+      get: mocks.getSetting,
+    },
     webViewProviders: {
       registerWebViewProvider: vi.fn(async (webViewType: string, webViewProvider: unknown) => {
         mocks.webViewProviders.set(webViewType, webViewProvider);
@@ -244,7 +248,49 @@ describe('platformGetResources.openHome', () => {
     mocks.dataProvidersGet.mockResolvedValue(provider);
     mocks.openWebView.mockResolvedValue('home-1');
     mocks.getOpenWebViewDefinition.mockResolvedValue(undefined);
+    // Power mode unless a test says otherwise: there, only an opener asks for a preset.
+    mocks.getSetting.mockImplementation(async () => 'power');
     await activateWithFreshModule();
+  });
+
+  /*
+   * Ian's condition for not locking the filter in Simple mode (PT-3182, 2026-10-21): Home there
+   * always starts on Paratext projects, wherever it was opened from.
+   */
+  it('starts Home on projects in Simple mode, even when asked for nothing in particular', async () => {
+    mocks.getSetting.mockImplementation(async () => 'simple');
+
+    await openHome();
+
+    expect(mocks.openWebView).toHaveBeenCalledTimes(1);
+    expect(lastRequestedPreset()).toBe('paratextProject');
+  });
+
+  it('puts an open Home back on projects in Simple mode when the user had widened it', async () => {
+    mocks.getSetting.mockImplementation(async () => 'simple');
+    mocks.getOpenWebViewDefinition.mockResolvedValue({
+      id: 'home-1',
+      webViewType: 'platformGetResources.home',
+      state: { projectResourceFilter: 'resource' },
+    });
+
+    await openHome('platform.projectResources');
+
+    expect(mocks.reloadWebView).toHaveBeenCalledWith(
+      'platformGetResources.home',
+      'home-1',
+      expect.objectContaining({ initialProjectResourceFilter: 'paratextProject' }),
+    );
+  });
+
+  it('starts Home on projects when the interface mode cannot be read', async () => {
+    mocks.getSetting.mockImplementation(async () => {
+      throw new Error('settings unavailable');
+    });
+
+    await openHome();
+
+    expect(lastRequestedPreset()).toBe('paratextProject');
   });
 
   afterEach(async () => {

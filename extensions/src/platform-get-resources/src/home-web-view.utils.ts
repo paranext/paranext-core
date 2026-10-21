@@ -55,3 +55,26 @@ export function shouldReloadHomeForFilterPreset(
 ): boolean {
   return (existingWebView.state?.projectResourceFilter ?? 'all') !== initialProjectResourceFilter;
 }
+
+/**
+ * The filter `platformGetResources.openHome` asks Home to start on.
+ *
+ * In Simple mode Home always starts on Paratext projects, wherever it was opened from (Ian,
+ * PT-3182, 2026-10-21): the filter isn't locked there, so a user can still choose to see resources,
+ * but every open starts again on projects. In Power mode only an opener that asks for projects gets
+ * them, and Home otherwise starts on the filter it last showed.
+ *
+ * @param shouldShowProjectsOnly The command's argument. Only strictly `true` asks for projects: the
+ *   macOS native menubar passes each menu item's group key as the first argument (PT-4873), and
+ *   that string must not read as "projects only".
+ * @param interfaceMode `platform.interfaceMode`, or `undefined` if it could not be read — which
+ *   counts as Simple, the mode whose rule is stricter
+ * @returns The preset, or `undefined` to start on the filter Home last showed
+ */
+export function getHomeFilterPreset(
+  shouldShowProjectsOnly: unknown,
+  interfaceMode: string | undefined,
+): ProjectResourceFilterValue | undefined {
+  if (shouldShowProjectsOnly === true || interfaceMode !== 'power') return 'paratextProject';
+  return undefined;
+}

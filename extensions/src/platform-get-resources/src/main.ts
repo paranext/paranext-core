@@ -18,6 +18,7 @@ import { resolveDblCatalog, shouldStopBackgroundFetch } from './dbl-catalog.util
 import { buildLocalNonDblResources, waitAtMost } from './get-local-non-dbl-resources.utils';
 import {
   buildHomeWebViewState,
+  getHomeFilterPreset,
   type HomeWebViewOptions,
   shouldReloadHomeForFilterPreset,
 } from './home-web-view.utils';
@@ -505,10 +506,16 @@ export async function activate(context: ExecutionActivationContext) {
   const openHomeWebViewCommandPromise = papi.commands.registerCommand(
     'platformGetResources.openHome',
     async (shouldShowProjectsOnly?: boolean) => {
-      // Strictly `true`: the macOS native menubar calls every menu command with the item's group
-      // key as its first argument, and a truthy string must not read as "projects only".
-      const initialProjectResourceFilter =
-        shouldShowProjectsOnly === true ? 'paratextProject' : undefined;
+      let interfaceMode: string | undefined;
+      try {
+        interfaceMode = await papi.settings.get('platform.interfaceMode');
+      } catch (e) {
+        logger.warn(`openHome could not read the interface mode: ${getErrorMessage(e)}`);
+      }
+      const initialProjectResourceFilter = getHomeFilterPreset(
+        shouldShowProjectsOnly,
+        interfaceMode,
+      );
       const options: HomeWebViewOptions = {
         initialProjectResourceFilter,
         // Focus existing one if one exists

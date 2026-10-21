@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { SavedWebViewDefinition } from '@papi/core';
-import { buildHomeWebViewState, shouldReloadHomeForFilterPreset } from './home-web-view.utils';
+import {
+  buildHomeWebViewState,
+  getHomeFilterPreset,
+  shouldReloadHomeForFilterPreset,
+} from './home-web-view.utils';
 
 const savedHome = (state?: Record<string, unknown>): SavedWebViewDefinition => ({
   id: 'home1',
@@ -75,5 +79,29 @@ describe('shouldReloadHomeForFilterPreset', () => {
         'paratextProject',
       ),
     ).toBe(false);
+  });
+});
+
+/*
+ * Simple mode doesn't lock the filter, but Home there always starts on Paratext projects (Ian,
+ * PT-3182, 2026-10-21). Power mode starts where the user left it unless an opener asks.
+ */
+describe('getHomeFilterPreset', () => {
+  it('starts on projects in Simple mode, whatever the opener asked for', () => {
+    expect(getHomeFilterPreset(undefined, 'simple')).toBe('paratextProject');
+    expect(getHomeFilterPreset(false, 'simple')).toBe('paratextProject');
+  });
+
+  it('starts on projects when the interface mode cannot be read', () => {
+    expect(getHomeFilterPreset(undefined, undefined)).toBe('paratextProject');
+  });
+
+  it('starts on projects in Power mode only when the opener asks for them', () => {
+    expect(getHomeFilterPreset(true, 'power')).toBe('paratextProject');
+    expect(getHomeFilterPreset(undefined, 'power')).toBeUndefined();
+  });
+
+  it("doesn't read the macOS menubar's group key as asking for projects", () => {
+    expect(getHomeFilterPreset('platform.projectResources', 'power')).toBeUndefined();
   });
 });

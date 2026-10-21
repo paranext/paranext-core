@@ -355,6 +355,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   that the reload applies the preset only because every provider run gives the iframe a new
   `srcNonce`, which remounts it: if web views ever keep their nonce across reloads, Home would keep
   showing its old filter while its `state` says otherwise, and this has to be revisited.
+- **Amended 2026-10-21 (PT-3182, Simple mode):** in Simple mode `openHome` always asks for the
+  Paratext projects preset, whatever its argument (`getHomeFilterPreset`), so Home there starts on
+  projects on every open and an open Home the user had widened is reloaded back onto them; an
+  unreadable interface mode counts as Simple. The filter is not locked in Simple mode: Ian accepted
+  that on this condition, since resources a user chooses to see open in their reference tab
+  (`adr-simple-mode-resource-opens-to-reference-tab`). Power mode is unchanged.
 
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
@@ -7556,8 +7562,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Alternatives:** **Add it to the project's (team) list** — rejected: every teammate would see
   one user's pick. **Show it without saving** — rejected by Ian: an opened text should stay
   available to that user. **Lock Simple-mode Home to projects only** — the fallback Sebastian
-  defined in case this didn't land; not added, as with this in place he sees no need for it (Ian to
-  confirm on PT-3182). **A pending-selection slot in module
+  defined in case this didn't land; not added. Ian accepted that on PT-3182 (2026-10-21) on one
+  condition, which `openHome` keeps: in Simple mode Home always starts on Paratext projects, so a
+  user sees resources only by choosing them, and they then open in their tab. **A pending-selection slot in module
   state**, as `currentResourceTextPanelProjectIds` is — rejected: reload options carry the value to
   the one build it was asked for.
 - **Consequences:** The personal list is per project (`UserSettings-{user}.xml`); "available in any

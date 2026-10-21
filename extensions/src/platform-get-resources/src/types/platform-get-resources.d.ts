@@ -145,8 +145,9 @@ declare module 'papi-shared-types' {
      *   out the published resources that otherwise share its list, and reloads an already-open Home
      *   that is showing another filter. Set by entry points that are asking "get me to one of my
      *   projects". Omitted or any other value asks for Home as it is: a new Home starts on
-     *   everything, and an open one is raised showing whatever filter it last had. The user can
-     *   change the filter either way.
+     *   everything, and an open one is raised showing whatever filter it last had. In Simple mode
+     *   Home always starts on Paratext projects, whatever this says. The user can change the filter
+     *   either way.
      * @returns WebView id for the Home WebView or `undefined` if none was opened
      */
     'platformGetResources.openHome': (
