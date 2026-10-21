@@ -1,8 +1,41 @@
 diff --git a/node_modules/rc-dock/es/DockLayout.js b/node_modules/rc-dock/es/DockLayout.js
-index bac288d..6e25d88 100644
+index bac288d..68b79be 100644
 --- a/node_modules/rc-dock/es/DockLayout.js
 +++ b/node_modules/rc-dock/es/DockLayout.js
-@@ -258,7 +258,17 @@ export class DockLayout extends DockPortalManager {
+@@ -161,6 +161,32 @@ export class DockLayout extends DockPortalManager {
+      * @param floatPosition @inheritDoc
+      */
+     dockMove(source, target, direction, floatPosition) {
++        /**
++         * patch-package notes:
++         *
++         * A drag keeps the tab or panel object it found at drag start (`DragState.setData`), and
++         * every drop target passes that object here. Any layout change during the drag that
++         * replaces the object — `updateTab` with new tab data does, and the app calls it for tab
++         * title, flash, focus and web view state changes — leaves it stale: removing it walks its
++         * old `parent` chain and rebuilds the root box from the layout as it was at drag start, so
++         * the drop loses the tab (when docking against the root box) or duplicates it (when the
++         * destination also changed). The target can be stale the same way, since the drag manager
++         * reads a drop target's handlers when the pointer enters it, and a handler that closes over
++         * its render-time panel keeps that panel. Look both objects up by id in the current layout
++         * instead. A source that isn't in the layout keeps the object passed in, since that is
++         * also how callers add a new tab.
++         */
++        if (source && source.id != null) {
++            source = this.find(source.id, Algorithm.Filter.AnyTabPanel) || source;
++        }
++        if (target && typeof target !== 'string' && target.id != null) {
++            target = this.find(target.id, Algorithm.Filter.All) || target;
++        }
++        if (source && target && typeof target !== 'string' && target.id === source.id) {
++            // Dropped onto itself. rc-dock's own drop handlers check this by object identity, which
++            // a replaced object gets past.
++            return;
++        }
+         let layout = this.getLayout();
+         if (direction === 'maximize') {
+             layout = Algorithm.maximize(layout, source);
+@@ -258,7 +284,17 @@ export class DockLayout extends DockPortalManager {
                  if (!makeActive) {
                      // restore the previous activeId
                      panelData.activeId = activeId;
@@ -21,7 +54,7 @@ index bac288d..6e25d88 100644
                  }
              }
              else if (makeActive && panelData.activeId !== id) {
-@@ -316,7 +326,21 @@ export class DockLayout extends DockPortalManager {
+@@ -316,7 +352,21 @@ export class DockLayout extends DockPortalManager {
          if (dropRect) {
              if (direction === 'remove') {
                  this.setState((oldStates) => {
