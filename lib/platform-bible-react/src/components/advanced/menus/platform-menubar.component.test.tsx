@@ -463,6 +463,36 @@ describe('PlatformMenubar label alignment and shortcut spacing', () => {
     expect(spacerOf(screen.getByRole('menuitem', { name: /^Sub/ }))).not.toBeNull();
   });
 
+  it('sizes an image icon like a named icon and the icon-less spacer, so all labels line up', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <PlatformMenubar
+        menuData={{
+          ...MIXED,
+          items: [
+            ...MIXED.items,
+            {
+              label: 'With image',
+              localizeNotes: '',
+              group: 'test.top',
+              order: 4,
+              command: 'test.e',
+              iconPathBefore: 'image.png',
+            },
+          ],
+        }}
+        onSelectMenuItem={() => {}}
+      />,
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Project' }));
+    const imageBox = (await screen.findByRole('menuitem', { name: /With image/ })).querySelector(
+      '[data-slot="menu-icon-image-box"]',
+    );
+    expect(imageBox).toHaveClass('tw:w-4');
+    expect(imageBox?.querySelector('img')).toHaveClass('tw:max-h-4', 'tw:max-w-4');
+    expect(spacerOf(screen.getByRole('menuitem', { name: /^Plain/ }))).toHaveClass('tw:w-4');
+  });
+
   it('decides the slot per menu, so a menu without icons gets no spacer', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     render(<PlatformMenubar menuData={MIXED} onSelectMenuItem={() => {}} />);
