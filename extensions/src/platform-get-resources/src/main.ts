@@ -108,12 +108,6 @@ let hasWaitedForLocalResourceProjects = false;
 const RESOURCE_PROJECT_WAIT_ATTEMPTS = 5;
 const RESOURCE_PROJECT_WAIT_DELAY_MS = 500;
 /**
- * How long the local non-DBL resource list waits for the catalog before it is built without it.
- * Well inside the Simple-mode show's 20 s deadline, which reads this list.
- */
-const LOCAL_RESOURCES_CATALOG_WAIT_MS = 5000;
-
-/**
  * Reads local project metadata, waiting for the C# Paratext PDPF to register its resource projects.
  *
  * The wait is what lets a locally-installed non-DBL resource appear in the picker: a read that
@@ -350,23 +344,25 @@ async function getCachedResources(): Promise<DblResourceCatalog> {
  *
  * Rejects when the local projects could not be read, so a caller can tell that apart from there
  * being none. The catalog failing does not stop it: the list is then built without it.
+ *
+ * @param catalogWaitMs The longest to wait for the catalog, in milliseconds, before building the
+ *   list without it. Without one it waits for the catalog however long it takes.
  */
-async function getLocalNonDblResources(): Promise<DblResourceData[]> {
+async function getLocalNonDblResources(catalogWaitMs?: number): Promise<DblResourceData[]> {
   try {
     // The exclusion below is only as good as the catalog's `installed`/`projectId` flags, and
     // `getCachedResources` returns before its background sync finishes. Wait for that sync and read
     // `cachedResources` afterwards, so a resource already on disk is excluded as a DBL entry rather
-    // than emitted a second time as a synthetic non-DBL one. Bounded: with no catalog cached yet,
-    // the read queues behind the startup fetch and its retries, and a caller opening a side-loaded
-    // resource would wait them all out.
-    const isCatalogCurrent = await waitAtMost(
-      (async () => {
-        await getCachedResources();
-        await ensureInstalledFlagsSynced();
-      })(),
-      LOCAL_RESOURCES_CATALOG_WAIT_MS,
-    );
-    if (!isCatalogCurrent)
+    // than emitted a second time as a synthetic non-DBL one. A caller that lists these beside the
+    // catalog must let it wait, or every installed DBL resource is listed twice; one that only
+    // looks a resource up can bound the wait, since the startup fetch and its retries can be long.
+    const catalogSynced = (async () => {
+      await getCachedResources();
+      await ensureInstalledFlagsSynced();
+    })();
+    // `typeof`, not `!== undefined`: an argument left out may arrive over the network as `null`.
+    if (typeof catalogWaitMs !== 'number') await catalogSynced;
+    else if (!(await waitAtMost(catalogSynced, catalogWaitMs)))
       logger.warn('Building local non-DBL resources without waiting longer for the catalog');
   } catch (error: unknown) {
     logger.warn(
@@ -589,6 +585,31 @@ export async function activate(context: ExecutionActivationContext) {
   const getLocalNonDblResourcesCommandPromise = papi.commands.registerCommand(
     'platformGetResources.getLocalNonDblResources',
     getLocalNonDblResources,
+    {
+      method: {
+        // Experimental: the catalogWaitMs parameter's contract is not yet stable.
+        'x-experimental': true,
+        summary:
+          'Lists locally-installed, read-only resources that are not in the DBL catalog, as ' +
+          'synthetic entries whose dblEntryUid is their projectId',
+        params: [
+          {
+            name: 'catalogWaitMs',
+            required: false,
+            summary:
+              'The longest to wait for the DBL catalog, in milliseconds, before building the list ' +
+              'without it, when it can include installed DBL resources too. Left out, it waits for ' +
+              'the catalog; a caller that lists these beside the catalog should leave it out',
+            schema: { type: 'number' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The resources, each as DblResourceData',
+          schema: { type: 'array', items: { type: 'object' } },
+        },
+      },
+    },
   );
 
   const refreshResourceFlagsCommandPromise = papi.commands.registerCommand(

@@ -83,8 +83,8 @@ describe('shouldReloadHomeForFilterPreset', () => {
 });
 
 /*
- * Simple mode doesn't lock the filter, but Home there always starts on Paratext projects (Ian,
- * PT-3182, 2026-10-21). Power mode starts where the user left it unless an opener asks.
+ * Simple mode doesn't lock the filter, but Home there always starts on Paratext projects. Power
+ * mode starts where the user left it unless an opener asks.
  */
 describe('getHomeFilterPreset', () => {
   it('starts on projects in Simple mode, whatever the opener asked for', () => {

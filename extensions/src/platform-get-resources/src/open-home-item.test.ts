@@ -60,7 +60,7 @@ describe('openHomeItem', () => {
     expect(commandsSent()).not.toContain('platformScriptureEditor.openResourceViewer');
   });
 
-  it('opens the resource viewer when no project is open to add the resource to', async () => {
+  it('opens the resource viewer when no reference tab is open to show the resource in', async () => {
     mocks.getSetting.mockImplementation(async () => 'simple');
 
     await openHomeItem('resource-1', true);

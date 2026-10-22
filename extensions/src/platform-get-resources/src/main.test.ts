@@ -104,10 +104,10 @@ async function getCachedResources() {
   return handler();
 }
 
-async function getLocalNonDblResources() {
+async function getLocalNonDblResources(...args: unknown[]) {
   const handler = mocks.registeredCommands.get('platformGetResources.getLocalNonDblResources');
   if (!handler) throw new Error('getLocalNonDblResources was not registered');
-  return handler();
+  return handler(...args);
 }
 
 async function refreshResourceFlags(shouldRecomputeUpdateStatus?: boolean) {
@@ -254,8 +254,8 @@ describe('platformGetResources.openHome', () => {
   });
 
   /*
-   * Ian's condition for not locking the filter in Simple mode (PT-3182, 2026-10-21): Home there
-   * always starts on Paratext projects, wherever it was opened from.
+   * Simple mode does not lock the filter, so Home there always starts on Paratext projects instead,
+   * wherever it was opened from.
    */
   it('starts Home on projects in Simple mode, even when asked for nothing in particular', async () => {
     mocks.getSetting.mockImplementation(async () => 'simple');
@@ -485,7 +485,7 @@ describe('platformGetResources.getLocalNonDblResources', () => {
     }
   });
 
-  it('does not wait out a catalog fetch that hangs', async () => {
+  it('waits no longer than asked for a catalog fetch that hangs', async () => {
     // With no catalog cached yet, the read queues behind the startup fetch; a Simple-mode open of a
     // side-loaded resource would otherwise wait it all out and run out of time.
     provider.getDblResources.mockImplementation(() => new Promise(() => {}));
@@ -495,8 +495,41 @@ describe('platformGetResources.getLocalNonDblResources', () => {
     await activateWithFreshModule();
     vi.useFakeTimers();
     try {
-      const resources = getLocalNonDblResources();
+      const resources = getLocalNonDblResources(5000);
       await vi.advanceTimersByTimeAsync(5000);
+
+      await expect(resources).resolves.toEqual([expect.objectContaining({ projectId: 'VULGP83' })]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits for a slow catalog when no limit is given, so an installed DBL resource is not listed', async () => {
+    // The resource picker and panels list this beside the catalog; a list built without the
+    // catalog would put every installed DBL resource in front of them twice.
+    let deliverCatalog: (resources: DblResourceData[]) => void = () => {};
+    provider.getDblResources.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          deliverCatalog = resolve;
+        }),
+    );
+    mocks.getMetadataForAllProjects.mockResolvedValue([
+      { id: 'BYZ1', name: 'BYZ', isEditable: false },
+      { id: 'VULGP83', name: 'VULGP83', isEditable: false },
+    ]);
+    await activateWithFreshModule();
+    vi.useFakeTimers();
+    try {
+      let settled = false;
+      const resources = getLocalNonDblResources().finally(() => {
+        settled = true;
+      });
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(settled).toBe(false);
+
+      deliverCatalog([row('byz', 'BYZ1')]);
+      await vi.advanceTimersByTimeAsync(0);
 
       await expect(resources).resolves.toEqual([expect.objectContaining({ projectId: 'VULGP83' })]);
     } finally {

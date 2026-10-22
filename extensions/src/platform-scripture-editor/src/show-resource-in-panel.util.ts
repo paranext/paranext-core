@@ -123,12 +123,14 @@ async function findCatalogEntry(resourceProjectId: string): Promise<CatalogLooku
   // which can outlast the show's deadline. Past the limit the catalog counts as unread, so the
   // resource is still shown but not saved (see `isReferenceKindKnown`).
   let catalog: DblResourceCatalog | undefined;
+  let hasCatalogTimedOut = false;
   try {
     catalog = await withinTime(
       papi.commands.sendCommand('platformGetResources.getCachedResources'),
       CATALOG_READ_WAIT_MS,
     );
-    if (!catalog) logger.warn('Gave up waiting for the DBL resource catalog');
+    hasCatalogTimedOut = !catalog;
+    if (hasCatalogTimedOut) logger.warn('Gave up waiting for the DBL resource catalog');
   } catch (e) {
     logger.warn(`Could not read the DBL resource catalog: ${getErrorMessage(e)}`);
   }
@@ -137,12 +139,15 @@ async function findCatalogEntry(resourceProjectId: string): Promise<CatalogLooku
   let entry = catalog?.status === 'available' ? catalog.resources.find(coversResource) : undefined;
 
   // The locally-installed list is read only when the catalog does not cover the resource: reading
-  // it waits on a second sync of the installed flags, for an answer the catalog already gave.
+  // it waits on a second sync of the installed flags, for an answer the catalog already gave. Its
+  // own wait for the catalog is bounded too, and skipped once this one has already given up, so a
+  // slow catalog is waited out once rather than twice.
   let wasLocalListRead = true;
   if (!entry) {
     try {
       const localEntries = await papi.commands.sendCommand(
         'platformGetResources.getLocalNonDblResources',
+        hasCatalogTimedOut ? 0 : CATALOG_READ_WAIT_MS,
       );
       entry = localEntries.find(coversResource);
     } catch (e) {

@@ -213,14 +213,21 @@ declare module 'papi-shared-types' {
      * Callers (e.g. `selectTextConnection`) detect this and create a `ProjectReference` instead of
      * a `DblResourceReference` so the resource is loadable without a catalog entry.
      *
+     * @param catalogWaitMs The longest to wait for the DBL catalog, in milliseconds, before
+     *   building the list without it — in which case it can include installed DBL resources too.
+     *   Without one it waits for the catalog however long it takes; a caller that lists these
+     *   beside the catalog should leave it out.
      * @returns Synthetic resource entries for locally-installed non-DBL resources. Also returns
      *   `[]` when the C# data provider has not registered its projects yet — callers cannot
      *   distinguish that from a genuine "no local non-DBL resources" result, so a caller that needs
      *   a retry or loading affordance must get that signal from elsewhere.
      * @throws When the local projects could not be read. A failed catalog does not throw: the list
      *   is then built without it.
+     * @experimental The `catalogWaitMs` parameter may change or disappear without notice.
      */
-    'platformGetResources.getLocalNonDblResources': () => Promise<DblResourceData[]>;
+    'platformGetResources.getLocalNonDblResources': (
+      catalogWaitMs?: number,
+    ) => Promise<DblResourceData[]>;
 
     // `paratextBibleSendReceive.*` commands are deliberately NOT declared here. This file is
     // auto-included (via `typeRoots`) into the TypeScript programs of extension repos developed

@@ -59,10 +59,10 @@ export function shouldReloadHomeForFilterPreset(
 /**
  * The filter `platformGetResources.openHome` asks Home to start on.
  *
- * In Simple mode Home always starts on Paratext projects, wherever it was opened from (Ian,
- * PT-3182, 2026-10-21): the filter isn't locked there, so a user can still choose to see resources,
- * but every open starts again on projects. In Power mode only an opener that asks for projects gets
- * them, and Home otherwise starts on the filter it last showed.
+ * In Simple mode Home always starts on Paratext projects, wherever it was opened from: the filter
+ * isn't locked there, so a user can still choose to see resources, but every open starts again on
+ * projects. In Power mode only an opener that asks for projects gets them, and Home otherwise
+ * starts on the filter it last showed.
  *
  * @param shouldShowProjectsOnly The command's argument. Only strictly `true` asks for projects: the
  *   macOS native menubar passes each menu item's group key as the first argument (PT-4873), and

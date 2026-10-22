@@ -805,6 +805,26 @@ describe('showResourceInReferencePanel', () => {
       await expect(show).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
       expect(mocks.setUserList).not.toHaveBeenCalled();
       expect(mocks.notify).not.toHaveBeenCalled();
+      // Having given up on the catalog once, it does not wait for it a second time.
+      expect(mocks.sendCommand).toHaveBeenCalledWith(
+        'platformGetResources.getLocalNonDblResources',
+        0,
+      );
+    });
+
+    it("bounds the locally-installed list's wait for the catalog", async () => {
+      // Waiting in full is for callers listing it beside the catalog, not for a lookup.
+      catalogHas(
+        [],
+        [catalogEntry({ dblEntryUid: 'VULGP83', projectId: 'VULGP83', displayName: 'VULGP83' })],
+      );
+
+      await expect(showResourceInReferencePanel('VULGP83')).resolves.toEqual(SHOWN_IN_BIBLE_TEXTS);
+
+      const localListCall = mocks.sendCommand.mock.calls.find(
+        ([command]) => command === 'platformGetResources.getLocalNonDblResources',
+      );
+      expect(localListCall?.[1]).toBeGreaterThan(0);
     });
 
     it('answers, and lets the next show start, without waiting for its warning to be sent', async () => {
