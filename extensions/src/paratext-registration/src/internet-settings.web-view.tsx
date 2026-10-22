@@ -13,9 +13,11 @@ const INTERNET_SETTINGS_RESTART_DELAY_MS = 5 * 1000;
 
 const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDataProvider';
 
-// Intentionally duplicated in the first-run wizard (internet-settings-step.component.tsx): the two
-// consumers sit on opposite sides of the core/extension boundary and `paratext-registration` is a
-// types-only module, so there is no shared runtime module to hoist this into.
+// Intentionally duplicated from the core-side copy (src/renderer/components/
+// internet-settings.constants.ts, shared by the user-profile popover and the first-run wizard step):
+// this consumer sits on the extension side of the core/extension boundary and `paratext-registration`
+// is a types-only module, so there is no shared runtime module across that boundary to hoist this
+// into.
 const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
   permittedInternetUse: 'VpnRequired',
   selectedServer: 'Production',

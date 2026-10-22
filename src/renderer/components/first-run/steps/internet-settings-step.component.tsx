@@ -15,11 +15,13 @@ import {
   type LocalizeKey,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  DEFAULT_INTERNET_SETTINGS,
+  INTERNET_SETTINGS_DATA_PROVIDER,
+} from '@renderer/components/internet-settings.constants';
 import type { FirstRunStepProps } from '../first-run-step-props.model';
 import { StepLoading } from '../step-loading.component';
 import { WizardStepHeading } from '../wizard-step-heading.component';
-
-const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDataProvider';
 
 // `firstRun_*` keys come from core (assets/localization), `internetSettings_*` and
 // `paratextRegistration_*` from the paratext-registration extension. Both merge in the combiner, so
@@ -37,17 +39,6 @@ const STRING_KEYS: LocalizeKey[] = [
   '%firstRun_step_internetSettings_loadError%',
   ...INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
 ];
-
-// `useData`'s defaultValue is typed as the data type's getData (InternetSettings), so it cannot be
-// undefined. This value is never shown to the user — the spinner covers the load. Intentionally
-// duplicated in the standalone dialog (internet-settings.web-view.tsx): the two consumers sit on
-// opposite sides of the core/extension boundary and `paratext-registration` is a types-only module,
-// so there is no shared runtime module to hoist this into.
-const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
-  permittedInternetUse: 'VpnRequired',
-  selectedServer: 'Production',
-  proxyPort: 0,
-};
 
 /**
  * First-run wizard step that lets the user configure internet access before registration. Saves

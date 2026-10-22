@@ -31,6 +31,10 @@ import { useRegistrationValidity } from '@renderer/hooks/use-registration-validi
 import { includeCurrentLanguages } from '@renderer/services/include-current-languages';
 import { offerRestartAfterInterfaceLanguageChange } from '@renderer/services/interface-language-restart-prompt';
 import {
+  DEFAULT_INTERNET_SETTINGS,
+  INTERNET_SETTINGS_DATA_PROVIDER,
+} from '@renderer/components/internet-settings.constants';
+import {
   getOfferedLanguageDefaults,
   switchInterfaceLanguage,
 } from '@shared/data/interface-languages.data';
@@ -44,7 +48,7 @@ import {
   LocalizeKey,
   type ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
-import type { InternetSettings, RegistrationData, ServerType } from 'paratext-registration';
+import type { RegistrationData, ServerType } from 'paratext-registration';
 import { useEffect, useState } from 'react';
 import './user-profile-popover.component.css';
 
@@ -96,20 +100,6 @@ const SERVER_BADGE_KEYS: Record<ServerType, { label: LocalizeKey; tooltip: Local
     label: '%userProfile_server_badge_test%',
     tooltip: '%userProfile_server_tooltip_test%',
   },
-};
-
-const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDataProvider';
-
-// `useData`'s defaultValue is typed as the data type's getData (InternetSettings), so it cannot be
-// undefined. This value is never shown to the user — the badge only renders once a real value
-// replaces it, via the `isLoadingInternetSettings` check below. Intentionally duplicated (a third
-// copy, alongside the standalone dialog and the first-run wizard step): `paratext-registration` is
-// a types-only module, so there is no shared runtime module across the core/extension boundary to
-// hoist this into.
-const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
-  permittedInternetUse: 'VpnRequired',
-  selectedServer: 'Production',
-  proxyPort: 0,
 };
 
 /** Shown while the offered languages load, or if they cannot be read: exactly the offered languages. */
