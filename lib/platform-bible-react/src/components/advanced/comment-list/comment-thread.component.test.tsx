@@ -987,6 +987,8 @@ describe('CommentThread selection styling', () => {
     rerender(threadElement({ isSelected: true }));
 
     const selected = screen.getByRole('option');
+    // `--foreground` is the token active-comment-bar-contrast.test.ts measures against every card
+    // surface; a different bar token here would need its contrast checked there instead.
     expect(selected.className).toMatch(/\bborder-foreground\b/);
     expect(selected.className).not.toMatch(/\bborder-transparent\b/);
 
