@@ -101,6 +101,7 @@ namespace TestParanextDataProvider.Projects.SendReceive
         // neither commits nor pushes, so whatever is waiting locally would stay "unsent" forever.
         [TestCase("Modified", UserRoles.Observer)]
         [TestCase("Modified", null)]
+        [TestCase("Modified", UserRoles.None)]
         [TestCase("UntrackedExtensionData", UserRoles.Observer)]
         [TestCase("TipMoved", UserRoles.Observer)]
         public void ChangesOfAUserWhoCannotSend_AreNotUnsynced(string change, UserRoles? role)
@@ -123,6 +124,19 @@ namespace TestParanextDataProvider.Projects.SendReceive
             }
 
             Assert.That(_service.HasUnsyncedLocalChanges(new SharedDummyScrText(role)), Is.False);
+        }
+
+        // The role is checked before the repository is read, so a user who cannot send gets a
+        // definite answer even when the repository cannot be read.
+        [Test]
+        public void UnreadableRepositoryOfAUserWhoCannotSend_IsNotUnsynced()
+        {
+            _hg.StatusFailure = new InvalidOperationException("hg is gone");
+
+            Assert.That(
+                _service.HasUnsyncedLocalChanges(new SharedDummyScrText(UserRoles.Observer)),
+                Is.False
+            );
         }
 
         [Test]

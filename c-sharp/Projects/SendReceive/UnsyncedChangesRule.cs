@@ -7,7 +7,8 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// shared has nothing to send. A missing last-synced tip (public core, or never synced) means the
 /// tip comparison is unknowable, so only the uncommitted check applies. Kept free of ParatextData
 /// so it is unit-testable; <see cref="ParatextProjectSendReceiveService.HasUnsyncedLocalChanges"/>
-/// gathers the inputs.
+/// gathers the inputs, and answers "nothing to send" without asking this rule when the current
+/// user has no role that may change the project.
 /// </summary>
 internal static class UnsyncedChangesRule
 {
