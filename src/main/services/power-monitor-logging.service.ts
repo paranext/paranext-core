@@ -46,7 +46,8 @@ const registeredMonitors = new WeakSet<PowerMonitorLike>();
  * Log OS power transitions so a disconnect can be correlated with what the machine was doing.
  *
  * Diagnosis only: these handlers log and nothing else. Reconnecting a dropped PAPI socket on resume
- * is deliberately out of scope here.
+ * is deliberately out of scope here. This file's override in `.eslintrc.js` keeps it that way: the
+ * module may load nothing at runtime but the logger.
  *
  * @param powerMonitor Electron's `powerMonitor`. Must only be touched after the `ready` event, so
  *   callers pass it in rather than importing `electron` directly here.
