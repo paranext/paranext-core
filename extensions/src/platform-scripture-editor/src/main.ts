@@ -602,7 +602,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
     // itself must keep its narrower "opened as Resource Viewer" tab-identity meaning (see Section 2
     // of the design spec). A lookup failure or a project that doesn't advertise
     // `platformScripture.scriptureEditPermissions` fails open here (title stays whatever
-    // isReadOnly/markers already computed), matching the same fail-open convention the webview's
+    // isReadOnly/Preview already computed), matching the same fail-open convention the webview's
     // own reactive `canUserEditScripture` signal uses — so the open-time label and the live gate
     // never disagree about which direction an error should bias.
     // Preview is read-only only in Power: outside Power a saved formatted view is the editable
@@ -1761,8 +1761,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   // Await the registration promises at the end so we don't hold everything else up
-  const markerNotifier = new ReadOnlyViewNotifier(papi, context.executionToken);
-  const markerNotifierUnsubscribers = await markerNotifier.start();
+  const readOnlyViewNotifier = new ReadOnlyViewNotifier(papi, context.executionToken);
+  const readOnlyViewNotifierUnsubscribers = await readOnlyViewNotifier.start();
 
   // Resolve the feature flag (kicked off above so it overlapped the other registrations) and, only
   // if enabled, register the provider. Awaiting the flag here rather than up front keeps every
@@ -1811,7 +1811,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       },
     },
     unsubFromDefaultProjectPicker,
-    ...markerNotifierUnsubscribers,
+    ...readOnlyViewNotifierUnsubscribers,
     await applySharedLayoutPromise,
     await finalizeProjectSwitchPromise,
     await syncOnSwitchToPowerPromise,

@@ -82,7 +82,7 @@ export const EDIT_ACTION_BLOCKED_KEY: LocalizeKey =
  * Show the standard "editing isn't available" warning notification for the Project menu's Edit
  * flyout, for when `runEditMenuAction` reports that the chosen action did not run. One message
  * covers every reason the editor can be read-only here (no permission, permission still loading, an
- * automatic sync in progress, or the markers view) rather than naming which.
+ * automatic sync in progress, or Preview in Power mode) rather than naming which.
  *
  * Takes `localizedStrings` rather than a resolved message so {@link EDIT_ACTION_BLOCKED_KEY} is
  * named exactly once in the codebase.

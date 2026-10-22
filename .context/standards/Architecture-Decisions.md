@@ -7148,9 +7148,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Date:** 2026-10-22
 - **Status:** Accepted
-- **Context:** The editor offers Standard view (editable formatted text) and, in Power mode, a
-  Preview that must not accept edits. Simple mode has no Preview, and the Markers view is shown nowhere,
-  yet saved web view state and settings can still hold `'formatted'` or `'markers'`. Whether the
+- **Context:** The editor offers Standard view (editable, with visible paragraph markers) and, in
+  Power mode, a Preview (the formatted view) that must not accept edits. Simple mode has no Preview,
+  and the Markers view is shown nowhere, yet saved web view state can still hold `'formatted'` or
+  `'markers'` as its `viewType`. Whether the
   same saved value is editable therefore depends on the interface mode, which a plain mapping from
   view type to editability cannot express.
 - **Decision:** Power's Preview is the formatted view made read-only. The saved value stays
