@@ -219,13 +219,11 @@ describe('getLeadingIconSlot', () => {
     expect(getLeadingIconSlot([{}, { iconNameBefore: 'search' }])).toBe('icon');
   });
 
-  it('reserves an image slot when only image paths are used', () => {
-    expect(getLeadingIconSlot([{}, { iconPathBefore: 'https://example.test/a.svg' }])).toBe(
-      'image',
-    );
+  it('reserves the same icon slot when only image paths are used', () => {
+    expect(getLeadingIconSlot([{}, { iconPathBefore: 'https://example.test/a.svg' }])).toBe('icon');
   });
 
-  it('prefers the named icon when both kinds appear, as MenuItemIcon does', () => {
+  it('reserves one icon slot when both kinds appear', () => {
     expect(
       getLeadingIconSlot([
         { iconPathBefore: 'https://example.test/a.svg' },
@@ -243,7 +241,7 @@ describe('getLeadingIconSlot', () => {
       getLeadingIconSlot([
         { iconNameBefore: 'not-a-known-icon', iconPathBefore: 'https://example.test/a.svg' },
       ]),
-    ).toBe('image');
+    ).toBe('icon');
   });
 
   it('ignores trailing icons', () => {
