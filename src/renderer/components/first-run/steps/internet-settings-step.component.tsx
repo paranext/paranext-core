@@ -174,8 +174,8 @@ function InternetSettingsLoaded({
         if (!isMounted.current) return;
         lastGood.current = next;
         setIsSaving(false);
-        // Changing the server while an unsupported internet-use value is still stored must not
-        // unlock Next, so re-derive it from what was actually saved.
+        // Next must reflect what was actually saved, not assume the selection just made is
+        // supported — re-derive it from `next.permittedInternetUse` rather than unlocking outright.
         setCanProceed?.(isSupportedInternetUse(next.permittedInternetUse));
       } catch (err: unknown) {
         if (!isMounted.current) return;

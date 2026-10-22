@@ -48,7 +48,7 @@ type MockState = {
   setTheme: ReturnType<typeof vi.fn> | undefined;
   shouldMatchSystem: boolean;
   setShouldMatchSystem: ReturnType<typeof vi.fn>;
-  /** Undefined means the internet settings data provider has not registered yet (still loading). */
+  /** `false` means the internet settings data provider has not registered yet (still loading). */
   internetSettingsProviderAvailable: boolean;
   /**
    * Undefined means still loading (the hook reports `isLoading: true` regardless of this value); a
