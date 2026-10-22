@@ -124,6 +124,7 @@ import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal'
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
 import { isInsertCommentChord, runPaletteSessionKeyDown } from './insert-comment-chord.util';
+import { startPendingComment } from './start-pending-comment.util';
 import { useIsProjectDataLoading } from './copy-limit/use-is-project-data-loading.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import {
@@ -1863,49 +1864,45 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       anchoredText = readCommentRangeText(validation.range, editorUsjCorrected);
     }
 
-    // Try to find the selected text element to anchor the popover to. No rendered editor content
-    // means there is nothing to anchor to — bail out before recording the pending range or setting
-    // the highlight annotation below, not just before opening the popover: either one left behind
-    // with no popover open to clear it would strand a highlight in the text with no way to remove
-    // it, and would misdirect the next comment actually saved to this stale range.
-    const editorContainer = document.querySelector<HTMLElement>('.usfm');
-    if (!editorContainer) return;
-
-    pendingCommentAnnotationRange.current = {
-      range: annotationRange,
-      verseRef: scrRef,
-      anchoredText,
-    };
-
-    // Create a temporary annotation to highlight the selected text
-    editorRef.current?.setAnnotation(
-      annotationRange,
-      ANNOTATION_TYPE_TRANSLATOR_COMMENT,
-      PENDING_COMMENT_ANNOTATION_ID,
-    );
-
-    // Position the popover near the annotation. Use the browser's selection to get the bounding
-    // rect of the selected text
-    const domSelection = window.getSelection();
-    if (domSelection && domSelection.rangeCount > 0) {
-      const range = domSelection.getRangeAt(0).cloneRange();
-      commentPopoverAnchor.setSource(
-        createPendingCommentAnchorSource(
-          range,
-          () =>
-            editorRef.current?.getAnnotationRanges(
-              ANNOTATION_TYPE_TRANSLATOR_COMMENT,
-              PENDING_COMMENT_ANNOTATION_ID,
-            ) ?? [],
-          editorContainer,
+    startPendingComment(document, {
+      recordPendingRange: () => {
+        pendingCommentAnnotationRange.current = {
+          range: annotationRange,
+          verseRef: scrRef,
+          anchoredText,
+        };
+      },
+      // A temporary annotation to highlight the selected text
+      highlightPendingRange: () =>
+        editorRef.current?.setAnnotation(
+          annotationRange,
+          ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+          PENDING_COMMENT_ANNOTATION_ID,
         ),
-      );
-    } else {
-      // Fallback to center of editor viewport
-      commentPopoverAnchor.setSource(createPendingCommentCenterAnchorSource(editorContainer));
-    }
-
-    setShowCommentEditor(true);
+      // Position the popover near the annotation. Use the browser's selection to get the bounding
+      // rect of the selected text
+      anchorPopover: (editorContainer) => {
+        const domSelection = window.getSelection();
+        if (domSelection && domSelection.rangeCount > 0) {
+          const range = domSelection.getRangeAt(0).cloneRange();
+          commentPopoverAnchor.setSource(
+            createPendingCommentAnchorSource(
+              range,
+              () =>
+                editorRef.current?.getAnnotationRanges(
+                  ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+                  PENDING_COMMENT_ANNOTATION_ID,
+                ) ?? [],
+              editorContainer,
+            ),
+          );
+        } else {
+          // Fallback to center of editor viewport
+          commentPopoverAnchor.setSource(createPendingCommentCenterAnchorSource(editorContainer));
+        }
+      },
+      openCommentEditor: () => setShowCommentEditor(true),
+    });
   }, [scrRef, canUserCreateComments, isSyncBlocked, notifySyncEditBlocked, commentPopoverAnchor]);
 
   /**
