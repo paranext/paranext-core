@@ -41,12 +41,10 @@ current.
 These are at rest (`NormalizeUsfm` fixed points that ParatextData's USX → USFM leg reproduces byte
 for byte). Each `.usj` is `usxStringToUsj` over the chapter's `pdp-usx/` capture, with `version`
 set to `3.0` and the output formatted by Prettier (JSON parser, print width 100) — the same recipe
-reproduces the `testUSFM-2SA-1`, `-2` and `-3` `.usj` files byte for byte. `testUSFM-2SA-5.usj`
-carries one further hand edit: its three nameless paragraphs (`<para style="">` in the USX) have
-`"marker": ""` where `usxStringToUsj` writes `"style": ""` with no `marker`. An empty marker is the
-author's own bytes (`\ 2` in the `.usfm`); until scripture-editors PR #19 ships, the converter
-treats an empty style as absent, and after it the raw conversion should equal this file. Everything else in that file, including the second `\ca` as a top-level
-`char ca` after a chapter whose `altnumber` is the first, is ParatextData's shape unchanged.
+reproduces the `testUSFM-2SA-1`, `-2` and `-3` `.usj` files byte for byte, and every new file
+here with no hand edits. In `testUSFM-2SA-5.usj` that includes the three nameless paragraphs
+(`<para style="">` in the USX, `\ 2` in the `.usfm`) as `"marker": ""`, and the second `\ca` as a
+top-level `char ca` after a chapter whose `altnumber` is the first — ParatextData's shape.
 
 - **`testUSFM-2SA-4.usfm`**: standard USFM the other chapters do not use — `\cl`, `\cd`, a heading,
   `\r` and `\b` before the first `\p`, a cross reference, an endnote, `-` and custom note callers,
