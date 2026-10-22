@@ -8,6 +8,7 @@ type ProjectInfo = {
   name?: string;
   fullName?: string;
   language?: string;
+  unsupportedReason?: string;
 };
 
 /**
@@ -55,6 +56,7 @@ export function buildLocalNonDblResources(
 ): DblResourceData[] {
   const nonDblMetadata = allMetadata.filter((m) => {
     if (m.isEditable !== false) return false;
+    if (m.unsupportedReason) return false;
     return !dblEntries.some((r) => doesCatalogRowCoverProject(r, m.id));
   });
 

@@ -716,6 +716,19 @@ async function importHost() {
   return import('@renderer/services/web-view.service-shard');
 }
 
+/**
+ * Call right after unregistering a dock layout. Unregistering leaves the shard waiting on a fresh
+ * `AsyncVariable` for the next registration, and that variable rejects after its 10-second timeout
+ * when nothing registers. No test registers again on the same module instance, so the rejection
+ * would surface as an unhandled error in whichever test is running 10 seconds later, and fail the
+ * run whenever the rest of the file takes longer than that. Handling it here keeps it quiet.
+ */
+function handlePendingDockLayoutTimeout(host: Awaited<ReturnType<typeof importHost>>): void {
+  host.getDockLayout().catch(() => {
+    // The rejection only reports that no dock layout registered again, which is expected here.
+  });
+}
+
 // File-wide, not per-describe: several describes register a dock layout (which subscribes to
 // webview open/update events for the last-opened-project cache), and few of them ever call the
 // returned unregister function. Without this, a still-subscribed handler from an earlier test
@@ -767,6 +780,25 @@ describe('handleSwitchToSimpleMode', () => {
     sendCommandMock.mockImplementation(async (command: string) =>
       command === 'platform.getWindows' ? windows : undefined,
     );
+  }
+
+  /**
+   * Runs a switch whose lookup hangs, on fake timers advanced just past the cold-start bound plus
+   * the two paint waits around it, so the bound is what ends the switch rather than a real wait.
+   */
+  async function switchToSimpleModePastTheColdStartBound(
+    host: Awaited<ReturnType<typeof importHost>>,
+  ): Promise<void> {
+    vi.useFakeTimers();
+    try {
+      const switching = host.handleSwitchToSimpleMode();
+      await vi.advanceTimersByTimeAsync(
+        host.COLD_START_LOOKUP_TIMEOUT_MS + 2 * host.PAINT_WAIT_TIMEOUT_MS,
+      );
+      await switching;
+    } finally {
+      vi.useRealTimers();
+    }
   }
 
   it('a window that is not the primary does no switch work at all', async () => {
@@ -912,7 +944,8 @@ describe('handleSwitchToSimpleMode', () => {
     // (getMostRecentProjectId's getRecentProjects call) - proven by the cached id reaching
     // buildSimpleLayoutForProject directly above. dataProviderGetMock is legitimately still called
     // with this same id post-switch, for the unrelated recordProjectOpened side effect (see the
-    // dedicated tests for that behavior below).
+    // dedicated tests for that behavior below). Nor is the cached id looked up again: only a
+    // project whose lookup succeeded and showed it usable is ever cached.
     expect(getMetadataForProjectMock).not.toHaveBeenCalled();
   });
 
@@ -1037,6 +1070,29 @@ describe('handleSwitchToSimpleMode', () => {
     expect(getLastOpenedProject()).toEqual({ id: 'proj-editable-fallback' });
   });
 
+  it('slow path: tries the next recent candidate when the most-recent one carries an unsupportedReason', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const getRecentProjects = vi.fn(async () => ['proj-sba', 'proj-p1']);
+    dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
+      dataProviderId === 'platformScripture.recentlyOpenedProjects'
+        ? { getRecentProjects }
+        : undefined,
+    );
+    getMetadataForProjectMock.mockImplementation(async (projectId: string) =>
+      projectId === 'proj-sba'
+        ? { unsupportedReason: '%project_unsupported_studyBibleAdditions%' }
+        : {},
+    );
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-p1');
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    expect(getLastOpenedProject()).toEqual({ id: 'proj-p1' });
+  });
+
   it('slow path: falls back to the bare layout when every recent candidate is a published resource, and does not cache any of them', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
@@ -1093,11 +1149,32 @@ describe('handleSwitchToSimpleMode', () => {
     expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('Timed out'));
   });
 
-  it('slow path: falls back to the bare layout and warns if resolving whether the project is published hangs past the cold-start bound', async () => {
+  it('slow path: opens a recent candidate whose usability lookup failed, but does not cache it', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
-    const getRecentProjects = vi.fn(async () => ['proj-recent-slow-published-check']);
+    const getRecentProjects = vi.fn(async () => ['proj-lookup-failed']);
+    dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
+      dataProviderId === 'platformScripture.recentlyOpenedProjects'
+        ? { getRecentProjects }
+        : undefined,
+    );
+    getMetadataForProjectMock.mockRejectedValue(new Error('PDP unreachable'));
+
+    await host.handleSwitchToSimpleMode();
+
+    // A failed lookup must never lock the user out of a real project, so the switch still opens
+    // it. Caching it would make every later switch take it unchecked.
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-lookup-failed');
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    expect(getLastOpenedProject()).toBeUndefined();
+  });
+
+  it('slow path: falls back to the bare layout, warns, and caches nothing if resolving whether the project is usable hangs past the cold-start bound', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const getRecentProjects = vi.fn(async () => ['proj-recent-slow-usable-check']);
     dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
       dataProviderId === 'platformScripture.recentlyOpenedProjects'
         ? { getRecentProjects }
@@ -1106,12 +1183,14 @@ describe('handleSwitchToSimpleMode', () => {
     // Never resolves within this test's lifetime - simulates a hung PDP-factory wait.
     getMetadataForProjectMock.mockImplementation(() => new Promise(() => {}));
 
-    await host.handleSwitchToSimpleMode();
+    await switchToSimpleModePastTheColdStartBound(host);
 
     expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
     const { logger } = await import('@shared/services/logger.service');
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Timed out'));
-  }, 5000);
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    expect(getLastOpenedProject()).toBeUndefined();
+  });
 
   it('fallback: with no cache and no resolvable recent project, skips the project-bound layout entirely and loads the bare layout instead', async () => {
     const host = await importHost();
@@ -1168,10 +1247,7 @@ describe('handleSwitchToSimpleMode', () => {
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
     // Never resolves within this test's lifetime - simulates a hung recents-provider round trip
-    // (e.g. the early-startup PDP-factory wait). Real timers here (not faked):
-    // handleSwitchToSimpleMode starts with a waitForNextPaint() in order to show the overlay
-    // earlier, and faking timers made that hang unpredictably depending on whether jsdom's
-    // requestAnimationFrame polyfill happens to be setTimeout-based.
+    // (e.g. the early-startup PDP-factory wait).
     const getRecentProjects = vi.fn(() => new Promise<string[]>(() => {}));
     dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
       dataProviderId === 'platformScripture.recentlyOpenedProjects'
@@ -1179,12 +1255,12 @@ describe('handleSwitchToSimpleMode', () => {
         : undefined,
     );
 
-    await host.handleSwitchToSimpleMode();
+    await switchToSimpleModePastTheColdStartBound(host);
 
     expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
     const { logger } = await import('@shared/services/logger.service');
-    expect(logger.warn).toHaveBeenCalled();
-  }, 5000);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Timed out'));
+  });
 
   it('fast path: merges an enabled default-layout supplement entry into the project-bound layout', async () => {
     const host = await importHost();
@@ -1658,6 +1734,28 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
     expect(getLastOpenedProject()).toBeUndefined();
   });
 
+  it('never caches a project with an unsupportedReason as the last-opened Simple-mode project', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout(editorSlotLayout());
+    host.registerDockLayout(fakeDockLayout);
+    const editorTabId = await mintEditorTabId(fakeDockLayout);
+    getMetadataForProjectMock.mockResolvedValue({
+      unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+    });
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+
+    emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
+      webView: {
+        id: editorTabId,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-sba',
+      },
+    });
+
+    await vi.waitFor(() => expect(getMetadataForProjectMock).toHaveBeenCalledWith('proj-sba'));
+    expect(getLastOpenedProject()).toBeUndefined();
+  });
+
   it('logs a warning and does not cache when the metadata lookup rejects', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout(editorSlotLayout());
@@ -1685,6 +1783,7 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
     const unregister = host.registerDockLayout(fakeDockLayout);
     const editorTabId = await mintEditorTabId(fakeDockLayout);
     unregister();
+    handlePendingDockLayoutTimeout(host);
     const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
 
     emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
@@ -3104,6 +3203,7 @@ describe('registerDockLayout unregister', () => {
     await Promise.resolve();
 
     unregister();
+    handlePendingDockLayoutTimeout(host);
 
     await vi.waitFor(() => expect(rejectingUnsub).toHaveBeenCalled());
     expect(logger.warn).toHaveBeenCalledWith(

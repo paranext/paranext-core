@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react';
 import { CardTitle, Label } from 'platform-bible-react';
 import { useMemo, useState } from 'react';
 import { Home, HOME_STRING_KEYS } from './home.component';
+import { useUnsupportedReasonStrings } from './use-unsupported-reason-strings.hook';
 import { useLocalProjects } from './use-local-projects.hook';
 
 globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
@@ -32,6 +33,7 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
   const { localProjectsInfo, isLoadingLocalProjects } = useLocalProjects({
     logLabel: 'New Tab',
   });
+  const localizedUnsupportedReasons = useUnsupportedReasonStrings(localProjectsInfo);
 
   const dialogTitleText: string = localizedStringsWithLoadingState[0]['%new_tab_dialog_title%'];
   const loadingText: string = localizedStringsWithLoadingState[0]['%resources_loading%'];
@@ -45,6 +47,7 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
       localProjectsInfo={localProjectsInfo}
       isLoadingLocalProjects={isLoadingLocalProjects}
+      localizedUnsupportedReasons={localizedUnsupportedReasons}
       onOpenProject={(projectId, isPublished) => openResource(projectId, isPublished)}
       showGetResourcesButton={false}
       headerContent={

@@ -293,4 +293,20 @@ describe('metadataToLocalProjectInfo', () => {
     expect(result.isPublished).toBe(false);
     expect(result.language).toBe('de');
   });
+
+  it('copies unsupportedReason through when the metadata carries one', () => {
+    const result = metadataToLocalProjectInfo(
+      makeMetadata({
+        id: 'p1',
+        name: 'Short',
+        unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+      }),
+    );
+    expect(result.unsupportedReason).toBe('%project_unsupported_studyBibleAdditions%');
+  });
+
+  it('leaves unsupportedReason absent when the metadata has none', () => {
+    const result = metadataToLocalProjectInfo(makeMetadata({ id: 'p1', name: 'Short' }));
+    expect(result.unsupportedReason).toBeUndefined();
+  });
 });

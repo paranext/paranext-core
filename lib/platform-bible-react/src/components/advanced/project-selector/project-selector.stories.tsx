@@ -3,6 +3,7 @@
 // fits production code better than story fixtures.
 /* eslint-disable no-type-assertion/no-type-assertion */
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, within } from 'storybook/test';
 import { useMemo, useState } from 'react';
 import { BookOpen, FileText } from 'lucide-react';
 import type { ScrollGroupId } from 'platform-bible-utils';
@@ -510,6 +511,19 @@ export const Loading: Story = {
 // #region per-row disabled
 
 export const PerRowDisabled: Story = {
+  // Runs in a real browser: jsdom applies no CSS, so it cannot see the shared `CommandItem`'s
+  // `pointer-events: none` on disabled rows that would stop this hover from reaching the row.
+  tags: ['test'],
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(body.getByRole('combobox', { name: /^Project/ }));
+
+    await userEvent.hover(await body.findByRole('option', { name: /ESV16UK/ }));
+
+    await expect(await body.findByRole('tooltip')).toHaveTextContent(
+      'Read-only — cannot copy into this project',
+    );
+  },
   render: () => {
     const projectsWithDisabled: ProjectSelectorProject[] = sampleProjects.map((p) =>
       p.id === 'esv16uk' || p.id === 'tp1'

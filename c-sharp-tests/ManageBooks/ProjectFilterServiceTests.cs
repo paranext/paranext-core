@@ -51,6 +51,7 @@ namespace TestParanextDataProvider.ManageBooks
         private DummyScrText _bt = null!;
         private DummyScrText _notes = null!;
         private DummyScrText _marble = null!;
+        private DummyScrText _sba = null!;
         private ResourceDummyScrText _resource = null!;
         private ResourceDummyScrText _editableFlaggedResource = null!;
 
@@ -80,6 +81,13 @@ namespace TestParanextDataProvider.ManageBooks
                 type: ProjectType.MarbleResource,
                 editable: false
             );
+            // Study Bible Additions is a scripture-typed project (passes IsScripture()) that
+            // Platform.Bible cannot open — see ScrTextExtensions.GetOpenBlockedReason.
+            _sba = CreateScrText(
+                name: "SbaAdditions",
+                type: ProjectType.StudyBibleAdditions,
+                editable: true
+            );
             // Scripture-typed resource project — surfaces
             // ProjectSummary.IsResource = true so the Copy "From" / Create
             // "Based on" pickers can hide resources without an extra API
@@ -108,6 +116,7 @@ namespace TestParanextDataProvider.ManageBooks
             AddProject(_bt);
             AddProject(_notes);
             AddProject(_marble);
+            AddProject(_sba);
             AddProject(_resource);
             AddProject(_editableFlaggedResource);
         }
@@ -120,6 +129,7 @@ namespace TestParanextDataProvider.ManageBooks
             _bt?.Dispose();
             _notes?.Dispose();
             _marble?.Dispose();
+            _sba?.Dispose();
             _resource?.Dispose();
             _editableFlaggedResource?.Dispose();
         }
@@ -190,6 +200,34 @@ namespace TestParanextDataProvider.ManageBooks
                     $"ProjectId for '{summary.Name}' must be uppercase (canonical papi form)"
                 );
             }
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("BehaviorId", "BHV-411")]
+        [Description(
+            "A Study Bible Additions project cannot be opened (see "
+                + "ScrTextExtensions.GetOpenBlockedReason), so no Manage Books picker offers it — "
+                + "AllScripture excludes it while still returning an openable Standard project."
+        )]
+        public void FilterProjects_AllScripture_ExcludesStudyBibleAdditions()
+        {
+            var input = new ProjectFilterInput(ProjectFilterPurpose.AllScripture, null);
+
+            ProjectListResult result = ProjectFilterService.FilterProjects(input);
+
+            var names = result.Projects.Select(p => p.Name).ToList();
+            Assert.That(
+                names,
+                Has.Member(_std.Name),
+                "an openable Standard project is still offered"
+            );
+            Assert.That(
+                names,
+                Has.No.Member(_sba.Name),
+                "Study Bible Additions cannot be opened, so it is not offered"
+            );
         }
 
         // -------------------------------------------------------------------

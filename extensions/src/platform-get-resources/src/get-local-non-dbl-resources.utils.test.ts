@@ -42,6 +42,20 @@ describe('buildLocalNonDblResources — filtering', () => {
     expect(buildLocalNonDblResources([{ id: 'ambiguous-proj' }], [])).toHaveLength(0);
   });
 
+  it('excludes a read-only project that cannot be opened', () => {
+    const result = buildLocalNonDblResources(
+      [
+        readOnlyProject('local-abc'),
+        {
+          ...readOnlyProject('local-sba'),
+          unsupportedReason: '%project_unsupported_studyBibleAdditions%',
+        },
+      ],
+      [],
+    );
+    expect(result.map((r) => r.projectId)).toEqual(['local-abc']);
+  });
+
   it('includes read-only projects not in the DBL catalog', () => {
     const result = buildLocalNonDblResources([readOnlyProject('local-abc')], []);
     expect(result).toHaveLength(1);

@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 
+import '@testing-library/jest-dom';
 import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { LanguageStrings } from 'platform-bible-utils';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import localizedStringsContribution from '../contributions/localizedStrings.json';
 import {
@@ -79,6 +82,9 @@ function renderHomeList({
   showGetResourcesButton = true,
   isLoadingLocalProjects = false,
   unsyncedProjectIds,
+  localizedUnsupportedReasons = {},
+  onOpenProject = () => {},
+  onSendReceiveProject = () => {},
 }: {
   remoteProjectsState?: RemoteProjectsState;
   localProjectsInfo?: LocalProjectInfo[];
@@ -87,6 +93,9 @@ function renderHomeList({
   showGetResourcesButton?: boolean;
   isLoadingLocalProjects?: boolean;
   unsyncedProjectIds?: readonly string[];
+  localizedUnsupportedReasons?: LanguageStrings;
+  onOpenProject?: (projectId: string, isPublished: boolean) => void;
+  onSendReceiveProject?: (projectId: string) => void | Promise<void>;
 } = {}) {
   return render(
     <Home
@@ -98,6 +107,9 @@ function renderHomeList({
       showGetResourcesButton={showGetResourcesButton}
       isLoadingLocalProjects={isLoadingLocalProjects}
       unsyncedProjectIds={unsyncedProjectIds}
+      localizedUnsupportedReasons={localizedUnsupportedReasons}
+      onOpenProject={onOpenProject}
+      onSendReceiveProject={onSendReceiveProject}
       localizedStringsWithLoadingState={[EN_STRINGS, false]}
     />,
   );
@@ -443,5 +455,347 @@ describe('Home unsynced changes marker', () => {
       'Sync',
       'Open',
     ]);
+  });
+});
+
+/*
+ * A project that cannot be opened (e.g. a Study Bible Additions project) stays listed so a user can
+ * find and sync it: only Open is blocked, with the reason in a tooltip or, inside a row's ⋯ menu,
+ * in the disabled item. Sync and Get stay enabled.
+ */
+describe('Home unsupported projects', () => {
+  const UNSUPPORTED_REASON_KEY = '%project_unsupported_studyBibleAdditions%';
+  const UNSUPPORTED_REASON_TEXT = "Study Bible Additions projects aren't supported yet.";
+  const GENERIC_REASON_KEY = '%project_unsupported_generic%';
+  const GENERIC_REASON_TEXT = "This project can't be opened.";
+
+  const UNSUPPORTED_LOCAL_PROJECT: LocalProjectInfo = {
+    projectId: 'sba1',
+    isPublished: false,
+    fullName: 'SBA Project',
+    name: 'SBA',
+    language: 'en',
+    unsupportedReason: UNSUPPORTED_REASON_KEY,
+  };
+  const OPENABLE_PROJECT: LocalProjectInfo = {
+    projectId: 'openable1',
+    isPublished: false,
+    fullName: 'Openable Project',
+    name: 'OPN',
+    language: 'en',
+  };
+  /** A project that exists only on the server, with a reason. */
+  const UNSUPPORTED_SERVER_ONLY_PROJECTS: SharedProjectsInfo = {
+    server1: {
+      id: 'server1',
+      name: 'SVR',
+      fullName: 'Server-only Project',
+      language: 'en',
+      editedStatus: 'new',
+      lastSendReceiveDate: '',
+      unsupportedReason: UNSUPPORTED_REASON_KEY,
+    },
+  };
+
+  it('disables Open, blocks double-click, and surfaces the reason through the tooltip', () => {
+    const onOpenProject = vi.fn();
+    renderHomeList({
+      localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+      localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_TEXT },
+      onOpenProject,
+    });
+
+    expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled();
+    // The tooltip's explanation is reachable through the focusable wrapper's accessible name —
+    // the mechanism DisabledActionTooltip uses so keyboard and screen-reader users reach it.
+    expect(screen.getByRole('group', { name: UNSUPPORTED_REASON_TEXT })).toBeInTheDocument();
+    // Muted even though the project IS locally available — only the unsupported reason mutes it
+    // here, distinct from the existing "not downloaded" muting.
+    expect(screen.getByText('SBA').closest('tr')).toHaveClass('tw:text-muted-foreground/70');
+
+    fireEvent.doubleClick(screen.getByText('SBA'));
+    expect(onOpenProject).not.toHaveBeenCalled();
+  });
+
+  it('calls onOpenProject when an openable project is clicked (positive control)', () => {
+    const onOpenProject = vi.fn();
+    renderHomeList({ localProjectsInfo: [OPENABLE_PROJECT], onOpenProject });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(onOpenProject).toHaveBeenCalledWith('openable1', false);
+  });
+
+  it('keeps Open disabled when the local reason survives the server-first merge and the server reports none', () => {
+    const onOpenProject = vi.fn();
+    renderHomeList({
+      localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+      sharedProjectsInfo: {
+        [UNSUPPORTED_LOCAL_PROJECT.projectId]: {
+          id: UNSUPPORTED_LOCAL_PROJECT.projectId,
+          name: 'SBA-S/R',
+          fullName: 'SBA Project',
+          language: 'en',
+          editedStatus: '',
+          lastSendReceiveDate: '2026-09-01T00:00:00.000Z',
+        },
+      },
+      localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_TEXT },
+      onOpenProject,
+    });
+
+    expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(onOpenProject).not.toHaveBeenCalled();
+  });
+
+  it('mutes a server-only project with a reason but leaves its Get button enabled', () => {
+    renderHomeList({
+      localProjectsInfo: [],
+      sharedProjectsInfo: UNSUPPORTED_SERVER_ONLY_PROJECTS,
+      localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_TEXT },
+    });
+
+    const row = screen.getByText('Server-only Project').closest('tr');
+    expect(row).toHaveClass('tw:text-muted-foreground/70');
+    expect(screen.getByRole('button', { name: 'Get' })).toBeEnabled();
+  });
+
+  it('gets a server-only project with a reason on double-click', async () => {
+    const onSendReceiveProject = vi.fn(async () => {});
+    renderHomeList({
+      localProjectsInfo: [],
+      sharedProjectsInfo: UNSUPPORTED_SERVER_ONLY_PROJECTS,
+      localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_TEXT },
+      onSendReceiveProject,
+    });
+
+    // Double-click on a row that isn't local gets it, which the reason doesn't block.
+    fireEvent.doubleClick(screen.getByText('SVR'));
+
+    await waitFor(() => {
+      expect(onSendReceiveProject).toHaveBeenCalledWith('server1');
+    });
+  });
+
+  it('never shows a raw, unresolved localize key as tooltip text', () => {
+    renderHomeList({
+      localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+      // Simulates a key that has not resolved to a translation (or the loading seed): the map
+      // still echoes the key back as its own "translation".
+      localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_KEY },
+    });
+
+    expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled();
+    // With no text to show, there is no tooltip wrapper either: it would be a tab stop with no
+    // name and an empty bubble.
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.queryByText(UNSUPPORTED_REASON_KEY)).toBeNull();
+  });
+
+  it.each([
+    ['resolves to its own key', UNSUPPORTED_REASON_KEY],
+    ['is not a localize key', 'oops'],
+  ])('shows the generic reason when the reason %s', (_case, unsupportedReason) => {
+    renderHomeList({
+      localProjectsInfo: [{ ...UNSUPPORTED_LOCAL_PROJECT, unsupportedReason }],
+      localizedUnsupportedReasons: {
+        [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_KEY,
+        [GENERIC_REASON_KEY]: GENERIC_REASON_TEXT,
+      },
+    });
+
+    expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled();
+    expect(screen.getByRole('group', { name: GENERIC_REASON_TEXT })).toBeInTheDocument();
+    expect(screen.queryByText('oops')).toBeNull();
+  });
+
+  it('keeps Open disabled when the server reports an empty reason and the local one is real', () => {
+    const onOpenProject = vi.fn();
+    renderHomeList({
+      localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+      sharedProjectsInfo: {
+        [UNSUPPORTED_LOCAL_PROJECT.projectId]: {
+          id: UNSUPPORTED_LOCAL_PROJECT.projectId,
+          name: 'SBA-S/R',
+          fullName: 'SBA Project',
+          language: 'en',
+          editedStatus: '',
+          lastSendReceiveDate: '2026-09-01T00:00:00.000Z',
+          unsupportedReason: '',
+        },
+      },
+      localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_TEXT },
+      onOpenProject,
+    });
+
+    expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled();
+    expect(screen.getByRole('group', { name: UNSUPPORTED_REASON_TEXT })).toBeInTheDocument();
+  });
+
+  /*
+   * Open moves into a row's ⋯ menu in two places: the action cell's menu for a downloaded S/R
+   * project with local edits (Sync takes the button), and the menu every row shows at 300px or
+   * narrower. A disabled menu item cannot carry a hover tooltip, so the reason has to be in the item.
+   */
+  describe('Open inside a row menu', () => {
+    /** A downloaded S/R project with local edits, so its action cell puts Open in the ⋯ menu. */
+    function editedSharedCopyOf(project: LocalProjectInfo): SharedProjectsInfo {
+      return {
+        [project.projectId]: {
+          id: project.projectId,
+          name: project.name,
+          fullName: project.fullName,
+          language: project.language,
+          editedStatus: 'edited',
+          lastSendReceiveDate: '2026-09-01T00:00:00.000Z',
+        },
+      };
+    }
+
+    /**
+     * Opens the ⋯ menu in the named cell of the row showing `rowName` and finds the item named
+     * `itemName`. Both menus are always in the DOM; only CSS decides which one a given width
+     * shows.
+     */
+    async function openRowMenu(rowName: string, cell: 'first' | 'last', itemName = /^Open/) {
+      const row = screen.getByText(rowName).closest('tr');
+      if (!row) throw new Error(`expected a table row for ${rowName}`);
+      const cells = within(row).getAllByRole('cell');
+      const trigger = (cell === 'first' ? cells[0] : cells[cells.length - 1]).querySelector(
+        '[aria-haspopup="menu"]',
+      );
+      if (!(trigger instanceof HTMLElement))
+        throw new Error(`expected a ⋯ menu in the ${cell} cell`);
+      await userEvent.setup().click(trigger);
+      return screen.findByRole('menuitem', { name: itemName });
+    }
+
+    /** A downloaded S/R project with no local edits, so its action cell puts Sync in the ⋯ menu. */
+    function uneditedSharedCopyOf(project: LocalProjectInfo): SharedProjectsInfo {
+      const shared = editedSharedCopyOf(project);
+      return {
+        [project.projectId]: { ...shared[project.projectId], editedStatus: '' },
+      };
+    }
+
+    it.each([
+      ['an openable', OPENABLE_PROJECT],
+      ['an unsupported', UNSUPPORTED_LOCAL_PROJECT],
+    ] as const)('syncs %s downloaded project from its action cell menu', async (_kind, project) => {
+      const onSendReceiveProject = vi.fn(async () => {});
+      renderHomeList({
+        localProjectsInfo: [project],
+        sharedProjectsInfo: uneditedSharedCopyOf(project),
+        localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_TEXT },
+        onSendReceiveProject,
+      });
+
+      const syncItem = await openRowMenu(project.name, 'last', /^Sync$/);
+      expect(syncItem).not.toHaveAttribute('aria-disabled');
+      await userEvent.setup().click(syncItem);
+
+      await waitFor(() => expect(onSendReceiveProject).toHaveBeenCalledWith(project.projectId));
+    });
+
+    it.each([
+      ['action cell', 'last'],
+      ['narrow-width', 'first'],
+    ] as const)(
+      'disables Open in the %s menu and shows the reason inside the item',
+      async (_menuName, cell) => {
+        const onOpenProject = vi.fn();
+        renderHomeList({
+          localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+          sharedProjectsInfo: editedSharedCopyOf(UNSUPPORTED_LOCAL_PROJECT),
+          localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_TEXT },
+          onOpenProject,
+        });
+
+        const openItem = await openRowMenu(UNSUPPORTED_LOCAL_PROJECT.name, cell);
+
+        expect(openItem).toHaveAttribute('aria-disabled', 'true');
+        expect(openItem).toHaveTextContent(UNSUPPORTED_REASON_TEXT);
+        // The disabled item is already drawn at half opacity; muted text under that falls below
+        // readable contrast.
+        expect(within(openItem).getByText(UNSUPPORTED_REASON_TEXT)).not.toHaveClass(
+          'tw:text-muted-foreground',
+        );
+        // A click that reaches the item anyway (jsdom applies no `pointer-events: none`) opens
+        // nothing.
+        fireEvent.click(openItem);
+        expect(onOpenProject).not.toHaveBeenCalled();
+      },
+    );
+
+    it('shows the reason in the narrow-width menu of a project that is not on the server', async () => {
+      renderHomeList({
+        localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+        localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_TEXT },
+      });
+
+      const openItem = await openRowMenu(UNSUPPORTED_LOCAL_PROJECT.name, 'first');
+
+      expect(openItem).toHaveAttribute('aria-disabled', 'true');
+      expect(openItem).toHaveTextContent(UNSUPPORTED_REASON_TEXT);
+    });
+
+    it('never shows a raw, unresolved localize key inside the item', async () => {
+      renderHomeList({
+        localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+        localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_KEY },
+      });
+
+      const openItem = await openRowMenu(UNSUPPORTED_LOCAL_PROJECT.name, 'first');
+
+      expect(openItem).toHaveAttribute('aria-disabled', 'true');
+      expect(openItem).not.toHaveTextContent(UNSUPPORTED_REASON_KEY);
+    });
+
+    // Radix's arrow-key navigation skips a `disabled` item, which would leave the reason written
+    // inside it unreachable for a keyboard user.
+    it('lets keyboard focus reach the blocked Open item, and selecting it opens nothing', async () => {
+      const onOpenProject = vi.fn();
+      renderHomeList({
+        localProjectsInfo: [UNSUPPORTED_LOCAL_PROJECT],
+        sharedProjectsInfo: editedSharedCopyOf(UNSUPPORTED_LOCAL_PROJECT),
+        localizedUnsupportedReasons: { [UNSUPPORTED_REASON_KEY]: UNSUPPORTED_REASON_TEXT },
+        onOpenProject,
+      });
+      const user = userEvent.setup();
+
+      const openItem = await openRowMenu(UNSUPPORTED_LOCAL_PROJECT.name, 'first');
+      const itemCount = screen.getAllByRole('menuitem').length;
+      // Positive control: the menu holds another item, so focus has somewhere else it could go.
+      expect(itemCount).toBeGreaterThan(1);
+      const focusedItems = new Set<EventTarget | null>();
+      const recordFocus = (event: FocusEvent) => focusedItems.add(event.target);
+      document.addEventListener('focusin', recordFocus);
+      // Walk the whole menu, so the blocked item is passed whichever position it holds.
+      await user.keyboard(`{ArrowDown>${itemCount}/}`);
+      document.removeEventListener('focusin', recordFocus);
+
+      expect(focusedItems).toContain(openItem);
+      expect(openItem).toHaveAttribute('aria-disabled', 'true');
+      expect(openItem).toHaveTextContent(UNSUPPORTED_REASON_TEXT);
+
+      openItem.focus();
+      await user.keyboard('{Enter}');
+      expect(onOpenProject).not.toHaveBeenCalled();
+    });
+
+    it('keeps Open enabled in the action cell menu of an openable project (positive control)', async () => {
+      const onOpenProject = vi.fn();
+      renderHomeList({
+        localProjectsInfo: [OPENABLE_PROJECT],
+        sharedProjectsInfo: editedSharedCopyOf(OPENABLE_PROJECT),
+        onOpenProject,
+      });
+
+      const openItem = await openRowMenu(OPENABLE_PROJECT.name, 'last');
+
+      expect(openItem).not.toHaveAttribute('aria-disabled');
+      await userEvent.setup().click(openItem);
+      expect(onOpenProject).toHaveBeenCalledWith(OPENABLE_PROJECT.projectId, false);
+    });
   });
 });
