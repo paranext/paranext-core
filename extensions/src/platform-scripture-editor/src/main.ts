@@ -49,7 +49,7 @@ import {
   buildScriptureTextGridWebView,
   type TextCollectionPanelOptions,
   selectProjectIdsForOpenMode,
-  showsReadOnlyMarkersView,
+  showsReadOnlyPreview,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
   toScriptureEditorInfos,
@@ -57,7 +57,7 @@ import {
   updateRelatedFindPanel,
   VIEW_TYPE_FOR_SET_VIEW_COMMAND,
 } from './platform-scripture-editor.utils';
-import { MarkersViewNotifier } from './markers-view-notifier.model';
+import { ReadOnlyViewNotifier } from './read-only-view-notifier.model';
 import { SharedLayoutReceiver } from './shared-layout-receiver.model';
 import {
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
@@ -585,14 +585,14 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
     // itself must keep its narrower "opened as Resource Viewer" tab-identity meaning (see Section 2
     // of the design spec). A lookup failure or a project that doesn't advertise
     // `platformScripture.scriptureEditPermissions` fails open here (title stays whatever
-    // isReadOnly/markers already computed), matching the same fail-open convention the webview's
+    // isReadOnly/Preview already computed), matching the same fail-open convention the webview's
     // own reactive `canUserEditScripture` signal uses — so the open-time label and the live gate
     // never disagree about which direction an error should bias.
-    // A saved markers view is read-only only where it is shown as markers: outside Power the editor
-    // shows it as the editable formatted view
+    // Preview is read-only only in Power: outside Power a saved formatted view is the editable
+    // Simple view
     let isReadOnlyForTitle =
       isReadOnly ||
-      showsReadOnlyMarkersView(savedWebViewStateUpdated.viewType, interfaceMode === 'power');
+      showsReadOnlyPreview(savedWebViewStateUpdated.viewType, interfaceMode === 'power');
     if (!isReadOnlyForTitle && projectId) {
       try {
         const scriptureEditPermissionsPdp = await papi.projectDataProviders.get(
@@ -1301,7 +1301,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     changeScriptureView,
     {
       method: {
-        summary: 'Change the Scripture view type in the editor',
+        summary: 'Toggle the editor between Standard view and Preview (Power mode only)',
         params: [
           {
             name: 'webViewId',
@@ -1328,7 +1328,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     {
       method: {
         'x-experimental': true,
-        summary: 'Show Standard view in the editor (Preview outside Power mode)',
+        summary: 'Show Standard view in the editor (the Simple view outside Power mode)',
         params: [
           {
             name: 'webViewId',
@@ -1355,7 +1355,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     {
       method: {
         'x-experimental': true,
-        summary: 'Show Preview (the formatted view) in the editor',
+        summary:
+          'Show Preview, the read-only formatted view, in the editor (the Simple view outside Power mode)',
         params: [
           {
             name: 'webViewId',
@@ -1682,8 +1683,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   // Await the registration promises at the end so we don't hold everything else up
-  const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
-  const markerNotifierUnsubscribers = await markerNotifier.start();
+  const readOnlyViewNotifier = new ReadOnlyViewNotifier(papi, context.executionToken);
+  const readOnlyViewNotifierUnsubscribers = await readOnlyViewNotifier.start();
 
   // Resolve the feature flag (kicked off above so it overlapped the other registrations) and, only
   // if enabled, register the provider. Awaiting the flag here rather than up front keeps every
@@ -1731,7 +1732,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       },
     },
     unsubFromDefaultProjectPicker,
-    ...markerNotifierUnsubscribers,
+    ...readOnlyViewNotifierUnsubscribers,
     await applySharedLayoutPromise,
     await finalizeProjectSwitchPromise,
     sharedLayoutReArmEmitter,

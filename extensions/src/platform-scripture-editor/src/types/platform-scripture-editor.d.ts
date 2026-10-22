@@ -43,9 +43,8 @@ declare module 'platform-scripture-editor' {
   };
 
   /**
-   * Tell the editor to cycle between the Scripture view types. In Power mode the cycle is formatted
-   * (Preview), then Standard, then Marker view, then back to formatted. Outside Power mode only the
-   * formatted view is available, so the cycle stays on it.
+   * Tell the editor to toggle between Standard view and Preview. This only has an effect in Power
+   * mode; outside Power mode the editor has a single view, so nothing changes.
    */
   export type EditorMessageChangeScriptureView = {
     method: 'changeScriptureView';
@@ -53,7 +52,8 @@ declare module 'platform-scripture-editor' {
 
   /**
    * Tell the editor to show a specific Scripture view type. A `'standard'` or `'markers'` request
-   * resolves to the formatted view when the interface mode is not Power.
+   * resolves to the formatted view (the Simple view) when the interface mode is not Power. In Power
+   * mode a `'markers'` request is shown as Standard view.
    *
    * @experimental This message is unstable and may change or disappear without notice
    */
@@ -320,7 +320,10 @@ declare module 'platform-scripture-editor' {
   // #region editor WebView types
 
   /**
-   * Ways Scripture project text can be viewed in the editor.
+   * Ways Scripture project text can be viewed in the editor. `'formatted'` is the editable Simple
+   * view outside Power mode and Preview, which is read-only, in Power mode. `'standard'` is
+   * Standard view (Power mode only). `'markers'` is a value saved by earlier versions; it is shown
+   * as Standard view in Power mode and as the Simple view otherwise.
    *
    * @experimental The set of view types is expected to grow.
    */
@@ -404,14 +407,14 @@ declare module 'platform-scripture-editor' {
      */
     selectRange(range: ScriptureRange): Promise<void>;
     /**
-     * Cycle through the Scripture view types in the editor. In Power mode the cycle is formatted
-     * (Preview), then Standard, then Marker view, then back to formatted. Outside Power mode only
-     * the formatted view is available, so the cycle stays on it.
+     * Toggle the editor between Standard view and Preview. This only has an effect in Power mode;
+     * outside Power mode the editor has a single view, so nothing changes.
      */
     changeScriptureView(): Promise<void>;
     /**
      * Show a specific Scripture view type in the editor (`'standard'` and `'markers'` resolve to
-     * the formatted view outside Power mode)
+     * the formatted view, the Simple view, outside Power mode; in Power mode `'markers'` is shown
+     * as Standard view)
      *
      * @experimental This method is unstable and may change or disappear without notice
      */
@@ -867,9 +870,9 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Cycles through the Scripture view types in the editor for the given WebView ID. In Power mode
-     * the cycle is formatted (Preview), then Standard, then Marker view, then back to formatted.
-     * Outside Power mode only the formatted view is available, so the cycle stays on it.
+     * Toggles the editor between Standard view and Preview for the given WebView ID. This only has
+     * an effect in Power mode; outside Power mode the editor has a single view, so nothing
+     * changes.
      *
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
@@ -877,7 +880,7 @@ declare module 'papi-shared-types' {
 
     /**
      * Shows Standard view in the editor for the given WebView ID. Outside Power mode the editor
-     * shows the Preview (formatted) view instead.
+     * shows the Simple view instead.
      *
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      * @experimental This command is unstable and may change or disappear without notice
@@ -885,7 +888,8 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.setViewStandard': (webViewId: string | undefined) => Promise<void>;
 
     /**
-     * Shows Preview (the formatted view) in the editor for the given WebView ID.
+     * Shows Preview (the formatted view) in the editor for the given WebView ID. Preview is
+     * read-only in Power mode.
      *
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      * @experimental This command is unstable and may change or disappear without notice
@@ -979,8 +983,8 @@ declare module 'papi-shared-types' {
       editorWebViewId?: string | undefined,
     ) => Promise<void>;
     /**
-     * Dismiss the marker-view readonly notification for a given notification ID. The command
-     * receives the `notificationId` when the notification's click action is used.
+     * Dismiss the read-only Preview notification for a given notification ID. The command receives
+     * the `notificationId` when the notification's click action is used.
      */
     'platformScriptureEditor.dismissMarkerNotificationForProjectToday': NotificationClickCommandHandler;
     /**

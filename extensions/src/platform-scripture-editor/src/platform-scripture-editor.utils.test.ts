@@ -22,7 +22,8 @@ import {
   getTabTitleProjectName,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
-  showsReadOnlyMarkersView,
+  showsReadOnlyPreview,
+  usesPaneNoteModel,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   resolveViewTypeForInterfaceMode,
@@ -3329,8 +3330,33 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     paneRendered: false,
     isPowerMode: true,
     surface: 'popover' as const,
-    isStandardView: false,
+    isPaneNoteModel: false,
   };
+
+  it('navigates a read-only Preview caller to the pane and shows a hidden pane in Power', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      isCollapsed: true,
+      surface: 'none',
+      isPaneNoteModel: true,
+      isPowerMode: true,
+      paneVisible: false,
+      paneRendered: false,
+    });
+    expect(d.action).toBe('navigate-only');
+    expect(d.showPane).toBe(true);
+    expect(d.sendPaneFocusRequest).toBe(true);
+  });
+
+  it('keeps a read-only caller inert without the pane model', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      isCollapsed: true,
+      surface: 'none',
+      isPaneNoteModel: false,
+    });
+    expect(d.action).toBe('ignore-read-only');
+  });
 
   it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
     expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
@@ -3437,7 +3463,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   });
 
   it('Standard view: opens the pane editor and reveals a hidden pane', () => {
-    const d = decideNoteCallerClickAction({ ...base, surface: 'pane', isStandardView: true });
+    const d = decideNoteCallerClickAction({ ...base, surface: 'pane', isPaneNoteModel: true });
     expect(d).toEqual({
       clearStaleEditingSession: false,
       action: 'open-pane-editor',
@@ -3450,7 +3476,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     const d = decideNoteCallerClickAction({
       ...base,
       surface: 'pane',
-      isStandardView: true,
+      isPaneNoteModel: true,
       editingNoteKey: 'k1',
       paneVisible: true,
       paneRendered: true,
@@ -3460,7 +3486,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   });
 
   it('read-only Standard view: navigates only, still revealing the pane in Power mode', () => {
-    const d = decideNoteCallerClickAction({ ...base, surface: 'none', isStandardView: true });
+    const d = decideNoteCallerClickAction({ ...base, surface: 'none', isPaneNoteModel: true });
     expect(d.action).toBe('navigate-only');
     expect(d.showPane).toBe(true);
     expect(d.sendPaneFocusRequest).toBe(true);
@@ -3473,7 +3499,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
       decideNoteCallerClickAction({
         ...base,
         surface: 'none',
-        isStandardView: true,
+        isPaneNoteModel: true,
         isPowerMode: false,
       }),
     ).toMatchObject({ action: 'navigate-only', showPane: false, sendPaneFocusRequest: false });
@@ -3481,7 +3507,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
       decideNoteCallerClickAction({
         ...base,
         surface: 'none',
-        isStandardView: true,
+        isPaneNoteModel: true,
         isPowerMode: false,
         paneVisible: true,
         paneRendered: true,
@@ -3496,7 +3522,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
         decideNoteCallerClickAction({
           ...base,
           surface: 'none',
-          isStandardView: false,
+          isPaneNoteModel: false,
           isPowerMode,
           paneVisible: true,
           paneRendered: true,
@@ -3515,7 +3541,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
       decideNoteCallerClickAction({
         ...base,
         surface: 'pane',
-        isStandardView: true,
+        isPaneNoteModel: true,
         isCollapsed: false,
       }).action,
     ).toBe('ignore-expanded');
@@ -3657,14 +3683,14 @@ describe('shouldEndPaneNoteEditOnRowSelect', () => {
 describe('resolveCallerHighlight', () => {
   it('highlights the selected note while Standard view has the pane focused', () => {
     expect(
-      resolveCallerHighlight({ isStandardView: true, paneHasFocus: true, selectedIndex: 0 }),
+      resolveCallerHighlight({ isPaneNoteModel: true, paneHasFocus: true, selectedIndex: 0 }),
     ).toBe(0);
   });
 
   it('clears the highlight while the pane has no selection', () => {
     expect(
       resolveCallerHighlight({
-        isStandardView: true,
+        isPaneNoteModel: true,
         paneHasFocus: true,
         selectedIndex: undefined,
       }),
@@ -3673,13 +3699,13 @@ describe('resolveCallerHighlight', () => {
 
   it('clears the highlight while focus is outside the pane', () => {
     expect(
-      resolveCallerHighlight({ isStandardView: true, paneHasFocus: false, selectedIndex: 2 }),
+      resolveCallerHighlight({ isPaneNoteModel: true, paneHasFocus: false, selectedIndex: 2 }),
     ).toBeUndefined();
   });
 
   it('clears the highlight outside Standard view', () => {
     expect(
-      resolveCallerHighlight({ isStandardView: false, paneHasFocus: true, selectedIndex: 2 }),
+      resolveCallerHighlight({ isPaneNoteModel: false, paneHasFocus: true, selectedIndex: 2 }),
     ).toBeUndefined();
   });
 
@@ -3688,7 +3714,7 @@ describe('resolveCallerHighlight', () => {
     // focused row is where the pane's caret is, so its note is the one marked.
     expect(
       resolveCallerHighlight({
-        isStandardView: true,
+        isPaneNoteModel: true,
         paneHasFocus: true,
         focusedRowIndex: 3,
         selectedIndex: 1,
@@ -3696,7 +3722,7 @@ describe('resolveCallerHighlight', () => {
     ).toBe(3);
     expect(
       resolveCallerHighlight({
-        isStandardView: true,
+        isPaneNoteModel: true,
         paneHasFocus: true,
         focusedRowIndex: 3,
         selectedIndex: undefined,
@@ -3707,7 +3733,7 @@ describe('resolveCallerHighlight', () => {
   it('falls back to the selected row when no row holds focus', () => {
     expect(
       resolveCallerHighlight({
-        isStandardView: true,
+        isPaneNoteModel: true,
         paneHasFocus: true,
         focusedRowIndex: undefined,
         selectedIndex: 1,
@@ -3718,7 +3744,7 @@ describe('resolveCallerHighlight', () => {
   it('marks no focused row while focus is outside the pane', () => {
     expect(
       resolveCallerHighlight({
-        isStandardView: true,
+        isPaneNoteModel: true,
         paneHasFocus: false,
         focusedRowIndex: 3,
         selectedIndex: 1,
@@ -3730,9 +3756,9 @@ describe('resolveCallerHighlight', () => {
     // A view round trip leaves the pane mounted, its row selected, and DOM focus where it was, so
     // re-deriving on the way back has to give the index again rather than staying cleared.
     const paneState = { paneHasFocus: true, selectedIndex: 2 };
-    expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
-    expect(resolveCallerHighlight({ isStandardView: false, ...paneState })).toBeUndefined();
-    expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
+    expect(resolveCallerHighlight({ isPaneNoteModel: true, ...paneState })).toBe(2);
+    expect(resolveCallerHighlight({ isPaneNoteModel: false, ...paneState })).toBeUndefined();
+    expect(resolveCallerHighlight({ isPaneNoteModel: true, ...paneState })).toBe(2);
   });
 });
 
@@ -3769,26 +3795,26 @@ describe('shouldPublishPaneDocument (the pane repaints only when its notes chang
   });
 });
 
-describe('resolveViewTypeForInterfaceMode (standard and markers views are power-mode-only)', () => {
+describe('resolveViewTypeForInterfaceMode (Standard is Power-only; Markers is shown nowhere)', () => {
   it('coerces standard to formatted in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('standard', false)).toBe('formatted');
-  });
-
-  it('keeps standard in power mode', () => {
-    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
   });
 
   it('leaves formatted unchanged in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('formatted', false)).toBe('formatted');
   });
 
-  it('coerces markers to formatted in simple mode, which has no way back from the read-only view', () => {
+  it('coerces a saved markers view to formatted in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('markers', false)).toBe('formatted');
   });
 
-  it('leaves formatted and markers unchanged in power mode', () => {
+  it('shows a saved markers view as Standard view in Power', () => {
+    expect(resolveViewTypeForInterfaceMode('markers', true)).toBe('standard');
+  });
+
+  it('leaves standard and formatted unchanged in Power', () => {
+    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
     expect(resolveViewTypeForInterfaceMode('formatted', true)).toBe('formatted');
-    expect(resolveViewTypeForInterfaceMode('markers', true)).toBe('markers');
   });
 });
 
@@ -3804,10 +3830,13 @@ describe('direct view-setting commands', () => {
 });
 
 describe('getNextViewTypeInCycle', () => {
-  it('cycles formatted -> standard -> markers -> formatted in power mode', () => {
+  it('toggles Standard view and Preview in Power', () => {
+    expect(getNextViewTypeInCycle('standard', true)).toBe('formatted');
     expect(getNextViewTypeInCycle('formatted', true)).toBe('standard');
-    expect(getNextViewTypeInCycle('standard', true)).toBe('markers');
-    expect(getNextViewTypeInCycle('markers', true)).toBe('formatted');
+  });
+
+  it('goes to Standard view from a markers value in Power', () => {
+    expect(getNextViewTypeInCycle('markers', true)).toBe('standard');
   });
 
   it('has nothing to change in simple mode, so a saved Power view type is never overwritten', () => {
@@ -3818,22 +3847,29 @@ describe('getNextViewTypeInCycle', () => {
   });
 });
 
-describe('showsReadOnlyMarkersView', () => {
-  it('is true for a saved markers view in Power, where the editor shows it read-only', () => {
-    expect(showsReadOnlyMarkersView('markers', true)).toBe(true);
+describe('showsReadOnlyPreview', () => {
+  it('is true for a saved formatted view in Power', () => {
+    expect(showsReadOnlyPreview('formatted', true)).toBe(true);
   });
 
-  it('is false for a saved markers view outside Power, where the editor shows the editable Preview', () => {
-    expect(showsReadOnlyMarkersView('markers', false)).toBe(false);
+  it.each([['standard'], ['markers'], [undefined], [42]])('is false for %s in Power', (v) => {
+    expect(showsReadOnlyPreview(v, true)).toBe(false);
   });
 
-  it.each([['formatted'], ['standard'], [undefined], [42]])(
-    'is false for a saved view type of %s',
-    (viewType) => {
-      expect(showsReadOnlyMarkersView(viewType, true)).toBe(false);
-      expect(showsReadOnlyMarkersView(viewType, false)).toBe(false);
-    },
-  );
+  it.each([['formatted'], ['standard'], ['markers']])('is false for %s outside Power', (v) => {
+    expect(showsReadOnlyPreview(v, false)).toBe(false);
+  });
+});
+
+describe('usesPaneNoteModel', () => {
+  it('is true for Standard view and Preview in Power', () => {
+    expect(usesPaneNoteModel('standard', true)).toBe(true);
+    expect(usesPaneNoteModel('formatted', true)).toBe(true);
+  });
+
+  it('is false for the Simple view', () => {
+    expect(usesPaneNoteModel('formatted', false)).toBe(false);
+  });
 });
 
 describe('isMissingBookError', () => {
@@ -4181,6 +4217,26 @@ describe('formatEditorTitle', () => {
       mockGetLocalizedStrings,
     );
     expect(title).toBe('My Project (Read-only)');
+  });
+
+  it.each([
+    ['formatted', true, 'Project (Read-only)'],
+    ['markers', true, 'Project (Editable)'],
+    ['formatted', false, 'Project (Editable)'],
+  ])('titles a saved %s view (Power: %s) as "%s"', async (viewType, isPowerMode, expected) => {
+    const stub = vi.fn().mockResolvedValue({
+      '%webView_platformScriptureEditor_title_format%': '{projectId} {editable}',
+      '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+      '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+    });
+    const title = await formatEditorTitle(
+      undefined,
+      'p1',
+      showsReadOnlyPreview(viewType, isPowerMode),
+      async () => 'Project',
+      stub,
+    );
+    expect(title).toBe(expected);
   });
 });
 

@@ -20,7 +20,7 @@ describe("the web view's setScriptureView message handler", () => {
     const start = source.indexOf("case 'setScriptureView': {");
     expect(start).toBeGreaterThanOrEqual(0);
     const handler = source.slice(start, source.indexOf('break;', start));
-    expect(handler).toContain('setViewType(editorMessage.viewType)');
+    expect(handler).toContain('saveViewType(editorMessage.viewType)');
     expect(handler).not.toContain('resolveViewTypeForInterfaceMode');
   });
 });

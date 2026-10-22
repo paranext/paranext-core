@@ -72,17 +72,17 @@ export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 
 /**
- * Resolves the view type the editor is allowed to show under the current `platform.interfaceMode`.
- * Standard and markers views are power-mode-only surfaces.
+ * Resolves the view type the editor shows under the current `platform.interfaceMode`. Standard view
+ * is a Power-mode-only surface, and the Markers view is shown nowhere.
  *
  * Standard view's PT9-parity editing affordances (the `\`/Enter marker palettes, paragraph-marker
  * editing) assume paragraph markers can be edited, but simple mode pairs with structure protection,
- * which intentionally blocks paragraph-marker edits. Markers view is read-only, and simple mode
- * offers no menu or shortcut back out of it. So a simple-mode user must never land in either (e.g.
- * via a `viewType` persisted during a power-mode session). Coerces 'standard' and 'markers' to
- * 'formatted' (the simple-mode view) when not in power mode; every other combination passes through
- * unchanged. The result is for display only: callers must not write it back to the persisted view
- * type, so returning to power mode restores the user's choice.
+ * which intentionally blocks paragraph-marker edits. So a simple-mode user must never land in it
+ * (e.g. via a `viewType` persisted during a power-mode session). Outside Power, 'standard' and
+ * 'markers' resolve to 'formatted' (the editable Simple view). In Power, a saved 'markers' is a
+ * value from earlier versions and is shown as Standard view; 'standard' and 'formatted' pass
+ * through unchanged. The result is for display only: callers must not write it back to the
+ * persisted view type, so returning to power mode restores the user's choice.
  *
  * @param viewType The current (requested or persisted) view type
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
@@ -92,22 +92,41 @@ export function resolveViewTypeForInterfaceMode(
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
 ): ScriptureEditorViewType {
-  if ((viewType === 'standard' || viewType === 'markers') && !isPowerMode) return 'formatted';
-  return viewType;
+  if (!isPowerMode) return 'formatted';
+  return viewType === 'markers' ? 'standard' : viewType;
+}
+
+/** Narrows an untyped saved value to a {@link ScriptureEditorViewType}. */
+function isScriptureEditorViewType(viewType: unknown): viewType is ScriptureEditorViewType {
+  return viewType === 'formatted' || viewType === 'standard' || viewType === 'markers';
 }
 
 /**
- * Whether a saved view type makes the editor show the read-only markers view in the current mode.
- * Outside Power a saved markers view is shown as the editable formatted view (see
- * {@link resolveViewTypeForInterfaceMode}), so it is not read-only there.
+ * Whether a saved view type makes the editor show Preview, the read-only formatted view. Preview is
+ * read-only only in Power; outside Power 'formatted' is the editable Simple view.
  *
  * @param viewType The view type saved in the web view's state (untyped there)
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
  */
-export function showsReadOnlyMarkersView(viewType: unknown, isPowerMode: boolean): boolean {
+export function showsReadOnlyPreview(viewType: unknown, isPowerMode: boolean): boolean {
   return (
-    viewType === 'markers' && resolveViewTypeForInterfaceMode(viewType, isPowerMode) === 'markers'
+    isPowerMode &&
+    isScriptureEditorViewType(viewType) &&
+    resolveViewTypeForInterfaceMode(viewType, isPowerMode) === 'formatted'
   );
+}
+
+/**
+ * Whether a saved view type makes the editor use the pane note model, which Standard view and
+ * Preview share in Power. The Simple view does not use it.
+ *
+ * @param viewType The view type saved in the web view's state (untyped there)
+ * @param isPowerMode Whether `platform.interfaceMode` is 'power'
+ */
+export function usesPaneNoteModel(viewType: unknown, isPowerMode: boolean): boolean {
+  if (!isPowerMode || !isScriptureEditorViewType(viewType)) return false;
+  const resolved = resolveViewTypeForInterfaceMode(viewType, isPowerMode);
+  return resolved === 'standard' || resolved === 'formatted';
 }
 
 /**
@@ -120,29 +139,23 @@ export const VIEW_TYPE_FOR_SET_VIEW_COMMAND = {
 } as const satisfies Record<string, ScriptureEditorViewType>;
 
 /**
- * Computes the next view type for the view-cycling affordance (the `changeScriptureView` command).
- * Power mode cycles formatted -> standard -> markers -> formatted. Simple mode only shows the
- * formatted view (see {@link resolveViewTypeForInterfaceMode}), so there is nothing to cycle to, and
- * returning nothing keeps a view type saved in Power from being overwritten.
+ * Computes the next view type for the view-toggling affordance (the `changeScriptureView` command).
+ * Power mode toggles between Standard view and Preview; a saved 'markers' value goes to Standard
+ * view. Simple mode has a single view (see {@link resolveViewTypeForInterfaceMode}), so there is
+ * nothing to change to, and returning nothing keeps a view type saved in Power from being
+ * overwritten.
  *
- * Cycles on the view type rather than `ViewOptions.markerMode`: in non-power mode both 'formatted'
- * and 'markers' resolve to markerMode 'hidden' (the non-power markers view overrides only
- * noteMode), so a markerMode-based cycle would orphan 'formatted'.
- *
- * @param viewType The current view type (resolved for mode first, so a lingering 'standard' or
- *   'markers' in simple mode advances as if it were already coerced)
+ * @param viewType The current view type
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
- * @returns The next view type in the Power cycle, or `undefined` in simple mode, where the caller
- *   must leave the saved view type alone
+ * @returns The other view type in Power, or `undefined` in simple mode, where the caller must leave
+ *   the saved view type alone
  */
 export function getNextViewTypeInCycle(
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
 ): ScriptureEditorViewType | undefined {
   if (!isPowerMode) return undefined;
-  if (viewType === 'formatted') return 'standard';
-  if (viewType === 'standard') return 'markers';
-  return 'formatted';
+  return viewType === 'standard' ? 'formatted' : 'standard';
 }
 
 /**
@@ -434,13 +447,13 @@ export function resolveNoteEditingSurface({
  * `CallerHighlightSynchronizer`: the border marks where the focused pane's caret is, so it shows
  * only while the footnotes pane owns DOM focus. Clicking back into the Scripture text leaves the
  * row selected but takes the border off the caller; clicking the row (or its editor) again puts it
- * back. Standard view is the only view that highlights callers at all.
+ * back. Only Standard view, and Preview in Power, highlight callers at all.
  *
  * PT9's pane has one caret, so the note it is in is the one marked. Here keyboard focus on a row
  * (Tab or the arrow keys) is that caret whenever a row has it, and the selected row otherwise (the
  * row editor, or the pane's chrome, holds focus).
  *
- * @param options.isStandardView Whether the editor is showing Standard view
+ * @param options.isPaneNoteModel Whether the editor is showing Standard view, or Preview in Power
  * @param options.paneHasFocus Whether DOM focus is inside the footnotes pane (its row list or its
  *   inline row editor)
  * @param options.focusedRowIndex The footnotes pane row holding DOM focus, or `undefined` when no
@@ -450,17 +463,17 @@ export function resolveNoteEditingSurface({
  * @returns The note index to highlight, or `undefined` to clear the highlight
  */
 export function resolveCallerHighlight({
-  isStandardView,
+  isPaneNoteModel,
   paneHasFocus,
   focusedRowIndex,
   selectedIndex,
 }: {
-  isStandardView: boolean;
+  isPaneNoteModel: boolean;
   paneHasFocus: boolean;
   focusedRowIndex?: number;
   selectedIndex: number | undefined;
 }): number | undefined {
-  if (!isStandardView || !paneHasFocus) return undefined;
+  if (!isPaneNoteModel || !paneHasFocus) return undefined;
   return focusedRowIndex ?? selectedIndex;
 }
 
@@ -512,10 +525,11 @@ export type NoteCallerClickState = {
   /** Where the clicked note would be edited; see {@link resolveNoteEditingSurface}. */
   surface: NoteEditingSurface;
   /**
-   * Whether the text is shown in Standard view. Only Standard view gives a read-only text the
-   * navigation half of the pane model; every other view keeps a read-only caller inert.
+   * Whether the text is shown in Standard view, or Preview in Power. Only these views give a
+   * read-only text the navigation half of the pane model; every other view keeps a read-only caller
+   * inert.
    */
-  isStandardView: boolean;
+  isPaneNoteModel: boolean;
 };
 
 /** What a collapsed-note caller click resolves to — see {@link decideNoteCallerClickAction}. */
@@ -599,7 +613,7 @@ export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCa
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  if (state.surface === 'none' && !state.isStandardView)
+  if (state.surface === 'none' && !state.isPaneNoteModel)
     return {
       clearStaleEditingSession,
       action: 'ignore-read-only',

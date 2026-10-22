@@ -169,7 +169,7 @@
             "id": "platformScriptureEditor.viewSubmenu",
             "label": "%webView_platformScriptureEditor_switchScriptureView_2%",
             "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu (Power) > View > Switch scripture view ▸ — opens the Standard view / Preview flyout. Hidden in Simple mode, which shows only Preview",
+            "localizeNotes": "Scripture editor top menu (Power) > View > Switch scripture view ▸ — opens the Standard view / Preview flyout. Hidden in Simple mode, which has one view",
             "iconNameBefore": "eye",
             "group": "platformScriptureEditor.layout",
             "order": 1
@@ -185,7 +185,7 @@
           {
             "label": "%webView_platformScriptureEditor_preview%",
             "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu (Power) > View > Switch scripture view > Preview — shows the formatted view of the text, the way it reads when published",
+            "localizeNotes": "Scripture editor top menu (Power) > View > Switch scripture view > Preview — shows the read-only formatted view of the text, the way it reads when published",
             "group": "platformScriptureEditor.viewModes",
             "order": 2,
             "command": "platformScriptureEditor.setViewPreview"
