@@ -113,13 +113,13 @@ export type MenuItemContainingCommand = MenuItemBase & {
   /** Name of the PAPI command to run when this menu item is selected. */
   command: ReferencedItem;
   /**
-   * Uri path to the icon to display after the menu text. Ex:
-   * `papi-extension://helloWorld/assets/icon.png`
+   * Uri path to the icon to display after the menu text, shown at up to 16px wide and tall (the
+   * size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`
    */
   iconPathAfter?: string;
   /**
-   * Uri path to the icon to display before the menu text. Ex:
-   * `papi-extension://helloWorld/assets/icon.png`
+   * Uri path to the icon to display before the menu text, shown at up to 16px wide and tall (the
+   * size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`
    */
   iconPathBefore?: string;
   /**
@@ -464,12 +464,12 @@ export const menuDocumentSchema = {
             },
             iconPathBefore: {
               description:
-                'Uri path to the icon to display before the menu text. Ex: `papi-extension://helloWorld/assets/icon.png`',
+                'Uri path to the icon to display before the menu text, shown at up to 16px wide and tall (the size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`',
               type: 'string',
             },
             iconPathAfter: {
               description:
-                'Uri path to the icon to display after the menu text. Ex: `papi-extension://helloWorld/assets/icon.png`',
+                'Uri path to the icon to display after the menu text, shown at up to 16px wide and tall (the size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`',
               type: 'string',
             },
           },
