@@ -313,8 +313,8 @@
           },
           {
             "label": "%webView_platformScriptureEditor_openChecks_2%",
-            "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu (Power) > Tools > Basic checks — opens the Checks panel for the editor's project as a tab in the third column, or brings that tab to the front",
+            "hiddenInterfaceModes": ["simple", "power"],
+            "localizeNotes": "Scripture editor top menu (Power) > Tools > Basic checks — opens the Checks panel for the editor's project as a tab in the third column, or brings that tab to the front. Hidden in both modes; remove \"power\" from hiddenInterfaceModes to restore it",
             "iconNameBefore": "circle-check-big",
             "group": "platformScriptureEditor.checks",
             "order": 3,

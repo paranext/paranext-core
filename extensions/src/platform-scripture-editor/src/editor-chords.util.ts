@@ -16,8 +16,8 @@ export type EditorChordMatch = {
  * Maps a keydown to the editor chord it spells, or `undefined` for any other key.
  *
  * - F7 shows the footnotes pane.
- * - Ctrl+Shift+R opens Basic checks. macOS uses Control rather than Command because Command+Shift+R
- *   is the macOS menu bar's force reload.
+ * - Ctrl+Shift+R opens Basic checks while they are shown (see {@link IS_BASIC_CHECKS_SHOWN}). macOS
+ *   uses Control rather than Command because Command+Shift+R is the macOS menu bar's force reload.
  * - Ctrl+T inserts a footnote and Ctrl+Shift+T a cross-reference. Ctrl rather than Command on macOS,
  *   like Find's Ctrl+F.
  *
@@ -60,9 +60,18 @@ export type EditorChordContext = {
 };
 
 /**
+ * Whether Basic checks' Ctrl+Shift+R chord runs. Off because Basic checks' item in the editor's
+ * Tools menu is hidden in both modes, and a Checks tab the user closes must not be reopenable from
+ * the keyboard either. Set it back to `true` when "power" comes off that item's
+ * `hiddenInterfaceModes` in `contributions/menus.json`.
+ */
+const IS_BASIC_CHECKS_SHOWN: boolean = false;
+
+/**
  * Whether a matched chord should run now. Inserting needs an editable, focused main editor so a
  * keystroke in a read-only text or in the footnote or comment editor does nothing. Basic checks
- * runs only in Power, where its menu item exists. Showing footnotes works in every state.
+ * runs only in Power, where its menu item exists, and only while {@link IS_BASIC_CHECKS_SHOWN}.
+ * Showing footnotes works in every state.
  */
 export function shouldRunEditorChord(
   chord: EditorChord,
@@ -72,7 +81,7 @@ export function shouldRunEditorChord(
     case 'showFootnotes':
       return true;
     case 'basicChecks':
-      return isPowerMode;
+      return IS_BASIC_CHECKS_SHOWN && isPowerMode;
     case 'insertFootnote':
     case 'insertCrossReference':
       return !isReadOnly && isEditorFocused;
