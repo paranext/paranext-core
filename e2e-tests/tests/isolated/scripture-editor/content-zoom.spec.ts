@@ -461,6 +461,49 @@ test.describe('scripture editor content zoom', () => {
       expect(handleBoxAfter.height).toBeCloseTo(footnotesHandleBox.height, 0);
     });
 
+    await test.step('only the text and the footnotes list are marked, once each', async () => {
+      // The markers are the view's whole zoom opt-in: whatever sits inside one scales with the
+      // text, and the platform ignores a marker inside another. Read with the footnotes pane
+      // showing, so both of the view's areas are rendered.
+      const placement = await editorFrame.evaluate(() => {
+        const MARKER = '[data-platform-content-zoom-root]';
+        const markers = Array.from(document.querySelectorAll(MARKER));
+        const markerFor = (areaId: string) =>
+          markers.find(
+            (marker) => marker.getAttribute('data-platform-content-zoom-root') === areaId,
+          );
+        const isOutsideEveryMarker = (selector: string) => {
+          const elements = Array.from(document.querySelectorAll(selector));
+          return elements.length > 0 && elements.every((element) => !element.closest(MARKER));
+        };
+        const main = markerFor('');
+        // Inside the scroll box, never on it: scrolling to a verse adds a viewport rect, in zoomed
+        // pixels under a marker, to the box's `scrollTop`, which is not zoomed.
+        const scrollBox = main?.parentElement?.closest('[class~="tw:overflow-auto"]');
+        return {
+          areas: markers.map((marker) => marker.getAttribute('data-platform-content-zoom-root')),
+          nestedMarkers: document.querySelectorAll(`${MARKER} ${MARKER}`).length,
+          isTextInMain: !!main?.querySelector('.editor-input'),
+          isScrollBoxUnmarked: !!scrollBox && !scrollBox.closest(MARKER),
+          isToolbarUnmarked: isOutsideEveryMarker('.scripture-editor-tab-nav'),
+          isFootnotesHandleUnmarked: isOutsideEveryMarker('[data-slot="resizable-handle"]'),
+          footnotesLabel: markerFor('footnotes')?.getAttribute('data-platform-content-zoom-label'),
+        };
+      });
+
+      expect({ ...placement, areas: [...placement.areas].sort() }).toEqual({
+        areas: ['', 'footnotes'],
+        nestedMarkers: 0,
+        isTextInMain: true,
+        isScrollBoxUnmarked: true,
+        isToolbarUnmarked: true,
+        isFootnotesHandleUnmarked: true,
+        // Named on the zoom indicator, which would otherwise show a bare level that reads as the
+        // Scripture text's own.
+        footnotesLabel: 'Footnotes',
+      });
+    });
+
     // Memory key shape, checked here (not after the reset-targeting step below) because both areas
     // presently hold a NON-default level: resetContentZoom deletes a memory key entirely rather
     // than writing back the default, so checking after the resets would find `main` absent.
