@@ -185,7 +185,7 @@
           {
             "label": "%webView_platformScriptureEditor_preview%",
             "hiddenInterfaceModes": ["simple"],
-            "localizeNotes": "Scripture editor top menu (Power) > View > Switch Scripture view > Preview — shows the formatted view of the text, the way it reads when published",
+            "localizeNotes": "Scripture editor top menu (Power) > View > Switch Scripture view > Preview — shows the read-only formatted view of the text, the way it reads when published",
             "group": "platformScriptureEditor.viewModes",
             "order": 2,
             "command": "platformScriptureEditor.setViewPreview"

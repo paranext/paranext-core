@@ -28,7 +28,7 @@ import {
   buildScriptureEditorWebViewState,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
   UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS,
-  showsReadOnlyMarkersView,
+  showsReadOnlyPreview,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   resolveViewTypeForInterfaceMode,
@@ -4847,8 +4847,9 @@ describe('decideNoteSessionUpdate (a row edit must not reload the row editor)', 
 describe('usesPaneNoteModel', () => {
   it.each([
     ['standard', true, true],
-    ['formatted', true, false],
+    ['formatted', true, true],
     ['markers', true, false],
+    ['standard', false, true],
     ['formatted', false, true],
     ['markers', false, false],
   ] as const)('%s view, isPowerMode=%s → %s', (viewType, isPowerMode, expected) => {
@@ -4857,18 +4858,31 @@ describe('usesPaneNoteModel', () => {
     );
   });
 
-  it('does not apply the Simple answer while the interface mode is still loading', () => {
-    expect(
-      usesPaneNoteModel({
-        viewType: 'formatted',
-        isPowerMode: false,
-        isInterfaceModeLoading: true,
-      }),
-    ).toBe(false);
-    expect(
-      usesPaneNoteModel({ viewType: 'standard', isPowerMode: false, isInterfaceModeLoading: true }),
-    ).toBe(true);
-  });
+  it.each([[true], [false]])(
+    'counts only Standard view while the interface mode is still loading (isPowerMode=%s)',
+    (isPowerMode) => {
+      expect(
+        usesPaneNoteModel({ viewType: 'formatted', isPowerMode, isInterfaceModeLoading: true }),
+      ).toBe(false);
+      expect(
+        usesPaneNoteModel({ viewType: 'markers', isPowerMode, isInterfaceModeLoading: true }),
+      ).toBe(false);
+      expect(
+        usesPaneNoteModel({ viewType: 'standard', isPowerMode, isInterfaceModeLoading: true }),
+      ).toBe(true);
+    },
+  );
+
+  it.each([[true], [false]])(
+    'uses the pane for a saved markers view once the interface mode has loaded (isPowerMode=%s), since the editor never displays markers',
+    (isPowerMode) => {
+      const displayed = resolveViewTypeForInterfaceMode('markers', isPowerMode);
+      expect(displayed).not.toBe('markers');
+      expect(
+        usesPaneNoteModel({ viewType: displayed, isPowerMode, isInterfaceModeLoading: false }),
+      ).toBe(true);
+    },
+  );
 });
 
 describe('resolveNoteEditingSurface', () => {
@@ -5069,26 +5083,26 @@ describe('shouldPublishPaneDocument (the pane repaints only when its notes chang
   });
 });
 
-describe('resolveViewTypeForInterfaceMode (standard and markers views are power-mode-only)', () => {
+describe('resolveViewTypeForInterfaceMode (Standard is Power-only; Markers is shown nowhere)', () => {
   it('coerces standard to formatted in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('standard', false)).toBe('formatted');
-  });
-
-  it('keeps standard in power mode', () => {
-    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
   });
 
   it('leaves formatted unchanged in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('formatted', false)).toBe('formatted');
   });
 
-  it('coerces markers to formatted in simple mode, which has no way back from the read-only view', () => {
+  it('coerces a saved markers view to formatted in simple mode', () => {
     expect(resolveViewTypeForInterfaceMode('markers', false)).toBe('formatted');
   });
 
-  it('leaves formatted and markers unchanged in power mode', () => {
+  it('shows a saved markers view as Standard view in Power', () => {
+    expect(resolveViewTypeForInterfaceMode('markers', true)).toBe('standard');
+  });
+
+  it('leaves standard and formatted unchanged in Power', () => {
+    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
     expect(resolveViewTypeForInterfaceMode('formatted', true)).toBe('formatted');
-    expect(resolveViewTypeForInterfaceMode('markers', true)).toBe('markers');
   });
 });
 
@@ -5161,10 +5175,13 @@ describe('direct view-setting commands', () => {
 });
 
 describe('getNextViewTypeInCycle', () => {
-  it('cycles formatted -> standard -> markers -> formatted in power mode', () => {
+  it('toggles Standard view and Preview in Power', () => {
+    expect(getNextViewTypeInCycle('standard', true)).toBe('formatted');
     expect(getNextViewTypeInCycle('formatted', true)).toBe('standard');
-    expect(getNextViewTypeInCycle('standard', true)).toBe('markers');
-    expect(getNextViewTypeInCycle('markers', true)).toBe('formatted');
+  });
+
+  it('goes to Standard view from a markers value in Power', () => {
+    expect(getNextViewTypeInCycle('markers', true)).toBe('standard');
   });
 
   it('has nothing to change in simple mode, so a saved Power view type is never overwritten', () => {
@@ -5175,22 +5192,18 @@ describe('getNextViewTypeInCycle', () => {
   });
 });
 
-describe('showsReadOnlyMarkersView', () => {
-  it('is true for a saved markers view in Power, where the editor shows it read-only', () => {
-    expect(showsReadOnlyMarkersView('markers', true)).toBe(true);
+describe('showsReadOnlyPreview', () => {
+  it('is true for a saved formatted view in Power', () => {
+    expect(showsReadOnlyPreview('formatted', true)).toBe(true);
   });
 
-  it('is false for a saved markers view outside Power, where the editor shows the editable Preview', () => {
-    expect(showsReadOnlyMarkersView('markers', false)).toBe(false);
+  it.each([['standard'], ['markers'], [undefined], [42]])('is false for %s in Power', (v) => {
+    expect(showsReadOnlyPreview(v, true)).toBe(false);
   });
 
-  it.each([['formatted'], ['standard'], [undefined], [42]])(
-    'is false for a saved view type of %s',
-    (viewType) => {
-      expect(showsReadOnlyMarkersView(viewType, true)).toBe(false);
-      expect(showsReadOnlyMarkersView(viewType, false)).toBe(false);
-    },
-  );
+  it.each([['formatted'], ['standard'], ['markers']])('is false for %s outside Power', (v) => {
+    expect(showsReadOnlyPreview(v, false)).toBe(false);
+  });
 });
 
 describe('isMissingBookError', () => {
@@ -5538,6 +5551,26 @@ describe('formatEditorTitle', () => {
       mockGetLocalizedStrings,
     );
     expect(title).toBe('My Project (Read-only)');
+  });
+
+  it.each([
+    ['formatted', true, 'Project (Read-only)'],
+    ['markers', true, 'Project (Editable)'],
+    ['formatted', false, 'Project (Editable)'],
+  ])('titles a saved %s view (Power: %s) as "%s"', async (viewType, isPowerMode, expected) => {
+    const stub = vi.fn().mockResolvedValue({
+      '%webView_platformScriptureEditor_title_format%': '{projectId} {editable}',
+      '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+      '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+    });
+    const title = await formatEditorTitle(
+      undefined,
+      'p1',
+      showsReadOnlyPreview(viewType, isPowerMode),
+      async () => 'Project',
+      stub,
+    );
+    expect(title).toBe(expected);
   });
 });
 
