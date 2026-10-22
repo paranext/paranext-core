@@ -97,6 +97,20 @@ export function resolveViewTypeForInterfaceMode(
 }
 
 /**
+ * Whether a saved view type makes the editor show the read-only markers view in the current mode.
+ * Outside Power a saved markers view is shown as the editable formatted view (see
+ * {@link resolveViewTypeForInterfaceMode}), so it is not read-only there.
+ *
+ * @param viewType The view type saved in the web view's state (untyped there)
+ * @param isPowerMode Whether `platform.interfaceMode` is 'power'
+ */
+export function showsReadOnlyMarkersView(viewType: unknown, isPowerMode: boolean): boolean {
+  return (
+    viewType === 'markers' && resolveViewTypeForInterfaceMode(viewType, isPowerMode) === 'markers'
+  );
+}
+
+/**
  * The view type each direct view-setting command shows. "Preview" is the user-facing name of the
  * `'formatted'` view type.
  */
