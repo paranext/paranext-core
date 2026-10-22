@@ -15,9 +15,6 @@ const localizedStrings = {
     'Disable access to some Bible translation services',
   '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%':
     'Disables access to Registry, sync, and the Digital Bible Library within the Paratext app. Other internet features and other applications are not affected.',
-  '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Disable ALL internet access',
-  '%paratextRegistration_description_internetUse_option_Disabled_details%':
-    'Blocks all internet access within the Paratext app. Other applications on your computer are not affected.',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%':
     'Block internet when in sensitive locations',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%':
@@ -48,7 +45,7 @@ function Controlled(
 /**
  * Each option's description sits behind an info icon button beside its label, revealed as a tooltip
  * on hover or keyboard focus, rather than under the label as body copy — which kept the list from
- * becoming five stacked paragraphs of small grey text. The button carries the description as its
+ * becoming stacked paragraphs of small grey text. The button carries the description as its
  * accessible name and is its own tab stop, so the description is reachable on every row, including
  * the "Not yet available" rows whose radios are disabled. A visually-hidden copy of the same
  * description is also wired to each radio via `aria-describedby`, so a screen reader moving through
@@ -109,11 +106,14 @@ export const DescriptionTooltipOnKeyboardFocus: Story = {
   render: (args) => <Controlled {...args} initialValue="Enabled" />,
   play: async ({ canvasElement, userEvent }) => {
     const unavailableOptionDescription =
-      localizedStrings['%paratextRegistration_description_internetUse_option_Disabled_details%'];
+      localizedStrings[
+        '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%'
+      ];
     await userEvent.tab(); // the checked radio
     await userEvent.tab(); // Unrestricted's info button
     await userEvent.tab(); // "Disable access to some Bible translation services" info button
-    await userEvent.tab(); // "Disable ALL internet access" info button, on an unavailable row
+    // "Block internet when in sensitive locations" info button, on an unavailable row
+    await userEvent.tab();
     await expect(
       within(canvasElement).getByRole('button', { name: unavailableOptionDescription }),
     ).toHaveFocus();
@@ -171,7 +171,7 @@ export const NarrowColumn: Story = {
 
 /** Option 2 selected — "Disable access to some Bible translation services". */
 export const DisabledAccess: Story = {
-  render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
+  render: (args) => <Controlled {...args} initialValue="Disabled" />,
 };
 
 /**
@@ -184,13 +184,13 @@ export const NothingSelected: Story = {
 };
 
 /**
- * A not-yet-available value is the current setting — `InternetSettings.xml` is seeded once from a
- * co-installed Paratext 9 on first launch, so it can name an option this app does not implement
- * yet. The row renders selected-but-disabled so the carried-over setting is visible rather than
- * silently swapped, and a banner says why nothing acts on it.
+ * A not-yet-available value is the current setting. The row renders selected-but-disabled so the
+ * stored setting is visible rather than silently swapped, and a banner says why nothing acts on it.
+ * The app replaces a stored `VpnRequired` at startup, so this shows only if that fails; see
+ * `UnavailableProxySelected` for the value a Paratext 9 settings file usually carries.
  */
 export const UnavailableOptionSelected: Story = {
-  render: (args) => <Controlled {...args} initialValue="Disabled" />,
+  render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
 };
 
 /** The other unsupported value a settings file can carry: "Configure proxy". */
@@ -203,6 +203,6 @@ export const UnavailableProxySelected: Story = {
  * since the descriptions explain the options rather than being part of the setting.
  */
 export const FormDisabled: Story = {
-  render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
+  render: (args) => <Controlled {...args} initialValue="Disabled" />,
   args: { disabled: true },
 };

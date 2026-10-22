@@ -194,4 +194,24 @@ public class InternetSettingsLogicTests
         );
         Assert.That(result, Is.Null);
     }
+
+    // ----- MigratedRawStatus -----
+
+    // The app does not implement "Block internet when in sensitive locations" yet, so a saved
+    // VpnRequired moves to the most restrictive option it does offer.
+    [Test]
+    public void MigratedRawStatus_VpnRequired_ReturnsDisabled()
+    {
+        var result = InternetSettingsLogic.MigratedRawStatus(InternetUse.VpnRequired);
+        Assert.That(result, Is.EqualTo(InternetUse.Disabled));
+    }
+
+    [TestCase(InternetUse.Enabled)]
+    [TestCase(InternetUse.Disabled)]
+    [TestCase(InternetUse.ProxyOnly)]
+    public void MigratedRawStatus_AnyOtherValue_ReturnsNull(InternetUse savedInternetUse)
+    {
+        var result = InternetSettingsLogic.MigratedRawStatus(savedInternetUse);
+        Assert.That(result, Is.Null);
+    }
 }
