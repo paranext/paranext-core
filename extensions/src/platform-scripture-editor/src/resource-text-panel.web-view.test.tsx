@@ -644,7 +644,7 @@ function makeProjectRow(projectId: string | undefined): PickerResource {
 }
 
 /** Renders the panel over `rows`, with the referenced list settled so selection can resolve. */
-function renderWithRows(rows: PickerResource[]) {
+function renderWithRows(rows: PickerResource[], propOverrides: Partial<WebViewProps> = {}) {
   mockUseEffectiveResourceReferenceList.mockReturnValue({
     status: 'ready',
     list: { dataVersion: '1.0.0', items: [] },
@@ -652,7 +652,7 @@ function renderWithRows(rows: PickerResource[]) {
   mockUseResourcePickerResources.mockReturnValue([rows, false]);
 
   const ResourceTextPanel = getResourceTextPanel();
-  return render(<ResourceTextPanel {...makeProps()} />);
+  return render(<ResourceTextPanel {...makeProps(propOverrides)} />);
 }
 
 /** The conversion-frame argument of every `useScrollGroupScrRef` call made during a render. */
@@ -689,5 +689,18 @@ describe('ResourceTextPanel — versification conversion frame', () => {
 
     expect(mockUseScrollGroupScrRef).toHaveBeenCalled();
     conversionFrames().forEach((frame) => expect(frame).toBeUndefined());
+  });
+
+  // The hook falls back to scroll group 0 when its first argument is `undefined`, so a panel set to
+  // another group would silently follow group 0; and an independent-reference write that never
+  // reaches the definition is lost on the next render.
+  it('follows its own scroll group and writes changes back to its definition', () => {
+    const updateWebViewDefinition = vi.fn(() => true);
+    renderWithRows([], { scrollGroupScrRef: 1, updateWebViewDefinition });
+
+    const [scrollGroupArg, setScrollGroupScrRef] = mockUseScrollGroupScrRef.mock.calls[0];
+    expect(scrollGroupArg).toBe(1);
+    setScrollGroupScrRef(2);
+    expect(updateWebViewDefinition).toHaveBeenCalledWith({ scrollGroupScrRef: 2 });
   });
 });
