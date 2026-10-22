@@ -16,7 +16,7 @@ type MenuItemIconProps = {
   leading?: boolean;
   /**
    * For a leading icon: the slot its list reserves. An item without an icon renders an empty spacer
-   * of that size so its label lines up with the labels of the items that have an icon.
+   * the size of that slot so its label lines up with the labels of the items that have an icon.
    */
   leadingSlot?: LeadingIconSlot;
 };
@@ -26,16 +26,12 @@ function MenuItemIcon({ icon, iconName, menuLabel, leading, leadingSlot }: MenuI
 
   if (isLucideIconName(iconName)) return <LucideIcon name={iconName} className={spacing} />;
 
-  if (!icon && leading && leadingSlot && leadingSlot !== 'none') {
+  if (!icon && leading && leadingSlot === 'icon') {
     return (
       <span
         aria-hidden="true"
         data-slot="menu-icon-spacer"
-        className={cn(
-          'tw:inline-block tw:shrink-0',
-          leadingSlot === 'icon' ? 'tw:w-4' : 'tw:w-5',
-          spacing,
-        )}
+        className={cn('tw:inline-block tw:w-4 tw:shrink-0', spacing)}
       />
     );
   }
@@ -44,22 +40,23 @@ function MenuItemIcon({ icon, iconName, menuLabel, leading, leadingSlot }: MenuI
 
   const alt = `${leading ? 'Leading' : 'Trailing'} icon for ${menuLabel}`;
 
-  // A leading image sits in a box as wide as the spacer of an icon-less item, so the labels of both
-  // line up whatever the image's own width is. The image keeps its max size so it never upscales.
+  // An image is capped at the 16px of a named icon. A leading image also sits in a box that wide,
+  // so its label lines up with the labels beside it whatever the image's own width is. The image
+  // keeps its max size so it never upscales.
   if (leading)
     return (
       <span
         data-slot="menu-icon-image-box"
         className={cn(
-          'tw:inline-flex tw:w-5 tw:shrink-0 tw:items-center tw:justify-center',
+          'tw:inline-flex tw:w-4 tw:shrink-0 tw:items-center tw:justify-center',
           spacing,
         )}
       >
-        <img className="tw:max-h-5 tw:max-w-5" src={icon} alt={alt} />
+        <img className="tw:max-h-4 tw:max-w-4" src={icon} alt={alt} />
       </span>
     );
 
-  return <img className={cn('tw:max-h-5 tw:max-w-5', spacing)} src={icon} alt={alt} />;
+  return <img className={cn('tw:max-h-4 tw:max-w-4', spacing)} src={icon} alt={alt} />;
 }
 
 export default MenuItemIcon;

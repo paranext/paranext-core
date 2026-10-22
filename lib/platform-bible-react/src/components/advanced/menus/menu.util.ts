@@ -142,8 +142,11 @@ export function getMenuSectionsWithItems(menuData: Localized<MultiColumnMenu>): 
     }));
 }
 
-/** The size of the leading icon slot a menu list reserves, so every label in the list lines up */
-export type LeadingIconSlot = 'none' | 'icon' | 'image';
+/**
+ * Whether a menu list reserves a leading icon slot, so every label in the list lines up. The slot is
+ * 16px, the size of a named icon; an image icon is capped to it.
+ */
+export type LeadingIconSlot = 'none' | 'icon';
 
 /** The fields of a menu item that decide whether it shows a leading icon */
 type ItemWithLeadingIcon = { iconNameBefore?: string; iconPathBefore?: string };
@@ -154,14 +157,13 @@ type ItemWithLeadingIcon = { iconNameBefore?: string; iconPathBefore?: string };
  * items that have one, so all labels in the list start at the same position.
  *
  * @param items The items rendered in the list, including submenu trigger items
- * @returns `'none'` if no item has a leading icon, `'icon'` if any has a known named icon (which
- *   wins over an image path, matching how `MenuItemIcon` renders), and `'image'` if only image
- *   paths are used. An unknown icon name counts only through the image path beside it, if any
+ * @returns `'icon'` if any item has a leading icon — a known named icon or an image path — and
+ *   `'none'` otherwise. An unknown icon name counts only through the image path beside it, if any
  */
 export function getLeadingIconSlot(items: ItemWithLeadingIcon[]): LeadingIconSlot {
-  if (items.some((item) => isLucideIconName(item.iconNameBefore))) return 'icon';
-  if (items.some((item) => item.iconPathBefore)) return 'image';
-  return 'none';
+  return items.some((item) => isLucideIconName(item.iconNameBefore) || item.iconPathBefore)
+    ? 'icon'
+    : 'none';
 }
 
 /**
