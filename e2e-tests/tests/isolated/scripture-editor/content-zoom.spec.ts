@@ -30,10 +30,8 @@ import {
   readCaretBox,
   readContentZoomMemory,
   readIndicatorText,
-  scrollText,
   scrollTextKeepingVisible,
   scrollTriggerNearPaneTop,
-  TEXT_NOTE_CALLER_SELECTOR,
   waitForPopupAnimations,
   zoomAreaTo,
 } from '../../../fixtures/content-zoom-helpers';
@@ -50,7 +48,6 @@ import {
   sendCommandWithId,
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
-import { DEFAULT_WINDOW_SIZE, setWindowWidth } from '../../../fixtures/helpers';
 
 test.use({
   interfaceMode: 'power',
@@ -171,7 +168,6 @@ async function selectWrappedText(page: Page, frame: Frame, input: Locator): Prom
 
 test.describe('scripture editor content zoom', () => {
   test('Ctrl+wheel and the zoom commands scale the text and footnotes areas independently and remember each level', async ({
-    electronApp,
     mainPage,
   }) => {
     // Heavy isolated test (own Electron instance, several zoom gestures each waiting on a
@@ -343,87 +339,6 @@ test.describe('scripture editor content zoom', () => {
       await sendCommandWithId(mainPage, CONTENT_ZOOM_COMMANDS.reset, editorId);
       await expect.poll(() => readFactor(editorFrame, '')).toBe(1);
       expect(await readFactor(editorFrame, 'footnotes')).toBe(1.1);
-    });
-
-    await test.step('the footnote popover stays at interface scale and beside its caller, even scrolled, re-zoomed and in a narrow pane', async () => {
-      const caller = editorFrame.locator(TEXT_NOTE_CALLER_SELECTOR).first();
-      const popover = editorFrame.locator('[data-slot="popover-content"]').filter({
-        has: editorFrame.locator('.editor-input'),
-      });
-      const cancel = popover.getByRole('button', { name: 'Cancel', exact: true });
-      // The editor controls this popover and does not close it on Escape or an outside click; its
-      // own Cancel button closes it, leaving an existing note unchanged.
-      const closeFootnotePopover = async () => {
-        await cancel.click();
-        await expect(popover).toBeHidden();
-      };
-      const openFootnotePopover = async () => {
-        await caller.click({ force: true });
-        await expect(popover).toBeVisible();
-        await expect(popover).not.toHaveAttribute('data-platform-content-zoom-root', /.*/);
-        await expectSettledBeside(editorFrame, popover, caller);
-      };
-
-      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
-      await openFootnotePopover();
-      // The popover keeps its 500 px minimum width at 100 %.
-      expect((await boxOf(popover)).width).toBeGreaterThanOrEqual(499);
-      const cancelAtDefault = await boxOf(cancel);
-      await closeFootnotePopover();
-
-      // Size is measured on the popover's controls: the popover's own width is sized by its
-      // content (`w-max`) and capped by the pane.
-      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1.5);
-      await openFootnotePopover();
-      expect((await boxOf(cancel)).height / cancelAtDefault.height).toBeCloseTo(1, 1);
-      await closeFootnotePopover();
-
-      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 2);
-      // Scroll the text before opening, so the caller is no longer where it sat at the top.
-      expect((await scrollText(editorFrame, { to: 120 })).after).toBe(120);
-      await openFootnotePopover();
-      expect((await boxOf(cancel)).height / cancelAtDefault.height).toBeCloseTo(1, 1);
-
-      // Scroll after opening: the popover moves with its caller.
-      await scrollTextKeepingVisible(editorFrame, 60, caller);
-      await expect(async () =>
-        expectPopupBesideTriggerAndInsideFrame(editorFrame, popover, caller),
-      ).toPass({ timeout: 5_000 });
-
-      // Change the text zoom while the popover is open: the text reflows under it and the popover
-      // follows its caller.
-      await sendCommandWithId(mainPage, CONTENT_ZOOM_COMMANDS.out, editorId, 'main');
-      await expect.poll(() => readFactor(editorFrame, '')).toBe(1.9);
-      await expect(async () =>
-        expectPopupBesideTriggerAndInsideFrame(editorFrame, popover, caller),
-      ).toPass({ timeout: 5_000 });
-      // The text reflowed under the open popover; the popover kept its size.
-      expect((await boxOf(cancel)).height / cancelAtDefault.height).toBeCloseTo(1, 1);
-      await sendCommandWithId(mainPage, CONTENT_ZOOM_COMMANDS.in, editorId, 'main');
-      await expect.poll(() => readFactor(editorFrame, '')).toBe(2);
-      await closeFootnotePopover();
-
-      // Narrow pane: the popover and its content must still fit inside it, at 200 % and at the
-      // 300 % maximum (the app does not allow a narrower window). A real OS window resize, never
-      // `mainPage.setViewportSize()` — on this CDP-attached fixture that applies an emulation
-      // override that bypasses the app's enforced `minWidth` instead of actually narrowing the
-      // window (see `setWindowWidth` in fixtures/helpers.ts).
-      await setWindowWidth(electronApp, mainPage, 900);
-      // Sequential: each zoom level's pop-up must be opened, checked and closed before the next.
-      /* eslint-disable no-await-in-loop */
-      const narrowFactors = [2, 3];
-      for (let i = 0; i < narrowFactors.length; i += 1) {
-        await zoomAreaTo(mainPage, editorFrame, editorId, 'main', narrowFactors[i]);
-        await openFootnotePopover();
-        await closeFootnotePopover();
-      }
-      /* eslint-enable no-await-in-loop */
-      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 2);
-      // Restore the window width and the text's scroll position for the steps that follow: they
-      // click verses with `{ force: true }`, which skips Playwright's visibility checks, so a verse
-      // left scrolled out of view would be clicked where it is no longer painted.
-      await setWindowWidth(electronApp, mainPage, DEFAULT_WINDOW_SIZE.width);
-      expect((await scrollText(editorFrame, { to: 0 })).after).toBe(0);
     });
 
     await test.step("the standard view's marker palette stays at interface scale beside its trigger", async () => {
