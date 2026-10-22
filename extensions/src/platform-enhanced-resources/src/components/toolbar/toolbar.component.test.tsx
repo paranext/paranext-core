@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { ShrinkStepOverride } from 'platform-bible-react';
-import { EnhancedResourceTabBar } from './toolbar.component';
+import { EnhancedResourceTabBar, EnhancedResourceTopToolbar } from './toolbar.component';
 
 // jsdom ships no ResizeObserver. Radix's Popper (behind the scope Select) builds one on mount, and
 // the bar itself hands one to `useShrinkStep`. Tests drive the step through `ShrinkStepOverride`
@@ -93,5 +94,24 @@ describe('EnhancedResourceTabBar', () => {
 
     expect(wideClassName).toMatch(/(?:^|\s)tw:w-44(?:\s|$)/);
     expect(screen.getByRole('combobox').className).toMatch(/(?:^|\s)tw:w-32(?:\s|$)/);
+  });
+});
+
+describe('EnhancedResourceTopToolbar menu', () => {
+  it('offers no zoom items: the platform owns content zoom, through the tab menu and its chords', async () => {
+    // Rendered without strings, so each item is named by its localize key.
+    render(<EnhancedResourceTopToolbar />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: '%enhancedResources_toolbar_tabMenu%' }),
+    );
+
+    const itemNames = [
+      ...screen.queryAllByRole('menuitem'),
+      ...screen.queryAllByRole('menuitemcheckbox'),
+      ...screen.queryAllByRole('menuitemradio'),
+    ].map((item) => item.textContent ?? '');
+    expect(itemNames).toContain('%enhancedResources_toolbar_menu_showFootnotes%');
+    expect(itemNames.filter((name) => /zoom/i.test(name))).toEqual([]);
   });
 });

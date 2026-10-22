@@ -411,6 +411,25 @@ describe('EnhancedScripturePane', () => {
     expect(lastEditorialOptions).not.toHaveProperty('contextMenuContainer');
   });
 
+  it('sizes its text with no zoom of its own, so the content zoom area alone scales it', () => {
+    // A private factor here would multiply with the platform's level for the Bible text area.
+    const { container } = render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+
+    // Every element, not only those with a `style` attribute: jsdom keeps CSS `zoom` on the CSSOM
+    // property but does not serialize it into the attribute.
+    const sized = Array.from(container.querySelectorAll<HTMLElement>('*')).filter(
+      (element) => element.style.zoom || element.style.fontSize,
+    );
+    expect(screen.getByTestId('mock-editorial')).toBeInTheDocument();
+    expect(sized).toEqual([]);
+  });
+
   it('exports the localized string keys as a frozen array', () => {
     expect(Object.isFrozen(ENHANCED_SCRIPTURE_PANE_STRING_KEYS)).toBe(true);
     expect(ENHANCED_SCRIPTURE_PANE_STRING_KEYS).toContain(

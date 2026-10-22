@@ -27,6 +27,7 @@ import {
 import type { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import { convertMarbleChapterXml, type MarbleAnnotation } from '../lib/marble-converter';
 import { computeScopeKeyedRefKey } from '../lib/scope-keyed-ref-key';
+import { useFootnotesToggleKey } from '../lib/use-footnotes-toggle-key.hook';
 import {
   useEnhancedResourcesProxy,
   type EnhancedResourcesNetworkObject,
@@ -2911,34 +2912,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     );
   }, []);
 
-  // F7 toggles the footnotes pane. The zoom chords belong to the platform's per-pane content zoom,
-  // which reaches this view through the areas it marks.
-  // `useWebViewState` setters take a plain value rather than React's functional updater, so the
-  // latest value is read from a ref to avoid a stale closure inside the handler.
-  const showFootnotesRef = useRef(showFootnotes);
-  useEffect(() => {
-    showFootnotesRef.current = showFootnotes;
-  }, [showFootnotes]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key === 'F7' &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.altKey &&
-        !event.shiftKey
-      ) {
-        event.preventDefault();
-        setShowFootnotes(!showFootnotesRef.current);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [setShowFootnotes]);
+  useFootnotesToggleKey(showFootnotes, setShowFootnotes);
 
   // FN-020(c) / G6: the filter input shows the actual word text (sourceText) of the clicked
   // token, not the opaque numeric token id. The scripture-pane click now forwards the surface
