@@ -574,7 +574,9 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-open-basic-checks',
-    purpose: 'Open Basic checks for the project (Power mode)',
+    // Kept while Basic checks are hidden in both modes, so the chord stays reserved and its menu
+    // hint returns with the menu item
+    purpose: 'Open Basic checks for the project (Power mode; off while Basic checks are hidden)',
     category: 'Navigation',
     context: 'Scripture editor web view',
     // macOS uses ⌃⇧R (not ⌘⇧R) because ⌘⇧R is the macOS menu bar's force reload

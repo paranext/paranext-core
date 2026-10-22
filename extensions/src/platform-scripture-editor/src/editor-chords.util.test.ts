@@ -134,8 +134,8 @@ describe('shouldRunEditorChord', () => {
     ).toBe(true);
   });
 
-  it('basicChecks runs in Power only, since Simple has no such menu item', () => {
-    expect(shouldRunEditorChord('basicChecks', live)).toBe(true);
+  it('basicChecks runs in neither mode, since its menu item is hidden in both', () => {
+    expect(shouldRunEditorChord('basicChecks', live)).toBe(false);
     expect(shouldRunEditorChord('basicChecks', { ...live, isPowerMode: false })).toBe(false);
   });
 });

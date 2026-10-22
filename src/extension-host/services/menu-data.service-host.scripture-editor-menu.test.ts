@@ -132,6 +132,7 @@ const HIDDEN_IN_BOTH_MODES = [
   'platformScripture.openMarkersInventory',
   'platformScripture.openPunctuationInventory',
   'platformScripture.openMarkersChecklist',
+  'platformScripture.openChecksSidePanel',
 ];
 const HIDDEN_IN_SIMPLE = [
   'platformScriptureEditor.setViewStandard',
@@ -202,10 +203,7 @@ describe("The scripture editor's Project menu, per mode", () => {
           'platformScriptureEditor.insertEndnoteAtSelection',
         ],
       ],
-      [
-        'platformScriptureEditor.tools',
-        ['legacyCommentManager.openCommentList', 'platformScripture.openChecksSidePanel'],
-      ],
+      ['platformScriptureEditor.tools', ['legacyCommentManager.openCommentList']],
     ]);
   });
 
@@ -309,7 +307,6 @@ describe("The scripture editor's Project menu, per mode", () => {
     ['platformScriptureEditor.setViewStandard', undefined],
     ['platformScriptureEditor.setViewPreview', undefined],
     ['legacyCommentManager.openCommentList', 'message-square'],
-    ['platformScripture.openChecksSidePanel', 'circle-check-big'],
   ];
   const ICONS_SIMPLE_ONLY: [string, string][] = [
     ['platformScriptureEditor.showBibleTextsPanel', 'book'],
@@ -341,7 +338,6 @@ describe("The scripture editor's Project menu, per mode", () => {
     ['power', 'platformScriptureEditor.toggleFootnotes', 'Show footnotes'],
     ['power', 'platformScriptureEditor.insertEndnoteAtSelection', 'Insert end note'],
     ['power', 'legacyCommentManager.openCommentList', 'Comments'],
-    ['power', 'platformScripture.openChecksSidePanel', 'Basic checks'],
     ['power', 'platformScripture.openManageBooks', 'Manage books'],
     ['power', 'platformScriptureEditor.setViewStandard', 'Standard view'],
     ['power', 'platformScriptureEditor.setViewPreview', 'Preview'],
@@ -358,13 +354,13 @@ describe("The scripture editor's Project menu, per mode", () => {
     expect(item && labelText(item.label)).toBe(expected);
   });
 
-  test('inventories and Markers Checklist are hidden in Power but stay declared', async () => {
+  test('inventories, Markers Checklist and Basic checks are hidden in Power but stay declared', async () => {
     const power = servedCommandIds(await getEditorTopMenuInMode('power'));
     const declared = declaredEditorCommandIds();
     HIDDEN_IN_BOTH_MODES.forEach((command) => {
       expect(power.has(command)).toBe(false);
     });
-    // Hidden, not deleted: the inventories and Markers Checklist remain declared.
+    // Hidden, not deleted: the inventories, Markers Checklist and Basic checks remain declared.
     HIDDEN_IN_BOTH_MODES.forEach((command) => expect(declared.has(command)).toBe(true));
   });
 
@@ -500,18 +496,18 @@ describe("The scripture editor's Project menu, per mode", () => {
    * has to sign off on.
    */
   const POWER_ONLY_COMMANDS = new Set([
-    // The four inventories and Markers Checklist: hidden in both modes, so they stay declared and
-    // return when the flag is removed.
+    // The four inventories, Markers Checklist and Basic checks: hidden in both modes, so they stay
+    // declared and return when the flag is removed. Basic checks returns to Power only: Simple's
+    // quality tooling is the Checking assistant, contributed outside core.
     'platformScripture.openCharactersInventory',
     'platformScripture.openRepeatedWordsInventory',
     'platformScripture.openMarkersInventory',
     'platformScripture.openPunctuationInventory',
     'platformScripture.openMarkersChecklist',
+    'platformScripture.openChecksSidePanel',
     // Manage books: book management is a Power-mode task; Simple's missing-book message instead
     // tells the user to ask their project administrator.
     'platformScripture.openManageBooks',
-    // Basic checks: Simple's quality tooling is the Checking assistant, contributed outside core.
-    'platformScripture.openChecksSidePanel',
     // The Power Comments item opens a separate Comment List web view; Simple's own Comments item
     // (legacyCommentManager.showCommentListPanel) fronts the shared Column 3 tab instead.
     'legacyCommentManager.openCommentList',
@@ -572,11 +568,24 @@ describe("The scripture editor's Project menu, per mode", () => {
   });
 
   /**
-   * The checks group must stay extensible: another extension (here the Checking assistant, Power
-   * only) adds its item after Basic checks, and a group that is not extensible makes the combiner
-   * throw, which drops that extension's whole menu document.
+   * The checks group must stay declared, in the Tools column, and extensible even while Basic
+   * checks (its own item) is hidden: another extension (here the Checking assistant, Power only)
+   * adds its item to it at order 4, and a group that is missing or not extensible makes the
+   * combiner throw, which drops that extension's whole menu document.
    */
-  describe('an extension adding a tool after Basic checks', () => {
+  test('the checks group stays declared in the Tools column and extensible', () => {
+    const menus = JSON.parse(readFileSync(EDITOR_MENUS_PATH, 'utf8'));
+    expect(menus.webViewMenus[SCRIPTURE_EDITOR_WEB_VIEW_TYPE].topMenu.groups).toHaveProperty(
+      ['platformScriptureEditor.checks'],
+      expect.objectContaining({
+        column: 'platformScriptureEditor.tools',
+        order: 3,
+        isExtensible: true,
+      }),
+    );
+  });
+
+  describe('an extension adding a tool to the checks group', () => {
     const FOREIGN_COMMAND = 'checkingAssistant.open';
 
     async function getMenuWithForeignChecksItem(mode: 'simple' | 'power') {
@@ -608,16 +617,12 @@ describe("The scripture editor's Project menu, per mode", () => {
       return webViewMenu.topMenu;
     }
 
-    test('Power serves it after Basic checks in the Tools column', async () => {
+    test('Power serves it after Comments in the Tools column, with Basic checks hidden', async () => {
       const menu = await getMenuWithForeignChecksItem('power');
       const tools = describeSections(menu).find(
         ([columnKey]) => columnKey === 'platformScriptureEditor.tools',
       );
-      expect(tools?.[1]).toEqual([
-        'legacyCommentManager.openCommentList',
-        'platformScripture.openChecksSidePanel',
-        FOREIGN_COMMAND,
-      ]);
+      expect(tools?.[1]).toEqual(['legacyCommentManager.openCommentList', FOREIGN_COMMAND]);
     });
 
     test('Simple does not serve it', async () => {
