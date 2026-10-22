@@ -135,6 +135,8 @@
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Open Scripture Editor",
       "%platformScriptureEditor_markersView_readonly_dismiss%": "Don't show again today",
       "%platformScriptureEditor_markersView_readonly_message_format%": "The markers view for {projectName} is read-only.",
+      "%platformScriptureEditor_previewView_readonly_dismiss%": "Don't show again today",
+      "%platformScriptureEditor_previewView_readonly_message_format%": "Preview of {projectName} is read-only. To edit, switch to Standard view.",
       "%platformScriptureEditor_sharedLayout_applyNow%": "Apply now",
       "%platformScriptureEditor_sharedLayout_newLayoutAvailable%": "An admin shared a new layout for this project",
       "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Show the scripture text grid view for viewing multiple resources side by side.",
@@ -507,6 +509,8 @@
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Abrir el editor de Escrituras",
       "%platformScriptureEditor_markersView_readonly_dismiss%": "No mostrar de nuevo hoy",
       "%platformScriptureEditor_markersView_readonly_message_format%": "La vista de marcadores para {projectName} es de solo lectura.",
+      "%platformScriptureEditor_previewView_readonly_dismiss%": "No mostrar de nuevo hoy",
+      "%platformScriptureEditor_previewView_readonly_message_format%": "La vista previa de {projectName} es de solo lectura. Para editar, cambie a la vista estándar.",
       "%platformScriptureEditor_sharedLayout_applyNow%": "Aplicar ahora",
       "%platformScriptureEditor_sharedLayout_newLayoutAvailable%": "Un administrador compartió un nuevo diseño para este proyecto",
       "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Mostrar la vista de cuadrícula de textos bíblicos para ver varios recursos en paralelo.",
@@ -1250,6 +1254,24 @@
     }
   },
   "metadata": {
+    "%platformScriptureEditor_markersView_readonly_dismiss%": {
+      "deprecationInfo": {
+        "date": "2026-10-22",
+        "message": "Superseded by %platformScriptureEditor_previewView_readonly_dismiss%."
+      }
+    },
+    "%platformScriptureEditor_previewView_readonly_dismiss%": {
+      "fallbackKey": "%platformScriptureEditor_markersView_readonly_dismiss%"
+    },
+    "%platformScriptureEditor_markersView_readonly_message_format%": {
+      "deprecationInfo": {
+        "date": "2026-10-22",
+        "message": "Superseded by %platformScriptureEditor_previewView_readonly_message_format%."
+      }
+    },
+    "%platformScriptureEditor_previewView_readonly_message_format%": {
+      "fallbackKey": "%platformScriptureEditor_markersView_readonly_message_format%"
+    },
     "%webView_footnoteList_header%": {
       "fallbackKey": "%Paratext.ProjectMenu.ProjectPropertiesForm.showInFootnotes.HeaderText%"
     },
