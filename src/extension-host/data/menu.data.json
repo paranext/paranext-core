@@ -128,7 +128,8 @@
     "items": [
       {
         "label": "%insertNote%",
-        "localizeNotes": "Web view context menu > Insert note...",
+        "hiddenInterfaceModes": ["simple", "power"],
+        "localizeNotes": "Web view context menu > Insert note... Hidden in both modes: a placeholder no command handles; notes are inserted from the Scripture editor's own Insert menu. Remove \"power\" from hiddenInterfaceModes to restore it",
         "group": "platform.insert",
         "order": 1,
         "command": "platform.insertNote"
@@ -136,7 +137,7 @@
       {
         "label": "%menuItemName_wordList%",
         "hiddenInterfaceModes": ["simple", "power"],
-        "localizeNotes": "Web view context menu > Word list...",
+        "localizeNotes": "Web view context menu > Word list... Hidden in both modes: a placeholder no command handles. Remove \"power\" from hiddenInterfaceModes to restore it",
         "group": "platform.wordList",
         "order": 1,
         "command": "platform.openWordList"

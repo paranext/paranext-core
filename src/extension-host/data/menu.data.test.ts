@@ -192,3 +192,22 @@ describe('defaultWebViewTabMenu zoom group', () => {
     expect(menuDataObject.defaultWebViewTabMenu.groups[CONTENT_ZOOM_TAB_MENU_GROUP]).toBeDefined();
   });
 });
+
+/**
+ * The default web-view right-click menu carries two placeholder items whose commands nothing
+ * registers. They stay in the file, hidden in both interface modes, with a translator note saying
+ * why — the same treatment as every other item hidden in both modes.
+ */
+describe('defaultWebViewContextMenu placeholder items', () => {
+  test.each(['platform.insertNote', 'platform.openWordList'])(
+    'hides %s in both modes and says why in its translator note',
+    (command) => {
+      const item = menuDataObject.defaultWebViewContextMenu.items.find(
+        (candidate) => candidate.command === command,
+      );
+      expect(item).toBeDefined();
+      expect(item?.hiddenInterfaceModes).toEqual(expect.arrayContaining(['simple', 'power']));
+      expect(item?.localizeNotes).toContain('Hidden in both modes');
+    },
+  );
+});
