@@ -4421,10 +4421,10 @@ describe('getNextViewTypeInCycle', () => {
     expect(getNextViewTypeInCycle('markers', true)).toBe('formatted');
   });
 
-  it('stays on formatted in simple mode for any current view type', () => {
+  it('has nothing to change in simple mode, so a saved Power view type is never overwritten', () => {
     const allViewTypes = ['formatted', 'markers', 'standard'] as const;
     allViewTypes.forEach((current) => {
-      expect(getNextViewTypeInCycle(current, false)).toBe('formatted');
+      expect(getNextViewTypeInCycle(current, false)).toBeUndefined();
     });
   });
 });

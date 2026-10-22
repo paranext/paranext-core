@@ -114,8 +114,9 @@ export const VIEW_TYPE_FOR_SET_VIEW_COMMAND = {
 
 /**
  * Computes the next view type for the view-cycling affordance (the `changeScriptureView` command).
- * Power mode cycles formatted -> standard -> markers -> formatted; simple mode only has the
- * formatted view (see {@link resolveViewTypeForInterfaceMode}), so cycling there stays on it.
+ * Power mode cycles formatted -> standard -> markers -> formatted. Simple mode only shows the
+ * formatted view (see {@link resolveViewTypeForInterfaceMode}), so there is nothing to cycle to, and
+ * returning nothing keeps a view type saved in Power from being overwritten.
  *
  * Cycles on the view type rather than `ViewOptions.markerMode`: in non-power mode both 'formatted'
  * and 'markers' resolve to markerMode 'hidden' (the non-power markers view overrides only
@@ -124,13 +125,14 @@ export const VIEW_TYPE_FOR_SET_VIEW_COMMAND = {
  * @param viewType The current view type (resolved for mode first, so a lingering 'standard' or
  *   'markers' in simple mode advances as if it were already coerced)
  * @param isPowerMode Whether `platform.interfaceMode` is 'power'
- * @returns The next view type in the mode-appropriate cycle
+ * @returns The next view type in the Power cycle, or `undefined` in simple mode, where the caller
+ *   must leave the saved view type alone
  */
 export function getNextViewTypeInCycle(
   viewType: ScriptureEditorViewType,
   isPowerMode: boolean,
-): ScriptureEditorViewType {
-  if (!isPowerMode) return 'formatted';
+): ScriptureEditorViewType | undefined {
+  if (!isPowerMode) return undefined;
   if (viewType === 'formatted') return 'standard';
   if (viewType === 'standard') return 'markers';
   return 'formatted';
