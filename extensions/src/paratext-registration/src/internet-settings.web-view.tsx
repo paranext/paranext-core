@@ -75,7 +75,14 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   // One-shot: whether the "Internet & connectivity" row was opened with Shift held. See
   // `computeCanEditServer`.
   const [requestDeveloperSettings] = useWebViewState<boolean>('requestDeveloperSettings', false);
-  const canEditServer = computeCanEditServer(requestDeveloperSettings, dpValue);
+
+  // Whether the server-selection control should render, captured once from the first successful
+  // read (below) rather than recomputed from the live `dpValue` on every render: this is a
+  // stage-then-commit dialog, so a value this session already decided to show must not flip to
+  // hidden the instant the user's own save lands (or vanish for good if the queued restart then
+  // fails) just because the live value moved to Production. Starts `false` so the control stays
+  // hidden while the first read is loading or errored.
+  const [canEditServer, setCanEditServer] = useState(false);
 
   // Once the staged draft + saved baseline have been synced from the first successful read.
   const hasSyncedFetch = useRef(false);
@@ -96,8 +103,9 @@ globalThis.webViewComponent = function InternetSettingsComponent({
       hasSyncedFetch.current = true;
       setInternetSettings(dpValue);
       setSavedInternetSettings(dpValue);
+      setCanEditServer(computeCanEditServer(requestDeveloperSettings, dpValue));
     }
-  }, [setData, isLoadingSettings, dpValue, setInternetSettings]);
+  }, [setData, isLoadingSettings, dpValue, setInternetSettings, requestDeveloperSettings]);
 
   const isFormDisabled =
     savedInternetSettings === undefined ||
