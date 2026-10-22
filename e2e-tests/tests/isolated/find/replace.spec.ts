@@ -293,7 +293,7 @@ test.describe('Replace mode', () => {
     await switchToReplaceMode(frame);
 
     await expect(frame.locator('#replace-term')).toBeVisible();
-    await expect(frame.getByRole('button', { name: /^replace$/i })).toBeVisible();
+    await expect(headerReplaceButton(frame)).toBeVisible();
     // Replace All is switched off (IS_REPLACE_ALL_ENABLED in find.web-view.tsx) because it cannot be
     // undone.
     await expect(frame.getByRole('button', { name: /^replace all$/i })).toHaveCount(0);
