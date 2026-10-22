@@ -2100,59 +2100,6 @@ function PlatformScriptureEditor({
     [projectId, localizedStrings, isReadOnlyEffective, endPaneNoteEdit],
   );
 
-  const options = useMemo<EditorOptions>(
-    () => ({
-      isReadonly: isReadOnlyEffective,
-      structureProtectionMode,
-      // A read-only editor makes no edits, so there is nothing to ask about.
-      onHiddenContentDelete: isReadOnlyEffective ? undefined : handleHiddenContentDelete,
-      hasSpellCheck: false,
-      nodes: nodeOptions,
-      textDirection: textDirectionEffective,
-      markerMenuTrigger: '\\',
-      view: viewOptions,
-      styleInfo,
-      markerSettleDelayMs,
-      hasExternalUI: true,
-      contextMenu: createInsertContextMenuItems(
-        localizedStrings,
-        {
-          insertFootnote: runInsertFromContextMenu(
-            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote].editDescription,
-          ),
-          insertCrossReference: runInsertFromContextMenu(
-            () =>
-              insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference]
-              .editDescription,
-          ),
-          insertEndnote: runInsertFromContextMenu(
-            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote].editDescription,
-          ),
-          insertComment: insertCommentAtCurrentSelection,
-        },
-        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
-      ),
-    }),
-    [
-      isReadOnlyEffective,
-      structureProtectionMode,
-      handleHiddenContentDelete,
-      canUserCreateComments,
-      isSyncBlocked,
-      textDirectionEffective,
-      nodeOptions,
-      viewOptions,
-      styleInfo,
-      markerSettleDelayMs,
-      localizedStrings,
-      insertCommentAtCurrentSelection,
-      insertNoteAtCurrentSelection,
-    ],
-  );
-
   /**
    * Runs an Edit flyout action on this editor with its read-only notices, selection restore and
    * refocus. Cut, Copy and Paste reach it from the menu's select handler (the clipboard needs the
@@ -3191,10 +3138,62 @@ function PlatformScriptureEditor({
   // view's project changes only by reloading it, which remounts it.
   const isChapterTextLoading = useIsProjectDataLoading(chapterUsjSelector, isUsjFromPdpLoading);
   const copyLimit = useChapterCopyLimit(projectId, scrRef, isChapterTextLoading);
-  /** `options` with the chapter's copy limit, for every copy surface the editor's text reaches. */
-  const editorOptionsWithCopyLimit = useMemo<EditorOptions>(
-    () => ({ ...options, copyLimit }),
-    [options, copyLimit],
+  // Built here, below the copy limit, so the editor has one options object and every copy surface
+  // its text reaches — the editor, the footnote editors, the footnotes pane — gets the copy limit
+  // from it. There is no variant without the copy limit to pass by mistake.
+  const options = useMemo<EditorOptions>(
+    () => ({
+      isReadonly: isReadOnlyEffective,
+      structureProtectionMode,
+      // A read-only editor makes no edits, so there is nothing to ask about.
+      onHiddenContentDelete: isReadOnlyEffective ? undefined : handleHiddenContentDelete,
+      hasSpellCheck: false,
+      nodes: nodeOptions,
+      textDirection: textDirectionEffective,
+      markerMenuTrigger: '\\',
+      view: viewOptions,
+      styleInfo,
+      markerSettleDelayMs,
+      hasExternalUI: true,
+      copyLimit,
+      contextMenu: createInsertContextMenuItems(
+        localizedStrings,
+        {
+          insertFootnote: runInsertFromContextMenu(
+            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote].editDescription,
+          ),
+          insertCrossReference: runInsertFromContextMenu(
+            () =>
+              insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference]
+              .editDescription,
+          ),
+          insertEndnote: runInsertFromContextMenu(
+            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote].editDescription,
+          ),
+          insertComment: insertCommentAtCurrentSelection,
+        },
+        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
+      ),
+    }),
+    [
+      isReadOnlyEffective,
+      structureProtectionMode,
+      handleHiddenContentDelete,
+      canUserCreateComments,
+      isSyncBlocked,
+      textDirectionEffective,
+      nodeOptions,
+      viewOptions,
+      styleInfo,
+      markerSettleDelayMs,
+      localizedStrings,
+      insertCommentAtCurrentSelection,
+      insertNoteAtCurrentSelection,
+      copyLimit,
+    ],
   );
   /**
    * The view options the footnotes pane and its row editor render with: the main editor's in Power
@@ -3229,18 +3228,18 @@ function PlatformScriptureEditor({
     rowEditorViewOptionsRef.current = footnotesPaneViewOptions;
   const rowEditorViewOptions = rowEditorViewOptionsRef.current;
   /**
-   * `editorOptionsWithCopyLimit` with the pane's view options, for the pane's row editor. Structure
+   * `options` with the pane's view options, for the pane's row editor. Structure
    * protection is off there, as it is in Power mode: a note has no verse or paragraph structure of
    * its own to protect, its edits only ever replace the note itself, and 'protected' would claim
    * Enter before the note's own `\fp` handling could run.
    */
   const paneFootnoteEditorOptions = useMemo<EditorOptions>(
     () => ({
-      ...editorOptionsWithCopyLimit,
+      ...options,
       view: rowEditorViewOptions,
       structureProtectionMode: 'off',
     }),
-    [editorOptionsWithCopyLimit, rowEditorViewOptions],
+    [options, rowEditorViewOptions],
   );
   // What the failure in hand IS, independent of what is on screen. Parsed once per failure, and
   // deliberately not keyed on the reference: the same held error is re-read on every navigation, and
@@ -5381,7 +5380,7 @@ function PlatformScriptureEditor({
               ref={editorRef}
               scrRef={scrRef}
               onScrRefChange={setScrRefNoScroll}
-              options={editorOptionsWithCopyLimit}
+              options={options}
               logger={logger}
               onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
               onSelectionChange={handleSelectionChange}
@@ -5719,7 +5718,7 @@ function PlatformScriptureEditor({
                 // the text beside the pane shows a spinner for both.
                 isLoading={!liveEditorUsj && (!usjForEditor || usjForEditor === defaultUsj)}
                 zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
-                copyLimit={editorOptionsWithCopyLimit.copyLimit}
+                copyLimit={copyLimit}
                 rowEditorViewOptions={rowEditorViewOptions}
                 allowInvisibleCharacters={allowInvisibleCharactersSetting.value}
               >
@@ -5765,7 +5764,7 @@ function PlatformScriptureEditor({
             onClose={onFootnoteEditorClose}
             onNoteEdit={onFootnoteEditorNoteEdit}
             scrRef={scrRef}
-            editorOptions={editorOptionsWithCopyLimit}
+            editorOptions={options}
             defaultMarkerMenuTrigger={INLINE_MARKERS_MENU_TRIGGER}
             localizedStrings={localizedStrings}
             parentEditorRef={editorRef}
