@@ -94,9 +94,13 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-001 — MarbleForm)',
   });
 
   // @scenario TS-043
-  // Behaviors: BHV-616 + INV-011 (non-Marble guard). The web view provider never declines: a
-  // request for a non-Marble resource opens an Enhanced Resource tab whose shell renders an empty
-  // state because it has no tokens. The page must absorb that gracefully, not crash.
+  // Behaviors: BHV-616 + INV-011 (non-Marble guard).
+  // Known gap: the rule that Enhanced Resources refuses a resource without Enhanced Resource data is
+  // not enforced. The web view provider opens the tab for any resource id and the shell shows an
+  // empty state (see the comment on enhancedResourceWebViewProvider in
+  // extensions/src/platform-enhanced-resources/src/main.ts). This test only checks that the page
+  // copes without crashing; when a guard lands it must assert the refusal instead.
+  // TODO(PT-4892): Assert the refusal once the provider enforces the rule.
   test('opens a non-Marble resource as an empty Enhanced Resource tab without crashing', async ({
     mainPage,
   }) => {
