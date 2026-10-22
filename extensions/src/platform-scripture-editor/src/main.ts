@@ -50,6 +50,7 @@ import {
   buildScriptureTextGridWebView,
   type TextCollectionPanelOptions,
   selectProjectIdsForOpenMode,
+  showsReadOnlyMarkersView,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
   syncOnSwitchToPower,
@@ -604,7 +605,11 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
     // isReadOnly/markers already computed), matching the same fail-open convention the webview's
     // own reactive `canUserEditScripture` signal uses — so the open-time label and the live gate
     // never disagree about which direction an error should bias.
-    let isReadOnlyForTitle = isReadOnly || savedWebViewStateUpdated.viewType === 'markers';
+    // A saved markers view is read-only only where it is shown as markers: outside Power the editor
+    // shows it as the editable formatted view
+    let isReadOnlyForTitle =
+      isReadOnly ||
+      showsReadOnlyMarkersView(savedWebViewStateUpdated.viewType, interfaceMode === 'power');
     if (!isReadOnlyForTitle && projectId) {
       try {
         const scriptureEditPermissionsPdp = await papi.projectDataProviders.get(
