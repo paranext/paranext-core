@@ -57,7 +57,7 @@ import {
   updateRelatedFindPanel,
   VIEW_TYPE_FOR_SET_VIEW_COMMAND,
 } from './platform-scripture-editor.utils';
-import { MarkersViewNotifier } from './markers-view-notifier.model';
+import { ReadOnlyViewNotifier } from './read-only-view-notifier.model';
 import { SharedLayoutReceiver } from './shared-layout-receiver.model';
 import {
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
@@ -1683,7 +1683,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   // Await the registration promises at the end so we don't hold everything else up
-  const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
+  const markerNotifier = new ReadOnlyViewNotifier(papi, context.executionToken);
   const markerNotifierUnsubscribers = await markerNotifier.start();
 
   // Resolve the feature flag (kicked off above so it overlapped the other registrations) and, only

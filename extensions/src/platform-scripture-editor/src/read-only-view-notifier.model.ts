@@ -9,13 +9,13 @@ import {
   UnsubscriberAsync,
 } from 'platform-bible-utils';
 import {
-  resolveViewTypeForInterfaceMode,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  showsReadOnlyPreview,
 } from './platform-scripture-editor.utils';
 
 /**
  * Time in milliseconds to wait before sending another notification informing the user that the
- * editor is read-only because they are in the markers view
+ * editor is read-only because it shows Preview
  */
 const READONLY_NOTIFICATION_DISMISS_DURATION_MS = 24 * 60 * 60 * 1000;
 
@@ -23,10 +23,11 @@ const READONLY_NOTIFICATION_DISMISS_DURATION_MS = 24 * 60 * 60 * 1000;
 const READONLY_NOTIFICATION_THROTTLE_MS = 8 * 1000;
 
 /**
- * Notifier that alerts users when a Scripture Editor WebView is opened or updated with
- * `state.viewType === 'markers'`. Allows dismissing notifications per-project for 24 hours.
+ * Notifier that tells users a Scripture Editor WebView is read-only because it shows Preview (Power
+ * mode's formatted view). It announces once each time a WebView enters Preview, and only for a
+ * project the user can edit. Allows dismissing notifications per-project for 24 hours.
  */
-export class MarkersViewNotifier {
+export class ReadOnlyViewNotifier {
   /** UserData storage key for the disabled map */
   private readonly disabledMapUserDataKey =
     'platformScriptureEditor.markerViewNotificationDisabled';
@@ -40,6 +41,8 @@ export class MarkersViewNotifier {
   private lastNotificationByProject: Record<string, number> = {};
   /** Map of per-project mutexes to avoid races when checking/updating last notification timestamps */
   private projectMutexes = new MutexMap();
+  /** Map of editor WebView IDs to whether the WebView showed Preview when last handled */
+  private readonly lastShownByWebViewId = new Map<string, boolean>();
 
   constructor(
     private papiInstance: typeof papi,
@@ -61,7 +64,7 @@ export class MarkersViewNotifier {
         )) ?? '{}';
       this.disabledMap = JSON.parse(rawDisableMap);
     } catch (e) {
-      logger.warn(`Failed to load marker-view disable map from storage: ${getErrorMessage(e)}`);
+      logger.warn(`Failed to load read-only-view disable map from storage: ${getErrorMessage(e)}`);
       this.disabledMap = {};
     }
     // Register command to dismiss for a project for 24 hours
@@ -81,7 +84,7 @@ export class MarkersViewNotifier {
           );
         } catch (e) {
           logger.warn(
-            `Failed to persist marker-view disable map for project ${projectId}: ${getErrorMessage(e)}`,
+            `Failed to persist read-only-view disable map for project ${projectId}: ${getErrorMessage(e)}`,
           );
         }
         // Clean up the runtime mapping
@@ -89,7 +92,7 @@ export class MarkersViewNotifier {
       },
       {
         method: {
-          summary: "Don't show marker view readonly notification for this project for 24 hours",
+          summary: "Don't show the read-only Preview notification for this project for 24 hours",
           params: [{ name: 'notificationId', required: true, schema: { type: 'string' } }],
           result: { name: 'return value', schema: { type: 'null' } },
         },
@@ -104,12 +107,17 @@ export class MarkersViewNotifier {
       this.handleWebView(webView),
     );
 
-    return [await dismissCommand, onOpen, onUpdate];
+    // A closed WebView's next appearance is a new entry, even if it reuses the ID
+    const onClose = this.papiInstance.webViews.onDidCloseWebView(({ webView }) => {
+      this.lastShownByWebViewId.delete(webView.id);
+    });
+
+    return [await dismissCommand, onOpen, onUpdate, onClose];
   }
 
   /**
-   * Handles a WebView being opened or updated, sending a notification if it is a markers view and
-   * notifications are not disabled for its project
+   * Handles a WebView being opened or updated, sending a notification when it has just entered
+   * Preview and notifications are not disabled for its project
    *
    * @param webViewDefinition WebView that was opened or updated
    */
@@ -117,31 +125,32 @@ export class MarkersViewNotifier {
     try {
       // We are only interested in our editor WebViews, so ignore others
       if (webViewDefinition.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
-      // TypeScript doesn't know the shape of state, but we know viewType (if present) is string
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const viewType = webViewDefinition.state?.viewType as string | undefined;
 
-      // Only need to send a notification if this is the markers view which is currently readonly
-      if (viewType !== 'markers') return;
-
-      // The editor decides with `resolveViewTypeForInterfaceMode` which view it shows for a saved
-      // one; outside Power that is the editable formatted view, so there is nothing read-only to
-      // announce
       const isPowerMode =
         (await this.papiInstance.settings.get('platform.interfaceMode')) === 'power';
-      if (resolveViewTypeForInterfaceMode(viewType, isPowerMode) !== 'markers') return;
-
       const { projectId, state } = webViewDefinition;
+      const isShowingPreview = showsReadOnlyPreview(state?.viewType, isPowerMode);
+
+      // Announce only on the change into Preview. Every handled event updates the record, so
+      // leaving Preview (including through a mode change) makes the next entry announce again.
+      const wasShowingPreview = this.lastShownByWebViewId.get(webViewDefinition.id) ?? false;
+      this.lastShownByWebViewId.set(webViewDefinition.id, isShowingPreview);
+      if (!isShowingPreview || wasShowingPreview) return;
+
       // If no projectId, can't proceed. Just warn and be done
       if (!projectId) {
         logger.warn(
-          `MarkerViewNotifier found an editor view WebView (${webViewDefinition.id}) with no projectId!`,
+          `ReadOnlyViewNotifier found an editor view WebView (${webViewDefinition.id}) with no projectId!`,
         );
         return;
       }
 
-      // If the view is already read-only, no need to notify
+      // If the view is already read-only for another reason, Preview adds nothing to announce
       if (state?.isReadOnly) return;
+
+      // A user who cannot edit Scripture could not edit in any view. A failed lookup does not
+      // suppress the notification.
+      if (!(await this.canUserEditScripture(projectId))) return;
 
       // Check if this notification is disabled for this project
       const disabledTime = this.disabledMap[projectId];
@@ -164,15 +173,15 @@ export class MarkersViewNotifier {
         } catch (e) {
           // fall back to id
           logger.warn(
-            `MarkerViewNotifier failed to get project name for project ${projectId}: ${getErrorMessage(
+            `ReadOnlyViewNotifier failed to get project name for project ${projectId}: ${getErrorMessage(
               e,
             )}`,
           );
         }
 
         // Localize and format the notification message and click label
-        const messageKey = '%platformScriptureEditor_markersView_readonly_message_format%';
-        const clickLabelKey = '%platformScriptureEditor_markersView_readonly_dismiss%';
+        const messageKey = '%platformScriptureEditor_previewView_readonly_message_format%';
+        const clickLabelKey = '%platformScriptureEditor_previewView_readonly_dismiss%';
         let localizedMessageTemplate = messageKey;
         let localizedClickLabel = clickLabelKey;
         try {
@@ -183,13 +192,13 @@ export class MarkersViewNotifier {
           localizedClickLabel = localized[clickLabelKey] ?? localizedClickLabel;
         } catch (e) {
           logger.warn(
-            `Failed to get localized strings for marker-view notification: ${getErrorMessage(e)}`,
+            `Failed to get localized strings for read-only Preview notification: ${getErrorMessage(e)}`,
           );
         }
 
         const message = formatReplacementString(localizedMessageTemplate, { projectName });
 
-        // Send notification informing that markers view is read-only for this WebView/project
+        // Send notification informing that Preview is read-only for this WebView/project
         const notificationId = await this.papiInstance.notifications.send({
           severity: 'info',
           message,
@@ -205,7 +214,26 @@ export class MarkersViewNotifier {
         this.lastNotificationByProject[projectId] = Date.now();
       });
     } catch (e) {
-      logger.warn(`MarkerViewNotifier failed handling WebView: ${getErrorMessage(e)}`);
+      logger.warn(`ReadOnlyViewNotifier failed handling WebView: ${getErrorMessage(e)}`);
+    }
+  }
+
+  /**
+   * Whether the user may edit Scripture in a project. Fails open: a project that does not offer the
+   * permission lookup, or a lookup that fails, counts as editable.
+   */
+  private async canUserEditScripture(projectId: string): Promise<boolean> {
+    try {
+      const pdp = await this.papiInstance.projectDataProviders.get(
+        'platformScripture.scriptureEditPermissions',
+        projectId,
+      );
+      return !pdp || (await pdp.canUserEditScripture());
+    } catch (e) {
+      logger.warn(
+        `ReadOnlyViewNotifier failed to check Scripture edit permission for project ${projectId}: ${getErrorMessage(e)}`,
+      );
+      return true;
     }
   }
 }
