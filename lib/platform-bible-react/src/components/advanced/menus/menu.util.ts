@@ -180,3 +180,28 @@ export function getItemsInGroups<T extends { group: string }>(
   const keys = new Set(groupKeys);
   return items.filter((item) => keys.has(item.group));
 }
+
+/** The rendered content of one menu group, ready to be joined with the groups beside it */
+export type GroupContent<T> = { groupKey: string; items: T[] };
+
+/**
+ * Joins the groups of one menu list in the order given, with a separator between each pair of
+ * groups that have items. A group without items adds nothing, so no separator ever leads, trails or
+ * doubles up — which matters because hiding items for an interface mode can empty any group.
+ *
+ * @param groups The groups' content, already sorted by the groups' `order`
+ * @param createSeparator Makes the separator that goes before the given group's items
+ * @returns The items of every group, with the separators between them
+ */
+export function joinGroupsWithSeparators<T>(
+  groups: GroupContent<T>[],
+  createSeparator: (groupKey: string) => T,
+): T[] {
+  let hasShownItems = false;
+  return groups.flatMap(({ groupKey, items }) => {
+    if (items.length === 0) return [];
+    const separator = hasShownItems ? [createSeparator(groupKey)] : [];
+    hasShownItems = true;
+    return [...separator, ...items];
+  });
+}
