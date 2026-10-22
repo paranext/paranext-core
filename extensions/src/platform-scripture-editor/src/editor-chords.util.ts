@@ -3,7 +3,8 @@ export type EditorChord =
   | 'showFootnotes'
   | 'basicChecks'
   | 'insertFootnote'
-  | 'insertCrossReference';
+  | 'insertCrossReference'
+  | 'toggleView';
 
 /** A keydown that spells an editor chord. */
 export type EditorChordMatch = {
@@ -20,6 +21,7 @@ export type EditorChordMatch = {
  *   uses Control rather than Command because Command+Shift+R is the macOS menu bar's force reload.
  * - Ctrl+T inserts a footnote and Ctrl+Shift+T a cross-reference. Ctrl rather than Command on macOS,
  *   like Find's Ctrl+F.
+ * - Ctrl+E toggles Standard view and Preview in Power; Control on macOS too.
  *
  * Alt is never part of a chord: AltGr reports as Ctrl+Alt on Windows/Linux and types `t` and `r`
  * characters on several European layouts. Meta never is either, since a Meta chord is the OS's or
@@ -54,6 +56,7 @@ function findChord(
   const key = event.key.toLowerCase();
   if (key === 'r') return event.shiftKey ? 'basicChecks' : undefined;
   if (key === 't') return event.shiftKey ? 'insertCrossReference' : 'insertFootnote';
+  if (key === 'e') return event.shiftKey ? undefined : 'toggleView';
   return undefined;
 }
 
@@ -79,7 +82,8 @@ const IS_BASIC_CHECKS_SHOWN: boolean = false;
  * Whether a matched chord should run now. Inserting needs an editable, focused main editor so a
  * keystroke in a read-only text or in the footnote or comment editor does nothing. Basic checks
  * runs only in Power, and only if its menu item exists (that is, while {@link IS_BASIC_CHECKS_SHOWN}
- * is true). Showing footnotes works in every state.
+ * is true). Showing footnotes works in every state. Toggling the view runs only in Power, where the
+ * view menu item exists.
  */
 export function shouldRunEditorChord(
   chord: EditorChord,
@@ -90,6 +94,8 @@ export function shouldRunEditorChord(
       return true;
     case 'basicChecks':
       return IS_BASIC_CHECKS_SHOWN && isPowerMode;
+    case 'toggleView':
+      return isPowerMode;
     case 'insertFootnote':
     case 'insertCrossReference':
       return !isReadOnly && isEditorFocused;
@@ -109,7 +115,10 @@ export type EditorChordEffects = {
   webViewId: string;
   /** Sends a PAPI command with the editor's web view id */
   sendCommand: (
-    command: 'platformScriptureEditor.toggleFootnotes' | 'platformScripture.openChecksSidePanel',
+    command:
+      | 'platformScriptureEditor.toggleFootnotes'
+      | 'platformScriptureEditor.changeView'
+      | 'platformScripture.openChecksSidePanel',
     webViewId: string,
   ) => void;
   /** Inserts a footnote or cross-reference at the selection */
@@ -117,8 +126,8 @@ export type EditorChordEffects = {
 };
 
 /**
- * Runs a matched chord that {@link shouldRunEditorChord} accepted. F7 and Basic checks send the same
- * commands the editor's top menu runs, so a chord and its menu item cannot drift apart.
+ * Runs a matched chord that {@link shouldRunEditorChord} accepted. F7, Ctrl+E and Basic checks send
+ * the same commands the editor's top menu runs, so a chord and its menu item cannot drift apart.
  */
 export function runEditorChord(
   chord: EditorChord,
@@ -130,6 +139,9 @@ export function runEditorChord(
       return;
     case 'basicChecks':
       sendCommand('platformScripture.openChecksSidePanel', webViewId);
+      return;
+    case 'toggleView':
+      sendCommand('platformScriptureEditor.changeView', webViewId);
       return;
     case 'insertFootnote':
       insertNote('insertFootnoteAtSelection');
