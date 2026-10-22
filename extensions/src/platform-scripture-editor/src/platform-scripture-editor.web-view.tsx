@@ -2882,16 +2882,19 @@ function PlatformScriptureEditor({
     /**
      * Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux). Read by BOTH listeners below:
      * the capture one claims it while a palette session is open, the bubble one acts on it
-     * otherwise.
+     * otherwise. A key an input method (IME) is still composing with is never the chord, as for the
+     * other editor chords (see `matchEditorChord`).
      */
-    const isInsertCommentChord = (event: KeyboardEvent) =>
-      isMac
+    const isInsertCommentChord = (event: KeyboardEvent) => {
+      if (event.isComposing || event.keyCode === 229) return false;
+      return isMac
         ? event.metaKey &&
-          event.altKey &&
-          // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
-          (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
+            event.altKey &&
+            // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
+            (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
         : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
-          (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
+            (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
+    };
 
     // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
     // root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
