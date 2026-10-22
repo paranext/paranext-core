@@ -37,17 +37,6 @@ describe('buildInternetSettingsWebViewState', () => {
     expect(result?.requestDeveloperSettings).toBe(false);
   });
 
-  test('does not unlock on a non-boolean value such as a notification id', () => {
-    // A notification click passes its id string as the command's first argument; the cast puts
-    // that runtime value in the slot the type says is a boolean.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const notificationId = 'platform.internetBlocked' as unknown as boolean;
-    const result = buildInternetSettingsWebViewState(savedInternetSettings({}), {
-      requestDeveloperSettings: notificationId,
-    });
-    expect(result?.requestDeveloperSettings).toBe(false);
-  });
-
   test('preserves other existing state fields', () => {
     const result = buildInternetSettingsWebViewState(
       savedInternetSettings({ internetSettingsSaveState: 'HasSaved' }),
@@ -65,23 +54,16 @@ describe('computeCanEditServer', () => {
   };
   const qa: InternetSettings = { ...production, selectedServer: 'QualityAssurance' };
 
-  test('false when on Production and Shift was not held', () => {
+  test('false when on Production and the server-selection request is false', () => {
     expect(computeCanEditServer(false, production)).toBe(false);
   });
-  test('true when Shift was held, regardless of server', () => {
+  test('true when the server-selection request is true, regardless of server', () => {
     expect(computeCanEditServer(true, production)).toBe(true);
   });
-  test('true when already off Production, even without Shift', () => {
+  test('true when already off Production, even without a server-selection request', () => {
     expect(computeCanEditServer(false, qa)).toBe(true);
   });
-  test('false when settings are a PlatformError and Shift was not held — fail toward locked', () => {
+  test('false when settings are a PlatformError and the request is false — fail toward locked', () => {
     expect(computeCanEditServer(false, newPlatformError('boom'))).toBe(false);
-  });
-  test('false on Production when the request slot holds a non-boolean such as a notification id', () => {
-    // Web view state is not type-checked at runtime, so a stray string can reach this slot; the
-    // cast reproduces that.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const notificationId = 'platform.internetBlocked' as unknown as boolean;
-    expect(computeCanEditServer(notificationId, production)).toBe(false);
   });
 });

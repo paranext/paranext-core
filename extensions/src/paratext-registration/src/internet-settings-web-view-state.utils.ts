@@ -5,18 +5,16 @@ import type { InternetSettingsWebViewOptions } from './internet-settings.web-vie
 
 /**
  * Build the Internet Settings WebView's persisted `state` from its saved definition and the options
- * `showInternetSettings` supplies. Extracted from `InternetSettingsWebViewProvider.getWebView` so
- * this option→state mapping is unit-testable without importing the WebView's `?inline` content.
+ * `showInternetSettings`/`showInternetSettingsWithServerSelection` supply. Kept outside
+ * `InternetSettingsWebViewProvider.getWebView` so this option→state mapping is unit-testable
+ * without importing the WebView's `?inline` content.
  *
- * `requestDeveloperSettings` is scrubbed unconditionally when the caller supplies nothing, rather
- * than falling back to the saved value — same treatment as `shouldFocusSearch` in the Find provider
- * (`find-web-view-state.utils.ts`). It records whether Shift was held at the moment the "Internet &
- * connectivity" row was clicked, a one-shot gesture rather than durable state; carrying a saved
- * `true` over would re-reveal the server-selection control on a restored layout that nobody asked
- * to unlock this session.
- *
- * Only a literal `true` unlocks: a caller can reach this with a non-boolean in that slot (a
- * notification click passes its notification id string), and that must not read as a request.
+ * `requestDeveloperSettings` is scrubbed unconditionally to `false` when the caller supplies
+ * nothing, rather than falling back to the saved value — same treatment as `shouldFocusSearch` in
+ * the Find provider (`find-web-view-state.utils.ts`). It records whether the dialog was opened via
+ * `showInternetSettingsWithServerSelection`, a one-shot gesture rather than durable state; carrying
+ * a saved `true` over would re-reveal the server-selection control on a restored layout that nobody
+ * asked to unlock this session.
  */
 export function buildInternetSettingsWebViewState(
   savedWebView: SavedWebViewDefinition,
@@ -24,25 +22,24 @@ export function buildInternetSettingsWebViewState(
 ): WebViewDefinition['state'] {
   return {
     ...savedWebView.state,
-    requestDeveloperSettings: options.requestDeveloperSettings === true,
+    requestDeveloperSettings: options.requestDeveloperSettings ?? false,
   };
 }
 
 /**
  * Whether the Internet Settings dialog should render the (otherwise hidden) server-selection
- * control. Combines the one-shot Shift-click request with a live read of whether the persisted
- * server is already something other than Production — the friction only guards leaving Production,
- * so a user already off it (or one who held Shift) can always reach the control. A failed
- * `internetSettings` read (a `PlatformError`) fails toward locked rather than guessing the control
- * should show, and so does any `requestDeveloperSettings` other than a literal `true` — web view
- * state is not type-checked at runtime.
+ * control. Combines the one-shot `showInternetSettingsWithServerSelection` request with a live read
+ * of whether the persisted server is already something other than Production — the friction only
+ * guards leaving Production, so a user already off it (or one who opened via that command) can
+ * always reach the control. A failed `internetSettings` read (a `PlatformError`) fails toward
+ * locked rather than guessing the control should show.
  */
 export function computeCanEditServer(
   requestDeveloperSettings: boolean,
   internetSettings: InternetSettings | PlatformError,
 ): boolean {
   return (
-    requestDeveloperSettings === true ||
+    requestDeveloperSettings ||
     (!isPlatformError(internetSettings) && internetSettings.selectedServer !== 'Production')
   );
 }

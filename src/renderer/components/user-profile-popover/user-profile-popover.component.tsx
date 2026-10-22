@@ -228,12 +228,17 @@ export function UserProfilePopover() {
 
   // The popover does not need to know the current server to decide whether the dialog should allow
   // changing it — that is computed live, inside the dialog, from the server the data provider
-  // reports when it opens. This only forwards whether Shift was held, a one-shot request to reveal
-  // the (otherwise hidden) server-selection control.
+  // reports when it opens. This only forwards whether Shift was held, choosing between the two
+  // commands: one that unlocks the (otherwise hidden) server-selection control for this open, and
+  // the plain one that doesn't.
   const handleNetworkSettings = async (requestDeveloperSettings: boolean) => {
     setIsOpen(false);
     try {
-      await sendCommand('paratextRegistration.showInternetSettings', requestDeveloperSettings);
+      await sendCommand(
+        requestDeveloperSettings
+          ? 'paratextRegistration.showInternetSettingsWithServerSelection'
+          : 'paratextRegistration.showInternetSettings',
+      );
     } catch (e: unknown) {
       logger.warn(`UserProfilePopover: failed to open internet settings: ${getErrorMessage(e)}`);
     }

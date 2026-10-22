@@ -15,7 +15,7 @@ const titleKey = '%internetSettings_webView_title%';
 const tooltipKey = '%internetSettings_webView_tooltip%';
 
 export interface InternetSettingsWebViewOptions extends OpenWebViewOptions {
-  /** One-shot: was Shift held when the opener clicked/activated "Internet & connectivity"? */
+  /** One-shot: was the dialog opened via `showInternetSettingsWithServerSelection`? */
   requestDeveloperSettings?: boolean;
 }
 

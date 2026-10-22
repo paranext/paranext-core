@@ -72,7 +72,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     INTERNET_SETTINGS_DATA_PROVIDER,
   ).InternetSettings(undefined, DEFAULT_INTERNET_SETTINGS);
 
-  // One-shot: whether the "Internet & connectivity" row was opened with Shift held. See
+  // One-shot: whether the dialog was opened via `showInternetSettingsWithServerSelection`. See
   // `computeCanEditServer`.
   const [requestDeveloperSettings] = useWebViewState<boolean>('requestDeveloperSettings', false);
 

@@ -42,6 +42,7 @@ function withRegistration(
         // Answer them so clicking around a story stays inert instead of throwing.
         case 'paratextRegistration.showParatextRegistration':
         case 'paratextRegistration.showInternetSettings':
+        case 'paratextRegistration.showInternetSettingsWithServerSelection':
           return undefined;
         default:
           // The throw alone is invisible here: the resolver turns a rejected probe into

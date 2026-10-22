@@ -333,30 +333,28 @@ describe('UserProfilePopover action rows', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  test('"Network settings" plain click sends the command with requestDeveloperSettings=false and closes the popover', async () => {
+  test('"Network settings" plain click sends the plain command and closes the popover', async () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const button = await screen.findByTestId('user-profile-action-network');
     fireEvent.click(button);
     expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
       'paratextRegistration.showInternetSettings',
-      false,
     );
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  test('"Network settings" Shift+click sends the command with requestDeveloperSettings=true', async () => {
+  test('"Network settings" Shift+click sends the server-selection command', async () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const button = await screen.findByTestId('user-profile-action-network');
     fireEvent.click(button, { shiftKey: true });
     expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
-      'paratextRegistration.showInternetSettings',
-      true,
+      'paratextRegistration.showInternetSettingsWithServerSelection',
     );
   });
 
-  test('Shift+Enter on the focused "Network settings" row cancels the keydown and sends the command with requestDeveloperSettings=true exactly once', async () => {
+  test('Shift+Enter on the focused "Network settings" row cancels the keydown and sends the server-selection command exactly once', async () => {
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const button = await screen.findByTestId('user-profile-action-network');
@@ -376,8 +374,12 @@ describe('UserProfilePopover action rows', () => {
     // a separate `getParatextRegistrationData` command.
     const internetSettingsCalls = vi
       .mocked(sendCommand)
-      .mock.calls.filter(([command]) => command === 'paratextRegistration.showInternetSettings');
-    expect(internetSettingsCalls).toEqual([['paratextRegistration.showInternetSettings', true]]);
+      .mock.calls.filter(
+        ([command]) => command === 'paratextRegistration.showInternetSettingsWithServerSelection',
+      );
+    expect(internetSettingsCalls).toEqual([
+      ['paratextRegistration.showInternetSettingsWithServerSelection'],
+    ]);
   });
 });
 
@@ -412,7 +414,7 @@ describe('UserProfilePopover server badge', () => {
     },
   );
 
-  test('plain click on the badge sends the command with requestDeveloperSettings=false, same as the row', async () => {
+  test('plain click on the badge sends the plain command, same as the row', async () => {
     setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
@@ -420,23 +422,21 @@ describe('UserProfilePopover server badge', () => {
     fireEvent.click(badge);
     expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
       'paratextRegistration.showInternetSettings',
-      false,
     );
   });
 
-  test('Shift+click on the badge sends the command with requestDeveloperSettings=true, same as the row', async () => {
+  test('Shift+click on the badge sends the server-selection command, same as the row', async () => {
     setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const badge = await screen.findByTestId('user-profile-server-badge');
     fireEvent.click(badge, { shiftKey: true });
     expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
-      'paratextRegistration.showInternetSettings',
-      true,
+      'paratextRegistration.showInternetSettingsWithServerSelection',
     );
   });
 
-  test('Enter on the focused badge sends the command with requestDeveloperSettings=false', async () => {
+  test('Enter on the focused badge sends the plain command', async () => {
     setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
@@ -444,19 +444,17 @@ describe('UserProfilePopover server badge', () => {
     fireEvent.keyDown(badge, { key: 'Enter' });
     expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
       'paratextRegistration.showInternetSettings',
-      false,
     );
   });
 
-  test('Shift+Enter on the focused badge sends the command with requestDeveloperSettings=true', async () => {
+  test('Shift+Enter on the focused badge sends the server-selection command', async () => {
     setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
     render(<UserProfilePopover />);
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     const badge = await screen.findByTestId('user-profile-server-badge');
     fireEvent.keyDown(badge, { key: 'Enter', shiftKey: true });
     expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
-      'paratextRegistration.showInternetSettings',
-      true,
+      'paratextRegistration.showInternetSettingsWithServerSelection',
     );
   });
 
