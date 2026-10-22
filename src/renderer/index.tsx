@@ -3,11 +3,8 @@
 import '@renderer/global-this-web-view.model';
 import '@renderer/global-this.model';
 
-import { App } from '@renderer/app.component';
-import {
-  hasRendererCrashed,
-  RendererErrorBoundary,
-} from '@renderer/components/renderer-error-boundary.component';
+import { RendererRoot } from '@renderer/renderer-root.component';
+import { cleanupWebViewStateOnUnload } from '@renderer/renderer-teardown.util';
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
 import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
@@ -40,7 +37,6 @@ import {
   initializeContentZoomService,
   resetContentZoom,
 } from '@renderer/services/web-view-content-zoom.service';
-import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
 import {
   getAllOpenWebViewDefinitionsSync,
   getSavedWebViewDefinitionSync,
@@ -223,11 +219,7 @@ if (!container) {
 }
 
 const root = createRoot(container);
-root.render(
-  <RendererErrorBoundary>
-    <App />
-  </RendererErrorBoundary>,
-);
+root.render(<RendererRoot />);
 markStartup('root-render');
 
 // #endregion
@@ -256,12 +248,6 @@ applyThemeSafe(getCurrentThemeSync(), 'first load');
 // #region teardown
 
 // This doesn't run if the renderer has an uncaught exception (which is a good thing)
-window.addEventListener('beforeunload', () => {
-  // `cleanupOldWebViewState` deletes the saved state of every web view it did not see load, so it
-  // is only correct once they all have — which a crashed tree never reached. See
-  // `hasRendererCrashed` for why the crash screen's reload button makes this path reachable.
-  if (hasRendererCrashed()) return;
-  cleanupOldWebViewState();
-});
+window.addEventListener('beforeunload', cleanupWebViewStateOnUnload);
 
 // #endregion
