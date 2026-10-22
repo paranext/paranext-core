@@ -50,16 +50,18 @@ export const SYNC_ACTIVITY_SEED_RETRY_DELAY_MS = 3 * 1000;
 
 /**
  * How many times to retry the sync activity seed. The realistic failure is a cold-start race with
- * the .NET process registering the command, which resolves in seconds; past this, the pushed
- * `onSyncActivityChanged` event is the only way the state becomes known.
+ * the .NET process registering the command, which resolves in seconds; past this, the state becomes
+ * known from the pushed `onSyncActivityChanged` event or the slower recheck
+ * (`SYNC_ACTIVITY_RECHECK_INTERVAL_MS`).
  */
 const MAX_SYNC_ACTIVITY_SEED_RETRIES = 10;
 
 /**
- * How often to re-read the sync activity while a sync is running. Both hops that forward
- * `onSyncActivityChanged` are fire-and-forget, so a lost closing event would otherwise leave the
- * answer `unknown` until the next sync. Same interval as core's `sync-activity-service.ts`
- * watchdog.
+ * How often to re-read the sync activity while it is not known to be idle: a sync is running, or no
+ * read has succeeded yet. Both hops that forward `onSyncActivityChanged` are fire-and-forget, so a
+ * lost closing event would otherwise leave the answer `unknown` until the next sync, and an idle
+ * app sends no event to recover a seed that ran out of retries or got a malformed reply. Same
+ * interval as core's `sync-activity-service.ts` watchdog.
  */
 export const SYNC_ACTIVITY_RECHECK_INTERVAL_MS = 30 * 1000;
 
@@ -238,7 +240,7 @@ export function useProjectPresence({ enabled }: { enabled: boolean }): ProjectPr
   }, [enabled, readSyncActivity]);
 
   useEffect(() => {
-    if (!enabled || isSyncing !== true) return undefined;
+    if (!enabled || isSyncing === false) return undefined;
     let isCurrent = true;
     const recheckTimer = setInterval(() => {
       readSyncActivity(() => isCurrent).catch((e) =>

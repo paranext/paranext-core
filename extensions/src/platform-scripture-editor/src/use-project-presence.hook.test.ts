@@ -308,6 +308,23 @@ describe('useProjectPresence', () => {
     expect(result.current).toBe('none');
   });
 
+  it('keeps re-reading the sync activity after the seed gives up, until it is known', async () => {
+    vi.useFakeTimers();
+    getMetadataForAllProjects.mockResolvedValue([SAMPLE_WEB]);
+    // The first read plus every seed retry
+    for (let i = 0; i < 11; i += 1) sendCommand.mockRejectedValueOnce(new Error('not registered'));
+    const { result } = renderHook(() => useProjectPresence({ enabled: true }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_ACTIVITY_SEED_RETRY_DELAY_MS * 10);
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_ACTIVITY_RECHECK_INTERVAL_MS);
+    });
+
+    expect(result.current).toBe('none');
+  });
+
   it('stops re-reading the sync activity once the sync has ended', async () => {
     vi.useFakeTimers();
     getMetadataForAllProjects.mockResolvedValue([SAMPLE_WEB]);
