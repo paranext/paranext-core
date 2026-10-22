@@ -257,8 +257,8 @@ describe('PlatformMenubar icons', () => {
 /**
  * Hiding menu items for an interface mode prunes items only — the groups and columns they belonged
  * to survive, so a group can end up with nothing in it. These fixtures place an emptied group in
- * each of the three positions a column can put one, since a separator must only ever sit between two
- * groups that still have items.
+ * each of the three positions a column can put one, since a separator must only ever sit between
+ * two groups that still have items.
  */
 function menuWithGroupsAndItems(
   groupKeys: string[],

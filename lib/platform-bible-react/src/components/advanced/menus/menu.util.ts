@@ -143,8 +143,8 @@ export function getMenuSectionsWithItems(menuData: Localized<MultiColumnMenu>): 
 }
 
 /**
- * Whether a menu list reserves a leading icon slot, so every label in the list lines up. The slot is
- * 16px, the size of a named icon; an image icon is capped to it.
+ * Whether a menu list reserves a leading icon slot, so every label in the list lines up. The slot
+ * is 16px, the size of a named icon; an image icon is capped to it.
  */
 export type LeadingIconSlot = 'none' | 'icon';
 
