@@ -4844,55 +4844,6 @@ export type NameablePhysicalKey = "Backspace" | "Delete";
  * use this without an extension having to declare its own copy of the string.
  */
 export declare function getLocalizeKeyForPhysicalKey(key: NameablePhysicalKey): LocalizeKey;
-/**
- * Shown instead of a project's `unsupportedReason` when that reason could not be read or has no
- * translation, so the user never sees a raw key or message.
- */
-export declare const PROJECT_OPEN_BLOCKED_FALLBACK_KEY: LocalizeKey;
-/** Shown when not even {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} can be localized. */
-export declare const PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE = "This project can't be opened.";
-/**
- * A project's `unsupportedReason` as a key that can be localized. The field is always a localize
- * key; anything else is replaced by {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} rather than shown
- * raw.
- *
- * @param unsupportedReason The project's `unsupportedReason`
- * @returns `unsupportedReason` if it is a localize key, otherwise the generic reason's key
- */
-export declare function toProjectOpenBlockedReasonKey(unsupportedReason: string): LocalizeKey;
-/**
- * The localize key explaining why the project was refused, when `error` is paranext-core's C#
- * refusing a request on a project that cannot be opened (the message ends with the
- * `(PROJECT_OPEN_BLOCKED)` sentinel).
- *
- * @param error Error, thrown value, or message string to inspect
- * @returns The reason's localize key, {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} if the refusal names
- *   no readable reason, or `undefined` if `error` is not such a refusal
- */
-export declare function getProjectOpenBlockedReasonKey(error: unknown): LocalizeKey | undefined;
-/** Inputs to {@link computeEffectiveStructureProtection}. */
-export type EffectiveStructureProtectionInputs = {
-	/** Global `platform.interfaceMode` value; the feature applies only in `'simple'`. */
-	interfaceMode: string | undefined;
-	/** Project-level `platformScripture.structureProtected` admin setting. */
-	isAdminProtected: boolean;
-	/** Whether the current user can toggle the admin/project lock. */
-	canAdminToggle: boolean;
-	/** The user's personal preference; `undefined` when never set. */
-	userSetting: boolean | undefined;
-};
-/**
- * Computes whether structure protection (a.k.a. structure locking) is effectively active.
- *
- * This is the single source of truth for the effective-protection algebra, shared across extensions
- * that cannot import each other directly: the `platform-scripture-editor` structure-protection hook
- * and the `platform-scripture` Scripture Finder PDP both call it.
- *
- * The feature applies in simple interface mode only; in power mode it is always inactive. Within
- * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise
- * the user's own preference governs (defaulting to on when never set).
- */
-export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**
@@ -5056,6 +5007,74 @@ export declare const localizedStringsDocumentSchema: {
 		};
 	};
 };
+/**
+ * Shown instead of a project's `unsupportedReason` when that reason could not be read or has no
+ * translation, so the user never sees a raw key or message.
+ */
+export declare const PROJECT_OPEN_BLOCKED_FALLBACK_KEY: "%project_unsupported_generic%";
+/** Shown when not even {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} can be localized. */
+export declare const PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE = "This project can't be opened.";
+/**
+ * A project's `unsupportedReason` as a key that can be localized. The field is always a localize
+ * key; anything else is replaced by {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} rather than shown
+ * raw.
+ *
+ * @param unsupportedReason The project's `unsupportedReason`
+ * @returns `unsupportedReason` if it is a localize key, otherwise the generic reason's key
+ */
+export declare function toProjectOpenBlockedReasonKey(unsupportedReason: string): LocalizeKey;
+/**
+ * The localize key explaining why the project was refused, when `error` is paranext-core's C#
+ * refusing a request on a project that cannot be opened (the message ends with the
+ * `(PROJECT_OPEN_BLOCKED)` sentinel).
+ *
+ * @param error Error, thrown value, or message string to inspect
+ * @returns The reason's localize key, {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} if the refusal names
+ *   no readable reason, or `undefined` if `error` is not such a refusal
+ */
+export declare function getProjectOpenBlockedReasonKey(error: unknown): LocalizeKey | undefined;
+/** What {@link notifyProjectOpenBlocked} needs from PAPI, passed in so it runs in any process. */
+export type NotifyProjectOpenBlockedDependencies = {
+	getLocalizedStrings: (localizeKeys: LocalizeKey[]) => Promise<LanguageStrings>;
+	sendNotification: (notification: {
+		message: LocalizeKey;
+		severity: "warning";
+	}) => Promise<unknown>;
+	logWarning: (message: string) => void;
+};
+/**
+ * Tells the user why a project was refused, as a warning notification (the notification service
+ * localizes the key). A key with no translation is replaced by the generic reason, so the
+ * notification never shows a raw key. Self-catching, so fire-and-forget callers never leak a
+ * rejection.
+ *
+ * @param reasonKey Localize key explaining why the project was refused
+ * @param dependencies The PAPI services to localize with, notify through, and log to
+ */
+export declare function notifyProjectOpenBlocked(reasonKey: LocalizeKey, { getLocalizedStrings, sendNotification, logWarning }: NotifyProjectOpenBlockedDependencies): Promise<void>;
+/** Inputs to {@link computeEffectiveStructureProtection}. */
+export type EffectiveStructureProtectionInputs = {
+	/** Global `platform.interfaceMode` value; the feature applies only in `'simple'`. */
+	interfaceMode: string | undefined;
+	/** Project-level `platformScripture.structureProtected` admin setting. */
+	isAdminProtected: boolean;
+	/** Whether the current user can toggle the admin/project lock. */
+	canAdminToggle: boolean;
+	/** The user's personal preference; `undefined` when never set. */
+	userSetting: boolean | undefined;
+};
+/**
+ * Computes whether structure protection (a.k.a. structure locking) is effectively active.
+ *
+ * This is the single source of truth for the effective-protection algebra, shared across extensions
+ * that cannot import each other directly: the `platform-scripture-editor` structure-protection hook
+ * and the `platform-scripture` Scripture Finder PDP both call it.
+ *
+ * The feature applies in simple interface mode only; in power mode it is always inactive. Within
+ * simple mode, an admin project lock that the user cannot toggle forces protection on; otherwise
+ * the user's own preference governs (defaulting to on when never set).
+ */
+export declare function computeEffectiveStructureProtection({ interfaceMode, isAdminProtected, canAdminToggle, userSetting, }: EffectiveStructureProtectionInputs): boolean;
 /**
  * One selectable item in a command/marker palette. The dependency-free shared shape consumed by
  * every layer that handles palette items — the renderer overlay service's `CommandPaletteItem`

@@ -73,6 +73,7 @@ import {
   type LanguageStrings,
   LocalizeKey,
   normalizeProjectId,
+  PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
   PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE,
 } from 'platform-bible-utils';
 import { CSSProperties, useCallback, useMemo } from 'react';
@@ -148,7 +149,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%projectPicker_search_placeholder%',
   '%projectPicker_no_results%',
   '%projectPicker_readOnly_label%',
-  '%project_unsupported_generic%',
+  PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
 ];
 
 /**
@@ -176,7 +177,7 @@ const PICKER_STRING_FALLBACKS = {
   '%projectPicker_toolbar_trigger_label_shortNameOnly%': 'Select project, {shortName}',
   '%projectPicker_toolbar_trigger_label_empty%': 'Select project, no projects on this computer',
   '%projectPicker_toolbar_trigger_label_error%': 'Select project, {errorMessage}',
-  '%project_unsupported_generic%': PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE,
+  [PROJECT_OPEN_BLOCKED_FALLBACK_KEY]: PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE,
 } as const;
 
 type PickerStringKey = keyof typeof PICKER_STRING_FALLBACKS;
@@ -214,7 +215,7 @@ function resolvePickerStrings(localizedStrings: LanguageStrings): Record<PickerS
     '%projectPicker_toolbar_trigger_label_error%': resolve(
       '%projectPicker_toolbar_trigger_label_error%',
     ),
-    '%project_unsupported_generic%': resolve('%project_unsupported_generic%'),
+    [PROJECT_OPEN_BLOCKED_FALLBACK_KEY]: resolve(PROJECT_OPEN_BLOCKED_FALLBACK_KEY),
   };
 }
 
@@ -341,12 +342,12 @@ function ToolbarProjectSelector({
   const getDisabledReason = useCallback(
     (unsupportedReason: string | undefined) => {
       if (!unsupportedReason) return undefined;
-      if (!isLocalizeKey(unsupportedReason)) return strings['%project_unsupported_generic%'];
+      if (!isLocalizeKey(unsupportedReason)) return strings[PROJECT_OPEN_BLOCKED_FALLBACK_KEY];
       if (isUnsupportedReasonLoading) return undefined;
       const localizedReason = unsupportedReasonStrings[unsupportedReason];
       return localizedReason && !isLocalizeKey(localizedReason)
         ? localizedReason
-        : strings['%project_unsupported_generic%'];
+        : strings[PROJECT_OPEN_BLOCKED_FALLBACK_KEY];
     },
     [strings, unsupportedReasonStrings, isUnsupportedReasonLoading],
   );

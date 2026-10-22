@@ -28,6 +28,8 @@ import {
   getProjectOpenBlockedReasonKey,
   isPlatformError,
   LegacyCommentThread,
+  notifyProjectOpenBlocked,
+  NotifyProjectOpenBlockedDependencies,
   serialize,
 } from 'platform-bible-utils';
 import { VerseRef } from '@sillsdev/scripture';
@@ -74,11 +76,16 @@ import { useBcvSyncScroll } from './use-bcv-sync-scroll.hook';
 import { useCommentDrafts } from './use-comment-drafts.hook';
 import { useFrozenPresetThreadIds } from './use-frozen-preset-thread-ids.hook';
 import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel.utils';
-import { notifyProjectOpenBlocked } from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { gateCommentWriteCapabilities } from './comment-list-capability-gating.util';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
+
+const PROJECT_OPEN_BLOCKED_NOTIFY_DEPENDENCIES: NotifyProjectOpenBlockedDependencies = {
+  getLocalizedStrings: (localizeKeys) => papi.localization.getLocalizedStrings({ localizeKeys }),
+  sendNotification: (notification) => papi.notifications.send(notification),
+  logWarning: (message) => logger.warn(message),
+};
 
 /**
  * The selection to seed a freshly mounted view with when it opened plain (no mount-time override):
@@ -968,7 +975,10 @@ global.webViewComponent = function CommentListWebView({
             notifySyncEditBlocked();
           } else if (openBlockedReasonKey) {
             // Resolving writes verse text, which a project that cannot be opened refuses.
-            notifyProjectOpenBlocked(openBlockedReasonKey);
+            notifyProjectOpenBlocked(
+              openBlockedReasonKey,
+              PROJECT_OPEN_BLOCKED_NOTIFY_DEPENDENCIES,
+            );
           } else {
             logger.error(`Failed to resolve conflict thread ${threadId}:`, error);
             sonner.error(

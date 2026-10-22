@@ -42,7 +42,7 @@ import {
 } from './checks/checks-side-panel/checks-side-panel.component';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { useProjectRecencyMap } from './hooks/use-project-recency-map';
-import { getProjectOpenBlockedReasonKey } from './project-open-blocked.util';
+import { getProjectOpenBlockedReasonKeyFromResult } from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { useProjectOpenBlockedMessage } from './hooks/use-project-open-blocked-message';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
@@ -727,7 +727,9 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [checkResults],
   );
 
-  const openBlockedReasonKey = getProjectOpenBlockedReasonKey(activeJobStatusReport.error);
+  const openBlockedReasonKey = getProjectOpenBlockedReasonKeyFromResult(
+    activeJobStatusReport.error,
+  );
   const openBlockedMessage = useProjectOpenBlockedMessage(openBlockedReasonKey);
   const displayedJobStatusReport = useMemo(
     () =>

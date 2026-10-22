@@ -9581,9 +9581,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     server-only SBA shows no reason until it is downloaded. Studio's Compare-versions revision reads
     (`CompareVersionsMethods.GetBaseVersionText` and `GetTextForRevision`, which Studio's core patch
     adds and its `ParatextProjectSendReceiveService` calls on the `ScrText` directly) bypass the C#
-    guards,
-    and the compare view in `paratext-bible-internal-extensions` does not yet turn the sentinel into
-    the reason. All three are for the Studio and internal-extensions PRs.
+    guards, and the compare view in `paratext-bible-internal-extensions` does not yet turn the
+    sentinel into the reason. All three are for the Studio and internal-extensions PRs.
   - **Known gaps:**
     - A command invoked with an unsupported project id opens the placeholder, and in Simple mode
       Column 3 follows it until the user switches projects.

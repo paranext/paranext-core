@@ -1,5 +1,9 @@
+import { vi } from 'vitest';
+import { LanguageStrings } from './extension-contributions/localized-strings.model';
+import { LocalizeKey } from './extension-contributions/menus.model';
 import {
   getProjectOpenBlockedReasonKey,
+  notifyProjectOpenBlocked,
   PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
   toProjectOpenBlockedReasonKey,
 } from './project-open-blocked-util';
@@ -43,5 +47,70 @@ describe('toProjectOpenBlockedReasonKey', () => {
 
   it('replaces anything that is not a localize key with the generic reason', () => {
     expect(toProjectOpenBlockedReasonKey('not a key')).toBe(PROJECT_OPEN_BLOCKED_FALLBACK_KEY);
+  });
+});
+
+/** Localizes `REASON_KEY`, echoing any other key the way an unregistered key comes back. */
+async function localizeReasonKey(localizeKeys: LocalizeKey[]): Promise<LanguageStrings> {
+  return Object.fromEntries(
+    localizeKeys.map((key) => [key, key === REASON_KEY ? 'Not supported yet.' : key]),
+  );
+}
+
+describe('notifyProjectOpenBlocked', () => {
+  function makeDependencies() {
+    return {
+      getLocalizedStrings: vi.fn(localizeReasonKey),
+      sendNotification: vi.fn(async () => undefined),
+      logWarning: vi.fn(),
+    };
+  }
+
+  it('sends the reason key as a warning, for the notification service to localize', async () => {
+    const dependencies = makeDependencies();
+
+    await notifyProjectOpenBlocked(REASON_KEY, dependencies);
+
+    expect(dependencies.sendNotification).toHaveBeenCalledWith({
+      message: REASON_KEY,
+      severity: 'warning',
+    });
+  });
+
+  it('sends the generic reason instead of a key with no translation', async () => {
+    const dependencies = makeDependencies();
+
+    await notifyProjectOpenBlocked('%project_unsupported_unregistered%', dependencies);
+
+    expect(dependencies.sendNotification).toHaveBeenCalledWith({
+      message: PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
+      severity: 'warning',
+    });
+  });
+
+  it('sends the generic reason when the reason cannot be localized', async () => {
+    const dependencies = makeDependencies();
+    dependencies.getLocalizedStrings.mockRejectedValue(new Error('localization unavailable'));
+
+    await notifyProjectOpenBlocked(REASON_KEY, dependencies);
+
+    expect(dependencies.sendNotification).toHaveBeenCalledWith({
+      message: PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
+      severity: 'warning',
+    });
+    expect(dependencies.logWarning).toHaveBeenCalledWith(
+      expect.stringContaining('localization unavailable'),
+    );
+  });
+
+  it('swallows and logs a rejected send so fire-and-forget callers cannot leak a rejection', async () => {
+    const dependencies = makeDependencies();
+    dependencies.sendNotification.mockRejectedValue(new Error('notification service unavailable'));
+
+    await expect(notifyProjectOpenBlocked(REASON_KEY, dependencies)).resolves.toBeUndefined();
+
+    expect(dependencies.logWarning).toHaveBeenCalledWith(
+      expect.stringContaining('notification service unavailable'),
+    );
   });
 });

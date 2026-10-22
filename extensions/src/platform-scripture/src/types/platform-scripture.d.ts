@@ -3246,7 +3246,8 @@ declare module 'papi-shared-types' {
      * @returns Id of the newly opened characters inventory web view, or `undefined` if no web view
      *   id was provided, the web view has no project, or the project cannot be opened (see
      *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
-     *   in those cases.
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openCharactersInventory': (
       webViewId?: string | undefined,
@@ -3261,7 +3262,8 @@ declare module 'papi-shared-types' {
      * @returns Id of the newly opened repeated-words inventory web view, or `undefined` if no web
      *   view id was provided, the web view has no project, or the project cannot be opened (see
      *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
-     *   in those cases.
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openRepeatedWordsInventory': (
       webViewId?: string | undefined,
@@ -3276,7 +3278,8 @@ declare module 'papi-shared-types' {
      * @returns Id of the newly opened markers inventory web view, or `undefined` if no web view id
      *   was provided, the web view has no project, or the project cannot be opened (see
      *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
-     *   in those cases.
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openMarkersInventory': (
       webViewId?: string | undefined,
@@ -3291,7 +3294,8 @@ declare module 'papi-shared-types' {
      * @returns Id of the newly opened punctuation inventory web view, or `undefined` if no web view
      *   id was provided, the web view has no project, or the project cannot be opened (see
      *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
-     *   in those cases.
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openPunctuationInventory': (
       webViewId?: string | undefined,
@@ -3314,7 +3318,8 @@ declare module 'papi-shared-types' {
      * @returns Id of the opened, re-pointed, or fronted checks side panel web view, or `undefined`
      *   if no editor web view id was provided, the web view has no project, or the project cannot
      *   be opened (see `ProjectMetadata.unsupportedReason`), in which case the user is told why.
-     *   Nothing is opened in those cases.
+     *   Nothing is opened in those cases. If the project's metadata lookup fails or takes over 1.5
+     *   seconds, the tool opens anyway and the backend refuses the project's text.
      */
     'platformScripture.openChecksSidePanel': (
       editorWebViewId?: string | undefined,
@@ -3410,7 +3415,9 @@ declare module 'papi-shared-types' {
      * @returns Id of the opened markers checklist web view, or `undefined` if no web view id was
      *   provided, the web view has no project, or the project cannot be opened (see
      *   `ProjectMetadata.unsupportedReason`), in which case the user is told why. Nothing is opened
-     *   in those cases. Also `undefined` if the provider did not create one.
+     *   in those cases. If the project's metadata lookup fails or takes over 1.5 seconds, the tool
+     *   opens anyway and the backend refuses the project's text. Also `undefined` if the provider
+     *   did not create one.
      * @experimental
      */
     'platformScripture.openMarkersChecklist': (
@@ -3442,7 +3449,9 @@ declare module 'papi-shared-types' {
      *   the calling editor's current book pre-selected, instead of the default view.
      * @returns Id of the Manage Books web view — the existing one if reused, or a newly opened one
      *   — or `undefined` if the project cannot be opened (see `ProjectMetadata.unsupportedReason`;
-     *   the user is told why and nothing is opened) or the provider did not create one.
+     *   the user is told why and nothing is opened) or the provider did not create one. If the
+     *   project's metadata lookup fails or takes over 1.5 seconds, the tool opens anyway and the
+     *   backend refuses the project's text.
      * @experimental
      */
     'platformScripture.openManageBooks': (

@@ -46,7 +46,7 @@ import {
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { projectNamesFromMetadata } from './project-names.util';
-import { getProjectOpenBlockedReasonKey } from './project-open-blocked.util';
+import { getProjectOpenBlockedReasonKeyFromResult } from './project-open-blocked.util';
 import { useProjectOpenBlockedMessage } from './hooks/use-project-open-blocked-message';
 import { Find, FIND_LOCALIZED_STRING_KEYS, FindProject } from './find/find.component';
 import { FIND_FOCUS_SEARCH_EVENT } from './find.model';
@@ -639,7 +639,7 @@ global.webViewComponent = function FindWebView({
 
   // Why the backend refused a search of a project that cannot be opened, shown in place of the raw
   // error.
-  const openBlockedReasonKey = getProjectOpenBlockedReasonKey(searchError);
+  const openBlockedReasonKey = getProjectOpenBlockedReasonKeyFromResult(searchError);
   const openBlockedMessage = useProjectOpenBlockedMessage(openBlockedReasonKey);
 
   const isMountedRef = useRef(false);

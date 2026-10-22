@@ -23,7 +23,7 @@ import {
   REPEATED_WORDS_INVENTORY_STRING_KEYS,
 } from './checks/inventories/repeated-words-inventory.component';
 import { useInventory } from './hooks/use-inventory';
-import { getProjectOpenBlockedReasonKey } from './project-open-blocked.util';
+import { getProjectOpenBlockedReasonKeyFromResult } from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { useProjectOpenBlockedMessage } from './hooks/use-project-open-blocked-message';
 
@@ -220,7 +220,7 @@ global.webViewComponent = function InventoryWebView({
   // When the backend refuses the project because it cannot be opened, the empty table says why
   // instead of reporting that nothing was found.
   const openBlockedMessage = useProjectOpenBlockedMessage(
-    getProjectOpenBlockedReasonKey(inventoryError),
+    getProjectOpenBlockedReasonKeyFromResult(inventoryError),
   );
   const inventoryLocalizedStrings = useMemo(
     () =>

@@ -38,6 +38,8 @@ import {
   makeProjectSelectorCustomData,
   normalizeFullName,
   normalizeProjectId,
+  notifyProjectOpenBlocked,
+  NotifyProjectOpenBlockedDependencies,
 } from 'platform-bible-utils';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
@@ -62,11 +64,7 @@ import {
   GreekEstherTemplatePicker,
   GreekEstherTemplatePickerLocalizedStrings,
 } from './greek-esther-template-picker.component';
-import {
-  getProjectOpenBlockedReasonKey,
-  notifyProjectOpenBlocked,
-  NotifyProjectOpenBlockedDependencies,
-} from './project-open-blocked.util';
+import { getProjectOpenBlockedReasonKeyFromResult } from './project-open-blocked.util';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
@@ -1001,7 +999,7 @@ global.webViewComponent = function ManageBooksWebView({
         notifySyncEditBlocked();
         return;
       }
-      const openBlockedReasonKey = getProjectOpenBlockedReasonKey(entry.text);
+      const openBlockedReasonKey = getProjectOpenBlockedReasonKeyFromResult(entry.text);
       if (openBlockedReasonKey) {
         notifyProjectOpenBlocked(openBlockedReasonKey, PROJECT_OPEN_BLOCKED_NOTIFY_DEPENDENCIES);
         return;

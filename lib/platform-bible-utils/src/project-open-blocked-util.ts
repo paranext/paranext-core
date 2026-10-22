@@ -1,3 +1,4 @@
+import { LanguageStrings } from './extension-contributions/localized-strings.model';
 import { LocalizeKey } from './extension-contributions/menus.model';
 import { isLocalizeKey } from './string-util';
 import { getErrorMessage } from './util';
@@ -17,7 +18,8 @@ const PROJECT_OPEN_BLOCKED_REASON_KEY_REGEX = /(%[^%\s]+%)\s*\(PROJECT_OPEN_BLOC
  * Shown instead of a project's `unsupportedReason` when that reason could not be read or has no
  * translation, so the user never sees a raw key or message.
  */
-export const PROJECT_OPEN_BLOCKED_FALLBACK_KEY: LocalizeKey = '%project_unsupported_generic%';
+export const PROJECT_OPEN_BLOCKED_FALLBACK_KEY =
+  '%project_unsupported_generic%' as const satisfies LocalizeKey;
 
 /** Shown when not even {@link PROJECT_OPEN_BLOCKED_FALLBACK_KEY} can be localized. */
 export const PROJECT_OPEN_BLOCKED_FALLBACK_MESSAGE = "This project can't be opened.";
@@ -49,4 +51,43 @@ export function getProjectOpenBlockedReasonKey(error: unknown): LocalizeKey | un
   if (!PROJECT_OPEN_BLOCKED_REGEX.test(message)) return undefined;
   const reasonKey = PROJECT_OPEN_BLOCKED_REASON_KEY_REGEX.exec(message)?.[1];
   return reasonKey ? toProjectOpenBlockedReasonKey(reasonKey) : PROJECT_OPEN_BLOCKED_FALLBACK_KEY;
+}
+
+/** What {@link notifyProjectOpenBlocked} needs from PAPI, passed in so it runs in any process. */
+export type NotifyProjectOpenBlockedDependencies = {
+  getLocalizedStrings: (localizeKeys: LocalizeKey[]) => Promise<LanguageStrings>;
+  sendNotification: (notification: {
+    message: LocalizeKey;
+    severity: 'warning';
+  }) => Promise<unknown>;
+  logWarning: (message: string) => void;
+};
+
+/**
+ * Tells the user why a project was refused, as a warning notification (the notification service
+ * localizes the key). A key with no translation is replaced by the generic reason, so the
+ * notification never shows a raw key. Self-catching, so fire-and-forget callers never leak a
+ * rejection.
+ *
+ * @param reasonKey Localize key explaining why the project was refused
+ * @param dependencies The PAPI services to localize with, notify through, and log to
+ */
+export async function notifyProjectOpenBlocked(
+  reasonKey: LocalizeKey,
+  { getLocalizedStrings, sendNotification, logWarning }: NotifyProjectOpenBlockedDependencies,
+): Promise<void> {
+  let message: LocalizeKey = PROJECT_OPEN_BLOCKED_FALLBACK_KEY;
+  try {
+    const localizedReason = (await getLocalizedStrings([reasonKey]))[reasonKey];
+    if (localizedReason && localizedReason !== reasonKey) message = reasonKey;
+  } catch (e) {
+    logWarning(
+      `Could not localize ${reasonKey}; sending the generic reason: ${getErrorMessage(e)}`,
+    );
+  }
+  try {
+    await sendNotification({ message, severity: 'warning' });
+  } catch (e) {
+    logWarning(`Failed to send the project-open-blocked notification: ${getErrorMessage(e)}`);
+  }
 }

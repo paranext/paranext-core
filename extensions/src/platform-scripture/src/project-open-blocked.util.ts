@@ -1,8 +1,10 @@
 import {
   getErrorMessage,
-  getProjectOpenBlockedReasonKey as getReasonKeyFromRefusalMessage,
+  getProjectOpenBlockedReasonKey,
   LanguageStrings,
   LocalizeKey,
+  notifyProjectOpenBlocked,
+  NotifyProjectOpenBlockedDependencies,
   PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
   toProjectOpenBlockedReasonKey,
 } from 'platform-bible-utils';
@@ -20,13 +22,13 @@ export const PROJECT_OPEN_BLOCKED_ERROR_CODE = 'PROJECT_OPEN_BLOCKED';
  * @param errorCode The error's code, from a service that reports one. The refusal's code alone is
  *   enough to recognize it.
  */
-export function getProjectOpenBlockedReasonKey(
+export function getProjectOpenBlockedReasonKeyFromResult(
   error: unknown,
   errorCode?: string,
 ): LocalizeKey | undefined {
   if (error === undefined) return undefined;
   return (
-    getReasonKeyFromRefusalMessage(error) ??
+    getProjectOpenBlockedReasonKey(error) ??
     (errorCode === PROJECT_OPEN_BLOCKED_ERROR_CODE ? PROJECT_OPEN_BLOCKED_FALLBACK_KEY : undefined)
   );
 }
@@ -45,42 +47,6 @@ export function selectProjectOpenBlockedMessage(
   const fallback = localizedStrings[PROJECT_OPEN_BLOCKED_FALLBACK_KEY];
   if (fallback && fallback !== PROJECT_OPEN_BLOCKED_FALLBACK_KEY) return fallback;
   return undefined;
-}
-
-/** What {@link notifyProjectOpenBlocked} needs from PAPI, passed in so it runs in any process. */
-export type NotifyProjectOpenBlockedDependencies = {
-  getLocalizedStrings: (localizeKeys: LocalizeKey[]) => Promise<LanguageStrings>;
-  sendNotification: (notification: {
-    message: LocalizeKey;
-    severity: 'warning';
-  }) => Promise<unknown>;
-  logWarning: (message: string) => void;
-};
-
-/**
- * Tells the user why a project was refused, as a warning notification (the notification service
- * localizes the key). A key with no translation is replaced by the generic reason, so the
- * notification never shows a raw key. Self-catching, so fire-and-forget callers never leak a
- * rejection.
- */
-export async function notifyProjectOpenBlocked(
-  reasonKey: LocalizeKey,
-  { getLocalizedStrings, sendNotification, logWarning }: NotifyProjectOpenBlockedDependencies,
-): Promise<void> {
-  let message = PROJECT_OPEN_BLOCKED_FALLBACK_KEY;
-  try {
-    const localizedReason = (await getLocalizedStrings([reasonKey]))[reasonKey];
-    if (localizedReason && localizedReason !== reasonKey) message = reasonKey;
-  } catch (e) {
-    logWarning(
-      `Could not localize ${reasonKey}; sending the generic reason: ${getErrorMessage(e)}`,
-    );
-  }
-  try {
-    await sendNotification({ message, severity: 'warning' });
-  } catch (e) {
-    logWarning(`Failed to send the project-open-blocked notification: ${getErrorMessage(e)}`);
-  }
 }
 
 /** What {@link refuseIfProjectUnsupported} needs from PAPI, passed in so it runs in any process. */

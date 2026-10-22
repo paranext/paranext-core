@@ -40,7 +40,7 @@ import type {
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { projectNamesFromMetadata } from './project-names.util';
-import { getProjectOpenBlockedReasonKey } from './project-open-blocked.util';
+import { getProjectOpenBlockedReasonKeyFromResult } from './project-open-blocked.util';
 import { useProjectOpenBlockedMessage } from './hooks/use-project-open-blocked-message';
 import { ChecklistTool, CHECKLIST_STRING_KEYS } from './components/checklist.component';
 import type {
@@ -304,7 +304,7 @@ global.webViewComponent = function ChecklistWebView({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [errorCode, setErrorCode] = useState<string | undefined>(undefined);
-  const openBlockedReasonKey = getProjectOpenBlockedReasonKey(error, errorCode);
+  const openBlockedReasonKey = getProjectOpenBlockedReasonKeyFromResult(error, errorCode);
   const openBlockedMessage = useProjectOpenBlockedMessage(openBlockedReasonKey);
   const displayedError = openBlockedReasonKey ? openBlockedMessage : error;
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
