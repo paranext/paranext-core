@@ -5,12 +5,12 @@ import {
 } from './internet-block-notification.utils';
 
 // ParatextData's own texts, as they arrive after crossing a process boundary.
-const ALL_ACCESS_DISABLED_ERROR =
+const PARATEXT_DATA_BLOCK_ERROR =
   'JSON-RPC Request error (-32000): Bug in Paratext caused attempted access to Internet. Request has been blocked.';
 
 describe('getInternetBlockedNotification', () => {
-  it('reports a "Disable all internet access" block with a link to the internet settings', () => {
-    expect(getInternetBlockedNotification(new Error(ALL_ACCESS_DISABLED_ERROR))).toEqual({
+  it("reports ParatextData's own block with a link to the internet settings", () => {
+    expect(getInternetBlockedNotification(new Error(PARATEXT_DATA_BLOCK_ERROR))).toEqual({
       severity: 'error',
       message: '%data_loading_error_internetAccess_disabled_2%',
       clickCommandLabel: '%general_open%',

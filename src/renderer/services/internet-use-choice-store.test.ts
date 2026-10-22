@@ -35,7 +35,7 @@ const mockWaitForNetworkObject = vi.mocked(networkObjectStatusService.waitForNet
 /** Stubs the saved `platform.internetUseChoiceAsked` and the provider's saved internet use. */
 function stub({
   wasAsked,
-  permittedInternetUse = 'VpnRequired',
+  permittedInternetUse = 'Disabled',
 }: {
   wasAsked?: boolean;
   permittedInternetUse?: string;

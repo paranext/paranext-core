@@ -4,8 +4,8 @@
  * Covers:
  *
  * - Opening via profile popover
- * - Radio row visibility (2 active, 3 not-yet-available with badges) and descriptions revealed from
- *   each option's info button
+ * - Radio row visibility (active and not-yet-available rows, with badges) and descriptions revealed
+ *   from each option's info button
  * - Descriptions staying shut for a programmatic focus, which the panel takes on load
  * - Reset and Save and restart button state (disabled when no changes, enabled after change)
  * - Reset restores original selection (buttons become disabled again)
@@ -27,6 +27,7 @@ import {
   expandDeveloperSection,
   internetSettingsFrame,
   internetUseRadio,
+  internetUseRadios,
   openInternetSettings,
   openInternetSettingsPanel,
   openUserProfilePopover,
@@ -88,7 +89,7 @@ test.describe('Internet & Connectivity settings', () => {
     }
   });
 
-  test('shows 2 active radio rows and 3 not-yet-available rows with badges', async ({
+  test('shows 2 active radio rows and 2 not-yet-available rows with badges', async ({
     mainPage,
   }) => {
     const frame = await openInternetSettingsPanel(mainPage);
@@ -109,15 +110,14 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(descriptionTooltip(frame)).toHaveCount(0);
 
     // Not-yet-available rows have disabled radio buttons
-    // %paratextRegistration_description_internetUse_option_Disabled_2%
-    await expect(internetUseRadio(frame, 'Disable all Internet access')).toBeDisabled();
     await expect(
       internetUseRadio(frame, /Block internet when in sensitive locations/),
     ).toBeDisabled();
     await expect(internetUseRadio(frame, /Configure proxy/)).toBeDisabled();
+    await expect(internetUseRadios(frame)).toHaveCount(4);
 
-    // Three "Not yet available" badges appear, and nothing promises the options are coming soon
-    await expect(frame.getByText('Not yet available', { exact: true })).toHaveCount(3);
+    // Two "Not yet available" badges appear, and nothing promises the options are coming soon
+    await expect(frame.getByText('Not yet available', { exact: true })).toHaveCount(2);
     await expect(frame.getByText(/coming soon/i)).toHaveCount(0);
 
     // The per-row "Not yet available" badges above are the only marker of the unavailable options;

@@ -234,7 +234,7 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
     }
 
     [Test]
-    public async Task InternetTurnedOff_FailsWithFailedPreconditionWithoutCallingTheRegistry()
+    public async Task InternetDisabled_FailsWithFailedPreconditionNamingTheSetting()
     {
         _userContext.Snapshot = ValidUser(isInternetDisabled: true);
 
@@ -243,7 +243,8 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         AssertFailure(result, PlatformErrorCodes.FailedPrecondition);
         Assert.That(
             result.Message,
-            Does.Contain("turned off").And.Not.Contain("Bible translation services")
+            Does.Contain("Disable access to some Bible translation services")
+                .And.Not.Contain("sensitive locations")
         );
         Assert.That(_tokenClient.PostCount, Is.Zero);
     }
@@ -258,8 +259,8 @@ internal class RegistryAccessTokenServiceTests : PapiTestBase
         AssertFailure(result, PlatformErrorCodes.FailedPrecondition);
         Assert.That(
             result.Message,
-            Does.Contain("Disable access to some Bible translation services")
-                .And.Not.Contain("turned off")
+            Does.Contain("Block internet when in sensitive locations")
+                .And.Not.Contain("Bible translation services")
         );
         Assert.That(_tokenClient.PostCount, Is.Zero);
     }

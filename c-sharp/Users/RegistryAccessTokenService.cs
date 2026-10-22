@@ -159,10 +159,11 @@ internal sealed class RegistryAccessTokenService(
                 resource,
                 PlatformErrorCodes.FailedPrecondition,
                 user.IsVpnRequired
-                    ? "\"Disable access to some Bible translation services\" is selected in Internet & "
+                    ? "\"Block internet when in sensitive locations\" is selected in Internet & "
                         + "connectivity settings, and this computer's location is restricted or "
                         + "could not be determined."
-                    : "Internet access is turned off in Internet & connectivity settings."
+                    : "\"Disable access to some Bible translation services\" is selected in "
+                        + "Internet & connectivity settings."
             );
         if (!user.IsConnected)
             return Fail(
