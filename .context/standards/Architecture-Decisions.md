@@ -9527,6 +9527,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   - **Where projects are opened, shown disabled with the reason:** the Simple toolbar picker (a
     hover tooltip), and Home and New Tab (a tooltip on the disabled Open button, and inline in the ⋯
     menu when Open is there).
+  - **They don't count as having a project.** The empty editor's no-projects guidance
+    (`useProjectPresence`) leaves them out, so a user whose only projects cannot be opened is told
+    how to get one, even though the toolbar picker lists those projects disabled. A separate message
+    for that case was rejected: it needs new strings for a state that lasts only until SBA support
+    lands.
   - **Tool pickers hide them.** Manage Books filters in C# (`ProjectFilterService`). Find, Checks,
     Checklist, Settings, the select and project-picker dialogs, `open()`'s project list and the
     resource lists filter on `unsupportedReason`. Find also ignores such projects' open tabs, so a
