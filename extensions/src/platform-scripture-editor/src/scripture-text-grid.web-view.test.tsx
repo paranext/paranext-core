@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { useRef, useState } from 'react';
@@ -460,7 +460,7 @@ describe('chapter-context split across a project change', () => {
     expect(liveRegionText()).toBe('Chapter view closed');
   });
 
-  it('lets Escape close an open pop-up first, and closes the split only on the next Escape', async () => {
+  it('lets each Escape close only the topmost layer, so the split closes last', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     hookResultsByProjectId.set(
       'projectOne',
@@ -477,14 +477,14 @@ describe('chapter-context split across a project change', () => {
     await waitFor(() => expect(screen.queryByText(TEXTS_HEADER)).not.toBeInTheDocument());
     expect(screen.getByTestId('chapter-split')).toBeInTheDocument();
 
-    // Closing the popover returns focus to its trigger, whose tooltip then opens; move focus away so
-    // nothing is open. Positive control: with no pop-up open, Escape closes the split.
-    act(() => {
-      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-    });
-    await waitFor(() =>
-      expect(document.querySelector('[data-radix-popper-content-wrapper]')).toBeNull(),
-    );
+    // Closing the popover returns focus to its trigger, whose tooltip then opens as a layer of its
+    // own, so the second Escape closes that tooltip and the split still stays open.
+    await screen.findByRole('tooltip');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    expect(screen.getByTestId('chapter-split')).toBeInTheDocument();
+
+    // Positive control: with nothing left open, the third Escape closes the split.
     await user.keyboard('{Escape}');
     expect(screen.queryByTestId('chapter-split')).not.toBeInTheDocument();
   });
