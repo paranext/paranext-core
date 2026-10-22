@@ -121,13 +121,13 @@ export type ILocalizationService = {
      */
     getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
     /**
-     * Builds a localized title for something scoped to one project, such as a web view's tab: looks
+     * Builds a localized title for something scoped to one project, such as a WebView's tab: looks
      * up the localized format for `localizeKey` and the project's short name (its `platform.name`
-     * setting), then replaces `{projectName}` in the format with that name. Use it in a web view
-     * provider's `getWebView` so the tab opens with its final title; in the web view itself, use
-     * the `useLocalizedProjectTitle` hook to keep the title up to date.
+     * setting), then replaces `{projectName}` in the format with that name. Use it in a WebView
+     * provider's `getWebView` so the tab opens with its final title; in the WebView itself, use the
+     * `useLocalizedProjectTitle` hook to keep the title up to date.
      *
-     * Never rejects, so a failed lookup cannot keep a web view from opening:
+     * Never rejects, so a failed lookup cannot keep a WebView from opening:
      *
      * - If the short name cannot be read, or is blank, the project id is shown in its place.
      * - If the format lookup fails, the title is just the project's name (or id).

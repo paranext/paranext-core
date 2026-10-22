@@ -166,14 +166,14 @@ export function getProjectDisplayName(projectId: string, projectName: unknown): 
 }
 
 /**
- * Formats a title for something scoped to one project, such as a web view's tab, by replacing
+ * Formats a title for something scoped to one project, such as a WebView's tab, by replacing
  * `{projectName}` in `titleFormat` with the project's display name (see
- * {@link getProjectDisplayName}). Use it wherever a provider and its web view both build the same
+ * {@link getProjectDisplayName}). Use it wherever a provider and its WebView both build the same
  * title, so the two always agree.
  *
  * To look up the name and the localized format as well, use
- * `papi.localization.getLocalizedProjectTitle` (in a web view provider or other async code) or the
- * `useLocalizedProjectTitle` hook (in a web view).
+ * `papi.localization.getLocalizedProjectTitle` (in a WebView provider or other async code) or the
+ * `useLocalizedProjectTitle` hook (in a WebView).
  *
  * @example
  *

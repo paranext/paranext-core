@@ -59,6 +59,7 @@ import {
   MutationResult,
   MANAGE_BOOKS_DIALOG_STRING_KEYS,
 } from './manage-books-dialog/manage-books-dialog.component';
+import { MANAGE_BOOKS_TITLE_WITH_PROJECT_KEY } from './manage-books-dialog/manage-books-dialog.types';
 import {
   GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS,
   GreekEstherTemplate,
@@ -472,7 +473,7 @@ global.webViewComponent = function ManageBooksWebView({
   // Keep the dock-tab title (and projectId) in step with the selected project.
   // Built from the same localize key `manage-books.web-view-provider.ts` uses for
   // the initial title, so the title does not change shape on a project switch.
-  const tabTitle = useLocalizedProjectTitle(projectId, '%manageBooks_dialog_titleWithProject%');
+  const tabTitle = useLocalizedProjectTitle(projectId, MANAGE_BOOKS_TITLE_WITH_PROJECT_KEY);
   useEffect(() => {
     if (!projectId || tabTitle === undefined) return;
     try {
