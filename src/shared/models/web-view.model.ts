@@ -224,9 +224,9 @@ type WebViewDefinitionBase = {
    */
   shouldShowToolbar?: boolean;
   /**
-   * Whether this WebView's tab can be closed by the user (shows the tab's close button). Set to
-   * `false` for tabs that must always remain open, such as views that are part of the default
-   * layout.
+   * Whether this WebView's tab can be closed by the user (shows the tab's close button and allows
+   * closing the tab with a middle click anywhere on its header). Set to `false` for tabs that must
+   * always remain open, such as views that are part of the default layout.
    *
    * Note: this default is applied by consumers (treat `undefined` as `true`, e.g. `isClosable ??
    * true`), not enforced by the type.
@@ -306,6 +306,134 @@ export type SavedWebViewDefinition = (
 ) &
   // Required properties
   Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
+
+/**
+ * Id of one zoom area — a named part of a web view's content that zooms as one and keeps its own
+ * content zoom level. Ids are lower-case letters, digits and hyphens, starting with a letter
+ * (`[a-z][a-z0-9-]*`), and are stable strings a web view chooses once (for example `main` for a
+ * view's primary content; a view that has several independently zoomable parts gives each its own
+ * id).
+ *
+ * `default` is reserved: its CSS custom property is the pane-wide default every other area falls
+ * back to, so an area of that name would set the default for the whole pane. The platform ignores
+ * an area marked with it — pick any other id.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type ContentZoomAreaId = string;
+
+/**
+ * Id of the zoom area a web view marks without naming one. Every web view that opts into content
+ * zoom has at least this area.
+ *
+ * Three attribute values name it: an empty value (`data-platform-content-zoom-root=""`), the id
+ * itself (`="main"`), and `="true"` — the value React serializes a bare JSX prop (`<div
+ * data-platform-content-zoom-root />`) to. Because `"true"` names this area, an area genuinely
+ * called `true` is not available.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * writes the literal `'main'` itself and keeps it equal to this constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const MAIN_CONTENT_ZOOM_AREA = 'main';
+
+/**
+ * Web-view definition `state` key holding the pane's own content zoom levels: a map from zoom area
+ * id to factor. An area with no entry follows the default from Settings. Written only by the
+ * platform; web views may read it.
+ *
+ * A web view whose `getWebViewDefinition` rebuilds its own definition on re-point (a
+ * `reloadWebView` pointed at another project through the same web view id) must carry its saved
+ * `state` through wholesale, by spreading it rather than copying only the keys the view itself
+ * uses: the platform stores a companion identity stamp next to this key, and a view that drops the
+ * stamp while keeping the levels has the platform silently re-attribute the previous project's
+ * level to the new one, rather than losing it.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * that reads this state key writes the literal `'platform.contentZoomLevels'` itself and keeps it
+ * equal to this constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const CONTENT_ZOOM_LEVELS_STATE_KEY = 'platform.contentZoomLevels';
+
+/**
+ * Attribute a web view puts on each element that wraps one zoom area's content (below its own
+ * toolbar, outside dividers and headers). The attribute value is the area id. Three values name the
+ * {@link MAIN_CONTENT_ZOOM_AREA} area instead: an empty value
+ * (`data-platform-content-zoom-root=""`), `="main"`, and the `="true"` React serializes a bare JSX
+ * prop (`<div data-platform-content-zoom-root />`) to. Write the empty value in static markup and
+ * the bare prop in JSX; either way the area is `main`. The platform's injected stylesheet applies
+ * `zoom: var(--platform-content-zoom-<area>)` to it. A marker inside another marker is ignored —
+ * matched by neither the platform's stylesheet nor its report of the view's areas — so nesting
+ * never compounds one area's zoom into another's. A web view that renders no element with this
+ * attribute is not zoomed at all, unless core declares its web view type zoomable: it renders at
+ * 100 % content zoom, its tab menu has no zoom items, and the zoom chords and Ctrl/⌘+wheel do
+ * nothing there. Interface scaling still applies to it.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * writes the literal `'data-platform-content-zoom-root'` itself and keeps it equal to this
+ * constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const CONTENT_ZOOM_ROOT_ATTRIBUTE = 'data-platform-content-zoom-root';
+
+/**
+ * Attribute a web view puts on an element that is not itself scaled — a row, a column, a card — to
+ * say that a click, a focus or a Ctrl/⌘+wheel anywhere inside it means one zoom area. The value is
+ * that area's id, spelled as for {@link CONTENT_ZOOM_ROOT_ATTRIBUTE}. The platform consults it only
+ * where no zoom area's marked element encloses the target: a marked element always wins. It changes
+ * which area the chords, the wheel and the tab menu act on; it scales nothing, and a scope naming
+ * an area the view does not render is ignored.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * writes the literal `'data-platform-content-zoom-scope'` itself (or imports the mirror from
+ * `platform-bible-react`) and keeps it equal to this constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const CONTENT_ZOOM_SCOPE_ATTRIBUTE = 'data-platform-content-zoom-scope';
+
+/**
+ * Attribute a web view may add to an element carrying {@link CONTENT_ZOOM_ROOT_ATTRIBUTE} to name
+ * that zoom area for the user. The zoom indicator then reads `<label> · <level>` (for example `HSV
+ * · 120 %`) instead of the level alone. Plain text; the platform reads the first non-empty label
+ * among the area's marked elements. An area without a label shows the level alone.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * writes the literal `'data-platform-content-zoom-label'` itself (or uses `ContentZoomRoot`'s
+ * `label` prop) and keeps it equal to this constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const CONTENT_ZOOM_LABEL_ATTRIBUTE = 'data-platform-content-zoom-label';
+
+/**
+ * Prefix of the CSS custom properties the platform sets on every web view's root element, one per
+ * zoom area, with that area's effective factor (own level, else the Settings default):
+ * `--platform-content-zoom-main`, `--platform-content-zoom-<area>`, …
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * that reads its own zoom variable writes the literal `'--platform-content-zoom-'` itself and keeps
+ * it equal to this constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const CONTENT_ZOOM_CSS_VARIABLE_PREFIX = '--platform-content-zoom-';
+
+/**
+ * CSS custom property holding the Settings default, the fallback for any zoom area without its own
+ * variable.
+ *
+ * Extension code cannot import this value at runtime — `@papi/core` is types-only — so a web view
+ * that reads the default zoom variable writes the literal `'--platform-content-zoom-default'`
+ * itself and keeps it equal to this constant.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const CONTENT_ZOOM_DEFAULT_CSS_VARIABLE = '--platform-content-zoom-default';
 
 /**
  * The `webViewType` of the Scripture editor web views provided by the `platform-scripture-editor`
@@ -396,7 +524,11 @@ export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProp
  * returned to the latest `defaultStateValue`, and changing the `stateKey` will use the latest
  * `defaultStateValue`. However, if `defaultStateValue` is changed while a state is
  * `defaultStateValue` (meaning it is reset and has no value), the returned state value will not be
- * updated to the new `defaultStateValue`.
+ * updated to the new `defaultStateValue`. A state value showing `defaultStateValue` keeps that same
+ * object across updates to other keys of the web view state, but still pass a stable default
+ * (module-level or memoized) if the value is used in an effect's dependency list. Likewise, a saved
+ * value that is deeply equal to the current state value keeps the current object, so saving an
+ * equal new object does not give the state value a new identity.
  *
  * _＠returns_ `[stateValue, setStateValue, resetWebViewState]`
  *

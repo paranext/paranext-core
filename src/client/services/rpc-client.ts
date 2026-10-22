@@ -87,16 +87,15 @@ export class RpcClient implements IRpcMethodRegistrar {
   private readonly jsonRpcClientServer: JSONRPCServerAndClient;
   private readonly connectionMutex: Mutex = new Mutex();
   private readonly registrationMutexMap: MutexMap = new MutexMap();
-  // TODO(PT-4435): `AsyncVariable` is single-shot and freezes itself once settled, so this
+  // TODO(PT-4495): `AsyncVariable` is single-shot and freezes itself once settled, so this
   // field cannot be reused across connection attempts — a second connect() resolves
   // instantly and reports Connected before the handshake finishes. Recreate it per attempt
   // (and move applyMiddleware to the constructor) before adding reconnect.
   //
-  // TODO(PT-4435): A fourth blocker sits outside this class and outside its tests, which mock the
-  // socket factory: in the renderer, `blockWebSocketsToPapiNetwork()` runs after the initial
-  // connect (`src/renderer/index.tsx`), so any later reconnect throws `Invalid URL` from
-  // `PapiRendererWebSocket`'s constructor and never reaches the `AsyncVariable` problems above.
-  // Reconnect needs an unblocked path to the PAPI port for this client.
+  // TODO(PT-4495): Reconnect is only needed by the extension host. The renderer connects over a
+  // MessagePort (see `web-socket.factory.ts`), which survives an OS suspend and does not go through
+  // `blockWebSocketsToPapiNetwork()`. For the extension host, reconnect still needs the
+  // `AsyncVariable` problems above resolved first.
   private readonly connectionComplete = new AsyncVariable<void>('websocket connected');
   private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
   private readonly connectionLostEmitter = new PlatformEventEmitter<void>();
@@ -216,7 +215,7 @@ export class RpcClient implements IRpcMethodRegistrar {
           // `getErrorMessage` would JSON-quote and escape the diagnostic rather than print it.
           typeof error === 'string' ? error : getErrorMessage(error),
         );
-        // TODO(PT-4435): The socket itself is never closed here, only forgotten — leaving a live,
+        // TODO(PT-4495): The socket itself is never closed here, only forgotten — leaving a live,
         // listener-less socket and a server-side RpcServer whose registered methods are never
         // reaped. That is the startup-race shape recorded in the ADR. Closing it changes what a
         // failed connect does to a live socket, so it belongs with the reconnect work.
@@ -230,7 +229,7 @@ export class RpcClient implements IRpcMethodRegistrar {
     });
   }
 
-  // TODO(PT-4435): No client peer reaches this method today. `IRpcHandler.disconnect` is called
+  // TODO(PT-4495): No client peer reaches this method today. `IRpcHandler.disconnect` is called
   // only from `networkService.shutdown()`, which runs in main, where the handler is an
   // `RpcWebSocketListener` — so a renderer or extension host currently dies with its socket rather
   // than closing it, and `INTENTIONAL_CLOSE_CODE` never leaves a client. Wiring a client-side

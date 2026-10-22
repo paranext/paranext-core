@@ -1,11 +1,9 @@
-import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useDataProvider,
   useDialogCallback,
   useLocalizedStrings,
-  useProjectData,
   useProjectDataProvider,
   useProjectSetting,
   useSetting,
@@ -21,6 +19,7 @@ import {
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ResourceReferenceList } from 'platform-scripture';
+import { useChapterUsjWithCopyLimit } from './copy-limit/use-chapter-usj-with-copy-limit.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
@@ -47,6 +46,8 @@ import { selectTextConnection } from './select-dbl-resource';
 import { ResourceTextPanel } from './resource-text-panel.component';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
+import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -54,7 +55,10 @@ const DEFAULT_TEXT_DIRECTION = 'ltr';
 // must keep a stable identity across renders — a fresh array every render re-runs its lookup — and
 // `RESOURCE_PANEL_STRING_KEYS` is a frozen readonly tuple, so it is spread into a mutable
 // `LocalizeKey[]` exactly once here.
-const ALL_STRING_KEYS: LocalizeKey[] = [...RESOURCE_PANEL_STRING_KEYS];
+const ALL_STRING_KEYS: LocalizeKey[] = [
+  ...RESOURCE_PANEL_STRING_KEYS,
+  ...COPYRIGHT_NOTICE_STRING_KEYS,
+];
 
 const BIBLE_TEXTS_ICON_URLS: TabIconUrls = {
   lightDefault: 'papi-extension://platformScriptureEditor/assets/book-open.svg',
@@ -275,8 +279,17 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // (shared with the model-text panel); without it the panel spins forever. Skipped while a manual
   // pick is in flight (it installs the resource itself).
   const dblEntryUidToInstall = dblMatch && !dblMatch.installed ? dblMatch.dblEntryUid : undefined;
-  const { isInstalling, installFailed, retryInstall, markInstallFailed } =
-    useDblResourceAutoInstall(dblEntryUidToInstall, installResource, isSelecting);
+  const {
+    isInstalling,
+    installFailed,
+    installFailureReason,
+    retryInstall,
+    clearInstallFailure,
+    markInstallFailed,
+  } = useDblResourceAutoInstall(dblEntryUidToInstall, installResource, {
+    skipAutoInstall: isSelecting,
+    refreshResourceList: refetchCatalog,
+  });
 
   // Only used to add a "check your connection" hint to the install-failed message when offline.
   const isOnline = useIsOnline();
@@ -299,6 +312,9 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       isCatalogReady,
       pickerResources !== undefined,
     ),
+    // These panels are re-pointed by reloading them, which reuses the web view id, so the
+    // published list must be scoped to the project it was built for.
+    projectId,
   );
 
   // #endregion
@@ -344,27 +360,16 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // #endregion
 
-  // #region USJ Fetch
+  // #region USJ Fetch and copy limit
 
   // Chapter view: the whole chapter goes to Editorial, which navigates to scrRef. Deliberately NOT
   // sliced by scripture-text-grid/verse-display.utils — slicing would blank the verse-0 front
   // matter (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve
   // verse 0 to verse 1; whole-chapter surfaces like this one must not (see
   // `adr-single-verse-surfaces-resolve-verse-zero-to-one`).
-  const [usjPossiblyError, , isUsjLoading] = useProjectData(
-    'platformScripture.USJ_Chapter',
+  const { usjPossiblyError, isUsjLoading, copyLimit } = useChapterUsjWithCopyLimit(
     resourceProjectId,
-  ).ChapterUSJ(
-    useMemo(
-      () => ({
-        book: scrRef.book,
-        chapterNum: scrRef.chapterNum,
-        verseNum: 1,
-        versificationStr: scrRef.versificationStr,
-      }),
-      [scrRef.book, scrRef.chapterNum, scrRef.versificationStr],
-    ),
-    EMPTY_USJ,
+    scrRef,
   );
 
   // #endregion
@@ -409,7 +414,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     async (resource: DblResourceData) => {
       setIsSelecting(true);
       // A user-initiated pick is a fresh attempt: clear any prior auto-install failure.
-      retryInstall();
+      clearInstallFailure();
       try {
         await selectTextConnection(
           resource,
@@ -436,7 +441,13 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
         setIsSelecting(false);
       }
     },
-    [getUserResourceTexts, setUserResourceTexts, installResource, retryInstall, markInstallFailed],
+    [
+      getUserResourceTexts,
+      setUserResourceTexts,
+      installResource,
+      clearInstallFailure,
+      markInstallFailed,
+    ],
   );
 
   // `useDialogCallback` is what keeps a second activation from destroying the picker the user is
@@ -479,13 +490,22 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       usjPossiblyError={usjPossiblyError}
       isUsjLoading={isUsjLoading}
       textDirection={textDirection}
+      copyLimit={copyLimit}
       isSelecting={isSelecting}
       isInstalling={isInstalling}
       installFailed={installFailed}
+      installFailureReason={installFailureReason}
       retryInstall={retryInstall}
       isOnline={isOnline}
       onShowResourcePicker={showResourcePicker}
       logger={logger}
+      copyrightNotice={
+        <ProjectCopyrightNotice
+          projectId={resourceProjectId}
+          localizedStrings={localizedStrings}
+          useWebViewState={useWebViewState}
+        />
+      }
     />
   );
 };

@@ -110,15 +110,17 @@ describe('buildLocalNonDblResources — synthetic entry shape', () => {
     expect(entry.bestLanguageName).toBe('fra');
   });
 
-  it('falls back displayName and fullName to id when name is absent', () => {
+  it('falls back displayName to id when name is absent, leaving fullName empty', () => {
     const [entry] = buildLocalNonDblResources([readOnlyProject('proj-fallback')], []);
     expect(entry.displayName).toBe('proj-fallback');
-    expect(entry.fullName).toBe('proj-fallback');
+    expect(entry.fullName).toBe('');
   });
 
-  it('falls back fullName to name when fullName is absent', () => {
+  it('leaves fullName empty rather than mirroring the short name into it', () => {
+    // A synthetic entry for a local project carries no DBL catalog full name. The Full Name column
+    // sits beside the Name column, so a mirror would print the same text twice.
     const [entry] = buildLocalNonDblResources([readOnlyProject('proj-2', { name: 'Short' })], []);
-    expect(entry.fullName).toBe('Short');
+    expect(entry.fullName).toBe('');
   });
 });
 

@@ -117,9 +117,9 @@ describe('a window nothing can run in is not a reason to close the last working 
   // this exists so nobody has to infer that the three pieces meet correctly.
   test('window A alone with an abandoned window is answered open-home, not closing', async () => {
     // A window whose renderer died and will never be reloaded is still on screen and still
-    // tracked — deliberately, since closing it would rewrite the persisted window layout without
-    // it — but nothing runs in it any more, so counting it as a second real window would close the
-    // only window the user can still work in.
+    // tracked — deliberately, since a window is not taken from the user unasked — but nothing runs
+    // in it any more, so counting it as a second real window would close the only window the user
+    // can still work in.
     vi.useFakeTimers();
     const windowAId = addWindow(fakeWindow(1));
     const windowBId = addWindow(fakeWindow(2));

@@ -53,7 +53,20 @@ export {
   aggregateUnsubscriberAsyncs,
 } from './lifetime-management/unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './scripture/usj-reader-writer.model';
-export { usfmMarkers, isBlockMarker, isCharacterMarker } from './markers/usfm-markers';
+export {
+  usfmMarkers,
+  isBlockMarker,
+  isCharacterMarker,
+  isParagraphMarker,
+} from './markers/usfm-markers';
+export {
+  MIN_ZOOM_FACTOR,
+  MAX_ZOOM_FACTOR,
+  ZOOM_STEP,
+  CONTENT_ZOOM_IN_SHORTCUT,
+  CONTENT_ZOOM_OUT_SHORTCUT,
+  CONTENT_ZOOM_RESET_SHORTCUT,
+} from './content-zoom.util';
 
 // Enums
 export { Section } from './scripture/scripture-util';
@@ -125,6 +138,7 @@ export {
   transformAndEnsureRegExpRegExpArray,
   collapseMiddleWords,
 } from './string-util';
+export { truncateToCopyLimit } from './copy-limit.util';
 export { getPaneSizeLimits } from './pane-utils';
 export { newPlatformError, isPlatformError } from './platform-error';
 export { default as deepEqual } from './equality-checking';
@@ -133,10 +147,21 @@ export { serialize, deserialize, isSerializable, htmlEncode } from './serializat
 export { default as getCurrentLocale } from './intl/intl-util';
 export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
-export { normalizeProjectId } from './project-util';
+export {
+  normalizeProjectId,
+  hasDistinctFullName,
+  normalizeFullName,
+  formatProjectName,
+  PROJECT_NAME_SEPARATOR,
+  compareProjectsByName,
+  compareProjectShortNames,
+  type ProjectNames,
+} from './project-util';
+export { createCachedInitializer } from './promises/cached-initializer';
 export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
 export { MODIFIER_KEYS, getLocalizeKeyForPhysicalKey } from './keyboard-util';
 export { computeEffectiveStructureProtection } from './structure-protection.util';
+export { clampZoom, roundZoom, adjustZoomFactor } from './content-zoom.util';
 
 // Types
 export type { EffectiveStructureProtectionInputs } from './structure-protection.util';
@@ -156,6 +181,7 @@ export type {
   CanHaveOnDidDispose,
 } from './lifetime-management/disposal.model';
 export type { PaneSizeLimitsOptions } from './pane-utils';
+export type { ContentZoomShortcut } from './content-zoom.util';
 export type { PlatformError, PlatformErrorCode } from './platform-error';
 export type {
   PlatformEventHandler,
@@ -205,6 +231,12 @@ export type {
 } from './extension-contributions/menus.model';
 export { menuDocumentSchema } from './extension-contributions/menus.model';
 export type { PaletteItem } from './palette.types';
+export {
+  PROJECT_SELECTOR_CUSTOM_DATA_KEYS,
+  makeProjectSelectorCustomData,
+  recencyMapFromOrderedIds,
+} from './project-selector-custom-data';
+export type { ProjectSelectorCustomDataShape } from './project-selector-custom-data';
 export type { DblResourceData, ResourceType } from './resources.model';
 export { doesCatalogRowCoverProject } from './resources.model';
 export type {

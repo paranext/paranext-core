@@ -1,5 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { newPlatformError } from 'platform-bible-utils';
+import {
+  markInternetUseChoiceSaved,
+  resetInternetUseChoiceForTesting,
+} from '@renderer/services/internet-use-choice-store';
 import { InternetSettingsStep } from './internet-settings-step.component';
 // Deep relative (not aliased) so the story drives the webpack-aliased renderer-hooks mock without
 // pulling it into tsc typecheck. Mirrors how the language step reaches its own mock channel.
@@ -22,6 +26,10 @@ const meta: Meta<typeof InternetSettingsStep> = {
     onNext: () => {},
     setCanProceed: () => {},
   },
+  beforeEach() {
+    // Each story starts before the user has chosen, whatever was clicked in the story before it.
+    resetInternetUseChoiceForTesting();
+  },
 };
 export default meta;
 
@@ -41,16 +49,40 @@ export const Loading: Story = {
   decorators: [withInternetSettings({ isLoading: true })],
 };
 
-/** Settings loaded, VPN Required selected, Next enabled. */
+/**
+ * Settings loaded with VPN Required stored, as ParatextData saves on first startup. No option is
+ * selected and Next stays disabled until the user picks one, so a stored value nobody chose is not
+ * presented as their choice.
+ */
 export const Default: Story = {
   decorators: [withInternetSettings()],
 };
 
-/** Enabled (unrestricted internet) option pre-selected. */
-export const Enabled: Story = {
+/**
+ * The user already chose "Unrestricted" this session and came back to the step: their choice shows
+ * selected and Next is enabled.
+ */
+export const ChoiceAlreadyMade: Story = {
+  beforeEach() {
+    markInternetUseChoiceSaved();
+  },
   decorators: [
     withInternetSettings({
       value: { ...DEFAULT_INTERNET_SETTINGS, permittedInternetUse: 'Enabled' },
+    }),
+  ],
+};
+
+/**
+ * The stored setting names an option this app does not implement yet. `InternetSettings.xml` is
+ * seeded once from a co-installed Paratext 9 on first launch, so the wizard can meet this on a
+ * first run. The row stays selected under a banner, and the step holds Next shut until the user
+ * picks an option that will actually take effect.
+ */
+export const UnsupportedStoredValue: Story = {
+  decorators: [
+    withInternetSettings({
+      value: { ...DEFAULT_INTERNET_SETTINGS, permittedInternetUse: 'Disabled' },
     }),
   ],
 };

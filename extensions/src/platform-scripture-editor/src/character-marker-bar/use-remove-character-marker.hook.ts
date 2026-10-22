@@ -31,7 +31,7 @@ export type UseRemoveCharacterMarkerOptions = {
   editorRef: MutableRefObject<EditorRef | null>;
   /** The project to snapshot before removing. No project means no snapshot. */
   projectId?: string;
-  /** `true` while an automatic Send/Receive has editing paused. Removal refuses and explains. */
+  /** `true` while an automatic sync has editing paused. Removal refuses and explains. */
   isSyncBlocked: boolean;
   /** Localized strings for the snapshot message and the three notifications. */
   localizedStrings: LanguageStrings;
@@ -74,7 +74,7 @@ export function useRemoveCharacterMarker({
       // to, since the point is to capture state before the edit lands. So an unguarded no-op leaves
       // a real empty restore point rather than one the backend quietly drops. (In plain
       // Platform.Bible the C# handler is an unimplemented stub that throws, so this only surfaces in
-      // Paratext 10 Studio, where the command is actually implemented.)
+      // Paratext 10, where the command is actually implemented.)
       const editor = editorRef.current;
       if (!editor) {
         logger.warn('Cannot remove a character marker: the editor is not mounted.');

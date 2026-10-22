@@ -88,7 +88,7 @@ THIRD-PARTY-NOTICES.lock.json
 
 # A verbatim rendering of the Terms of Service source document, and the terms the application is
 # licensed under. Reformatting a legal text turns a faithful copy into an approximation of one.
-TERMS-OF-SERVICE.md
+TERMS-OF-SERVICE.html
 
 # The notices renderer's golden fixture: it must equal render()'s output byte for byte.
 .erb/scripts/third-party-notices/__fixtures__/golden/

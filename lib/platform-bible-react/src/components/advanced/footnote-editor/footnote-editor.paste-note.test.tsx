@@ -31,7 +31,12 @@ import {
   PASTE_COMMAND,
   TextNode,
 } from 'lexical';
-import { editableView, renderPopoverAndWaitForInit } from './footnote-editor.test-harness';
+import {
+  editableView,
+  installPopoverJsdomStubs,
+  renderPopoverAndWaitForInit,
+  settle,
+} from './footnote-editor.test-harness';
 
 // jsdom implements neither `ClipboardEvent` nor `DragEvent`, but Lexical's paste path
 // (`eventFiles`/`onPasteForRichText`) references both as bare globals for its klass checks, so the
@@ -46,26 +51,7 @@ if (typeof globalStubs.DragEvent === 'undefined') globalStubs.DragEvent = functi
 if (typeof globalStubs.ClipboardEvent === 'undefined')
   globalStubs.ClipboardEvent = function ClipboardEvent() {};
 
-// jsdom doesn't implement `getBoundingClientRect` on `Range`; Lexical's post-commit
-// scroll-into-view reads the collapsed DOM selection's range rect. Stub it (a zero rect nothing
-// here asserts on) — same as the sibling palette-commit suite.
-if (typeof Range.prototype.getBoundingClientRect !== 'function') {
-  Range.prototype.getBoundingClientRect = function getBoundingClientRect(): DOMRect {
-    return {
-      x: 0,
-      y: 0,
-      width: 0,
-      height: 0,
-      top: 0,
-      right: 0,
-      bottom: 0,
-      left: 0,
-      toJSON() {
-        return this;
-      },
-    };
-  };
-}
+installPopoverJsdomStubs();
 
 /**
  * A paste event carrying the flavors a real-world copy delivers, duck-typed like the live
@@ -190,16 +176,6 @@ function readPasteOutcome(lexical: LexicalEditor) {
       noteText,
       rootText: $getRoot().getTextContent(),
     };
-  });
-}
-
-/** Waits for the engine's post-paste async passes (transform cascade, re-tokenization). */
-async function settle(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
   });
 }
 

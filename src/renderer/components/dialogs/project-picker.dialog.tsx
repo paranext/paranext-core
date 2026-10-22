@@ -43,6 +43,9 @@ export const PROJECT_PICKER_DIALOG: DialogDefinition<typeof PROJECT_PICKER_DIALO
     ...DIALOG_BASE,
     tabType: PROJECT_PICKER_DIALOG_TYPE,
     defaultTitle: '%projectPicker_title%',
+    // Title only: the component renders no description, so the shell's fallback one is still
+    // wanted. This is the case a single combined flag could not express.
+    providesOwnTitle: true,
     initialSize: { width: 700, height: 550 },
     Component: ProjectPickerWrapper,
   });

@@ -1,13 +1,12 @@
 /* Based on scripture-editors' packages/platform/src/usj-nodes.css:
-   https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
+   https://github.com/paranext/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
    (originally synced from commit ba0e846b3f1:
-   https://github.com/eten-tech-foundation/scripture-editors/commit/ba0e846b3f1,
+   https://github.com/paranext/scripture-editors/commit/ba0e846b3f1,
    with the RTL/bidi gutter-marker fixes and the ::after active-text outline forwarded from the
    demo copy's d95907eed30 sync — the two vendored copies must not diverge on those rules).
-   Local additions: li/lim --para-indent and --verse-text-start entries in
-   .psc-gutter-markers.text-spacing, mirroring scripture-editors commit 846ad99
-   (https://github.com/eten-tech-foundation/scripture-editors/commit/846ad99,
-   \li/\lim gutter overlap fix). */
+   When re-syncing, see the "Indent compensation" comment in the gutter section below for the
+   invariant usj-nodes-scss-coverage.test.ts enforces on this file and the demo copy.
+   The source's four `local()`-only Charis SIL @font-face rules are dropped. */
 
 /* stylelint-disable */
 
@@ -28,31 +27,31 @@
 .align_end {
   text-align: end;
 }
-@font-face {
-  font-family: 'Charis SIL';
-  src:
-    local('Charis SIL'), local('Charis SIL Bold'), local('Charis SIL Bold Italic'),
-    local('Charis SIL Italic');
-  font-weight: normal;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Bold');
-  font-weight: bold;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Italic');
-  font-style: italic;
-}
-@font-face {
-  font-family: 'Charis SIL';
-  src: local('Charis SIL Bold Italic');
-  font-weight: bold;
-  font-style: italic;
+/* Don't declare Scripture fonts here. A `local()`-only face errors where the font is not installed,
+   and an erroring face makes the family unusable at that weight and style instead of deferring to
+   the declaration in src/renderer/styles/fonts.css — which drops bold and italic Scripture text
+   onto a system font. */
+/* Fallback chain for the editor's generated project stylesheet, which emits
+   `font-family: "<project font>", var(--usj-font-fallback, serif)`. On `.usfm` so the unformatted
+   view gets it too. Diverges from the editor library's copy, which hard-codes the chain: this
+   points at Platform.Bible's own stack in src/renderer/styles/fonts.css, inlined into every web
+   view. The literal chain is the library's, and applies where fonts.css is not loaded. */
+.usfm {
+  --usj-font-fallback: var(
+    --scripture-font-stack,
+    'Charis SIL',
+    'Times New Roman',
+    'Liberation Serif',
+    'DejaVu Serif',
+    Georgia,
+    serif
+  );
 }
 .usfm.formatted-font {
-  font-family: 'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
+  /* Same `serif` fallback the generated project rules carry: a `var()` whose property turns out to
+     be invalid at computed-value time takes the whole declaration with it, dropping Scripture text
+     onto the inherited UI font. */
+  font-family: var(--usj-font-fallback, serif);
   font-size: 12pt;
 }
 
@@ -2780,8 +2779,11 @@ span.read img {
 
 /* position: relative gives absolutely-positioned gutter markers the right
    containing block. --para-indent and --verse-text-start default to 0;
-   paragraph-specific overrides follow below. */
-.psc-gutter-markers .para {
+   paragraph-specific overrides follow below. .book is included because its
+   marker glyph is positioned by the same rule as a paragraph's and reads the
+   same variable. */
+.psc-gutter-markers .para,
+.psc-gutter-markers .book {
   position: relative;
   --para-indent: 0px;
   --verse-text-start: 0px;
@@ -2843,17 +2845,34 @@ span.read img {
   background: none;
 }
 
-/* Indent compensation — mirrors the margin-left values above.
-   Only active when .text-spacing is present (same condition as the source rules).
-   pi2 and pi3 use the same primary-indent value in both LTR and RTL (10vw and 15vw
-   respectively), so no direction restriction is needed here. */
+/* Indent compensation: each marker's --para-indent must equal its text-spacing margin-left above,
+   or the gutter glyph lands in the text. The same value serves RTL margin-right, so a marker needs
+   the same margin in both directions. usj-nodes-scss-coverage.test.ts enforces this for margins
+   set in THIS file and the demo copy; margins loaded later in source order (marker-styles/*.scss,
+   generateUsjCss) override these and leave the compensation stale by the difference. That is
+   PT-4624.
+   \tr needs no entry: a real row is a <tr>, not a .para, and tools/pt9-css-converter strips it for
+   the same reason. The obsolete \tr1 and \tr2 still convert to plain paragraphs, so they do.
+   Out of scope: an "auto" text direction. Core never passes it: a project always declares ltr
+   or rtl (direction cannot be guessed for a minority language), the platform.textDirection
+   setting is typed to exclude it, and the model text panel narrows to those two. Were it to
+   arrive, the editor would set no dir attribute, so the [dir]-qualified margins above would not
+   apply while this compensation still did, and the [dir]-qualified gutter rules would not match,
+   leaving RTL content with the LTR gutter; see the KNOWN GAP note in the editor's
+   ArrowNavigationPlugin. */
+.psc-gutter-markers.text-spacing .usfm_p2 {
+  --para-indent: 2.5vw;
+}
 .psc-gutter-markers.text-spacing .usfm_io,
 .psc-gutter-markers.text-spacing .usfm_io1,
 .psc-gutter-markers.text-spacing .usfm_ili,
 .psc-gutter-markers.text-spacing .usfm_ili1,
 .psc-gutter-markers.text-spacing .usfm_li,
 .psc-gutter-markers.text-spacing .usfm_li1,
-.psc-gutter-markers.text-spacing .usfm_pi2 {
+.psc-gutter-markers.text-spacing .usfm_ph,
+.psc-gutter-markers.text-spacing .usfm_ph1,
+.psc-gutter-markers.text-spacing .usfm_pi2,
+.psc-gutter-markers.text-spacing .usfm_tr1 {
   --para-indent: 10vw;
 }
 .psc-gutter-markers.text-spacing .usfm_q,
@@ -2866,14 +2885,23 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_li2,
 .psc-gutter-markers.text-spacing .usfm_lim,
 .psc-gutter-markers.text-spacing .usfm_lim1,
-.psc-gutter-markers.text-spacing .usfm_pi3 {
+.psc-gutter-markers.text-spacing .usfm_ph2,
+.psc-gutter-markers.text-spacing .usfm_pi3,
+.psc-gutter-markers.text-spacing .usfm_tr2 {
   --para-indent: 15vw;
 }
 .psc-gutter-markers.text-spacing .usfm_qm,
 .psc-gutter-markers.text-spacing .usfm_qm1,
+.psc-gutter-markers.text-spacing .usfm_qm2,
+.psc-gutter-markers.text-spacing .usfm_qm3,
+.psc-gutter-markers.text-spacing .usfm_iq,
+.psc-gutter-markers.text-spacing .usfm_iq1,
+.psc-gutter-markers.text-spacing .usfm_iq2,
+.psc-gutter-markers.text-spacing .usfm_iq3,
 .psc-gutter-markers.text-spacing .usfm_io3,
 .psc-gutter-markers.text-spacing .usfm_li3,
-.psc-gutter-markers.text-spacing .usfm_lim2 {
+.psc-gutter-markers.text-spacing .usfm_lim2,
+.psc-gutter-markers.text-spacing .usfm_ph3 {
   --para-indent: 20vw;
 }
 .psc-gutter-markers.text-spacing .usfm_io4,
@@ -2886,20 +2914,26 @@ span.read img {
 }
 .psc-gutter-markers.text-spacing .usfm_ipi,
 .psc-gutter-markers.text-spacing .usfm_imi,
+.psc-gutter-markers.text-spacing .usfm_ipq,
+.psc-gutter-markers.text-spacing .usfm_imq,
+.psc-gutter-markers.text-spacing .usfm_ipr,
 .psc-gutter-markers.text-spacing .usfm_pmo,
 .psc-gutter-markers.text-spacing .usfm_pm,
 .psc-gutter-markers.text-spacing .usfm_pmc,
 .psc-gutter-markers.text-spacing .usfm_pmr,
 .psc-gutter-markers.text-spacing .usfm_pi,
 .psc-gutter-markers.text-spacing .usfm_pi1,
-.psc-gutter-markers.text-spacing .usfm_mi {
+.psc-gutter-markers.text-spacing .usfm_psi,
+.psc-gutter-markers.text-spacing .usfm_mi,
+.psc-gutter-markers.text-spacing .usfm_qd {
   --para-indent: 5vw;
 }
 
-/* --verse-text-start mirrors the text-indent values for paragraphs with a
-   negative text-indent (hanging indent). These paragraphs render their first
-   line to the LEFT of the element's border edge, so the active focus box
-   ::before must start at text-indent to align with the text. */
+/* --verse-text-start mirrors the negative text-indent (hanging indent) of poetry-style
+   paragraphs. The active focus box ::after reads it through min() against the glyph column,
+   so it only wins when a hanging indent reaches further into the gutter than
+   -(gutter width) - --para-indent. No marker in this file does, so today it is a fallback;
+   usj-nodes-scss-coverage.test.ts keeps it in step with text-indent regardless. */
 .psc-gutter-markers.text-spacing .usfm_q,
 .psc-gutter-markers.text-spacing .usfm_q1 {
   --verse-text-start: -10vw;
@@ -2948,10 +2982,18 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_iq3 {
   --verse-text-start: -5vw;
 }
+.psc-gutter-markers.text-spacing .usfm_ph,
+.psc-gutter-markers.text-spacing .usfm_ph1,
+.psc-gutter-markers.text-spacing .usfm_ph2,
+.psc-gutter-markers.text-spacing .usfm_ph3,
+.psc-gutter-markers.text-spacing .usfm_tr1,
+.psc-gutter-markers.text-spacing .usfm_tr2 {
+  --verse-text-start: -5vw;
+}
 
 /* RTL: move gutter to the right */
 .usfm.psc-gutter-markers[dir='rtl'] {
-  padding-right: 4em;
+  padding-right: var(--psc-gutter-width);
   padding-left: 10px; /* restore base value */
 }
 
@@ -2973,9 +3015,10 @@ span.read img {
 /* ── Active text focus box ────────────────────────────────────────────────────
    Applied via .psc-active-focus when viewOptions.hasActiveTextFocusBox is true.
    Shows an outline box around the verse range under the cursor. When used
-   alongside .psc-gutter-markers, the --verse-text-start variable aligns the box
-   with the hanging-indent text start of poetry paragraphs. Without the gutter
-   class that variable defaults to 0px, so poetry alignment is approximate. */
+   alongside .psc-gutter-markers the box also takes in the marker glyph (the rule
+   below); --verse-text-start is a fallback start that no marker in this file
+   wins today. Without the gutter class that variable defaults to 0px, so poetry
+   alignment is approximate. */
 
 .psc-active-focus {
   --scripture-accent: #c4956a;
@@ -3004,11 +3047,12 @@ span.read img {
 
 /* In gutter-marker mode, the paragraph marker (\p, \q1, etc.) is absolutely positioned in the
    gutter to the inline-start side of the paragraph's content box. Extend the outline's
-   inline-start so the box surrounds the marker too — using min() picks whichever is further
-   into the gutter, the hanging-indent text start (for poetry) or the marker's own column. */
+   inline-start so the box surrounds the marker too — using min() against the hanging-indent
+   text start (--verse-text-start). For every marker in this file the marker's own column is
+   further into the gutter, so it is what wins today. */
 .psc-active-focus.psc-gutter-markers .psc-active-text::after {
   inset-inline-start: min(
     var(--verse-text-start, 0px),
-    calc(-1 * var(--psc-gutter-width) - var(--para-indent))
+    calc(-1 * var(--psc-gutter-width) - var(--para-indent, 0px))
   );
 }

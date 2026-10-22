@@ -92,6 +92,14 @@ export type DialogContentProps = React.ComponentProps<typeof DialogPrimitive.Con
    * overlay styling than the default.
    */
   overlayClassName?: string;
+  // CUSTOM: Added overlayStyle prop so a caller can override the overlay's inline z-index (e.g. a
+  // nested modal, whose backdrop must paint above the dialog hosting it); overlayClassName cannot,
+  // because DialogOverlay sets zIndex inline and inline styles beat classes
+  /**
+   * Inline styles for the backdrop (`DialogOverlay`). Needed for anything the overlay sets inline —
+   * notably `zIndex`, which an `overlayClassName` cannot override.
+   */
+  overlayStyle?: React.CSSProperties;
   showCloseButton?: boolean;
 };
 
@@ -108,6 +116,8 @@ function DialogContent({
   showCloseButton = true,
   // CUSTOM: Destructure overlayClassName to forward to DialogOverlay for per-call backdrop styling
   overlayClassName,
+  // CUSTOM: Destructure overlayStyle to forward to DialogOverlay for per-call backdrop z-index
+  overlayStyle,
   // CUSTOM: Destructure style to allow merging with shared z-index constant
   style,
   ...props
@@ -116,8 +126,8 @@ function DialogContent({
   const dir = readDirection();
   return (
     <DialogPortal>
-      {/* CUSTOM: Pass overlayClassName to DialogOverlay for per-call backdrop styling */}
-      <DialogOverlay className={overlayClassName} />
+      {/* CUSTOM: Pass overlayClassName and overlayStyle to DialogOverlay for per-call backdrop styling */}
+      <DialogOverlay className={overlayClassName} style={overlayStyle} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

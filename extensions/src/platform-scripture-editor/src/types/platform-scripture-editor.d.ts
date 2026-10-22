@@ -55,23 +55,17 @@ declare module 'platform-scripture-editor' {
     method: 'toggleFootnotesPaneVisibility';
   };
 
-  /**
-   * Tell the editor to toggle the footnotes-pane auto-show/hide setting (which diverges from PT9)
-   * in standard view (default off; when on, the pane auto-shows/hides based on whether the current
-   * chapter has notes, unless the user has manually overridden it for that chapter)
-   */
-  export type EditorMessageToggleFootnotesAutoShow = {
-    method: 'toggleFootnotesAutoShow';
-  };
-
   /** Tell the editor to change (toggle between bottom and side) footnotes pane location */
   export type EditorMessageChangeFootnotesPaneLocation = {
     method: 'changeFootnotesPaneLocation';
   };
 
-  /** Tell the editor to insert a textual note (footnote or cross-reference) */
+  /** Tell the editor to insert a textual note (footnote, endnote, or cross-reference) */
   export type EditorMessageInsertTextualNoteAtSelection = {
-    method: 'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection';
+    method:
+      | 'insertFootnoteAtSelection'
+      | 'insertCrossReferenceAtSelection'
+      | 'insertEndnoteAtSelection';
   };
 
   /** Tell the editor to open the comment editor for inserting a new comment at the current verse */
@@ -152,7 +146,6 @@ declare module 'platform-scripture-editor' {
     | EditorMessageUpdateDecorations
     | EditorMessageChangeScriptureView
     | EditorMessageToggleFootnotesPaneVisibility
-    | EditorMessageToggleFootnotesAutoShow
     | EditorMessageChangeFootnotesPaneLocation
     | EditorMessageInsertTextualNoteAtSelection
     | EditorMessageInsertCommentAtSelection
@@ -215,14 +208,14 @@ declare module 'platform-scripture-editor' {
    */
   export type ScriptureRange = {
     /**
-     * Starting point where the check result applies in the document
+     * Starting point of the range in the document
      *
      * Note: some forms of this type are deprecated and will be removed eventually; see
      * {@link ScriptureLocation} for details.
      */
     start: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
     /**
-     * Ending point where the check result applies in the document
+     * Ending point of the range in the document.
      *
      * Note: some forms of this type are deprecated and will be removed eventually; see
      * {@link ScriptureLocation} for details.
@@ -356,7 +349,26 @@ declare module 'platform-scripture-editor' {
   };
 
   export type PlatformScriptureEditorWebViewController = NetworkableObject<{
-    /** Set the current selection on the editor */
+    /**
+     * Set the current selection on the editor, navigating to the range's book and chapter first if
+     * the editor is showing another, and scroll the range itself into view: a range already fully
+     * on screen stays put; otherwise its first line lands just below the top of the editor. If the
+     * editor's tab is hidden, the selection is made at once and the scroll happens when the tab is
+     * next shown.
+     *
+     * The reference the navigation publishes to the editor's scroll group is the range's full verse
+     * reference, not just its book and chapter, so other views on the same scroll group land on the
+     * same verse.
+     *
+     * The jump is ABANDONED — with no selection and no scroll — if the editor lands on a chapter
+     * other than the one requested before the range's content arrives (e.g. the user navigates away
+     * while the jump is still pending); the returned promise still resolves normally. It also falls
+     * back to scrolling to the verse, rather than the range, when the selection cannot be applied
+     * or its geometry cannot be measured.
+     *
+     * The returned promise resolves once the request has been sent to the editor, not once the
+     * scroll (or the navigation, selection, or fallback it may trigger) has finished.
+     */
     selectRange(range: ScriptureRange): Promise<void>;
     /**
      * Cycle through the Scripture view types in the editor (currently just a toggle between
@@ -365,11 +377,6 @@ declare module 'platform-scripture-editor' {
     changeScriptureView(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     toggleFootnotesPaneVisibility(): Promise<void>;
-    /**
-     * Toggle the footnotes-pane auto-show/hide setting (which diverges from PT9) in standard view
-     * (default off)
-     */
-    toggleFootnotesAutoShow(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     changeFootnotesPaneLocation(): Promise<'bottom' | 'trailing'>;
     /**
@@ -387,6 +394,8 @@ declare module 'platform-scripture-editor' {
     insertFootnoteAtSelection(): Promise<void>;
     /** Function to insert a cross-reference in the editor at the current selection */
     insertCrossReferenceAtSelection(): Promise<void>;
+    /** Function to insert an endnote in the editor at the current selection */
+    insertEndnoteAtSelection(): Promise<void>;
     /**
      * Function to open the comment editor for inserting a new project comment at the current verse.
      * Checks permissions and fetches assignable users before opening the editor.
@@ -438,8 +447,8 @@ declare module 'platform-scripture-editor' {
      * If the editor has already reported a selection, resolves immediately with that value (or
      * `undefined` if the editor reported no selection). If the editor has not yet reported any
      * selection at the time of the call, waits up to 10 seconds for the first selection and
-     * **rejects** if none arrives in that window — callers should be prepared to handle a rejected
-     * promise as well as a resolved `undefined`.
+     * resolves with `undefined` if none arrives in that window. Rejects only if the editor's
+     * controller is disposed while waiting.
      *
      * @returns The current selection range, or `undefined` if the editor reported no selection
      */
@@ -818,17 +827,6 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
 
     /**
-     * Toggles the footnotes-pane auto-show/hide setting (which diverges from PT9; default off) for
-     * the given the WebView ID. When on, the footnotes pane automatically shows/hides in standard
-     * view based on whether the current chapter has notes, unless manually overridden.
-     *
-     * @param webViewId The WebView ID of the scripture editor or resource viewer.
-     */
-    'platformScriptureEditor.toggleFootnotesAutoShow': (
-      webViewId: string | undefined,
-    ) => Promise<void>;
-
-    /**
      * Changes the location of the footnotes pane (if visible) for the given the WebView ID,
      * toggling between showing it at the bottom or side-by-side.
      *
@@ -841,6 +839,12 @@ declare module 'papi-shared-types' {
     /**
      * Command to insert a footnote into a given editor web view.
      *
+     * `editorWebViewId` is optional in the type but required in practice: with no id, or an id that
+     * no longer names an open Scripture editor, the command no-ops silently rather than inserting
+     * anywhere. A resolved promise means the request was DELIVERED to the web view, not that a note
+     * was inserted — the web view can still refuse the insert (e.g. read-only, no selection), and a
+     * refusal is not reported to the caller.
+     *
      * @param editorWebViewId The ID of the web view to insert the footnote for
      */
     'platformScriptureEditor.insertFootnoteAtSelection': (
@@ -848,17 +852,35 @@ declare module 'papi-shared-types' {
     ) => Promise<void>;
 
     /**
-     * Command to insert a cross-reference into a given editor web view.
+     * Command to insert a cross-reference into a given editor web view. See the
+     * `platformScriptureEditor.insertFootnoteAtSelection` command's TSDoc above for the
+     * `editorWebViewId` and resolution caveats, which apply identically here.
      *
-     * @param editorWebViewId The ID of the web view to insert the footnote for
+     * @param editorWebViewId The ID of the web view to insert the cross-reference for
      */
     'platformScriptureEditor.insertCrossReferenceAtSelection': (
       editorWebViewId?: string | undefined,
     ) => Promise<void>;
 
     /**
+     * Command to insert an endnote into a given editor web view. See the
+     * `platformScriptureEditor.insertFootnoteAtSelection` command's TSDoc above for the
+     * `editorWebViewId` and resolution caveats, which apply identically here.
+     *
+     * @param editorWebViewId The ID of the web view to insert the endnote for
+     */
+    'platformScriptureEditor.insertEndnoteAtSelection': (
+      editorWebViewId?: string | undefined,
+    ) => Promise<void>;
+
+    /**
      * Command to insert a project comment at the current verse in a given editor web view. Opens a
      * comment editor popover for drafting the comment content and optionally assigning to a user.
+     * See the `platformScriptureEditor.insertFootnoteAtSelection` command's TSDoc above for the
+     * `editorWebViewId` caveat, which applies here too — but resolution does NOT behave
+     * identically: this command's controller rethrows when the user lacks permission to create
+     * comments, so the returned promise CAN reject, and a sync-blocked comment shows the user a
+     * notice rather than failing silently.
      *
      * @param editorWebViewId The ID of the web view to insert the comment for
      */
@@ -910,6 +932,36 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.openResourceText': (
       resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
       projectId?: string,
+    ) => Promise<string | undefined>;
+    /**
+     * Brings the Bible texts tab to the front. If it isn't open, opens it for the editor's project.
+     * An open tab is raised, never reloaded, so it keeps its state.
+     *
+     * @param editorWebViewId The scripture editor the request came from
+     * @returns The Bible texts web view's ID, or `undefined` if it couldn't be shown
+     */
+    'platformScriptureEditor.showBibleTextsPanel': (
+      editorWebViewId?: string,
+    ) => Promise<string | undefined>;
+    /**
+     * Brings the Commentaries tab to the front. If it isn't open, opens it for the editor's
+     * project. An open tab is raised, never reloaded, so it keeps its state.
+     *
+     * @param editorWebViewId The scripture editor the request came from
+     * @returns The Commentaries web view's ID, or `undefined` if it couldn't be shown
+     */
+    'platformScriptureEditor.showCommentariesPanel': (
+      editorWebViewId?: string,
+    ) => Promise<string | undefined>;
+    /**
+     * Brings the Text collection tab to the front. If it isn't open, opens it; if the feature is
+     * unavailable (the provider was never registered), opens nothing and shows a warning instead.
+     *
+     * @param editorWebViewId The scripture editor the request came from (unused)
+     * @returns The Text collection web view's ID, or `undefined` if it could not be shown
+     */
+    'platformScriptureEditor.showTextCollectionPanel': (
+      editorWebViewId?: string,
     ) => Promise<string | undefined>;
   }
 

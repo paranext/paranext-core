@@ -1,4 +1,5 @@
 import { app } from 'electron';
+import type { IncomingMessage } from 'http';
 import {
   ConnectionStatus,
   createErrorResponse,
@@ -10,11 +11,14 @@ import {
   REGISTER_METHOD,
   RequestParams,
   requestWithRetry,
+  ServerSocketLike,
   UNREGISTER_EVENT,
   UNREGISTER_METHOD,
+  MAX_WEBSOCKET_PAYLOAD_BYTES,
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import {
+  IRpcLocalClientAcceptor,
   IRpcMethodRegistrar,
   RegisteredRpcMethodDetails,
   RpcClientDisconnectEvent,
@@ -72,7 +76,7 @@ function onServerError(error: unknown): void {
  *
  * Created by the main process on start up when the network service initializes
  */
-export class RpcWebSocketListener implements IRpcMethodRegistrar {
+export class RpcWebSocketListener implements IRpcMethodRegistrar, IRpcLocalClientAcceptor {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
   /**
    * Event that fires when a connected process goes away, carrying the method names its departure
@@ -94,7 +98,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   private webSocketServer: WebSocketServer | undefined;
   private nextSocketNumber = 1;
   private readonly connectionMutex = new Mutex();
-  private readonly rpcServerBySocket = new Map<WebSocket, RpcServer>();
+  private readonly rpcServerBySocket = new Map<ServerSocketLike, RpcServer>();
   private readonly rpcMethodDetailsByMethodName = new Map<string, RegisteredRpcMethodDetails>();
   private readonly localMethodsByMethodName = new Map<string, InternalRequestHandler>();
   private readonly rpcEventDetailsByEventName = new RpcEventRegistry();
@@ -165,7 +169,11 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       // through a computer network" in play. Making this address configurable would change what
       // downstream licensees are exposed to, so treat that as a licensing decision, not just a
       // networking one.
-      const webSocketServer = new WebSocketServer({ host: 'localhost', port: this.port });
+      const webSocketServer = new WebSocketServer({
+        host: 'localhost',
+        port: this.port,
+        maxPayload: MAX_WEBSOCKET_PAYLOAD_BYTES,
+      });
       this.webSocketServer = webSocketServer;
       webSocketServer.addListener('connection', this.onClientConnect);
       webSocketServer.addListener('close', this.disconnect);
@@ -344,6 +352,22 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
 
   async unregisterEvent(eventName: string): Promise<boolean> {
     return this.rpcEventDetailsByEventName.tryUnregister(this, eventName);
+  }
+
+  /**
+   * Start serving a caller-created socket as a client of main's RPC server. See
+   * {@link IRpcLocalClientAcceptor.acceptLocalClient}.
+   *
+   * @experimental
+   */
+  acceptLocalClient(socket: ServerSocketLike, name: string): void {
+    if (this.connectionStatus !== ConnectionStatus.Connected)
+      throw new Error(
+        `The PAPI network is not accepting clients (status ${this.connectionStatus})`,
+      );
+    // Only renderers connect this way, and a web view can drive its renderer's connection
+    this.serveClient(socket, name, false);
+    logger.info(`PAPI client ${name} connected over a local port`);
   }
 
   generateOpenRpcSchema(): OpenRpc {
@@ -604,21 +628,40 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
     );
   }
 
-  private onClientConnect(webSocket: WebSocket): void {
+  /**
+   * @param upgradeRequest The handshake request, which `ws` always passes. Without one the client
+   *   is treated as having sent `Origin`.
+   */
+  private onClientConnect(webSocket: WebSocket, upgradeRequest?: IncomingMessage): void {
     const socketId = this.nextSocketId;
-    const rpcServer = new RpcServer(
-      socketId,
+    // TODO(PT-2893): The Origin check is an insecure temporary stopgap; see RpcServer.processMessage
+    this.serveClient(
       webSocket,
+      socketId,
+      !!upgradeRequest && upgradeRequest.headers.origin === undefined,
+    );
+    // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
+    logger.info(`Websocket client ${socketId} connected`);
+  }
+
+  /** Attach an `RpcServer` to a socket and track it until the socket closes */
+  private serveClient(
+    socket: ServerSocketLike,
+    name: string,
+    isWebSocketWithoutOrigin: boolean,
+  ): void {
+    const rpcServer = new RpcServer(
+      name,
+      socket,
       this.propagateEvent,
       this.rpcMethodDetailsByMethodName,
       this.rpcEventDetailsByEventName,
       this.announceClientDisconnect,
+      isWebSocketWithoutOrigin,
     );
     rpcServer.connect();
-    this.rpcServerBySocket.set(webSocket, rpcServer);
-    // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
-    logger.info(`Websocket client ${socketId} connected`);
-    webSocket.addEventListener('close', this.onClientDisconnect);
+    this.rpcServerBySocket.set(socket, rpcServer);
+    socket.addEventListener('close', this.onClientDisconnect);
   }
 
   // Run by an RpcServer once it has removed its client's methods from the registry
@@ -638,7 +681,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
   private onClientDisconnect(ev: CloseEvent): void {
     // Assert the correct type
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const webSocket = ev.target as WebSocket;
+    const webSocket = ev.target as unknown as ServerSocketLike;
     webSocket.removeEventListener('close', this.onClientDisconnect);
     if (!this.rpcServerBySocket.delete(webSocket)) {
       logger.warn('Close called on a websocket, but no rpc server handler was found for it');

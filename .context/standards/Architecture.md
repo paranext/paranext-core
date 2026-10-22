@@ -19,18 +19,18 @@ This document provides detailed architectural information for Platform.Bible (pa
 
 ### Overview
 
-Platform.Bible uses **JSON-RPC 2.0 over WebSocket** for inter-process communication. All processes connect to the Main process which acts as the message broker.
+Platform.Bible uses **JSON-RPC 2.0** for inter-process communication. All processes connect to the Main process which acts as the message broker. The extension host and the .NET data provider connect over a WebSocket; each renderer window connects over an Electron `MessagePort`, because Chromium closes every TCP client socket when the OS suspends (see `adr-renderer-papi-transport-is-messageport`).
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                    Main Process (Electron)                   │
 │  • WebSocket server on port 8876                             │
+│  • One MessagePort per renderer window                       │
 │  • Routes messages between processes                         │
-└────────────────┬─────────────────────────────────────────────┘
-                 │ JSON-RPC over WebSocket (port 8876)
-    ┌────────────┼─────────────┬───────────────────┐
-    │            │             │                   │
-┌───▼────────┐ ┌─▼──────────┐ ┌▼───────────┐ ┌─────▼───────────┐
+└──────┬─────────────┬─────────────┬───────────────────────────┘
+       │ JSON-RPC    │ JSON-RPC    │ JSON-RPC over WebSocket (port 8876)
+       │ MessagePort │ MessagePort ├───────────────┐
+┌──────▼─────┐ ┌─────▼──────┐ ┌────▼───────┐ ┌─────▼───────────┐
 │ Renderer   │ │ Renderer   │ │ Extension  │ │ .NET Data       │
 │ (window 1) │ │ (window N) │ │ Host       │ │ Provider        │
 └────────────┘ └────────────┘ └────────────┘ └─────────────────┘
@@ -77,6 +77,12 @@ refuses them. The symptom appears
 three processes away as missing settings/localization/theme providers and raw `%localizeKey%` text,
 with nothing in the log tying it back to the socket. Any new `IRpcHandler` implementation inherits
 this requirement.
+
+**The renderer is not a WebSocket client.** Each window's connection to main is an Electron
+`MessagePort` obtained through the preload and served by `RpcWebSocketListener.acceptLocalClient`.
+Both rules above still apply to the `ws` server, which the extension host and .NET use; a change to
+that server does not reach the renderer, and a change to the renderer's transport does not reach
+them. Anything that counts clients on port 8876 should expect two, not three.
 
 See `adr-papi-websocket-hostname-bind` in [Architecture-Decisions.md](Architecture-Decisions.md)
 for the incident and the alternatives that were rejected.

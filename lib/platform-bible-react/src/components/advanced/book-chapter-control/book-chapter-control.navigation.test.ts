@@ -13,6 +13,16 @@ const lastChapters: Record<string, number> = {
   REV: 22,
 };
 
+/**
+ * Looks up a quick-nav button by its title rather than its position in the array, so tests keep
+ * working across reorders of the returned button list.
+ */
+function findButton(buttons: ReturnType<typeof useQuickNavButtons>, title: string) {
+  const button = buttons.find((candidate) => candidate.title === title);
+  if (!button) throw new Error(`No quick-nav button titled "${title}"`);
+  return button;
+}
+
 describe('useQuickNavButtons', () => {
   const mockHandleSubmit = vi.fn();
   const availableBooks = ['GEN', 'EXO', 'LEV', 'MAT', 'MRK', 'REV'];
@@ -32,10 +42,84 @@ describe('useQuickNavButtons', () => {
     );
 
     expect(result.current).toHaveLength(4);
-    expect(result.current[0].title).toBe('Previous chapter');
-    expect(result.current[1].title).toBe('Previous verse');
-    expect(result.current[2].title).toBe('Next verse');
-    expect(result.current[3].title).toBe('Next chapter');
+    expect(result.current.map((button) => button.title).sort()).toEqual([
+      'Next chapter',
+      'Next verse',
+      'Previous chapter',
+      'Previous verse',
+    ]);
+  });
+
+  test('groups chapter buttons before verse buttons', () => {
+    const { result } = renderHook(() =>
+      useQuickNavButtons(
+        { book: 'MAT', chapterNum: 5, verseNum: 1 },
+        ['MAT'],
+        'ltr',
+        mockHandleSubmit,
+      ),
+    );
+
+    expect(result.current.map((button) => button.title)).toEqual([
+      'Previous chapter',
+      'Next chapter',
+      'Previous verse',
+      'Next verse',
+    ]);
+    expect(result.current.map((button) => button.group)).toEqual([
+      'chapter',
+      'chapter',
+      'verse',
+      'verse',
+    ]);
+  });
+
+  test('verse icons are direction-independent', () => {
+    const ltr = renderHook(() =>
+      useQuickNavButtons(
+        { book: 'MAT', chapterNum: 5, verseNum: 1 },
+        ['MAT'],
+        'ltr',
+        mockHandleSubmit,
+      ),
+    ).result;
+    const rtl = renderHook(() =>
+      useQuickNavButtons(
+        { book: 'MAT', chapterNum: 5, verseNum: 1 },
+        ['MAT'],
+        'rtl',
+        mockHandleSubmit,
+      ),
+    ).result;
+
+    // Chapter icons flip with direction: each one takes the other's glyph in RTL.
+    expect(findButton(ltr.current, 'Previous chapter').icon).toBe(
+      findButton(rtl.current, 'Next chapter').icon,
+    );
+    expect(findButton(ltr.current, 'Next chapter').icon).toBe(
+      findButton(rtl.current, 'Previous chapter').icon,
+    );
+    // Verse icons are vertical chevrons, so they are the same glyph in both directions.
+    expect(findButton(ltr.current, 'Previous verse').icon).toBe(
+      findButton(rtl.current, 'Previous verse').icon,
+    );
+    expect(findButton(ltr.current, 'Next verse').icon).toBe(
+      findButton(rtl.current, 'Next verse').icon,
+    );
+  });
+
+  test('uses localized titles when they are supplied', () => {
+    const { result } = renderHook(() =>
+      useQuickNavButtons(
+        { book: 'MAT', chapterNum: 5, verseNum: 1 },
+        ['MAT'],
+        'ltr',
+        mockHandleSubmit,
+        { '%webView_bookChapterControl_nextChapter%': 'Capítulo siguiente' },
+      ),
+    );
+
+    expect(result.current[1].title).toBe('Capítulo siguiente');
   });
 
   describe('Previous chapter navigation', () => {
@@ -50,7 +134,7 @@ describe('useQuickNavButtons', () => {
       );
 
       act(() => {
-        result.current[0].onClick(); // Previous chapter
+        findButton(result.current, 'Previous chapter').onClick();
       });
 
       expect(mockHandleSubmit).toHaveBeenCalledWith({ book: 'GEN', chapterNum: 1, verseNum: 1 });
@@ -67,7 +151,7 @@ describe('useQuickNavButtons', () => {
       );
 
       act(() => {
-        result.current[0].onClick(); // Previous chapter
+        findButton(result.current, 'Previous chapter').onClick();
       });
 
       expect(mockHandleSubmit).toHaveBeenCalledWith({
@@ -87,7 +171,7 @@ describe('useQuickNavButtons', () => {
         ),
       );
 
-      expect(result.current[0].disabled).toBe(true);
+      expect(findButton(result.current, 'Previous chapter').disabled).toBe(true);
     });
 
     test('Is not disabled when not at first chapter of first book', () => {
@@ -100,7 +184,7 @@ describe('useQuickNavButtons', () => {
         ),
       );
 
-      expect(result.current[0].disabled).toBe(false);
+      expect(findButton(result.current, 'Previous chapter').disabled).toBe(false);
     });
   });
 
@@ -116,7 +200,7 @@ describe('useQuickNavButtons', () => {
       );
 
       act(() => {
-        result.current[3].onClick(); // Next chapter
+        findButton(result.current, 'Next chapter').onClick();
       });
 
       expect(mockHandleSubmit).toHaveBeenCalledWith({ book: 'GEN', chapterNum: 2, verseNum: 1 });
@@ -133,7 +217,7 @@ describe('useQuickNavButtons', () => {
       );
 
       act(() => {
-        result.current[3].onClick(); // Next chapter
+        findButton(result.current, 'Next chapter').onClick();
       });
 
       expect(mockHandleSubmit).toHaveBeenCalledWith({ book: 'EXO', chapterNum: 1, verseNum: 1 });
@@ -149,7 +233,7 @@ describe('useQuickNavButtons', () => {
         ),
       );
 
-      expect(result.current[3].disabled).toBe(true);
+      expect(findButton(result.current, 'Next chapter').disabled).toBe(true);
     });
   });
 
@@ -165,7 +249,7 @@ describe('useQuickNavButtons', () => {
       );
 
       act(() => {
-        result.current[1].onClick(); // Previous verse
+        findButton(result.current, 'Previous verse').onClick();
       });
 
       expect(mockHandleSubmit).toHaveBeenCalledWith({ book: 'GEN', chapterNum: 1, verseNum: 4 });
@@ -182,7 +266,7 @@ describe('useQuickNavButtons', () => {
       );
 
       act(() => {
-        result.current[1].onClick(); // Previous verse
+        findButton(result.current, 'Previous verse').onClick();
       });
 
       expect(mockHandleSubmit).toHaveBeenCalledWith({ book: 'GEN', chapterNum: 1, verseNum: 0 });
@@ -198,7 +282,7 @@ describe('useQuickNavButtons', () => {
         ),
       );
 
-      expect(result.current[1].disabled).toBe(true);
+      expect(findButton(result.current, 'Previous verse').disabled).toBe(true);
     });
   });
 
@@ -214,7 +298,7 @@ describe('useQuickNavButtons', () => {
       );
 
       act(() => {
-        result.current[2].onClick(); // Next verse
+        findButton(result.current, 'Next verse').onClick();
       });
 
       expect(mockHandleSubmit).toHaveBeenCalledWith({ book: 'GEN', chapterNum: 1, verseNum: 2 });
@@ -230,7 +314,7 @@ describe('useQuickNavButtons', () => {
         ),
       );
 
-      expect(result.current[2].disabled).toBeFalsy();
+      expect(findButton(result.current, 'Next verse').disabled).toBeFalsy();
     });
   });
 
@@ -254,15 +338,27 @@ describe('useQuickNavButtons', () => {
         ),
       );
 
-      // Icons should be different for RTL vs LTR
-      expect(ltrResult.current[0].icon).not.toBe(rtlResult.current[0].icon);
-      expect(ltrResult.current[1].icon).not.toBe(rtlResult.current[1].icon);
-      expect(ltrResult.current[2].icon).not.toBe(rtlResult.current[2].icon);
-      expect(ltrResult.current[3].icon).not.toBe(rtlResult.current[3].icon);
-      expect(ltrResult.current[0].icon).toBe(rtlResult.current[3].icon);
-      expect(ltrResult.current[1].icon).toBe(rtlResult.current[2].icon);
-      expect(ltrResult.current[2].icon).toBe(rtlResult.current[1].icon);
-      expect(ltrResult.current[3].icon).toBe(rtlResult.current[0].icon);
+      // Chapter icons flip with direction and swap positions between ltr and rtl.
+      expect(findButton(ltrResult.current, 'Previous chapter').icon).not.toBe(
+        findButton(rtlResult.current, 'Previous chapter').icon,
+      );
+      expect(findButton(ltrResult.current, 'Next chapter').icon).not.toBe(
+        findButton(rtlResult.current, 'Next chapter').icon,
+      );
+      expect(findButton(ltrResult.current, 'Previous chapter').icon).toBe(
+        findButton(rtlResult.current, 'Next chapter').icon,
+      );
+      expect(findButton(ltrResult.current, 'Next chapter').icon).toBe(
+        findButton(rtlResult.current, 'Previous chapter').icon,
+      );
+
+      // Verse icons are vertical chevrons and do not depend on direction.
+      expect(findButton(ltrResult.current, 'Previous verse').icon).toBe(
+        findButton(rtlResult.current, 'Previous verse').icon,
+      );
+      expect(findButton(ltrResult.current, 'Next verse').icon).toBe(
+        findButton(rtlResult.current, 'Next verse').icon,
+      );
     });
 
     test('Navigates to previous chapter within same book in RTL', () => {
@@ -276,7 +372,7 @@ describe('useQuickNavButtons', () => {
       );
 
       act(() => {
-        result.current[0].onClick(); // Previous chapter
+        findButton(result.current, 'Previous chapter').onClick();
       });
 
       expect(mockHandleSubmit).toHaveBeenCalledWith({ book: 'GEN', chapterNum: 1, verseNum: 1 });
@@ -292,7 +388,7 @@ describe('useQuickNavButtons', () => {
         ),
       );
 
-      expect(result.current[0].disabled).toBe(true);
+      expect(findButton(result.current, 'Previous chapter').disabled).toBe(true);
     });
 
     test('Is disabled when at last chapter of last book in RTL', () => {
@@ -305,7 +401,7 @@ describe('useQuickNavButtons', () => {
         ),
       );
 
-      expect(result.current[3].disabled).toBe(true);
+      expect(findButton(result.current, 'Next chapter').disabled).toBe(true);
     });
 
     test('Is disabled when at verse 0 in RTL', () => {
@@ -318,7 +414,7 @@ describe('useQuickNavButtons', () => {
         ),
       );
 
-      expect(result.current[1].disabled).toBe(true);
+      expect(findButton(result.current, 'Previous verse').disabled).toBe(true);
     });
   });
 
@@ -337,10 +433,10 @@ describe('useQuickNavButtons', () => {
       expect(result.current).toHaveLength(4);
 
       // With no present books, every step is a no-op, so all buttons are disabled
-      expect(result.current[0].disabled).toBe(true);
-      expect(result.current[1].disabled).toBe(true);
-      expect(result.current[2].disabled).toBe(true);
-      expect(result.current[3].disabled).toBe(true);
+      expect(findButton(result.current, 'Previous chapter').disabled).toBe(true);
+      expect(findButton(result.current, 'Next chapter').disabled).toBe(true);
+      expect(findButton(result.current, 'Previous verse').disabled).toBe(true);
+      expect(findButton(result.current, 'Next verse').disabled).toBe(true);
     });
 
     test('Handles single book in available books', () => {
@@ -355,10 +451,10 @@ describe('useQuickNavButtons', () => {
       );
 
       // Previous chapter should be enabled (not at chapter 1)
-      expect(result.current[0].disabled).toBe(false);
+      expect(findButton(result.current, 'Previous chapter').disabled).toBe(false);
 
       // Next chapter should be enabled (not at last chapter)
-      expect(result.current[3].disabled).toBe(false);
+      expect(findButton(result.current, 'Next chapter').disabled).toBe(false);
     });
 
     test('Rolls a book not in availableBooks to the nearest present book', () => {
@@ -376,7 +472,7 @@ describe('useQuickNavButtons', () => {
       expect(result.current).toHaveLength(4);
 
       act(() => {
-        result.current[0].onClick(); // Previous chapter
+        findButton(result.current, 'Previous chapter').onClick();
       });
 
       expect(mockHandleSubmit).toHaveBeenCalledWith({

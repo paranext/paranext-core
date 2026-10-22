@@ -9,9 +9,11 @@ import {
   setSyncActivityUnknown,
 } from '@renderer/services/sync-activity-store';
 import type { SyncProgressEvent, SyncState } from 'paratext-bible-send-receive';
+import type { UnsyncedChangeSets } from './use-unsynced-changes.hook';
 import {
   SYNC_SEED_RETRY_INTERVAL_MS,
   SYNC_SEED_RETRY_WINDOW_MS,
+  SYNC_SETTLE_TIMEOUT_MS,
   useSyncStatus,
 } from './use-sync-status.hook';
 
@@ -28,6 +30,30 @@ vi.mock('@shared/services/logger.service', () => ({
 vi.mock('@shared/services/project-lookup.service', () => ({
   projectLookupService: { getMetadataForAllProjects: vi.fn(async () => []) },
 }));
+
+/**
+ * What the mocked `useUnsyncedChanges` returns. A held value rather than a fresh object per call,
+ * because the real hook keeps the sets' identity while they are unchanged and the name lookup is
+ * keyed on it — a new object on every render would re-run the lookup forever.
+ */
+const unsyncedChanges = vi.hoisted(() => {
+  const state: { sets: UnsyncedChangeSets | undefined } = { sets: undefined };
+  return state;
+});
+vi.mock('./use-unsynced-changes.hook', () => ({ useUnsyncedChanges: () => unsyncedChanges.sets }));
+
+/** Frozen sets in the shape `useUnsyncedChanges` reports. */
+function unsyncedSets(
+  toSend: readonly string[],
+  toReceive: readonly string[] = [],
+  isRechecking = false,
+): UnsyncedChangeSets {
+  return Object.freeze({
+    toSend: Object.freeze([...toSend]),
+    toReceive: Object.freeze([...toReceive]),
+    isRechecking,
+  });
+}
 
 // --- Helpers ---
 
@@ -205,6 +231,8 @@ describe('useSyncStatus', () => {
     // the activity signal contributes nothing unless a test says otherwise.
     commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
     seedActivity({ isSyncing: false, projectIds: [] });
+    // Not yet known, which is what the unsynced-changes hook reports before its own seed answers.
+    unsyncedChanges.sets = undefined;
   });
 
   afterEach(() => {
@@ -269,9 +297,9 @@ describe('useSyncStatus', () => {
   });
 
   it('falls back to the claim alone when the activity command is unavailable', async () => {
-    // Public Platform.Bible, or a Studio build predating this signal: getSyncActivity rejects
-    // (rather than answering) for the life of the hook, and the toolbar must still be truthful
-    // about a claim-visible sync.
+    // Public Platform.Bible, or a Paratext 10 build predating this signal: getSyncActivity
+    // rejects (rather than answering) for the life of the hook, and the toolbar must still be
+    // truthful about a claim-visible sync.
     commands.mockGetSyncState({
       isSyncing: true,
       syncingProjectIds: ['PROJ1'],
@@ -948,5 +976,489 @@ describe('useSyncStatus', () => {
 
     expect(result.current.status).toBe('syncing');
     expect(result.current.syncingProjects).toEqual([]);
+  });
+
+  // --- Local changes not yet sent ---
+
+  it('reports unsynced when idle and the set is non-empty', async () => {
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    unsyncedChanges.sets = unsyncedSets(['PROJ1', 'PROJ2']);
+    // Names chosen so name order and id order disagree, which is what shows the list is sorted by
+    // name rather than left in the order the set arrived in.
+    mockProjectNames({ PROJ1: 'ZZZ', PROJ2: 'AAA' });
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unsynced');
+    expect(result.current.unsyncedProjects).toEqual([
+      { projectId: 'PROJ2', name: 'AAA', direction: 'send' },
+      { projectId: 'PROJ1', name: 'ZZZ', direction: 'send' },
+    ]);
+    expect(result.current.unsyncedDirection).toBe('send');
+    // Unsent projects are not syncing ones: the two lists must not bleed into each other.
+    expect(result.current.syncingProjects).toEqual([]);
+  });
+
+  it('reports unsynced after a successful sync when the set is non-empty', async () => {
+    // The last sync finishing says nothing about edits made since it ran. Mounting after a sync
+    // never starts a hold, even while the backend reports rechecking.
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'succeeded' }));
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unsynced');
+  });
+
+  it('reports failed rather than unsynced when the last sync failed', async () => {
+    // A failed sync already implies work was not sent, and it is the more actionable of the two.
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'failed' }));
+    unsyncedChanges.sets = unsyncedSets(['PROJ1']);
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('failed');
+  });
+
+  it('reports syncing rather than unsynced while a sync runs', async () => {
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    seedActivity({ isSyncing: true, projectIds: [] });
+    unsyncedChanges.sets = unsyncedSets(['PROJ1']);
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('syncing');
+  });
+
+  it('reports unsynced when the claim is unknown but the set is non-empty', async () => {
+    // The set is a positive fact read from the repository; an unreadable claim does not unmake it.
+    commands.mockGetSyncState(completedStateWithResults({}));
+    unsyncedChanges.sets = unsyncedSets(['PROJ1']);
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unsynced');
+  });
+
+  it('reports unsynced rather than a stale verdict after an activity-only sync', async () => {
+    // Same reasoning for the claim's stale verdict: how the activity-only sync went is unknowable,
+    // but that projects still hold unsent changes is not.
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'succeeded' }));
+    unsyncedChanges.sets = unsyncedSets(['PROJ1']);
+    captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    pushActivity({ isSyncing: true, projectIds: [] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('syncing');
+
+    pushActivity({ isSyncing: false, projectIds: [] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unsynced');
+  });
+
+  it.each([
+    { outcome: 'failed', expected: 'failed', isVerdictFromBackendOnly: true },
+    { outcome: 'succeeded', expected: 'unsynced', isVerdictFromBackendOnly: false },
+  ] as const)(
+    'reports $expected when an activity-only sync the backend says $outcome leaves changes waiting',
+    async ({ outcome, expected, isVerdictFromBackendOnly }) => {
+      // The backend's verdict ranks against waiting changes exactly as the claim's does: a failure
+      // keeps the indicator, and a success gives way to the changes still waiting.
+      commands.mockGetSyncState(completedStateFor({ PROJ1: 'succeeded' }));
+      unsyncedChanges.sets = unsyncedSets(['PROJ1']);
+      captureEventCallbacks();
+
+      const { result } = renderHook(() => useSyncStatus());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      pushActivity({ isSyncing: true, projectIds: [] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(result.current.status).toBe('syncing');
+
+      pushActivity({ isSyncing: false, projectIds: [], outcome });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(result.current.status).toBe(expected);
+      expect(result.current.isVerdictFromBackendOnly).toBe(isVerdictFromBackendOnly);
+    },
+  );
+
+  it('never reports unsynced while the set is not known', async () => {
+    // Positive control first: the same claim WITH a non-empty set reports unsynced, so an
+    // `idle` below is the unknown set's doing rather than a claim that could never yield it.
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    unsyncedChanges.sets = unsyncedSets(['PROJ1']);
+    const { result, rerender } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('unsynced');
+
+    unsyncedChanges.sets = undefined;
+    rerender();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('idle');
+    expect(result.current.unsyncedProjects).toEqual([]);
+  });
+
+  // --- Sync direction ---
+
+  it('reports unsynced with direction receive when only the server holds changes', async () => {
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    unsyncedChanges.sets = unsyncedSets([], ['PROJ1']);
+    mockProjectNames({ PROJ1: 'ONE' });
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unsynced');
+    expect(result.current.unsyncedDirection).toBe('receive');
+    expect(result.current.unsyncedProjects).toEqual([
+      { projectId: 'PROJ1', name: 'ONE', direction: 'receive' },
+    ]);
+  });
+
+  it('reports both for a project in both sets', async () => {
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], ['PROJ1']);
+    mockProjectNames({ PROJ1: 'ONE' });
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unsynced');
+    expect(result.current.unsyncedDirection).toBe('both');
+    expect(result.current.unsyncedProjects).toEqual([
+      { projectId: 'PROJ1', name: 'ONE', direction: 'both' },
+    ]);
+  });
+
+  it('reports both overall when one project is send-only and another receive-only', async () => {
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], ['PROJ2']);
+    mockProjectNames({ PROJ1: 'ONE', PROJ2: 'TWO' });
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.unsyncedDirection).toBe('both');
+    expect(result.current.unsyncedProjects).toEqual([
+      { projectId: 'PROJ1', name: 'ONE', direction: 'send' },
+      { projectId: 'PROJ2', name: 'TWO', direction: 'receive' },
+    ]);
+  });
+
+  it('reports failed rather than unsynced when only the server holds changes', async () => {
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'failed' }));
+    unsyncedChanges.sets = unsyncedSets([], ['PROJ1']);
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('failed');
+  });
+
+  it('reports no direction and not unsynced when both sets are empty', async () => {
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    unsyncedChanges.sets = unsyncedSets([], []);
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('idle');
+    expect(result.current.unsyncedDirection).toBeUndefined();
+    expect(result.current.unsyncedProjects).toEqual([]);
+  });
+
+  it('reports no direction while the sets are not known', async () => {
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    unsyncedChanges.sets = undefined;
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.unsyncedDirection).toBeUndefined();
+  });
+
+  it('does not name a project the sets have released while the new names are still loading', async () => {
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    unsyncedChanges.sets = unsyncedSets(['PROJ1']);
+    mockProjectNames({ PROJ1: 'ONE' });
+    const { result, rerender } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.unsyncedProjects).toEqual([
+      { projectId: 'PROJ1', name: 'ONE', direction: 'send' },
+    ]);
+
+    // The lookup for the new set never answers, so only the previous names are available.
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockReturnValue(
+      new Promise(() => {}),
+    );
+    unsyncedChanges.sets = unsyncedSets([], ['PROJ2']);
+    rerender();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.unsyncedDirection).toBe('receive');
+    expect(result.current.unsyncedProjects).toEqual([]);
+  });
+
+  // --- Just-synced projects are held out of the unsynced count until the backend rechecked ---
+
+  /**
+   * Mounts idle, then runs one sync through the event path: a start, then an end whose follow-up
+   * read answers with `endState`. Returns after the end event's read has settled.
+   */
+  async function runSyncThroughEvents(
+    endState: Partial<SyncState>,
+    options: { projectNames?: Record<string, string> } = {},
+  ) {
+    commands.mockGetSyncState(
+      { isSyncing: false, lastRequestedProjectIds: [] },
+      { isSyncing: true, lastRequestedProjectIds: [] },
+      endState,
+    );
+    if (options.projectNames) mockProjectNames(options.projectNames);
+    const { emitSyncStateChanged } = captureEventCallbacks();
+    const rendered = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    emitSyncStateChanged({ isSyncing: true });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    emitSyncStateChanged({ isSyncing: false });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    return { ...rendered, emitSyncStateChanged };
+  }
+
+  /** Re-renders with new unsynced sets, as the real hook does when the backend pushes a snapshot. */
+  async function pushUnsyncedSets(
+    rerender: () => void,
+    sets: UnsyncedChangeSets | undefined,
+  ): Promise<void> {
+    unsyncedChanges.sets = sets;
+    rerender();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  }
+
+  it('does not count a just-synced project while the backend is still rechecking', async () => {
+    // the lists can still describe the moment before the sync, so the project the sync just
+    // exchanged is left out until the backend says it rechecked.
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
+    const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }));
+
+    expect(result.current.status).toBe('synced');
+    expect(result.current.unsyncedProjects).toEqual([]);
+    expect(result.current.unsyncedDirection).toBeUndefined();
+  });
+
+  it('still reports at once a project the sync did not exchange', async () => {
+    unsyncedChanges.sets = unsyncedSets(['PROJ1', 'PROJ2'], [], true);
+    const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }), {
+      projectNames: { PROJ1: 'ONE', PROJ2: 'TWO' },
+    });
+
+    expect(result.current.status).toBe('unsynced');
+    expect(result.current.unsyncedProjects).toEqual([
+      { projectId: 'PROJ2', name: 'TWO', direction: 'send' },
+    ]);
+    expect(result.current.unsyncedDirection).toBe('send');
+  });
+
+  it('shows the project once the backend has finished rechecking', async () => {
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
+    const { result, rerender } = await runSyncThroughEvents(
+      completedStateFor({ PROJ1: 'succeeded' }),
+      { projectNames: { PROJ1: 'ONE' } },
+    );
+    expect(result.current.status).toBe('synced');
+
+    await pushUnsyncedSets(rerender, unsyncedSets(['PROJ1'], [], false));
+
+    expect(result.current.status).toBe('unsynced');
+    expect(result.current.unsyncedProjects).toEqual([
+      { projectId: 'PROJ1', name: 'ONE', direction: 'send' },
+    ]);
+  });
+
+  it('does not hold when the backend already finished rechecking at the end of the sync', async () => {
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], false);
+    const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }));
+
+    expect(result.current.status).toBe('unsynced');
+  });
+
+  it('releases the hold after the settle timeout when the backend never clears the flag', async () => {
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
+    const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }));
+    expect(result.current.status).toBe('synced');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_SETTLE_TIMEOUT_MS - 1);
+    });
+    expect(result.current.status).toBe('synced');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(result.current.status).toBe('unsynced');
+  });
+
+  it('does not hold a project the sync failed to exchange', async () => {
+    unsyncedChanges.sets = unsyncedSets(['PROJ1', 'PROJ2'], [], true);
+    const { result } = await runSyncThroughEvents(
+      completedStateFor({ PROJ1: 'failed', PROJ2: 'succeeded' }),
+      { projectNames: { PROJ1: 'ONE', PROJ2: 'TWO' } },
+    );
+
+    expect(result.current.status).toBe('failed');
+    expect(result.current.unsyncedProjects).toEqual([
+      { projectId: 'PROJ1', name: 'ONE', direction: 'send' },
+    ]);
+  });
+
+  it('holds a just-synced project in both directions', async () => {
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], ['PROJ1'], true);
+    const { result } = await runSyncThroughEvents(completedStateFor({ PROJ1: 'succeeded' }));
+
+    expect(result.current.status).toBe('synced');
+    expect(result.current.unsyncedDirection).toBeUndefined();
+  });
+
+  it('does not let a later failed sync inherit the previous sync hold', async () => {
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
+    const { result, emitSyncStateChanged } = await runSyncThroughEvents(
+      completedStateFor({ PROJ1: 'succeeded' }),
+      { projectNames: { PROJ1: 'ONE' } },
+    );
+    expect(result.current.status).toBe('synced');
+
+    // Same flag, a second sync that fails for the same project.
+    commands.mockGetSyncState(
+      { isSyncing: true, lastRequestedProjectIds: [] },
+      completedStateFor({ PROJ1: 'failed' }),
+    );
+    emitSyncStateChanged({ isSyncing: true });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    emitSyncStateChanged({ isSyncing: false });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('failed');
+    expect(result.current.unsyncedProjects).toEqual([
+      { projectId: 'PROJ1', name: 'ONE', direction: 'send' },
+    ]);
+  });
+
+  it('holds the projects an activity-only sync announced', async () => {
+    // no claim saw this sync, so the outcome is unknown, and the announced project is still
+    // held out of the count until the backend rechecked it.
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    unsyncedChanges.sets = unsyncedSets(['PROJ1'], [], true);
+    captureEventCallbacks();
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    pushActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    pushActivity({ isSyncing: false, projectIds: [] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unknown');
+    expect(result.current.unsyncedProjects).toEqual([]);
+  });
+
+  it('holds every project an activity-only sync announced, even as the announced set changes', async () => {
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    unsyncedChanges.sets = unsyncedSets(['PROJ1', 'PROJ2'], [], true);
+    captureEventCallbacks();
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // The announced set grows and then shrinks while the sync runs; no single snapshot names both
+    // projects at the end.
+    pushActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    pushActivity({ isSyncing: true, projectIds: ['PROJ1', 'PROJ2'] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    pushActivity({ isSyncing: true, projectIds: ['PROJ2'] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    pushActivity({ isSyncing: false, projectIds: [] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unknown');
+    expect(result.current.unsyncedProjects).toEqual([]);
   });
 });

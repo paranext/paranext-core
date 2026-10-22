@@ -107,12 +107,6 @@ export function useData(): unknown {
             undefined,
             language.isLoading,
           ];
-        if (language && dataType === 'AvailableInterfaceLanguages')
-          return (_selector: undefined, def: Record<string, LanguageInfo>): LanguageDataTuple => [
-            language.availableLanguages ?? def,
-            undefined,
-            false,
-          ];
         if (internetSettings && dataType === 'InternetSettings')
           return (_selector: unknown, def: unknown): InternetSettingsDataTuple => [
             internetSettings.value ?? def,

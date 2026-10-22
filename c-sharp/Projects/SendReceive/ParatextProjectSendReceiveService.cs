@@ -1,4 +1,9 @@
+using System.Collections.Concurrent;
 using Paranext.DataProvider.Services;
+using Paranext.DataProvider.Users;
+using Paratext.Data;
+using Paratext.Data.Repository;
+using Paratext.Data.Users;
 using static Paranext.DataProvider.NetworkObjects.Documentation.ExperimentalMethodDocumentation;
 
 namespace Paranext.DataProvider.Projects.SendReceive;
@@ -25,7 +30,7 @@ internal class ParatextProjectSendReceiveService(
     /// every project count/size, and the only request a timeout would rescue is a lost response on
     /// an otherwise-live socket — a risk every S/R command shares. Inert in plain Platform.Bible
     /// since the stub bodies below throw immediately, but the registrations already carry it so the
-    /// Paratext 10 Studio patch (which fills in the real implementations) inherits the correct
+    /// Paratext 10 patch (which fills in the real implementations) inherits the correct
     /// timeout.
     /// </summary>
     internal static readonly TimeSpan s_sendReceiveTimeout = TimeSpan.FromSeconds(0); // 0 = no timeout
@@ -37,11 +42,12 @@ internal class ParatextProjectSendReceiveService(
     /// Raised whenever this service's sync run bracket opens, resolves its project set, or closes.
     /// Forwarded to the PAPI by <see cref="SyncActivityNotifierService"/>.
     /// <para>
-    /// Scaffolding: nothing in open-source Platform.Bible opens a run bracket (the sync stub bodies
-    /// below throw), so this never fires here. The Paratext 10 Studio patch, which replaces those
-    /// bodies with real implementations, raises it through
-    /// <see cref="RaiseSyncActivityChanged"/> at each transition. Do not remove — removing it breaks
-    /// the patch.
+    /// Contract for an implementation that runs syncs: raise this through
+    /// <see cref="RaiseSyncActivityChanged"/> at each transition of every run, including runs whose
+    /// caller passed <c>suppressProgressNotification</c> — for those that raise no Send/Receive claim
+    /// of their own, this is the only signal the toolbar indicator gets. This class's stub sync
+    /// bodies run no sync, so on their own they never raise it; the Paratext 10 patch replaces those
+    /// bodies and raises it. Do not remove — the patch depends on it.
     /// </para>
     /// <para>
     /// Deliberately derived from the run marker rather than from
@@ -57,33 +63,80 @@ internal class ParatextProjectSendReceiveService(
     /// handler and read live by <see cref="SyncActivityNotifierService"/>'s baseline emit, so both
     /// surfaces report present state rather than a cached copy of the last transition.
     /// <para>
-    /// Scaffolding, as with <see cref="SyncActivityChanged"/>: no sync can run in open-source
-    /// Platform.Bible, so this is always idle here. The Paratext 10 Studio patch replaces the body
-    /// with a real read of its run state.
+    /// This body always reports idle because the stub sync bodies here run no sync. An
+    /// implementation that runs syncs replaces it with a locked read of its run state, so that both
+    /// surfaces report present state.
     /// </para>
     /// </summary>
     public SyncActivityState GetSyncActivity() => new(false, Array.Empty<string>());
 
     /// <summary>
-    /// Whether the persistent C# Send/Receive toast should be shown for a sync starting now.
-    /// <para>
-    /// Scaffolding for the Paratext 10 Studio patch, which owns the toast
-    /// (<c>RunWithSyncNotification</c>) and overrides this to suppress it in Simple mode, where
-    /// core's toolbar sync indicator is the single surface instead. The decision hook lives here
-    /// rather than in the patch because it reads a public platform setting
-    /// (<see cref="Settings.INTERFACE_MODE"/>) through public core helpers — no secret, no
-    /// <c>ParatextData.dll</c> — so by the patch's own criteria it is public-by-default, and keeping
-    /// it here removes one more standing conflict against a public file.
-    /// </para>
-    /// <para>
-    /// Returns <see langword="true"/> here, and that default is load-bearing rather than arbitrary:
-    /// core must keep showing whatever sync feedback it shows today. The suppressing override MUST
-    /// NOT ship before the sync-activity signal it hands off to, or Simple mode goes from one sync
-    /// surface to ZERO for the startup sync — the toast gone and no indicator raised in its place.
-    /// If the Studio work is split across PRs, the signal merges first.
-    /// </para>
+    /// Whether <paramref name="scrText"/> holds local changes this user's Send/Receive would send —
+    /// see <see cref="UnsyncedChangesRule"/>. Local repository reads only (an <c>hg status</c> and a
+    /// tip lookup); never contacts the server. Read by <see cref="UnsyncedChangesTracker"/>.
     /// </summary>
-    protected virtual bool ShouldShowPersistentSyncToast() => true;
+    /// <returns>
+    /// <see langword="true"/> when the project has uncommitted changes, or local commits made since
+    /// the last successful sync. <see langword="false"/> when it has none, when it is not shared, or
+    /// when the current user has no role that may change the project (see remarks).
+    /// <see langword="null"/> when the repository cannot be read (no Mercurial, a broken
+    /// repository), so the caller can keep its previous answer; the failure is logged once per
+    /// project until a later check of that project succeeds.
+    /// </returns>
+    /// <remarks>
+    /// Always <see langword="false"/> when the current user's role cannot change the project (an
+    /// Observer, or not a member): Send/Receive neither commits nor sends for such a user
+    /// (ParatextData's <c>VersionedText.ShareChanges</c> gates both on
+    /// <see cref="PermissionManager.HaveRoleNotObserver"/>), so anything waiting locally, such as
+    /// extension data written into the project's <c>shared</c> folder, could never be sent. The
+    /// role is read from the project's local user list, while Send/Receive decides from the member
+    /// list the server reports; the two can disagree after a role change made only on the server
+    /// (see the unsynced-changes ADR).
+    /// </remarks>
+    public bool? HasUnsyncedLocalChanges(ScrText scrText)
+    {
+        try
+        {
+            if (!scrText.IsProjectShared || !scrText.Permissions.HaveRoleNotObserver)
+                return false;
+            bool hasUnsyncedChanges = ReadUnsyncedLocalChanges(scrText);
+            _unsyncedCheckWarned.TryRemove(scrText.Guid.ToString(), out _);
+            return hasUnsyncedChanges;
+        }
+        catch (Exception ex)
+        {
+            if (_unsyncedCheckWarned.TryAdd(scrText.Guid.ToString(), true))
+                Console.Error.WriteLine(
+                    $"Could not determine unsynced changes for project {scrText.Name}: {ex.Message}"
+                );
+            return null;
+        }
+    }
+
+    private bool ReadUnsyncedLocalChanges(ScrText scrText)
+    {
+        if (VersioningManager.Get(scrText).HasUncommittedChanges())
+            return true;
+        string? lastSynced = GetLastSyncedTipId(scrText);
+        if (string.IsNullOrEmpty(lastSynced))
+            return false;
+        return UnsyncedChangesRule.Evaluate(
+            true,
+            false,
+            Hg.Default.GetTipId(scrText.Directory),
+            lastSynced
+        );
+    }
+
+    /// <summary>
+    /// Projects whose check failure has been logged and whose checks have not succeeded since.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, bool> _unsyncedCheckWarned = new();
+
+    /// <summary>
+    /// 1 while a server tip lookup failure has been logged and no later lookup has succeeded.
+    /// </summary>
+    private int _serverTipLookupWarned;
 
     /// <summary>
     /// Raises <see cref="SyncActivityChanged"/> with <paramref name="snapshot"/>, invoking each
@@ -143,7 +196,7 @@ internal class ParatextProjectSendReceiveService(
                     "Breaks (releases) the Send/Receive server-side repository lock for each given "
                         + "project and reports per-project success. Unrelated to the local "
                         + "in-process sync write gate reported by onSyncWriteLockChanged / "
-                        + "getAutoSyncBlocking. Only implemented in Paratext 10 Studio; throws "
+                        + "getAutoSyncBlocking. Only implemented in Paratext 10; throws "
                         + "PlatformUnimplementedException elsewhere.",
                     [
                         Param(
@@ -168,7 +221,109 @@ internal class ParatextProjectSendReceiveService(
 
     protected PapiClient PapiClient { get; } = papiClient;
 
-    // The three properties below are read only by the closed-source Paratext 10 Studio patch,
+    /// <summary>
+    /// The local Mercurial tip id recorded after this project's last successful Send/Receive, or
+    /// <see langword="null"/> when unknown.
+    /// <para>
+    /// Scaffolding: public Platform.Bible runs no Send/Receive, so this is always unknown here. The
+    /// Paratext 10 patch replaces the body with a lookup in its own record of the local tip at each
+    /// project's last successful Send/Receive. Called on background threads while a sync may be
+    /// running; an implementation must be safe for that and must not contact the network or run
+    /// Mercurial. Do not remove — removing it breaks the patch.
+    /// </para>
+    /// </summary>
+    protected internal virtual string? GetLastSyncedTipId(ScrText scrText) => null;
+
+    /// <summary>
+    /// The Send/Receive server's current tip id for each of <paramref name="projects"/>, keyed by
+    /// upper-cased project id; a <see langword="null"/> value means the server reported no tip.
+    /// <paramref name="projects"/> is never empty and holds only shared projects
+    /// (<see cref="ScrText.IsProjectShared"/>).
+    /// One batched request. Callers do not start a lookup while a sync is known to be active, but a
+    /// sync may start while a lookup runs: the lookup must tolerate that, and a result that
+    /// overlapped a sync is superseded by a lookup after that sync ends. It runs unattended on a
+    /// timer, so it must not write project data (no project file, setting or license update).
+    /// <para>
+    /// Scaffolding: public Platform.Bible cannot reach the Send/Receive server, so this returns no
+    /// entries here. The Paratext 10 patch replaces the body with the repository source's batched
+    /// lookup. Do not remove — removing it breaks the patch.
+    /// </para>
+    /// </summary>
+    protected internal virtual IReadOnlyDictionary<string, string?> GetServerTipIds(
+        IReadOnlyCollection<ScrText> projects
+    ) => new Dictionary<string, string?>();
+
+    /// <summary>
+    /// Whether the Paratext internet setting allows contacting the Send/Receive server — see
+    /// <see cref="AllowsServerLookup"/>.
+    /// </summary>
+    protected internal virtual bool IsInternetUseEnabled() =>
+        AllowsServerLookup(InternetAccess.Status, InternetAccess.RawStatus);
+
+    /// <summary>
+    /// Whether internet use resolves to enabled (<paramref name="effectiveInternetUse"/>, ParatextData's
+    /// <c>InternetAccess.Status</c>) and the saved setting (<paramref name="savedInternetUse"/>,
+    /// <c>InternetAccess.RawStatus</c>) does not turn off Send/Receive. Both are needed:
+    /// ParatextData resolves the saved "Disable access to some Bible translation services" to enabled
+    /// outside sensitive locations, but <see cref="InternetServicesGate"/> refuses Send/Receive for it.
+    /// </summary>
+    internal static bool AllowsServerLookup(
+        InternetUse effectiveInternetUse,
+        InternetUse savedInternetUse
+    ) =>
+        effectiveInternetUse == InternetUse.Enabled
+        && !InternetServicesGate.IsBlocked(savedInternetUse);
+
+    /// <summary>
+    /// The projects among <paramref name="projects"/> for which the server holds changes not yet
+    /// received here — see <see cref="UnreceivedChangesRule"/>. Returns <see langword="null"/> when
+    /// the server lookup failed, so a caller can keep its previous answer; logs that failure once
+    /// until a later lookup succeeds. Only shared projects are looked up: an unshared project is
+    /// never reported, and with none shared no lookup is made and the result is empty.
+    /// </summary>
+    public IReadOnlyCollection<string>? GetProjectsWithUnreceivedChanges(
+        IReadOnlyCollection<ScrText> projects
+    )
+    {
+        ScrText[] sharedProjects = [.. projects.Where(scrText => scrText.IsProjectShared)];
+        if (sharedProjects.Length == 0)
+            return Array.Empty<string>();
+
+        IReadOnlyDictionary<string, string?> serverTips;
+        try
+        {
+            serverTips = GetServerTipIds(sharedProjects);
+        }
+        catch (Exception ex)
+        {
+            if (Interlocked.Exchange(ref _serverTipLookupWarned, 1) == 0)
+            {
+                Console.Error.WriteLine(
+                    $"Could not read server tip ids for the sync-direction indicator: {ex.GetType().Name}: {ex.Message}"
+                );
+            }
+            return null;
+        }
+        Interlocked.Exchange(ref _serverTipLookupWarned, 0);
+
+        // The implementer chooses the dictionary's comparer; a case-insensitive view keeps a key
+        // spelled in another case from silently reading as "no tip".
+        var tipsById = new Dictionary<string, string?>(
+            serverTips,
+            StringComparer.OrdinalIgnoreCase
+        );
+        var result = new List<string>();
+        foreach (ScrText scrText in sharedProjects)
+        {
+            string id = scrText.Guid.ToString().ToUpperInvariant();
+            tipsById.TryGetValue(id, out string? serverTip);
+            if (UnreceivedChangesRule.Evaluate(serverTip, GetLastSyncedTipId(scrText)))
+                result.Add(id);
+        }
+        return result;
+    }
+
+    // The three properties below are read only by the closed-source Paratext 10 patch,
     // which replaces this class's stub bodies with real implementations. Do not remove them —
     // removing them breaks the patch.
     protected ParatextProjectDataProviderFactory PdpFactory { get; } = pdpFactory;
@@ -198,7 +353,7 @@ internal class ParatextProjectSendReceiveService(
     protected Boolean CommitChanges(String projectId, String comment, Boolean forceCommit = false)
     {
         throw new PlatformUnimplementedException(
-            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 to use this command."
         );
     }
 
@@ -210,24 +365,53 @@ internal class ParatextProjectSendReceiveService(
     protected void CommitDaily(String projectId)
     {
         throw new PlatformUnimplementedException(
-            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 to use this command."
         );
     }
 
     /// <summary>
-    /// Syncs projects from the provided IDs: filters for editable projects and S/Rs them,
-    /// then reads each editable project's connected resources and projects (one level deep —
-    /// connections of connections are not included) and S/Rs connected translation projects
-    /// or DBL-updates connected resources. Non-editable and unknown IDs are skipped.
-    /// Deduplication is handled internally.
-    /// Exception is thrown if this function is not implemented in the current application
-    /// or if an error was encountered syncing.
+    /// Syncs the given projects (S/Rs them), then handles connected resources and projects for the
+    /// project(s) this call settles on: connected translation projects are S/R'd, connected
+    /// resources are DBL-updated. Connections are followed one level only — connections of
+    /// connections are not included. Unknown IDs are skipped.
+    /// Exception is thrown if this function is not implemented in the current application; if
+    /// another Send/Receive is already in progress (rejects fail-fast rather than queuing behind
+    /// it); or if an error was encountered syncing.
+    /// Callers MUST NOT assume every shared project is present locally once this resolves, no
+    /// matter which form <paramref name="projectIds"/> took.
     /// </summary>
     /// <param name="projectIds">
-    /// IDs of the projects to sync. If <see langword="null"/>, all shared projects that are already
-    /// present locally (i.e., not new) are synced. An empty array is a no-op.
+    /// IDs of the projects to sync.
+    /// <list type="bullet">
+    /// <item>If explicit IDs are given, each one is synced regardless of whether it is already
+    /// present locally — a <c>new</c> (not yet downloaded) project among them is downloaded, not
+    /// skipped, though an implementation may still exclude a given id for reasons outside the
+    /// caller's control (e.g., an unsupported project version, or the project being otherwise
+    /// ineligible).</item>
+    /// <item>If <see langword="null"/> and at least one shared project the account knows about is
+    /// already present locally (not new), every locally-present shared project is synced; new
+    /// projects are left alone.</item>
+    /// <item>If <see langword="null"/> and no shared project the account knows about is present
+    /// locally yet (whether a genuine first sync, or every previously-local project has since gone
+    /// missing from disk), an implementation is expected to try to make at least one project
+    /// available for the current user to work in, if the account has one — but may stop short of
+    /// downloading every shared project in the account, trading completeness for performance.</item>
+    /// <item>An empty array is a no-op.</item>
+    /// </list>
     /// </param>
-    protected void SyncProjects(String[]? projectIds)
+    /// <param name="suppressProgressNotification">
+    /// When <see langword="true"/>, do not show the persistent in-progress toast (the one carrying
+    /// Cancel) for this sync; its other notifications, such as failure and role-change toasts, still
+    /// show. Defaults to <see langword="false"/>. When to pass it is part of the TypeScript
+    /// contract: see <c>paratextBibleSendReceive.syncProjects</c> in
+    /// <c>src/@types/paratext-bible-send-receive/index.d.ts</c>.
+    /// In-process C# callers must pass both arguments: <c>PapiClient</c>'s in-process dispatch
+    /// (<c>DynamicInvoke</c>) does not fill optional defaults, so only JSON-RPC callers may omit it.
+    /// An implementation MUST NOT honor it unless it also raises <see cref="SyncActivityChanged"/>
+    /// for the run: the toolbar indicator only sees a claimless sync through that signal, so honoring
+    /// the flag without it leaves a Simple-mode sync with no progress surface at all.
+    /// </param>
+    protected void SyncProjects(String[]? projectIds, bool suppressProgressNotification = false)
     {
 #if DEBUG
         // Dev-only placeholder: paranext-core has no S/R impl. PT10 patches the whole method.
@@ -240,7 +424,7 @@ internal class ParatextProjectSendReceiveService(
         );
 #else
         throw new PlatformUnimplementedException(
-            $"Command '{nameof(SyncProjects)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            $"Command '{nameof(SyncProjects)}' is not implemented in Platform.Bible. Must be running Paratext 10 to use this command."
         );
 #endif
     }
@@ -262,7 +446,7 @@ internal class ParatextProjectSendReceiveService(
     protected void CancelSync(NotificationId? notificationId = null)
     {
         throw new PlatformUnimplementedException(
-            $"Command '{nameof(CancelSync)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            $"Command '{nameof(CancelSync)}' is not implemented in Platform.Bible. Must be running Paratext 10 to use this command."
         );
     }
 
@@ -282,11 +466,11 @@ internal class ParatextProjectSendReceiveService(
     protected Task<Dictionary<string, bool>> BreakSyncLock(List<string> projectIds)
     {
         // Deliver the fault through the returned task rather than throwing synchronously, so the
-        // stub's fault mode matches the async Paratext 10 Studio implementation that replaces this
+        // stub's fault mode matches the async Paratext 10 implementation that replaces this
         // body (and the method stays async-free, avoiding CS1998).
         return Task.FromException<Dictionary<string, bool>>(
             new PlatformUnimplementedException(
-                $"Command '{nameof(BreakSyncLock)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+                $"Command '{nameof(BreakSyncLock)}' is not implemented in Platform.Bible. Must be running Paratext 10 to use this command."
             )
         );
     }

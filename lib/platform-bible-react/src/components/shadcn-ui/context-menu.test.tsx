@@ -15,6 +15,8 @@ import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 
 // jsdom doesn't ship a ResizeObserver, which Radix's Popper-positioned ContextMenu content
 // instantiates on mount. A no-op stub is sufficient since the test inspects style, not layout.
+// The hasPointerCapture / scrollIntoView shims it also needs are installed repo-wide by
+// vitest.setup.ts.
 class NoopResizeObserver implements ResizeObserver {
   // Keep an internal record of observed targets so the no-op methods touch `this` and don't
   // trip @typescript-eslint/class-methods-use-this. No test inspects this state.
@@ -36,12 +38,6 @@ class NoopResizeObserver implements ResizeObserver {
 beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
     globalThis.ResizeObserver = NoopResizeObserver;
-  }
-  if (typeof Element.prototype.hasPointerCapture !== 'function') {
-    Element.prototype.hasPointerCapture = () => false;
-  }
-  if (typeof Element.prototype.scrollIntoView !== 'function') {
-    Element.prototype.scrollIntoView = () => {};
   }
 });
 
@@ -92,5 +88,24 @@ describe('ContextMenuContent', () => {
       .find((menu) => menu.dataset.slot === 'context-menu-sub-content');
     expect(subContent).toBeDefined();
     expect(Number(subContent?.style.zIndex)).toBeGreaterThanOrEqual(Z_INDEX_ABOVE_DOCK);
+  });
+});
+
+describe('ContextMenuItem', () => {
+  it('recolors its descendants on highlight, as DropdownMenuItem and MenubarItem do', () => {
+    render(
+      <ContextMenu>
+        <ContextMenuTrigger>Tab header</ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem>Zoom in</ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>,
+    );
+
+    fireEvent.contextMenu(screen.getByText('Tab header'));
+
+    expect(screen.getByRole('menuitem', { name: 'Zoom in' })).toHaveClass(
+      'tw:not-data-[variant=destructive]:focus:**:text-accent-foreground',
+    );
   });
 });

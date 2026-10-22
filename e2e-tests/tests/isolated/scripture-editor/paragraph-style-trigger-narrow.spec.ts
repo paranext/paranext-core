@@ -101,20 +101,27 @@ test.describe('paragraph-style trigger at narrow editor widths', () => {
             await setWindowWidth(electronApp, mainPage, width);
             await expect(trigger).toBeVisible();
 
-            const overrunPx = await trigger.evaluate((el) => {
-              // The zone is the trigger's grandparent: the button sits inside the disabled-action
-              // tooltip wrapper, which is the zone's own flex item.
-              const zone = el.parentElement?.parentElement;
-              if (!zone) return Number.NaN;
-              return Math.round(
-                el.getBoundingClientRect().right - zone.getBoundingClientRect().right,
-              );
-            });
+            // setWindowWidth only bounds its post-resize reflow wait (a hidden/occluded window
+            // suspends requestAnimationFrame indefinitely, so it can return before layout has
+            // actually settled) — the flex re-layout can still land a frame or two later. Retry the
+            // whole measure-and-assert pass, re-reading the boxes fresh each time, matching
+            // title-bar-narrow-width.spec.ts's same-class assertion.
+            await expect(async () => {
+              const overrunPx = await trigger.evaluate((el) => {
+                // The zone is the trigger's grandparent: the button sits inside the disabled-action
+                // tooltip wrapper, which is the zone's own flex item.
+                const zone = el.parentElement?.parentElement;
+                if (!zone) return Number.NaN;
+                return Math.round(
+                  el.getBoundingClientRect().right - zone.getBoundingClientRect().right,
+                );
+              });
 
-            expect(
-              overrunPx,
-              `At a ${width}px window the paragraph-style trigger overruns its toolbar zone by ${overrunPx}px, so its trailing border and chevron are clipped instead of the label ellipsising`,
-            ).toBeLessThanOrEqual(ROUNDING_TOLERANCE_PX);
+              expect(
+                overrunPx,
+                `At a ${width}px window the paragraph-style trigger overruns its toolbar zone by ${overrunPx}px, so its trailing border and chevron are clipped instead of the label ellipsising`,
+              ).toBeLessThanOrEqual(ROUNDING_TOLERANCE_PX);
+            }).toPass({ timeout: 10_000 });
           }),
         ),
       Promise.resolve(),

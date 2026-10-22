@@ -24,15 +24,20 @@
  * replacements cannot affect the next. Do not run these against a fixture that lacks that
  * isolation.
  */
-import { FrameLocator, Locator, Page } from '@playwright/test';
+import { Frame, Locator, Page } from '@playwright/test';
 import {
   test,
   expect,
+  getFindHistory,
   openScriptureEditor,
   waitForProjects,
   WEB_COPY_PROJECT_ID,
 } from '../../../fixtures/find.fixture';
-import { waitForAppReady, PROCESS_READY_TIMEOUT } from '../../../fixtures/helpers';
+import {
+  resolveWebViewFrame,
+  waitForAppReady,
+  PROCESS_READY_TIMEOUT,
+} from '../../../fixtures/helpers';
 import {
   EDITOR_HAMBURGER_SELECTOR,
   findScriptureEditorFrame,
@@ -63,7 +68,7 @@ const SEARCH_TIMEOUT_MS = 150_000;
 // ---------------------------------------------------------------------------
 
 /** Get the first search result card. Each result renders `div[role="button"][aria-pressed]`. */
-function firstResultCard(frame: FrameLocator): Locator {
+function firstResultCard(frame: Frame): Locator {
   return frame.locator('[role="button"][aria-pressed]').first();
 }
 
@@ -76,8 +81,30 @@ function firstResultCard(frame: FrameLocator): Locator {
  * tw:font-light` classes, so without this exclusion the idle placeholder would satisfy this locator
  * too. Mirrors `resultsMessage` in `find.spec.ts`.
  */
-function resultsMessage(frame: FrameLocator): Locator {
+function resultsMessage(frame: Frame): Locator {
   return frame.locator('p:not([role="status"]).tw\\:font-light.tw\\:text-center');
+}
+
+/**
+ * Waits for the panel's search to finish and stay finished, and answers its results message.
+ *
+ * Seeing the message once is not enough. It shows for a stopped search as well as a completed one,
+ * so it can be on screen for a search that another is about to replace — in this suite a first read
+ * has come back "No results found" for a term the project held three times. So this waits until the
+ * message reads the same a second apart. A search starting in between hides the message, so two
+ * equal reads mean the panel settled on that answer.
+ */
+async function waitForSearchToSettle(frame: Frame): Promise<string> {
+  let settled = '';
+  await expect(async () => {
+    const first = await resultsMessage(frame).textContent({ timeout: 1_000 });
+    await frame.waitForTimeout(1_000);
+    const second = await resultsMessage(frame).textContent({ timeout: 1_000 });
+    expect(first).toBeTruthy();
+    expect(second).toBe(first);
+    settled = second ?? '';
+  }).toPass({ timeout: SEARCH_TIMEOUT_MS });
+  return settled;
 }
 
 /** The Find dock tab, which in Power mode is a normal closable tab rather than a fixed one. */
@@ -90,21 +117,33 @@ function findTab(mainPage: Page): Locator {
  *
  * The hamburger and its Radix menu both render INSIDE the editor's iframe (the menu portals to the
  * iframe body), while Find opens as a tab at main-page level.
+ *
+ * Returns the panel's iframe resolved once to a `Frame` — see {@link resolveWebViewFrame} for why
+ * not a `FrameLocator`. Each open is a new web view with a new iframe, so the frame is good until
+ * the panel is closed; reopening returns a fresh one.
  */
-async function openFindPanel(mainPage: Page): Promise<FrameLocator> {
+async function openFindPanel(mainPage: Page): Promise<Frame> {
   const editorFrame = await findScriptureEditorFrame(mainPage);
 
   const hamburger = editorFrame.locator(EDITOR_HAMBURGER_SELECTOR);
   await expect(hamburger).toBeVisible({ timeout: 15_000 });
   await hamburger.click();
 
-  // Anchored to the exact label "Find" (%webView_platformScriptureEditor_openFind%).
-  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find$/i });
+  // The item's accessible name is its label "Find" (%webView_platformScriptureEditor_openFind%)
+  // followed by a keyboard shortcut hint, so the match cannot be anchored to the end of the name.
+  // The trailing `(\s|$)` rules out only a longer single word, e.g. "Finder"; a sibling item whose
+  // label begins "Find " — "Find and replace…" — matches too, and the click then fails with a
+  // strict-mode violation rather than opening the wrong panel. That failure is the signal to narrow
+  // this locator to the label element instead of the whole accessible name.
+  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find(\s|$)/i });
   await expect(findMenuItem).toBeVisible({ timeout: 5_000 });
   await findMenuItem.click();
 
   await expect(findTab(mainPage)).toBeVisible({ timeout: 15_000 });
-  const frame = mainPage.frameLocator('iframe[title="Find"]');
+  const frame = await resolveWebViewFrame(
+    mainPage.locator('iframe[title="Find"]'),
+    "The Find web view's iframe",
+  );
   await expect(frame.locator('#search-term')).toBeVisible({ timeout: 30_000 });
   return frame;
 }
@@ -127,7 +166,7 @@ async function closeFindPanel(mainPage: Page): Promise<void> {
 }
 
 /** Switch the panel from Find to Replace. The ToggleGroup renders its items as `role="radio"`. */
-async function switchToReplaceMode(frame: FrameLocator): Promise<void> {
+async function switchToReplaceMode(frame: Frame): Promise<void> {
   await frame.getByRole('radio', { name: /^replace$/i }).click();
   await expect(frame.locator('#replace-term')).toBeVisible({ timeout: 5_000 });
 }
@@ -140,21 +179,21 @@ async function switchToReplaceMode(frame: FrameLocator): Promise<void> {
 const HISTORY_INACTIVITY_DEBOUNCE_MS = 5_000;
 
 /** Open the recent searches history dropdown. */
-async function openHistoryDropdown(frame: FrameLocator): Promise<void> {
+async function openHistoryDropdown(frame: Frame): Promise<void> {
   const button = frame.getByRole('button', { name: /show recent searches/i });
   await expect(button).toBeVisible({ timeout: 5_000 });
   await button.click();
 }
 
 /** Open the filters dropdown (the "Toggle filters" button). */
-async function openFiltersPanel(frame: FrameLocator): Promise<void> {
+async function openFiltersPanel(frame: Frame): Promise<void> {
   const filtersBtn = frame.getByRole('button', { name: /toggle filters/i });
   await expect(filtersBtn).toBeVisible({ timeout: 5_000 });
   await filtersBtn.click();
 }
 
 /** The header's Replace action button — `.first()` because result cards render one each too. */
-function headerReplaceButton(frame: FrameLocator): Locator {
+function headerReplaceButton(frame: Frame): Locator {
   return frame.getByRole('button', { name: /^replace$/i }).first();
 }
 
@@ -168,7 +207,7 @@ async function setupReplaceMode(
   mainPage: Page,
   searchTerm = REPLACE_SEARCH_TERM,
   replaceTerm = 'replaced',
-): Promise<FrameLocator> {
+): Promise<Frame> {
   const frame = await openFindPanel(mainPage);
 
   await frame.locator('#search-term').fill(searchTerm);
@@ -378,6 +417,11 @@ test.describe('Replace operations', () => {
     if (!(await regexCheckbox.isChecked())) await regexCheckbox.click();
     await expect(regexCheckbox).toBeChecked();
     await regexCheckbox.press('Escape');
+    // Wait for the panel to finish closing before typing. Closing it from the keyboard hands focus
+    // back to the filters button when the exit animation ends; typing before then has that focus
+    // move land after the fill, which steals focus from the search box and opens the button's
+    // tooltip over the Find/Replace toggle, where it swallows the click below.
+    await expect(regexCheckbox).not.toBeVisible({ timeout: 5_000 });
 
     await frame.locator('#search-term').fill(REPLACE_SEARCH_TERM);
     await frame.locator('#search-term').press('Enter');
@@ -418,11 +462,8 @@ test.describe('Replace operations', () => {
     // it, while the status-bar total comes straight from the find job's own count.
     await frame.locator('#search-term').fill('replaced');
     await frame.locator('#search-term').press('Enter');
-    const baselineMessage = resultsMessage(frame);
-    await expect(baselineMessage).toHaveText(/^(no results found|\d+ results)$/i, {
-      timeout: SEARCH_TIMEOUT_MS,
-    });
-    const baselineText = (await baselineMessage.textContent()) ?? '';
+    const baselineText = await waitForSearchToSettle(frame);
+    expect(baselineText).toMatch(/^(no results found|\d+ results)$/i);
     const baselineCount = /no results found/i.test(baselineText)
       ? 0
       : Number(baselineText.match(/(\d+) results$/)?.[1]);
@@ -474,33 +515,16 @@ test.describe('Search history on close', () => {
   test('adds the search term to history when the Find panel is closed', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
 
-    // Seed one entry so the history control exists at all. RecentSearches renders nothing when the
-    // list is empty, so on a profile with no history the dropdown this test opens is simply absent
-    // — which would fail as if the control had regressed. Earlier tests in this file happen to
-    // leave history behind, but relying on that makes running this one alone fail confusingly.
-    await frame.locator('#search-term').fill(`histtest-seed-${Date.now()}`);
-    await frame.locator('#search-term').press('Enter');
-
     const term = `histtest-unmount-${Date.now()}`;
     await frame.locator('#search-term').fill(term);
     const filledAt = Date.now();
 
     // Positive control. Neither of the other two routes into history can have fired: Enter was
     // never pressed and the inactivity debounce has not elapsed. So if the term were already
-    // here, the assertion after the close would pass without the close doing anything.
-    await openHistoryDropdown(frame);
-    await expect(frame.getByRole('option', { name: term })).toHaveCount(0);
-    await frame.locator('#search-term').press('Escape');
-
-    // Opening the dropdown leaves the pointer on its trigger, and the tooltip that follows renders
-    // in a popper wrapper OUTSIDE the panel — so it outlives the panel's close and sits over the
-    // editor's menu button, swallowing the click that reopens Find. Park the pointer and wait for
-    // it to go before closing. The wait is deliberately short: everything between filling the term
-    // and closing has to finish inside the inactivity debounce below.
-    await mainPage.mouse.move(0, 0);
-    await expect(mainPage.locator('[data-slot="tooltip-content"]')).toHaveCount(0, {
-      timeout: 2_000,
-    });
+    // here, the assertion after the close would pass without the close doing anything. Read from
+    // the store rather than the history dropdown: opening the dropdown is a click into the web
+    // view, which can take most of the debounce on its own (see `resolveWebViewFrame`).
+    expect(await getFindHistory(WEB_COPY_PROJECT_ID)).not.toContain(term);
 
     await closeFindPanel(mainPage);
 
@@ -514,6 +538,6 @@ test.describe('Search history on close', () => {
 
     const reopened = await openFindPanel(mainPage);
     await openHistoryDropdown(reopened);
-    await expect(reopened.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
+    await expect(reopened.getByRole('menuitem', { name: term })).toBeVisible({ timeout: 5_000 });
   });
 });

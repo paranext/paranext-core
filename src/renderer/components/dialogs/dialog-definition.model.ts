@@ -36,7 +36,13 @@ export const RESOURCE_PICKER_DIALOG_TYPE = 'platform.resourcePicker';
  *   It is not yet a stable contract.
  */
 export const PROJECT_PICKER_DIALOG_TYPE = 'platform.projectPicker';
-/** The tabType for the share layout dialog in `share-layout.dialog.tsx` */
+/**
+ * The tabType for the Team layout dialog in `team-layout.dialog.tsx`.
+ *
+ * The `shareLayout` spelling here, in `SHARE_LAYOUT_DIALOG_TYPE` and in the `%shareLayoutDialog_*%`
+ * localization keys is deliberately frozen: these are published contracts, and renaming them would
+ * break saved layouts and translator catalogs for a cosmetic gain.
+ */
 export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
 
 type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
@@ -93,6 +99,12 @@ export type ResourcePickerDialogOptions = DialogOptions & {
    * one that is already on disk. Defaults to true.
    */
   allowSelectingInstalled?: boolean;
+  /**
+   * When true, texts whose licensing terms prohibit their use as a model or base for a new
+   * translation are shown greyed out, with the reason, and cannot be picked. Set it when picking a
+   * model text, not a reference text. Defaults to false.
+   */
+  disableRestrictedModelTexts?: boolean;
 };
 
 /**
@@ -103,7 +115,7 @@ export type ResourcePickerDialogOptions = DialogOptions & {
  */
 export type ProjectPickerOptions = DialogOptions;
 
-/** Options to provide when showing the Share Layout dialog */
+/** Options to provide when showing the Team layout dialog */
 export type ShareLayoutDialogOptions = DialogOptions & {
   /** The project whose layout is being shared */
   projectId: string;

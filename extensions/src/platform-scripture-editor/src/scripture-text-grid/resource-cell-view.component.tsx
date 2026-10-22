@@ -3,8 +3,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
   Button,
+  ContentZoomRoot,
+  isMacOs,
+  isWindows,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -12,21 +16,31 @@ import {
   TooltipTrigger,
   useTruncationTooltip,
 } from 'platform-bible-react';
+import { ShortcutKeys } from 'platform-bible-react/experimental';
 import { EllipsisVertical, GripVertical } from 'lucide-react';
-import { formatReplacementString } from 'platform-bible-utils';
 import {
-  CSSProperties,
+  CONTENT_ZOOM_IN_SHORTCUT,
+  CONTENT_ZOOM_OUT_SHORTCUT,
+  CONTENT_ZOOM_RESET_SHORTCUT,
+  formatReplacementString,
+  truncateToCopyLimit,
+  type ContentZoomShortcut,
+} from 'platform-bible-utils';
+import {
   ReactNode,
   useCallback,
+  useRef,
   useState,
+  type DragEvent,
   type KeyboardEvent,
   type MouseEvent,
+  type Ref,
 } from 'react';
+import { buildAlignedZoomStyle } from './aligned-grid.styles';
 import { ResourceCellState } from './resource-cell.utils';
 import {
   BOOK_NOT_AVAILABLE_KEY,
   COPY_KEY,
-  EMPTY_KEY,
   FAILED_KEY,
   LOADING_KEY,
   NOT_INSTALLED_KEY,
@@ -43,6 +57,8 @@ export {
   FAILED_KEY,
   BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
+  NO_VERSES_TO_SHOW_KEY,
+  CHAPTER_EMPTY_KEY,
   ZOOM_IN_KEY,
   ZOOM_OUT_KEY,
   RESET_ZOOM_KEY,
@@ -55,22 +71,40 @@ export {
 /** How the cell shows its resource name: a hanging inline label, or a header band. */
 export type ResourceNameDisplay = 'inline' | 'header';
 
-/** Localized copy for the zoom actions (the kebab dropdown and the right-click context menu). */
+/** Localized copy for the zoom actions (the "⋮" dropdown and the right-click context menu). */
 export type ZoomMenuLabels = { zoomIn: string; zoomOut: string; reset: string; options: string };
+
+/** Where a cell's zoom level lands; see {@link ResourceCellViewProps.zoomTarget}. */
+export type ZoomTarget = 'box' | 'blocks';
 
 export type ResourceCellViewProps = {
   /** Which visual state to render; only `ready` shows the editor. */
   state: ResourceCellState;
   /** Resource label shown in the header band or inline label. */
   label: string;
+  /**
+   * Content zoom area this resource's text belongs to — `resource-<id>`, or the shared fallback
+   * `text-collection` for an id that yields none. Both layouts mark their text with it, labelled
+   * with `label` for the zoom indicator; a resource's verse row and chapter view share it.
+   */
+  zoomArea: string;
   /** This resource's own text direction ('ltr' | 'rtl'), applied to the content area. */
   textDirection: string;
   /** Localized strings; import `RESOURCE_CELL_STRING_KEYS` to resolve them. */
   localizedStrings: ResourceCellLocalizedStrings;
+  /**
+   * The most UTF-16 code units the right-click Copy item may write to the clipboard; `undefined` is
+   * unlimited. See `EditorOptions.copyLimit`. Required so a caller states it.
+   */
+  copyLimit: number | undefined;
   /** The editor rendered when `state` is `ready` (the connected cell supplies `Editorial`). */
   editor: ReactNode;
-  /** When true (verse mode, slice empty), render the empty label instead of the editor. */
-  isVerseEmpty?: boolean;
+  /**
+   * Message to render instead of the editor when the resource has text but none of it belongs in
+   * this view — the focused verse is missing in verse mode, the chapter has no verses to align in
+   * the aligned grid. Omit to render the editor.
+   */
+  emptyMessage?: string;
   /**
    * How to show the resource name. `'header'` (default) is a compact header line above the content,
    * used by chapter contexts (single-resource full-width + chapter-context split). `'inline'` hangs
@@ -78,19 +112,42 @@ export type ResourceCellViewProps = {
    * render outside `Editorial` (paranext-core only).
    */
   nameDisplay?: ResourceNameDisplay;
-  /** Current zoom factor for this resource (1 = default). */
-  zoomFactor?: number;
-  /** False when the factor is at MAX_ZOOM_FACTOR. */
+  /**
+   * Who scrolls this cell's content. `'auto'` (default) is the cell itself. `'visible'` hands it to
+   * an ancestor, which the aligned grid needs: a scroll container's children cannot take part in an
+   * ancestor's grid, and cells that scrolled separately would drift out of alignment anyway.
+   */
+  contentOverflow?: 'auto' | 'visible';
+  /**
+   * Ref to this cell's scrollable content box, for a caller that scrolls the cell itself
+   * (`contentOverflow="auto"`) — a chapter surface following the scroll-group reference.
+   *
+   * Only the header layout wires it. The inline layout's verse row has nothing to scroll to, since
+   * the cell is already reduced to the reference's verse.
+   */
+  contentRef?: Ref<HTMLDivElement>;
+  /**
+   * Where the zoom level lands. `'box'` (default) leaves it to the platform, which scales the
+   * element marking this resource's text. `'blocks'` publishes the area's level as a custom
+   * property for the verse blocks to take, which is what the aligned grid needs: there the marker
+   * generates no box and the wrapper around it is a subgrid box, whose shared row tracks must not
+   * scale with the text (`ALIGNED_ZOOM_PROPERTY`).
+   */
+  zoomTarget?: ZoomTarget;
+  /** False when the resource's level is at MAX_ZOOM_FACTOR. */
   canZoomIn?: boolean;
-  /** False when the factor is at MIN_ZOOM_FACTOR. */
+  /** False when the resource's level is at MIN_ZOOM_FACTOR. */
   canZoomOut?: boolean;
-  /** False when the factor is already at the default (1). Defaults to true. */
+  /**
+   * False while the resource has no zoom level of its own, so Reset would change nothing. Defaults
+   * to true.
+   */
   canReset?: boolean;
-  /** Zoom action callbacks; invoked by the kebab dropdown. */
+  /** Zoom action callbacks; invoked by the "⋮" dropdown and the right-click menu. */
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onResetZoom?: () => void;
-  /** Localized menu copy; when omitted the zoom surfaces are not rendered. */
+  /** Localized menu copy; when omitted the zoom items and the "⋮" button are not rendered. */
   zoomMenuLabels?: ZoomMenuLabels;
   /**
    * When true, show a focusable reorder-handle grip in the header (reorder logic lives in the
@@ -105,7 +162,69 @@ export type ResourceCellViewProps = {
   reorderHint?: string;
   /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
   onReorderKeyDown?: (event: KeyboardEvent) => void;
+  /**
+   * Makes the header band the drag source for a reorder. It is deliberately the header and not the
+   * whole cell: a `draggable` ancestor makes its entire subtree draggable, so a column-wide drag
+   * source turns a click-drag across the text into a reorder instead of a selection — and selecting
+   * a passage down a column is the reason this view renders one editor per column.
+   */
+  headerDrag?: { onDragStart: (event: DragEvent) => void; onDragEnd: () => void };
+  /** The resource's copyright notice indicator, shown beside its name */
+  copyrightIndicator?: ReactNode;
 };
+
+/** The spelling of `shortcut` for the operating system the app is running on. */
+function getShortcutForThisOs(shortcut: ContentZoomShortcut): string {
+  if (isMacOs()) return shortcut.macOS;
+  if (isWindows()) return shortcut.windows;
+  return shortcut.linux;
+}
+
+/**
+ * The text of the page's current selection that lies inside `root`. A selection dragged across
+ * several cells is cut to this cell, so only text this cell's copy limit governs is copied. Reading
+ * it briefly replaces the live selection and then puts it back. A selection that cannot be read,
+ * such as one left anchored in nodes the editor has since replaced, reads as `''`.
+ */
+function getSelectedTextWithin(root: Node): string {
+  const selection = window.getSelection();
+  if (!selection) return '';
+  try {
+    const rootRange = document.createRange();
+    rootRange.selectNodeContents(root);
+    const ranges = Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i));
+    const isInsideRoot = (range: Range) =>
+      rootRange.comparePoint(range.startContainer, range.startOffset) === 0 &&
+      rootRange.comparePoint(range.endContainer, range.endOffset) === 0;
+    if (ranges.every(isInsideRoot)) return selection.toString();
+
+    // `Selection.toString` keeps the line breaks between blocks that `Range.toString` drops, so
+    // read the text through the selection itself, cut to `root`, and then put the original ranges
+    // back.
+    const clampedRanges = ranges
+      .filter((range) => range.intersectsNode(root))
+      .map((range) => {
+        const clamped = range.cloneRange();
+        if (rootRange.comparePoint(range.startContainer, range.startOffset) < 0)
+          clamped.setStart(rootRange.startContainer, rootRange.startOffset);
+        if (rootRange.comparePoint(range.endContainer, range.endOffset) > 0)
+          clamped.setEnd(rootRange.endContainer, rootRange.endOffset);
+        return clamped;
+      });
+    // A range has no direction, so put the original selection back from its anchor and focus,
+    // which keep a backward selection backward. A selection with a range has both.
+    const { anchorNode, anchorOffset, focusNode, focusOffset } = selection;
+    selection.removeAllRanges();
+    clampedRanges.forEach((range) => selection.addRange(range));
+    const text = selection.toString();
+    selection.removeAllRanges();
+    if (anchorNode && focusNode)
+      selection.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset);
+    return text;
+  } catch {
+    return '';
+  }
+}
 
 function ZoomItemsShared({
   labels,
@@ -124,28 +243,37 @@ function ZoomItemsShared({
   onZoomOut?: () => void;
   onResetZoom?: () => void;
 }) {
+  // These items run the platform's own platform.webViewContentZoomIn/Out/Reset commands (see
+  // use-resource-content-zoom.hook.ts), so they show the chords core's keyboard-shortcuts catalog
+  // lists for those commands; both read them from platform-bible-utils.
+  const zoomInHint = getShortcutForThisOs(CONTENT_ZOOM_IN_SHORTCUT);
+  const zoomOutHint = getShortcutForThisOs(CONTENT_ZOOM_OUT_SHORTCUT);
+  const resetHint = getShortcutForThisOs(CONTENT_ZOOM_RESET_SHORTCUT);
+
   return (
     <>
       <DropdownMenuItem disabled={!canZoomIn} onSelect={onZoomIn}>
         {labels.zoomIn}
+        <DropdownMenuShortcut>
+          <ShortcutKeys hint={zoomInHint} />
+        </DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem disabled={!canZoomOut} onSelect={onZoomOut}>
         {labels.zoomOut}
+        <DropdownMenuShortcut>
+          <ShortcutKeys hint={zoomOutHint} />
+        </DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem disabled={!canReset} onSelect={onResetZoom}>
         {labels.reset}
+        <DropdownMenuShortcut>
+          <ShortcutKeys hint={resetHint} />
+        </DropdownMenuShortcut>
       </DropdownMenuItem>
     </>
   );
 }
 
-/**
- * The resource short-name/abbreviation, in the standout resource color (`tw:text-primary`). Single
- * line; a tooltip reveals the full name only when the text is actually clipped (same manual-`open`
- * pattern as the `ProjectRowView` row in `project-selector.component.tsx`). `aria-hidden` because
- * the enclosing gridcell already exposes the name via `aria-label`, so the visible copy is not
- * announced twice.
- */
 /**
  * Compile-time exhaustiveness check for the cell-state chain below: every state that does NOT
  * render a placeholder must be `'ready'`. Adding a `ResourceCellState` member without giving it a
@@ -158,6 +286,13 @@ function assertStateIsReady(state: 'ready'): 'ready' {
   return state;
 }
 
+/**
+ * The resource short-name/abbreviation, in the standout resource color (`tw:text-primary`). Single
+ * line; a tooltip reveals the full name only when the text is actually clipped (same manual-`open`
+ * pattern as the `ProjectRowView` row in `project-selector.component.tsx`). `aria-hidden` because
+ * the enclosing `role="listitem"` (`scripture-text-grid.component.tsx`) already exposes the name
+ * via `aria-label`, so the visible copy is not announced twice.
+ */
 function ResourceNameLabel({ label, className }: { label: string; className?: string }) {
   // Show the tooltip only when the label text is actually clipped (same manual-`open` pattern
   // shared with `ProjectRowView` in `project-selector.component.tsx`).
@@ -191,18 +326,24 @@ function ResourceNameLabel({ label, className }: { label: string; className?: st
  *
  * All role, focus, activation, and accessible-name concerns are handled by the parent verse
  * `listitem` in `ScriptureTextGrid` — this component is purely presentational. It adds only the
- * per-resource zoom surfaces (the header kebab dropdown and the right-click zoom/copy menu) and the
- * drag/keyboard reorder handle grip.
+ * resource's zoom surfaces (the header's "⋮" dropdown and the right-click Copy and zoom menu) and
+ * the drag/keyboard reorder handle grip. The cell text is marked as the resource's own content-zoom
+ * area (`zoomArea`), named with the resource label for the zoom indicator; the scroll box around it
+ * stays unmarked, so its scrollbar and padding keep interface size.
  */
 export function ResourceCellView({
   state,
   label,
+  zoomArea,
   textDirection,
   localizedStrings,
+  copyLimit,
   editor,
-  isVerseEmpty,
+  emptyMessage,
   nameDisplay = 'header',
-  zoomFactor,
+  contentOverflow = 'auto',
+  contentRef,
+  zoomTarget = 'box',
   canZoomIn = true,
   canZoomOut = true,
   canReset = true,
@@ -215,12 +356,23 @@ export function ResourceCellView({
   reorderHandleLabel,
   reorderHint,
   onReorderKeyDown,
+  headerDrag,
+  copyrightIndicator,
 }: ResourceCellViewProps) {
   let readyContent: ReactNode = editor;
-  if (isVerseEmpty) {
+  if (emptyMessage) {
     readyContent = (
-      <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:text-center">
-        <span className="tw:text-sm tw:text-muted-foreground">{localizedStrings[EMPTY_KEY]}</span>
+      // Not `EmptyState`, which renders its message in a `role="status"` live region. That is right
+      // for a view-level zero state (the web view's own empty state uses it, once), but this one is
+      // per cell: with several resources in the list, a reference change would queue one
+      // announcement per cell that lacks the verse and starve the grid's reorder announcer. The cell
+      // is already named by its enclosing region or listitem, and the sibling placeholder states
+      // below are plain text for the same reason.
+      <div
+        data-cell-placeholder
+        className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center"
+      >
+        <span className="tw:text-center tw:text-sm tw:text-muted-foreground">{emptyMessage}</span>
       </div>
     );
   }
@@ -264,7 +416,10 @@ export function ResourceCellView({
     state === 'ready' ? (
       readyContent
     ) : (
-      <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center">
+      <div
+        data-cell-placeholder
+        className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center"
+      >
         {unavailableContent}
       </div>
     );
@@ -273,37 +428,69 @@ export function ResourceCellView({
     undefined,
   );
   const [selectedText, setSelectedText] = useState('');
+  // The content area, without the resource name, so a selection dragged in from another cell does
+  // not count the name toward this cell's limit. The inline and header layouts are exclusive, so
+  // one ref serves both.
+  // The ref needs to start out with null for it to work as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const copyAreaRef = useRef<HTMLDivElement>(null);
+  // The header layout's content area is also the caller's `contentRef`, so it takes both refs.
+  const setHeaderContentElement = useCallback(
+    (element: HTMLDivElement | null) => {
+      copyAreaRef.current = element;
+      if (typeof contentRef === 'function') contentRef(element);
+      else if (contentRef) contentRef.current = element;
+    },
+    [contentRef],
+  );
+
+  // A resource that is not installed shows only a placeholder, so there is nothing to copy and the
+  // browser's own menu is left alone there.
+  const hasRightClickMenu = state !== 'unavailable';
 
   const handleCellContextMenu = useCallback(
-    (event: MouseEvent) => {
-      if (!zoomMenuLabels) return; // no zoom controller → allow default behavior
+    (event: MouseEvent<HTMLElement>) => {
+      // A window opened from the cell (its copyright details) renders outside it, but React still
+      // delivers its events here; leave its right-clicks alone
+      if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return;
       // The editor owns `contextmenu` over its content, and its built-in menu clips and cannot flip
       // near the viewport edge. Intercept in the capture phase (before the editor's handler) and open
       // our own portaled, collision-aware menu at the cursor instead.
       event.preventDefault();
       event.stopPropagation();
-      // Capture selection now — focus moves to the menu when it opens, which clears the DOM
-      // selection, so we must grab it before setRightClickMenuPos triggers the re-render.
-      const selection = window.getSelection()?.toString().trim() ?? '';
-      setSelectedText(selection);
+      // Capture the selection now, before the menu opens and takes focus. It is cut to the limit
+      // in force now, so a limit that grows while the menu is open cannot copy more of it.
+      const text = getSelectedTextWithin(copyAreaRef.current ?? event.currentTarget).trim();
+      setSelectedText(truncateToCopyLimit(text, copyLimit));
       setRightClickMenuPos({ x: event.clientX, y: event.clientY });
     },
-    [zoomMenuLabels],
+    [copyLimit],
   );
 
-  // Format the kebab aria-label with the resource name (the template uses {resourceName}).
+  // Format the "⋮" aria-label with the resource name (the template uses {resourceName}).
   const zoomOptionsAriaLabel = zoomMenuLabels
     ? formatReplacementString(zoomMenuLabels.options, { resourceName: label })
     : undefined;
 
-  const contentStyle: CSSProperties | undefined =
-    zoomFactor !== undefined && zoomFactor !== 1 ? { zoom: zoomFactor } : undefined;
+  const contentStyle = zoomTarget === 'blocks' ? buildAlignedZoomStyle(zoomArea) : undefined;
+  // A scroll port has scroll anchoring off: the reference scroll tells the reader's scrolling from
+  // its own by comparing `scrollTop`, and anchoring rewrites it as content arrives above the verse,
+  // which is the case the re-check exists for. See the aligned grid root's `overflow-anchor` rule.
+  const contentOverflowClass =
+    contentOverflow === 'visible'
+      ? 'tw:overflow-visible'
+      : 'tw:overflow-auto tw:[overflow-anchor:none]';
 
   return (
     <div
-      onContextMenuCapture={zoomMenuLabels ? handleCellContextMenu : undefined}
-      // `group` powers the hover/focus-visible kebab reveal. Activation (opening the chapter split)
-      // is owned by the parent verse `listitem` in ScriptureTextGrid — this cell is presentational.
+      onContextMenuCapture={hasRightClickMenu ? handleCellContextMenu : undefined}
+      // The `data-cell-*` attributes here and below are what the aligned grid's stylesheet hooks
+      // onto to turn this flex chrome into its subgrid chain (`aligned-grid.styles.ts`) — layout
+      // anchors, not test ids.
+      data-cell-root
+      // `group` powers the hover/focus-within reveal of the "⋮" button. Activation (opening the
+      // chapter split) is owned by the parent verse `listitem` in ScriptureTextGrid — this cell is
+      // presentational.
       className="tw:group tw:flex tw:min-w-0 tw:flex-col"
     >
       {nameDisplay === 'inline' ? (
@@ -314,17 +501,31 @@ export function ResourceCellView({
         // remaining min-w-0 column. Only the verse text scales with zoom; the hanging name is fixed.
         <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
           <ResourceNameLabel label={label} className="tw:max-w-24 tw:min-w-0 tw:text-sm" />
-          <div className="tw:min-w-0 tw:flex-1 tw:overflow-auto" style={contentStyle}>
-            {stateContent}
+          {copyrightIndicator}
+          <div
+            ref={copyAreaRef}
+            className={`tw:min-w-0 tw:flex-1 ${contentOverflowClass}`}
+            style={contentStyle}
+          >
+            <ContentZoomRoot area={zoomArea} label={label}>
+              {stateContent}
+            </ContentZoomRoot>
           </div>
         </div>
       ) : (
-        // Chapter context: a compact header line (colored name with a bottom border) with the zoom
-        // kebab and optional reorder grip at its inline-end, above the content. Long labels
-        // truncate; the tooltip reveals the full name only when actually clipped. Only the content
-        // scales with zoom, not the header.
+        // Chapter context: a compact header line (colored name with a bottom border) with the
+        // optional reorder grip at its inline-start and the "⋮" zoom options button at its
+        // inline-end, above the content. Long labels truncate; the tooltip reveals the full name
+        // only when actually clipped. Only the content scales with zoom, not the header.
         <>
-          <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-0.5">
+          <div
+            data-cell-header
+            data-testid={headerDrag ? 'scripture-text-grid-column-drag-source' : undefined}
+            draggable={headerDrag ? true : undefined}
+            onDragStart={headerDrag?.onDragStart}
+            onDragEnd={headerDrag?.onDragEnd}
+            className={`tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-0.5${headerDrag ? ' tw:cursor-grab' : ''}`}
+          >
             {showDragHandle ? (
               // Nested tooltip on the grip so `reorderHint` shows on hover AND keyboard focus.
               // Its own provider/tooltip keeps it independent of the name-truncation tooltip.
@@ -351,6 +552,7 @@ export function ResourceCellView({
               </TooltipProvider>
             ) : undefined}
             <ResourceNameLabel label={label} className="tw:min-w-0 tw:flex-1 tw:text-xs" />
+            {copyrightIndicator}
             {zoomMenuLabels ? (
               <TooltipProvider>
                 <DropdownMenu>
@@ -361,10 +563,8 @@ export function ResourceCellView({
                           variant="ghost"
                           size="icon"
                           aria-label={zoomOptionsAriaLabel}
-                          // Stop the click from bubbling to the parent verse `listitem`, whose click
-                          // handler opens the chapter-context split. Radix opens the dropdown on
-                          // pointerdown, so this does not prevent the menu from opening — it only
-                          // prevents the chapter-context panel from opening simultaneously.
+                          // Keep the click from reaching an enclosing click handler. Radix opens the
+                          // dropdown on pointerdown, so the menu still opens.
                           onClick={(e) => e.stopPropagation()}
                           // Hidden until hover/focus for pointer users; always visible on touch
                           // (`hover: none`) where there is no hover to reveal it.
@@ -391,12 +591,26 @@ export function ResourceCellView({
               </TooltipProvider>
             ) : undefined}
           </div>
-          <div className="tw:flex-1 tw:overflow-auto" style={contentStyle} dir={textDirection}>
-            <div className="tw:p-2">{stateContent}</div>
+          <div
+            ref={setHeaderContentElement}
+            data-cell-content
+            className={`tw:flex-1 ${contentOverflowClass}`}
+            style={contentStyle}
+            dir={textDirection}
+          >
+            {/* The zoom root sits INSIDE the content box, never on it: that box is the scroll
+                port a chapter cell scrolls to a verse (`useReferenceScroll`), and `zoom` on the
+                port would leave the target's viewport rect and the port's `scrollTop` in
+                different coordinate spaces, so the port overshoots by the zoom factor. */}
+            <div data-cell-pad className="tw:p-2">
+              <ContentZoomRoot area={zoomArea} label={label}>
+                {stateContent}
+              </ContentZoomRoot>
+            </div>
           </div>
         </>
       )}
-      {zoomMenuLabels ? (
+      {hasRightClickMenu ? (
         <DropdownMenu
           open={rightClickMenuPos !== undefined}
           onOpenChange={(open) => {
@@ -411,25 +625,44 @@ export function ResourceCellView({
               style={{ left: rightClickMenuPos?.x ?? 0, top: rightClickMenuPos?.y ?? 0 }}
             />
           </DropdownMenuTrigger>
-          <DropdownMenuContent>
+          <DropdownMenuContent
+            // The menu is portaled out of the cell's DOM, but React still bubbles its synthetic
+            // events through the component tree, so a click on an item, or Enter/Space choosing one,
+            // would reach the verse `listitem` around this cell and open that row's chapter panel
+            // (the same reason `book-chapter-control.component.tsx` stops keys on its portaled
+            // popover). Only Enter and Space are stopped, so the zoom chords still reach the pane's
+            // own key handling while the menu is open; Radix handles Escape on the document.
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+            }}
+          >
             <DropdownMenuItem
               disabled={!selectedText}
               onSelect={() => {
-                if (selectedText) navigator.clipboard?.writeText(selectedText).catch(() => {});
+                if (!selectedText) return;
+                // Cut again, in case the limit shrank while the menu was open.
+                const textToCopy = truncateToCopyLimit(selectedText, copyLimit);
+                if (!textToCopy) return;
+                navigator.clipboard?.writeText(textToCopy).catch(() => {});
               }}
             >
               {localizedStrings[COPY_KEY]}
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <ZoomItemsShared
-              labels={zoomMenuLabels}
-              canZoomIn={canZoomIn}
-              canZoomOut={canZoomOut}
-              canReset={canReset}
-              onZoomIn={onZoomIn}
-              onZoomOut={onZoomOut}
-              onResetZoom={onResetZoom}
-            />
+            {zoomMenuLabels ? (
+              <>
+                <DropdownMenuSeparator />
+                <ZoomItemsShared
+                  labels={zoomMenuLabels}
+                  canZoomIn={canZoomIn}
+                  canZoomOut={canZoomOut}
+                  canReset={canReset}
+                  onZoomIn={onZoomIn}
+                  onZoomOut={onZoomOut}
+                  onResetZoom={onResetZoom}
+                />
+              </>
+            ) : undefined}
           </DropdownMenuContent>
         </DropdownMenu>
       ) : undefined}

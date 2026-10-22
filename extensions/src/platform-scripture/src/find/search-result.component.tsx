@@ -1,5 +1,11 @@
 import { ArrowRight, Copy, Minus, Plus, X } from 'lucide-react';
-import { Button, DisabledActionTooltip, DropdownMenuItem, ResultsCard } from 'platform-bible-react';
+import {
+  Button,
+  ContentZoomRoot,
+  DisabledActionTooltip,
+  DropdownMenuItem,
+  ResultsCard,
+} from 'platform-bible-react';
 import { LocalizedStringValue, LocalizeKey, UsjReaderWriter } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -275,14 +281,15 @@ export default function SearchResult({
 
     const { beforeText, text, afterText } = textParts;
 
+    // Only the verse text zooms with the pane; the loading message above stays at interface size.
     return (
-      <>
+      <ContentZoomRoot as="span">
         {displayText(beforeText)}
         {/* <mark> exposes the match as highlighted text to assistive tech; findHighlightClass sets
             its own bg + text color, overriding the UA default mark styling. */}
         <mark className={findHighlightClass}>{displayText(preserveTrailingSpaces(text))}</mark>
         {displayText(afterText)}
-      </>
+      </ContentZoomRoot>
     );
   };
 
@@ -394,23 +401,29 @@ export default function SearchResult({
       />
     );
 
+    // Only the preview text is marked for content zoom; the arrow, minus and plus icons keep
+    // interface size.
     if (previewOptions.layout === 'inline') {
       // Falls back to arrow if context not yet loaded
       if (!textParts) {
         return (
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5">
-            <span className={`${findClass} tw:min-w-0 ${breakClass}`}>{findText}</span>
+            <ContentZoomRoot as="span" className={`${findClass} tw:min-w-0 ${breakClass}`}>
+              {findText}
+            </ContentZoomRoot>
             <ArrowRight className="tw:h-3 tw:w-3 tw:shrink-0 tw:rtl:rotate-180" />
             {isEmptyReplace ? (
               deletionBar
             ) : (
-              <span className={`${replaceClass} tw:min-w-0 ${breakClass}`}>{replaceText}</span>
+              <ContentZoomRoot as="span" className={`${replaceClass} tw:min-w-0 ${breakClass}`}>
+                {replaceText}
+              </ContentZoomRoot>
             )}
           </div>
         );
       }
       return (
-        <div className={`tw:text-muted-foreground ${fontClass} ${breakClass}`}>
+        <ContentZoomRoot as="div" className={`tw:text-muted-foreground ${fontClass} ${breakClass}`}>
           {displayText(textParts.beforeText)}
           <span className={findClassInline}>
             {previewOptions.showInvisible
@@ -419,7 +432,7 @@ export default function SearchResult({
           </span>
           {isEmptyReplace ? deletionBar : <span className={replaceClassInline}>{replaceText}</span>}
           {displayText(textParts.afterText)}
-        </div>
+        </ContentZoomRoot>
       );
     }
 
@@ -431,19 +444,25 @@ export default function SearchResult({
         <div className="tw:space-y-0.5">
           <div className="tw:flex tw:items-baseline tw:gap-1">
             <Minus className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground" />
-            <span className={`tw:text-muted-foreground tw:min-w-0 ${breakClass} ${fontClass}`}>
+            <ContentZoomRoot
+              as="span"
+              className={`tw:text-muted-foreground tw:min-w-0 ${breakClass} ${fontClass}`}
+            >
               {before}
               <span className={findClass}>{findText}</span>
               {after}
-            </span>
+            </ContentZoomRoot>
           </div>
           <div className="tw:flex tw:items-baseline tw:gap-1">
             <Plus className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-foreground" />
-            <span className={`tw:text-foreground tw:min-w-0 ${breakClass} ${fontClass}`}>
+            <ContentZoomRoot
+              as="span"
+              className={`tw:text-foreground tw:min-w-0 ${breakClass} ${fontClass}`}
+            >
               {before}
               {isEmptyReplace ? deletionBar : <span className={replaceClass}>{replaceText}</span>}
               {after}
-            </span>
+            </ContentZoomRoot>
           </div>
         </div>
       );
@@ -452,12 +471,16 @@ export default function SearchResult({
     // Default: arrow layout
     return (
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5">
-        <span className={`${findClass} tw:min-w-0 ${breakClass}`}>{findText}</span>
+        <ContentZoomRoot as="span" className={`${findClass} tw:min-w-0 ${breakClass}`}>
+          {findText}
+        </ContentZoomRoot>
         <ArrowRight className="tw:h-3 tw:w-3 tw:shrink-0 tw:rtl:rotate-180" />
         {isEmptyReplace ? (
           deletionBar
         ) : (
-          <span className={`${replaceClass} tw:min-w-0 ${breakClass}`}>{replaceText}</span>
+          <ContentZoomRoot as="span" className={`${replaceClass} tw:min-w-0 ${breakClass}`}>
+            {replaceText}
+          </ContentZoomRoot>
         )}
       </div>
     );
@@ -480,9 +503,12 @@ export default function SearchResult({
         {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}
       </button>
       {!searchResult.isReplaced && (
-        <span className="scripture-font tw:min-w-0 tw:truncate tw:font-normal tw:text-muted-foreground">
+        <ContentZoomRoot
+          as="span"
+          className="scripture-font tw:min-w-0 tw:truncate tw:font-normal tw:text-muted-foreground"
+        >
           {searchResult.text ?? ''}
-        </span>
+        </ContentZoomRoot>
       )}
       {searchResult.isReplaced && (
         <>

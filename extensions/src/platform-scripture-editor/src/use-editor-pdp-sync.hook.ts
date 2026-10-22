@@ -272,8 +272,11 @@ export function useEditorPdpSync({
       // popover — `isEditingSessionActive`) still defers regardless of the window: typing inside
       // the popover's own editor never stamps the main editor's local-edit timestamp, and
       // replacing the main editor mid-session regenerates every Lexical key and kills the session.
-      // The session predicate carries its own staleness bound web-view-side, so a wedged session
-      // cannot hold this deferral open forever either.
+      // The predicate bounds only the footnote-popover session web-view-side (a wedged note session
+      // stops deferring once stale). A marker-palette session has no bound: while one stays open,
+      // every differing same-document update is deferred and the editor's content pushed over it,
+      // including a genuine external merge — a known gap documented on
+      // `resolveEditingSessionActivity`.
       //
       // When the editor is NOT focused (idle, blurred) and no session is active, the PDP update
       // replaces as before — genuine external co-edits land immediately.
@@ -300,6 +303,10 @@ export function useEditorPdpSync({
           lastAppliedDocumentSelector.current,
         );
         if (isSameDocument) {
+          // Every return below this point deliberately skips `setEditorUsj`, so `editorChapterKey`
+          // (the web view's `useScrollToRange` gate — see `setEditorUsj`'s call site) does not
+          // advance here either. A range jump waiting on that chapter stays pending for as long as
+          // this branch keeps firing.
           if (areUsjContentsEqualIgnoringVersion(editorUsj, usjFromPdp)) {
             // The PDP now agrees with the editor — the round-trip converged.
             nonConvergingDeferralCount.current = 0;
@@ -453,6 +460,9 @@ export function useEditorPdpSync({
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
     else {
+      // This branch does not call `setEditorUsj` either, so `editorChapterKey` does not advance for
+      // it — same coupling as the deferral branch above. A range jump waiting on this chapter stays
+      // pending for as long as this is the branch that keeps firing for it.
       nonConvergingDeferralCount.current = 0;
       // The editor is already showing this document — the incoming update matches what this
       // editor last sent — so record the selector as applied even though nothing is (re)applied

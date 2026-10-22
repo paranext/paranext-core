@@ -89,8 +89,12 @@ export interface ForwardedPaletteKeyEvent {
 	/** `KeyboardEvent.key` — the value matched against the requester's declared key list. */
 	key: string;
 	/**
-	 * `KeyboardEvent.keyCode`. Needed only for the legacy `229` "handled by IME" signal, which some
-	 * engines fire before `isComposing` flips true.
+	 * `KeyboardEvent.keyCode`.
+	 *
+	 * Two uses. It carries the legacy `229` "handled by IME" signal, which some engines fire before
+	 * `isComposing` flips true. It also names the PHYSICAL key, which the marker-palette table falls
+	 * back to when the character a layout produced cannot name a marker — on a Cyrillic layout the
+	 * `q` key produces `й`, and `keyCode` 65–90 turns that back into a Latin letter.
 	 */
 	keyCode: number;
 	/** Whether an IME composition is underway; such a key is never palette input. */

@@ -21,7 +21,6 @@ const meta: Meta<typeof FirstRunShell> = {
     withFirstRunLanguage({
       interfaceLanguage: ['en'],
       setupLanguages: SETUP_LANGUAGES,
-      availableLanguages: SETUP_LANGUAGES,
     }),
   ],
 };
@@ -30,6 +29,13 @@ export default meta;
 type Story = StoryObj<typeof FirstRunShell>;
 
 export const Language: Story = { args: { entryStep: 'language' } };
+/**
+ * A Paratext 9 user's first launch: the registration copied from Paratext 9 is already valid, so
+ * the banner says so and language, internet settings and identify show as complete.
+ */
+export const CopiedFromParatext9: Story = {
+  args: { entryStep: 'language', registrationValidAtStart: true, registrationPreexisting: true },
+};
 // The step reads a data provider that has no PAPI backend in Storybook, so without standing one in
 // it shows its "provider hasn't registered yet" spinner and Next never enables. The step's own
 // states live in `steps/internet-settings-step.stories.tsx`; the shell needs it to render at all.

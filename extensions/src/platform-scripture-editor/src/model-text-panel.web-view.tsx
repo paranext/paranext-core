@@ -15,14 +15,17 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo } from 'react';
+import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
-import { isDblResourceReference } from './resource-reference.utils';
+import { getModelResourceProjectId, isDblResourceReference } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 import { canPublishResourcePanelProjectIds } from './resource-panel-readiness.utils';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
+import { ProjectCopyrightNotice } from './copyright-notice/project-copyright-notice.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -38,6 +41,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   ...MODEL_TEXT_PANEL_STRING_KEYS,
   '%webView_modelTextPanel_title%',
   '%webView_modelTextPanel_title_withResource%',
+  ...COPYRIGHT_NOTICE_STRING_KEYS,
 ];
 
 /**
@@ -128,7 +132,13 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     useWebViewState,
     modelResourceProjectId ? [modelResourceProjectId] : [],
     canPublishResourcePanelProjectIds(effectiveModelTextsState, isCatalogReady),
+    // These panels are re-pointed by reloading them, which reuses the web view id, so the
+    // published list must be scoped to the project it was built for.
+    projectId,
   );
+
+  // The project on screen, whichever kind of reference chose it, for its copyright notice
+  const displayedProjectId = getModelResourceProjectId(effectiveModelText, dblResources);
 
   // --- Operation callbacks ---
 
@@ -160,36 +170,51 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
         selectedResourceIds,
         isModal: true,
         resourceType: 'ScriptureResource',
+        disableRestrictedModelTexts: true,
       }),
     [],
   );
 
   const getResourceChapter = useCallback(
     async (resourceProjectId: string, ref: SerializedVerseRef) => {
-      const usjPdp = await papi.projectDataProviders.get(
-        'platformScripture.USJ_Chapter',
-        resourceProjectId,
-      );
-      const usj =
-        (await usjPdp.getChapterUSJ({
-          book: ref.book,
-          chapterNum: ref.chapterNum,
-          verseNum: 1,
-          versificationStr: ref.versificationStr,
-        })) ?? defaultUsj;
+      const getUsj = async () => {
+        const usjPdp = await papi.projectDataProviders.get(
+          'platformScripture.USJ_Chapter',
+          resourceProjectId,
+        );
+        return (
+          (await usjPdp.getChapterUSJ({
+            book: ref.book,
+            chapterNum: ref.chapterNum,
+            verseNum: 1,
+            versificationStr: ref.versificationStr,
+          })) ?? defaultUsj
+        );
+      };
 
-      let textDirection: string = DEFAULT_TEXT_DIRECTION;
-      try {
-        const basePdp = await papi.projectDataProviders.get('platform.base', resourceProjectId);
-        const td = await basePdp.getSetting('platform.textDirection');
-        if (typeof td === 'string' && td) textDirection = td;
-      } catch (e) {
-        logger.warn(`Failed to read model text direction: ${getErrorMessage(e)}`);
-      }
+      const getTextDirection = async () => {
+        try {
+          const basePdp = await papi.projectDataProviders.get('platform.base', resourceProjectId);
+          const td = await basePdp.getSetting('platform.textDirection');
+          if (typeof td === 'string' && td) return td;
+        } catch (e) {
+          logger.warn(`Failed to read model text direction: ${getErrorMessage(e)}`);
+        }
+        return DEFAULT_TEXT_DIRECTION;
+      };
 
+      const [usj, textDirection] = await Promise.all([getUsj(), getTextDirection()]);
       return { usj, textDirection };
     },
     [],
+  );
+
+  // `ModelTextPanel` reads its text from the project `getModelResourceProjectId` resolves.
+  // `ModelTextPanel` blocks copying while its chapter text loads.
+  const resourceCopyLimit = useChapterCopyLimit(
+    getModelResourceProjectId(effectiveModelText, dblResources),
+    scrRef,
+    'applied-by-caller',
   );
 
   return (
@@ -208,7 +233,15 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       setUserModelTexts={setUserModelTexts}
       showResourcePicker={showResourcePicker}
       getResourceChapter={getResourceChapter}
+      resourceCopyLimit={resourceCopyLimit}
       logger={logger}
+      copyrightNotice={
+        <ProjectCopyrightNotice
+          projectId={displayedProjectId}
+          localizedStrings={localizedStrings}
+          useWebViewState={useWebViewState}
+        />
+      }
     />
   );
 };

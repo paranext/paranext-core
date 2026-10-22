@@ -50,6 +50,15 @@ public static class Program
         // implementation so we don't miss `ParatextData` code that needs to run.
         ProgressUtils.Implementation = new ProgressUtilsRunImmediately();
 
+        // Pin ParatextData's per-user folder (registration, internet settings) before anything can
+        // read it: ParatextData caches the folder on first access, and its own choice would follow
+        // the app version and could land in Paratext 9's folder. See PlatformParatextInfo.
+        var platformParatextInfo = new PlatformParatextInfo(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+        );
+        PlatformParatextInfo.Install(platformParatextInfo);
+        Console.WriteLine($"ParatextData app-data folder: {ParatextInfo.AppDataFolder}");
+
         using PapiClient papi = new();
         try
         {
@@ -64,7 +73,8 @@ public static class Program
             await SharedStoreService.InitializeAsync(papi);
             papi.SetSharedStore(SharedStoreService.GetSharedStore());
 
-            // Log the ParatextData.dll assembly version then change it to 10.<our semver>
+            // Log the ParatextData.dll assembly version then change it to 10.<our semver>. The
+            // app-data folder does not follow this version; PlatformParatextInfo pins it.
             var appInfo = AppService.GetAppInfo(papi);
             var appVersion = SemVerUtils.ConvertSemVerToVersion(appInfo.Version);
             Console.WriteLine(
@@ -73,6 +83,40 @@ public static class Program
             ParatextInfo.ParatextVersion = appVersion;
 
             var paratextProjects = new LocalParatextProjects(papi);
+
+            // The persisted settings below read from the settings service, which the extension host
+            // can still be starting. Reading too soon throws and ends this process. Starting with
+            // empty values instead would let the next save wipe what is stored. Both settings have
+            // contributed defaults, so any answer is non-null. Each is waited for: a stored setting
+            // is answered as soon as the service registers, but an unstored one only after the
+            // extension host's contributions load.
+            var settingsWaitTimeout = TimeSpan.FromSeconds(60);
+            var settingsRetryDelay = TimeSpan.FromMilliseconds(250);
+            StartupTiming.Mark("settings-wait-start");
+            using var settingsWaitDeadline = new CancellationTokenSource(settingsWaitTimeout);
+            var settingsServiceAnswered =
+                await SettingsService.WaitForSettingAsync<SerializableStringDictionary>(
+                    papi,
+                    Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
+                    settingsRetryDelay,
+                    settingsWaitDeadline.Token
+                )
+                && await SettingsService.WaitForSettingAsync<SerializableStringDictionary>(
+                    papi,
+                    Settings.PTX_UTILS_MEMENTO_DATA,
+                    settingsRetryDelay,
+                    settingsWaitDeadline.Token
+                );
+            if (papi.DisconnectTask.IsCompleted)
+                return;
+            if (!settingsServiceAnswered)
+            {
+                Console.Error.WriteLine(
+                    $"The settings service did not answer within {settingsWaitTimeout.TotalSeconds}s; "
+                        + "continuing startup, so reading the persisted settings will likely fail"
+                );
+            }
+            StartupTiming.Mark("settings-wait-end");
 
             // Adapted from Paratext's `Program.StaticInitialization`
             ParatextDataSettings.Initialize(new PersistedParatextDataSettings(papi));
@@ -97,6 +141,15 @@ public static class Program
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var internetSettingsDataProvider = new InternetSettingsDataProvider(papi);
             var dblResources = new DblResourcesDataProvider(papi, paratextProjects);
+            // Initialized in the critical barrier below. Extension activation doesn't wait for that
+            // barrier, so a token request sent from an extension's activate() before this handler
+            // registers relies on the caller's requestWithRetry (about 10 seconds).
+            var registryAccessTokenService = new RegistryAccessTokenService(
+                papi,
+                new ParatextDataRegistryUserContext(),
+                new RestClientRegistryTokenClient(),
+                () => DateTimeOffset.UtcNow
+            );
             var paratextRegistrationService = new ParatextRegistrationService(
                 papi,
                 internetSettingsDataProvider
@@ -151,19 +204,48 @@ public static class Program
                 paratextSendReceiveService
             );
 
+            // Track and announce the projects with changes waiting in each sync direction (event +
+            // getUnsyncedChanges).
+            var unsyncedChangesTracker = new UnsyncedChangesTracker(
+                paratextSendReceiveService,
+                paratextProjects
+            );
+            unsyncedChangesTracker.Start();
+            var remoteChangesPoller = new RemoteChangesPoller(
+                paratextSendReceiveService,
+                paratextProjects
+            );
+            var unsyncedChangesNotifierService = new UnsyncedChangesNotifierService(
+                papi,
+                unsyncedChangesTracker,
+                remoteChangesPoller
+            );
+
             StartupTiming.Mark("init-barrier-start");
-            // Critical path: everything the renderer needs to list projects and open an editor.
+            // Critical path: everything the renderer needs to list projects and open an editor, plus
+            // the Registry token handler, so it registers early for extensions that call it from
+            // activate().
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 paratextPublishedFactory.InitializeAsync(),
                 versificationConversionService.InitializeAsync(),
                 paratextRegistrationService.InitializeAsync(),
+                registryAccessTokenService.InitializeAsync(),
                 paratextSendReceiveService.InitializeAsync(),
                 dblResources.RegisterDataProviderAsync(),
                 sendReceiveBlockNotifierService.InitializeAsync(),
-                syncActivityNotifierService.InitializeAsync()
+                syncActivityNotifierService.InitializeAsync(),
+                unsyncedChangesNotifierService.InitializeAsync()
             );
             StartupTiming.Mark("init-barrier-end");
+
+            // Off the barrier: one `hg status` per local project, in the background; the result
+            // arrives as an onUnsyncedChangesChanged event when it differs from the empty baseline.
+            unsyncedChangesTracker.StartBaselineScan();
+
+            // Off the barrier: the first server lookup runs after a short delay, then every few
+            // minutes; its result arrives as an onUnsyncedChangesChanged event when toReceive changes.
+            remoteChangesPoller.Start();
 
             // Things that only run in our "noisy dev mode" go here
             var noisyDevModeEnvVar = Environment.GetEnvironmentVariable("DEV_NOISY");

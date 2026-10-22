@@ -1,6 +1,5 @@
 import { Fragment, useMemo } from 'react';
 import {
-  Kbd,
   Table,
   TableBody,
   TableCell,
@@ -8,32 +7,12 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
-
-/** Per-operating-system rendering of a single keyboard shortcut combination. */
-export type KeyboardShortcutKeys = {
-  /** MacOS representation, e.g. `⌘Z` (symbols, no separator). */
-  macOS: string;
-  /** Windows representation, e.g. `Ctrl+Z`. */
-  windows: string;
-  /** Linux representation, e.g. `Ctrl+Z`. */
-  linux: string;
-};
-
-/** A single documented keyboard shortcut. */
-export type KeyboardShortcutEntry = {
-  /** Stable identifier/slug, e.g. `next-tab`. */
-  id: string;
-  /** What the shortcut does, in sentence case. */
-  purpose: string;
-  /** Grouping bucket, e.g. `Navigation`, `Editing`, `Zoom`. */
-  category: string;
-  /** Where the shortcut is active, e.g. `Main process (global)`. */
-  context: string;
-  /** Per-OS key combinations. */
-  keys: KeyboardShortcutKeys;
-  /** Repo-relative file paths where the shortcut is handled. */
-  locations: string[];
-};
+import { ShortcutKeys } from 'platform-bible-react/experimental';
+import type {
+  KeyboardShortcutEntry,
+  KeyboardShortcutKeys,
+} from '@shared/data/keyboard-shortcuts.model';
+import { parseShortcutKeycaps } from './keyboard-shortcut-keycaps.util';
 
 /** Localizable string keys for {@link KeyboardShortcutsCatalog} column headers. */
 export const KEYBOARD_SHORTCUTS_CATALOG_STRING_KEYS = Object.freeze([
@@ -105,6 +84,38 @@ function buildOsRows(keys: KeyboardShortcutKeys): OsKeyRow[] {
 }
 
 /**
+ * Renders one key combination through the shared {@link ShortcutKeys} renderer.
+ *
+ * The wrapping span's muted, small text only reaches `ShortcutKeys`' unstyled `+` separator: each
+ * `Kbd` sets its own color and size explicitly, so this is the catalog page's own styling choice
+ * rather than something `ShortcutKeys` should hard-code for every consumer.
+ */
+function KeycapCombination({ hint }: { hint: string }) {
+  return (
+    <span className="tw:text-xs tw:text-muted-foreground">
+      <ShortcutKeys hint={hint} />
+    </span>
+  );
+}
+
+/** Renders one OS's key string: its alternatives as keycaps, or its no-equivalent marker as text. */
+function OsKeys({ keys }: { keys: string }) {
+  const parsed = parseShortcutKeycaps(keys);
+  if (parsed.kind === 'no-equivalent')
+    return <span className="tw:text-xs tw:text-muted-foreground">{parsed.text}</span>;
+  return (
+    <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-1">
+      {parsed.alternatives.map((alternative, index) => (
+        <Fragment key={alternative}>
+          {index > 0 && <span className="tw:text-xs tw:text-muted-foreground">/</span>}
+          <KeycapCombination hint={alternative} />
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
+/**
  * Renders a documentation table of keyboard shortcuts, grouped by category. Each row shows the
  * per-OS key combination, what the shortcut does, where it is active, links to the code locations
  * that handle it, and how many such locations exist.
@@ -169,7 +180,7 @@ export function KeyboardShortcutsCatalog({
                             className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1"
                           >
                             <span className="tw:text-xs tw:text-muted-foreground">{row.os}</span>
-                            <Kbd>{row.combo}</Kbd>
+                            <OsKeys keys={row.combo} />
                           </div>
                         ))}
                       </div>

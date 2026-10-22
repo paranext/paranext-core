@@ -1,6 +1,8 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   ColumnDef,
+  ContentZoomRoot,
+  ContentZoomTextProvider,
   Inventory,
   InventorySummaryItem,
   InventoryTableData,
@@ -52,9 +54,12 @@ const createColumns = (
     {
       ...inventoryItemColumn(itemLabel),
       cell: ({ row }) => (
-        <div className="tw:text-lg tw:font-bold tw:font-mono tw:flex tw:justify-center">
+        <ContentZoomRoot
+          as="div"
+          className="tw:text-lg tw:font-bold tw:font-mono tw:flex tw:justify-center"
+        >
           {row.getValue('item')}
-        </div>
+        </ContentZoomRoot>
       ),
     },
     {
@@ -153,20 +158,23 @@ export function PunctuationInventory({
     ],
   );
 
+  // Opts the shared occurrence table into content zoom: its snippet text zooms with the pane.
   return (
-    <Inventory
-      inventoryItems={inventoryItems}
-      setVerseRef={setVerseRef}
-      localizedStrings={localizedStrings}
-      approvedItems={approvedItems}
-      unapprovedItems={unapprovedItems}
-      scope={scope}
-      onScopeChange={onScopeChange}
-      columns={columns}
-      areInventoryItemsLoading={areInventoryItemsLoading}
-      classNameForVerseText="scripture-font"
-      onItemSelected={onItemSelected}
-    />
+    <ContentZoomTextProvider>
+      <Inventory
+        inventoryItems={inventoryItems}
+        setVerseRef={setVerseRef}
+        localizedStrings={localizedStrings}
+        approvedItems={approvedItems}
+        unapprovedItems={unapprovedItems}
+        scope={scope}
+        onScopeChange={onScopeChange}
+        columns={columns}
+        areInventoryItemsLoading={areInventoryItemsLoading}
+        classNameForVerseText="scripture-font"
+        onItemSelected={onItemSelected}
+      />
+    </ContentZoomTextProvider>
   );
 }
 

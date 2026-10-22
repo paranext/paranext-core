@@ -19,7 +19,7 @@ vi.mock('@renderer/services/first-run-store', async (importActual) => {
 // OnboardingTour is stubbed because it transitively imports papi-hooks → papi-frontend.service.ts
 // which calls window.matchMedia at module init time (not supported by jsdom without a stub).
 vi.mock('./components/onboarding-tour/onboarding-tour.component', () => ({
-  OnboardingTour: () => undefined,
+  OnboardingTour: () => <div data-testid="onboarding-tour" />,
 }));
 vi.mock('@renderer/components/docking/platform-dock-layout.component', () => ({
   PlatformDockLayout: () => undefined,
@@ -33,6 +33,12 @@ vi.mock('./components/overlays/overlay-workspace-updating.component', () => ({
 vi.mock('./components/overlays/overlay-connection-lost.component', () => ({
   ConnectionLostOverlay: () => <div data-testid="connection-lost-overlay" />,
 }));
+vi.mock(
+  './components/extension-host-stopped-banner/extension-host-stopped-banner.component',
+  () => ({
+    ExtensionHostStoppedBanner: () => <div data-testid="extension-host-stopped-banner" />,
+  }),
+);
 vi.mock('./components/first-run/first-run-overlay.component', () => ({
   FirstRunOverlay: () => <div data-testid="first-run-overlay" />,
 }));
@@ -66,6 +72,22 @@ describe('App first-run wiring', () => {
     // notice if <ConnectionLostOverlay /> were removed from Main's JSX. Removing the mount must fail.
     render(<App />);
     expect(screen.getByTestId('connection-lost-overlay')).toBeInTheDocument();
+  });
+
+  it('mounts the extension-host-stopped banner so it is listening from startup', () => {
+    // Guards the actual wiring: the banner decides for itself whether to render anything, so
+    // nothing else in this suite would notice if it were removed from Main's JSX.
+    render(<App />);
+    expect(screen.getByTestId('extension-host-stopped-banner')).toBeInTheDocument();
+  });
+
+  it('mounts the onboarding tour so it can stand itself down when the connection drops', () => {
+    // Guards the actual wiring, as the two assertions above do. The tour decides for itself whether
+    // to render, and one of those decisions is to render nothing while the connection-lost state is
+    // up — so a tour dropped from Main's JSX looks identical to a tour that stood down correctly
+    // from inside the tour's own suite. Removing the mount must fail here.
+    render(<App />);
+    expect(screen.getByTestId('onboarding-tour')).toBeInTheDocument();
   });
 
   it('sets data-interface-mode="simple" on document.body when not in power mode', () => {

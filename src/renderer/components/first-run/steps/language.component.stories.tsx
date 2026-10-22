@@ -45,7 +45,6 @@ export const MultipleLanguages: Story = {
     withFirstRunLanguage({
       interfaceLanguage: ['en'],
       setupLanguages: MULTIPLE_LANGUAGES,
-      availableLanguages: MULTIPLE_LANGUAGES,
     }),
   ],
 };
@@ -56,7 +55,6 @@ export const EnglishOnly: Story = {
     withFirstRunLanguage({
       interfaceLanguage: ['en'],
       setupLanguages: ENGLISH_ONLY,
-      availableLanguages: ENGLISH_ONLY,
     }),
   ],
 };

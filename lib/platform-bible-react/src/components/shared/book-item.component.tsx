@@ -1,5 +1,6 @@
 import { CommandItem } from '@/components/shadcn-ui/command';
 import { getLocalizedBookId, getLocalizedBookName } from '@/components/shared/book.utils';
+import { LIST_ITEM_KEYBOARD_FOCUS_RING } from '@/utils/focus.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon } from '@sillsdev/scripture';
 import { Check } from 'lucide-react';
@@ -30,6 +31,17 @@ type BookItemProps = {
   localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
   /** Value to use for Command component matching */
   commandValue?: string;
+  /**
+   * When true, the item paints no keyboard focus ring even while cmdk still marks it
+   * `data-selected`. Set it while a control outside the list holds focus, so the list and that
+   * control never show a focus indicator at the same time — two at once leave the user no way to
+   * tell which surface the next keystroke reaches.
+   *
+   * Suppresses the paint, not the state: cmdk keeps its highlighted item, so the ring returns to
+   * exactly where the user left it. Clearing the highlight instead would hand it to cmdk's
+   * select-first-item fallback, which moves it rather than removing it.
+   */
+  suppressKeyboardHighlight?: boolean;
   /** When true, renders the item as disabled: suppresses onSelect and dims the visuals. */
   disabled?: boolean;
   /**
@@ -80,6 +92,7 @@ export function BookItem({
   showCheck = false,
   localizedBookNames,
   commandValue,
+  suppressKeyboardHighlight = false,
   disabled = false,
   dimmedReason,
   dimmedDescription,
@@ -146,12 +159,27 @@ export function BookItem({
       aria-label={ariaLabel}
       disabled={disabled}
       className={cn(
+        !suppressKeyboardHighlight && LIST_ITEM_KEYBOARD_FOCUS_RING,
+        // Suppress CommandItem's own data-selected background and text color so the keyboard
+        // highlight is the ring alone. Book rows and grid cells belong to one control and share one
+        // highlight language; a background here would make the same keyboard state look different
+        // depending on which view the user is in.
+        'tw:data-selected:bg-transparent tw:data-selected:text-inherit',
+        // Hover keeps its own background so pointer feedback stays distinct from the ring, which
+        // marks the item Enter will submit.
+        'tw:hover:bg-muted',
+        // Hide CommandItem's own trailing check icon — this component's own `showCheck` icon
+        // (rendered as the first child below, so it is never the last child) is the one shown.
+        'tw:[&>svg:last-child]:hidden',
         className,
         disabled && 'tw:cursor-not-allowed tw:opacity-50',
         // Mirrors NumberedItemGrid's dimmed-vs-disabled split — same tokens, so chapter/verse cells
         // and book rows grey identically inside one popover: dimmed is presentation only, so it
-        // never sets aria-disabled or blocks onSelect, and it yields to disabled.
-        isDimmed && 'tw:bg-muted/50 tw:text-muted-foreground/50',
+        // never sets aria-disabled or blocks onSelect, and it yields to disabled. Restated under
+        // data-selected so a dimmed row keeps its dimming while the keyboard highlight is on it,
+        // rather than losing it to the suppression rule above.
+        isDimmed &&
+          'tw:bg-muted/50 tw:text-muted-foreground/50 tw:data-selected:bg-muted/50 tw:data-selected:text-muted-foreground/50',
       )}
     >
       {showCheck && (

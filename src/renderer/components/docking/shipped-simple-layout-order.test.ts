@@ -2,6 +2,8 @@ import { vi } from 'vitest';
 import { BoxData, LayoutBase, PanelData } from 'rc-dock';
 import { readdirSync, readFileSync } from 'fs';
 import { resolve } from 'path';
+import { isGroupUnderColumnOrSubMenu } from 'platform-bible-react';
+import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { simpleLayout } from './simple-layout.data';
 import { applyProjectIdToTabs, buildSimpleLayoutForProject } from './simple-layout.builder';
@@ -89,6 +91,56 @@ const supplementEntries: DefaultLayoutSupplementEntry[] =
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   defaultLayoutSupplement.tabs as unknown as DefaultLayoutSupplementEntry[];
 
+const EDITOR_MENUS_PATH = resolve(
+  __dirname,
+  '../../../../extensions/src/platform-scripture-editor/contributions/menus.json',
+);
+
+/**
+ * The tab each Simple TOOLS item brings to the front. Kept by hand because the menu names a command
+ * and the layout names a web view type. A new third-column tab fails this test until it gets a
+ * TOOLS item and an entry here.
+ */
+const TAB_FOR_COMMAND: Record<string, string> = {
+  'platformScriptureEditor.showBibleTextsPanel': 'platformScriptureEditor.bibleTexts',
+  'platformScriptureEditor.showCommentariesPanel': 'platformScriptureEditor.commentaries',
+  'platformLexicalTools.openDictionary': 'platformLexicalTools.dictionary',
+  'legacyCommentManager.showCommentListPanel': 'legacyCommentManager.commentListPanel',
+  'platformScriptureEditor.showTextCollectionPanel': 'platformScriptureEditor.scriptureTextGrid',
+  'platformScripture.openFind': 'platformScripture.find',
+};
+
+type MenuItemJson = {
+  group: string;
+  order: number;
+  command?: string;
+  hiddenInterfaceModes?: string[];
+};
+
+/** The TOOLS section's commands, read straight off the raw menu JSON, in the order they are served. */
+function simpleToolsCommands(): string[] {
+  const menus = JSON.parse(readFileSync(EDITOR_MENUS_PATH, 'utf8'));
+  const { topMenu } = menus.webViewMenus['platformScriptureEditor.react'];
+  const {
+    groups,
+    items,
+  }: {
+    groups: Localized<MultiColumnMenu['groups']>;
+    items: MenuItemJson[];
+  } = topMenu;
+  return Object.entries(groups)
+    .filter(([groupKey, group]) =>
+      isGroupUnderColumnOrSubMenu(groupKey, group, 'platformScriptureEditor.simpleTools'),
+    )
+    .sort(([, a], [, b]) => a.order - b.order)
+    .flatMap(([groupKey]) =>
+      items
+        .filter((item) => item.group === groupKey && !item.hiddenInterfaceModes?.includes('simple'))
+        .sort((a, b) => a.order - b.order)
+        .flatMap((item) => (item.command ? [item.command] : [])),
+    );
+}
+
 describe('shipped Simple-mode Column 3 order', () => {
   it('the static layout lists Column 3 in the shipped order', () => {
     // Order-sensitive on purpose: `toHaveLength` and `toContain` both pass under any permutation,
@@ -97,6 +149,7 @@ describe('shipped Simple-mode Column 3 order', () => {
     expect(columnWebViewTypes(simpleLayout, 2)).toEqual([
       'platformScriptureEditor.bibleTexts',
       'platformScriptureEditor.commentaries',
+      'platformLexicalTools.dictionary',
       'legacyCommentManager.commentListPanel',
       'platformScripture.find',
     ]);
@@ -159,17 +212,18 @@ describe('shipped Simple-mode Column 3 order', () => {
 
   it('every pinned webViewType still exists in the extension that provides it', () => {
     // Core cannot import extension source, so these webViewTypes are bare string literals in the
-    // layout data — four of them predate this column's Find tab. Renaming a provider's webViewType
-    // is a pure-rename refactor inside its own extension: it type-checks, it lints, and Simple mode
-    // silently loses that tab, because a saved tab with no registered provider just fails to load.
+    // layout data. Renaming a provider's webViewType is a pure-rename refactor inside its own
+    // extension: it type-checks, it lints, and Simple mode silently loses that tab, because a saved
+    // tab with no registered provider just fails to load.
     // Reading the extension source is the same technique the SCRIPTURE_EDITOR_WEBVIEW_TYPE drift
     // guard uses (web-view.model.test.ts); matching on the literal rather than a constant name keeps
-    // it working across the several differently-named (and mostly non-exported) constants these six
+    // it working across the several differently-named (and mostly non-exported) constants these
     // types are declared under.
     const extensionSourceDirs: Record<string, string> = {
       platformScripture: 'extensions/src/platform-scripture/src',
       platformScriptureEditor: 'extensions/src/platform-scripture-editor/src',
       legacyCommentManager: 'extensions/src/legacy-comment-manager/src',
+      platformLexicalTools: 'extensions/src/platform-lexical-tools/src',
     };
 
     /**
@@ -214,10 +268,21 @@ describe('shipped Simple-mode Column 3 order', () => {
     expect(columnWebViewTypes(merged, 2)).toEqual([
       'platformScriptureEditor.bibleTexts',
       'platformScriptureEditor.commentaries',
+      'platformLexicalTools.dictionary',
       'legacyCommentManager.commentListPanel',
       'platformScriptureEditor.scriptureTextGrid',
       'platformScripture.find',
     ]);
+  });
+
+  it("lists the Simple Project menu's TOOLS section in the same order as the third column", () => {
+    const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries, 'simple');
+    const mappedTabs = simpleToolsCommands().map((command) => TAB_FOR_COMMAND[command]);
+    // TAB_FOR_COMMAND[command] is undefined for an unmapped command, and a missing layout slot is
+    // also undefined, so the two could compare equal below for the wrong reason. Guard each mapped
+    // entry first so an unmapped command fails here instead.
+    mappedTabs.forEach((tab) => expect(tab).toBeDefined());
+    expect(mappedTabs).toEqual(columnWebViewTypes(merged, 2));
   });
 
   it('the real supplement leaves nothing Simple-mode-only behind in a power-mode merge', () => {
@@ -267,7 +332,7 @@ describe('shipped Simple-mode Column 3 order', () => {
     // new entry whose tab the bake cannot reach (no `data` payload) fails here rather than in the
     // app. The bake itself is covered by `simple-layout.builder.test.ts`.
     const merged = mergeDefaultLayoutSupplement(
-      buildSimpleLayoutForProject('proj-1'),
+      buildSimpleLayoutForProject('proj-1').layout,
       supplementEntries,
       'simple',
     );

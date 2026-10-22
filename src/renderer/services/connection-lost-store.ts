@@ -48,8 +48,11 @@ export function subscribeToConnectionLost(listener: () => void): () => void {
  *
  * Those signals reach only as far as the browser does. A window closing while the app stays up and
  * a reload both raise them; an app quit does not, because main destroys the window instead of
- * closing it and `destroy()` skips them. See {@link initConnectionLostService} for what that leaves
- * uncovered.
+ * closing it and `destroy()` skips them. The quit is covered by main's `platform.onWillShutDown`
+ * event, which `extension-host-stopped-service.ts` turns into a call to this function. A quit
+ * announced on `platform.onWillShutDown` is never cancelled in this app (main's quit latch is
+ * one-way, and `decideWindowClose` stops asking once a quit is requested), so the latch needs no
+ * reset.
  */
 export function markShuttingDown(): void {
   isShuttingDown = true;
@@ -68,7 +71,13 @@ export function reportConnectionLost(): void {
 }
 
 /**
- * Resets the store to its initial state.
+ * Resets the store's state to its initial value.
+ *
+ * Subscriptions are deliberately left alone. Clearing them drops a mounted component's callback
+ * while `useSyncExternalStore` still believes it is subscribed — `subscribeToConnectionLost` is a
+ * stable module-level reference, so React never re-subscribes — and a later `reportConnectionLost`
+ * then notifies nobody. In the usual "assert the surface is gone" test that reads as a pass.
+ * Unsubscribing is the consumer's own teardown to do.
  *
  * WARNING: Test-only.
  *
@@ -77,5 +86,4 @@ export function reportConnectionLost(): void {
 export function resetConnectionLost(): void {
   isConnectionLost = false;
   isShuttingDown = false;
-  listeners.clear();
 }

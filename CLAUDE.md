@@ -29,6 +29,7 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | PT9 Feature Inventory   | [paratext-9-features/](.context/research/paratext-9-features/README.md) | Catalogue of Paratext 9 features (entry points, forms, classes, sources) — used by `/investigate-prd` |
 | Capability Designs      | [designs/](.context/designs/)                                             | Design specs + implementation plans for capabilities (e.g. `/investigate-prd`) |
 | Startup performance     | [README.md](README.md#startup-performance-timing)                         | Enable `PT_STARTUP_MARKS`, capture marks, render the waterfall (`npm run startup-waterfall`), packaged-vs-dev caveat |
+| First-run wizard reset  | [README.md](README.md#resetting-the-first-run-wizard)                     | Bring the setup wizard back (`platform.resetFirstRun`, registered/unregistered Paratext 9 user), demo mode, where the registration lives |
 
 ## Terminology
 
@@ -54,23 +55,24 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 
 ### Multi-Process Architecture
 
-The application runs as four separate processes that communicate via JSON-RPC over WebSocket:
+The application runs as four kinds of process that communicate via JSON-RPC: the renderer windows over an Electron MessagePort, the extension host and the .NET data provider over WebSocket on port 8876.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Main Process (Electron)               │
-│  • Window management & app lifecycle                     │
-│  • Spawns and manages child processes                    │
-└────────────────┬────────────────────────────────────────┘
-                 │ JSON-RPC over WebSocket (port 8876)
-    ┌────────────┼────────────┬───────────────────┐
-    │            │            │                   │
-┌───▼────────┐ ┌─▼──────────┐ ┌▼────────────────┐
+┌──────────────────────────────────────────────────────────────┐
+│                    Main Process (Electron)                   │
+│  • Window management & app lifecycle                         │
+│  • Spawns and manages child processes                        │
+│  • WebSocket server on port 8876                             │
+│  • One MessagePort per renderer window                       │
+└──────┬─────────────┬─────────────────────────────────────────┘
+       │ JSON-RPC    │ JSON-RPC over WebSocket (port 8876)
+       │ MessagePort ├───────────────┐
+┌──────▼─────┐ ┌─────▼──────┐ ┌──────▼──────────┐
 │ Renderer   │ │ Extension  │ │ .NET Data       │
-│ (React UI) │ │ Host       │ │ Provider        │
-│            │ │            │ │                 │
+│ (React UI, │ │ Host       │ │ Provider        │
+│ per window)│ │            │ │                 │
 │ • Web UI   │ │ • Loads    │ │ • Project data  │
-│ • Dialogs  │ │  extensions│ │ • Paratext     │
+│ • Dialogs  │ │  extensions│ │ • Paratext      │
 │ • WebViews │ │ • PAPI     │ │   integration   │
 └────────────┘ └────────────┘ └─────────────────┘
 ```

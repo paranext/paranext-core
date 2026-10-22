@@ -25,6 +25,7 @@ import { parseDeclared } from './declared';
 import { sha256 } from './lock';
 import { loadPolicy } from './policy';
 import { readJsonFile } from './read-json';
+import { separateProgramIds } from './separate-programs';
 import type { Policy } from './types';
 
 const DIR = path.join(__dirname, 'spdx-corpus');
@@ -40,12 +41,14 @@ function idsIn(expression: string | undefined): string[] {
 /**
  * Every identifier a verdict can resolve to, and therefore every text the document may reproduce.
  *
- * The two lists are the classification tables. The three instrument tables are what admits an
- * identifier that is on NEITHER list: an `exceptions` entry records the identifier a reviewer
- * determined a package's text actually is, an `elections` entry records the operand taken from a
- * disjunction, and an `overrides` entry records terms read from a nuspec's pre-SPDX `licenseUrl`.
- * An override marked `nonSpdx` names free text (a proprietary grant) that SPDX does not publish and
- * the corpus therefore cannot hold; its text comes from `licenseTexts` instead.
+ * The two lists are the classification tables. The instrument tables are what admits an identifier
+ * that is on NEITHER list: an `exceptions` entry records the identifier a reviewer determined a
+ * package's text actually is, an `elections` entry records the operand taken from a disjunction, an
+ * `overrides` entry records terms read from a nuspec's pre-SPDX `licenseUrl`, and a
+ * `separatePrograms` entry records the identifiers of a program redistributed as a separate
+ * executable and the components bundled inside its deliveries. An override marked `nonSpdx` names
+ * free text (a proprietary grant) that SPDX does not publish and the corpus therefore cannot hold;
+ * its text comes from `licenseTexts` instead.
  */
 export function reachableIds(policy: Policy): string[] {
   const ids = new Set<string>([...policy.allowed, ...policy.copyleft]);
@@ -56,6 +59,7 @@ export function reachableIds(policy: Policy): string[] {
   Object.values(policy.overrides || {})
     .filter((entry) => !entry.nonSpdx)
     .forEach((entry) => idsIn(entry.license).forEach((id) => ids.add(id)));
+  separateProgramIds(policy.separatePrograms || {}).forEach((id) => ids.add(id));
   return [...ids].sort();
 }
 

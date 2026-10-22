@@ -1,14 +1,26 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { createPortal } from 'react-dom';
+import { CONTENT_ZOOM_SCOPE_ATTRIBUTE } from 'platform-bible-react';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
-import type { ResourceZoomController } from './use-resource-zoom.hook';
+import type { ResourceZoomController } from './use-resource-content-zoom.hook';
+
+const { mockWarn } = vi.hoisted(() => ({ mockWarn: vi.fn() }));
+vi.mock('@papi/frontend', () => ({ logger: { warn: mockWarn } }));
+
+/** Verse blocks the mocked cell renders in aligned mode; `top` is the stubbed geometry. */
+let alignedVerseBlocks: { start: number; end: number; top: number }[] = [];
+
+/** When set, each cell also renders a window portalled out of it, as its copyright notice does */
+const cellWindow = { isOpen: false };
 
 const mockResourceCell = vi.fn(
   ({
     resourceRef,
+    zoomArea,
     scrRef,
     // setScrRef stays in the type (so mock.calls[n][0].setScrRef type-checks in the setter-sync test)
     // but is not destructured here because it is not used in the rendered JSX.
@@ -16,48 +28,112 @@ const mockResourceCell = vi.fn(
     showDragHandle,
     reorderHandleLabel,
     onReorderKeyDown,
+    headerDrag,
   }: {
     resourceRef: { label: string; projectId: string; resourceId: string };
+    zoomArea: string;
+    zoom?: unknown;
+    zoomMenuLabels?: unknown;
     scrRef: { verseNum: number };
     setScrRef: (scrRef: unknown) => void;
+    isViewVisible?: boolean;
     viewMode?: string;
+    orderIndex?: number;
     showDragHandle?: boolean;
     reorderHandleLabel?: string;
     onReorderKeyDown?: (event: React.KeyboardEvent) => void;
-  }) => (
-    <div data-testid={`cell-${resourceRef.projectId}`} data-view-mode={viewMode}>
-      {`${resourceRef.label}@${scrRef.verseNum}`}
-      {showDragHandle ? (
-        // Mirror the real wiring: a focusable grip that forwards keydown and exposes its id.
-        <button
-          type="button"
-          data-reorder-handle-id={resourceRef.resourceId}
-          data-testid={`grip-${resourceRef.resourceId}`}
-          aria-label={reorderHandleLabel}
-          // Mirror the real grip: stop click bubbling so a reorder grip click never activates the
-          // enclosing verse listitem's chapter-context split.
-          onClick={(event: React.MouseEvent) => event.stopPropagation()}
-          onKeyDown={onReorderKeyDown}
-        >
-          grip
-        </button>
-      ) : undefined}
-    </div>
-  ),
+    headerDrag?: { onDragStart: (event: React.DragEvent) => void; onDragEnd: () => void };
+  }) => {
+    const portalledWindow = cellWindow.isOpen
+      ? createPortal(
+          <div role="dialog" aria-label={`Window from ${resourceRef.label}`}>
+            <button type="button">Close</button>
+          </div>,
+          document.body,
+        )
+      : undefined;
+    return (
+      <div
+        data-testid={`cell-${resourceRef.projectId}`}
+        data-view-mode={viewMode}
+        data-zoom-area={zoomArea}
+      >
+        <span>{`${resourceRef.label}@${scrRef.verseNum}`}</span>
+        <span data-testid={`verse-text-${resourceRef.projectId}`}>verse text</span>
+        {/* The real cell's header band, which is the reorder drag source — the column itself must
+            not be draggable, or a click-drag over the text starts a reorder instead of selecting.
+            The copyright indicator, which opens the portalled window, sits in it when there is one. */}
+        {headerDrag ? (
+          <div
+            data-cell-header
+            data-testid={`header-${resourceRef.resourceId}`}
+            draggable
+            onDragStart={headerDrag.onDragStart}
+            onDragEnd={headerDrag.onDragEnd}
+          >
+            {portalledWindow}
+          </div>
+        ) : (
+          portalledWindow
+        )}
+        {/* In the aligned grid the real cell renders an editor whose verse blocks carry the range the
+          layout places them on, and which the reference scroll targets. Stand in for those, with
+          the geometry the scroll reads (jsdom measures nothing) declared per element. */}
+        {viewMode === 'aligned' ? (
+          <>
+            <div data-cell-header data-stub-top="0" data-stub-height="20" />
+            {alignedVerseBlocks.map((block) => (
+              <div
+                key={block.start}
+                className="verse-block"
+                data-testid={`block-${resourceRef.projectId}-${block.start}`}
+                data-verse-start={block.start}
+                data-verse-end={block.end}
+                data-stub-top={block.top}
+              />
+            ))}
+          </>
+        ) : undefined}
+        {showDragHandle ? (
+          // Mirror the real wiring: a focusable grip that forwards keydown and exposes its id.
+          // NOTE: the real `ResourceCellView` renders this only in its header-band layout, so a verse
+          // -view test that uses it is exercising the handler, not the rendered UI. The grip's own
+          // presence is covered against the real component in `resource-cell-view.component.test.tsx`.
+          <button
+            type="button"
+            data-reorder-handle-id={resourceRef.resourceId}
+            data-testid={`grip-${resourceRef.resourceId}`}
+            aria-label={reorderHandleLabel}
+            // Mirror the real grip: stop click bubbling so a reorder grip click never activates the
+            // enclosing verse listitem's chapter-context split.
+            onClick={(event: React.MouseEvent) => event.stopPropagation()}
+            onKeyDown={onReorderKeyDown}
+          >
+            grip
+          </button>
+        ) : undefined}
+      </div>
+    );
+  },
 );
 
 vi.mock('./resource-cell.component', () => ({
   ResourceCell: (props: Parameters<typeof mockResourceCell>[0]) => mockResourceCell(props),
 }));
 
-vi.mock('./use-resource-zoom-input.hook', () => ({
-  useResourceZoomInput: vi.fn(),
-}));
+// Stands in for the web view root's `useViewVisibility()`, whose answer the grid takes as a prop.
+// Mutable so a test can model an inactive dock tab: the real hook needs an IntersectionObserver,
+// which jsdom has not got, and would report `false` regardless because jsdom reports zero geometry
+// for everything — so the aligned grid's deferred scroll could never be observed without this.
+const mockVisibility = { isVisible: true };
 
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
   return {
     ...original,
+    // The aligned stylesheet is inert in jsdom, which lays nothing out, so injecting ~400 rules per
+    // mount would only cost parse time. `aligned-grid.styles.test.ts` asserts its content instead.
+    useStylesheet: () => {},
     ResizablePanelGroup: ({ children }: { children: React.ReactNode }) => (
       <div data-testid="resizable-panel-group">{children}</div>
     ),
@@ -81,6 +157,7 @@ type RenderOptions = { zoom?: ResourceZoomController };
 function renderGrid(gridResources: typeof resources, options: RenderOptions = {}) {
   const result = render(
     <ScriptureTextGrid
+      isViewVisible
       resources={gridResources}
       scrRef={scrRef}
       setScrRef={setScrRef}
@@ -92,6 +169,7 @@ function renderGrid(gridResources: typeof resources, options: RenderOptions = {}
     rerender: (nextResources: typeof resources, nextOptions: RenderOptions = {}) =>
       result.rerender(
         <ScriptureTextGrid
+          isViewVisible
           resources={nextResources}
           scrRef={scrRef}
           setScrRef={setScrRef}
@@ -104,12 +182,15 @@ function renderGrid(gridResources: typeof resources, options: RenderOptions = {}
 // Reset between tests so per-test assertions on the mock's calls aren't polluted by prior renders.
 beforeEach(() => {
   mockResourceCell.mockClear();
+  mockWarn.mockClear();
+  cellWindow.isOpen = false;
 });
 
 describe('ScriptureTextGrid', () => {
   it('renders one listitem per resource in effective-list order', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -125,6 +206,7 @@ describe('ScriptureTextGrid', () => {
   it('announces verse 1 at a verse-0 reference, matching what the cells render (PT-3133)', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={{ ...scrRef, verseNum: 0 }}
         setScrRef={setScrRef}
@@ -139,13 +221,21 @@ describe('ScriptureTextGrid', () => {
     ]);
   });
   it('feeds the same scrRef to every cell', () => {
-    render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);
+    render(
+      <ScriptureTextGrid
+        isViewVisible
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+      />,
+    );
     expect(screen.getByText('WEB@3')).toBeInTheDocument();
     expect(screen.getByText('KJV@3')).toBeInTheDocument();
   });
   it('names the list region with the provided accessible label', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -155,7 +245,14 @@ describe('ScriptureTextGrid', () => {
     expect(screen.getByRole('list', { name: 'Text Collection' })).toBeInTheDocument();
   });
   it('has list and listitem roles, no grid or row', () => {
-    render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);
+    render(
+      <ScriptureTextGrid
+        isViewVisible
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+      />,
+    );
     expect(screen.getByRole('list')).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(resources.length);
     expect(screen.queryByRole('grid')).not.toBeInTheDocument();
@@ -164,6 +261,7 @@ describe('ScriptureTextGrid', () => {
   it('renders a single resource as a whole-chapter region, not a verse list', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={[{ resourceId: 'r-a', projectId: 'a', label: 'WEB' }]}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -177,13 +275,21 @@ describe('ScriptureTextGrid', () => {
     expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'chapter');
   });
   it('defaults row cells to verse view mode', () => {
-    render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);
+    render(
+      <ScriptureTextGrid
+        isViewVisible
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+      />,
+    );
     expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'verse');
     expect(screen.getByTestId('cell-b')).toHaveAttribute('data-view-mode', 'verse');
   });
   it('does not render the chapter-context split when closed', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -197,6 +303,7 @@ describe('ScriptureTextGrid', () => {
     const onChapterContextChange = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -211,6 +318,7 @@ describe('ScriptureTextGrid', () => {
   it('renders the chapter-context region when split is open', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -231,10 +339,73 @@ describe('ScriptureTextGrid', () => {
     expect(chapterCells).toHaveLength(1);
     expect(chapterCells[0][0].resourceRef).toEqual(resources[1]);
   });
+  it('hands every chapter surface the view visibility it was given, so a hidden tab defers', () => {
+    // A chapter cell scrolls itself, and while its dock tab is hidden it must defer that scroll and
+    // catch up on activation. That only works if the cell hears the real answer; a hard-coded
+    // `true` at any one call site would scroll a pane with no layout, which silently does nothing.
+    const surfaces = [
+      { name: 'single resource', extra: { resources: [resources[0]] } },
+      { name: 'chapter columns', extra: { viewMode: 'chapter' as const } },
+      {
+        name: 'chapter-context split',
+        extra: { chapterContext: resources[1], onChapterContextChange: vi.fn() },
+      },
+    ];
+    const results = surfaces.map(({ name, extra }) => {
+      mockResourceCell.mockClear();
+      const { unmount } = render(
+        <ScriptureTextGrid
+          isViewVisible={false}
+          resources={resources}
+          scrRef={scrRef}
+          setScrRef={setScrRef}
+          {...extra}
+        />,
+      );
+      const chapterCells = mockResourceCell.mock.calls.filter(
+        (call) => call[0].viewMode === 'chapter',
+      );
+      unmount();
+      return {
+        name,
+        rendersChapterCell: chapterCells.length > 0,
+        visibilities: [...new Set(chapterCells.map((call) => call[0].isViewVisible))],
+      };
+    });
+
+    expect(results).toEqual(
+      surfaces.map(({ name }) => ({ name, rendersChapterCell: true, visibilities: [false] })),
+    );
+  });
+  it('tells each chapter column its position, so a reorder re-arms its scroll', () => {
+    // A moved column's scroll container loses its scroll position; the cell uses its position to
+    // notice the move.
+    render(
+      <ScriptureTextGrid
+        isViewVisible
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+      />,
+    );
+
+    expect(
+      mockResourceCell.mock.calls.map((call) => [
+        call[0].resourceRef.resourceId,
+        call[0].orderIndex,
+      ]),
+    ).toEqual([
+      ['r-a', 0],
+      ['r-b', 1],
+      ['r-c', 2],
+    ]);
+  });
   it('closes the split via the labeled close button', () => {
     const onChapterContextClose = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -250,6 +421,7 @@ describe('ScriptureTextGrid', () => {
   it('restores focus to the opening listitem when the split closes', () => {
     const { rerender } = render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -262,6 +434,7 @@ describe('ScriptureTextGrid', () => {
     // Open, then close the split (the parent controls `chapterContext`).
     rerender(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -271,6 +444,7 @@ describe('ScriptureTextGrid', () => {
     );
     rerender(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -287,6 +461,7 @@ describe('ScriptureTextGrid — chapter view', () => {
   it('stacks one chapter cell per resource, each in its own region', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -309,6 +484,7 @@ describe('ScriptureTextGrid — chapter view', () => {
   it('does not open a chapter-context split in chapter mode, even when a handler is provided', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -325,6 +501,7 @@ describe('ScriptureTextGrid — chapter view', () => {
   it('gives every chapter cell the shared scrRef setter (selection stays in sync)', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -339,6 +516,7 @@ describe('ScriptureTextGrid — chapter view', () => {
   it('renders a single resource as a whole-chapter region in chapter mode too', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={[{ resourceId: 'r-a', projectId: 'a', label: 'WEB' }]}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -360,46 +538,15 @@ describe('ScriptureTextGrid — chapter view', () => {
     expect(document.querySelector('[data-resource-id="r2"]')).not.toBeNull();
   });
 
-  it('prunes zoom entries for resources no longer present', () => {
-    const zoom: ResourceZoomController = {
-      getZoom: () => 1,
-      setZoomForResource: vi.fn(),
-      adjustZoom: vi.fn(),
-      resetZoom: vi.fn(),
-      pruneToResourceIds: vi.fn(),
-    };
-    const { rerender } = renderGrid(
-      [
-        { resourceId: 'r1', projectId: 'p1', label: 'WEB' },
-        { resourceId: 'r2', projectId: 'p2', label: 'NIV' },
-      ],
-      { zoom },
-    );
-    expect(zoom.pruneToResourceIds).toHaveBeenLastCalledWith(['r1', 'r2']);
-    rerender([{ resourceId: 'r1', projectId: 'p1', label: 'WEB' }], { zoom });
-    expect(zoom.pruneToResourceIds).toHaveBeenLastCalledWith(['r1']);
-  });
-
-  it('does not call pruneToResourceIds when the resource list is empty (prevents data loss during source loading)', () => {
-    const zoom: ResourceZoomController = {
-      getZoom: () => 1,
-      setZoomForResource: vi.fn(),
-      adjustZoom: vi.fn(),
-      resetZoom: vi.fn(),
-      pruneToResourceIds: vi.fn(),
-    };
-    renderGrid([], { zoom });
-    expect(zoom.pruneToResourceIds).not.toHaveBeenCalled();
-  });
-
-  it('single-resource container exposes data-resource-id so the zoom input hook can resolve the target', () => {
+  it('single-resource container exposes data-resource-id so an element inside it can be traced to its resource', () => {
     renderGrid([{ resourceId: 'r-solo', projectId: 'p-solo', label: 'SOLO' }]);
     expect(document.querySelector('[data-resource-id="r-solo"]')).not.toBeNull();
   });
 
-  it('chapter-context region exposes data-resource-id for its resource so Ctrl+wheel zoom works over the split panel', () => {
+  it('chapter-context region exposes data-resource-id for its resource', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -419,6 +566,7 @@ describe('ScriptureTextGrid — verse view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -435,6 +583,7 @@ describe('ScriptureTextGrid — verse view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -450,6 +599,7 @@ describe('ScriptureTextGrid — verse view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -464,6 +614,7 @@ describe('ScriptureTextGrid — verse view reorder', () => {
   it('highlights the hovered drop-target item and clears the highlight on dragEnd', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -484,6 +635,7 @@ describe('ScriptureTextGrid — verse view reorder', () => {
     const onChapterContextChange = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -504,6 +656,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -511,14 +664,15 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         onReorder={onReorder}
       />,
     );
-    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
-    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    const wrappers = screen.getAllByTestId('scripture-text-grid-column-drop-target');
+    fireEvent.dragStart(screen.getByTestId('header-r-b')); // drag KJV by its header
     fireEvent.drop(wrappers[0]); // onto WEB (resourceId 'r-a')
     expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
   });
   it('highlights the hovered drop-target cell and clears the highlight on dragEnd', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -526,18 +680,19 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         onReorder={vi.fn()}
       />,
     );
-    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
-    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    const wrappers = screen.getAllByTestId('scripture-text-grid-column-drop-target');
+    fireEvent.dragStart(screen.getByTestId('header-r-b')); // drag KJV by its header
     fireEvent.dragOver(wrappers[0]); // hover over WEB (resourceId 'r-a')
     expect(wrappers[0].className).toContain('tw:ring-2');
     expect(wrappers[0].className).toContain('tw:ring-inset');
     expect(wrappers[0].className).toContain('tw:ring-primary');
-    fireEvent.dragEnd(wrappers[1]);
+    fireEvent.dragEnd(screen.getByTestId('header-r-b'));
     expect(wrappers[0].className).not.toContain('tw:ring-2');
   });
   it('does not highlight the dragged cell itself when hovered', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -545,8 +700,8 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         onReorder={vi.fn()}
       />,
     );
-    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
-    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    const wrappers = screen.getAllByTestId('scripture-text-grid-column-drop-target');
+    fireEvent.dragStart(screen.getByTestId('header-r-b')); // drag KJV by its header
     fireEvent.dragOver(wrappers[1]); // hover over itself
     expect(wrappers[1].className).not.toContain('tw:ring-2');
   });
@@ -554,6 +709,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -561,8 +717,8 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
         onReorder={onReorder}
       />,
     );
-    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
-    fireEvent.dragStart(wrappers[1]);
+    const wrappers = screen.getAllByTestId('scripture-text-grid-column-drop-target');
+    fireEvent.dragStart(screen.getByTestId('header-r-b'));
     fireEvent.dragOver(wrappers[0]);
     expect(wrappers[0].className).toContain('tw:ring-2');
     fireEvent.drop(wrappers[0]);
@@ -572,6 +728,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -587,6 +744,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -601,6 +759,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
   it('keyboard: the live region announces the move after a successful keyboard reorder', () => {
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -620,6 +779,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -635,6 +795,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -650,6 +811,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     const onReorder = vi.fn();
     render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -665,6 +827,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
   it('keyboard: restores focus to the moved cell grip after the row re-renders', () => {
     const { rerender } = render(
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -678,6 +841,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     // with 'r-a' in its new slot and focus must follow it to the moved grip.
     rerender(
       <ScriptureTextGrid
+        isViewVisible
         resources={[resources[1], resources[0], resources[2]]}
         scrRef={scrRef}
         setScrRef={setScrRef}
@@ -688,4 +852,622 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
     );
     expect(screen.getByTestId('grip-r-a')).toHaveFocus();
   });
+});
+
+describe('ScriptureTextGrid — zoom areas', () => {
+  /** The zoom scope each element carries, read through the exported attribute name. */
+  const scopesOf = (elements: HTMLElement[]) =>
+    elements.map((element) => element.getAttribute(CONTENT_ZOOM_SCOPE_ATTRIBUTE));
+
+  it('gives each resource its own area, the same one in its verse row and its chapter panel', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[1]}
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    const cellsOfB = screen.getAllByTestId('cell-b');
+    // Positive control: the verse row and the chapter panel both render resource b.
+    expect(cellsOfB).toHaveLength(2);
+    expect(cellsOfB.map((cell) => cell.getAttribute('data-zoom-area'))).toEqual([
+      'resource-r-b',
+      'resource-r-b',
+    ]);
+    expect(screen.getByTestId('cell-a')).toHaveAttribute('data-zoom-area', 'resource-r-a');
+    expect(screen.getByTestId('cell-c')).toHaveAttribute('data-zoom-area', 'resource-r-c');
+  });
+
+  it('puts the zoom scope with its resource’s area on every verse row and on the chapter panel', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[2]}
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    expect(scopesOf(screen.getAllByRole('listitem'))).toEqual([
+      'resource-r-a',
+      'resource-r-b',
+      'resource-r-c',
+    ]);
+    expect(screen.getByTestId('scripture-text-grid-chapter-context')).toHaveAttribute(
+      CONTENT_ZOOM_SCOPE_ATTRIBUTE,
+      'resource-r-c',
+    );
+  });
+
+  it('puts the zoom scope on every chapter-view column', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+      />,
+    );
+    expect(scopesOf(screen.getAllByRole('region'))).toEqual([
+      'resource-r-a',
+      'resource-r-b',
+      'resource-r-c',
+    ]);
+    expect(
+      ['cell-a', 'cell-b', 'cell-c'].map((testId) =>
+        screen.getByTestId(testId).getAttribute('data-zoom-area'),
+      ),
+    ).toEqual(['resource-r-a', 'resource-r-b', 'resource-r-c']);
+  });
+
+  it('puts the zoom scope on the single-resource region', () => {
+    renderGrid([{ resourceId: 'r-solo', projectId: 'p-solo', label: 'SOLO' }]);
+    expect(screen.getByRole('region')).toHaveAttribute(
+      CONTENT_ZOOM_SCOPE_ATTRIBUTE,
+      'resource-r-solo',
+    );
+    expect(screen.getByTestId('cell-p-solo')).toHaveAttribute('data-zoom-area', 'resource-r-solo');
+  });
+
+  it('falls back to the shared text-collection area for an id with nothing to keep, warning once', () => {
+    // The grid remembers which ids it has warned about for the whole session, so no other test in
+    // this file may use this id.
+    const gridResources = [{ resourceId: '日本語', projectId: 'jp', label: 'JP' }, resources[0]];
+    const { rerender } = render(
+      <ScriptureTextGrid resources={gridResources} scrRef={scrRef} setScrRef={setScrRef} />,
+    );
+    rerender(
+      <ScriptureTextGrid resources={[...gridResources]} scrRef={scrRef} setScrRef={setScrRef} />,
+    );
+    expect(screen.getByTestId('cell-jp')).toHaveAttribute('data-zoom-area', 'text-collection');
+    expect(scopesOf(screen.getAllByRole('listitem'))).toEqual(['text-collection', 'resource-r-a']);
+    expect(mockWarn).toHaveBeenCalledTimes(1);
+    expect(String(mockWarn.mock.calls[0][0])).toContain('"日本語"');
+  });
+
+  it('hands every cell the zoom controller and menu labels, in all four layouts', () => {
+    const zoom = {
+      getZoom: () => 1,
+      hasOwnLevel: () => false,
+      adjustZoom: vi.fn(),
+      resetZoom: vi.fn(),
+    };
+    const zoomMenuLabels = { zoomIn: 'in', zoomOut: 'out', reset: 'reset', options: 'options' };
+    const everyCellGotThem = () =>
+      mockResourceCell.mock.calls.every(
+        ([cellProps]) => cellProps.zoom === zoom && cellProps.zoomMenuLabels === zoomMenuLabels,
+      );
+
+    const verseView = render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[0]}
+        onChapterContextChange={vi.fn()}
+        zoom={zoom}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    // Positive control: three verse rows plus the chapter panel rendered.
+    expect(screen.getAllByTestId(/^cell-/)).toHaveLength(4);
+    expect(everyCellGotThem()).toBe(true);
+    verseView.unmount();
+
+    mockResourceCell.mockClear();
+    const chapterView = render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        zoom={zoom}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    expect(screen.getAllByTestId(/^cell-/)).toHaveLength(3);
+    expect(everyCellGotThem()).toBe(true);
+    chapterView.unmount();
+
+    mockResourceCell.mockClear();
+    render(
+      <ScriptureTextGrid
+        resources={[resources[0]]}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        zoom={zoom}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    expect(screen.getAllByTestId(/^cell-/)).toHaveLength(1);
+    expect(everyCellGotThem()).toBe(true);
+  });
+
+  it('puts the zoom scope on every Grid-view column, and hands each cell its area and the controller', () => {
+    const zoom = {
+      getZoom: () => 1,
+      hasOwnLevel: () => false,
+      adjustZoom: vi.fn(),
+      resetZoom: vi.fn(),
+    };
+    const zoomMenuLabels = { zoomIn: 'in', zoomOut: 'out', reset: 'reset', options: 'options' };
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="aligned"
+        zoom={zoom}
+        zoomMenuLabels={zoomMenuLabels}
+      />,
+    );
+    expect(scopesOf(screen.getAllByRole('region'))).toEqual([
+      'resource-r-a',
+      'resource-r-b',
+      'resource-r-c',
+    ]);
+    expect(
+      ['cell-a', 'cell-b', 'cell-c'].map((testId) =>
+        screen.getByTestId(testId).getAttribute('data-zoom-area'),
+      ),
+    ).toEqual(['resource-r-a', 'resource-r-b', 'resource-r-c']);
+    expect(
+      mockResourceCell.mock.calls.every(
+        ([cellProps]) => cellProps.zoom === zoom && cellProps.zoomMenuLabels === zoomMenuLabels,
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('ScriptureTextGrid — aligned (Grid) view', () => {
+  const alignedRef = { book: 'MAT', chapterNum: 5, verseNum: 1, versificationStr: 'English' };
+  /** Height of the stubbed scroll port; a block below this is off screen. */
+  const PORT_HEIGHT = 300;
+  /** Height of the stubbed sticky header, which covers the top of the port. */
+  const HEADER_HEIGHT = 20;
+
+  /**
+   * Jsdom lays nothing out, so every rect is zero and none of the scroll decisions would be
+   * observable. Give each element the geometry it declares via `data-stub-*` instead.
+   *
+   * Verse blocks move with the port's scroll, as they would in a browser; the port and its
+   * `position: sticky` header do not.
+   */
+  function stubGeometry() {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function stub(
+      this: HTMLElement,
+    ) {
+      const isPort = this.getAttribute('data-testid') === 'scripture-text-grid-aligned';
+      const port = this.closest<HTMLElement>('[data-testid="scripture-text-grid-aligned"]');
+      const scrolledBy = this.classList.contains('verse-block') ? (port?.scrollTop ?? 0) : 0;
+      const top = isPort ? 0 : Number(this.dataset.stubTop ?? 0) - scrolledBy;
+      const height = isPort ? PORT_HEIGHT : Number(this.dataset.stubHeight ?? 0);
+      return new DOMRect(0, top, 0, height);
+    });
+  }
+
+  function renderAligned(
+    reference: typeof alignedRef,
+    gridResources: typeof resources = resources,
+    extraProps: Record<string, unknown> = {},
+  ) {
+    const ui = (currentRef: typeof alignedRef) => (
+      <ScriptureTextGrid
+        isViewVisible={mockVisibility.isVisible}
+        resources={gridResources}
+        scrRef={currentRef}
+        setScrRef={setScrRef}
+        viewMode="aligned"
+        ariaLabel="Text Collection"
+        {...extraProps}
+      />
+    );
+    const result = render(ui(reference));
+    const port = screen.getByTestId('scripture-text-grid-aligned');
+    return { ...result, port, rerenderAt: (next: typeof alignedRef) => result.rerender(ui(next)) };
+  }
+
+  beforeEach(() => {
+    mockVisibility.isVisible = true;
+    // Verse 1 starts on screen; the 4-5 bridge is far below it.
+    alignedVerseBlocks = [
+      { start: 1, end: 1, top: 100 },
+      { start: 4, end: 5, top: 900 },
+    ];
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('renders every resource as a column of one grid, with no verse listitems', () => {
+    renderAligned(alignedRef);
+
+    expect(screen.getByTestId('scripture-text-grid-aligned')).toBeInTheDocument();
+    expect(screen.getAllByRole('region')).toHaveLength(3);
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+  });
+
+  it('puts every cell in aligned mode, so each asks the editor for block verses', () => {
+    renderAligned(alignedRef);
+
+    expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'aligned');
+    expect(screen.getByTestId('cell-b')).toHaveAttribute('data-view-mode', 'aligned');
+  });
+
+  it('gives the scroll port a tab stop, since nothing that scrolls it can be focused', () => {
+    // The columns do have tab stops — the reorder grip and the zoom kebab — but both sit in the
+    // sticky header, which never moves. Without this the content below the fold is reachable only
+    // by pointer, because Arrow and PageDown have nothing to scroll.
+    const { port } = renderAligned(alignedRef, resources, {
+      onReorder: vi.fn(),
+      getReorderHandleLabel: (name: string) => `Reorder ${name}`,
+    });
+
+    expect(port).toHaveAttribute('tabindex', '0');
+    expect(port.className).toContain('tw:focus-visible:ring-2');
+  });
+
+  it('lays out one column per resource', () => {
+    const { port } = renderAligned(alignedRef);
+
+    expect(port.style.gridTemplateColumns).toBe('repeat(3, minmax(16rem, 1fr))');
+  });
+
+  it('asks for one column while the resource list is still empty, since repeat() rejects zero', () => {
+    // The web view passes an empty list briefly while its sources load.
+    const { port } = renderAligned(alignedRef, []);
+
+    expect(port.style.gridTemplateColumns).toBe('repeat(1, minmax(16rem, 1fr))');
+  });
+
+  it('renders a single resource as a one-column aligned grid, not a chapter view', () => {
+    // Falling through to the chapter branch here would silently drop the aligned layout for anyone
+    // down to one text.
+    renderAligned(alignedRef, [resources[0]]);
+
+    expect(screen.getByTestId('scripture-text-grid-aligned')).toBeInTheDocument();
+    expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'aligned');
+  });
+
+  it('opens no chapter-context split, even when a handler is provided', () => {
+    renderAligned(alignedRef, resources, { onChapterContextChange: vi.fn() });
+
+    fireEvent.click(screen.getAllByRole('region')[0]);
+
+    expect(screen.queryByTestId('scripture-text-grid-chapter-context')).not.toBeInTheDocument();
+  });
+
+  describe('reorder', () => {
+    const reorderProps = {
+      onReorder: vi.fn(),
+      getReorderHandleLabel: (name: string) => `Reorder ${name}`,
+    };
+
+    beforeEach(() => {
+      reorderProps.onReorder.mockClear();
+    });
+
+    it('moves a column with the keyboard', () => {
+      renderAligned(alignedRef, resources, reorderProps);
+
+      fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowRight' });
+
+      expect(reorderProps.onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
+    });
+
+    it('moves a column by dragging its header onto another column', () => {
+      // The header is the drag source; the column is the drop target. A column-wide drag source
+      // would start a reorder when the reader tried to select text.
+      renderAligned(alignedRef, resources, reorderProps);
+      const columns = screen.getAllByTestId('scripture-text-grid-column-drop-target');
+
+      fireEvent.dragStart(screen.getByTestId('header-r-b'));
+      fireEvent.drop(columns[0]);
+
+      expect(reorderProps.onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
+    });
+
+    it('rings the hovered column as a drop target', () => {
+      renderAligned(alignedRef, resources, reorderProps);
+      const columns = screen.getAllByTestId('scripture-text-grid-column-drop-target');
+
+      fireEvent.dragStart(screen.getByTestId('header-r-b'));
+      fireEvent.dragOver(columns[0]);
+
+      expect(columns[0].className).toContain('tw:ring-2');
+    });
+  });
+
+  describe('scrolling to the reference', () => {
+    it('scrolls a reference that is off screen to just below the sticky header', () => {
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+
+      // No block starts at verse 5; the 4-5 bridge covers it, and sits at 900.
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+    });
+
+    it('leaves a reference that is already on screen where it is', () => {
+      // Clicking a verse reports it as the new reference. Scrolling it to the top of the port would
+      // move the passage out from under the reader in response to their own click.
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+
+      rerenderAt({ ...alignedRef, verseNum: 1 });
+
+      expect(port.scrollTop).toBe(0);
+    });
+
+    it('scrolls again when a late-arriving column pushes the target back off screen', async () => {
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+
+      // A slower resource renders: its verse 2 block appears, adding height above the target and
+      // moving it down the page.
+      alignedVerseBlocks = [
+        { start: 1, end: 1, top: 100 },
+        { start: 2, end: 2, top: 600 },
+        { start: 4, end: 5, top: 1500 },
+      ];
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+
+      await waitFor(() => expect(port.scrollTop).toBe(1500 - HEADER_HEIGHT));
+    });
+
+    it('stops correcting once the reader scrolls, until the reference changes', async () => {
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+
+      // The reader scrolls away, then a slower resource renders and moves the target again.
+      port.scrollTop = 200;
+      alignedVerseBlocks = [
+        { start: 1, end: 1, top: 100 },
+        { start: 2, end: 2, top: 600 },
+        { start: 4, end: 5, top: 1500 },
+      ];
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      await waitFor(() => expect(screen.getByTestId('block-a-2')).toBeInTheDocument());
+
+      expect(port.scrollTop).toBe(200);
+
+      // A new reference re-arms it.
+      rerenderAt({ ...alignedRef, verseNum: 1 });
+      await waitFor(() => expect(port.scrollTop).toBe(100 - HEADER_HEIGHT));
+    });
+
+    it('keeps following the reference when the browser clamps scrollTop after content shrinks', async () => {
+      // Removing a resource (or zooming one out) shortens the content, and the browser then clamps
+      // scrollTop to the new bottom. That is not the reader moving the port, and reading it as such
+      // stood the reference scroll down for good — silently killing the late-column correction in
+      // the one case it exists for.
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+
+      // The port can now scroll only to 400, so the browser moves scrollTop down to it.
+      Object.defineProperty(port, 'scrollHeight', { value: 400 + PORT_HEIGHT, configurable: true });
+      Object.defineProperty(port, 'clientHeight', { value: PORT_HEIGHT, configurable: true });
+      port.scrollTop = 400;
+
+      // A slower resource then renders and moves the target, which must still be corrected.
+      alignedVerseBlocks = [
+        { start: 1, end: 1, top: 100 },
+        { start: 2, end: 2, top: 600 },
+        { start: 4, end: 5, top: 1500 },
+      ];
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+
+      await waitFor(() => expect(port.scrollTop).toBe(1500 - HEADER_HEIGHT));
+    });
+
+    it('keeps following the reference when content shrinks until nothing overflows', async () => {
+      // With nothing left to scroll the browser clamps scrollTop all the way to 0. That is still a
+      // clamp, not the reader, so a later column growing the content again must still be corrected.
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+
+      // Resources are unchecked until what is left fits the port.
+      Object.defineProperty(port, 'scrollHeight', { value: PORT_HEIGHT, configurable: true });
+      Object.defineProperty(port, 'clientHeight', { value: PORT_HEIGHT, configurable: true });
+      port.scrollTop = 0;
+      alignedVerseBlocks = [{ start: 1, end: 1, top: 100 }];
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      // Let the mutation-driven check run against the shrunk content.
+      await act(
+        () =>
+          new Promise<void>((resolve) => {
+            setTimeout(resolve, 50);
+          }),
+      );
+
+      Object.defineProperty(port, 'scrollHeight', { value: 2000, configurable: true });
+      alignedVerseBlocks = [
+        { start: 1, end: 1, top: 100 },
+        { start: 2, end: 2, top: 600 },
+        { start: 4, end: 5, top: 1500 },
+      ];
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+
+      await waitFor(() => expect(port.scrollTop).toBe(1500 - HEADER_HEIGHT));
+    });
+
+    it('defers the scroll while the tab is hidden and catches up when it is shown', () => {
+      stubGeometry();
+      mockVisibility.isVisible = false;
+      const { port, rerenderAt } = renderAligned(alignedRef);
+
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      // A hidden rc-dock pane has no layout, so scrolling now would silently do nothing.
+      expect(port.scrollTop).toBe(0);
+
+      mockVisibility.isVisible = true;
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+    });
+  });
+});
+
+describe('ScriptureTextGrid — events from inside a verse item', () => {
+  function renderActivatableGrid() {
+    const onChapterContextChange = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        onChapterContextChange={onChapterContextChange}
+      />,
+    );
+    return onChapterContextChange;
+  }
+
+  it('opens the chapter view for a click on the verse text', () => {
+    const onChapterContextChange = renderActivatableGrid();
+
+    fireEvent.click(screen.getByTestId('verse-text-b'));
+
+    expect(onChapterContextChange).toHaveBeenCalledWith(resources[1]);
+  });
+
+  it('ignores a click inside a window portalled out of a cell', () => {
+    cellWindow.isOpen = true;
+    const onChapterContextChange = renderActivatableGrid();
+
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Window from KJV' })).getByRole('button', {
+        name: 'Close',
+      }),
+    );
+
+    expect(onChapterContextChange).not.toHaveBeenCalled();
+  });
+
+  it.each(['Enter', ' '])(
+    'opens the chapter view for %j pressed on the verse item itself',
+    (key) => {
+      const onChapterContextChange = renderActivatableGrid();
+
+      fireEvent.keyDown(screen.getAllByRole('listitem')[1], { key });
+
+      expect(onChapterContextChange).toHaveBeenCalledWith(resources[1]);
+    },
+  );
+
+  it.each(['Enter', ' '])(
+    'leaves %j pressed on a control inside the verse item to that control',
+    (key) => {
+      cellWindow.isOpen = true;
+      const onChapterContextChange = renderActivatableGrid();
+
+      const isNotCancelled = fireEvent.keyDown(
+        within(screen.getByRole('dialog', { name: 'Window from KJV' })).getByRole('button', {
+          name: 'Close',
+        }),
+        { key },
+      );
+
+      expect(isNotCancelled).toBe(true);
+      expect(onChapterContextChange).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('ScriptureTextGrid — drags inside a window portalled out of a cell', () => {
+  function renderReorderableGrid(viewMode: 'verse' | 'chapter') {
+    cellWindow.isOpen = true;
+    const onReorder = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode={viewMode}
+        onReorder={onReorder}
+      />,
+    );
+    const dropTargets = screen.getAllByTestId(
+      viewMode === 'verse'
+        ? 'scripture-text-grid-cell-draggable'
+        : 'scripture-text-grid-column-drop-target',
+    );
+    // The verse view drags a whole verse item; the chapter view drags a column by its header
+    const dragSourceOf = (index: number) =>
+      viewMode === 'verse'
+        ? dropTargets[index]
+        : screen.getByTestId(`header-${resources[index].resourceId}`);
+    return { onReorder, dropTargets, dragSourceOf };
+  }
+
+  function closeButtonInWindowFrom(label: string) {
+    return within(screen.getByRole('dialog', { name: `Window from ${label}` })).getByRole(
+      'button',
+      {
+        name: 'Close',
+      },
+    );
+  }
+
+  it.each(['verse', 'chapter'] as const)(
+    'starts no reorder for a drag that begins in the window (%s view)',
+    (viewMode) => {
+      const { onReorder, dropTargets } = renderReorderableGrid(viewMode);
+
+      fireEvent.dragStart(closeButtonInWindowFrom('KJV'));
+      fireEvent.drop(dropTargets[0]);
+
+      expect(onReorder).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['verse', 'chapter'] as const)(
+    'neither highlights nor drops onto a cell for a drag over its window (%s view)',
+    (viewMode) => {
+      const { onReorder, dropTargets, dragSourceOf } = renderReorderableGrid(viewMode);
+      fireEvent.dragStart(dragSourceOf(1)); // drag KJV
+
+      fireEvent.dragOver(closeButtonInWindowFrom('WEB'));
+      expect(dropTargets[0].className).not.toContain('tw:ring-2');
+      fireEvent.drop(closeButtonInWindowFrom('WEB'));
+      expect(onReorder).not.toHaveBeenCalled();
+
+      // The same drag over the cell itself does reach it
+      fireEvent.dragOver(dropTargets[0]);
+      expect(dropTargets[0].className).toContain('tw:ring-2');
+      fireEvent.drop(dropTargets[0]);
+      expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
+    },
+  );
 });

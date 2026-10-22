@@ -16,14 +16,20 @@ const mocks = vi.hoisted(() => {
   // A class with no declared constructor silently accepts (and ignores) whatever args a subclass's
   // `super(...)` call passes, so this needs no constructor of its own.
   class PapiBackendStubBase {}
+  // Named so `beforeEach` can restore it after `vi.resetAllMocks()`, which strips this
+  // implementation along with every other mock's — every test needs it to reach its handler.
+  async function registerCommandImpl(name: string, handler: (...args: unknown[]) => unknown) {
+    registeredCommands.set(name, handler);
+    return async () => true;
+  }
   return {
     registeredCommands,
     openWebView: vi.fn(async () => 'wv-1'),
     onDidCloseWebView: vi.fn(() => () => {}),
-    registerCommand: vi.fn(async (name: string, handler: (...args: unknown[]) => unknown) => {
-      registeredCommands.set(name, handler);
-      return async () => true;
-    }),
+    getOpenWebViewDefinition: vi.fn(async () => undefined),
+    reloadWebView: vi.fn(async () => undefined),
+    registerCommand: vi.fn(registerCommandImpl),
+    registerCommandImpl,
     PapiBackendStubBase,
   };
 });
@@ -38,9 +44,9 @@ vi.mock('@papi/backend', () => ({
     webViews: {
       openWebView: mocks.openWebView,
       onDidCloseWebView: mocks.onDidCloseWebView,
-      getOpenWebViewDefinition: vi.fn(async () => undefined),
+      getOpenWebViewDefinition: mocks.getOpenWebViewDefinition,
       getWebViewController: vi.fn(async () => undefined),
-      reloadWebView: vi.fn(async () => undefined),
+      reloadWebView: mocks.reloadWebView,
     },
     projectDataProviders: {
       get: vi.fn(async () => ({ getSetting: vi.fn(async () => undefined) })),
@@ -59,6 +65,7 @@ vi.mock('@papi/backend', () => ({
 // mocks are applied to the module under test.
 /* eslint-disable import/first */
 import { UnsubscriberAsyncList } from 'platform-bible-utils';
+import { logger } from '@papi/backend';
 import { activate } from './main';
 /* eslint-enable import/first */
 
@@ -75,8 +82,11 @@ function makeContext() {
 
 describe('legacy comment manager main.ts activation', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mocks.registeredCommands.clear();
+    // resetAllMocks() also strips this mock's own base implementation; restore it since every
+    // test below depends on activate() populating registeredCommands.
+    mocks.registerCommand.mockImplementation(mocks.registerCommandImpl);
   });
 
   it('opening a comment list for a project reuses the existing one via the reuse search', async () => {
@@ -110,5 +120,51 @@ describe('legacy comment manager main.ts activation', () => {
     // The module must not subscribe to web view close events to evict tracking — there is no
     // local map left for a close event to clean up.
     expect(mocks.onDidCloseWebView).not.toHaveBeenCalled();
+  });
+
+  it('showCommentListPanel raises an open Comments tab without reloading it', async () => {
+    await activate(makeContext());
+    mocks.openWebView.mockResolvedValueOnce('comments-tab');
+    const handler = mocks.registeredCommands.get('legacyCommentManager.showCommentListPanel');
+    await expect(handler?.('editor-1')).resolves.toBe('comments-tab');
+    expect(mocks.openWebView).toHaveBeenLastCalledWith(
+      'legacyCommentManager.commentListPanel',
+      undefined,
+      { existingId: '?', createNewIfNotFound: false, bringToFront: true },
+    );
+    expect(mocks.reloadWebView).not.toHaveBeenCalled();
+  });
+
+  it("showCommentListPanel opens a Comments tab for the editor's project when none is open", async () => {
+    await activate(makeContext());
+    mocks.openWebView.mockResolvedValueOnce(undefined).mockResolvedValueOnce('new-comments-tab');
+    mocks.getOpenWebViewDefinition.mockResolvedValueOnce({ projectId: 'project-1' });
+    const handler = mocks.registeredCommands.get('legacyCommentManager.showCommentListPanel');
+    await expect(handler?.('editor-1')).resolves.toBe('new-comments-tab');
+    expect(mocks.getOpenWebViewDefinition).toHaveBeenCalledWith('editor-1');
+    expect(mocks.openWebView).toHaveBeenLastCalledWith(
+      'legacyCommentManager.commentListPanel',
+      { type: 'tab' },
+      { projectId: 'project-1' },
+    );
+    expect(mocks.reloadWebView).not.toHaveBeenCalled();
+  });
+
+  it('showCommentListPanel opens an unlabeled Comments tab when the editor web view cannot be resolved', async () => {
+    await activate(makeContext());
+    mocks.openWebView.mockResolvedValueOnce(undefined).mockResolvedValueOnce('new-comments-tab');
+    // getOpenWebViewDefinition is documented to throw when no window claimed the web view and some
+    // window could not be asked — that must degrade to "no project id", not reject the command.
+    mocks.getOpenWebViewDefinition.mockRejectedValueOnce(new Error('no window answered'));
+    const handler = mocks.registeredCommands.get('legacyCommentManager.showCommentListPanel');
+    await expect(handler?.('editor-1')).resolves.toBe('new-comments-tab');
+    expect(mocks.openWebView).toHaveBeenLastCalledWith(
+      'legacyCommentManager.commentListPanel',
+      { type: 'tab' },
+      { projectId: undefined },
+    );
+    // Distinguishes this from the plain not-found path, which degrades to the same "no project id"
+    // outcome without logging anything.
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('editor-1'));
   });
 });

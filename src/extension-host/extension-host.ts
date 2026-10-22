@@ -19,11 +19,21 @@ import { initialize as initializeSettingsService } from '@extension-host/service
 import { initialize as initializeThemeData } from '@extension-host/services/theme-data.service-host';
 import { startProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { initialize as initializeLocalizationService } from '@extension-host/services/localization.service-host';
-import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
+import {
+  EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE,
+  extensionHostStartedMessage,
+  gracefulShutdownMessage,
+} from '@node/models/interprocess-messages.model';
 import { killChildProcessesFromExtensions } from '@extension-host/services/create-process.service';
 import { initialize as initializeDatabaseService } from '@extension-host/services/database.service-host';
 import { startLocalOAuthServer } from '@extension-host/services/local-oauth.service';
 import * as analyticsService from '@extension-host/services/analytics.service';
+import { hasGracefulShutdownStarted, runGracefulShutdown } from '@extension-host/graceful-shutdown';
+import { exitExtensionHostOnLostConnection } from '@extension-host/exit-on-lost-connection';
+import {
+  announceExtensionHostStarted,
+  registerExtensionHostStartedEvent,
+} from '@extension-host/announce-extension-host-started';
 import { markStartup } from '@shared/utils/startup-timing.util';
 import { STARTUP_MARK_PROCESS_START } from '@shared/data/platform.data';
 
@@ -37,16 +47,7 @@ markStartup(STARTUP_MARK_PROCESS_START);
 process.on('message', (message) => {
   if (isString(message) && message === gracefulShutdownMessage) {
     logger.info('Beginning to shut down process due to graceful shutdown message');
-    (async () => {
-      try {
-        await extensionService.shutdown();
-      } catch (error) {
-        logger.error(`Failed to deactivate extensions. ${getErrorMessage(error)}`);
-      } finally {
-        logger.info('Finally shutting down process due to graceful shutdown message');
-        process.exit();
-      }
-    })();
+    runGracefulShutdown(() => process.exit());
   }
 });
 
@@ -91,8 +92,28 @@ process.on('unhandledRejection', (reason) => {
     // — before anything else in this IIFE runs — guarantees app_launch is first in flush order.
     analyticsService.trackEvent('app_launch');
 
-    // The network service has to start first, and it uses the shared store after initialization
-    await networkService.initialize();
+    // The network service has to start first, and it uses the shared store after initialization.
+    // Without a connection this process can do nothing, and the lost-connection exit below is not
+    // subscribed yet, so exit now: main reports a non-zero exit it did not ask for as a crash, and
+    // every window shows the extensions-have-stopped banner instead of nothing answering.
+    try {
+      await networkService.initialize();
+    } catch (error) {
+      logger.error(
+        `Extension host could not connect to main; exiting so main can report it. ${getErrorMessage(error)}`,
+      );
+      // The queued analytics (`app_launch`) are deliberately not flushed: there is no connection
+      // to flush them over.
+      process.exit(EXTENSION_HOST_STARTUP_FAILURE_EXIT_CODE);
+    }
+    // Subscribed as soon as there is a connection to lose. Returns an unsubscriber we never call.
+    exitExtensionHostOnLostConnection({
+      onDidLoseConnection: networkService.onDidLoseConnection,
+      runGracefulShutdown,
+      hasGracefulShutdownStarted,
+      exitProcess: (code) => process.exit(code),
+    });
+    const startedEventRegistration = registerExtensionHostStartedEvent();
     // Analytics initialization must not gate extension-host startup — it can take up to
     // ENVIRONMENT_RESOLUTION_TIMEOUT_MS if the Send/Receive server-target lookup is slow.
     // trackEvent()'s `unresolved` queue tolerates this finishing at any point.
@@ -124,6 +145,13 @@ process.on('unhandledRejection', (reason) => {
     // The extension service locks down importing other modules, so be careful what runs after it
     await extensionService.initialize();
     markStartup('extensions-initialized');
+    await startedEventRegistration;
+    announceExtensionHostStarted();
+    // `process.send` exists only when main forked this process with an IPC channel; run on its own
+    // (`npm run start:extension-host`) there is no main restart to tell.
+    process.send?.(extensionHostStartedMessage, (error) => {
+      if (error) logger.warn(`Error telling main the extension host started: ${error}`);
+    });
   } catch (error) {
     logger.error(error);
   }

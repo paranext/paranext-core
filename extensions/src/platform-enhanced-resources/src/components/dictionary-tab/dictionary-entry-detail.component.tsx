@@ -13,6 +13,7 @@ import {
   RadioGroupItem,
   Switch,
   cn,
+  useContentZoomTextProps,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { ArrowLeft } from 'lucide-react';
@@ -168,6 +169,7 @@ export function DictionaryEntryDetail({
   onClose,
   localizedStringsWithLoadingState = [{}, false],
 }: DictionaryEntryDetailProps) {
+  const contentZoomTextProps = useContentZoomTextProps();
   const getLocalizedString = (key: DictionaryEntryDetailLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
@@ -319,10 +321,21 @@ export function DictionaryEntryDetail({
               onClick={() => onSourceTextClick(tokenId)}
               data-testid={`dictionary-entry-detail-source-${tokenId}`}
             >
-              <span>{sourceText}</span>
+              <span
+                // The hook returns only the content-zoom marker attribute, or nothing.
+                // eslint-disable-next-line react/jsx-props-no-spreading
+                {...contentZoomTextProps}
+              >
+                {sourceText}
+              </span>
             </Button>
             {transliteration && (
-              <span className="tw:text-sm tw:italic tw:text-muted-foreground">
+              <span
+                className="tw:text-sm tw:italic tw:text-muted-foreground"
+                // The hook returns only the content-zoom marker attribute, or nothing.
+                // eslint-disable-next-line react/jsx-props-no-spreading
+                {...contentZoomTextProps}
+              >
                 ({transliteration})
               </span>
             )}

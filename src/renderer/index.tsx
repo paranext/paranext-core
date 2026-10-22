@@ -12,6 +12,10 @@ import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocki
 import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
 import { initConnectionLostService } from '@renderer/services/connection-lost-service';
+import {
+  catchUpExtensionHostStoppedState,
+  initExtensionHostStoppedService,
+} from '@renderer/services/extension-host-stopped-service';
 import { startBookChapterControlServiceShard } from '@renderer/services/book-chapter-control.service-shard';
 import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
 import { startNotificationServiceShard } from '@renderer/services/notification.service-shard';
@@ -23,12 +27,31 @@ import {
   onDidChangeCurrentTheme,
   startThemeService,
 } from '@renderer/services/theme.service';
+import { rememberLaunchInterfaceLanguage } from '@renderer/services/interface-language-restart-prompt';
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
 import { startUsersnapServiceShard } from '@renderer/services/usersnap.service-shard';
+import { startFirstRunServiceShard } from '@renderer/services/first-run.service-shard';
 import { startOnboardingTourServiceShard } from '@renderer/services/onboarding-tour.service-shard';
+import { isWindowInputBlocked } from '@renderer/services/window-input-blocked.util';
+import { registerContentZoomChromeKeys } from '@renderer/services/web-view-content-zoom.chrome-keys';
+import {
+  adjustContentZoom,
+  canContentZoomActOnActiveTarget,
+  initializeContentZoomService,
+  resetContentZoom,
+} from '@renderer/services/web-view-content-zoom.service';
 import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
-import { startWebViewServiceShard } from '@renderer/services/web-view.service-shard';
-import { initialize as initializeWindowService } from '@renderer/services/window.service-shard';
+import {
+  getAllOpenWebViewDefinitionsSync,
+  getSavedWebViewDefinitionSync,
+  onDidUpdateWebView,
+  startWebViewServiceShard,
+  updateWebViewDefinitionSync,
+} from '@renderer/services/web-view.service-shard';
+import {
+  getLastFocusedTabId,
+  initialize as initializeWindowService,
+} from '@renderer/services/window.service-shard';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { logger } from '@shared/services/logger.service';
@@ -101,6 +124,9 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
 // is missed for good — and this store is the one thing that tells the user the app has stopped
 // working. Returns an unsubscriber we intentionally never call; it runs for the renderer's lifetime.
 initConnectionLostService();
+// Same reasoning as above, for main's lifecycle events: `getNetworkEvent` returns a subscribable
+// before the network service has connected, and neither event replays to a late subscriber.
+initExtensionHostStoppedService();
 
 // App-wide service setup
 // We are not awaiting these service startups for a few reasons:
@@ -113,7 +139,14 @@ initConnectionLostService();
     // The network service has to start first, and it uses the shared store after initialization
     await networkService.initialize();
     markStartup('papi-connected');
+    // Not awaited: nothing at startup needs the answer, and it never rejects.
+    catchUpExtensionHostStoppedState();
     await initializeSharedStoreService(networkService);
+
+    // Read as early as possible, before anything can switch the language, so the restart prompt
+    // knows which language the menu bar and Settings labels were built in. Not awaited: it never
+    // rejects, and nothing at startup needs it.
+    rememberLaunchInterfaceLanguage();
 
     // This needs to run before web views start running and after the network service is running
     blockWebSocketsToPapiNetwork();
@@ -121,6 +154,29 @@ initConnectionLostService();
     // This needs to run before the web view service shard starts running and blocks us from creating
     // an iframe for the Usersnap feedback forms
     await initializeUsersnapApi();
+
+    // Composes the content-zoom service with the web-view and window shards' functions before the
+    // web-view service shard (below) can open a web view that needs them. Importing either shard
+    // directly from the zoom service would create a cycle, since both shards import from it; this
+    // is the one place that can wire them together without one. Not awaited: it reads two settings,
+    // and no web view should wait on those round trips to open.
+    initializeContentZoomService({
+      getDefinition: getSavedWebViewDefinitionSync,
+      updateDefinition: (webViewId, update) => updateWebViewDefinitionSync(webViewId, update),
+      getAllOpenDefinitions: getAllOpenWebViewDefinitionsSync,
+      onDidUpdateWebView,
+      getLastFocusedTabId,
+      isWindowInputBlocked,
+    }).catch((e) =>
+      logger.warn(`Content zoom service failed to initialize: ${getErrorMessage(e)}`),
+    );
+    // The returned unsubscriber is discarded: this listener runs for the window's lifetime.
+    registerContentZoomChromeKeys({
+      adjustContentZoom,
+      resetContentZoom,
+      isWindowInputBlocked,
+      canContentZoomAct: canContentZoomActOnActiveTarget,
+    });
 
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),
@@ -131,6 +187,7 @@ initConnectionLostService();
       startUsersnapServiceShard(),
       startBookChapterControlServiceShard(),
       startOnboardingTourServiceShard(),
+      startFirstRunServiceShard(),
       startOverlayService(),
       startThemeService(),
       initializeWindowService(),

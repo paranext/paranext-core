@@ -11,18 +11,31 @@
  * on any module the host's `require` shim does not supply.
  */
 
-import { LocalizationSelectors, OpenWebViewOptions, SavedWebViewDefinition } from '@papi/core';
+import {
+  LocalizationSelectors,
+  OpenWebViewOptions,
+  SavedWebViewDefinition,
+  WebViewDefinition,
+} from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
 // Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
 // only `papi`, so this package must never become a runtime import here (see the note at the top of
 // this file). `USJ_VERSION` is used solely under `typeof`, so `import type` keeps it erased.
-import type { MarkerContent, Usj, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
+import type {
+  MarkerContent,
+  MarkerObject,
+  Usj,
+  USJ_VERSION,
+} from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,
   formatReplacementString,
   getErrorMessage,
   isLocalizeKey,
+  isString,
+  isWhiteSpace,
+  isParagraphMarker,
   isPlatformError,
   LanguageStrings,
   LocalizeKey,
@@ -33,10 +46,12 @@ import {
   usfmMarkers,
   UsjDocumentLocation,
   UsjReaderWriter,
+  UsjTextContentLocation,
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
+import type { SettingTypes } from 'papi-shared-types';
 import type { MutableRefObject } from 'react';
 // import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
 // import from the editor package drags its React-bundling dist into the main bundle, breaking
@@ -141,15 +156,318 @@ export function correctEditorUsjVersion(editorUsj: Usj): Usj {
   return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
 }
 
+/** Whether `jsonPath` names the very last item of `usj`: the last item at every level. */
+function isFinalItemOfDocument(usj: Usj, jsonPath: string): boolean {
+  const indexes = Array.from(jsonPath.matchAll(/content\[(\d+)\]/g), (match) => Number(match[1]));
+  if (indexes.length === 0) return false;
+  let { content }: { content?: MarkerContent[] } = usj;
+  return indexes.every((index) => {
+    if (!content || index !== content.length - 1) return false;
+    const item = content[index];
+    content = typeof item === 'string' ? undefined : item.content;
+    return true;
+  });
+}
+
+/**
+ * A selection location on a text node of `textLength` characters, brought onto that text. The end
+ * of the document is spelled on the document's last text as one past the text's end (see
+ * `UsjDocumentLocation`), and a caret there sits at the end of that text, so that offset becomes
+ * the text's length. Every other location is returned as is — including that offset on any other
+ * text, or an offset further past the end, neither of which a location spells and which a caller
+ * should treat as the defect it is.
+ *
+ * @param location The location on text, as the editor reported it.
+ * @param textLength The length of the text node the location resolved to.
+ * @param usj The document the location addresses.
+ * @returns `location`, with the document-end offset brought onto the end of the text.
+ */
+export function withDocumentEndOnText(
+  location: UsjTextContentLocation,
+  textLength: number,
+  usj: Usj,
+): UsjTextContentLocation {
+  if (location.offset !== textLength + 1) return location;
+  if (!isFinalItemOfDocument(usj, location.jsonPath)) return location;
+  return { ...location, offset: textLength };
+}
+
+/** The notice shown when a comment cannot be anchored to the selection. */
+export type CommentSelectionNoticeKey =
+  | '%webView_platformScriptureEditor_error_selectionNotResolved%'
+  | '%webView_platformScriptureEditor_error_selectionContainsMarkers%'
+  | '%webView_platformScriptureEditor_error_noTextSelected%';
+
+/**
+ * The outcome of validating a selection for a new comment: the range to annotate, or the notice to
+ * show instead. `warning` is set only when the selection broke the settled-document contract (a
+ * defect worth logging), not when the user selected something a comment cannot anchor to.
+ */
+export type CommentSelectionValidation =
+  | { range: { start: UsjDocumentLocation; end: UsjDocumentLocation } }
+  | { notice: CommentSelectionNoticeKey; warning?: string };
+
+const NOTICE_NOT_RESOLVED: CommentSelectionNoticeKey =
+  '%webView_platformScriptureEditor_error_selectionNotResolved%';
+const NOTICE_CONTAINS_MARKERS: CommentSelectionNoticeKey =
+  '%webView_platformScriptureEditor_error_selectionContainsMarkers%';
+const NOTICE_NO_TEXT: CommentSelectionNoticeKey =
+  '%webView_platformScriptureEditor_error_noTextSelected%';
+
+/**
+ * Reads the text a validated comment range names. {@link validateCommentSelection} guarantees both
+ * ends are text locations on the same path, so the range names one slice of one string.
+ *
+ * @param range A range from {@link validateCommentSelection}
+ * @param usj The document to read from
+ * @returns The named text, or `undefined` if the path no longer resolves to a string or the offsets
+ *   no longer fit inside it
+ */
+export function readCommentRangeText(
+  range: { start: UsjDocumentLocation; end: UsjDocumentLocation },
+  usj: Usj,
+): string | undefined {
+  if (
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(range.start) ||
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(range.end) ||
+    range.start.jsonPath !== range.end.jsonPath
+  )
+    return undefined;
+  try {
+    const usjRW = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
+    const node = usjRW.jsonPathToUsjNodeAndDocumentLocation(range.start.jsonPath)?.node;
+    if (!isString(node)) return undefined;
+    const { offset: startOffset } = range.start;
+    const { offset: endOffset } = range.end;
+    if (startOffset < 0 || endOffset < startOffset || endOffset > node.length) return undefined;
+    return node.slice(startOffset, endOffset);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether a pending comment must be discarded because the text it is anchored to is no longer what
+ * was selected. The comment is saved against the frozen range, so a range that now names other text
+ * (or none) would store the comment on the wrong characters.
+ *
+ * @param pending The pending comment's frozen range and the text it named when captured
+ * @param usj The current settled document
+ */
+export function hasPendingCommentTextChanged(
+  pending: {
+    range: { start: UsjDocumentLocation; end: UsjDocumentLocation };
+    anchoredText: string;
+  },
+  usj: Usj,
+): boolean {
+  return readCommentRangeText(pending.range, usj) !== pending.anchoredText;
+}
+
+/**
+ * A range end that names a marker object, with no offset, is the same USFM position as the end of
+ * the string right before that marker (Find and Checks spell "up to the footnote" this way). It is
+ * rewritten onto that string so it validates the same as the text-end spelling.
+ */
+function withMarkerEndOnPrecedingText(
+  end: UsjDocumentLocation,
+  usjRW: UsjReaderWriter,
+): UsjDocumentLocation {
+  const keys = Object.keys(end);
+  if (keys.length !== 1 || !('jsonPath' in end)) return end;
+  const match = /^(.*content\[)(\d+)\]$/.exec(end.jsonPath);
+  if (!match || Number(match[2]) < 1) return end;
+  const previousJsonPath = `${match[1]}${Number(match[2]) - 1}]`;
+  try {
+    const previous = usjRW.jsonPathToUsjNodeAndDocumentLocation(previousJsonPath);
+    if (!isString(previous?.node)) return end;
+    const { documentLocation } = previous;
+    if (!UsjReaderWriter.isUsjDocumentLocationForTextContent(documentLocation)) return end;
+    return { ...documentLocation, offset: previous.node.length };
+  } catch {
+    return end;
+  }
+}
+
+/**
+ * Validates a selection as the anchor of a new comment against the settled document the selection
+ * addresses, and expands a collapsed caret to the word around it.
+ *
+ * @param selection The editor's (settled) selection
+ * @param usj The settled document
+ * @returns The range to annotate, or the notice to show (and whether it is a defect to log)
+ */
+export function validateCommentSelection(
+  selection: { start: UsjDocumentLocation; end?: UsjDocumentLocation },
+  usj: Usj,
+): CommentSelectionValidation {
+  const usjRW = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
+  const { start } = selection;
+  const end = selection.end ? withMarkerEndOnPrecedingText(selection.end, usjRW) : start;
+
+  // A property, closing-marker or attribute location is not text, whatever its path resolves to
+  if (
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(start) ||
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(end)
+  ) {
+    const isCollapsed = !selection.end || serialize(selection.end) === serialize(start);
+    return { notice: isCollapsed ? NOTICE_NO_TEXT : NOTICE_CONTAINS_MARKERS };
+  }
+
+  let startNode;
+  try {
+    startNode = usjRW.jsonPathToUsjNodeAndDocumentLocation(start.jsonPath)?.node;
+    // Throws if the end does not resolve either
+    usjRW.jsonPathToUsjNodeAndDocumentLocation(end.jsonPath);
+  } catch (e) {
+    return {
+      notice: NOTICE_NOT_RESOLVED,
+      warning: `Comment insertion: selection jsonPath start=${start.jsonPath} end=${end.jsonPath} does not resolve against the settled USJ! ${getErrorMessage(e)}`,
+    };
+  }
+
+  // Strings compare by value, so identical sibling strings must be told apart by their paths
+  if (!isString(startNode) || start.jsonPath !== end.jsonPath)
+    return { notice: NOTICE_CONTAINS_MARKERS };
+
+  // A caret at the end of the document is spelled one past the end of the last text; it sits at
+  // the end of that text, which is where the comment anchors.
+  const textStart = withDocumentEndOnText(start, startNode.length, usj);
+  const textEnd = withDocumentEndOnText(end, startNode.length, usj);
+
+  // An offset past the node means the settled-document contract was broken by a bug or a race;
+  // anchoring there would place the comment past the text.
+  const offsetPastEnd = [textStart, textEnd].find((location) => location.offset > startNode.length);
+  if (offsetPastEnd)
+    return {
+      notice: NOTICE_NOT_RESOLVED,
+      warning: `Comment insertion: selection offset ${offsetPastEnd.offset} at ${textStart.jsonPath} is past the end of the settled node (length ${startNode.length})!`,
+    };
+
+  if (textStart.offset !== textEnd.offset) return { range: { start: textStart, end: textEnd } };
+
+  // Collapsed: require a non-whitespace character beside the caret and expand to that word. This
+  // is approximate; the backend selects the word by the project's definition of whitespace.
+  const { offset } = textStart;
+  let charBefore = offset > 0 ? startNode[offset - 1] : '';
+  let charAfter = offset < startNode.length ? startNode[offset] : '';
+  if (
+    (charBefore.length === 0 || isWhiteSpace(charBefore)) &&
+    (charAfter.length === 0 || isWhiteSpace(charAfter))
+  )
+    return { notice: NOTICE_NO_TEXT };
+
+  let endOffset = offset;
+  while (charAfter.length > 0 && !isWhiteSpace(charAfter)) {
+    charAfter = endOffset + 1 < startNode.length ? startNode[endOffset + 1] : '';
+    endOffset += 1;
+  }
+  let startOffset = offset - 1;
+  while (charBefore.length > 0 && !isWhiteSpace(charBefore)) {
+    charBefore = startOffset > 0 ? startNode[startOffset - 1] : '';
+    startOffset -= 1;
+  }
+  return {
+    range: {
+      start: { ...textStart, offset: startOffset + 1 },
+      end: { ...textEnd, offset: endOffset },
+    },
+  };
+}
+
+/** Where a note is edited: the footnotes pane (Standard view), the popover, or nowhere. */
+export type NoteEditingSurface = 'pane' | 'popover' | 'none';
+
+/**
+ * Decides the note-editing surface for a click on a note caller. Standard view edits notes in the
+ * footnotes pane, in place, matching PT9's model; every other view keeps the popover. A read-only
+ * text has no editing surface at all — a caller click in Standard view still navigates (see
+ * {@link decideNoteCallerClickAction}) but never opens an editor; outside Standard view the caller
+ * is inert.
+ *
+ * @param viewType The scripture editor's current view type
+ * @param isReadOnly Whether the text is read-only (editing is disabled)
+ * @returns Where a click on a collapsed note caller should open its editor
+ */
+export function resolveNoteEditingSurface({
+  viewType,
+  isReadOnly,
+}: {
+  viewType: ScriptureEditorViewType;
+  isReadOnly: boolean;
+}): NoteEditingSurface {
+  if (isReadOnly) return 'none';
+  return viewType === 'standard' ? 'pane' : 'popover';
+}
+
+/**
+ * Decides which note's caller carries the highlight border, mirroring PT9's
+ * `CallerHighlightSynchronizer`: the border marks where the focused pane's caret is, so it shows
+ * only while the footnotes pane owns DOM focus. Clicking back into the Scripture text leaves the
+ * row selected but takes the border off the caller; clicking the row (or its editor) again puts it
+ * back. Standard view is the only view that highlights callers at all.
+ *
+ * PT9's pane has one caret, so the note it is in is the one marked. Here keyboard focus on a row
+ * (Tab or the arrow keys) is that caret whenever a row has it, and the selected row otherwise (the
+ * row editor, or the pane's chrome, holds focus).
+ *
+ * @param options.isStandardView Whether the editor is showing Standard view
+ * @param options.paneHasFocus Whether DOM focus is inside the footnotes pane (its row list or its
+ *   inline row editor)
+ * @param options.focusedRowIndex The footnotes pane row holding DOM focus, or `undefined` when no
+ *   row does
+ * @param options.selectedIndex The footnotes pane's selected row, or `undefined` when nothing is
+ *   selected
+ * @returns The note index to highlight, or `undefined` to clear the highlight
+ */
+export function resolveCallerHighlight({
+  isStandardView,
+  paneHasFocus,
+  focusedRowIndex,
+  selectedIndex,
+}: {
+  isStandardView: boolean;
+  paneHasFocus: boolean;
+  focusedRowIndex?: number;
+  selectedIndex: number | undefined;
+}): number | undefined {
+  if (!isStandardView || !paneHasFocus) return undefined;
+  return focusedRowIndex ?? selectedIndex;
+}
+
+/**
+ * Decides whether selecting a footnotes pane row ends the open row-editing session. Selecting moves
+ * the caller highlight to the newly selected note, so an editor left open on a different note would
+ * read as editing the wrong one. The session ends, keeping its edits, whenever the selection lands
+ * anywhere but the row being edited.
+ *
+ * Applies to opening a row as well (a click or Enter on it): the new session starts only after the
+ * old one has ended through the normal close path.
+ *
+ * @param options.paneEditingIndex The row the row editor is open on, or `undefined` when none is
+ *   open
+ * @param options.selectedIndex The row just selected
+ * @returns Whether to end the row-editing session
+ */
+export function shouldEndPaneNoteEditOnRowSelect({
+  paneEditingIndex,
+  selectedIndex,
+}: {
+  paneEditingIndex: number | undefined;
+  selectedIndex: number;
+}): boolean {
+  return paneEditingIndex !== undefined && paneEditingIndex !== selectedIndex;
+}
+
 /** Snapshot of the state a collapsed-note caller click decides against. */
-export interface NoteCallerClickState {
+export type NoteCallerClickState = {
   /**
    * Whether the clicked note is collapsed (expanded notes are edited in place, not via click).
    * `undefined` (the adaptor could not tell) is treated as not collapsed, matching the original
    * `noteCallerOnClick` guard.
    */
   isCollapsed: boolean | undefined;
-  /** The note key of an in-progress footnote-editor session, if any. */
+  /** The note key of an in-progress note-editing session, if any (popover or pane). */
   editingNoteKey: string | undefined;
   /** Whether the footnote-editor popover is actually shown right now. */
   popoverShown: boolean;
@@ -157,16 +475,37 @@ export interface NoteCallerClickState {
   paneVisible: boolean;
   /** Whether the footnotes pane is actually rendered (visible toggle AND data loaded). */
   paneRendered: boolean;
-  /** Whether the footnotes pane's auto-show behavior is enabled. */
-  isAutoShowEnabled: boolean;
-}
+  /**
+   * Whether the interface is in Power mode. A caller click reveals a hidden pane only in Power
+   * mode; Simple mode keeps PT9's manual pane visibility.
+   */
+  isPowerMode: boolean;
+  /** Where the clicked note would be edited; see {@link resolveNoteEditingSurface}. */
+  surface: NoteEditingSurface;
+  /**
+   * Whether the text is shown in Standard view. Only Standard view gives a read-only text the
+   * navigation half of the pane model; every other view keeps a read-only caller inert.
+   */
+  isStandardView: boolean;
+};
+
+/** What a collapsed-note caller click resolves to — see {@link decideNoteCallerClickAction}. */
+export type NoteCallerClickAction =
+  | 'ignore-expanded'
+  | 'ignore-popover-open'
+  | 'ignore-read-only'
+  | 'open-popover'
+  | 'open-pane-editor'
+  | 'navigate-only';
 
 /** What a collapsed-note caller click should do — see {@link decideNoteCallerClickAction}. */
-export interface NoteCallerClickDecision {
+export type NoteCallerClickDecision = {
   /**
-   * True when `editingNoteKey` belongs to a session whose popover is no longer shown — orphaned
-   * bookkeeping that would otherwise dead-end every future caller click; clearing it keeps the
-   * failure benign. The caller must clear the editing-session refs before acting.
+   * True when `editingNoteKey` belongs to a popover session whose popover is no longer shown —
+   * orphaned bookkeeping that would otherwise dead-end every future caller click; clearing it keeps
+   * the failure benign. A pane-editor session keeps its key between clicks by design (the row stays
+   * open across navigation), so it is never stale. The caller must clear the editing-session refs
+   * before acting.
    */
   clearStaleEditingSession: boolean;
   /**
@@ -174,57 +513,252 @@ export interface NoteCallerClickDecision {
    *
    * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
    * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored.
-   * - `open-popover` — open the footnote-editor popover for the clicked note. The popover always
-   *   opens on a routed click, because it is the only surface that can EDIT a note today; the pane
-   *   flags below are navigation alongside it, never a substitute for it.
+   * - `ignore-read-only` — the text is read-only and not in Standard view, so the caller is inert:
+   *   the pane's navigation model belongs to Standard view alone.
+   * - `open-popover` — open the footnote-editor popover for the clicked note (every view but
+   *   Standard).
+   * - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (Standard view).
+   * - `navigate-only` — the text is read-only in Standard view, so there is no editing surface; the
+   *   click still navigates (reveals/scrolls the pane) without opening an editor.
    */
-  action: 'ignore-expanded' | 'ignore-popover-open' | 'open-popover';
+  action: NoteCallerClickAction;
   /**
    * Also select/highlight/scroll to the clicked note in the footnotes pane (PT9 navigate-to-note).
    * True when the pane is rendered — or is being shown by this very click ({@link showPane}); the
    * pane's focus-request machinery retries a request that arrives before its data mounts.
    */
   sendPaneFocusRequest: boolean;
-  /** Also show the footnotes pane: it is currently toggled off and auto-show is enabled. */
+  /** Also show the footnotes pane: it is currently toggled off and the interface is in Power mode. */
   showPane: boolean;
-}
+};
 
 /**
  * Decides what a click on a note caller does. Pure decision logic extracted from
- * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests:
+ * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests.
+ *
+ * The editing surface ({@link NoteCallerClickState.surface}, from {@link resolveNoteEditingSurface})
+ * decides where a routed click opens an editor: the footnotes pane in Standard view, the popover
+ * everywhere else, and nowhere in a read-only text, where the click still navigates without opening
+ * an editor. In every case:
  *
  * - An expanded note's caller does nothing (the note is edited in place).
- * - While a footnote-editor popover is really shown, clicks are ignored (one session at a time).
- * - An editing-session key without a shown popover is STALE — it must not block the click.
- * - Otherwise the popover OPENS — always, in every view, because it is the only surface that can edit
- *   a note today. Alongside it, the pane highlights the clicked note when it is rendered, and a
- *   click also SHOWS the pane when it is toggled off and auto-show is enabled.
+ * - A read-only text outside Standard view does nothing either: the pane's navigate-to-note model is
+ *   Standard view's, and every other view keeps the caller inert.
+ * - While a popover is really shown, a popover-surface click is ignored (one session at a time). A
+ *   pane-editor session has no such limit — its row stays open across clicks.
+ * - A popover session's key left behind without a shown popover is STALE and must not block the
+ *   click; a pane-editor session's key is never stale, since the pane keeps it by design.
+ *
+ * Alongside whichever action is chosen, the pane highlights the clicked note when it is rendered,
+ * and a click also SHOWS the pane when it is toggled off and the interface is in Power mode.
+ *
+ * {@link NoteCallerClickDecision.clearStaleEditingSession} is decided independently of the action
+ * and is reported on EVERY branch, the dead-click ones included: orphaned popover bookkeeping has
+ * to be cleared whether or not this particular click does anything with it, or it dead-ends every
+ * future click.
  */
 export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
+  const clearStaleEditingSession =
+    state.editingNoteKey !== undefined && !state.popoverShown && state.surface !== 'pane';
+  const showPane = state.isPowerMode && !state.paneVisible;
+  const sendPaneFocusRequest = state.paneRendered || showPane;
+
   if (!state.isCollapsed)
     return {
-      clearStaleEditingSession: false,
+      clearStaleEditingSession,
       action: 'ignore-expanded',
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  // A truthy editingNoteKey marks an editing session (matches the original inline guard's
-  // truthiness check; an empty-string key is never a live session).
-  if (state.editingNoteKey && state.popoverShown)
+  if (state.surface === 'none' && !state.isStandardView)
     return {
-      clearStaleEditingSession: false,
+      clearStaleEditingSession,
+      action: 'ignore-read-only',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    };
+  if (state.surface === 'popover' && state.popoverShown)
+    return {
+      clearStaleEditingSession,
       action: 'ignore-popover-open',
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  const clearStaleEditingSession = !!state.editingNoteKey;
-  const showPane = state.isAutoShowEnabled && !state.paneVisible;
+
+  let action: NoteCallerClickAction = 'navigate-only';
+  if (state.surface === 'pane') action = 'open-pane-editor';
+  else if (state.surface === 'popover') action = 'open-popover';
+  return { clearStaleEditingSession, action, sendPaneFocusRequest, showPane };
+}
+
+/** Snapshot of what an editor change did to an open pane note-editing session. */
+export type NoteSessionUpdateState = {
+  /** Whether the session's note key still resolves to a note in the editor's document. */
+  sessionKeyResolves: boolean;
+  /**
+   * Whether the change's inserted node key resolves to a note. When the session's key stopped
+   * resolving, that inserted note IS the session's note, replaced in place by the row editor's own
+   * live-apply (`replaceEmbedUpdate` swaps the node and re-mints its key).
+   */
+  insertedKeyIsNote: boolean;
+  /**
+   * Whether the session note's current content differs from the comparison baseline — what the row
+   * editor is known to be showing. Only meaningful while {@link sessionKeyResolves}.
+   */
+  noteChanged: boolean;
+};
+
+/** What an editor change does to an open pane note-editing session. */
+export type NoteSessionUpdateAction = 'rekey' | 'end-session' | 'follow-note';
+
+/** What an editor change should do to an open pane session — see {@link decideNoteSessionUpdate}. */
+export type NoteSessionUpdateDecision = {
+  /**
+   * What the change resolves to:
+   *
+   * - `rekey` — the session's note was replaced in place, so the session follows the new key.
+   * - `end-session` — the note is gone and nothing replaced it, so there is nothing left to edit.
+   * - `follow-note` — the note is still there; the editing row follows its (possibly moved) index.
+   */
+  action: NoteSessionUpdateAction;
+  /**
+   * Hand the row editor a fresh `noteOps` ARRAY IDENTITY, which is what reloads its document. Only
+   * ever true for a change that came from somewhere other than the row editor itself: reloading a
+   * row editor mid-typing throws away its caret and replaces its document with content that is
+   * missing anything still inside its apply debounce.
+   */
+  reloadRowEditor: boolean;
+  /**
+   * Refresh the comparison baseline ({@link NoteSessionUpdateState.noteChanged}) to the note's
+   * current content. True on a re-key — where the row editor's own live-apply is the new content —
+   * as well as on a reload, so the next external change is compared against what the row editor is
+   * actually showing rather than against the ops it was first loaded with.
+   */
+  refreshBaseline: boolean;
+};
+
+/**
+ * Decides what an editor change does to an open footnotes-pane note-editing session. Pure decision
+ * logic extracted from `handleEditorialUsjChange` in the web view, where the reload/baseline
+ * invariant below has no component-level test harness of its own.
+ *
+ * The ops cannot tell the row editor's own live-apply from a note inserted in the text: both carry
+ * a note insert-embed op. The DOCUMENT tells them apart — the row editor's apply replaces the
+ * session's note node, so the session's key stops resolving while an inserted key resolves to the
+ * replacement.
+ *
+ * The invariant that makes the row editor usable: a reload is for changes from ELSEWHERE only, and
+ * the baseline the "changed?" comparison runs against must track the row editor's own applies too.
+ * A baseline left at the ops the row was loaded with makes every later external change compare
+ * unequal, reloading the row editor once per edit cycle.
+ */
+export function decideNoteSessionUpdate(state: NoteSessionUpdateState): NoteSessionUpdateDecision {
+  if (!state.sessionKeyResolves) {
+    if (state.insertedKeyIsNote)
+      return { action: 'rekey', reloadRowEditor: false, refreshBaseline: true };
+    return { action: 'end-session', reloadRowEditor: false, refreshBaseline: false };
+  }
   return {
-    clearStaleEditingSession,
-    action: 'open-popover',
-    sendPaneFocusRequest: state.paneRendered || showPane,
-    showPane,
+    action: 'follow-note',
+    reloadRowEditor: state.noteChanged,
+    refreshBaseline: state.noteChanged,
   };
+}
+
+/**
+ * The notes in a document the editor produced, in document order - the list the footnotes pane
+ * shows and `EditorRef.getNoteIndex` indexes.
+ *
+ * The editor stamps its documents with a USJ version the markers map is not declared for, and
+ * `UsjReaderWriter` warns on every read when that happens; this corrects the version first (see
+ * {@link correctEditorUsjVersion}) so reading the notes on every keystroke logs nothing.
+ *
+ * @param editorUsj A document from the editor (`EditorRef.getUsj`) or the PDP
+ * @returns The notes, as `UsjReaderWriter.findAllNotes` returns them
+ */
+export function findEditorUsjNotes(editorUsj: Usj): MarkerObject[] {
+  return new UsjReaderWriter(correctEditorUsjVersion(editorUsj), {
+    markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+  }).findAllNotes();
+}
+
+/**
+ * Whether the editor's freshly settled document has to be republished to the footnotes pane.
+ *
+ * Typing in the Scripture body changes the document on every keystroke and the note list on none of
+ * them, and republishing regardless re-renders the whole web view - the Scripture editor included -
+ * per character, which is felt as typing lag with the pane open. Editing inside a row editor does
+ * change a note, but only once per live-apply debounce, so the pane still repaints as fast as
+ * anything it shows actually changes.
+ *
+ * That makes the published document's guarantee "a document whose NOTES are current" rather than
+ * "the current document" - which is what the pane and `EditorRef.getNoteIndex` have to agree on.
+ *
+ * @param newNotes The notes read out of the document about to be published, or `undefined` when
+ *   they could not be read - a document this reader cannot walk must publish, so it can never wedge
+ *   the pane on stale notes
+ * @param publishedNotes The notes the pane is already showing, or `undefined` when nothing has been
+ *   published yet
+ * @returns Whether to publish the document
+ */
+export function shouldPublishPaneDocument(
+  newNotes: MarkerObject[] | undefined,
+  publishedNotes: MarkerObject[] | undefined,
+): boolean {
+  if (!newNotes || !publishedNotes) return true;
+  return !valuesAreDeeplyEqual(newNotes, publishedNotes);
+}
+
+/**
+ * The Scripture reference of the verse a note sits in, so selecting a note in the footnotes pane
+ * (or clicking its caller) can move the scroll group there, as PT9's notes pane does.
+ *
+ * Resolved from the USJ rather than from the editor's own selection reporting, so a read-only text
+ * — which has no caret to report from — navigates exactly like an editable one.
+ *
+ * Only the VERSE is taken from the note's position: the editor holds exactly one chapter, so book,
+ * chapter and versification all ride through from the reference in effect. That also keeps a
+ * document with no `\c` of its own (which resolves as chapter 0) from navigating the user into
+ * front matter.
+ *
+ * @param usj The chapter document the pane and `EditorRef.getNoteIndex` both index; pass the
+ *   editor's live document, not the PDP's, or an index typed ahead of the save debounce names a
+ *   different note
+ * @param noteIndex Document-order index of the note among the chapter's notes
+ * @param currentScrRef The reference in effect now — everything but the verse comes from it
+ * @returns The reference to publish, or `undefined` when the note cannot be located (no note at
+ *   that index, or USJ this reader cannot walk) — in which case the caller should leave the current
+ *   reference alone rather than guess, and report that it did
+ */
+export function resolveNoteVerseRef(
+  usj: Usj | undefined,
+  noteIndex: number,
+  currentScrRef: SerializedVerseRef,
+): SerializedVerseRef | undefined {
+  if (!usj || noteIndex < 0) return undefined;
+  try {
+    // Corrected for the same reason as in `findEditorUsjNotes`.
+    const usjReaderWriter = new UsjReaderWriter(correctEditorUsjVersion(usj), {
+      markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+    });
+    const note = usjReaderWriter.findAllNotes()[noteIndex];
+    if (!note) return undefined;
+    const { verseRef } = usjReaderWriter.nodeToUsfmVerseRefVerseLocation(
+      note,
+      undefined,
+      currentScrRef.book,
+    );
+    // `verse` is the text form of the verse being LEFT, set when it is a range or segment (`3-4`,
+    // `2a`); kept, it would contradict the note's own `verseNum` for every reader that prefers it.
+    const noteRef: SerializedVerseRef = { ...currentScrRef, verseNum: verseRef.verseNum };
+    delete noteRef.verse;
+    return noteRef;
+  } catch {
+    // Malformed USJ is a navigation that does not happen, never a thrown error out of a click
+    // handler. Stays silent here — this is a pure helper with no logger of its own — and the
+    // caller reports the `undefined` it gets back.
+    return undefined;
+  }
 }
 
 // #region Editor Title Formatting
@@ -265,6 +799,37 @@ export async function formatEditorTitle(
   }
 
   return title;
+}
+
+/**
+ * The project name a tab title shows: the project's short name (`platform.name`), falling back to
+ * the project id when the setting is unavailable.
+ *
+ * Deliberately NOT `formatProjectName`. A tab strip is the most space-constrained surface in the
+ * app, so appending the full name would push the short name — the field a Paratext user identifies
+ * a project by — toward the truncation it is supposed to survive. Short-name-first holds here in
+ * the strongest form available: the short name is the only name shown.
+ *
+ * Lives here rather than inline in `main.ts`'s title callback so that the choice of setting is
+ * pinned by a test. `formatEditorTitle`'s own tests inject this name, so they stay green whichever
+ * setting feeds them; without this seam, a swap to `platform.fullName` changes every tab title and
+ * no test notices.
+ *
+ * The project-id fallback is defensive rather than reachable in production: the C# data provider
+ * special-cases `platform.name` to `scrText.Name`, and the setting carries a contribution default,
+ * so a project served by it always answers. It guards a third-party project data provider that does
+ * not, and an unavailable provider.
+ *
+ * @param papi The PAPI backend.
+ * @param projectId The project whose name the tab shows.
+ * @returns The project's short name, or the project id when it has none.
+ */
+export async function getTabTitleProjectName(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<string> {
+  const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+  return (await pdp.getSetting('platform.name')) ?? projectId;
 }
 
 // #endregion Editor Title Formatting
@@ -468,10 +1033,15 @@ export async function convertScriptureRangeToEditorRange(
     endVerseOffset === undefined ? endVerseRef : { verseRef: endVerseRef, offset: endVerseOffset },
   );
 
-  // If we don't have which verse we're setting the scroll group to, get it
+  // If we don't have which verse we're setting the scroll group to, get it. A USJ document
+  // location range only carries a chapter's own USJ, which has a book `id` marker for chapter 1
+  // and lacks one otherwise (see UsjChapterLocation), so fall back to the book already resolved
+  // above for this range.
   if (startVerseRef.verseNum === -1) {
-    const startUsfmLocation =
-      usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(startDocumentLocation);
+    const startUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
+      startDocumentLocation,
+      startVerseRef.book,
+    );
     startVerseRef.verseNum = startUsfmLocation.verseRef.verseNum;
   }
 
@@ -497,37 +1067,58 @@ export async function convertScriptureRangeToEditorRange(
  */
 export const availableScrollGroupIds = [undefined, ...new Array(5).keys()];
 
-export type BlockMarkerBlockNames = typeof blockMarkerToBlockNames;
+/**
+ * `MarkerType.Paragraph` markers that are never valid to select via a plain paragraph-style retag,
+ * because they are instead applied through dedicated, structure-aware mechanisms.
+ */
+export const PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS: ReadonlySet<string> = new Set(['id', 'c']);
 
-// This list is incomplete.
-export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
-  cl: '%paragraphMenu_cl_markerDescription%',
-  h: '%paragraphMenu_h_markerDescription%',
-  h1: '%paragraphMenu_h1_markerDescription%',
-  h2: '%paragraphMenu_h2_markerDescription%',
-  h3: '%paragraphMenu_h3_markerDescription%',
-  ide: '%paragraphMenu_ide_markerDescription%',
-  m: '%paragraphMenu_m_markerDescription%',
-  ms: '%paragraphMenu_ms_markerDescription%',
-  ms1: '%paragraphMenu_ms1_markerDescription%',
-  ms2: '%paragraphMenu_ms2_markerDescription%',
-  ms3: '%paragraphMenu_ms3_markerDescription%',
-  mt: '%paragraphMenu_mt_markerDescription%',
-  mt1: '%paragraphMenu_mt1_markerDescription%',
-  mt2: '%paragraphMenu_mt2_markerDescription%',
-  mt3: '%paragraphMenu_mt3_markerDescription%',
-  mt4: '%paragraphMenu_mt4_markerDescription%',
-  nb: '%paragraphMenu_nb_markerDescription%',
-  p: '%paragraphMenu_p_markerDescription%',
-  pi: '%paragraphMenu_pi_markerDescription%',
-  q1: '%paragraphMenu_q1_markerDescription%',
-  q2: '%paragraphMenu_q2_markerDescription%',
-  r: '%paragraphMenu_r_markerDescription%',
-  s: '%paragraphMenu_s_markerDescription%',
-  toc1: '%paragraphMenu_toc1_markerDescription%',
-  toc2: '%paragraphMenu_toc2_markerDescription%',
-  toc3: '%paragraphMenu_toc3_markerDescription%',
-};
+/**
+ * Every USFM paragraph-style marker known to {@link usfmMarkers} that a user can validly choose to
+ * apply via a plain paragraph-style retag. (Excludes
+ * {@link PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS}.)
+ */
+export const selectableParagraphMarkers: readonly string[] = Object.keys(usfmMarkers)
+  .filter(
+    (marker) =>
+      isParagraphMarker(marker) && !PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS.has(marker),
+  )
+  .sort();
+
+/**
+ * True when a marker has a real (potentially localized) title available via
+ * {@link getParagraphMarkerTitle} (as displayed in tooltips, the Paragraph combo box
+ * trigger/switcher, etc.) Some titles may not be displayed in all possible contexts.
+ */
+export function hasDisplayableParagraphMarkerTitle(marker: string): boolean {
+  return isParagraphMarker(marker);
+}
+
+/**
+ * Builds the localize key for a paragraph marker's description.
+ *
+ * @param marker Marker code, without its leading backslash (e.g. `p`, not `\p`)
+ */
+export function paragraphMarkerNameKey(marker: string): LocalizeKey {
+  return `%paragraphMenu_${marker}_markerDescription%`;
+}
+
+/**
+ * Resolves the localized title for a paragraph marker. Returns `undefined` when no title is
+ * available at all ({@link hasDisplayableParagraphMarkerTitle} is `false`) — when the marker isn't a
+ * paragraph marker in `usfmMarkers` at all. Otherwise, returns whatever `localizedStrings`
+ * currently has for the marker's key (from the `useLocalizedStrings` hook).
+ *
+ * @param marker Marker code to look up, without its leading backslash (e.g. `p`, not `\p`)
+ * @param localizedStrings The localized strings to resolve the title from
+ */
+export function getParagraphMarkerTitle(
+  marker: string,
+  localizedStrings: LanguageStrings,
+): string | undefined {
+  if (!hasDisplayableParagraphMarkerTitle(marker)) return undefined;
+  return localizedStrings[paragraphMarkerNameKey(marker)];
+}
 
 /**
  * Generates the marker menu list items specifically inserting appropriate action functions using
@@ -559,7 +1150,7 @@ export function generateParagraphMenuListItems(
   notifyStructureProtected: () => void,
   restoreSelection?: () => void,
 ): MarkerMenuItem[] {
-  return Object.entries(blockMarkerToBlockNames).map(([marker, title]) => {
+  return selectableParagraphMarkers.map((marker) => {
     // The trailing detail column would otherwise sit empty for exactly the menu this feature is
     // named after. `usfmMarkers[marker].description` is a localize key the web view already
     // resolves (it loads every marker description), so this needs no new key and no new
@@ -567,7 +1158,7 @@ export function generateParagraphMenuListItems(
     const descriptionKey = usfmMarkers[marker]?.description;
     const markerMenuItem: MarkerMenuItem = {
       marker,
-      title: localizedStrings[title] ?? title,
+      title: getParagraphMarkerTitle(marker, localizedStrings) ?? marker,
       subtitle: descriptionKey ? localizedStrings[descriptionKey] : undefined,
       action: () => {
         // Defense-in-depth: unreachable while the paragraph control is disabled
@@ -761,9 +1352,9 @@ export function selectProjectIdsForOpenMode(
 
 /**
  * Outcome of a single picker attempt. Every outcome other than `'filled'` is a "may retry on the
- * next trigger" — the driver in {@link startDefaultProjectPicker} re-invokes on web-view-open and
- * sync-completion events, so transient causes (sync still in flight, layout not loaded yet) clear
- * themselves naturally.
+ * next trigger" — the driver in {@link startDefaultProjectPicker} re-invokes on web-view-open,
+ * sync-completion and project-set-change events, so transient causes (sync still in flight, layout
+ * not loaded yet) clear themselves naturally.
  *
  * - `'wrong-mode'` — `platform.interfaceMode` is not `'simple'`; the picker does nothing until it is.
  * - `'no-empty'` — no empty Scripture Editor (no `projectId`) is currently open. The driver may retry
@@ -774,8 +1365,8 @@ export function selectProjectIdsForOpenMode(
  * - `'failed'` — the open command rejected; logged at warn. The driver may retry on the next trigger.
  * - `'no-candidate'` — S/R was reachable, but no shared project passed the activity / `editedStatus`
  *   filter. Projects with `editedStatus` of `'new'` (not yet downloaded locally) or
- *   `'unregistered'` (limited/provisional license) are excluded, as are projects with no
- *   `lastSendReceiveDate`. The driver may retry after a sync completes.
+ *   `'unregistered'` (limited/provisional license) are excluded. The driver may retry after a sync
+ *   completes or the project set changes.
  * - `'filled'` — the picker successfully called the open command for the top candidate.
  */
 export type DefaultProjectPickerOutcome =
@@ -850,7 +1441,7 @@ async function tryOpenFromRecentlyOpened(
  *
  * Idempotent: each invocation re-reads the dock and the shared-projects list. The driver in
  * {@link startDefaultProjectPicker} is responsible for re-invoking on events that change those
- * inputs (web-view opens, sync completions).
+ * inputs (web-view opens, sync completions, project-set changes).
  *
  * @param papi The PAPI backend handle. Injected for testability.
  * @returns The outcome of this attempt — see {@link DefaultProjectPickerOutcome}.
@@ -1001,6 +1592,14 @@ export async function openDefaultActiveProjectIfApplicable(
  * - `paratextBibleSendReceive.onSyncStateChanged` (when `isSyncing` is `false`) — handles a sync
  *   finishing. Newly-added shared projects look ineligible (`editedStatus === 'new'`, no
  *   `lastSendReceiveDate`) until the first sync settles, so the picker has to re-check after that.
+ * - `platform.onDidChangeProjects` — handles the project set changing, including through the syncs
+ *   that raise no `onSyncStateChanged` (see `adr-toolbar-sync-status-is-local`). It also fires when
+ *   a project's metadata changes (a rename, its language, whether it is editable), which re-runs
+ *   the picker for nothing. Once the editor has a project, such a run exits early (`'no-empty'`).
+ *   While an empty editor exists, each one repeats the recently-opened lookup,
+ *   `paratextBibleSendReceive.getSharedProjects` and a permission lookup per candidate; that is
+ *   bounded by the emitter's debounce and by the coalescing below. Not debounced here: its emitter
+ *   (`LocalParatextProjects`, C#) already debounces it.
  *
  * Cold-start gap: there is no explicit "S/R command registered" signal, so if
  * `paratextBibleSendReceive` activates after `platformScriptureEditor` but before any of the
@@ -1090,6 +1689,16 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
       );
   });
 
+  const unsubFromProjectsChanged = papi.network.getNetworkEvent('platform.onDidChangeProjects')(
+    () => {
+      tryPicker().catch((e) =>
+        papi.logger.warn(
+          `Default active project picker: projects-changed handler threw unexpectedly: ${getErrorMessage(e)}`,
+        ),
+      );
+    },
+  );
+
   // Cover the case where the empty editor and an eligible synced project are already in place
   // (e.g., second startup after a successful first run).
   tryPicker().catch((e) =>
@@ -1098,7 +1707,12 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     ),
   );
 
-  return aggregateUnsubscribers([unsubFromWebViewOpen, unsubFromWebViewUpdate, unsubFromSync]);
+  return aggregateUnsubscribers([
+    unsubFromWebViewOpen,
+    unsubFromWebViewUpdate,
+    unsubFromSync,
+    unsubFromProjectsChanged,
+  ]);
 }
 
 // #endregion Default Active Project Picker
@@ -1107,8 +1721,9 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 
 /**
  * Fire-and-forget helper that flushes the outgoing project, then syncs the incoming one. Each sync
- * is independently error-isolated so a failure in one doesn't block the other. Only called in
- * simple mode after a replace-tab project switch.
+ * is independently error-isolated so a failure in one doesn't block the other. Called after a
+ * Simple-mode replace-tab project switch, and by `finalizeProjectSwitch` after a Power -> Simple
+ * mode switch — by which time the user may be back in Power mode.
  *
  * Uses `paratextBibleSendReceive.syncProjects` for the incoming project because it also pulls
  * connected resources and translation partners (deep sync). Uses the shallower
@@ -1118,15 +1733,64 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * The incoming project syncs LAST because these are two separate backend runs and the sync
  * indicator reports the most recent one. Whichever runs last is the verdict the user is shown, and
  * the project they just switched to — the one on screen — is what that verdict should describe. A
- * failure flushing the outgoing project is logged rather than shown; see
- * `adr-sync-activity-outcome-is-coarse` in `.context/standards/Architecture-Decisions.md`.
+ * failure flushing the outgoing project reaches the user only through its own failure toast (see
+ * below), not the indicator; see `adr-sync-activity-outcome-is-coarse` in
+ * `.context/standards/Architecture-Decisions.md`.
+ *
+ * The outgoing sync is skipped only for a published resource (see `isProjectPublished`), which
+ * holds nothing the user wrote. A translation project with editing switched off still syncs: its
+ * Scripture text is locked, but the user can still add comments to it. The window-close and
+ * shutdown syncs (`getWritableEditorProjectIds` in `src/main/shutdown-tasks.ts`) do not yet draw
+ * the same line: they drop every editor whose saved `isReadOnly` is set, and an editor opened with
+ * a project ID (Home, New Tab, the title-bar picker) takes that flag from `platform.isEditable`, so
+ * an `Editable=F` project is synced here but not when its window closes or the app quits
+ * (PT-4786).
+ *
+ * `interfaceMode` is the caller's read of `platform.interfaceMode` (`undefined` when that read
+ * failed). The incoming sync suppresses the dotnet progress toast only for a known `'simple'`,
+ * where the toolbar sync indicator is its surface; any other value keeps the toast, since the
+ * indicator may not be mounted. The flag is sent only when it is `true`: a dotnet `SyncProjects`
+ * that predates the parameter rejects a two-argument call, so omitting it keeps the toast-keeping
+ * cases working against that backend. The outgoing `sendReceiveProjects` keeps its toast: its
+ * `suppressNotification` would also hide the failure toast, which is this claimless sync's only
+ * failure surface.
+ *
+ * Gated on first-run sync consent: neither Send/Receive command runs unless the
+ * `platform.getAutomaticSyncConsent` command answers `granted`. That command is the main process's
+ * `getAutomaticSyncConsent`, the one implementation of the rule, so this module does not restate
+ * it. The gate covers those two commands only — this module still reaches the network elsewhere
+ * during the wizard, e.g. `openDefaultActiveProjectIfApplicable`'s
+ * `paratextBibleSendReceive.getSharedProjects` registry lookup (see PT-4606).
+ *
+ * The gate applies in Simple mode only, so it checks `interfaceMode` rather than trusting every
+ * caller to be Simple-mode-only. An unreadable mode (`undefined`) is treated as Simple, so it
+ * cannot bypass the gate.
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,
   incomingProjectId: string,
   outgoingProjectId: string | undefined,
+  interfaceMode: SettingTypes['platform.interfaceMode'] | undefined,
 ): Promise<void> {
-  if (outgoingProjectId) {
+  // The first-run wizard is an overlay, so the project picker behind it can drive a switch through
+  // here before the user has answered its sync-consent step.
+  if (interfaceMode !== 'power') {
+    let consent;
+    try {
+      consent = await papi.commands.sendCommand('platform.getAutomaticSyncConsent');
+    } catch (e) {
+      papi.logger.warn(
+        `Project-switch sync: could not check first-run sync consent (${getErrorMessage(e)}); skipping sync`,
+      );
+      return;
+    }
+    if (consent !== 'granted') {
+      papi.logger.info(`Project-switch sync skipped: first-run sync consent is ${consent}`);
+      return;
+    }
+  }
+
+  if (outgoingProjectId && !(await isProjectPublished(papi, outgoingProjectId))) {
     try {
       await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [
         outgoingProjectId,
@@ -1139,7 +1803,16 @@ export async function syncOnProjectSwitch(
   }
 
   try {
-    await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
+    // Mode change mid-sync: intentionally not handled. The flag is fixed for the run, and the
+    // toolbar indicator mounts only in Simple mode, so switching to Power while a suppressed sync
+    // runs leaves it with no progress surface until it ends. Accepted in
+    // `adr-sync-surface-per-interface-mode`.
+    const flag: [true] | [] = interfaceMode === 'simple' ? [true] : [];
+    await papi.commands.sendCommand(
+      'paratextBibleSendReceive.syncProjects',
+      [incomingProjectId],
+      ...flag,
+    );
   } catch (e) {
     papi.logger.warn(
       `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
@@ -1164,10 +1837,9 @@ export async function syncOnProjectSwitch(
  * back to Power mode. Mirrors `open()`'s own `needsOverlay` block (main.ts): the sync is
  * fire-and-forget (`syncOnProjectSwitch` already catches its own errors, and awaiting it here would
  * delay the shared-layout apply and `recordProjectOpened` by however long a deep Send/Receive
- * takes, with `recordProjectOpened` never running at all if the user quits mid-sync); and
- * `applyForProject` re-checks `platform.interfaceMode` fresh immediately before running, since
- * applying while no longer in Simple mode would wrongly manipulate the Power layout instead of
- * being a no-op.
+ * takes, with `recordProjectOpened` never running at all if the user quits mid-sync); and the mode
+ * is read fresh here, once, before the sync, since applying while no longer in Simple mode would
+ * wrongly manipulate the Power layout instead of being a no-op.
  *
  * @param papi Backend PAPI instance.
  * @param projectId The project now showing in the Scripture Editor.
@@ -1179,10 +1851,29 @@ export async function finalizeProjectSwitch(
   projectId: string,
   applyForProject: ((projectId: string) => Promise<void>) | undefined,
 ): Promise<void> {
+  // Read once, before the sync, so the sync and the Simple-only block below agree on the mode. A
+  // failed read leaves `undefined`: the sync then keeps its progress toast and the Simple-only block
+  // is skipped, the same as for Power.
+  let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+  try {
+    interfaceMode = await papi.settings.get('platform.interfaceMode');
+  } catch (e) {
+    papi.logger.warn(
+      `finalizeProjectSwitch: could not read platform.interfaceMode for ${projectId}; syncing with the progress toast: ${getErrorMessage(e)}`,
+    );
+  }
   // There's no outgoing project here since this replaces the whole Simple layout, not one editor
   // tab within it.
-  syncOnProjectSwitch(papi, projectId, undefined);
-  if ((await papi.settings.get('platform.interfaceMode')) === 'simple') {
+  syncOnProjectSwitch(papi, projectId, undefined, interfaceMode);
+  if (interfaceMode === 'simple') {
+    // Normally a no-op: `runProjectBoundSimpleSwitch` (`src/renderer/services/
+    // web-view.service-shard.ts`) bakes `projectId` into every merged supplement tab with
+    // `applyProjectIdToTabs` before this runs, so the Text Collection arrives already bound and
+    // the call returns at its skip guard. Kept as a safety net for a caller that skips the bake.
+    // Ordered before `applyForProject` for the same reason the editor-column switch is: a re-point
+    // settles its content before the shared layout picks which tab to front. It swallows its own
+    // failures, so no try/catch here.
+    await updateRelatedTextCollectionPanel(papi, projectId);
     await applyForProject?.(projectId);
   }
   try {
@@ -1202,20 +1893,52 @@ export async function finalizeProjectSwitch(
 // #region Text Connection Panels
 
 /**
+ * Whether `projectId` is a published resource rather than a translation project.
+ *
+ * `platform.isPublished` is the project-kind classification. `platform.isEditable` is not a
+ * substitute: it is a project-wide switch on editing the Scripture text, so a translation project
+ * can have it off.
+ *
+ * Read from the project's `platform.base` PDP rather than `projectLookup.getMetadataForProject`,
+ * because the setting is the authoritative value while the metadata field is optional.
+ *
+ * A failed read counts as "not published", the setting's own default: following a project is
+ * recoverable on the next switch, while staying put would leave a panel silently on the outgoing
+ * project.
+ */
+async function isProjectPublished(papi: typeof PapiBackend, projectId: string): Promise<boolean> {
+  try {
+    const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+    return (await pdp.getSetting('platform.isPublished')) === true;
+  } catch (e) {
+    papi.logger.warn(
+      `Could not read platform.isPublished for ${projectId} (${getErrorMessage(e)}); treating it as a translation project`,
+    );
+    return false;
+  }
+}
+
+/**
  * Opens or updates the model text and the various views to be displayed in tabs in "column 3" (
- * reference texts, commentaries, comments, etc.) for a project.
+ * reference texts, commentaries, comments, Text Collection, etc.) for a project.
+ *
+ * Every panel here is error-isolated, so one failing panel never stops the rest from being
+ * re-pointed. Find is NOT here: it needs the id of the editor web view the switch produces, so it
+ * is re-pointed separately by {@link updateRelatedFindPanel} once that editor exists.
+ *
+ * The Text Collection is the one panel that declines to follow a published resource; see
+ * {@link updateRelatedTextCollectionPanel}.
  *
  * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for
- * @param isProjectEditable Whether `projectId` names an editable translation project rather than a
- *   read-only resource opened in the editor column. Only the Scripture Text Grid honors it; the
- *   other Column 3 panels follow the editor either way.
  */
 export async function openOrUpdateRelatedPanels(
   papi: typeof PapiBackend,
   projectId: string,
-  isProjectEditable: boolean,
 ): Promise<void> {
+  // Started first so the settings round trip overlaps the four panel commands below instead of
+  // adding to the switch's latency.
+  const isPublishedPromise = isProjectPublished(papi, projectId);
   try {
     await papi.commands.sendCommand('platformScriptureEditor.openModelText', projectId);
   } catch (e) {
@@ -1244,10 +1967,8 @@ export async function openOrUpdateRelatedPanels(
   } catch (e) {
     papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
   }
-  // A text collection is built from an editable project's settings, so a read-only resource opened
-  // in the editor column must not re-point it. Not wrapped like the four above: this one swallows
-  // its own failures (see its TSDoc).
-  if (isProjectEditable) await updateRelatedTextCollectionPanel(papi, projectId);
+  // Not wrapped like the four above: this one swallows its own failures (see its TSDoc).
+  await updateRelatedTextCollectionPanel(papi, projectId, isPublishedPromise);
 }
 
 /**
@@ -1260,78 +1981,179 @@ export async function openOrUpdateRelatedPanels(
  * because an inline literal would trip TypeScript's excess-property check.
  *
  * Exported so `scriptureTextGridWebViewProvider` in `main.ts` types its `openWebViewOptions` with
- * this same type: the writer here and the reader there are otherwise linked only by the field name,
- * so renaming or dropping `projectId` on one side would leave `typecheck` green and silently stop
- * the panel following project switches. (Mirrors `FindWebViewOptions`, which Find exports once and
- * uses on both sides.)
+ * this same type, which catches a _rename_ of `projectId` on either side via the object literal's
+ * excess-property check. It does NOT catch an omission: `projectId` has to stay optional, so `{
+ * bringToFront: false }` still typechecks and the provider's `openWebViewOptions.projectId ??
+ * savedWebView.projectId` would quietly fall back to the stale saved id, leaving the panel on the
+ * outgoing project with `typecheck` green. `resolveGridProviderProjectId` pins that precedence and
+ * `buildScriptureTextGridWebView` is what the provider calls, so both the rule and its use are
+ * covered. (Mirrors `FindWebViewOptions`, which Find exports once and uses on both sides.)
  */
 export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
+
+/**
+ * Which project the Text Collection provider should hand its web view.
+ *
+ * The two halves of the re-point meet here. `openWebViewOptions` is the half a project switch fills
+ * in — `updateRelatedTextCollectionPanel` passes the incoming project through `reloadWebView` — and
+ * it has to win: preferring the saved definition when a switch supplied a project leaves the panel
+ * rendering the outgoing project's texts. `savedWebView.projectId` is what keeps a restored tab, or
+ * one re-provided for an unrelated reason, on the project it already had.
+ *
+ * Extracted from the provider so this precedence is testable: the provider itself lives in
+ * `main.ts`, which no test imports, so inline the rule could be inverted and every test would still
+ * pass.
+ *
+ * @param openWebViewOptions Options the caller passed to `openWebView`/`reloadWebView`.
+ * @param savedWebView The saved definition being re-provided.
+ * @returns The project id to bind the web view to, or `undefined` when neither half names one.
+ */
+export function resolveGridProviderProjectId(
+  openWebViewOptions: TextCollectionPanelOptions,
+  savedWebView: Pick<SavedWebViewDefinition, 'projectId'>,
+): string | undefined {
+  return openWebViewOptions.projectId ?? savedWebView.projectId;
+}
 
 /**
  * Re-points the Text Collection panel at `projectId`, the way {@link openOrUpdateRelatedPanels}
  * re-points the rest of Column 3.
  *
- * Re-pointing is a reload, not an in-place `projectId` update: `papi.webViews` exposes no
- * definition-updating call from the service side, and the grid _requires_ a remount anyway because
- * it reads admin layout settings through `useBufferedLayoutSetting`, which documents itself as
- * built for consumers that switch projects via `reloadWebView` and NOT safe for ones that change
- * `projectId` in place.
+ * Re-pointing is a reload, not an in-place `projectId` update, because `papi.webViews` exposes no
+ * definition-updating call at all — only a web view can update its _own_ definition
+ * (`updateWebViewDefinition` in `WebViewProps`), so from the service side a reload is the only way
+ * to change any updatable property, as `reloadWebView`'s own TSDoc says. The grid does not depend
+ * on the reload for correctness: it remounts everything that reads admin layout settings through
+ * `useBufferedLayoutSetting` whenever its project changes (see `ScriptureTextGridProjectView`),
+ * because that hook is NOT safe for consumers that change `projectId` in place (it would keep
+ * serving the previous project's held value). Without any re-point the panel would keep rendering
+ * the outgoing project's texts indefinitely: an unbound grid seeds itself once from the window's
+ * `ActiveEditorProjectId` and keeps that project from then on (see
+ * `resolveTextCollectionProjectId`), so only a re-point moves it.
  *
- * Three deliberate constraints:
+ * Four deliberate constraints:
  *
- * - Never creates a panel when none is open. The Text Collection's only open path is the
- *   default-layout supplement, so "not open" means the tab was closed in Power mode or the
- *   `platformScriptureEditor.enableScriptureTextGrid` setting is off — neither a state a project
- *   switch should reverse.
+ * - Never follows a published resource (see `isProjectPublished`): a resource has no collection of
+ *   its own, so following it would cost a reload, and the in-memory state it drops, for an empty
+ *   panel. The rule lives here rather than in a caller so every re-point path applies it.
+ * - Never creates a panel when none is open, unlike the Text Collection's menu command
+ *   (`platformScriptureEditor.showTextCollectionPanel`), which does create one on demand. A project
+ *   switch closing a tab the user deliberately closed in Power mode, or one the
+ *   `platformScriptureEditor.enableScriptureTextGrid` setting has kept from ever existing, is not
+ *   something a re-point should reverse — only a direct request to show the panel should create it.
+ *   (Both callers are Simple-mode-only — `openOrUpdateRelatedPanels` for an editor-column switch
+ *   and `finalizeProjectSwitch` for a Power→Simple one — so this guard is a contract, not a hot
+ *   path.)
  * - Skips the reload when the panel already shows `projectId`, because rebuilding the iframe drops
- *   the grid's in-memory React state (an open chapter-context split, in-flight "Installing…" rows)
- *   for no gain.
- * - Never brings the panel to front. This re-points the whole column rather than answering a request
- *   for the Text Collection, and the admin's shared layout chooses the front tab next.
+ *   the grid's in-memory React state for no gain. State held through `useWebViewState` —
+ *   `viewMode`, per-cell zoom — survives, since a reload reuses the same web view id.
+ *
+ *   Not all of that loss is cosmetic. The reload destroys the iframe's JS realm, so a DBL install
+ *   running in the grid is abandoned mid-flight: `installDblResource` proxies to .NET and completes
+ *   regardless, but the continuation that calls `persistUserAddition` dies with the realm, leaving
+ *   the resource installed on disk and absent from the collection, with no notification and no log
+ *   (the post-await `sourcesRef` check is a staleness re-read, not a liveness check). Recoverable
+ *   by re-adding the resource, which then succeeds immediately. TODO(PT-4510): fix in the install
+ *   path — persist the addition somewhere that survives a reload.
+ * - Never brings the panel to front. This runs as part of re-pointing the whole column, not because
+ *   anyone asked for the Text Collection, and the admin's shared layout chooses the front tab
+ *   immediately afterward.
  *
  * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
  * swallowed, because the project switch itself has already succeeded by this point.
  *
  * @param papi The instance of papi to read web view definitions with and request the reload from
  * @param projectId The id of the project whose text collection the panel should show
+ * @param isPublishedPromise Whether `projectId` is a published resource. A caller that already
+ *   started this read passes it in so the round trip overlaps its own work; otherwise it is read
+ *   here, and only once a reload is still in question.
  */
 export async function updateRelatedTextCollectionPanel(
   papi: typeof PapiBackend,
   projectId: string,
+  isPublishedPromise?: Promise<boolean>,
 ): Promise<void> {
+  let existingPanel: SavedWebViewDefinition | undefined;
   try {
     const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-    const existingPanel = allOpenDefs.find(
-      (def) => def.webViewType === SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+    existingPanel = allOpenDefs.find((def) => def.webViewType === SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
+  } catch (e) {
+    // The router rejects this outright when any window is unreachable, so this is "what is open is
+    // unknown", not "no panel is open" — distinct from the no-panel case below, which is normal.
+    papi.logger.error(
+      `Text Collection re-point to ${projectId} aborted: could not establish which web views are open (${getErrorMessage(e)}). The panel may still show a previous project.`,
     );
-    if (!existingPanel || existingPanel.projectId === projectId) return;
+    return;
+  }
 
+  // Normalized on both sides, as this module does everywhere else it compares ids: they arrive
+  // verbatim from a resource reference while the .NET side canonicalizes to uppercase, so a raw
+  // `===` would read a case-differing id as a different project and reload on every switch back —
+  // discarding exactly the in-memory state this guard exists to protect.
+  if (
+    !existingPanel ||
+    (existingPanel.projectId !== undefined &&
+      normalizeProjectId(existingPanel.projectId) === normalizeProjectId(projectId))
+  )
+    return;
+
+  if (await (isPublishedPromise ?? isProjectPublished(papi, projectId))) return;
+
+  try {
     // Hidden case: Simple mode shows one Column 3 tab at a time, so this usually lands on an
     // inactive tab. That is fine and needs no catch-up — the reload remounts the panel and its
     // render is entirely data-driven (no geometry reads, no scrollIntoView), so it produces the
     // right content while hidden and is simply revealed when the tab is next activated.
     const options: TextCollectionPanelOptions = { projectId, bringToFront: false };
-    await papi.webViews.reloadWebView(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, existingPanel.id, options);
+    const reloadedId = await papi.webViews.reloadWebView(
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      existingPanel.id,
+      options,
+    );
+    // `reloadWebView` resolves `undefined` rather than throwing when the definition has gone or the
+    // provider declines to supply one. Worth an error rather than silence: a failed re-point is not
+    // self-correcting. `projectId` is not in `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS`, so once any
+    // re-point has succeeded the panel's saved definition carries a project and `explicitProjectId`
+    // wins in `resolveTextCollectionProjectId` from then on, and nothing but another re-point will
+    // move the panel.
+    if (reloadedId === undefined)
+      papi.logger.error(
+        `Text Collection re-point to ${projectId} did not take: reloadWebView returned no id for panel ${existingPanel.id}. The panel is left showing ${existingPanel.projectId ?? 'no project'}.`,
+      );
   } catch (e) {
-    papi.logger.warn(`Error updating text collection panel project: ${getErrorMessage(e)}`);
+    papi.logger.error(
+      `Text Collection re-point to ${projectId} failed for panel ${existingPanel.id}: ${getErrorMessage(e)}. The panel is left showing ${existingPanel.projectId ?? 'no project'}.`,
+    );
   }
 }
 
 /**
  * Re-points the Find panel at `projectId`, the way {@link openOrUpdateRelatedPanels} re-points the
- * rest of Column 3. Kept separate, and called after the editor's own web view exists, because Find
- * needs `editorWebViewId`: it caches that id and uses it to select and highlight a clicked result
- * in the editor, and a project switch that replaces the editor tab mints a new one. Running this
- * alongside the other panels would hand Find the id of the editor being replaced.
+ * rest of Column 3. Called after the editor's own web view exists because Find caches
+ * `editorWebViewId` to select and highlight a clicked result, and a project switch that replaces
+ * the editor tab mints a new one.
  *
- * Find is also the one Column 3 panel that is re-pointed without being opened. In Simple mode it is
- * part of the fixed layout from startup, so it is always already there; anywhere else it is a panel
- * the user opened deliberately, and a project switch is not a request to open it.
+ * Re-points without opening, like {@link updateRelatedTextCollectionPanel}: a project switch is not
+ * a request to open a panel that isn't there.
+ *
+ * Deliberately has no editability or project-kind condition: Find follows the editor onto a
+ * read-only project or a published resource because searching is a read (see
+ * `adr-find-follows-editor-to-read-only`).
+ *
+ * Only Simple mode re-points Find. The mode is read here, fresh, rather than taken from the caller:
+ * a project switch can run long enough for the user to change mode mid-way, and reloading Power
+ * mode's Find onto the switched project would be wrong.
+ *
+ * Hidden case: in Simple mode Find's tab is usually inactive when this runs. The reload remounts
+ * Find, whose render is data-driven, so it shows the right project when next shown. But a Find that
+ * restores a previous search runs it immediately, hidden or not, and the auto-search held back by
+ * `useRunWhenVisible` runs again when the tab is shown, so the search, and the clearing of results
+ * it starts with, happens twice. A known gap, tracked as PT-4418.
  *
  * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
  * swallowed, because the project switch itself has already succeeded by this point.
  *
- * @param papi The instance of papi to send the command
+ * @param papi The instance of papi to read the interface mode with and send the command
  * @param projectId The id of the project Find should search from now on
  * @param editorWebViewId Id of the editor web view the switch produced
  */
@@ -1341,6 +2163,7 @@ export async function updateRelatedFindPanel(
   editorWebViewId: string | undefined,
 ): Promise<void> {
   try {
+    if ((await papi.settings.get('platform.interfaceMode')) !== 'simple') return;
     await papi.commands.sendCommand(
       'platformScripture.updateFindProject',
       projectId,
@@ -1348,6 +2171,51 @@ export async function updateRelatedFindPanel(
     );
   } catch (e) {
     papi.logger.warn(`Error updating find panel project: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
+ * Re-points an open Checks side panel at `projectId`, the Checks counterpart of
+ * {@link updateRelatedFindPanel} and called at the same point for the same reason: the panel holds
+ * the editor's web view id to focus the editor and select a clicked result, so it needs the id of
+ * the editor the switch produced.
+ *
+ * Creates nothing. In Simple mode Checks joins Column 3 only when the user opens it, and a project
+ * switch is not a request to open it.
+ *
+ * Never follows a published resource (see `isProjectPublished`), the same rule as
+ * {@link updateRelatedTextCollectionPanel}: a resource is not something the user checks, so Checks
+ * stays on the translation project. A translation project with editing switched off is followed
+ * like any other.
+ *
+ * Only Simple mode re-points Checks, read fresh here for the same reason as in
+ * {@link updateRelatedFindPanel}. In Power mode each Checks panel is docked beside the editor it was
+ * opened for, so re-pointing "the" open one would retarget whichever editor's panel the probe
+ * happened to find.
+ *
+ * Never throws: a failure here is logged and swallowed, because the project switch itself has
+ * already succeeded by this point.
+ *
+ * @param papi The instance of papi to read the interface mode and project kind with and send the
+ *   command
+ * @param projectId The id of the project Checks should check from now on
+ * @param editorWebViewId Id of the editor web view the switch produced
+ */
+export async function updateRelatedChecksSidePanel(
+  papi: typeof PapiBackend,
+  projectId: string,
+  editorWebViewId: string | undefined,
+): Promise<void> {
+  try {
+    if ((await papi.settings.get('platform.interfaceMode')) !== 'simple') return;
+    if (await isProjectPublished(papi, projectId)) return;
+    await papi.commands.sendCommand(
+      'platformScripture.updateChecksSidePanelProject',
+      projectId,
+      editorWebViewId,
+    );
+  } catch (e) {
+    papi.logger.warn(`Error updating checks side panel project: ${getErrorMessage(e)}`);
   }
 }
 
@@ -1713,3 +2581,54 @@ export function resolveResourceContentState({
 }
 
 // #endregion Missing Book Detection
+
+/** Localize key for the Text Collection tab's title and tooltip. */
+export const SCRIPTURE_TEXT_GRID_TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
+
+/**
+ * Builds the Text Collection's web view definition.
+ *
+ * Lives here rather than inline in the provider so the project-binding seam is reachable by a test:
+ * `main.ts` is the extension entry point and no test imports it, so inline the precedence between
+ * `openWebViewOptions.projectId` and `savedWebView.projectId` could be inverted — leaving the panel
+ * on the outgoing project — with the whole suite still green.
+ *
+ * The web view's content and styles are passed in rather than imported: they are webpack `?inline`
+ * assets, and importing them here would pull them into every consumer of this module.
+ *
+ * @param papi The instance of papi to read the interface mode and localized strings from.
+ * @param savedWebView The saved definition being re-provided.
+ * @param openWebViewOptions Options the caller passed to `openWebView`/`reloadWebView`.
+ * @param webViewContent The web view's inline content and styles.
+ * @returns The definition to provide.
+ */
+export async function buildScriptureTextGridWebView(
+  papi: typeof PapiBackend,
+  savedWebView: SavedWebViewDefinition,
+  openWebViewOptions: TextCollectionPanelOptions,
+  webViewContent: { content: string; styles: string },
+): Promise<WebViewDefinition> {
+  if (savedWebView.webViewType !== SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
+    throw new Error(
+      `${SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
+    );
+
+  const projectId = resolveGridProviderProjectId(openWebViewOptions, savedWebView);
+  const interfaceMode = await papi.settings.get('platform.interfaceMode');
+  const titleLocalizedStrings = await papi.localization.getLocalizedStrings({
+    localizeKeys: [SCRIPTURE_TEXT_GRID_TITLE_KEY],
+  });
+
+  return {
+    ...savedWebView,
+    title: SCRIPTURE_TEXT_GRID_TITLE_KEY,
+    tooltip: titleLocalizedStrings[SCRIPTURE_TEXT_GRID_TITLE_KEY],
+    isClosable: interfaceMode === 'power',
+    shouldShowToolbar: false,
+    projectId,
+    content: webViewContent.content,
+    styles: webViewContent.styles,
+    iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
+    scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+  };
+}

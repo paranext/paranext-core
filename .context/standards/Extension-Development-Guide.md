@@ -1,10 +1,10 @@
 ---
 title: Extension Development Guide
 description: Extension anatomy, lifecycle, PAPI usage, WebViews, and contribution points for Platform.Bible.
-version: 1.0.0
+version: 1.1.8
 status: active
 created: 2026-03-04
-last_updated: 2026-03-04
+last_updated: 2026-10-20
 ---
 
 # Extension Development Guide
@@ -133,6 +133,110 @@ controller** (see [WebViews](#webviews)), which already exists for that need: it
 per web view, so its methods are addressed to a specific instance without any global name per
 instance.
 
+### Elevated privileges
+
+Some capabilities are handed only to extensions that ask for them in `manifest.json`'s
+`elevatedPrivileges`. Each arrives on the activation context as `context.elevatedPrivileges.<name>`,
+which is `undefined` when the extension didn't declare it, or when it runs on a Platform.Bible that
+predates the privilege.
+
+| Privilege               | Gives                                                     | Extra manifest field             |
+| ----------------------- | --------------------------------------------------------- | -------------------------------- |
+| `createProcess`         | Spawn and fork child processes                            | -                                |
+| `manageExtensions`      | Install, enable and disable extensions                    | -                                |
+| `handleUri`             | Receive URIs the operating system routes to the extension | -                                |
+| `requestRegistryTokens` | Paratext Registry access tokens for named services        | `paratextRegistryTokenResources` |
+
+#### Paratext Registry access tokens
+
+An extension that needs to identify the user to another Paratext service, such as the Translator's
+Assistant server, gets a short-lived Registry access token made from the user's existing
+registration. The registration code never leaves Platform.Bible, and the token is valid only at the
+service it names.
+
+```json
+{
+  "elevatedPrivileges": ["requestRegistryTokens"],
+  "paratextRegistryTokenResources": [
+    "https://assistant.example.org",
+    "https://assistant-dev.example.org"
+  ]
+}
+```
+
+```typescript
+import papi from '@papi/backend';
+import type { ExecutionActivationContext, RequestRegistryTokens } from '@papi/core';
+
+// The Assistant's resource identifier, which is also its address. Resolve it before each request,
+// because the user can switch Registry server while Platform.Bible runs.
+async function getAssistantResource(): Promise<string> {
+  // Match the Registry this Platform.Bible talks to: registry-dev needs the dev identifier.
+  const registryUrl = await papi.commands.sendCommand('paratextRegistration.getParatextRegistryUrl');
+  return registryUrl.includes('registry-dev')
+    ? 'https://assistant-dev.example.org'
+    : 'https://assistant.example.org';
+}
+
+// Takes a path on the Assistant, never a whole URL: whoever receives the token can use it at the
+// Assistant as this user until it expires, so it must go only to the Assistant. Every request gets
+// its token here (it's cached, so that's cheap), so a rejection (offline, unregistered, restricted
+// location) reaches the code that made the request.
+async function fetchFromAssistant(
+  registryTokens: RequestRegistryTokens,
+  path: string,
+): Promise<Response> {
+  const resource = await getAssistantResource();
+  // An absolute or `//host/...` path replaces the server in `new URL`, so check where it points.
+  const url = new URL(path, resource);
+  if (url.origin !== new URL(resource).origin) throw new Error(`Not an Assistant path: ${path}`);
+
+  const { accessToken } = await registryTokens.getAccessToken({
+    resource,
+    scope: ['projects.members:read'],
+  });
+  // Never log the token.
+  return papi.fetch(url.href, { headers: { Authorization: `Bearer ${accessToken}` } });
+}
+
+export async function activate(context: ExecutionActivationContext): Promise<void> {
+  // Only check that the privilege is here. Getting a token can fail for reasons that come and go,
+  // and activate() must not fail with it.
+  const registryTokens = context.elevatedPrivileges.requestRegistryTokens;
+  if (!registryTokens) return; // Not declared, or an older Platform.Bible
+
+  // Register what calls fetchFromAssistant(registryTokens, ...) with the paths it needs. Whatever
+  // you expose to web views or other extensions returns the service's data, never the token, and
+  // doesn't take a path or URL from its caller: that would let any extension call the Assistant as
+  // this user.
+}
+```
+
+- Each `resource` must match an entry in `paratextRegistryTokenResources` exactly (a trailing slash
+  makes a different identifier), and a Registry sysadmin must have registered it with the Registry.
+- Always pass `scope`. Only the five read scopes in `RegistryReadScope` are allowed.
+- Get the token, and call the service, in extension-host code. Never return the token from, or
+  store it in, a command, network object, data provider, web view state or web view message:
+  commands are callable by every extension and web views are same-origin, so any other extension
+  could read it there. There's no reason to store it anyway, since it's cached and short-lived.
+- Send the token only to the service it names: whoever receives it can call that service as the
+  user until it expires. Build each request URL from the resource and check its origin, as
+  `fetchFromAssistant` does, rather than taking a URL from a caller.
+- Failures reject with a `PlatformError`. Branch on its `code`. Its `message` is an English
+  diagnostic for logs, so show users your own localized text based on the `code`:
+  - `UNAUTHENTICATED`: offer `paratextRegistration.showParatextRegistration`.
+  - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: internet access is
+    off, or "Disable access to some Bible translation services" is selected and this computer's
+    location is restricted or could not be determined.
+  - `UNAVAILABLE`: retry later.
+  - `INVALID_ARGUMENT` or `PERMISSION_DENIED`: a configuration bug in the extension or the
+    Registry. `PERMISSION_DENIED` also covers the Registry refusing to issue the token for a
+    registration it accepted (HTTP 403), so don't offer registration for it: registering again
+    won't help. A resource stored from before the user switched Registry server also gets
+    `INVALID_ARGUMENT` from the new Registry when only the other Registry has it registered, so
+    resolve the resource again before each request.
+  - No `code` (for example, the request timed out): treat it like `UNAVAILABLE`.
+
 ---
 
 ## PAPI (Platform API)
@@ -245,12 +349,16 @@ Never use editable content in list item keys:
 {items.map(item => <Input key={item.id} value={item.name} />)}
 ```
 
+### Saving on Teardown
+
+Flush pending work (a debounced save, a draft) in a `pagehide` listener, and in an effect's unmount cleanup as well. When a web view reloads (for example on `reloadWebView`), the platform unmounts the replaced document's React root on that document's `unload`, after every `pagehide` listener has run and while the old document is still current, so a `pagehide` listener that your effect cleanup removes still fires. An `unload` listener added in an effect also runs before that unmount, but `pagehide` is the flush point to rely on. Closing the web view's panel or moving its tab within the window also runs your `pagehide` and `unload` listeners before the root unmounts, but there the document is already being discarded, and the platform's own unmount of the root (the close-time cleanup and `handleLoadIframe` in `web-view.component.tsx`) can run after the iframe has been removed, so asynchronous work that an unmount cleanup starts is not guaranteed to finish: flush from `pagehide`. A window or app close may run no unmount, or skip `pagehide`, so pair the `pagehide` listener with `beforeunload`. `use-comment-drafts.hook.ts` (`legacy-comment-manager`) does both.
+
 ### Opening WebViews with Layouts
 
 When opening a WebView via `papi.webViews.openWebView()`, you can specify how it displays using the `layout` option:
 
 - `'tab'` (default): Opens as a tab within the current dock panel.
-- `'panel'`: Opens as a panel adjacent to the active tab (specify `direction` to control placement: `'left'`, `'right'`, `'bottom'`, `'top'`, etc.).
+- `'panel'`: Opens beside the tab group of `targetTabId`'s tab, or, when no `targetTabId` is given (or it is not in this window), beside the tab group of the tab most recently opened as a `'tab'` or re-opened in this window, else of the first tab in it (specify `direction` to control placement: `'left'`, `'right'`, `'bottom'`, `'top'`, etc.). When the target's tab group is docked, the tab is added, as its active tab, to the tab group directly on the requested side instead of a new group being created, if that group can take it: it sits beside the target's group (a group touching it only at a corner does not count), has at least one tab, holds the same kind of tab, is not one of Simple mode's fixed columns, and is at least as wide (as tall for `'top'` and `'bottom'`) as a new group beside the target would be. Otherwise a new group opens beside the target's group. When the target's tab group is floating or maximized, the tab opens as a new group at the reading-end edge of the dock area (the right, or the left in a right-to-left UI), and a floating target that would cover that group is moved aside. A target in another application window is placed by these same rules in that window. `'left'` and `'right'` are mirrored in a right-to-left UI.
 - `'float'`: Opens as a floating window; can specify `floatSize` and `position`: `'cascade'` or `'center'`.
 - `'window'` **(experimental)**: Opens in its own application window. In Simple mode—which is single-window by design—this degrades to `'tab'`.
 - `'replace-tab'`: Replaces an existing tab (requires `targetTabId`).
@@ -258,17 +366,22 @@ When opening a WebView via `papi.webViews.openWebView()`, you can specify how it
 Additionally, `targetWindowId` **(experimental)** lets you open a WebView into a specific named window instead of the one the user is working in. Applies to `'tab'`, `'panel'`, and `'float'` layouts only; combining it with `'window'` is an error, and combining it with `'replace-tab'` is likewise an error—the tab being replaced already names the window. The open fails if no such window exists — it never falls back to another window. Window ids are platform-assigned and never reused, so an id names one window and only that window. Retrieve the id of the window your code is running in with `papi.window.getWindowId()`. That is not the same question as `platform.getFocusedWindowId`, which reports whichever window the user is looking at — it answers with a different window's id whenever yours is not the focused one.
 
 Two **experimental** commands expose moving a WebView between windows:
-`platform.moveWebViewToNewWindow(webViewId)` and
-`platform.moveWebViewToWindow(webViewId, targetWindowId)`. A move closes the WebView in its
-current window and reopens it — same `useWebViewState` state — in the target, so consumers see a
-close event then an open event, and a WebView controller reference held across a move must be
-re-acquired. The commands return the WebView's authoritative post-move id, which can differ from
-the id passed in: a WebView restored from a persisted layout carries a window-scoped id that a
-move does not keep, so use the returned id for anything after the move.
+`platform.moveWebViewToNewWindow(webViewId, isUserRequested?)` and
+`platform.moveWebViewToWindow(webViewId, targetWindowId, isUserRequested?)`. A move closes the
+WebView in its current window and reopens it — same `useWebViewState` state — in the target, so
+consumers see a close event then an open event, and a WebView controller reference held across a
+move must be re-acquired. The commands return the WebView's authoritative post-move id, which is
+always the same id that was passed in: a WebView keeps the id it was minted with for its whole
+life, across any number of moves. The optional `isUserRequested` parameter marks a move that a
+person in this app asked for — e.g. a tab's own context menu — as opposed to an extension moving a
+view on its own; it defaults to `false`. A window the platform deliberately opened in the
+background is raised for a user-requested move and left alone otherwise.
 
 `existingId: '?'` reuse is **cross-window** (experimental): the search covers every window,
 prefers the window the user is working in when more than one matches, and raises the window
-where the match was found. The optional, **experimental** `existingProjectId` limits that search —
+where the match was found — unless that window is one the platform deliberately kept in the
+background and the user has not yet been in it, in which case content merely arriving there does
+not raise it. The optional, **experimental** `existingProjectId` limits that search —
 in every window, not just the one the call was headed for — to web views showing that project, so
 a match for the project asked for outranks a web view of the same type showing another one
 (combining it with a concrete `existingId` — or with no `existingId` at all — is an error). What a
@@ -287,6 +400,59 @@ view, so it refuses to guess instead: an open that would create fails, while a p
 - Use **TailwindCSS** (Tailwind v4) with the `tw:` prefix for theming
 - Use semantic color variables (e.g., `tw:bg-card`) instead of hardcoded colors
 - Support RTL/LTR layouts using logical properties (`start`/`end` instead of `left`/`right`)
+
+### Content Zoom (experimental)
+
+A WebView opts into per-pane **content zoom** by marking the elements that render **project text** — scripture, note bodies, result snippets, resource text in its own font — and not the region around them. Buttons, inputs, filters, headers, badges and card frames stay outside every marked element, so they keep interface scale while the text grows:
+
+```tsx
+import { ContentZoomRoot } from 'platform-bible-react';
+
+globalThis.webViewComponent = function MyWebView() {
+  return (
+    <div className="tw:flex tw:flex-col tw:h-full">
+      <MyToolbar />
+      {results.map((result) => (
+        <p key={result.id}>
+          <Button onClick={() => goTo(result.ref)}>{result.refLabel}</Button>
+          <ContentZoomRoot as="span" className="scripture-font">
+            {result.text}
+          </ContentZoomRoot>
+        </p>
+      ))}
+    </div>
+  );
+};
+```
+
+That is the whole opt-in. The platform then scales the marked elements on Ctrl/⌘+`+`/`-`/`0`, on Ctrl/⌘+wheel and from the tab context menu, remembers the level for that project and kind of pane, and shows the brief level indicator in the pane's top corner (top-right, top-left for right-to-left text). You write no key handler, no state and no CSS.
+
+- **One area id across many text elements.** A *zoom area* is a named part of a view that zooms as one and keeps its own level. `<ContentZoomRoot>` with no `area` prop marks the view's `main` area — it renders the marker attribute with an empty value, and that empty value *is* the contract, not an oversight. A list or card view marks every text element with the same id and they zoom together; a view with several independently zoomable panes names each one (`area="footnotes"`), and each area gets its own level and memory. Ids are lower-case letters, digits and hyphens starting with a letter (`[a-z][a-z0-9-]*`); `default` is reserved. Use `as="span"` inside a `<p>`, a heading or a table cell. Text rendered by a `platform-bible-react` component (the comment cards) is marked by that component when you wrap it in `ContentZoomTextProvider`; your own inline text components can spread `useContentZoomTextProps()` onto their text element to take part the same way.
+- **Areas must not nest.** A marked element inside another marked element is ignored (and logged once). Mark the text itself, not a scroll container that also holds a second area. Dividers, resize handles, banners and panel headers stay **outside** every area so they keep their size while the content scales.
+- **Name areas the user cannot tell apart, and tie unscaled containers to their area.** Give each
+  such area a name with `ContentZoomRoot`'s `label` prop, and the zoom indicator shows it
+  ("HSV · 120 %"). Put `data-platform-content-zoom-scope="<area id>"` on a row, column or card that
+  holds the text together with unscaled controls, so a click or Ctrl/⌘+wheel anywhere in it means
+  that area. See [Component-Builder-Patterns.md](Component-Builder-Patterns.md) "Content Zoom
+  Opt-In (experimental)"; the Text Collection grid is the reference.
+- **Plain-HTML WebViews** put the attribute on each text element directly — `<div data-platform-content-zoom-root>` for the main area, `<div data-platform-content-zoom-root="footnotes">` (or a `<span>` for inline text) for a named one. `ContentZoomRoot` is only the React convenience wrapper over the same attribute; `CONTENT_ZOOM_ROOT_ATTRIBUTE` is exported beside it so you never have to spell the string.
+- **Measuring inside a zoomed area.** The platform applies CSS `zoom` to the marked element, so `getBoundingClientRect()` inside it reports **zoomed** pixels while `getComputedStyle(element).fontSize` reports the **unzoomed** value. Code that converts between the two must read the factor itself, from the CSS custom property `--platform-content-zoom-<areaId>` on the WebView's `documentElement` (`--platform-content-zoom-main` for the unnamed area), falling back to `--platform-content-zoom-default`, which holds the Settings default that any area without its own level follows. (This mismatch is the PT-4167 caveat.)
+- **If your view owns Ctrl/⌘+wheel for a sub-region of its own**, register that listener in the **capture** phase and call `stopPropagation()`. The platform's listener is deliberately on the bubble phase so that a view which does this keeps precedence.
+- **A view that marks nothing is not zoomed.** Content zoom acts only on *zoomable* panes: a first-party view the platform declares zoomable, or a view that currently renders at least one marked element. Anything else, including every URL WebView, renders at 100 % content zoom, shows no zoom items in its tab menu, and leaves Ctrl/⌘+`+`/`-`/`0` and Ctrl/⌘+wheel alone. *Interface scaling* still applies to it. Your view is zoomable only while at least one element carrying `data-platform-content-zoom-root` is rendered: the tab menu's zoom items, Ctrl/⌘ + `+`/`-`/`0` and Ctrl/⌘+wheel appear and act only then. If your view shows nothing to zoom for a while (before a search, while loading), render an empty marked element so the controls stay available.
+- **Keep the terminology apart**, in your copy and in your identifiers. *Interface scaling* (the `platform.zoomFactor` setting) scales the **whole application**, chrome included; it is labelled "Interface scaling" in Settings. *Content zoom* is per **pane** and scales only marked content; its default is the `platform.webViewContentZoom` setting, labelled "Tab content default zoom" in Settings. Say **pane**, not "tab", for the thing that zooms — one tab may hold several panes, as the Scripture editor holds a text pane and a footnotes pane.
+- **Simple mode's tab menu shows only the `platform.tabZoom` group.** It narrows the platform's contributed tab menu to that one group before rendering it, so an extension's own tab-menu contribution appears in Power mode only, never in Simple mode. A tab whose pane is not zoomable therefore has no tab menu at all in Simple mode.
+
+`ContentZoomRoot` (including its `label` prop), `ContentZoomTextProvider`, `useContentZoomTextProps`, `CONTENT_ZOOM_ROOT_ATTRIBUTE`, `CONTENT_ZOOM_SCOPE_ATTRIBUTE`, `CONTENT_ZOOM_LABEL_ATTRIBUTE` and the `data-platform-content-zoom-root` / `-scope` / `-label` contracts are **experimental** and may change without notice.
+
+**Pop-ups stay at interface scale.** Menus, popovers, dropdowns and tooltips from
+`platform-bible-react`, the pop-ups requested through `papi.overlays` (`showCommandPalette`,
+`showPopover`, `showContextMenu`) and the Scripture editor's own right-click menu never take content
+zoom, even when they open from zoomed text: content zoom makes project text readable, it does not
+resize controls. Only their position follows the zoomed content. A pop-up you anchor to a position
+in the text should read that position live — `useLivePopoverAnchor` from `platform-bible-react`
+re-measures on scroll, resize and reflow — because `getBoundingClientRect()` inside a zoomed element
+already reports viewport pixels, which is what the pop-up is placed in. Never put
+`data-platform-content-zoom-root` on pop-up content: the platform zooms every element that carries it.
 
 ---
 
@@ -435,3 +601,12 @@ For details, see [Merging Template Changes wiki](https://github.com/paranext/par
 | Version | Date       | Change          |
 | ------- | ---------- | --------------- |
 | 1.0.0   | 2026-03-04 | Initial version |
+| 1.1.0   | 2026-09-15 | Add "Content Zoom (experimental)" under WebViews — the `ContentZoomRoot` / `data-platform-content-zoom-root` opt-in, one root per zoom area, the no-root whole-view fallback, the zoomed-`getBoundingClientRect` vs unzoomed-`fontSize` caveat, the capture-phase rule for views owning Ctrl+wheel, and the Interface-Scaling / content-zoom terminology split. |
+| 1.1.1   | 2026-09-18 | Note that a command palette, popover or context menu requested through `papi.overlays` follows the requesting pane's content scale automatically — nothing for the extension author to opt in. |
+| 1.1.2   | 2026-09-21 | Note that a view mounting the Scripture editor inside a zoom area hands it that area's element (`EditorOptions.contextMenuContainer`) so the editor's right-click menu takes the area's zoom. |
+| 1.1.3   | 2026-09-23 | Content zoom acts only on zoomable panes (declared by the platform, or rendering a marked element): an unmarked view is no longer scaled whole; document the "zoomable only while a marker is rendered" limitation for third-party views and Simple mode's menu-less non-zoomable tabs. |
+| 1.1.4   | 2026-09-23 | Pop-ups stay at interface scale: replace "Pop-ups follow their area" and the `papi.overlays` scaling note with one rule; `ContentZoomAreaProvider`, the pop-up attribute and `EditorOptions.contextMenuContainer` are gone. |
+| 1.1.5   | 2026-09-23 | "Content Zoom": mark the project text, not a content root — per-element markers sharing one id, `as="span"`, `ContentZoomTextProvider` / `useContentZoomTextProps`. |
+| 1.1.6   | 2026-09-24 | "Content Zoom": the area `label` and the zoom scope attribute (both experimental), pointing to Component-Builder-Patterns; the Text Collection grid is the reference, with one `resource-<id>` area per resource. |
+| 1.1.7   | 2026-10-02 | Add "Saving on Teardown" under WebViews: flush in a `pagehide` listener and in the unmount cleanup; a reload unmounts the root on `unload`, after the web view's own `pagehide` listeners; a panel close or tab move runs `pagehide` too, but the root can unmount after the iframe is gone, so `pagehide` is the flush point. |
+| 1.1.8   | 2026-10-16 | "Elevated privileges": the privilege table and the `requestRegistryTokens` privilege for Paratext Registry access tokens. |

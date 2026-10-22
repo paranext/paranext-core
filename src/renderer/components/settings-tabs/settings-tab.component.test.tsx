@@ -1,11 +1,23 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto-sync-blocked.hook';
+import userEvent from '@testing-library/user-event';
+import { projectLookupService } from '@shared/services/project-lookup.service';
+import { projectDataProviders } from '@renderer/services/papi-frontend.service';
+import type { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { SettingsTab } from './settings-tab.component';
+import {
+  PROJECT_SELECTOR_NO_RESULTS_KEY,
+  PROJECT_SELECTOR_SEARCH_PLACEHOLDER_KEY,
+} from './settings-tab.localization';
 
 const SYNC_BLOCKED_NOTICE_KEY = '%settings_projectSyncBlocked_notice%';
 const SYNC_BLOCKED_NOTICE_TEXT = 'Editing paused for Send/Receive';
+const PROJECTS_GROUP_LABEL = 'Ajustes del proyecto';
+const PICKER_SEARCH_PLACEHOLDER = 'Buscar proyectos y recursos';
+const PICKER_NO_RESULTS = 'No se encontraron proyectos';
+const PROJECT_NAME = 'World English Bible';
 
 // The hook under wiring test — controlled per test to simulate a blocked / unblocked project.
 vi.mock('@renderer/hooks/use-is-project-auto-sync-blocked.hook', () => ({
@@ -13,7 +25,14 @@ vi.mock('@renderer/hooks/use-is-project-auto-sync-blocked.hook', () => ({
 }));
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
-  useLocalizedStrings: vi.fn(() => [{ [SYNC_BLOCKED_NOTICE_KEY]: SYNC_BLOCKED_NOTICE_TEXT }]),
+  useLocalizedStrings: vi.fn(() => [
+    {
+      [SYNC_BLOCKED_NOTICE_KEY]: SYNC_BLOCKED_NOTICE_TEXT,
+      '%settings_sidebar_projectSettingsLabel%': PROJECTS_GROUP_LABEL,
+      [PROJECT_SELECTOR_SEARCH_PLACEHOLDER_KEY]: PICKER_SEARCH_PLACEHOLDER,
+      [PROJECT_SELECTOR_NO_RESULTS_KEY]: PICKER_NO_RESULTS,
+    },
+  ]),
 }));
 
 // This test only exercises SettingsTab's own render structure (one notice above N groups) — the
@@ -77,15 +96,48 @@ vi.mock('@shared/services/settings.service', () => ({
 vi.mock('@shared/services/project-lookup.service', () => ({
   projectLookupService: {
     getMetadataForProject: vi.fn(async () => ({ projectInterfaces: [] })),
-    // Empty so the sidebar's project list stays empty and getProjectName (which needs a live
-    // papi-frontend project data provider) is never reached.
-    getMetadataForAllProjects: vi.fn(async () => []),
+    // Empty by default so the sidebar's project list stays empty.
+    getMetadataForAllProjects: vi.fn(async (): Promise<ProjectMetadata[]> => []),
   },
 }));
 
+// Mocked so a test can assert the sidebar never reaches for one: project names come off metadata,
+// which is the only source that distinguishes "no full name" from "never set one".
 vi.mock('@renderer/services/papi-frontend.service', () => ({
-  projectDataProviders: { get: vi.fn() },
+  projectDataProviders: {
+    get: vi.fn(
+      async (): Promise<{ getSetting: (key: string) => Promise<string> }> => ({
+        getSetting: async () => PROJECT_NAME,
+      }),
+    ),
+  },
 }));
+
+// jsdom ships neither ResizeObserver nor these Element methods; cmdk and Radix inside the picker's
+// popover need all three. No-op stubs suffice — nothing here asserts layout.
+class NoopResizeObserver implements ResizeObserver {
+  private readonly targets = new Set<Element>();
+
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+
+  disconnect() {
+    this.targets.clear();
+  }
+}
+
+beforeAll(() => {
+  if (typeof globalThis.ResizeObserver === 'undefined')
+    globalThis.ResizeObserver = NoopResizeObserver;
+  if (typeof Element.prototype.scrollTo !== 'function') Element.prototype.scrollTo = () => {};
+  if (typeof Element.prototype.scrollIntoView !== 'function')
+    Element.prototype.scrollIntoView = () => {};
+});
 
 describe('SettingsTab sync-blocked notice dedup', () => {
   beforeEach(() => {
@@ -124,5 +176,65 @@ describe('SettingsTab sync-blocked notice dedup', () => {
     await waitFor(() => expect(screen.getAllByTestId('settings-group')).toHaveLength(1));
     expect(useIsProjectAutoSyncBlocked).toHaveBeenCalledWith(undefined);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});
+
+describe('SettingsTab project picker localization', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useIsProjectAutoSyncBlocked).mockReturnValue(false);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
+      { id: 'projA', projectInterfaces: [], pdpFactoryInfo: {} },
+    ]);
+  });
+
+  it('shows the picker popover in the UI language, not English', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<SettingsTab />);
+
+    const trigger = await screen.findByRole('combobox', { name: PROJECTS_GROUP_LABEL });
+    await user.click(trigger);
+
+    const search = await screen.findByPlaceholderText(PICKER_SEARCH_PLACEHOLDER);
+    expect(screen.queryByPlaceholderText('Search projects & resources')).not.toBeInTheDocument();
+
+    await user.type(search, 'zzzz');
+    expect(await screen.findByText(PICKER_NO_RESULTS)).toBeInTheDocument();
+  });
+});
+
+describe('SettingsTab project names', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useIsProjectAutoSyncBlocked).mockReturnValue(false);
+  });
+
+  it('names projects from metadata rather than opening a data provider per project', async () => {
+    // `pdp.getSetting('platform.fullName')` falls through to the setting's contribution default, a
+    // localized `*Name Missing*` placeholder, so a project that never set a full name reads back as
+    // one and the sidebar renders "WEB - *Name Missing*". Metadata omits the field instead, which
+    // is the only source that can tell the two states apart.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
+      { id: 'projA', name: 'WEB', projectInterfaces: [], pdpFactoryInfo: {} },
+      {
+        id: 'projB',
+        name: 'ESV',
+        fullName: 'English Standard Version',
+        projectInterfaces: [],
+        pdpFactoryInfo: {},
+      },
+    ]);
+    render(<SettingsTab />);
+
+    const trigger = await screen.findByRole('combobox', { name: PROJECTS_GROUP_LABEL });
+    await user.click(trigger);
+
+    // The project with a full name shows both; the one without shows its short name and no
+    // placeholder standing in for the name it does not have.
+    expect(await screen.findByText('English Standard Version')).toBeInTheDocument();
+    expect(await screen.findByText('WEB')).toBeInTheDocument();
+    expect(screen.queryByText(/Name Missing/)).not.toBeInTheDocument();
+    expect(projectDataProviders.get).not.toHaveBeenCalled();
   });
 });

@@ -12,7 +12,7 @@ import type {
   EffectiveResourceReference,
   EffectiveResourceReferenceList,
 } from 'platform-scripture';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 // The editor's USJ node styling. The real app loads these globally; Storybook doesn't, so without
 // them the editor's context menu is unstyled and its read-only marker toolbar renders as a stray
@@ -27,6 +27,8 @@ import '../../../../lib/platform-bible-react/src/components/demo/scripture-edito
 /* eslint-enable import/no-relative-packages */
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
+import { CopyrightNoticeBanner } from './copyright-notice/copyright-notice-banner.component';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from './copyright-notice/copyright-notice.const';
 
 /**
  * Icon-free subset of the editor's wrapper styles (from the platform scripture-editor
@@ -112,6 +114,12 @@ type DecoratorConfig = {
   disableInstall?: boolean;
   /** Make install reject so the recoverable install-failed state is observable. */
   failInstall?: boolean;
+  /**
+   * Let install succeed while the list keeps reporting the resource uninstalled, so the
+   * installed-but-unavailable state is observable. Distinct from `failInstall`: the install worked,
+   * so the panel must not blame the network.
+   */
+  installNeverConverges?: boolean;
   /** Hold the configured list in its loading state so the resolving spinner is observable. */
   isListLoading?: boolean;
   /** Make the configured-list read fail so the settings-error state is observable. */
@@ -120,6 +128,8 @@ type DecoratorConfig = {
   isCatalogReady?: boolean;
   /** Fail the DBL catalog fetch so the recoverable catalog-error state is observable. */
   hasCatalogError?: boolean;
+  /** The model text's copyright notice, which the web view supplies in the app. */
+  copyrightNotice?: ReactNode;
 };
 
 /** Maps the story's flags to the discriminated list state the panel consumes. */
@@ -203,6 +213,18 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         onScrRefChange={setScrRef}
         installResource={async (uid) => {
           if (config.failInstall) throw new Error('Simulated install failure');
+          if (config.installNeverConverges) {
+            // Install resolves without the resource ever appearing installed. Blanking the list and
+            // restoring it is how the panel's own catalog refetch presents itself, and it is what
+            // lets the panel re-evaluate a uid it has already attempted; the timeout is needed so
+            // the two updates land in separate commits rather than batching into no change at all.
+            setResources([]);
+            await new Promise((resolve) => {
+              setTimeout(resolve, 0);
+            });
+            setResources(config.resources ?? seedResources);
+            return;
+          }
           if (config.disableInstall) return;
           setResources((rs) =>
             rs.map((r) => (r.dblEntryUid === uid ? { ...r, installed: true } : r)),
@@ -218,6 +240,8 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         }}
         showResourcePicker={showResourcePicker}
         getResourceChapter={async () => ({ usj: sampleUsj, textDirection: 'ltr' })}
+        resourceCopyLimit={undefined}
+        copyrightNotice={config.copyrightNotice}
       />
       <Dialog
         open={pickerOpen}
@@ -260,11 +284,12 @@ export const Active: Story = {
 };
 
 /**
- * No model text configured. Click "More info" to expand the explanatory body (and "Less info" to
- * collapse it), then click "pick model text" to open the REAL resource picker; choosing the
- * uninstalled ASV installs it and then renders it — fully interactive. The three empty-state
- * strings (`_moreInfo%`, `_lessInfo%`, `_moreInfo_body%`) resolve from this extension's
- * `localizedStrings.json` via `MODEL_TEXT_PANEL_STRING_KEYS`, so the toggle shows real copy.
+ * No model text configured. Click "Pick a text…" to open the REAL resource picker; choosing the
+ * uninstalled ASV installs it and then renders it — fully interactive. "More info", above the
+ * button, expands the Base/Model explanation ("Less info" collapses it). The empty-state strings
+ * (the prompt, the button, `_moreInfo%`, `_lessInfo%` and the `_baseOrModel_*%` explanation)
+ * resolve from this extension's `localizedStrings.json` via `MODEL_TEXT_PANEL_STRING_KEYS`, so it
+ * shows real copy.
  */
 export const NoModelText: Story = {
   decorators: [createDecorator({})],
@@ -281,6 +306,17 @@ export const Selecting: Story = {
  */
 export const InstallFailed: Story = {
   decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[1])], failInstall: true })],
+};
+
+/**
+ * The install succeeded, but the list still reports the resource as not installed — the catalog and
+ * the disk disagree. The panel says the model text is installed and could not be opened, rather
+ * than blaming the install or the network, and offers a retry that re-reads the list.
+ */
+export const InstalledButUnavailable: Story = {
+  decorators: [
+    createDecorator({ initialAdmin: [dblRef(seedResources[1])], installNeverConverges: true }),
+  ],
 };
 
 /** The configured model text id isn't present in the DBL list. */
@@ -334,5 +370,33 @@ export const ResolvingCatalog: Story = {
 export const CatalogError: Story = {
   decorators: [
     createDecorator({ initialAdmin: [dblRef(seedResources[0])], hasCatalogError: true }),
+  ],
+};
+
+/**
+ * A model text that carries a copyright notice: the banner sits below the header, so the header
+ * keeps the height that lines it up with Column 3's tab bar.
+ */
+export const WithCopyrightNotice: Story = {
+  decorators: [
+    createDecorator({
+      initialAdmin: [dblRef(seedResources[0])],
+      copyrightNotice: (
+        <CopyrightNoticeBanner
+          notice={{
+            kind: 'restrictedLicense',
+            name: 'WEB',
+            fullName: 'World English Bible',
+            copyrightYears: '2011',
+          }}
+          localizedStrings={getLocalizedStrings([...COPYRIGHT_NOTICE_STRING_KEYS])}
+          onDismiss={() => {
+            // Dismissal is kept by the web view in the app; logged here
+            // eslint-disable-next-line no-console
+            console.log('onDismiss');
+          }}
+        />
+      ),
+    }),
   ],
 };

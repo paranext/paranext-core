@@ -1,0 +1,974 @@
+import {
+  CONTENT_ZOOM_IN_SHORTCUT,
+  CONTENT_ZOOM_OUT_SHORTCUT,
+  CONTENT_ZOOM_RESET_SHORTCUT,
+} from 'platform-bible-utils';
+import type { KeyboardShortcutEntry } from '@shared/data/keyboard-shortcuts.model';
+
+/**
+ * The complete catalog of keyboard shortcuts used across the entire Platform.Bible application:
+ * shortcuts handled in the Electron main process, shortcuts defined by bundled extensions, and
+ * shortcuts defined inside the shared `platform-bible-react` component library. This is the single
+ * source of truth — when you add, change, or remove any keyboard handler anywhere in the app,
+ * update the matching entry here. Set `command` on an entry to show its chord as a hint beside menu
+ * items that run that command.
+ *
+ * Note on macOS modifier order: the `Guidelines/Keyboard shortcuts` page orders macOS modifiers
+ * Control, Option, Shift, Command. `next-tab-group` and `previous-tab-group` show Command before
+ * Option (`⌘⌥…`) to mirror their handler code. Entries with a `command` are shown in menus, so
+ * their macOS keys follow the guideline order.
+ */
+export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
+  {
+    id: 'next-tab',
+    purpose: 'Switch to the next tab in the window that received the keypress',
+    category: 'Navigation',
+    // Registered per window (each window's webContents gets its own before-input-event listener)
+    // and acts only on that window's own tabs, not app-wide.
+    context: 'Main process (per window)',
+    keys: { macOS: '⌃⇥ / ⌘⇧]', windows: 'Ctrl+Tab', linux: 'Ctrl+Tab' },
+    locations: ['src/main/main.ts'],
+  },
+  {
+    id: 'previous-tab',
+    purpose: 'Switch to the previous tab in the window that received the keypress',
+    category: 'Navigation',
+    // Registered per window (each window's webContents gets its own before-input-event listener)
+    // and acts only on that window's own tabs, not app-wide.
+    context: 'Main process (per window)',
+    keys: { macOS: '⌃⇧⇥ / ⌘⇧[', windows: 'Ctrl+Shift+Tab', linux: 'Ctrl+Shift+Tab' },
+    locations: ['src/main/main.ts'],
+  },
+  {
+    id: 'next-tab-group',
+    purpose: 'Switch to the next tab group in the window that received the keypress',
+    category: 'Navigation',
+    // Registered per window (each window's webContents gets its own before-input-event listener)
+    // and acts only on that window's own tab groups, not app-wide.
+    // macOS combo mirrors code order (`input.meta && input.alt`); see file note on modifier order
+    context: 'Main process (per window)',
+    keys: { macOS: '⌘⌥↓', windows: 'Ctrl+PageDown', linux: 'Ctrl+PageDown' },
+    locations: ['src/main/main.ts'],
+  },
+  {
+    id: 'previous-tab-group',
+    purpose: 'Switch to the previous tab group in the window that received the keypress',
+    category: 'Navigation',
+    // Registered per window (each window's webContents gets its own before-input-event listener)
+    // and acts only on that window's own tab groups, not app-wide.
+    // macOS combo mirrors code order (`input.meta && input.alt`); see file note on modifier order
+    context: 'Main process (per window)',
+    keys: { macOS: '⌘⌥↑', windows: 'Ctrl+PageUp', linux: 'Ctrl+PageUp' },
+    locations: ['src/main/main.ts'],
+  },
+  {
+    id: 'go-to-next-chapter',
+    purpose: 'Go to the next chapter in the active scroll group',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    keys: { macOS: 'F8', windows: 'F8', linux: 'F8' },
+    locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+  },
+  {
+    id: 'go-to-previous-chapter',
+    purpose: 'Go to the previous chapter in the active scroll group',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    keys: { macOS: '⌘F8', windows: 'Ctrl+F8', linux: 'Ctrl+F8' },
+    locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+  },
+  {
+    id: 'go-to-next-book',
+    purpose: 'Go to the next book in the active scroll group',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    keys: { macOS: 'F9', windows: 'F9', linux: 'F9' },
+    locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+  },
+  {
+    id: 'go-to-previous-book',
+    purpose: 'Go to the previous book in the active scroll group',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    keys: { macOS: '⌘F9', windows: 'Ctrl+F9', linux: 'Ctrl+F9' },
+    locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+  },
+  {
+    id: 'go-to-next-verse',
+    purpose: 'Go to the next verse in the active scroll group',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    keys: { macOS: '⌘↓', windows: 'Ctrl+↓', linux: 'Ctrl+↓' },
+    locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+  },
+  {
+    id: 'go-to-previous-verse',
+    purpose: 'Go to the previous verse in the active scroll group',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    keys: { macOS: '⌘↑', windows: 'Ctrl+↑', linux: 'Ctrl+↑' },
+    locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+  },
+  {
+    id: 'open-book-chapter-control',
+    purpose: 'Open the Book Chapter Control ready to type a reference',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    keys: { macOS: '⌘B', windows: 'Ctrl+B', linux: 'Ctrl+B' },
+    locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
+  },
+  {
+    id: 'book-chapter-control-move-grid-highlight',
+    purpose:
+      'Move the highlighted chapter or verse in the Book Chapter Control grid (mirrored horizontally in right-to-left layouts). While the search box is on screen the horizontal arrows move the text caret first, and reach the preview grid either once the caret has nowhere left to go or once a vertical arrow has stepped into the grid; editing the query hands them back to the caret',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: {
+      macOS: '↑ / ↓ / ← / →',
+      windows: '↑ / ↓ / ← / →',
+      linux: '↑ / ↓ / ← / →',
+    },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.utils.ts',
+    ],
+  },
+  {
+    id: 'book-chapter-control-activate-grid-item',
+    purpose:
+      'Go to the highlighted chapter or verse in the Book Chapter Control grid. In the books view — where the search box is on screen and the grid below it is a preview of the typed reference — Enter submits that reference instead, and Space stays an ordinary character',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+    ],
+  },
+  {
+    id: 'book-chapter-control-cycle-focus',
+    purpose:
+      'Move between the Book Chapter Control’s own controls (search box, recent searches, quick-navigation arrows, show-more toggle), wrapping at the ends rather than leaving the popover. The chapter and verse views have no controls of their own, so there the key does nothing — Escape closes the picker',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+    ],
+  },
+  {
+    id: 'book-chapter-control-back',
+    purpose:
+      'Go back one level in the Book Chapter Control — verses to chapters, chapters to books',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: { macOS: '⌫', windows: 'Backspace', linux: 'Backspace' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+    ],
+  },
+  // Escape on the Book Chapter Control popover is deliberately absent from this catalog; the
+  // reasoning is recorded once, under "Not catalogued" in keyboard-shortcuts.mdx.
+  {
+    id: 'reference-history-back',
+    purpose: 'Go back one Scripture reference in the active scroll group’s history',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    // In RTL the back/forward pairs swap meaning (physical-direction-preserving, like Paratext 9)
+    keys: { macOS: '⌘[', windows: 'Alt+←', linux: 'Alt+←' },
+    locations: ['src/main/main.ts', 'src/main/reference-history-keyboard.util.ts'],
+  },
+  {
+    id: 'reference-history-forward',
+    purpose: 'Go forward one Scripture reference in the active scroll group’s history',
+    category: 'Navigation',
+    context: 'Main process (global)',
+    // In RTL the back/forward pairs swap meaning (physical-direction-preserving, like Paratext 9)
+    keys: { macOS: '⌘]', windows: 'Alt+→', linux: 'Alt+→' },
+    locations: ['src/main/main.ts', 'src/main/reference-history-keyboard.util.ts'],
+  },
+  {
+    id: 'focus-notification-toasts',
+    purpose: 'Focus the notification toasts, cycling across position groups on repeated presses',
+    category: 'Navigation',
+    context: 'Renderer (global)',
+    // Sonner's built-in Toaster hotkey and NotificationDisplay's focus-cycling handler share this
+    // combo (NOTIFICATION_TOASTER_HOTKEY) - they must not drift apart.
+    keys: { macOS: '⌥T', windows: 'Alt+T', linux: 'Alt+T' },
+    locations: ['src/renderer/components/notification-display.tsx'],
+  },
+  {
+    id: 'connection-lost-contain-focus',
+    purpose:
+      'Keep focus on Reload while the connection-lost state is shown, so the keyboard cannot reach controls that can no longer work',
+    category: 'Navigation',
+    context: 'Renderer (global, only while the connection-lost state is shown)',
+    // Containment is the Radix modal `Dialog`'s default, shared with every other dialog in the app
+    // and not catalogued for them. Listed for this one because here it is load-bearing rather than
+    // incidental: every control it keeps focus away from is one that can no longer do anything.
+    // Not total — a focus scope only constrains where focus lands, so three categories still fire:
+    // main's `before-input-event` accelerators, the `document`-level toaster hotkeys (Sonner's own
+    // and Alt+T above), and PlatformMenubar's Alt / Alt+P / Alt+L / Alt+N / Alt+H, which are
+    // `react-hotkeys-hook` bindings that additionally pull focus OUT of the scope by calling
+    // `.focus()` on a menu trigger behind the scrim. See the component doc block.
+    keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
+    locations: [
+      'src/renderer/components/overlays/overlay-connection-lost.component.tsx',
+      'lib/platform-bible-react/src/components/shadcn-ui/dialog.tsx',
+    ],
+  },
+  {
+    id: 'connection-lost-swallow-escape',
+    purpose:
+      'Do nothing — the connection-lost state deliberately cannot be dismissed, so Escape is inert while it is shown',
+    category: 'Menus',
+    context: 'Renderer (global, only while the connection-lost state is shown)',
+    // `onEscapeKeyDown` is prevented on the state's DialogContent. Catalogued because it is the one
+    // dialog in the app where Escape does NOT close anything, and because the `dismiss-overlays`
+    // entry says a modal dialog on top is left to its own shell — this is that shell, and it
+    // swallows the key. Reload is the only way out.
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: ['src/renderer/components/overlays/overlay-connection-lost.component.tsx'],
+  },
+  {
+    id: 'content-zoom-in',
+    purpose:
+      'Zoom the active zoom area of the pane in by 10 % (the area last clicked or focused; a click keeps its area even when the view answers it by moving focus elsewhere, until the user presses a key there other than a lone modifier or a zoom chord)',
+    category: 'Zoom',
+    context:
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a later focus move or any key other than a modifier pressed on its own or a zoom chord); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
+    // The macOS View menu binds ⌘= (what it renders) and, through a hidden duplicate item, ⇧⌘= —
+    // which is how a Mac reports ⌘+. The in-view and window-chrome handlers also accept `=`, the
+    // numpad `+`, and any Shift state.
+    keys: CONTENT_ZOOM_IN_SHORTCUT,
+    locations: [
+      'src/shared/models/content-zoom.model.ts',
+      'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/renderer/services/web-view-content-zoom.chrome-keys.ts',
+      'src/main/platform-macos-menubar.data.ts',
+      'src/main/services/web-view.service-router.ts',
+    ],
+    command: 'platform.webViewContentZoomIn',
+  },
+  {
+    id: 'content-zoom-out',
+    purpose: 'Zoom the focused zoom area of the pane out by 10 %',
+    category: 'Zoom',
+    context:
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a later focus move or any key other than a modifier pressed on its own or a zoom chord); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
+    // The handler also accepts the numpad `-` key. Shift is accepted too, which is what puts this
+    // chord within reach on AZERTY and Czech layouts, where the top-row key is shifted.
+    keys: CONTENT_ZOOM_OUT_SHORTCUT,
+    locations: [
+      'src/shared/models/content-zoom.model.ts',
+      'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/renderer/services/web-view-content-zoom.chrome-keys.ts',
+      'src/main/platform-macos-menubar.data.ts',
+      'src/main/services/web-view.service-router.ts',
+    ],
+    command: 'platform.webViewContentZoomOut',
+  },
+  {
+    id: 'content-zoom-reset',
+    purpose:
+      'Return the focused zoom area of the pane to the default zoom set in Settings (not to 100 %)',
+    category: 'Zoom',
+    context:
+      'Inside a web view (the bootstrap targets the zoom area with focus, else the pane’s active area — the one last clicked or focused, where a click keeps its area through the view’s own answering refocus until a later focus move or any key other than a modifier pressed on its own or a zoom chord); on the window chrome (renderer listener, capture phase, so a control that swallows keydown cannot hide the chord; it does nothing while this window’s input is held — a modal dialog, the command palette, or a full-screen overlay such as connection lost, workspace updating or first run — and leaves the key alone when nothing can zoom); or the macOS View menu',
+    // The handler also accepts the numpad `0` key while NumLock is on; with NumLock off that key
+    // reports itself as Insert and is left to Chromium's legacy Copy chord. Shift is accepted too,
+    // which is what puts this chord within reach on AZERTY and Czech layouts, where the top-row key
+    // is shifted.
+    keys: CONTENT_ZOOM_RESET_SHORTCUT,
+    locations: [
+      'src/shared/models/content-zoom.model.ts',
+      'src/renderer/services/web-view-content-zoom.bootstrap-script.ts',
+      'src/renderer/services/web-view-content-zoom.chrome-keys.ts',
+      'src/main/platform-macos-menubar.data.ts',
+      'src/main/services/web-view.service-router.ts',
+    ],
+    command: 'platform.webViewContentZoomReset',
+  },
+  {
+    id: 'content-zoom-wheel',
+    purpose:
+      'Zoom the content of the pane in or out — one step per wheel notch, or by travel for a trackpad pinch',
+    category: 'Zoom',
+    context:
+      'Inside a web view — content zoom of the zoom area under the pointer, or whose zoom scope the pointer is in (else the pane’s active area). A trackpad pinch also zooms with no modifier held — the browser synthesizes it as Ctrl+wheel, which the handler recognizes as pinch travel rather than a notch chord',
+    // The handler accepts Ctrl or ⌘ as the modifier on every platform, and ignores the gesture when
+    // Shift or Alt is held as well.
+    keys: { macOS: '⌘ wheel / ⌃ wheel', windows: 'Ctrl+wheel', linux: 'Ctrl+wheel' },
+    locations: ['src/renderer/services/web-view-content-zoom.bootstrap-script.ts'],
+  },
+  {
+    id: 'dismiss-overlays',
+    purpose:
+      'Dismiss the topmost open overlay — a context menu, command palette, or popover (works in every frame, including web views)',
+    category: 'Menus',
+    context: 'Main process (global; not while the connection-lost state is shown)',
+    // Announced without preventDefault, so the focused frame still receives Escape and may act on
+    // it too — e.g. the scripture editor's marker palette closes its own session. Only the bare,
+    // initial press announces: a modified Escape (Shift/Ctrl/Alt/Meta) or an auto-repeat tick of a
+    // held Escape is not the dismissal gesture. A modal dialog on top is left to its own shell,
+    // and a focused command palette also answers Escape through its own keydown handler.
+    // `OverlayHost` stands down once the connection-lost state latches, taking every overlay it
+    // hosts — context menu, command palette, popover, modal dialog — with it, so the renderer-side
+    // handler named above no longer exists in that state. Main's announcement goes out over the
+    // dead socket, so nothing in this renderer hears it; the key itself reaches the connection-lost
+    // dialog, which swallows it — see the `connection-lost-swallow-escape` entry.
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: [
+      'src/main/main.ts',
+      'src/main/app-window-input.util.ts',
+      'src/renderer/services/overlays/overlay.service-host.ts',
+      'src/renderer/components/overlays/overlay-command-palette.component.tsx',
+      'src/renderer/components/overlay-host.component.tsx',
+    ],
+  },
+  {
+    id: 'dev-tools',
+    purpose: 'Open developer tools',
+    category: 'Developer',
+    context: 'Main process (global)',
+    keys: { macOS: 'F12', windows: 'F12', linux: 'F12' },
+    locations: ['src/main/main.ts'],
+  },
+  // The handler is the scripture-editors repo's CopyLimitPlugin; the listed files supply the copy
+  // limit that turns it on. It blocks the shortcut anywhere on the page, not only in the editor.
+  // The macOS Edit menu's Select All is a native menu command it cannot block; a copy after it is
+  // still shortened to the limit.
+  {
+    id: 'scripture-select-all-disabled-copy-limited',
+    purpose:
+      'In texts that limit copying, and in any text while its chapter or copy limit is loading or cannot be read, Select All does nothing (except in a text field)',
+    category: 'Editing',
+    context:
+      'Scripture editor and Resource Viewer, Bible texts and Commentaries panels, Text Collection, and Model text panel, for a copy-limited text or a text still loading',
+    keys: { macOS: '⌘A', windows: 'Ctrl+A', linux: 'Ctrl+A' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/copy-limit/use-chapter-copy-limit.hook.ts',
+      'extensions/src/platform-scripture-editor/src/copy-limit/use-chapter-usj-with-copy-limit.hook.ts',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/resource-text-panel.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell.component.tsx',
+      'extensions/src/platform-scripture-editor/src/model-text-panel.web-view.tsx',
+    ],
+  },
+  {
+    id: 'scripture-markers-menu',
+    purpose:
+      'Open the inline markers menu. Does nothing while the editor’s right-click menu is open, in every view',
+    category: 'Editing',
+    context: 'Scripture editor web view',
+    keys: { macOS: '\\', windows: '\\', linux: '\\' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+      'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
+    ],
+  },
+  {
+    id: 'scripture-markers-menu-commit-typed',
+    purpose: 'Commit the marker typed in the markers menu',
+    category: 'Editing',
+    context:
+      'Scripture editor web view (main text, the footnote editor popover, or a note being edited in the footnotes pane in Standard view), while the markers menu is open',
+    // Space commits what was TYPED, not the highlighted entry — the same in the `\` menu and the
+    // Enter-triggered paragraph menu, both of which the forwarding table drives now that every
+    // marker palette focuses its LIST rather than an input of its own. At a collapsed caret it
+    // materializes the typed marker; with nothing typed it closes and inserts nothing. Over a
+    // selection it wraps only on an exact (case-insensitive) match and otherwise closes without
+    // touching the selection. The one exception: a filter naming a NOTE marker in the stylesheet
+    // commits THAT note marker when the list offers it and inserts nothing when it does not,
+    // because a materialized `\f ` literal would absorb the word after it as the new note's
+    // caller.
+    keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
+    locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
+  },
+  {
+    id: 'scripture-markers-menu-commit-highlighted',
+    purpose: 'Commit the highlighted entry in the markers menu',
+    category: 'Editing',
+    context:
+      'Scripture editor web view (main text, the footnote editor popover, or a note being edited in the footnotes pane in Standard view), while the markers menu is open',
+    // Enter and Tab are one commit gesture, matching the editor package's own menus, and the same
+    // in both menus — including the Enter-triggered paragraph menu, which the forwarding table
+    // drives throughout now that it focuses its list instead of an input, so an Enter-Enter cannot
+    // reach the document. Shift+Enter and Shift+Tab commit too: Shift is how an uppercase custom
+    // marker is typed, and a soft line break has no USFM representation. A Ctrl/Cmd/Alt chord is
+    // not a commit — it closes the menu. The table does not claim it, though with focus in the
+    // palette it does not reach the editor either (Ctrl+Z/B do nothing there). Chord+Enter IS
+    // claimed on the way out, or the menu's own list would act on it. Over a zero-match filter both keys are
+    // claimed no-ops and the menu stays open (PT9 parity).
+    keys: { macOS: '⏎ / ⇥', windows: 'Enter / Tab', linux: 'Enter / Tab' },
+    locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
+  },
+  {
+    id: 'scripture-markers-menu-filter',
+    purpose: 'Move the highlight and widen or narrow the typed filter in the markers menu',
+    category: 'Editing',
+    context:
+      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
+    // Arrow keys move the highlighted entry; Backspace widens the typed filter, or closes the
+    // menu when nothing is typed — the same in both menus. Marker characters (letters, digits,
+    // `+`, `-`) narrow it. The character the layout produced is what counts whenever it can name a
+    // marker; the PHYSICAL key is the fallback only when it cannot, so a Cyrillic or Greek layout
+    // still types the Latin marker name while AZERTY and QWERTZ keep theirs. Any other key —
+    // punctuation, accented or non-Latin characters, a dead key, Delete,
+    // Left/Right/Home/End/PageUp/PageDown — is ignored: it cannot name a marker, so the menu stays
+    // open and nothing reaches the text.
+    keys: {
+      macOS: '↑ / ↓ / ⌫',
+      windows: 'Up / Down / Backspace',
+      linux: 'Up / Down / Backspace',
+    },
+    locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
+  },
+  {
+    id: 'scripture-markers-menu-commit-closing-marker',
+    purpose: 'Commit a closing marker from the markers menu',
+    category: 'Editing',
+    context:
+      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
+    // The counterpart to Space's opening-marker commit: commits the typed marker's closing form
+    // with no terminating space, in both menus. Over a non-collapsed selection the selected content
+    // is replaced, which is what typing a closing marker by hand has always done — except with
+    // nothing typed, where it closes the menu and leaves the selection intact rather than
+    // destroying it over one keystroke.
+    keys: { macOS: '*', windows: '*', linux: '*' },
+    locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
+  },
+  {
+    id: 'scripture-markers-menu-commit-and-reopen',
+    purpose: 'Commit the typed marker and immediately open the markers menu again',
+    category: 'Editing',
+    context:
+      'Scripture editor web view (main text or a note being edited in the footnotes pane, Standard view), while the markers menu is open',
+    // Commits like Space but without the terminating space, then reopens for the backslash just
+    // pressed, so a paired marker is one continuous flow — in both menus. With nothing typed there
+    // is nothing to commit, so it is ignored and the menu stays open. Not a commit key over a
+    // selection: the wrap consumes the selection, leaving nothing for a second marker.
+    keys: { macOS: '\\', windows: '\\', linux: '\\' },
+    locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
+  },
+  {
+    id: 'scripture-close-markers-menu',
+    purpose: 'Close the inline markers menu',
+    category: 'Editing',
+    context: 'Scripture editor web view',
+    // A Ctrl/Cmd/Alt chord closes it too; the table leaves the key unclaimed — the menu is no longer
+    // relevant to what the user asked for. Two exclusions, both because the modifier is being used
+    // to TYPE rather than to command: AltGr on Windows and Linux, and Option on macOS, where
+    // `Option+e` begins `é` and `Option+n` begins `ñ`. Ctrl+Option and Cmd+Option are still chords,
+    // since their command modifier is what decides.
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
+    ],
+  },
+  {
+    id: 'scripture-find',
+    purpose:
+      'Bring Find to the front and put the caret in its search box — a permanent tab in Simple mode, a panel beside the editor in Power mode. Pre-fills the search box with the editor selection, if any',
+    category: 'Navigation',
+    context:
+      'Scripture editor, model text, Bible text, commentary, and Text Collection web views. ' +
+      'In Text Collection it searches the resource holding the caret; in the reference panels, the ' +
+      'displayed resource. Does nothing (logged) until a scripture is resolved.',
+    // macOS intentionally uses ⌃F (not the usual ⌘F). One shared hook holds the handler; the next
+    // entries are the web views that mount it, and the last is the command they invoke.
+    keys: { macOS: '⌃F', windows: 'Ctrl+F', linux: 'Ctrl+F' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/use-open-find-shortcut.hook.ts',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/model-text-panel.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/resource-text-panel.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx',
+      'extensions/src/platform-scripture/src/main.ts',
+      'extensions/src/platform-scripture/src/find/use-focus-search-on-invoke.hook.ts',
+    ],
+    command: 'platformScripture.openFind',
+  },
+  {
+    id: 'scripture-insert-comment',
+    purpose:
+      'Insert a comment at the selection. Does nothing while the editor’s right-click menu is open',
+    category: 'Editing',
+    context: 'Scripture editor web view',
+    // Ctrl+Shift+N first (not code order) so the menu hint shows it
+    keys: {
+      macOS: '⌥⌘M',
+      windows: 'Ctrl+Shift+N / Ctrl+Alt+M',
+      linux: 'Ctrl+Shift+N / Ctrl+Alt+M',
+    },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+    ],
+    command: 'platformScriptureEditor.insertCommentAtSelection',
+  },
+  // TODO(PT-4735): Show hints on the rest of Simple's Project menu. ⌃T and ⌃⇧T below need a
+  // `command` that works in every view; the design's ⌃J, ⌃E and F7 have no editor handler or entry
+  // here yet. A new `command` also needs its row in `EXPECTED_MENU_HINTS`.
+  {
+    id: 'scripture-insert-footnote',
+    purpose:
+      'Insert a footnote at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
+    category: 'Editing',
+    context: 'Scripture editor web view',
+    // macOS intentionally uses ⌃T (not ⌘T) to match the handler in
+    // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
+    // No `command`: the chord works only in Standard view, but the menu item works in every view
+    keys: { macOS: '⌃T', windows: 'Ctrl+T', linux: 'Ctrl+T' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+    ],
+  },
+  {
+    id: 'scripture-insert-cross-reference',
+    purpose:
+      'Insert a cross-reference at the selection (Standard view, editable). Does nothing while the editor’s right-click menu is open',
+    category: 'Editing',
+    context: 'Scripture editor web view',
+    // macOS intentionally uses ⌃⇧T (not ⌘⇧T) to match the handler in
+    // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
+    // No `command`: the chord works only in Standard view, but the menu item works in every view
+    keys: { macOS: '⌃⇧T', windows: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+    ],
+  },
+  {
+    id: 'scripture-remove-character-formatting',
+    purpose: 'Remove character formatting from the selection',
+    category: 'Editing',
+    // Handled inside the editor library that ships as the `@eten-tech-foundation/platform-editor`
+    // package (its `MarkerEditPlugin` claims the chord from a `KEY_DOWN_COMMAND` handler that
+    // requires Ctrl with no Alt/Shift/Meta, and acts only when there is a selection to unformat),
+    // so there is no handler file in this repo to link. `locations` names the web view that mounts
+    // that editor — the nearest in-repo code — because the field renders as links into
+    // paranext-core and a path in another repo would not resolve.
+    context:
+      'Scripture editor web view (handled by the @eten-tech-foundation/platform-editor package)',
+    // ⌃Space on macOS, deliberately not ⌘Space, which is Spotlight. ⌃ also keeps this consistent
+    // with the editor's other in-web-view chords (⌃F, ⌃T, ⌃⇧T). ⌃Space can still collide with the
+    // macOS input-source switcher and with some IME on/off toggles.
+    keys: { macOS: '⌃Space', windows: 'Ctrl+Space', linux: 'Ctrl+Space' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
+    id: 'scripture-toggle-structure-lock',
+    purpose: 'Lock or unlock the structure for yourself (your personal structure protection)',
+    category: 'Editing',
+    context: 'Scripture editor web view (Simple mode)',
+    // Does nothing while the button is disabled: the lock state failed to load, or a Project
+    // Administrator locked the structure and you cannot change project settings. The handler also
+    // accepts ⌃ for ⌘ on macOS, and Meta for Ctrl on Windows/Linux.
+    keys: { macOS: '⇧⌘L', windows: 'Ctrl+Shift+L', linux: 'Ctrl+Shift+L' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/structure-protection-button.component.tsx',
+      'extensions/src/platform-scripture-editor/src/use-structure-protection-state.hook.ts',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
+    id: 'scripture-editor-context-menu',
+    purpose:
+      'Open the editor’s own right-click menu (Cut/Copy/Paste and the Insert footnote/cross-reference/comment/endnote items). While open, the menu holds the keyboard: it is the only keyboard mode on screen, and every other key does nothing until the menu is dismissed or its highlighted item runs',
+    category: 'Menus',
+    // Not a shortcut this repo registers: the browser raises `contextmenu` inside the editor,
+    // which the editor package's `ContextMenuPlugin` (`@eten-tech-foundation/platform-editor`)
+    // turns into the menu — no in-repo handler exists for the open gesture itself. `locations`
+    // names where this repo supplies the menu's own items and reads its open state instead.
+    //
+    // Right-click only, on every platform: Shift+F10 and the Menu key also raise `contextmenu`,
+    // but a keyboard-invoked one always targets the content-editable ROOT (there is no click point
+    // to aim at a descendant), and `ContextMenuPlugin` ignores a `contextmenu` event whose target
+    // IS the editor root — the same check that keeps a right-click on empty editor space from
+    // opening the menu. Opening it by keyboard would need the editor package to special-case a
+    // keyboard-invoked `contextmenu` event.
+    context: 'Scripture editor web view (main text and the footnote editor popover)',
+    keys: {
+      macOS: '— (no equivalent)',
+      windows: '— (no equivalent)',
+      linux: '— (no equivalent)',
+    },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+      'lib/platform-bible-react/src/components/advanced/editor-context-menu.util.ts',
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+    ],
+  },
+  {
+    id: 'scripture-paragraph-markers-menu',
+    purpose:
+      'In Standard view, open the paragraph markers menu to split the paragraph. In other views, creates a new paragraph marker whose style matches the current paragraph marker style. While the editor’s right-click menu is open, that menu owns Enter instead: it invokes the highlighted item, or does nothing.',
+    category: 'Editing',
+    context: 'Scripture editor web view',
+    // Enter is claimed in EVERY modifier state, matching PT9's KeyPressEditHandler (no modifier
+    // check): any modifier chord with Enter — including Shift+Enter, which would otherwise insert
+    // a soft line break with no USFM representation — opens the same menu.
+    // Not claimed while the editor's right-click context menu is open: that menu owns Enter for as
+    // long as it is up (see `isEditorContextMenuOpen`).
+    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
+    ],
+  },
+  // The editor's arrow-key caret movement (verse hops, note boundaries, the two caret stops
+  // around an \fp span's rendered line break — all in the scripture-editors repo's
+  // ArrowNavigationPlugin) is deliberately NOT cataloged: arrow keys moving the caret in a
+  // natural way is expected editor behavior, not a keyboard shortcut.
+  {
+    id: 'scripture-text-grid-open-chapter-context',
+    purpose: 'Open the chapter-context view for the focused cell',
+    category: 'View',
+    context: 'Scripture Text Grid web view (the cell itself focused, not a control inside it)',
+    keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+    ],
+  },
+  {
+    id: 'scripture-text-grid-move-between-cells',
+    purpose: 'Move to the next or previous cell in the Scripture Text Grid',
+    category: 'Navigation',
+    context: 'Scripture Text Grid web view',
+    keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+    ],
+  },
+  {
+    id: 'scripture-text-grid-close-chapter-context',
+    purpose: 'Close the chapter-context view',
+    category: 'View',
+    context: 'Scripture Text Grid web view (not inside an open window or menu, which closes first)',
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/chapter-context-escape.utils.ts',
+    ],
+  },
+  {
+    id: 'scripture-text-grid-reorder-cell',
+    // The reorder grip is rendered only by the header-band layout, which is the chapter and grid
+    // views; the verse view hangs its resource name inline and shows no grip, so there is nothing
+    // to focus there and the arrow keys never reach the handler. Tracked as PT-4184 follow-up.
+    purpose: 'Reorder the focused Scripture Text Grid column one position (chapter and grid views)',
+    category: 'View',
+    context: 'Scripture Text Grid web view',
+    keys: {
+      macOS: '← / →',
+      windows: '← / →',
+      linux: '← / →',
+    },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
+    ],
+  },
+  {
+    id: 'enhanced-resources-toggle-footnotes',
+    purpose: 'Toggle the footnotes panel',
+    category: 'View',
+    context: 'Enhanced resources web view',
+    keys: { macOS: 'F7', windows: 'F7', linux: 'F7' },
+    locations: [
+      'extensions/src/platform-enhanced-resources/src/web-views/enhanced-resource.web-view.tsx',
+    ],
+  },
+  // Shortcuts defined inside the shared platform-bible-react component library.
+  {
+    id: 'editor-undo',
+    purpose: 'Undo the last edit in the editor',
+    category: 'Editing',
+    context: 'Editor (text editing)',
+    keys: { macOS: '⌘Z', windows: 'Ctrl+Z', linux: 'Ctrl+Z' },
+    locations: [
+      'lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx',
+    ],
+  },
+  {
+    id: 'editor-redo',
+    purpose: 'Redo the last undone edit',
+    category: 'Editing',
+    context: 'Editor (text editing)',
+    keys: { macOS: '⇧⌘Z', windows: 'Ctrl+Y / Ctrl+Shift+Z', linux: 'Ctrl+Y / Ctrl+Shift+Z' },
+    locations: [
+      'lib/platform-bible-react/src/components/basics/editor-keyboard-shortcuts.component.tsx',
+    ],
+  },
+  {
+    id: 'comment-submit',
+    purpose: 'Submit or save the comment being edited (new comment, reply, or edit)',
+    category: 'Editing',
+    context: 'Comment editor',
+    keys: { macOS: '⌘⏎', windows: 'Ctrl+Enter', linux: 'Ctrl+Enter' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/comment-editor/comment-editor.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/comment-list/comment-item.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/comment-list/comment-thread.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/comment-list/comment-list.utils.ts',
+    ],
+  },
+  {
+    id: 'footnote-markers-menu',
+    purpose:
+      'Open the inline markers menu in the footnote editor. Does nothing while the popover’s own right-click menu is open',
+    category: 'Editing',
+    context: 'Footnote editor',
+    keys: { macOS: '\\', windows: '\\', linux: '\\' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
+      'lib/platform-bible-react/src/components/advanced/editor-context-menu.util.ts',
+    ],
+  },
+  {
+    id: 'footnote-close-markers-menu',
+    purpose: 'Close the inline markers menu in the footnote editor',
+    category: 'Editing',
+    context: 'Footnote editor',
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
+    ],
+  },
+  {
+    id: 'footnote-new-paragraph',
+    purpose: 'Insert a new paragraph (\\fp) within the footnote being edited',
+    category: 'Editing',
+    context: 'Footnote editor',
+    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-close-editor',
+    purpose: 'Stop editing the open note in the footnotes pane, keeping the edits',
+    category: 'Editing',
+    // The pane's row editor applies its edits live, so there is nothing to discard - Escape is its
+    // explicit dismissal, and it hands focus back to the note's row.
+    context:
+      "Footnotes pane, in the note row editor or on its own controls (not while the editor's right-click menu is open)",
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-move-between-notes',
+    purpose: 'Move to the previous/next note in the footnotes pane',
+    category: 'Navigation',
+    // Arrow navigation runs only for keystrokes that originate on the list or on a read-only row.
+    // The row being edited hosts a real editor that owns its own arrow keys, and so do that
+    // editor's overlays, which are portalled out of the pane but still bubble their React events
+    // through the list.
+    context: 'Footnotes pane, from the list or a note row',
+    keys: {
+      macOS: '↑ / ↓',
+      windows: '↑ / ↓',
+      linux: '↑ / ↓',
+    },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-move-between-rows',
+    purpose: 'Move to the previous/next note row in the footnotes pane',
+    category: 'Navigation',
+    // Every row is its own tab stop rather than the list being one, so Tab walks the notes.
+    context: 'Footnotes pane',
+    keys: {
+      macOS: '⇥ / ⇧⇥',
+      windows: 'Tab / Shift+Tab',
+      linux: 'Tab / Shift+Tab',
+    },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-open-note',
+    purpose: 'Open the focused note for editing, or select it where the pane does not edit',
+    category: 'Editing',
+    context: 'Footnotes pane, on a note row',
+    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor-footnotes.component.tsx',
+    ],
+  },
+  {
+    id: 'footnote-pane-select-note',
+    purpose:
+      'Select the focused note in the footnotes pane without opening it, closing a note open for editing in another row',
+    category: 'Selection',
+    context: 'Footnotes pane, on a note row',
+    keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnotes/footnote-list.component.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
+    id: 'picker-select-highlighted-item',
+    purpose: 'Select the highlighted item in a picker whose search box is empty',
+    category: 'Selection',
+    // Opt-in per picker (`spaceSelectsHighlightedItem`) so a surface with its own Space semantics —
+    // the marker palettes, which claim Space to commit what the user TYPED — keeps the key. Every
+    // picker below opts in.
+    context:
+      'Book/chapter picker, project selector, book scope picker, combo boxes, inline marker menu',
+    keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
+    locations: [
+      'lib/platform-bible-react/src/components/shadcn-ui/command.tsx',
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/scope-selector/select-books-picker.component.tsx',
+      'lib/platform-bible-react/src/components/basics/combo-box.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/multi-select-combo-box.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/marker-menu.component.tsx',
+    ],
+  },
+  {
+    id: 'select-books-range',
+    purpose: 'Range-select books (extend the selection to the clicked book)',
+    category: 'Selection',
+    context: 'Book picker',
+    keys: { macOS: '⇧⏎', windows: 'Shift+Enter', linux: 'Shift+Enter' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/scope-selector/select-books-picker.component.tsx',
+    ],
+  },
+  {
+    id: 'sync-status-dismiss-truncation-tooltip',
+    purpose:
+      'Dismiss the tooltip showing the sync button’s full label when its project name is clipped',
+    category: 'Menus',
+    // Listens on `window`, but only while that tooltip is open. The tooltip is fully controlled, so
+    // Radix's own Escape handling never runs and this supplies it (WCAG 1.4.13). A fresh hover
+    // offers the tooltip again.
+    context: 'Toolbar sync status button',
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: ['src/renderer/components/sync-status-button.component.tsx'],
+  },
+  {
+    id: 'menubar-close',
+    purpose: 'Close the open application menu',
+    category: 'Menus',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
+    keys: { macOS: '⌥', windows: 'Alt', linux: 'Alt' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
+    ],
+  },
+  {
+    id: 'menubar-project',
+    purpose: 'Open the Project menu',
+    category: 'Menus',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
+    keys: { macOS: '⌥P', windows: 'Alt+P', linux: 'Alt+P' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
+    ],
+  },
+  {
+    id: 'menubar-window',
+    purpose: 'Open the Window menu',
+    category: 'Menus',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
+    keys: { macOS: '⌥L', windows: 'Alt+L', linux: 'Alt+L' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
+    ],
+  },
+  {
+    id: 'menubar-layout',
+    purpose: 'Open the Layout menu',
+    category: 'Menus',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
+    keys: { macOS: '⌥N', windows: 'Alt+N', linux: 'Alt+N' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
+    ],
+  },
+  {
+    id: 'menubar-help',
+    purpose: 'Open the Help menu',
+    category: 'Menus',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
+    keys: { macOS: '⌥H', windows: 'Alt+H', linux: 'Alt+H' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
+    ],
+  },
+  {
+    id: 'tab-context-menu',
+    purpose: 'Open the context menu for the focused tab',
+    category: 'Menus',
+    // Not a shortcut the app registers: the browser raises `contextmenu` at the focused tab, which
+    // the tab title forwards into the menu's trigger. macOS has no Menu key and no Shift+F10
+    // equivalent for this, so the menu is reached there by right-clicking (or Control-clicking) the
+    // tab. Forwarded whenever the tab has menu items. Simple mode's menu is narrowed to the
+    // content-zoom group, so a Simple-mode tab whose pane is not zoomable has no menu and Shift+F10
+    // opens nothing.
+    context:
+      'Renderer (focused tab with menu items — always in Power mode; in Simple mode only on a tab whose pane takes content zoom)',
+    keys: { macOS: '— (no equivalent)', windows: 'Shift+F10 / Menu', linux: 'Shift+F10 / Menu' },
+    locations: ['src/renderer/components/docking/platform-tab-title.component.tsx'],
+  },
+  {
+    id: 'tour-dismiss',
+    purpose: 'Dismiss the onboarding tour',
+    category: 'View',
+    context: 'Onboarding tour overlay (not while the connection-lost state is shown)',
+    // The overlay unmounts entirely once the connection is lost, so this key is not merely muted —
+    // it is withdrawn, and Escape falls to the `connection-lost-swallow-escape` entry. Standing the
+    // tour down is what keeps it from spending the permanent done flag on the way to a reload.
+    // `onboarding-tour.component.tsx` is listed because that unmount is what makes the context
+    // above true — the handler lives in `tour.component.tsx`, but the guard decides whether it runs.
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: [
+      'src/renderer/components/onboarding-tour/tour.component.tsx',
+      'src/renderer/components/onboarding-tour/onboarding-tour.component.tsx',
+    ],
+  },
+  {
+    id: 'tour-focus-cycle',
+    purpose: 'Cycle keyboard focus through the onboarding tour card buttons',
+    category: 'Navigation',
+    context: 'Onboarding tour overlay (not while the connection-lost state is shown)',
+    // The overlay unmounts entirely once the connection is lost, so the card's focus trap goes with
+    // it and Tab falls to the `connection-lost-contain-focus` entry, which holds focus on Reload.
+    // `onboarding-tour.component.tsx` is listed because that unmount is what makes the context
+    // above true — the trap lives in `tour.component.tsx`, but the guard decides whether it runs.
+    keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
+    locations: [
+      'src/renderer/components/onboarding-tour/tour.component.tsx',
+      'src/renderer/components/onboarding-tour/onboarding-tour.component.tsx',
+    ],
+  },
+];

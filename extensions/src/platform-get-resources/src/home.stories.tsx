@@ -5,7 +5,13 @@ import type { SharedProjectsInfo } from 'platform-scripture';
 import { ReactElement, useEffect, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import { alertCommand, rejectingMock } from '../../../../.storybook/story.utils';
-import { Home, HomeProps, LocalProjectInfo, HOME_STRING_KEYS } from './home.component';
+import {
+  Home,
+  HomeProps,
+  LocalProjectInfo,
+  HOME_STRING_KEYS,
+  type RemoteProjectsState,
+} from './home.component';
 
 const GET_STARTED_URL =
   'https://github.com/paranext/paranext/wiki/Getting-Started-with-Platform.Bible-and-Paratext-10-Studio';
@@ -108,11 +114,11 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
   const [sharedProjectsAndResources, setSharedProjectsAndResources] = useState<SharedProjectsInfo>(
     {},
   );
-  const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
+  const [remoteProjectsState, setRemoteProjectsState] = useState<RemoteProjectsState>('loading');
   useEffect(() => {
     const timeout = setTimeout(() => {
       setSharedProjectsAndResources(staticProjectsAndResources);
-      setIsLoadingRemoteProjects(false);
+      setRemoteProjectsState('loaded');
     }, 2000);
     return () => clearTimeout(timeout);
   }, []);
@@ -124,7 +130,7 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
         localProjectsInfo: localProjectsAndResources,
         isLoadingLocalProjects,
         sharedProjectsInfo: sharedProjectsAndResources,
-        isLoadingRemoteProjects,
+        remoteProjectsState,
         headerContent: (
           <>
             <HomeIcon size="36" />
@@ -217,4 +223,60 @@ function SendReceiveErrorDecorator(Story: (update?: { args: HomeProps }) => Reac
 
 export const SendReceiveError: Story = {
   decorators: [SendReceiveErrorDecorator],
+};
+
+/**
+ * The send/receive server could not be reached, so the list holds only what is already on this
+ * computer.
+ */
+function ServerUnreachableDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        // Empty on purpose: an unreachable server yields no shared projects.
+        sharedProjectsInfo: {},
+        remoteProjectsState: 'unreachable',
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+export const ServerUnreachable: Story = {
+  decorators: [ServerUnreachableDecorator],
+};
+
+/**
+ * Home as the title bar's project picker footer opens it: scoped to editable projects, with the
+ * published resources left out. Compare with `Default`, which is the same data unscoped — the
+ * resource rows (`Res1`, `Res2`, `SdDict`) are the difference.
+ */
+function ProjectsOnlyDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: staticLocalProjectsAndResources,
+        sharedProjectsInfo: staticProjectsAndResources,
+        shouldShowProjectsOnly: true,
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+export const ProjectsOnly: Story = {
+  decorators: [ProjectsOnlyDecorator],
 };

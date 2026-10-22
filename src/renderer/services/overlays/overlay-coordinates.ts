@@ -19,7 +19,8 @@ export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null {
 
 /**
  * Translates iframe-relative coordinates to document-relative coordinates using
- * getBoundingClientRect of the WebView iframe.
+ * getBoundingClientRect of the WebView iframe. The platform never scales the iframe element itself
+ * (content zoom scales marked areas inside it), so an inner pixel is an outer pixel.
  *
  * @param webViewId The webViewId of the iframe
  * @param position The iframe-relative position
@@ -33,10 +34,7 @@ export function translateCoordinates(
   if (!iframe) return position;
 
   const rect = iframe.getBoundingClientRect();
-  return {
-    x: position.x + rect.left,
-    y: position.y + rect.top,
-  };
+  return { x: rect.left + position.x, y: rect.top + position.y };
 }
 
 /**

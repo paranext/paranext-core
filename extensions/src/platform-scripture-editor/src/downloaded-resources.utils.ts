@@ -1,6 +1,10 @@
 import papi, { logger } from '@papi/frontend';
 import type { DblResourceData, ResourceType } from 'platform-bible-utils';
-import { doesCatalogRowCoverProject, getErrorMessage } from 'platform-bible-utils';
+import {
+  doesCatalogRowCoverProject,
+  getErrorMessage,
+  normalizeFullName,
+} from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -17,7 +21,12 @@ import {
 export type DownloadedResource = {
   projectId: string;
   name: string;
-  fullName: string;
+  /**
+   * Absent when the resource has no full name distinct from its short one. Deliberately not
+   * mirrored from `name`: a mirrored value claims a full name the resource does not have, which
+   * every consumer then has to un-claim.
+   */
+  fullName?: string;
   language: string;
 };
 
@@ -61,7 +70,7 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
     return metadata.map((data) => ({
       projectId: data.id,
       name: data.name ?? data.id,
-      fullName: data.fullName ?? data.name ?? data.id,
+      fullName: normalizeFullName(data.fullName),
       language: data.language ?? '',
     }));
   } catch (e) {
@@ -71,19 +80,47 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
 }
 
 /**
+ * Index catalog rows by DBL entry uid for {@link matchesDownloaded}.
+ *
+ * Keys are lower-cased because uid casing differs by source — the C# catalog whitelist stores them
+ * upper-case, the commentary whitelist lower-case — so an exact comparison silently misses. Callers
+ * build this once rather than per comparison: the picker tests every downloaded project against
+ * every listed reference, and a scan of the ~1800-row catalog inside that pair of loops is a
+ * multiplicative cost for a lookup that does not change.
+ */
+export function indexDblResourcesByUid(
+  dblResources: DblResourceData[],
+): ReadonlyMap<string, DblResourceData> {
+  return new Map(dblResources.map((row) => [row.dblEntryUid.toLowerCase(), row]));
+}
+
+/**
  * Whether a downloaded project is the same resource as an existing reference: exact project-id
- * match for ProjectReferences, or a dblEntryUid prefix match for DblResourceReferences (the local
- * project id of an installed DBL resource begins with its dblEntryUid).
+ * match for a `ProjectReference`, or — for a `DblResourceReference` — whichever catalog row carries
+ * that uid, resolved against the project the same way the rest of the picker resolves it.
+ *
+ * Resolving through the catalog rather than comparing the uid to the project id directly is what
+ * makes a divergent-id resource match: a resource project's id is unrelated to the DBL entry it was
+ * installed from, so the two share a prefix for some resources and nothing at all for others. A
+ * reference whose uid is absent from the catalog matches nothing, which is the same conclusion
+ * `downloadedToRow` reaches when it classifies such a project as non-DBL.
+ *
+ * @param project The locally-installed project to test.
+ * @param reference The existing reference to test it against.
+ * @param dblResourcesByUid Catalog rows from {@link indexDblResourcesByUid}, used to resolve a
+ *   `DblResourceReference` to a local project.
  */
 export function matchesDownloaded(
   project: DownloadedResource,
   reference: ResourceReference,
+  dblResourcesByUid: ReadonlyMap<string, DblResourceData>,
 ): boolean {
   if (isProjectReference(reference)) return reference.id === project.projectId;
-  if (isDblResourceReference(reference))
-    return (
-      reference.id !== '' && project.projectId.toLowerCase().startsWith(reference.id.toLowerCase())
-    );
+  if (isDblResourceReference(reference)) {
+    if (reference.id === '') return false;
+    const row = dblResourcesByUid.get(reference.id.toLowerCase());
+    return row !== undefined && doesCatalogRowCoverProject(row, project.projectId);
+  }
   return false;
 }
 
@@ -91,13 +128,17 @@ export function matchesDownloaded(
 function resolveReferenced(
   item: EffectiveResourceReference,
   dblResources: DblResourceData[],
+  dblResourcesByUid: ReadonlyMap<string, DblResourceData>,
 ): PickerResource | undefined {
   const isAdminLocked =
     (isProjectReference(item) || isDblResourceReference(item)) && !!item.isInTextCollection;
   if (isDblResourceReference(item)) {
     // No catalog row means nothing can be said about the reference's type or local project, and a
     // guessed type would leak it into a type-filtered view as a blank row.
-    const dbl = dblResources.find((r) => r.dblEntryUid === item.id);
+    // Through the same index `matchesDownloaded` uses. Resolving a uid two different ways in one
+    // file is how a resource goes missing entirely: dropped here for want of an exact match, and
+    // filtered out of the extras below because the case-insensitive lookup there did match.
+    const dbl = dblResourcesByUid.get(item.id.toLowerCase());
     if (!dbl) return undefined;
     return {
       reference: item,
@@ -171,8 +212,8 @@ function downloadedToRow(
  * Union referenced items with downloaded-but-unreferenced projects, deduped (referenced wins).
  *
  * The per-reference-kind typing this applies is mirrored by `splitResourcesByTab` in
- * `src/renderer/components/dialogs/share-layout.utils.ts`, which sorts the same setting into the
- * Share Layout dialog's tabs. It cannot import from an extension, so the two are kept in step by
+ * `src/renderer/components/dialogs/team-layout.utils.ts`, which sorts the same setting into the
+ * Team layout dialog's tabs. It cannot import from an extension, so the two are kept in step by
  * hand: change a typing rule here and change it there.
  *
  * They currently disagree in two ways, documented in full on that function. One is deliberate — a
@@ -187,11 +228,15 @@ export function buildPickerResources(
   downloaded: DownloadedResource[],
   dblResources: DblResourceData[],
 ): PickerResource[] {
+  const dblResourcesByUid = indexDblResourcesByUid(dblResources);
   const referenced = effectiveItems
-    .map((item) => resolveReferenced(item, dblResources))
+    .map((item) => resolveReferenced(item, dblResources, dblResourcesByUid))
     .filter((r): r is PickerResource => r !== undefined);
   const extras = downloaded
-    .filter((project) => !effectiveItems.some((item) => matchesDownloaded(project, item)))
+    .filter(
+      (project) =>
+        !effectiveItems.some((item) => matchesDownloaded(project, item, dblResourcesByUid)),
+    )
     .map((project) => downloadedToRow(project, dblResources));
   return [...referenced, ...extras];
 }

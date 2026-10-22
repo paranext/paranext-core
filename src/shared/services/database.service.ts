@@ -1,11 +1,10 @@
-import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import { networkObjectService } from '@shared/services/network-object.service';
 import {
   IDatabaseService,
   databaseServiceObjectToProxy,
   databaseServiceNetworkObjectName,
 } from '@shared/services/database.service-model';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
+import { createCachedInitializer, createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 let networkObject: IDatabaseService;
 const initialize = createCachedInitializer(async () => {

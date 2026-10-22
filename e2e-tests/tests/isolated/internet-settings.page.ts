@@ -1,5 +1,47 @@
 import { expect, type FrameLocator, type Locator, type Page } from '@playwright/test';
-import { isPopoverTriggerExpanded } from '../../fixtures/helpers';
+import {
+  isPopoverTriggerExpanded,
+  sendPapiRequestOnce,
+  waitForAppReady,
+  waitForPapiMethodRegistered,
+} from '../../fixtures/helpers';
+
+/** JSON-RPC method prefix of the C# `paratextRegistration.internetSettingsDataProvider`. */
+const INTERNET_SETTINGS_PROVIDER_METHOD =
+  'object:paratextRegistration.internetSettingsDataProvider-data';
+
+/**
+ * The saved internet settings, as {@link readSavedInternetSettings} returns them. Opaque to tests:
+ * only {@link restoreSavedInternetSettings} reads it.
+ */
+export type SavedInternetSettings = Record<string, unknown>;
+
+/**
+ * Reads the internet settings ParatextData has saved. They live in ParatextData's own
+ * `InternetSettings.xml`, outside the dev-appdata settings file the fixtures restore, so a test
+ * that saves an internet setting must put this back itself (see
+ * {@link restoreSavedInternetSettings}).
+ */
+export async function readSavedInternetSettings(): Promise<SavedInternetSettings> {
+  await waitForPapiMethodRegistered(`${INTERNET_SETTINGS_PROVIDER_METHOD}.getInternetSettings`);
+  // The leading `undefined` is the data type's selector, which this provider ignores.
+  return sendPapiRequestOnce<SavedInternetSettings>(
+    `${INTERNET_SETTINGS_PROVIDER_METHOD}.getInternetSettings`,
+    [undefined],
+  );
+}
+
+/**
+ * Saves internet settings read by {@link readSavedInternetSettings} back. The proxy and DBL
+ * passwords come back masked, and the provider keeps the stored password for a masked one, so the
+ * round trip does not change them.
+ */
+export async function restoreSavedInternetSettings(settings: SavedInternetSettings): Promise<void> {
+  await sendPapiRequestOnce(`${INTERNET_SETTINGS_PROVIDER_METHOD}.setInternetSettings`, [
+    undefined,
+    settings,
+  ]);
+}
 
 /**
  * Open the user-profile popover and return its "Internet & connectivity" action.
@@ -76,10 +118,10 @@ export function selectableConnectivityOptions(frame: FrameLocator): {
  * Select whichever of the two selectable connectivity options is not the current one, so the form
  * genuinely holds an unsaved change.
  *
- * Which one that is depends on the machine: these settings live in ParatextData's own storage and
- * are shared with any co-installed Paratext 9, so a developer box can legitimately start on either.
- * Clicking a fixed option would be a no-op wherever that option was already selected. Nothing here
- * is persisted — only "Save and restart" writes.
+ * Which one that is depends on the machine: these settings live in ParatextData's own storage,
+ * which is seeded once from a co-installed Paratext 9, so a developer box can legitimately start on
+ * either. Clicking a fixed option would be a no-op wherever that option was already selected.
+ * Nothing here is persisted — only "Save and restart" writes.
  *
  * @returns The radio that was selected before the click, so a test can assert a reset restores it
  */
@@ -92,4 +134,76 @@ export async function selectTheOtherConnectivityOption(frame: FrameLocator): Pro
   await target.click();
   await expect(target).toBeChecked();
   return original;
+}
+
+/**
+ * Waits for the app, opens the settings panel, and returns the frame, ready to interact with. This
+ * is the entry point for every test that starts from an open panel; use the lower-level helpers
+ * above only when a test needs to assert on something before or during opening.
+ */
+export async function openInternetSettingsPanel(mainPage: Page): Promise<FrameLocator> {
+  await waitForAppReady(mainPage);
+  await openInternetSettings(mainPage);
+  return internetSettingsFrame(mainPage);
+}
+
+/** A radio button in the internet-access option list, by its visible label. */
+export function internetUseRadio(frame: FrameLocator, label: string | RegExp): Locator {
+  return frame.getByRole('radio', { name: label });
+}
+
+/**
+ * An option's info button, by the description it carries as its accessible name. Hovering or
+ * keyboard-focusing it opens that description in a tooltip.
+ */
+export function optionInfoButton(frame: FrameLocator, description: string | RegExp): Locator {
+  return frame.getByRole('button', { name: description });
+}
+
+/**
+ * The description tooltip revealed from an option's info button. Each description lives here rather
+ * than in always-visible body copy, so an empty locator means nothing is currently revealed.
+ *
+ * Targets the visible content, NOT `getByRole('tooltip')` — Radix puts that role on a
+ * visually-hidden copy it renders for screen readers, so a role query would match even when the
+ * tooltip is painted behind something and invisible.
+ */
+export function descriptionTooltip(frame: FrameLocator): Locator {
+  return frame.locator('[data-slot="tooltip-content"]');
+}
+
+/** The "Save and restart" button. Disabled until the form has unsaved changes. */
+export function saveAndRestartButton(frame: FrameLocator): Locator {
+  return frame.getByRole('button', { name: 'Save and restart' });
+}
+
+/** The "Discard changes" button. Disabled until the form has unsaved changes. */
+export function discardChangesButton(frame: FrameLocator): Locator {
+  return frame.getByRole('button', { name: 'Discard changes' });
+}
+
+/**
+ * Waits for the initial settings fetch to finish.
+ *
+ * Gated on an active radio becoming enabled, which is only true once loading ends — the form passes
+ * `isFormDisabled` (true while fetching) straight to the option list. Deliberately NOT gated on the
+ * Save/Discard buttons being disabled: that holds both while fetching and when loaded-unmodified,
+ * so it cannot distinguish the two and would let a test click a radio before the fetch lands, only
+ * for the arriving value to overwrite it.
+ */
+export async function waitForSettingsLoaded(frame: FrameLocator): Promise<void> {
+  await expect(selectableConnectivityOptions(frame).unrestricted).toBeEnabled({ timeout: 10_000 });
+}
+
+/** Expands the collapsed "Developer only" section that holds the server-environment radios. */
+export async function expandDeveloperSection(frame: FrameLocator): Promise<void> {
+  await frame.getByRole('button', { name: /Developer only/ }).click();
+}
+
+/** A server-environment radio inside the developer section. */
+export function serverTypeRadio(
+  frame: FrameLocator,
+  server: 'production' | 'quality-assurance' | 'development' | 'test',
+): Locator {
+  return frame.getByTestId(`server-type-${server}`);
 }

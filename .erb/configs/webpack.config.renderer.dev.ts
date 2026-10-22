@@ -31,7 +31,11 @@ if (!skipDLLs && !(fs.existsSync(webpackPaths.dllPath) && fs.existsSync(manifest
       'The DLL files are missing. Sit back while we build them for you with "npm run build-dll"',
     ),
   );
-  execSync('npm run postinstall');
+  // `inherit` so the chain's own diagnostics reach the terminal. `execSync` captures stdout by
+  // default, and the actionable messages here go there - `check-native-dep`'s native-dependency
+  // report, electron-builder's output, the DLL build's. Without this, a chain that exits non-zero
+  // shows only nested "Command failed" wrappers that name no cause.
+  execSync('npm run postinstall', { stdio: 'inherit' });
 }
 
 const configuration: webpack.Configuration = {
@@ -212,6 +216,17 @@ const configuration: webpack.Configuration = {
   },
 
   devServer: {
+    // Loopback-only, so the server is unreachable off-machine and no firewall prompt is raised.
+    // Bind by NAME rather than the `127.0.0.1` literal: webpack-dev-server passes `host` through
+    // verbatim as the injected HMR client's `hostname`, and the page itself is served from
+    // `http://localhost:${port}` (`resolveHtmlPath`). A literal here makes that client dial
+    // `ws://127.0.0.1:${port}/ws`, which the server's own same-origin check rejects with
+    // `Invalid Host/Origin header` and closes — a ~1s reconnect loop whose every close sends the
+    // error overlay a `DISMISS`, wiping genuine compile errors off the screen. The manual client
+    // entry above resolves its socket URL from the page origin, so HMR keeps working and the loop
+    // is easy to miss. Same reasoning as the PAPI websocket's bind — see
+    // `adr-papi-websocket-hostname-bind` in `.context/standards/Architecture-Decisions.md`.
+    host: 'localhost',
     port,
     compress: true,
     hot: true,

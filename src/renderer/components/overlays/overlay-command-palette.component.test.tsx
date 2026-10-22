@@ -2,7 +2,6 @@ import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
-  ForwardedSessionKind,
   getMarkerPaletteClaimedKeys,
   handleMarkerPaletteSessionKeyDown,
   MarkerPaletteSessionDriver,
@@ -341,6 +340,70 @@ describe('OverlayCommandPalettePresentational', () => {
       await vi.waitFor(() => expect(input).toHaveFocus());
     });
 
+    it('should focus the search input of an ANCHORED palette, whose input mounts after the palette', async () => {
+      // Anchored mode renders the input inside a Radix Popover portal, which mounts its content on
+      // a render AFTER the palette's own mount effects have run — so at the first attempt there is
+      // no input to focus yet. An anchored palette that fails to focus leaves every typed filter
+      // character landing in the document instead.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 10, y: 10 }}
+          anchor={{ width: 1, height: 16 }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = await screen.findByRole('combobox');
+      await vi.waitFor(() => expect(input).toHaveFocus());
+    });
+
+    it('should NOT focus an anchored palette that declares keyForwarding, even once its input mounts', async () => {
+      // A selection-wrap marker palette anchors like the Enter palette above, but forwards its
+      // keys to the editor session — it must leave DOM focus in the requesting editor for the
+      // whole time it is open, or the forwarded keys never arrive and the editor selection is lost.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 10, y: 10 }}
+          anchor={{ width: 1, height: 16 }}
+          keyForwarding={{ keys: ['Enter'], onKey: vi.fn() }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = await screen.findByRole('combobox');
+      // Give the retry loop, if it were still running, several animation frames to steal focus.
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+      });
+      expect(input).not.toHaveFocus();
+    });
+
+    it('should NOT focus a centered palette that declares keyForwarding, even though its input mounts immediately', async () => {
+      // Centered mode (no `position`) renders its input directly, not inside a Radix Popover
+      // portal, so the input exists on the very first mount-effect attempt. A key-forwarding
+      // palette must still leave focus wherever it already was — forwarding exists precisely so a
+      // palette can be driven without ever taking DOM focus.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          keyForwarding={{ keys: ['Enter'], onKey: vi.fn() }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      // Give the retry loop, if it were still running, several animation frames to steal focus.
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+      });
+      expect(input).not.toHaveFocus();
+    });
+
     it('should not throw when the palette unmounts before focus ever sticks', async () => {
       const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {});
 
@@ -361,6 +424,231 @@ describe('OverlayCommandPalettePresentational', () => {
       });
       expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
       expect(document.body).toHaveFocus();
+    });
+  });
+
+  describe("focusTarget: 'list' — focus on something that cannot be edited", () => {
+    // Why this mode exists: an IME or a dead key begins composing in ANY focused text box no
+    // matter what a key handler cancels, and once a composition is under way per-key rules no
+    // longer apply to it. Focusing the list means no composition ever starts, so a dead key
+    // arrives as an ordinary keydown the requester's table can ignore.
+
+    it('focuses the LIST, not the search input', async () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const list = screen.getByRole('listbox');
+      await vi.waitFor(() => expect(list).toHaveFocus());
+      expect(screen.getByRole('combobox')).not.toHaveFocus();
+    });
+
+    it('focuses an ANCHORED list palette, whose list mounts after the first attempt', async () => {
+      // Same portal timing as the input case: Radix commits nothing on its first pass, so the
+      // retry must survive a target that does not exist yet.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      await vi.waitFor(() => expect(screen.getByRole('listbox')).toHaveFocus());
+    });
+
+    it('renders the search box read-only, out of the tab order, over the HOST filter', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          filterText="se"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      expect(input).toHaveAttribute('readonly');
+      expect(input).toHaveAttribute('tabindex', '-1');
+      expect(input).toHaveValue('se');
+    });
+
+    it('puts the focused list in the tab order and points it at the highlighted item', async () => {
+      // aria-activedescendant only speaks from a FOCUSED element. Passive mode cannot use it (it
+      // focuses nothing) and falls back to the service's live region; list mode can, which is the
+      // accessibility gain over passive.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          selectedIndex={1}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const list = screen.getByRole('listbox');
+      await vi.waitFor(() => expect(list).toHaveFocus());
+      expect(list).toHaveAttribute('tabindex', '0');
+      const activeId = list.getAttribute('aria-activedescendant');
+      expect(activeId).toBeTruthy();
+      expect(document.getElementById(activeId ?? '')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('forwards EVERY key to the session, including keys it never declared', () => {
+      // The point of list mode: one table in the requester decides what each key means, including
+      // the ones it ignores. Declaring them all would duplicate that table here.
+      const onKey = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          keyForwarding={{ keys: ['Enter'], onKey }}
+        />,
+      );
+
+      const list = screen.getByRole('listbox');
+      fireEvent.keyDown(list, { key: 'Enter' });
+      fireEvent.keyDown(list, { key: 'q' });
+      fireEvent.keyDown(list, { key: '.' });
+      fireEvent.keyDown(list, { key: 'Dead' });
+      fireEvent.keyDown(list, { key: 'ArrowDown' });
+
+      expect(onKey.mock.calls.map(([event]) => event.key)).toEqual([
+        'Enter',
+        'q',
+        '.',
+        'Dead',
+        'ArrowDown',
+      ]);
+    });
+
+    it('stops forwarded keys reaching this document\u2019s other shortcut bindings', () => {
+      // A list-focused palette holds focus in the renderer document rather than in the requesting
+      // WebView’s iframe, which puts the renderer’s `document`-level shortcut bindings in the
+      // key’s path — `PlatformMenubar` binds bare `alt` and answers it by dispatching a SYNTHETIC
+      // Escape at a menu trigger, which would close the palette the instant a user reaches for a
+      // dead key (Option is how `é` is typed on macOS).
+      const documentListener = vi.fn();
+      document.addEventListener('keydown', documentListener);
+      const onKey = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          keyForwarding={{ keys: [], onKey }}
+        />,
+      );
+
+      // A key the session IGNORES is still the palette's to own \u2014 that is the case that bit us.
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Alt', altKey: true });
+
+      expect(onKey).toHaveBeenCalledTimes(1);
+      expect(documentListener).not.toHaveBeenCalled();
+      document.removeEventListener('keydown', documentListener);
+    });
+
+    it('leaves the DEFAULT palette\u2019s keys reaching the document, as before', () => {
+      // Only list mode claims the keyboard this way; an ordinary focused palette keeps today's
+      // behaviour so other PAPI consumers are unaffected.
+      const documentListener = vi.fn();
+      document.addEventListener('keydown', documentListener);
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Alt', altKey: true });
+
+      expect(documentListener).toHaveBeenCalled();
+      document.removeEventListener('keydown', documentListener);
+    });
+
+    it('hands Escape to the session too, instead of dismissing locally', () => {
+      // Dismissal is the session's call: it has a caret to restore and a pending state to clear.
+      const onKey = vi.fn();
+      const onDismiss = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+          keyForwarding={{ keys: [], onKey }}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
+
+      expect(onKey).toHaveBeenCalledTimes(1);
+      expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it('still dismisses on Escape when the requester declared no forwarding at all', () => {
+      const onDismiss = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          focusTarget="list"
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' });
+
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves the DEFAULT palette untouched — input focused and editable', async () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      await vi.waitFor(() => expect(input).toHaveFocus());
+      expect(input).not.toHaveAttribute('readonly');
+    });
+
+    it('does not forward undeclared keys, and dismisses locally, outside list mode', () => {
+      // A key-forwarding palette that is NOT list-focused keeps today's behaviour in both
+      // respects: only its declared keys go back to the session, and Escape is its own. (It also
+      // leaves focus alone — covered by the anchored-palette focus tests above.)
+      const onKey = vi.fn();
+      const onDismiss = vi.fn();
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={onDismiss}
+          keyForwarding={{ keys: ['Enter'], onKey }}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      fireEvent.keyDown(input, { key: 'q' });
+      expect(onKey).not.toHaveBeenCalled();
+      fireEvent.keyDown(input, { key: 'Escape' });
+      expect(onDismiss).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -822,6 +1110,37 @@ describe('OverlayCommandPalettePresentational', () => {
       );
     });
 
+    it('should scroll the newly highlighted item into view when selectedIndex changes', () => {
+      // Passive items are plain elements, so cmdk's own scroll-to-selected never runs; without the
+      // palette doing it, a host-driven highlight can move below the fold unseen.
+      const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+      const { rerender } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={0}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      scrollIntoView.mockClear();
+
+      rerender(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          selectedIndex={2}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const newlyHighlighted = screen.getByText('Close Tab').closest('[data-slot="command-item"]');
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+      expect(scrollIntoView.mock.contexts).toContain(newlyHighlighted);
+      scrollIntoView.mockRestore();
+    });
+
     it('should render items with role="option" and point the listbox aria-activedescendant at the highlighted item', () => {
       render(
         <OverlayCommandPalettePresentational
@@ -1026,6 +1345,103 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(onSelect).toHaveBeenCalledWith('non-basic');
     });
   });
+
+  describe('sizing and anchoring (anchored mode)', () => {
+    it('sizes the inner wrapper with the default caps and leaves PopoverContent unsized', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { style } = inner as HTMLElement;
+      // jsdom leaves an inline style property that was never assigned as `undefined` rather than the
+      // empty string a real browser reports for an unset CSS property, so the absent `zoom` is
+      // checked against both.
+      expect(style.zoom || '').toBe('');
+      // The palette's own default width/cap.
+      expect(style.maxWidth).toBe('500px');
+
+      const content = document.querySelector('[data-overlay-command-palette]');
+      expect(content).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((content as HTMLElement).style.width).toBe('auto');
+    });
+
+    it("leaves the caller's own maxWidth exactly as given at interface scale", () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          maxWidth={320}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { style } = inner as HTMLElement;
+      expect(style.maxWidth).toBe('320px');
+    });
+
+    it('renders the arrow as a sibling of the inner wrapper, not inside it', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const content = document.querySelector('[data-overlay-command-palette]');
+      const inner = document.querySelector('[data-overlay-command-palette-zoom]');
+      expect(content).toBeInTheDocument();
+      expect(inner).toBeInTheDocument();
+      // querySelector returns Element | null; the assertions above guard null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const contentEl = content as HTMLElement;
+      // PopoverContent has exactly two direct children: the inner wrapper and the arrow. Radix
+      // requires the arrow to be a child of PopoverContent, and it must be the OTHER child — inside
+      // the wrapper it would sit in the scrolled box. Checked structurally rather than by finding an
+      // `svg` because cmdk's search-icon svg (rendered inside the wrapper, ahead of the arrow's own
+      // svg in document order) would otherwise be matched first.
+      const otherChildren = Array.from(contentEl.children).filter((child) => child !== inner);
+      expect(otherChildren).toHaveLength(1);
+      expect(inner?.contains(otherChildren[0])).toBe(false);
+    });
+
+    it('sizes the anchor to the trigger as the pane measured it', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          position={{ x: 100, y: 200 }}
+          anchor={{ width: 40, height: 20 }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const anchor = document.querySelector('[data-overlay-command-palette-anchor]');
+      expect(anchor).toBeInTheDocument();
+      // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { style } = anchor as HTMLElement;
+      expect(style.width).toBe('40px');
+      expect(style.height).toBe('20px');
+    });
+  });
 });
 
 describe('OverlayCommandPalette (store-connected)', () => {
@@ -1069,6 +1485,30 @@ describe('OverlayCommandPalette (store-connected)', () => {
 
   beforeEach(() => {
     clearAllOverlays();
+  });
+
+  it('hands the request’s anchor size to the presentational component it renders', () => {
+    // A `position` plus a sized `request.anchor` puts the palette in its anchored branch (the
+    // centered branch has no anchor).
+    const entry = createPaletteEntry({
+      position: { x: 10, y: 20 },
+      request: {
+        items: paletteItems,
+        disableFuzzyMatching: true,
+        anchor: { x: 10, y: 20, width: 40, height: 20 },
+      },
+    });
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    const anchor = document.querySelector('[data-overlay-command-palette-anchor]');
+    expect(anchor).toBeInTheDocument();
+    // querySelector returns Element | null; the assertion above guards null, but TS can't narrow it
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const { style: anchorStyle } = anchor as HTMLElement;
+    // request.anchor is 40x20, drawn at that size.
+    expect(anchorStyle.width).toBe('40px');
+    expect(anchorStyle.height).toBe('20px');
   });
 
   it('mirrors typed filter text into the store so a forwarded commit resolves against the displayed list', () => {
@@ -1205,9 +1645,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
   }
 
   function renderForwardingPalette(
-    // The forwarded kinds only: an 'enter' session never declares key forwarding (its palette is
-    // always focused), so getMarkerPaletteClaimedKeys does not accept it.
-    session: MarkerPaletteSessionState & { kind: ForwardedSessionKind },
+    session: MarkerPaletteSessionState,
     driver: MarkerPaletteSessionDriver,
     onSelect = vi.fn(),
   ) {
@@ -1217,7 +1655,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
         onSelect={onSelect}
         onDismiss={vi.fn()}
         keyForwarding={{
-          keys: getMarkerPaletteClaimedKeys(session.kind),
+          keys: getMarkerPaletteClaimedKeys(),
           onKey: (event) => handleMarkerPaletteSessionKeyDown(event, session, driver),
         }}
       />,
@@ -1227,7 +1665,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
 
   it('routes typed characters into the SESSION filter, not the palette input', () => {
     // Without this the session would commit an empty query while the screen showed a full one.
-    const session: MarkerPaletteSessionState & { kind: ForwardedSessionKind } = {
+    const session: MarkerPaletteSessionState = {
       kind: 'selection',
       filter: '',
       items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
@@ -1245,7 +1683,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
   it('overlay-focused + NON-EMPTY filter + Space performs the ratified selection wrap', () => {
     // Previously: Space was an ordinary character appended to cmdk's filter, so the wrap never
     // happened and the query stopped matching anything.
-    const session: MarkerPaletteSessionState & { kind: ForwardedSessionKind } = {
+    const session: MarkerPaletteSessionState = {
       kind: 'selection',
       filter: '',
       items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
@@ -1268,7 +1706,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
     // item, committing something the user never typed and bypassing the session entirely. With
     // the patch opt-in (a palette with key forwarding does not opt in) and Space forwarded, the
     // session's own visible refusal runs instead.
-    const session: MarkerPaletteSessionState & { kind: ForwardedSessionKind } = {
+    const session: MarkerPaletteSessionState = {
       kind: 'selection',
       filter: '',
       items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
@@ -1294,7 +1732,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
         onSelect={vi.fn()}
         onDismiss={onDismiss}
         keyForwarding={{
-          keys: getMarkerPaletteClaimedKeys('backslash'),
+          keys: getMarkerPaletteClaimedKeys(),
           onKey: (event) => handleMarkerPaletteSessionKeyDown(event, session, driver),
         }}
       />,

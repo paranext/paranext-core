@@ -6,7 +6,8 @@ import type {
   ResourceReferenceList,
   ITextConnectionSettingsProjectDataProvider,
 } from 'platform-scripture';
-import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
+import { useProjectSetting, useProjectDataProviderState } from '@papi/frontend/react';
+import { logger } from '@papi/frontend';
 import {
   useEffectiveResourceReferenceList,
   type EffectiveResourceReferenceListState,
@@ -14,7 +15,7 @@ import {
 
 vi.mock('@papi/frontend/react', () => ({
   useProjectSetting: vi.fn(),
-  useProjectDataProvider: vi.fn(),
+  useProjectDataProviderState: vi.fn(),
 }));
 
 vi.mock('@papi/frontend', () => ({
@@ -43,7 +44,20 @@ function readyList(state: EffectiveResourceReferenceListState) {
 }
 
 const mockUseProjectSetting = vi.mocked(useProjectSetting);
-const mockUseProjectDataProvider = vi.mocked(useProjectDataProvider);
+const mockUseProjectDataProviderState = vi.mocked(useProjectDataProviderState);
+
+/**
+ * Serves a provider as the `ready` state, or `undefined` as `loading` — the two statuses these
+ * hooks branch on. Keeps each test saying "this provider is available now" rather than restating
+ * the state shape.
+ */
+function serveProvider(pdp: unknown) {
+  mockUseProjectDataProviderState.mockReturnValue(
+    // The mock only needs the discriminant and payload the hook reads.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (pdp ? { status: 'ready', networkObject: pdp } : { status: 'loading' }) as never,
+  );
+}
 
 const emptyList = (dataVersion = '1.0.0'): ResourceReferenceList => ({
   dataVersion,
@@ -79,7 +93,7 @@ describe('useEffectiveResourceReferenceList', () => {
   it('reports loading while the project setting is loading', () => {
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
     const mockPdp = makeMockPdp(emptyList(), 'subscribeUserModelTexts');
-    mockUseProjectDataProvider.mockReturnValue(mockPdp);
+    serveProvider(mockPdp);
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -93,13 +107,139 @@ describe('useEffectiveResourceReferenceList', () => {
     // normal interleaving on essentially every mount: the user layer needs the PDP to resolve, then
     // an explicit subscribe, then a first delivery — strictly more hops than the project setting.
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
-    mockUseProjectDataProvider.mockReturnValue(undefined);
+    serveProvider(undefined);
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
     expect(result.current.status).toBe('loading');
+  });
+
+  it('never reports ready against the loading placeholder when the user list arrives first', async () => {
+    // `useBufferedLayoutSetting` copies the loaded value into its held copy from an effect, so on
+    // the commit where the admin setting finishes loading `isLoading` is already false while the
+    // held copy is still the empty stand-in. Reporting `ready` on that commit hands the grid a merge
+    // with no admin items; the grid's reconcile effect then prunes those ids out of the saved cell
+    // order and persists the damage, losing the admin resources' saved slots.
+    const adminList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'Admin Text', id: 'admin-001' }],
+    };
+    const userList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'User Text', id: 'user-001' }],
+    };
+
+    // The user layer answers from the first render; only the admin layer is still loading.
+    serveProvider(makeMockPdp(userList, 'subscribeUserModelTexts'));
+    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
+
+    const observed: EffectiveResourceReferenceListState[] = [];
+    const { rerender } = renderHook(() => {
+      const state = useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts');
+      observed.push(state);
+      return state;
+    });
+
+    // The admin setting resolves. The held copy still lags by one commit.
+    mockUseProjectSetting.mockReturnValue([adminList, undefined, undefined, false]);
+    rerender();
+
+    await waitFor(() => {
+      expect(observed.at(-1)?.status).toBe('ready');
+    });
+
+    // Every `ready` the hook ever reported must carry the admin item. Asserting only on the final
+    // state would pass even when a transient ready-without-admin commit went out, because the held
+    // copy catches up on the very next one — and that transient commit is what does the damage.
+    const readyWithoutAdmin = observed.filter(
+      (state) =>
+        state.status === 'ready' && !state.list.items.some((item) => item.id === 'admin-001'),
+    );
+    expect(readyWithoutAdmin).toHaveLength(0);
+  });
+
+  it('never reports ready without the admin items while recovering from a failed first read', async () => {
+    // The first read is an error, so nothing is applied to the held copy. When the setting becomes
+    // readable the error clears on that commit, but the held copy is applied by an effect and is
+    // still the empty placeholder — a `ready` there is an empty prompt the panels would show.
+    const adminList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'Admin Text', id: 'admin-001' }],
+    };
+    serveProvider(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+    // Mount while loading, so the held copy starts as the placeholder rather than the error.
+    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
+
+    const observed: EffectiveResourceReferenceListState[] = [];
+    const { rerender } = renderHook(() => {
+      const state = useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts');
+      observed.push(state);
+      return state;
+    });
+
+    mockUseProjectSetting.mockReturnValue([makePlatformError(), undefined, undefined, false]);
+    rerender();
+    await waitFor(() => expect(observed.at(-1)?.status).toBe('error'));
+
+    mockUseProjectSetting.mockReturnValue([adminList, undefined, undefined, false]);
+    rerender();
+
+    await waitFor(() => expect(observed.at(-1)?.status).toBe('ready'));
+    const readyWithoutAdmin = observed.filter(
+      (state) =>
+        state.status === 'ready' && !state.list.items.some((item) => item.id === 'admin-001'),
+    );
+    expect(readyWithoutAdmin).toHaveLength(0);
+  });
+
+  it('returns the admin items when the user settings provider lookup is unavailable', async () => {
+    // The lookup finished without a provider, so no user layer is coming. The hook promises the
+    // admin items in that case rather than a spinner that never clears.
+    const adminList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'Admin Text', id: 'admin-001' }],
+    };
+    mockUseProjectSetting.mockReturnValue([adminList, undefined, undefined, false]);
+    // The mock only needs the discriminant the hook reads.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    mockUseProjectDataProviderState.mockReturnValue({ status: 'unavailable' } as never);
+
+    const { result } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(readyList(result.current).items).toEqual([
+      expect.objectContaining({ id: 'admin-001', source: 'admin' }),
+    ]);
+  });
+
+  it('logs a failed unsubscribe after unmount as a warning, not a subscribe error', async () => {
+    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
+    let resolveSubscribe: (unsub: () => Promise<boolean>) => void = () => {};
+    serveProvider({
+      subscribeUserModelTexts: vi.fn(
+        () =>
+          new Promise<() => Promise<boolean>>((resolve) => {
+            resolveSubscribe = resolve;
+          }),
+      ),
+    });
+
+    const { unmount } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+    unmount();
+    await act(async () => {
+      resolveSubscribe(() => Promise.reject(new Error('provider already disposed')));
+    });
+
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to unsubscribe from user text connection settings'),
+    );
+    expect(vi.mocked(logger.error)).not.toHaveBeenCalled();
   });
 
   it('clears the stale user list when the PDP goes away, preventing a wrong cross-project merge', () => {
@@ -111,7 +251,7 @@ describe('useEffectiveResourceReferenceList', () => {
       items: [{ type: 'project', name: 'From Project A', id: 'a-001' }],
     };
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
-    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(userListA, 'subscribeUserModelTexts'));
+    serveProvider(makeMockPdp(userListA, 'subscribeUserModelTexts'));
 
     const { result, rerender } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-a', 'platformScripture.modelTexts'),
@@ -121,7 +261,7 @@ describe('useEffectiveResourceReferenceList', () => {
     expect(readyList(result.current).items[0]).toMatchObject({ id: 'a-001' });
 
     // PDP goes away (new project selected, PDP not yet registered).
-    mockUseProjectDataProvider.mockReturnValue(undefined);
+    serveProvider(undefined);
     rerender();
 
     // Must report loading — not a stale merge of project B's admin list with project A's user
@@ -135,7 +275,7 @@ describe('useEffectiveResourceReferenceList', () => {
     };
     mockUseProjectSetting.mockReturnValue([projectList, undefined, undefined, false]);
     const mockPdp = makeMockPdp(emptyList(), 'subscribeUserModelTexts');
-    mockUseProjectDataProvider.mockReturnValue(mockPdp);
+    serveProvider(mockPdp);
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -158,7 +298,7 @@ describe('useEffectiveResourceReferenceList', () => {
       items: [{ type: 'enhancedResource', name: 'My Resource' }],
     };
     const mockPdp = makeMockPdp(userList, 'subscribeUserModelTexts');
-    mockUseProjectDataProvider.mockReturnValue(mockPdp);
+    serveProvider(mockPdp);
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -187,7 +327,7 @@ describe('useEffectiveResourceReferenceList', () => {
       ],
     };
     const mockPdp = makeMockPdp(userList, 'subscribeUserModelTexts');
-    mockUseProjectDataProvider.mockReturnValue(mockPdp);
+    serveProvider(mockPdp);
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -222,7 +362,7 @@ describe('useEffectiveResourceReferenceList', () => {
       ],
     };
     const mockPdp = makeMockPdp(userList, 'subscribeUserModelTexts');
-    mockUseProjectDataProvider.mockReturnValue(mockPdp);
+    serveProvider(mockPdp);
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -252,7 +392,7 @@ describe('useEffectiveResourceReferenceList', () => {
       items: [{ type: 'dblResource', name: 'DBL Resource', id: 'dbl-001' }],
     };
     const mockPdp = makeMockPdp(userList, 'subscribeUserModelTexts');
-    mockUseProjectDataProvider.mockReturnValue(mockPdp);
+    serveProvider(mockPdp);
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -278,7 +418,7 @@ describe('useEffectiveResourceReferenceList', () => {
     // `projectId` was never consulted, so this pinned nothing: without a project there is no user
     // PDP, and that is what must keep the hook out of `ready`.
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
-    mockUseProjectDataProvider.mockReturnValue(undefined);
+    serveProvider(undefined);
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList(undefined, 'platformScripture.modelTexts'),
@@ -298,7 +438,7 @@ describe('useEffectiveResourceReferenceList', () => {
       items: [{ type: 'sourceLanguageResource', name: 'Hebrew' }],
     };
     const mockPdp = makeMockPdp(userList, 'subscribeUserReferencedProjectsAndResources');
-    mockUseProjectDataProvider.mockReturnValue(mockPdp);
+    serveProvider(mockPdp);
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList(
@@ -339,11 +479,7 @@ describe('useEffectiveResourceReferenceList', () => {
       callback(platformError);
       return () => Promise.resolve(true);
     });
-    // Mock object literal cannot satisfy the full PDP interface — cast needed for test isolation
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    mockUseProjectDataProvider.mockReturnValue({
-      subscribeUserModelTexts: mockSubscribe,
-    } as unknown as ReturnType<typeof useProjectDataProvider>);
+    serveProvider({ subscribeUserModelTexts: mockSubscribe });
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -367,7 +503,7 @@ describe('useEffectiveResourceReferenceList', () => {
       false,
     ]);
     const mockPdp = makeMockPdp(emptyList(), 'subscribeUserModelTexts');
-    mockUseProjectDataProvider.mockReturnValue(mockPdp);
+    serveProvider(mockPdp);
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -381,7 +517,7 @@ describe('useEffectiveResourceReferenceList', () => {
   it('reports error when the project setting fails after the initial loading window', () => {
     // Mount while the setting is still loading, so the buffered copy holds the placeholder.
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
-    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+    serveProvider(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
 
     const { result, rerender } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -405,7 +541,7 @@ describe('useEffectiveResourceReferenceList', () => {
 
   it('recovers to ready once an unreadable setting becomes readable again', () => {
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
-    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+    serveProvider(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
 
     const { result, rerender } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -449,11 +585,7 @@ describe('useEffectiveResourceReferenceList', () => {
     const mockSubscribe = vi.fn(async () => {
       throw new Error('subscribe rejected');
     });
-    // Mock object literal cannot satisfy the full PDP interface — cast needed for test isolation
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    mockUseProjectDataProvider.mockReturnValue({
-      subscribeUserModelTexts: mockSubscribe,
-    } as unknown as ReturnType<typeof useProjectDataProvider>);
+    serveProvider({ subscribeUserModelTexts: mockSubscribe });
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -475,7 +607,7 @@ describe('useEffectiveResourceReferenceList', () => {
       items: 'not-an-array' as unknown as ResourceReferenceList['items'],
     };
     mockUseProjectSetting.mockReturnValue([malformed, undefined, undefined, false]);
-    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+    serveProvider(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -496,7 +628,7 @@ describe('useEffectiveResourceReferenceList', () => {
       ],
     };
     mockUseProjectSetting.mockReturnValue([projectList, undefined, undefined, false]);
-    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+    serveProvider(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -524,7 +656,7 @@ describe('useEffectiveResourceReferenceList', () => {
       ],
     };
     mockUseProjectSetting.mockReturnValue([projectList, undefined, undefined, false]);
-    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+    serveProvider(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -550,7 +682,7 @@ describe('useEffectiveResourceReferenceList', () => {
         { type: 'enhancedResource', name: 'User Only' },
       ],
     };
-    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(userList, 'subscribeUserModelTexts'));
+    serveProvider(makeMockPdp(userList, 'subscribeUserModelTexts'));
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
@@ -581,7 +713,7 @@ describe('useEffectiveResourceReferenceList', () => {
       items: [{ type: 'project', name: 'Admin V2', id: 'a-2' }],
     };
     mockUseProjectSetting.mockReturnValue([adminV1, undefined, undefined, false]);
-    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+    serveProvider(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
 
     const { result, rerender } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),

@@ -28,7 +28,13 @@ export function useInstallDblResource(
 ): (dblEntryUid: string) => Promise<void> {
   return useCallback(
     async (dblEntryUid: string) => {
-      if (await installDblResource(provider, dblEntryUid, logLabel)) onInstalled();
+      if (!(await installDblResource(provider, dblEntryUid, logLabel))) return;
+
+      // No flag refresh here: every caller re-resolves its catalog through a read that refreshes
+      // the flags first, so refreshing again would run a second full sync back to back — one the
+      // user waits through, since a refresh deliberately starts after any sync already running
+      // rather than joining it.
+      onInstalled();
     },
     [provider, logLabel, onInstalled],
   );

@@ -19,7 +19,7 @@ import { scrollToRef, SaveState } from './utils';
  */
 export const INTERNET_SETTINGS_STRING_KEYS: LocalizeKey[] = [
   '%general_error_title%',
-  '%internetSettings_webView_subtitle%',
+  '%internetSettings_webView_subtitle_2%',
   '%internetSettings_webView_title_2%',
   '%paratextRegistration_alert_updatedInternetSettings_2%',
   '%paratextRegistration_alert_updatedRegistration_description%',
@@ -117,7 +117,7 @@ export function InternetSettingsForm({
           {localizedStrings['%internetSettings_webView_title_2%']}
         </h2>
         <p className="tw:text-sm tw:text-muted-foreground">
-          {localizedStrings['%internetSettings_webView_subtitle%']}
+          {localizedStrings['%internetSettings_webView_subtitle_2%']}
         </p>
       </div>
 

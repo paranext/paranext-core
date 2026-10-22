@@ -1,25 +1,43 @@
-import type { Locator, Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * Page-object helpers for the first-run wizard dialog.
  *
- * All helpers scope queries inside the full-screen `role="dialog"` (the Radix `DialogContent`) so
- * they cannot accidentally match content in the aria-hidden app behind the overlay.
+ * All helpers scope queries inside `[data-testid="first-run-dialog"]` — the wizard's own Radix
+ * `DialogContent` — rather than a bare `role="dialog"` locator: the onboarding tour opens its own
+ * dialog the instant the wizard unmounts, and a role-based locator would match that dialog too,
+ * hanging {@link FirstRunPage.waitForDismissed} forever instead of observing the wizard close.
  *
  * Button-label notes (from `assets/localization/en.json`):
  *
  * - Primary action: "Next" on steps 1–3, "Finish" on the last step (SyncProgress)
  * - "Back" — absent on the first step (Language) and on the SyncProgress interstitial
  * - "Sync" — the Sync consent step's own primary action (Next is hidden on that step)
- * - "Skip automatic sync" — present only on the Sync consent step (shell footer)
+ * - "Don't sync yet" — present only on the Sync consent step (the step's own footer)
  * - "Save and restart" — the Identify step's own primary action (Next is hidden on that step)
  */
 export class FirstRunPage {
-  /** Locator for the full-screen first-run dialog. */
+  /** Locator for the first-run wizard's own dialog content. */
   readonly dialog: Locator;
 
-  constructor(private readonly page: Page) {
-    this.dialog = page.getByRole('dialog');
+  constructor(page: Page) {
+    this.dialog = page.getByTestId('first-run-dialog');
+  }
+
+  /** "Don't sync yet" — present only in the Sync consent step's own footer. */
+  get dontSyncYetButton(): Locator {
+    return this.dialog.getByRole('button', { name: "Don't sync yet" });
+  }
+
+  /** "Sync" — the Sync consent step's own primary action. */
+  get syncButton(): Locator {
+    return this.dialog.getByRole('button', { name: /^sync$/i });
+  }
+
+  /** The "Unrestricted" internet access option on the Internet Settings step. */
+  get unrestrictedOption(): Locator {
+    // %paratextRegistration_description_internetUse_option_Enabled_2%
+    return this.dialog.getByRole('radio', { name: 'Unrestricted' });
   }
 
   /**
@@ -61,6 +79,20 @@ export class FirstRunPage {
     await this.dialog.getByRole('button', { name: /^(Next|Finish)$/i }).click({ timeout: 60_000 });
   }
 
+  /**
+   * Choose "Unrestricted" on the Internet Settings step. The step selects no option and keeps Next
+   * disabled until the user picks one, so this must come before {@link clickNext} there. Long
+   * timeout for the same reason as clickNext: the list renders only once the async settings read
+   * lands.
+   *
+   * Clicks the option's label, as a user does. The label stretches over the whole row so the row is
+   * clickable, which makes Playwright treat the radio button itself as covered and never click it.
+   */
+  async chooseUnrestrictedInternetAccess(): Promise<void> {
+    await this.dialog.locator('label', { hasText: /^Unrestricted$/ }).click({ timeout: 60_000 });
+    await expect(this.dialog.getByRole('radio', { name: 'Unrestricted' })).toBeChecked();
+  }
+
   /** Click the Back button (not present on the first step or on the SyncProgress interstitial). */
   async clickBack(): Promise<void> {
     await this.dialog.getByRole('button', { name: 'Back' }).click();
@@ -71,12 +103,25 @@ export class FirstRunPage {
    * advances to Sync progress; in production it triggers a real S/R sync first.
    */
   async clickSync(): Promise<void> {
-    await this.dialog.getByRole('button', { name: /^sync$/i }).click({ timeout: 60_000 });
+    await this.syncButton.click({ timeout: 60_000 });
   }
 
-  /** Click "Skip automatic sync" (present only on the Sync consent step shell footer). */
-  async clickSkipAutomaticSync(): Promise<void> {
-    await this.dialog.getByRole('button', { name: 'Skip automatic sync' }).click();
+  /** Click "Don't sync yet" (present only in the Sync consent step's own footer). */
+  async clickDontSyncYet(): Promise<void> {
+    await this.dontSyncYetButton.click();
+  }
+
+  /**
+   * Select "Unrestricted" on the Internet Settings step. The step saves each selection immediately
+   * and keeps Next disabled until that save lands, so a following {@link clickNext} waits for the
+   * write to finish. Selecting the option that is already checked writes nothing.
+   *
+   * The click timeout covers the step's own async settings read: the options render only once the
+   * internet settings data provider has answered.
+   */
+  async selectUnrestricted(): Promise<void> {
+    await this.unrestrictedOption.click({ timeout: 60_000 });
+    await expect(this.unrestrictedOption).toBeChecked();
   }
 
   /**
