@@ -430,8 +430,11 @@ export type FindProps = {
   onHideResult: (index: number) => void;
   /** Called when the user replaces a single result, by its original index (defaults to focused). */
   onReplace: (resultIndex?: number) => void;
-  /** Called when the user replaces all visible results. */
-  onReplaceAll: () => void;
+  /**
+   * Called when the user replaces all visible results. When omitted, the Replace All button is
+   * hidden.
+   */
+  onReplaceAll?: () => void;
   /** Called to cancel/revert the pending replace operation. */
   onCancelReplace: () => void;
   /** Called when the results container scrolls (drives progressive loading). */
@@ -1264,14 +1267,16 @@ export function Find({
                 disabled={isReplaceActionBlocked}
                 tooltipText={replaceBlockedTooltipText}
               >
-                <Button
-                  variant="outline"
-                  onClick={onReplaceAll}
-                  disabled={visibleResults.length === 0 || isReplaceUnavailable}
-                >
-                  <ReplaceAll className="tw:h-4 tw:w-4" />
-                  {localizedStrings['%webView_find_replaceAll%']}
-                </Button>
+                {onReplaceAll && (
+                  <Button
+                    variant="outline"
+                    onClick={onReplaceAll}
+                    disabled={visibleResults.length === 0 || isReplaceUnavailable}
+                  >
+                    <ReplaceAll className="tw:h-4 tw:w-4" />
+                    {localizedStrings['%webView_find_replaceAll%']}
+                  </Button>
+                )}
                 <Button
                   onClick={() => onReplace()}
                   disabled={focusedResultIndex === undefined || isReplaceUnavailable}

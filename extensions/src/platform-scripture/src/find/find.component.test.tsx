@@ -671,6 +671,27 @@ const FAKE_RESULT = {
   text: 'God',
 };
 
+describe('Find — Replace All availability', () => {
+  const replaceModeProps = {
+    activeMode: 'replace',
+    searchTerm: 'God',
+    searchStatus: 'completed',
+    results: [FAKE_RESULT],
+    focusedResultIndex: 0,
+  } satisfies Partial<FindProps>;
+
+  it('shows Replace All when given a handler for it', () => {
+    render(<Find {...buildLifecycleProps(replaceModeProps)} />);
+    expect(screen.getByRole('button', { name: 'Replace all' })).toBeInTheDocument();
+  });
+
+  it('hides Replace All but keeps Replace when no handler for it is given', () => {
+    render(<Find {...buildLifecycleProps({ ...replaceModeProps, onReplaceAll: undefined })} />);
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Replace all' })).toBeNull();
+  });
+});
+
 describe('Find — permission-blocked Replace', () => {
   function buildReplaceProps(overrides: Partial<FindProps>): FindProps {
     return buildLifecycleProps({
