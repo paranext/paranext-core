@@ -81,7 +81,7 @@ const DEFAULT_RECENT_IDS: string[] = [];
 const RECENT_IDS_R1_R2: string[] = ['proj-r1', 'proj-r2'];
 const RECENT_IDS_R1: string[] = ['proj-r1'];
 const RECENT_IDS_R1_RES2: string[] = ['proj-r1', 'res-r2'];
-const RECENT_IDS_RES1: string[] = ['res1'];
+const RECENT_IDS_RES_R1: string[] = ['res-r1'];
 
 type MetadataFixture = {
   id: string;
@@ -430,11 +430,11 @@ describe('useProjectPickerData', () => {
     const { logger } = await import('@shared/services/logger.service');
     const { projectLookupService, useData } = await importMocks();
     vi.mocked(useData).mockImplementation(() => ({
-      RecentProjects: vi.fn().mockReturnValue([RECENT_IDS_RES1, vi.fn(), false]),
+      RecentProjects: vi.fn().mockReturnValue([RECENT_IDS_RES_R1, vi.fn(), false]),
     }));
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
       metadataList([
-        { id: 'res1', fullName: 'Full res1', name: 'Short res1', isPublished: true },
+        { id: 'res-r1', fullName: 'Full res-r1', name: 'Short res-r1', isPublished: true },
       ]) as never,
     );
 
