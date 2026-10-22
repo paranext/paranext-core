@@ -418,9 +418,9 @@ describe('PlatformBibleToolbar — Sync button', () => {
 
   it('is rendered despite unavailable send/receive once the backend reports a sync', async () => {
     // Syncs also start from paths that never touch the send/receive extension — `startup-tasks.ts`
-    // calls the dotnet `syncProjects` command directly. In Simple mode the persistent toast is
-    // suppressed in favour of this indicator, so hiding it on a settled `false` would leave a real,
-    // multi-minute sync with no surface and no way to cancel.
+    // calls the dotnet `syncProjects` command directly. In Simple mode that call suppresses the
+    // dotnet progress toast in favour of this indicator, so hiding it on a settled `false` would
+    // leave a real, multi-minute sync with no surface and no way to cancel.
     vi.mocked(useSendReceiveAvailability).mockReturnValue(false);
     mockSendCommand(false);
     render(<PlatformBibleToolbar />);

@@ -6,6 +6,7 @@ import type {
   WarnFn,
 } from './comment-list-filters.model';
 import {
+  ALL_BOOKS_SCOPE_FILTER,
   applyFilterOverrides,
   buildCommentThreadSelector,
   DEFAULT_COMMENT_FILTERS,
@@ -21,7 +22,7 @@ import {
 
 const scrRef = { book: 'GEN', chapterNum: 3, verseNum: 5 };
 
-function build(preset: CommentPreset, scopeFilter: ScopeFilter = DEFAULT_SCOPE_FILTER) {
+function build(preset: CommentPreset, scopeFilter: ScopeFilter = ALL_BOOKS_SCOPE_FILTER) {
   return buildCommentThreadSelector({
     filters: { preset },
     scopeFilter,
@@ -81,7 +82,7 @@ describe('presets', () => {
     // silently show the wrong threads rather than none.
     const selector = buildCommentThreadSelector({
       filters: { preset: 'unresolved-assigned-to-me' },
-      scopeFilter: DEFAULT_SCOPE_FILTER,
+      scopeFilter: ALL_BOOKS_SCOPE_FILTER,
       scrRef,
       currentUserName: '',
     });
@@ -175,8 +176,12 @@ describe('applyFilterOverrides', () => {
 });
 
 describe('scope', () => {
-  it('contributes nothing at its default', () => {
-    expect(DEFAULT_SCOPE_FILTER).toBe('all-books');
+  it('opens on the current chapter by default', () => {
+    expect(DEFAULT_SCOPE_FILTER).toBe('current-chapter');
+  });
+
+  it('contributes no range for all-books', () => {
+    expect(ALL_BOOKS_SCOPE_FILTER).toBe('all-books');
     expect(build('all', 'all-books')).toEqual({});
   });
 
@@ -206,17 +211,20 @@ describe('scope', () => {
 });
 
 describe('isShowingAllThreads', () => {
-  it('is true only when both the preset and the scope are at their defaults', () => {
+  it('is true only when the preset is at its default and the scope is all-books', () => {
     expect(
-      isShowingAllThreads({ filters: DEFAULT_COMMENT_FILTERS, scopeFilter: DEFAULT_SCOPE_FILTER }),
+      isShowingAllThreads({
+        filters: DEFAULT_COMMENT_FILTERS,
+        scopeFilter: ALL_BOOKS_SCOPE_FILTER,
+      }),
     ).toBe(true);
   });
 
-  it('is false when the preset narrows the view, even at the default scope', () => {
+  it('is false when the preset narrows the view, even at the all-books scope', () => {
     expect(
       isShowingAllThreads({
         filters: { preset: 'unresolved' },
-        scopeFilter: DEFAULT_SCOPE_FILTER,
+        scopeFilter: ALL_BOOKS_SCOPE_FILTER,
       }),
     ).toBe(false);
   });

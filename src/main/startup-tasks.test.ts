@@ -11,7 +11,12 @@ import * as commandService from '@shared/services/command.service';
 import * as networkService from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { waitForScriptureWorkspaceReady } from '@main/startup-readiness.util';
+import {
+  deferAutomaticSyncForSession,
+  resetAutomaticSyncDeferralForTesting,
+} from '@main/first-run-consent.util';
 import { performStartupTasks, STARTUP_SYNC_RETRY_BUDGET_MS } from './startup-tasks';
+import { createSettingsStub, READ_THROWS } from './settings-stub.test-util';
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn() },
@@ -37,6 +42,7 @@ const mockSettingsGet = vi.mocked(settingsService.get);
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 const mockRequestNoRetry = vi.mocked(networkService.requestNoRetry);
 const mockLoggerDebug = vi.mocked(logger.debug);
+const mockLoggerInfo = vi.mocked(logger.info);
 const mockLoggerWarn = vi.mocked(logger.warn);
 const mockWaitForReady = vi.mocked(waitForScriptureWorkspaceReady);
 
@@ -60,14 +66,12 @@ function requestTimedOutError() {
   );
 }
 
-function stubSettings({ mode = 'simple', firstRunComplete = true, syncOnStartup = true } = {}) {
-  mockSettingsGet.mockImplementation(async (key: string) => {
-    if (key === 'platform.interfaceMode') return mode;
-    if (key === 'platform.firstRunComplete') return firstRunComplete;
-    if (key === 'platform.syncOnStartup') return syncOnStartup;
-    throw new Error(`Unexpected settings key in test stub: ${key}`);
-  });
-}
+/** The settings this suite's code under test reads (see {@link createSettingsStub}). */
+const stubSettings = createSettingsStub(mockSettingsGet, {
+  mode: 'simple',
+  firstRunComplete: true,
+  syncOnStartup: true,
+});
 
 /** The settings snapshot a Simple-mode startup sync needs before anything else can skip it. */
 const SIMPLE_MODE_SETTINGS = { mode: 'simple', firstRunComplete: true, syncOnStartup: true };
@@ -106,6 +110,7 @@ async function startupWithSettingsChangedDuringReadinessWait(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetAutomaticSyncDeferralForTesting();
   mockSendCommand.mockResolvedValue(undefined);
   mockRequestNoRetry.mockResolvedValue(undefined);
   mockWaitForReady.mockResolvedValue({ outcome: 'ready' });
@@ -122,12 +127,27 @@ describe('performStartupTasks', () => {
     expect(mockSendCommand).not.toHaveBeenCalled();
   });
 
-  it('fires syncProjects with no project IDs when interface mode is simple', async () => {
+  it('still fires the power-mode startup sync when first run is not complete', async () => {
+    // Regression guard: do NOT hoist the gate above the `interfaceMode === 'power'` early return.
+    // It would look symmetric and would permanently, silently disable Power mode's scheduled startup
+    // sync, with no UI to turn it back on (see getAutomaticSyncConsent). Needs the per-setting
+    // stub: the blanket mockResolvedValue('power') the other Power tests use answers the
+    // firstRunComplete read with 'power', which is not `false` and so cannot express this case.
+    stubSettings({ mode: 'power', firstRunComplete: false });
+    await performStartupTasks();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('runScheduledSessionSync'),
+      'startup',
+    );
+  });
+
+  it('fires syncProjects with no project IDs and the progress toast suppressed when interface mode is simple', async () => {
     stubSettings({ mode: 'simple', firstRunComplete: true });
     await performStartupTasks();
     expect(mockSendCommand).toHaveBeenCalledWith(
       'paratextBibleSendReceive.syncProjects',
       undefined,
+      true,
     );
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
   });
@@ -150,6 +170,22 @@ describe('performStartupTasks', () => {
     stubSettings({ mode: 'simple', firstRunComplete: false });
     await performStartupTasks();
     expect(mockSendCommand).not.toHaveBeenCalled();
+    // Its own line, distinct from the syncOnStartup skip below, so the log says which gate closed.
+    // Info, not debug, so packaged builds (log level `info`) keep it — the shutdown and
+    // window-close consent skips log at info for the same reason.
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      expect.stringContaining('Startup sync skipped: first-run sync consent not confirmed'),
+    );
+  });
+
+  it('does NOT fire sync in simple mode after the user chose "Don\'t sync yet" this session', async () => {
+    stubSettings({ mode: 'simple', firstRunComplete: true });
+    deferAutomaticSyncForSession();
+    await performStartupTasks();
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      expect.stringContaining('automatic sync deferred for this session'),
+    );
   });
 
   it('fires sync in simple mode once first run is complete', async () => {
@@ -158,10 +194,11 @@ describe('performStartupTasks', () => {
     expect(mockSendCommand).toHaveBeenCalledWith(
       'paratextBibleSendReceive.syncProjects',
       undefined,
+      true,
     );
   });
 
-  it('skips startup sync when user chose "Skip automatic sync" on sync consent step', async () => {
+  it('skips startup sync when the user turned off platform.syncOnStartup', async () => {
     stubSettings({ mode: 'simple', firstRunComplete: true, syncOnStartup: false });
     await performStartupTasks();
     expect(mockSendCommand).not.toHaveBeenCalled();
@@ -174,16 +211,12 @@ describe('performStartupTasks', () => {
   it('proceeds with startup sync when syncOnStartup setting read throws (fail-open to sync)', async () => {
     // If the setting read fails, default to proceeding with sync rather than silently skipping
     // a user who never actually chose to skip.
-    mockSettingsGet.mockImplementation(async (key: string) => {
-      if (key === 'platform.interfaceMode') return 'simple';
-      if (key === 'platform.firstRunComplete') return true;
-      if (key === 'platform.syncOnStartup') throw new Error('read failed');
-      throw new Error(`Unexpected settings key in test stub: ${key}`);
-    });
+    stubSettings({ mode: 'simple', firstRunComplete: true, syncOnStartup: READ_THROWS });
     await performStartupTasks();
     expect(mockSendCommand).toHaveBeenCalledWith(
       'paratextBibleSendReceive.syncProjects',
       undefined,
+      true,
     );
     expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('platform.syncOnStartup'));
   });
@@ -378,6 +411,54 @@ describe('performStartupTasks', () => {
       // Budget exhausted on MethodNotFound means the command never registered — the message says so.
       expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('never registered'));
     });
+
+    it('stops retrying without firing once the user has switched to Simple mode', async () => {
+      // The Power-only sync keeps its progress toast; fired after a switch to Simple it would run
+      // beside the Simple-mode toolbar indicator, giving one sync two cancellable surfaces.
+      let mode = 'power';
+      mockSettingsGet.mockImplementation(async () => mode);
+      mockRequestNoRetry.mockImplementation(async () => {
+        mode = 'simple';
+        throw methodNotFoundError();
+      });
+
+      vi.useFakeTimers();
+      try {
+        const startupPromise = performStartupTasks();
+        await vi.advanceTimersByTimeAsync(5_000);
+        await expect(startupPromise).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringContaining('no longer in Power mode'),
+      );
+    });
+
+    it('stops retrying without firing when re-reading the mode fails', async () => {
+      mockSettingsGet
+        .mockResolvedValueOnce('power')
+        .mockRejectedValue(new Error('settings unavailable'));
+      mockRequestNoRetry.mockRejectedValue(methodNotFoundError());
+
+      vi.useFakeTimers();
+      try {
+        const startupPromise = performStartupTasks();
+        await vi.advanceTimersByTimeAsync(5_000);
+        await expect(startupPromise).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+      expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Could not read platform.interfaceMode'),
+      );
+    });
   });
 
   // #endregion
@@ -405,6 +486,7 @@ describe('performStartupTasks', () => {
       expect(mockSendCommand).toHaveBeenCalledWith(
         'paratextBibleSendReceive.syncProjects',
         undefined,
+        true,
       );
     });
 
@@ -422,6 +504,7 @@ describe('performStartupTasks', () => {
       expect(mockSendCommand).toHaveBeenCalledWith(
         'paratextBibleSendReceive.syncProjects',
         undefined,
+        true,
       );
       expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('did not become ready'));
     });
@@ -526,6 +609,7 @@ describe('performStartupTasks', () => {
       expect(mockSendCommand).toHaveBeenCalledWith(
         'paratextBibleSendReceive.syncProjects',
         undefined,
+        true,
       );
     });
 
@@ -592,6 +676,7 @@ describe('performStartupTasks', () => {
       expect(mockSendCommand).toHaveBeenCalledWith(
         'paratextBibleSendReceive.syncProjects',
         undefined,
+        true,
       );
     });
 
@@ -699,6 +784,32 @@ describe('performStartupTasks', () => {
       );
     });
 
+    it('does not fire the sync when the user chooses "Don\'t sync yet" during the readiness wait', async () => {
+      stubSettings(SIMPLE_MODE_SETTINGS);
+      let resolveReadiness: (result: { outcome: 'ready' }) => void = () => {};
+      mockWaitForReady.mockReturnValue(
+        new Promise((resolve) => {
+          resolveReadiness = resolve;
+        }),
+      );
+
+      const startupPromise = performStartupTasks();
+      await vi.waitFor(() => expect(mockWaitForReady).toHaveBeenCalled());
+      // Positive control: nothing withheld the sync before the wait, so the skip below can only
+      // come from the post-wait re-check.
+      expect(mockLoggerInfo).not.toHaveBeenCalledWith(expect.stringContaining('skipped'));
+      deferAutomaticSyncForSession();
+      resolveReadiness({ outcome: 'ready' });
+      await startupPromise;
+
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /Startup sync skipped after the readiness wait.*automatic sync deferred for this session/,
+        ),
+      );
+    });
+
     it('does not fire the sync when first run becomes incomplete during the readiness wait', async () => {
       await startupWithSettingsChangedDuringReadinessWait(SIMPLE_MODE_SETTINGS, {
         ...SIMPLE_MODE_SETTINGS,
@@ -706,7 +817,9 @@ describe('performStartupTasks', () => {
       });
 
       expect(mockSendCommand).not.toHaveBeenCalled();
-      expect(mockLoggerDebug).toHaveBeenCalledWith(
+      // Info, not debug, like the pre-wait consent skip: packaged builds (log level `info`) must
+      // keep the line that explains a session which did not sync.
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
         expect.stringContaining('Startup sync skipped after the readiness wait'),
       );
     });

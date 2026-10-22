@@ -2838,7 +2838,11 @@ declare module 'renderer/services/electron-papi-port-provider' {
   export function createElectronPapiPortProvider(win?: Window): PapiPortProvider;
 }
 declare module 'renderer/services/renderer-web-socket.service' {
-  /** Once our network is running, run this to stop extensions from connecting to it directly */
+  /**
+   * Once our network is running, run this so `PapiRendererWebSocket` (the `WebSocket` web views get)
+   * refuses connections to it. Web views can still reach the native `WebSocket` on `window.top`; see
+   * "The renderer's PAPI port" in `.context/standards/Security-Guide.md`.
+   */
   export const blockWebSocketsToPapiNetwork: () => void;
   /** This wraps the browser's WebSocket implementation to provide
    * better control over internet access. It is isomorphic with the standard WebSocket, so it should
@@ -3096,6 +3100,14 @@ declare module 'main/services/rpc-server' {
     private readonly propagateEventMethod;
     /** Called by an RpcServer once its client's methods have been removed from the registry */
     private readonly announceClientDisconnectMethod;
+    /** See the constructor's `isWebSocketWithoutOrigin` */
+    private readonly isWebSocketWithoutOrigin;
+    /**
+     * @param isWebSocketWithoutOrigin Whether the client connected over a WebSocket whose handshake
+     *   carried no `Origin` header. Only such a client may send the request types main refuses to
+     *   browsers and renderers. Defaults to false, so a connection nobody vouched for is refused
+     *   them.
+     */
     constructor(
       name: string,
       webSocket: ServerSocketLike,
@@ -3103,6 +3115,7 @@ declare module 'main/services/rpc-server' {
       rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
       rpcEventDetailsByEventName: IRpcEventRegistry,
       announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
+      isWebSocketWithoutOrigin?: boolean,
     );
     connect(): Promise<boolean>;
     disconnect(): Promise<void>;
@@ -3340,6 +3353,10 @@ declare module 'main/services/rpc-websocket-listener' {
      * @param eventType The event name being announced.
      */
     private warnIfInvalidEventAnnouncement;
+    /**
+     * @param upgradeRequest The handshake request, which `ws` always passes. Without one the client
+     *   is treated as having sent `Origin`.
+     */
     private onClientConnect;
     /** Attach an `RpcServer` to a socket and track it until the socket closes */
     private serveClient;
@@ -6277,6 +6294,29 @@ declare module 'papi-shared-types' {
   } from 'shared/services/web-view.service-model';
   import { ContentZoomAreaId, WebViewId } from 'shared/models/web-view.model';
   /**
+   * What `platform.resetFirstRun` does with the Paratext registration in Platform.Bible's own
+   * ParatextData folder. Paratext 9's registration is never changed.
+   *
+   * - `keep`: leave the registration as it is
+   * - `copyFromParatext9`: on the restart, replace Platform.Bible's registration and internet
+   *   settings with fresh copies of Paratext 9's, the way a Paratext 9 user's first launch does.
+   *   With no registered Paratext 8 or 9 on the machine, this leaves Platform.Bible unregistered
+   *   and on default internet settings.
+   * - `clear`: remove the registration, like a Paratext 9 user who never registered
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  type ResetFirstRunRegistration = 'keep' | 'copyFromParatext9' | 'clear';
+  /**
+   * Options for `platform.resetFirstRun`
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  type ResetFirstRunOptions = {
+    /** What to do with the registration. Defaults to `keep`. */
+    registration?: ResetFirstRunRegistration;
+  };
+  /**
    * Function types for each command available on the papi. Each extension can extend this interface
    * to add commands that it registers on the papi with `papi.commands.registerCommand`.
    *
@@ -6332,6 +6372,24 @@ declare module 'papi-shared-types' {
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
+    /**
+     * Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start
+     * now: `granted`; `unconfirmed` when the first-run wizard has not been answered or its
+     * completion flag could not be read; or `deferred` when the user chose "Don't sync yet" earlier
+     * in this app session. Only meaningful in Simple mode: the completion flag is never written in
+     * Power mode, so a Power-mode sync must not consult this.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getAutomaticSyncConsent': () => Promise<'granted' | 'unconfirmed' | 'deferred'>;
+    /**
+     * Withhold automatic Simple-mode Send/Receive for the rest of this app session. Called when the
+     * user chooses "Don't sync yet" in the first-run wizard; the next launch syncs as usual.
+     * One-way on purpose: nothing lifts the deferral before a restart.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.deferAutomaticSyncForSession': () => Promise<void>;
     /**
      * Create a new application window.
      *
@@ -6529,6 +6587,20 @@ declare module 'papi-shared-types' {
      */
     'platform.showOnboardingTour': () => Promise<void>;
     /**
+     * Developer and tester tool, not for extensions to call: it can delete the user's registration.
+     *
+     * Forget first-run progress and restart into the first-run wizard, in Simple mode, as a new
+     * user — or a Paratext 9 user launching Platform.Bible for the first time — would see it. Also
+     * clears the orientation tour's completion and whether the user was asked for an internet-use
+     * choice (`platform.internetUseChoiceAsked`), and turns `platform.syncOnStartup` and
+     * `platform.showRegistrationReminderOnStartup` back on. Works in installed builds: press F12
+     * and run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     *
+     * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.resetFirstRun': (options?: ResetFirstRunOptions) => Promise<void>;
+    /**
      * Navigate the active scroll group to the next chapter (rolls into the next book)
      *
      * @experimental This command is unstable and may change or disappear without notice
@@ -6721,10 +6793,14 @@ declare module 'papi-shared-types' {
      */
     'platform.firstRunComplete': boolean;
     /**
-     * Whether to perform automatic startup sync. Hidden; written once by the first-run store when
-     * the user chooses "Skip automatic sync" on the sync-consent step (sets it to `false`). Read by
-     * startup-tasks on each launch; absent or `true` means sync, `false` means skip. Only the
-     * automatic startup sync is affected; manual Send/Receive is unaffected. Never reset by core.
+     * Whether to perform automatic startup sync. Hidden; not exposed in the settings UI. Read on
+     * each launch by the Simple-mode startup sync only — Power mode never reads it. Absent or
+     * `true` means sync, `false` means skip. Only the automatic startup sync is affected; manual
+     * Send/Receive is unaffected. The first-run wizard does not write it: declining there ("Don't
+     * sync yet") withholds automatic sync for that session only. A `false` can be left over from an
+     * earlier first-run wizard, which wrote it on decline, and nothing in core resets it.
+     *
+     * TODO(PT-4607): give profiles left with that `false` a way back to automatic startup sync.
      */
     'platform.syncOnStartup': boolean;
     /**
@@ -6734,6 +6810,14 @@ declare module 'papi-shared-types' {
      * checkbox). Only consulted for completed users; the fresh-user onboarding flow ignores it.
      */
     'platform.showRegistrationReminderOnStartup': boolean;
+    /**
+     * Whether the user has been asked to choose how Paratext accesses the internet, or did not need
+     * to be. Hidden; set by the first-run wizard when it saves the user's internet-use choice, and
+     * by Power-mode startup once it has checked the saved value (opening the Internet &
+     * connectivity settings if that value turns off sync and the Digital Bible Library). `false`
+     * (default) means the next Power-mode startup checks.
+     */
+    'platform.internetUseChoiceAsked': boolean;
   }
   /**
    * Names for each user setting available on the papi.
@@ -9581,6 +9665,12 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
      * one that is already on disk. Defaults to true.
      */
     allowSelectingInstalled?: boolean;
+    /**
+     * When true, texts whose licensing terms prohibit their use as a model or base for a new
+     * translation are shown greyed out, with the reason, and cannot be picked. Set it when picking a
+     * model text, not a reference text. Defaults to false.
+     */
+    disableRestrictedModelTexts?: boolean;
   };
   /**
    * Options to provide when showing the Project Picker dialog (no extra options needed)
@@ -9897,6 +9987,7 @@ declare module 'shared/models/elevated-privilege-names.model' {
     CreateProcess = 'createProcess',
     ManageExtensions = 'manageExtensions',
     HandleUri = 'handleUri',
+    RequestRegistryTokens = 'requestRegistryTokens',
   }
 }
 declare module 'extension-host/extension-types/extension-manifest.model' {
@@ -9920,6 +10011,12 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
     main: string;
     /** List of special permissions required by the extension to work as intended */
     elevatedPrivileges: `${ElevatedPrivilegeNames}`[];
+    /**
+     * Services this extension may request Paratext Registry access tokens for, as exact resource
+     * identifiers (for example `https://assistant.example.org`). Required, and must be non-empty,
+     * when `elevatedPrivileges` includes `requestRegistryTokens`; otherwise ignored.
+     */
+    paratextRegistryTokenResources?: string[];
     /**
      * Path to the TypeScript type declaration file that describes this extension and its interactions
      * on the PAPI. Relative to the extension's root folder.
@@ -10165,10 +10262,111 @@ declare module 'shared/models/handle-uri-privilege.model' {
     redirectUri: string;
   };
 }
+declare module 'shared/models/request-registry-tokens-privilege.model' {
+  /**
+   * Every {@link RegistryReadScope}, as a list. Keep in sync with `AllowedScopes` in
+   * `c-sharp/Users/RegistryAccessTokenService.cs`; a test on each side pins the same scopes.
+   */
+  export const REGISTRY_READ_SCOPES: readonly [
+    'projects.members:read',
+    'projects:read',
+    'projects.progress:read',
+    'orgs:read',
+    'users.org:read',
+  ];
+  /**
+   * The read-only Paratext Registry scopes Platform.Bible requests on an extension's behalf. The
+   * Registry would issue write scopes to a registration-code caller too; Platform.Bible never asks
+   * for them.
+   */
+  export type RegistryReadScope = (typeof REGISTRY_READ_SCOPES)[number];
+  /** What an extension asks for when it requests a Paratext Registry access token */
+  export type RegistryAccessTokenRequest = {
+    /**
+     * Identifier of the service the token is for (an RFC 8707 resource, for example
+     * `https://assistant.example.org`). Must exactly match an entry in the extension manifest's
+     * `paratextRegistryTokenResources`, and must be registered with the Paratext Registry that this
+     * Platform.Bible is pointed at.
+     */
+    resource: string;
+    /**
+     * Scopes the token should carry. Pass them explicitly: if omitted, the token carries none. As of
+     * 2026-10 the Paratext Registry both documents and implements that for a caller using a
+     * registration code; its default scopes apply only to trusted clients.
+     */
+    scope?: RegistryReadScope[];
+  };
+  /** A Paratext Registry access token for one service */
+  export type RegistryAccessToken = {
+    /** Bearer token, valid only at the requested `resource`. Never log it. */
+    accessToken: string;
+    /**
+     * When the token expires, in milliseconds since the Unix epoch. A token handed out by
+     * {@link RequestRegistryTokens.getAccessToken} has at least two minutes left unless the Registry
+     * issues shorter-lived tokens.
+     */
+    expiresAt: number;
+  };
+  /**
+   * Gets Paratext Registry access tokens that identify the current user to a service the extension
+   * names, using the user's existing Paratext registration. The registration code never leaves
+   * Platform.Bible.
+   *
+   * To receive this, an extension lists `requestRegistryTokens` in its manifest's
+   * `elevatedPrivileges` and lists the services it may request tokens for in
+   * `paratextRegistryTokenResources`:
+   *
+   * ```json
+   * {
+   *   "elevatedPrivileges": ["requestRegistryTokens"],
+   *   "paratextRegistryTokenResources": ["https://assistant.example.org"]
+   * }
+   * ```
+   */
+  export type RequestRegistryTokens = {
+    /**
+     * Gets an access token for `request.resource`. Tokens are cached, so call this before each
+     * request to the service instead of storing the token.
+     *
+     * Call this, and the service, from extension-host code. Never return the token from, or store it
+     * in, a command, network object, data provider, web view state or web view message: commands are
+     * callable by every extension and web views are same-origin, so any other extension could read it
+     * there.
+     *
+     * Send the token only to `request.resource`: whoever receives it can call that service as the
+     * user until it expires, so build request URLs from the resource instead of accepting them from
+     * callers.
+     *
+     * Rejects with a `PlatformError`. Its `code` says why; its `message` is an English diagnostic for
+     * logs, so show users your own localized text based on the `code`:
+     *
+     * - `PERMISSION_DENIED`: `resource` is not in the manifest's `paratextRegistryTokenResources`, or
+     *   the Registry accepted the registration but refused to issue the token (HTTP 403), which
+     *   registering again won't fix
+     * - `INVALID_ARGUMENT`: a scope is not allowed, or the Registry rejected the request (for example,
+     *   the resource is not registered with this Registry)
+     * - `UNAUTHENTICATED`: the user has no valid registration, or the Registry did not accept it
+     * - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: internet access is
+     *   off, or "Disable access to some Bible translation services" is selected and this computer's
+     *   location is restricted or could not be determined
+     * - `UNAVAILABLE`: there is no internet connection, reading the registration or the Internet &
+     *   connectivity settings failed or took too long, or the Registry could not be reached or did
+     *   not return a usable token; retrying later may help
+     *
+     * Other failures, such as a request that times out, reject without a `code`. Treat them like
+     * `UNAVAILABLE`.
+     *
+     * @param request The service to get a token for and the scopes the token should carry
+     * @returns The token and when it expires
+     */
+    getAccessToken(request: RegistryAccessTokenRequest): Promise<RegistryAccessToken>;
+  };
+}
 declare module 'shared/models/elevated-privileges.model' {
   import type { CreateProcess } from 'shared/models/create-process-privilege.model';
   import type { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
   import type { HandleUri } from 'shared/models/handle-uri-privilege.model';
+  import type { RequestRegistryTokens } from 'shared/models/request-registry-tokens-privilege.model';
   /** Object that contains properties with special capabilities for extensions that required them */
   export type ElevatedPrivileges = {
     /** Functions that can be run to start new processes */
@@ -10180,6 +10378,11 @@ declare module 'shared/models/elevated-privileges.model' {
      * this extension
      */
     handleUri: HandleUri | undefined;
+    /**
+     * Functions for getting Paratext Registry access tokens for the services listed in the manifest's
+     * `paratextRegistryTokenResources`
+     */
+    requestRegistryTokens: RequestRegistryTokens | undefined;
   };
 }
 declare module 'extension-host/extension-types/extension-activation-context.model' {
@@ -13497,6 +13700,12 @@ declare module '@papi/core' {
     SingleMethodDocumentation,
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
+  export type {
+    RequestRegistryTokens,
+    RegistryAccessToken,
+    RegistryAccessTokenRequest,
+    RegistryReadScope,
+  } from 'shared/models/request-registry-tokens-privilege.model';
   export type {
     ExtensionDataEnumerationProjectDataTypes,
     ExtensionDataListScope,

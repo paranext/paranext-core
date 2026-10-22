@@ -45,6 +45,10 @@ import {
 import { startDialogServiceRouter } from '@main/services/dialog.service-router';
 import { startUsersnapServiceRouter } from '@main/services/usersnap.service-router';
 import { startBookChapterControlServiceRouter } from '@main/services/book-chapter-control.service-router';
+import {
+  applyPendingFirstRunReset,
+  startFirstRunServiceRouter,
+} from '@main/services/first-run.service-router';
 import { startOnboardingTourServiceRouter } from '@main/services/onboarding-tour.service-router';
 import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
@@ -56,6 +60,10 @@ import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { registerPowerMonitorListeners } from '@main/services/power-monitor-logging.service';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
+import {
+  deferAutomaticSyncForSession,
+  getAutomaticSyncConsent,
+} from '@main/first-run-consent.util';
 import {
   performShutdownTasks,
   performWindowCloseTasks,
@@ -474,6 +482,7 @@ async function main() {
       started: startBookChapterControlServiceRouter(),
     },
     { name: 'onboarding tour service router', started: startOnboardingTourServiceRouter() },
+    { name: 'first-run service router', started: startFirstRunServiceRouter() },
     { name: 'scripture navigation commands', started: startScrollGroupNavigationCommands() },
     { name: 'notification service router', started: startNotificationServiceRouter() },
     { name: 'window service router', started: startWindowServiceRouter() },
@@ -2423,6 +2432,8 @@ async function main() {
         }
       }
 
+      await applyPendingFirstRunReset();
+
       // Caught here rather than left to reject this chain: `createWindow` refuses outright during a
       // quit and the restore reads from disk, so this can fail — and a rejection would skip the
       // `activate` registration below, which is the only thing that brings windows back on macOS
@@ -2749,6 +2760,33 @@ async function main() {
     {
       method: {
         summary: 'Get the os platform ("win32", "darwin", "linux")',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand('platform.getAutomaticSyncConsent', getAutomaticSyncConsent, {
+    method: {
+      summary:
+        'Whether the first-run sync consent gate allows an automatic Simple-mode Send/Receive to start now',
+      params: [],
+      result: {
+        name: 'return value',
+        schema: { type: 'string', enum: ['granted', 'unconfirmed', 'deferred'] },
+      },
+    },
+  });
+
+  commandService.registerCommand(
+    'platform.deferAutomaticSyncForSession',
+    async () => deferAutomaticSyncForSession(),
+    {
+      method: {
+        summary: 'Withhold automatic Simple-mode Send/Receive for the rest of this app session',
         params: [],
         result: {
           name: 'return value',

@@ -33,6 +33,8 @@ import {
   formatReplacementString,
   getErrorMessage,
   isLocalizeKey,
+  isString,
+  isWhiteSpace,
   isParagraphMarker,
   isPlatformError,
   LanguageStrings,
@@ -44,10 +46,12 @@ import {
   usfmMarkers,
   UsjDocumentLocation,
   UsjReaderWriter,
+  UsjTextContentLocation,
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
+import type { SettingTypes } from 'papi-shared-types';
 import type { MutableRefObject } from 'react';
 // import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
 // import from the editor package drags its React-bundling dist into the main bundle, breaking
@@ -150,6 +154,225 @@ export function correctEditorUsjVersion(editorUsj: Usj): Usj {
   // well right now
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
+}
+
+/** Whether `jsonPath` names the very last item of `usj`: the last item at every level. */
+function isFinalItemOfDocument(usj: Usj, jsonPath: string): boolean {
+  const indexes = Array.from(jsonPath.matchAll(/content\[(\d+)\]/g), (match) => Number(match[1]));
+  if (indexes.length === 0) return false;
+  let { content }: { content?: MarkerContent[] } = usj;
+  return indexes.every((index) => {
+    if (!content || index !== content.length - 1) return false;
+    const item = content[index];
+    content = typeof item === 'string' ? undefined : item.content;
+    return true;
+  });
+}
+
+/**
+ * A selection location on a text node of `textLength` characters, brought onto that text. The end
+ * of the document is spelled on the document's last text as one past the text's end (see
+ * `UsjDocumentLocation`), and a caret there sits at the end of that text, so that offset becomes
+ * the text's length. Every other location is returned as is — including that offset on any other
+ * text, or an offset further past the end, neither of which a location spells and which a caller
+ * should treat as the defect it is.
+ *
+ * @param location The location on text, as the editor reported it.
+ * @param textLength The length of the text node the location resolved to.
+ * @param usj The document the location addresses.
+ * @returns `location`, with the document-end offset brought onto the end of the text.
+ */
+export function withDocumentEndOnText(
+  location: UsjTextContentLocation,
+  textLength: number,
+  usj: Usj,
+): UsjTextContentLocation {
+  if (location.offset !== textLength + 1) return location;
+  if (!isFinalItemOfDocument(usj, location.jsonPath)) return location;
+  return { ...location, offset: textLength };
+}
+
+/** The notice shown when a comment cannot be anchored to the selection. */
+export type CommentSelectionNoticeKey =
+  | '%webView_platformScriptureEditor_error_selectionNotResolved%'
+  | '%webView_platformScriptureEditor_error_selectionContainsMarkers%'
+  | '%webView_platformScriptureEditor_error_noTextSelected%';
+
+/**
+ * The outcome of validating a selection for a new comment: the range to annotate, or the notice to
+ * show instead. `warning` is set only when the selection broke the settled-document contract (a
+ * defect worth logging), not when the user selected something a comment cannot anchor to.
+ */
+export type CommentSelectionValidation =
+  | { range: { start: UsjDocumentLocation; end: UsjDocumentLocation } }
+  | { notice: CommentSelectionNoticeKey; warning?: string };
+
+const NOTICE_NOT_RESOLVED: CommentSelectionNoticeKey =
+  '%webView_platformScriptureEditor_error_selectionNotResolved%';
+const NOTICE_CONTAINS_MARKERS: CommentSelectionNoticeKey =
+  '%webView_platformScriptureEditor_error_selectionContainsMarkers%';
+const NOTICE_NO_TEXT: CommentSelectionNoticeKey =
+  '%webView_platformScriptureEditor_error_noTextSelected%';
+
+/**
+ * Reads the text a validated comment range names. {@link validateCommentSelection} guarantees both
+ * ends are text locations on the same path, so the range names one slice of one string.
+ *
+ * @param range A range from {@link validateCommentSelection}
+ * @param usj The document to read from
+ * @returns The named text, or `undefined` if the path no longer resolves to a string or the offsets
+ *   no longer fit inside it
+ */
+export function readCommentRangeText(
+  range: { start: UsjDocumentLocation; end: UsjDocumentLocation },
+  usj: Usj,
+): string | undefined {
+  if (
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(range.start) ||
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(range.end) ||
+    range.start.jsonPath !== range.end.jsonPath
+  )
+    return undefined;
+  try {
+    const usjRW = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
+    const node = usjRW.jsonPathToUsjNodeAndDocumentLocation(range.start.jsonPath)?.node;
+    if (!isString(node)) return undefined;
+    const { offset: startOffset } = range.start;
+    const { offset: endOffset } = range.end;
+    if (startOffset < 0 || endOffset < startOffset || endOffset > node.length) return undefined;
+    return node.slice(startOffset, endOffset);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether a pending comment must be discarded because the text it is anchored to is no longer what
+ * was selected. The comment is saved against the frozen range, so a range that now names other text
+ * (or none) would store the comment on the wrong characters.
+ *
+ * @param pending The pending comment's frozen range and the text it named when captured
+ * @param usj The current settled document
+ */
+export function hasPendingCommentTextChanged(
+  pending: {
+    range: { start: UsjDocumentLocation; end: UsjDocumentLocation };
+    anchoredText: string;
+  },
+  usj: Usj,
+): boolean {
+  return readCommentRangeText(pending.range, usj) !== pending.anchoredText;
+}
+
+/**
+ * A range end that names a marker object, with no offset, is the same USFM position as the end of
+ * the string right before that marker (Find and Checks spell "up to the footnote" this way). It is
+ * rewritten onto that string so it validates the same as the text-end spelling.
+ */
+function withMarkerEndOnPrecedingText(
+  end: UsjDocumentLocation,
+  usjRW: UsjReaderWriter,
+): UsjDocumentLocation {
+  const keys = Object.keys(end);
+  if (keys.length !== 1 || !('jsonPath' in end)) return end;
+  const match = /^(.*content\[)(\d+)\]$/.exec(end.jsonPath);
+  if (!match || Number(match[2]) < 1) return end;
+  const previousJsonPath = `${match[1]}${Number(match[2]) - 1}]`;
+  try {
+    const previous = usjRW.jsonPathToUsjNodeAndDocumentLocation(previousJsonPath);
+    if (!isString(previous?.node)) return end;
+    const { documentLocation } = previous;
+    if (!UsjReaderWriter.isUsjDocumentLocationForTextContent(documentLocation)) return end;
+    return { ...documentLocation, offset: previous.node.length };
+  } catch {
+    return end;
+  }
+}
+
+/**
+ * Validates a selection as the anchor of a new comment against the settled document the selection
+ * addresses, and expands a collapsed caret to the word around it.
+ *
+ * @param selection The editor's (settled) selection
+ * @param usj The settled document
+ * @returns The range to annotate, or the notice to show (and whether it is a defect to log)
+ */
+export function validateCommentSelection(
+  selection: { start: UsjDocumentLocation; end?: UsjDocumentLocation },
+  usj: Usj,
+): CommentSelectionValidation {
+  const usjRW = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
+  const { start } = selection;
+  const end = selection.end ? withMarkerEndOnPrecedingText(selection.end, usjRW) : start;
+
+  // A property, closing-marker or attribute location is not text, whatever its path resolves to
+  if (
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(start) ||
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(end)
+  ) {
+    const isCollapsed = !selection.end || serialize(selection.end) === serialize(start);
+    return { notice: isCollapsed ? NOTICE_NO_TEXT : NOTICE_CONTAINS_MARKERS };
+  }
+
+  let startNode;
+  try {
+    startNode = usjRW.jsonPathToUsjNodeAndDocumentLocation(start.jsonPath)?.node;
+    // Throws if the end does not resolve either
+    usjRW.jsonPathToUsjNodeAndDocumentLocation(end.jsonPath);
+  } catch (e) {
+    return {
+      notice: NOTICE_NOT_RESOLVED,
+      warning: `Comment insertion: selection jsonPath start=${start.jsonPath} end=${end.jsonPath} does not resolve against the settled USJ! ${getErrorMessage(e)}`,
+    };
+  }
+
+  // Strings compare by value, so identical sibling strings must be told apart by their paths
+  if (!isString(startNode) || start.jsonPath !== end.jsonPath)
+    return { notice: NOTICE_CONTAINS_MARKERS };
+
+  // A caret at the end of the document is spelled one past the end of the last text; it sits at
+  // the end of that text, which is where the comment anchors.
+  const textStart = withDocumentEndOnText(start, startNode.length, usj);
+  const textEnd = withDocumentEndOnText(end, startNode.length, usj);
+
+  // An offset past the node means the settled-document contract was broken by a bug or a race;
+  // anchoring there would place the comment past the text.
+  const offsetPastEnd = [textStart, textEnd].find((location) => location.offset > startNode.length);
+  if (offsetPastEnd)
+    return {
+      notice: NOTICE_NOT_RESOLVED,
+      warning: `Comment insertion: selection offset ${offsetPastEnd.offset} at ${textStart.jsonPath} is past the end of the settled node (length ${startNode.length})!`,
+    };
+
+  if (textStart.offset !== textEnd.offset) return { range: { start: textStart, end: textEnd } };
+
+  // Collapsed: require a non-whitespace character beside the caret and expand to that word. This
+  // is approximate; the backend selects the word by the project's definition of whitespace.
+  const { offset } = textStart;
+  let charBefore = offset > 0 ? startNode[offset - 1] : '';
+  let charAfter = offset < startNode.length ? startNode[offset] : '';
+  if (
+    (charBefore.length === 0 || isWhiteSpace(charBefore)) &&
+    (charAfter.length === 0 || isWhiteSpace(charAfter))
+  )
+    return { notice: NOTICE_NO_TEXT };
+
+  let endOffset = offset;
+  while (charAfter.length > 0 && !isWhiteSpace(charAfter)) {
+    charAfter = endOffset + 1 < startNode.length ? startNode[endOffset + 1] : '';
+    endOffset += 1;
+  }
+  let startOffset = offset - 1;
+  while (charBefore.length > 0 && !isWhiteSpace(charBefore)) {
+    charBefore = startOffset > 0 ? startNode[startOffset - 1] : '';
+    startOffset -= 1;
+  }
+  return {
+    range: {
+      start: { ...textStart, offset: startOffset + 1 },
+      end: { ...textEnd, offset: endOffset },
+    },
+  };
 }
 
 /** Where a note is edited: the footnotes pane (Standard view), the popover, or nowhere. */
@@ -810,10 +1033,15 @@ export async function convertScriptureRangeToEditorRange(
     endVerseOffset === undefined ? endVerseRef : { verseRef: endVerseRef, offset: endVerseOffset },
   );
 
-  // If we don't have which verse we're setting the scroll group to, get it
+  // If we don't have which verse we're setting the scroll group to, get it. A USJ document
+  // location range only carries a chapter's own USJ, which has a book `id` marker for chapter 1
+  // and lacks one otherwise (see UsjChapterLocation), so fall back to the book already resolved
+  // above for this range.
   if (startVerseRef.verseNum === -1) {
-    const startUsfmLocation =
-      usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(startDocumentLocation);
+    const startUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
+      startDocumentLocation,
+      startVerseRef.book,
+    );
     startVerseRef.verseNum = startUsfmLocation.verseRef.verseNum;
   }
 
@@ -1124,9 +1352,9 @@ export function selectProjectIdsForOpenMode(
 
 /**
  * Outcome of a single picker attempt. Every outcome other than `'filled'` is a "may retry on the
- * next trigger" — the driver in {@link startDefaultProjectPicker} re-invokes on web-view-open and
- * sync-completion events, so transient causes (sync still in flight, layout not loaded yet) clear
- * themselves naturally.
+ * next trigger" — the driver in {@link startDefaultProjectPicker} re-invokes on web-view-open,
+ * sync-completion and project-set-change events, so transient causes (sync still in flight, layout
+ * not loaded yet) clear themselves naturally.
  *
  * - `'wrong-mode'` — `platform.interfaceMode` is not `'simple'`; the picker does nothing until it is.
  * - `'no-empty'` — no empty Scripture Editor (no `projectId`) is currently open. The driver may retry
@@ -1137,8 +1365,8 @@ export function selectProjectIdsForOpenMode(
  * - `'failed'` — the open command rejected; logged at warn. The driver may retry on the next trigger.
  * - `'no-candidate'` — S/R was reachable, but no shared project passed the activity / `editedStatus`
  *   filter. Projects with `editedStatus` of `'new'` (not yet downloaded locally) or
- *   `'unregistered'` (limited/provisional license) are excluded, as are projects with no
- *   `lastSendReceiveDate`. The driver may retry after a sync completes.
+ *   `'unregistered'` (limited/provisional license) are excluded. The driver may retry after a sync
+ *   completes or the project set changes.
  * - `'filled'` — the picker successfully called the open command for the top candidate.
  */
 export type DefaultProjectPickerOutcome =
@@ -1213,7 +1441,7 @@ async function tryOpenFromRecentlyOpened(
  *
  * Idempotent: each invocation re-reads the dock and the shared-projects list. The driver in
  * {@link startDefaultProjectPicker} is responsible for re-invoking on events that change those
- * inputs (web-view opens, sync completions).
+ * inputs (web-view opens, sync completions, project-set changes).
  *
  * @param papi The PAPI backend handle. Injected for testability.
  * @returns The outcome of this attempt — see {@link DefaultProjectPickerOutcome}.
@@ -1364,6 +1592,14 @@ export async function openDefaultActiveProjectIfApplicable(
  * - `paratextBibleSendReceive.onSyncStateChanged` (when `isSyncing` is `false`) — handles a sync
  *   finishing. Newly-added shared projects look ineligible (`editedStatus === 'new'`, no
  *   `lastSendReceiveDate`) until the first sync settles, so the picker has to re-check after that.
+ * - `platform.onDidChangeProjects` — handles the project set changing, including through the syncs
+ *   that raise no `onSyncStateChanged` (see `adr-toolbar-sync-status-is-local`). It also fires when
+ *   a project's metadata changes (a rename, its language, whether it is editable), which re-runs
+ *   the picker for nothing. Once the editor has a project, such a run exits early (`'no-empty'`).
+ *   While an empty editor exists, each one repeats the recently-opened lookup,
+ *   `paratextBibleSendReceive.getSharedProjects` and a permission lookup per candidate; that is
+ *   bounded by the emitter's debounce and by the coalescing below. Not debounced here: its emitter
+ *   (`LocalParatextProjects`, C#) already debounces it.
  *
  * Cold-start gap: there is no explicit "S/R command registered" signal, so if
  * `paratextBibleSendReceive` activates after `platformScriptureEditor` but before any of the
@@ -1453,6 +1689,16 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
       );
   });
 
+  const unsubFromProjectsChanged = papi.network.getNetworkEvent('platform.onDidChangeProjects')(
+    () => {
+      tryPicker().catch((e) =>
+        papi.logger.warn(
+          `Default active project picker: projects-changed handler threw unexpectedly: ${getErrorMessage(e)}`,
+        ),
+      );
+    },
+  );
+
   // Cover the case where the empty editor and an eligible synced project are already in place
   // (e.g., second startup after a successful first run).
   tryPicker().catch((e) =>
@@ -1461,7 +1707,12 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
     ),
   );
 
-  return aggregateUnsubscribers([unsubFromWebViewOpen, unsubFromWebViewUpdate, unsubFromSync]);
+  return aggregateUnsubscribers([
+    unsubFromWebViewOpen,
+    unsubFromWebViewUpdate,
+    unsubFromSync,
+    unsubFromProjectsChanged,
+  ]);
 }
 
 // #endregion Default Active Project Picker
@@ -1470,8 +1721,9 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
 
 /**
  * Fire-and-forget helper that syncs the incoming project first, then the outgoing one. Each sync is
- * independently error-isolated so a failure in one doesn't block the other. Only called in simple
- * mode after a replace-tab project switch.
+ * independently error-isolated so a failure in one doesn't block the other. Called after a
+ * Simple-mode replace-tab project switch, and by `finalizeProjectSwitch` after a Power -> Simple
+ * mode switch — by which time the user may be back in Power mode.
  *
  * Uses `paratextBibleSendReceive.syncProjects` for the incoming project because it also pulls
  * connected resources and translation partners (deep sync). Uses the shallower
@@ -1486,14 +1738,62 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * a project ID (Home, New Tab, the title-bar picker) takes that flag from `platform.isEditable`, so
  * an `Editable=F` project is synced here but not when its window closes or the app quits
  * (PT-4786).
+ *
+ * `interfaceMode` is the caller's read of `platform.interfaceMode` (`undefined` when that read
+ * failed). The incoming sync suppresses the dotnet progress toast only for a known `'simple'`,
+ * where the toolbar sync indicator is its surface; any other value keeps the toast, since the
+ * indicator may not be mounted. The flag is sent only when it is `true`: a dotnet `SyncProjects`
+ * that predates the parameter rejects a two-argument call, so omitting it keeps the toast-keeping
+ * cases working against that backend. The outgoing `sendReceiveProjects` keeps its toast: its
+ * `suppressNotification` would also hide the failure toast, which is this claimless sync's only
+ * failure surface.
+ *
+ * Gated on first-run sync consent: neither Send/Receive command runs unless the
+ * `platform.getAutomaticSyncConsent` command answers `granted`. That command is the main process's
+ * `getAutomaticSyncConsent`, the one implementation of the rule, so this module does not restate
+ * it. The gate covers those two commands only — this module still reaches the network elsewhere
+ * during the wizard, e.g. `openDefaultActiveProjectIfApplicable`'s
+ * `paratextBibleSendReceive.getSharedProjects` registry lookup (see PT-4606).
+ *
+ * The gate applies in Simple mode only, so it checks `interfaceMode` rather than trusting every
+ * caller to be Simple-mode-only. An unreadable mode (`undefined`) is treated as Simple, so it
+ * cannot bypass the gate.
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,
   incomingProjectId: string,
   outgoingProjectId: string | undefined,
+  interfaceMode: SettingTypes['platform.interfaceMode'] | undefined,
 ): Promise<void> {
+  // The first-run wizard is an overlay, so the project picker behind it can drive a switch through
+  // here before the user has answered its sync-consent step.
+  if (interfaceMode !== 'power') {
+    let consent;
+    try {
+      consent = await papi.commands.sendCommand('platform.getAutomaticSyncConsent');
+    } catch (e) {
+      papi.logger.warn(
+        `Project-switch sync: could not check first-run sync consent (${getErrorMessage(e)}); skipping sync`,
+      );
+      return;
+    }
+    if (consent !== 'granted') {
+      papi.logger.info(`Project-switch sync skipped: first-run sync consent is ${consent}`);
+      return;
+    }
+  }
+
   try {
-    await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
+    // Mode change mid-sync: intentionally not handled. The flag is fixed for the run, and the
+    // toolbar indicator mounts only in Simple mode, so switching to Power while a suppressed sync
+    // runs leaves it with no progress surface until it ends. Accepted in
+    // `adr-sync-surface-per-interface-mode`.
+    const flag: [true] | [] = interfaceMode === 'simple' ? [true] : [];
+    await papi.commands.sendCommand(
+      'paratextBibleSendReceive.syncProjects',
+      [incomingProjectId],
+      ...flag,
+    );
   } catch (e) {
     papi.logger.warn(
       `Project-switch sync: incoming sync for ${incomingProjectId} failed: ${getErrorMessage(e)}`,
@@ -1530,10 +1830,9 @@ export async function syncOnProjectSwitch(
  * back to Power mode. Mirrors `open()`'s own `needsOverlay` block (main.ts): the sync is
  * fire-and-forget (`syncOnProjectSwitch` already catches its own errors, and awaiting it here would
  * delay the shared-layout apply and `recordProjectOpened` by however long a deep Send/Receive
- * takes, with `recordProjectOpened` never running at all if the user quits mid-sync); and
- * `applyForProject` re-checks `platform.interfaceMode` fresh immediately before running, since
- * applying while no longer in Simple mode would wrongly manipulate the Power layout instead of
- * being a no-op.
+ * takes, with `recordProjectOpened` never running at all if the user quits mid-sync); and the mode
+ * is read fresh here, once, before the sync, since applying while no longer in Simple mode would
+ * wrongly manipulate the Power layout instead of being a no-op.
  *
  * @param papi Backend PAPI instance.
  * @param projectId The project now showing in the Scripture Editor.
@@ -1545,10 +1844,21 @@ export async function finalizeProjectSwitch(
   projectId: string,
   applyForProject: ((projectId: string) => Promise<void>) | undefined,
 ): Promise<void> {
+  // Read once, before the sync, so the sync and the Simple-only block below agree on the mode. A
+  // failed read leaves `undefined`: the sync then keeps its progress toast and the Simple-only block
+  // is skipped, the same as for Power.
+  let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+  try {
+    interfaceMode = await papi.settings.get('platform.interfaceMode');
+  } catch (e) {
+    papi.logger.warn(
+      `finalizeProjectSwitch: could not read platform.interfaceMode for ${projectId}; syncing with the progress toast: ${getErrorMessage(e)}`,
+    );
+  }
   // There's no outgoing project here since this replaces the whole Simple layout, not one editor
   // tab within it.
-  syncOnProjectSwitch(papi, projectId, undefined);
-  if ((await papi.settings.get('platform.interfaceMode')) === 'simple') {
+  syncOnProjectSwitch(papi, projectId, undefined, interfaceMode);
+  if (interfaceMode === 'simple') {
     // Normally a no-op: `runProjectBoundSimpleSwitch` (`src/renderer/services/
     // web-view.service-shard.ts`) bakes `projectId` into every merged supplement tab with
     // `applyProjectIdToTabs` before this runs, so the Text Collection arrives already bound and

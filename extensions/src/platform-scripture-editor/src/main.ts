@@ -7,8 +7,6 @@ import type {
   WebViewDefinition,
 } from '@papi/core';
 import {
-  AsyncVariable,
-  deepEqual,
   getErrorMessage,
   newGuid,
   PlatformEventEmitter,
@@ -27,6 +25,7 @@ import {
 } from 'platform-scripture-editor';
 import { AnnotationStyleDataProviderEngine } from './annotations/annotation-style.data-provider-engine.model';
 import { mergeDecorations } from './decorations.util';
+import { createSelectionTracker } from './selection-tracker.utils';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import modelTextPanelWebViewStyles from './model-text-panel.web-view.scss?inline';
@@ -361,7 +360,7 @@ async function open(
       // for a published resource — an `Editable=F` translation project can still hold new comments.
       // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
       // require tracking a dirty flag in the editor controller, which doesn't exist yet).
-      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoing?.projectId);
+      syncOnProjectSwitch(papi, projectForWebView.projectId, outgoing?.projectId, interfaceMode);
     }
 
     const emitDidFinish = () => {
@@ -624,21 +623,12 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       if (webView.id === currentWebViewDefinition.id) currentWebViewDefinition = webView;
     });
     /**
-     * Variable that holds the current selection in the editor. Will be `undefined` if could not
-     * determine selection. Will also be `undefined` initially until the editor reports its first
-     * selection.
+     * The selection the editor last reported. `getSelection()` callers wait for the editor's first
+     * report; after that they get the last report, which is `undefined` when the editor has none.
      */
-    let currentSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
-    /**
-     * Variable used to block `getSelection()` callers until the editor reports its first selection.
-     * Constructed lazily on the first `getSelection()` call so its internal 10s timeout timer never
-     * starts if nobody is waiting. If a selection arrives before any `getSelection()` call,
-     * `currentSelection` populates and this variable is never constructed at all — which is the
-     * common case in Platform.Bible when the editor is opened without a `projectId`.
-     */
-    let firstSelectionAsync:
-      | AsyncVariable<ScriptureRangeUsjVerseRefChapterLocation | undefined>
-      | undefined;
+    const selectionTracker = createSelectionTracker<ScriptureRangeUsjVerseRefChapterLocation>(
+      `platformScriptureEditor.selection.${currentWebViewDefinition.id}`,
+    );
     /** Posts an insert-note-at-selection message of the given kind to this editor's web view. */
     async function postInsertNoteMessage(
       method: EditorMessageInsertTextualNoteAtSelection['method'],
@@ -885,42 +875,17 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           throw new Error(errorMessage);
         }
       },
-      async getSelection() {
-        // If we already have a selection, return it directly.
-        if (currentSelection !== undefined) return currentSelection;
-        // Otherwise lazy-construct the AsyncVariable so its 10s timer only starts when a caller
-        // is actually waiting. Subsequent callers reuse the same promise — including the cached
-        // rejection if the timeout already fired, so retries get the same rejection rather than
-        // a silent `undefined`.
-        if (!firstSelectionAsync) {
-          firstSelectionAsync = new AsyncVariable(
-            `platformScriptureEditor.selection.${currentWebViewDefinition.id}`,
-          );
-        }
-        return firstSelectionAsync.promise;
+      getSelection() {
+        return selectionTracker.getSelection();
       },
       async updateSelectionInternal(selection) {
-        const webViewId = currentWebViewDefinition.id;
-
         // If the selection didn't change, we don't need to do anything
-        if (deepEqual(currentSelection, selection)) return;
+        if (!selectionTracker.report(selection)) return;
 
-        currentSelection = selection;
-        // Resolve the first selection async variable IF it was lazy-constructed by a caller.
-        // If no caller has called getSelection() yet, firstSelectionAsync is still undefined and
-        // there is nothing to resolve — `currentSelection` is the source of truth from here.
-        if (firstSelectionAsync && !firstSelectionAsync.hasSettled) {
-          firstSelectionAsync.resolveToValue(selection);
-        }
-        selectionChangedEventEmitter?.emit({ webViewId, selection });
+        selectionChangedEventEmitter?.emit({ webViewId: currentWebViewDefinition.id, selection });
       },
       async dispose() {
-        currentSelection = undefined;
-        // If a caller lazy-constructed the AsyncVariable and it hasn't settled, reject it so
-        // any pending `getSelection()` callers fail fast rather than waiting for the 10s timeout.
-        if (firstSelectionAsync && !firstSelectionAsync.hasSettled) {
-          firstSelectionAsync.rejectWithReason('Disposed before first selection received');
-        }
+        selectionTracker.dispose();
         return unsubFromWebViewUpdates();
       },
     };
@@ -1483,10 +1448,10 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     EDITOR_SELECTION_CHANGED_EVENT,
   );
 
-  // Default active project picker for simple layout. Subscribes to web-view-open and
-  // sync-completion events and attempts to fill the empty Scripture Editor with the
-  // most-recently-active editable project. Re-runs on each subscribed event; concurrent
-  // triggers coalesce into a single follow-up run.
+  // Default active project picker for simple layout. Subscribes to web-view-open, sync-completion
+  // and project-set-change events and attempts to fill the empty Scripture Editor with the
+  // most-recently-active project. Re-runs on each subscribed event; concurrent triggers coalesce
+  // into a single follow-up run.
   const unsubFromDefaultProjectPicker = startDefaultProjectPicker(papi);
 
   // Payload type is inferred from the NetworkEvents augmentation added earlier — do NOT pass an

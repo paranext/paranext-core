@@ -53,6 +53,10 @@ import {
   resolveNoteEditingSurface,
   shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
+  validateCommentSelection,
+  readCommentRangeText,
+  hasPendingCommentTextChanged,
+  withDocumentEndOnText,
   selectableParagraphMarkers,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
 } from './platform-scripture-editor.utils';
@@ -99,6 +103,45 @@ const SAMPLE_USFM_CHAPTER = String.raw`\id GEN GEN - Genesis
 \v 1 In the beginning God created the heavens and the earth.
 \v 2 Now the earth was formless and empty.
 \v 3 And God said, "Let there be light," and there was light.`;
+
+// Sample USJ chapter data for Genesis chapter 2. Chapter USJ only carries the book `id` marker
+// when the chapter is 1 (the intro content before chapter 1 belongs to chapter 1's USJ); a
+// chapter-2 (or later) document has no `id` marker to derive a book ID from.
+const SAMPLE_USJ_CHAPTER_2 = Object.freeze({
+  type: 'USJ',
+  version: '3.0',
+  content: [
+    { type: 'chapter', marker: 'c', number: '2', sid: 'GEN 2' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1', sid: 'GEN 2:1' },
+        'Thus the heavens and the earth were finished.',
+      ],
+    },
+  ],
+});
+
+// Sample USJ chapter data for Genesis chapter 1 with a `nd` char span nested in verse 1's text
+const SAMPLE_USJ_CHAPTER_WITH_CHAR_SPAN = Object.freeze({
+  type: 'USJ',
+  version: '3.0',
+  content: [
+    { type: 'book', marker: 'id', code: 'GEN', content: ['GEN - Genesis'] },
+    { type: 'chapter', marker: 'c', number: '1', sid: 'GEN 1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' },
+        'In the beginning ',
+        { type: 'char', marker: 'nd', content: ['GOD'] },
+        ' created the heavens and the earth.',
+      ],
+    },
+  ],
+});
 
 // Special object to pass into `createMockPapi` to make the USJ chapter return nothing
 const USJ_NOTHING = {};
@@ -366,6 +409,57 @@ describe('convertScriptureRangeToEditorRange', () => {
     });
   });
 
+  describe('Book ID fallback for USJ document locations outside chapter 1', () => {
+    it("derives the verse from a chapter-2 USJ using the range's own book id", async () => {
+      const { papi } = createMockPapi(SAMPLE_USJ_CHAPTER_2);
+      // UsjFlatChapterLocation format (book + chapterNum + documentLocation); chapter 2's USJ has
+      // no `id` marker to derive a book ID from
+      const range: ScriptureRange = {
+        start: {
+          book: 'GEN',
+          chapterNum: 2,
+          documentLocation: { jsonPath: '$.content[1].content[0]' },
+        },
+        end: {
+          book: 'GEN',
+          chapterNum: 2,
+          documentLocation: { jsonPath: '$.content[1].content[1]', offset: 5 },
+        },
+      };
+
+      const result = await convertScriptureRangeToEditorRange(papi, range, PROJECT_ID);
+
+      expect(result.verseRef.book).toBe('GEN');
+      expect(result.verseRef.chapterNum).toBe(2);
+      expect(result.verseRef.verseNum).toBe(1);
+      expect(result.editorRange.start.jsonPath).toBe('$.content[1].content[0]');
+      expect(result.editorRange.end.jsonPath).toBe('$.content[1].content[1]');
+      expect(getOffset(result.editorRange.end)).toBe(5);
+    });
+  });
+
+  describe('Collapsed ranges', () => {
+    // USFM offset 26 in verse 1 is the settled position right at the start of the `nd` char
+    // span's text ("GOD"), after the marker's own backslash+code: content[2] is the `p`
+    // paragraph, content[2] within that is the `nd` char node, and content[0] within that is its
+    // text
+    const expectedCollapsedLocation = { jsonPath: '$.content[2].content[2].content[0]', offset: 0 };
+
+    it('resolves both ends to the same location when `range.end` equals `range.start`, at settled offset 0 of a char span text', async () => {
+      const { papi } = createMockPapi(SAMPLE_USJ_CHAPTER_WITH_CHAR_SPAN);
+      const point: ScriptureRange['start'] = {
+        scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+        offset: 26,
+      };
+      const range: ScriptureRange = { start: point, end: point };
+
+      const result = await convertScriptureRangeToEditorRange(papi, range, PROJECT_ID);
+
+      expect(result.editorRange.start).toEqual(expectedCollapsedLocation);
+      expect(result.editorRange.end).toEqual(result.editorRange.start);
+    });
+  });
+
   describe('Error handling', () => {
     it('should throw error when range spans different chapters', async () => {
       const { papi } = createMockPapi();
@@ -493,12 +587,16 @@ interface PickerMocks {
   fireWebViewUpdate: (webViewType?: string) => void;
   /** Synthesize a `paratextBibleSendReceive.onSyncStateChanged` event from within a test. */
   fireSync: (event: { isSyncing: boolean }) => void;
+  /** Synthesize a `platform.onDidChangeProjects` event from within a test. */
+  fireProjectsChanged: () => void;
   /** `true` once the driver has unsubscribed from `onDidOpenWebView`. */
   isWebViewOpenUnsubscribed: () => boolean;
   /** `true` once the driver has unsubscribed from `onDidUpdateWebView`. */
   isWebViewUpdateUnsubscribed: () => boolean;
   /** `true` once the driver has unsubscribed from `onSyncStateChanged`. */
   isSyncUnsubscribed: () => boolean;
+  /** `true` once the driver has unsubscribed from `onDidChangeProjects`. */
+  isProjectsChangedUnsubscribed: () => boolean;
 }
 
 function createPickerMocks(): PickerMocks {
@@ -534,17 +632,14 @@ function createPickerMocks(): PickerMocks {
     };
   });
 
-  let syncListener: ((evt: { isSyncing: boolean }) => void) | undefined;
-  let syncUnsubscribed = false;
-  const mockGetNetworkEvent = vi.fn((eventName: string) => (listener: typeof syncListener) => {
-    if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
-      syncListener = listener;
-    }
+  // Network-event listeners by event name, and the names the driver has unsubscribed from.
+  const networkEventListeners = new Map<string, (evt: unknown) => void>();
+  const unsubscribedNetworkEvents = new Set<string>();
+  const mockGetNetworkEvent = vi.fn((eventName: string) => (listener: (evt: unknown) => void) => {
+    networkEventListeners.set(eventName, listener);
     return () => {
-      if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
-        syncUnsubscribed = true;
-        syncListener = undefined;
-      }
+      unsubscribedNetworkEvents.add(eventName);
+      networkEventListeners.delete(eventName);
     };
   });
 
@@ -615,12 +710,21 @@ function createPickerMocks(): PickerMocks {
       webViewUpdateListener({ webView: { webViewType } });
     },
     fireSync: (event) => {
-      if (!syncListener) throw new Error('fireSync: no listener captured');
-      syncListener(event);
+      const listener = networkEventListeners.get('paratextBibleSendReceive.onSyncStateChanged');
+      if (!listener) throw new Error('fireSync: no listener captured');
+      listener(event);
+    },
+    fireProjectsChanged: () => {
+      const listener = networkEventListeners.get('platform.onDidChangeProjects');
+      if (!listener) throw new Error('fireProjectsChanged: no listener captured');
+      listener(undefined);
     },
     isWebViewOpenUnsubscribed: () => webViewOpenUnsubscribed,
     isWebViewUpdateUnsubscribed: () => webViewUpdateUnsubscribed,
-    isSyncUnsubscribed: () => syncUnsubscribed,
+    isSyncUnsubscribed: () =>
+      unsubscribedNetworkEvents.has('paratextBibleSendReceive.onSyncStateChanged'),
+    isProjectsChangedUnsubscribed: () =>
+      unsubscribedNetworkEvents.has('platform.onDidChangeProjects'),
   };
 }
 
@@ -2271,6 +2375,20 @@ describe('startDefaultProjectPicker', () => {
     expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1);
   });
 
+  it('re-runs the picker when the set of projects changes', async () => {
+    const mocks = createPickerMocks();
+    setUpFastNoOp(mocks);
+
+    startDefaultProjectPicker(mocks.papi);
+    await vi.waitFor(() => expect(mocks.mockGetSetting).toHaveBeenCalledTimes(1));
+
+    mocks.fireProjectsChanged();
+
+    await vi.waitFor(() => {
+      expect(mocks.mockGetSetting).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('coalesces multiple triggers during an in-flight run into a single follow-up', async () => {
     const mocks = createPickerMocks();
     // Block the initial picker call on a controllable promise so we can fire triggers while it's
@@ -2313,6 +2431,7 @@ describe('startDefaultProjectPicker', () => {
     expect(mocks.isWebViewOpenUnsubscribed()).toBe(true);
     expect(mocks.isWebViewUpdateUnsubscribed()).toBe(true);
     expect(mocks.isSyncUnsubscribed()).toBe(true);
+    expect(mocks.isProjectsChangedUnsubscribed()).toBe(true);
   });
 
   it('warns and keeps running when openDefaultActiveProjectIfApplicable throws unexpectedly', async () => {
@@ -2393,35 +2512,115 @@ function createProjectKindMocks(projectKind: ProjectKind) {
 
 // #region syncOnProjectSwitch
 
-function createSyncMockPapi(projectKind: ProjectKind = EDITABLE_PROJECT) {
+/** Stubbed answer meaning "this read or request rejects" rather than resolving. */
+const READ_THROWS = Symbol('read throws');
+
+/**
+ * What the project-switch reads answer: `finalizeProjectSwitch` reads the mode and passes it on,
+ * and `syncOnProjectSwitch` (which takes the mode as an argument) requests consent. The option
+ * names match the main-process task suites' `createSettingsStub`
+ * (`src/main/settings-stub.test-util.ts`), which this workspace cannot import. Defaults are Simple
+ * mode with consent granted, so assertions exercise syncing rather than the gate.
+ */
+type SyncGateStub = {
+  /** `platform.interfaceMode` */
+  mode?: 'simple' | 'power' | typeof READ_THROWS;
+  /** The `platform.getAutomaticSyncConsent` command */
+  consent?: 'granted' | 'unconfirmed' | 'deferred' | typeof READ_THROWS;
+};
+
+/**
+ * The papi pieces the project-switch gate touches. `mockSendCommand` records only the sync
+ * commands: the consent request is answered by `mockGetConsent` instead, so a test that replaces
+ * `mockSendCommand`'s implementation still gets past the gate. A settings read of anything but the
+ * mode throws, so a newly added read cannot pass unnoticed.
+ */
+function createSyncGateStubs({ mode = 'simple', consent = 'granted' }: SyncGateStub) {
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
-  const mockWarn = vi.fn();
+  const mockGetConsent = vi.fn(async () => {
+    if (consent === READ_THROWS) throw new Error('consent check unavailable');
+    return consent;
+  });
+  const sendCommand = async (commandName: string, ...args: unknown[]) =>
+    commandName === 'platform.getAutomaticSyncConsent'
+      ? mockGetConsent()
+      : mockSendCommand(commandName, ...args);
+  const mockGetSetting = vi.fn(async (key: string) => {
+    if (key !== 'platform.interfaceMode')
+      throw new Error(`Unexpected settings key in test stub: ${key}`);
+    if (mode === READ_THROWS) throw new Error('settings service unavailable');
+    return mode;
+  });
+  return {
+    sendCommand,
+    mockSendCommand,
+    mockGetConsent,
+    mockGetSetting,
+    mockWarn: vi.fn(),
+    mockInfo: vi.fn(),
+  };
+}
+
+function createSyncMockPapi(gate: SyncGateStub = {}, projectKind: ProjectKind = EDITABLE_PROJECT) {
+  const { sendCommand, mockGetSetting, mockWarn, mockInfo, ...mocks } = createSyncGateStubs(gate);
   const { mockProjectDataProvidersGet, setProjectKind } = createProjectKindMocks(projectKind);
   // Must cast since the mock only includes the papi properties used by syncOnProjectSwitch.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
-    commands: { sendCommand: mockSendCommand },
+    commands: { sendCommand },
     projectDataProviders: { get: mockProjectDataProvidersGet },
-    logger: { warn: mockWarn },
+    logger: { warn: mockWarn, info: mockInfo },
+    settings: { get: mockGetSetting },
   } as unknown as typeof PapiBackend;
-  return { papi, mockSendCommand, mockWarn, mockProjectDataProvidersGet, setProjectKind };
+  return { papi, mockWarn, mockInfo, mockProjectDataProvidersGet, setProjectKind, ...mocks };
 }
+
+/**
+ * The sync commands `syncOnProjectSwitch` dispatches, in dispatch order: a deep sync of the
+ * incoming project, then a shallower send/receive of the outgoing one.
+ */
+const PROJECT_SWITCH_SYNC_COMMANDS = [
+  'paratextBibleSendReceive.syncProjects',
+  'paratextBibleSendReceive.sendReceiveProjects',
+];
 
 describe('syncOnProjectSwitch', () => {
   it('calls syncProjects with the incoming project ID', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'simple');
+
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextBibleSendReceive.syncProjects',
+      ['proj-incoming'],
+      true,
+    );
+  });
+
+  it('keeps the progress toast for the incoming sync in Power mode', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'power');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
       'proj-incoming',
     ]);
   });
 
-  it('calls sendReceiveProjects with the outgoing project ID when provided', async () => {
+  it('keeps the progress toast for the incoming sync when the mode is unknown', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-incoming',
+    ]);
+  });
+
+  it('calls sendReceiveProjects with only the outgoing project ID when provided, even in Simple mode', async () => {
+    const { papi, mockSendCommand } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
       'proj-outgoing',
@@ -2435,7 +2634,7 @@ describe('syncOnProjectSwitch', () => {
       callOrder.push(commandName);
     });
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(callOrder).toEqual([
       'paratextBibleSendReceive.syncProjects',
@@ -2446,7 +2645,7 @@ describe('syncOnProjectSwitch', () => {
   it('does not call sendReceiveProjects when outgoingProjectId is undefined', async () => {
     const { papi, mockSendCommand } = createSyncMockPapi();
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'simple');
 
     expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
       'paratextBibleSendReceive.sendReceiveProjects',
@@ -2459,7 +2658,7 @@ describe('syncOnProjectSwitch', () => {
       if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
     });
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
       'proj-outgoing',
@@ -2471,7 +2670,7 @@ describe('syncOnProjectSwitch', () => {
     mockSendCommand.mockRejectedValue(new Error('network error'));
 
     await expect(
-      syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing'),
+      syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple'),
     ).resolves.toBeUndefined();
   });
 
@@ -2481,7 +2680,7 @@ describe('syncOnProjectSwitch', () => {
       if (commandName === 'paratextBibleSendReceive.syncProjects') throw new Error('sync failed');
     });
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
+    await syncOnProjectSwitch(papi, 'proj-incoming', undefined, 'simple');
 
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-incoming'));
   });
@@ -2493,16 +2692,16 @@ describe('syncOnProjectSwitch', () => {
         throw new Error('S/R failed');
     });
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-outgoing'));
   });
 
   it('still syncs an outgoing translation project with editing switched off', async () => {
     // `Editable=F` locks the Scripture text, not comments, so the project can hold new work.
-    const { papi, mockSendCommand } = createSyncMockPapi(READ_ONLY_PROJECT);
+    const { papi, mockSendCommand } = createSyncMockPapi({}, READ_ONLY_PROJECT);
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
       'proj-outgoing',
@@ -2514,10 +2713,10 @@ describe('syncOnProjectSwitch', () => {
     // Classifies the outgoing project, not the incoming one.
     setProjectKind('proj-outgoing', PUBLISHED_RESOURCE);
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand.mock.calls).toEqual([
-      ['paratextBibleSendReceive.syncProjects', ['proj-incoming']],
+      ['paratextBibleSendReceive.syncProjects', ['proj-incoming'], true],
     ]);
   });
 
@@ -2527,11 +2726,76 @@ describe('syncOnProjectSwitch', () => {
     const { papi, mockSendCommand, mockProjectDataProvidersGet } = createSyncMockPapi();
     mockProjectDataProvidersGet.mockRejectedValue(new Error('pdp unavailable'));
 
-    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
       'proj-outgoing',
     ]);
+  });
+
+  it('sends both sync commands once first-run sync consent is granted', async () => {
+    const { papi, mockSendCommand, mockGetConsent } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
+
+    expect(mockGetConsent).toHaveBeenCalled();
+    expect(mockSendCommand.mock.calls.map(([commandName]) => commandName)).toEqual(
+      PROJECT_SWITCH_SYNC_COMMANDS,
+    );
+  });
+
+  it.each([
+    ['the first-run wizard has not been answered', 'unconfirmed'],
+    ['the user chose "Don\'t sync yet" earlier this session', 'deferred'],
+  ] as const)('syncs nothing while %s', async (_, consent) => {
+    const { papi, mockSendCommand, mockInfo } = createSyncMockPapi({ consent });
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    // A silent skip is indistinguishable from a switch that never reached the sync, so the gate
+    // must say it closed — at info, since packaged builds drop debug.
+    expect(mockInfo).toHaveBeenCalledWith(
+      `Project-switch sync skipped: first-run sync consent is ${consent}`,
+    );
+  });
+
+  it('syncs nothing when the consent check rejects (fails closed)', async () => {
+    const { papi, mockSendCommand, mockWarn } = createSyncMockPapi({ consent: READ_THROWS });
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'simple');
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalledWith(
+      expect.stringContaining('could not check first-run sync consent'),
+    );
+  });
+
+  it('does not consult the consent gate in power mode', async () => {
+    // The first-run completion flag is never written outside Simple mode, so gating a power-mode
+    // caller on it would suppress that caller's sync permanently.
+    const { papi, mockSendCommand, mockGetConsent } = createSyncMockPapi({
+      consent: 'unconfirmed',
+    });
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', 'power');
+
+    expect(mockGetConsent).not.toHaveBeenCalled();
+    expect(mockSendCommand.mock.calls.map(([commandName]) => commandName)).toEqual(
+      PROJECT_SWITCH_SYNC_COMMANDS,
+    );
+  });
+
+  it('still applies the consent gate when the caller could not read the interface mode', async () => {
+    // An unreadable mode must not become a way past the gate.
+    const { papi, mockSendCommand, mockGetConsent } = createSyncMockPapi({
+      consent: 'unconfirmed',
+    });
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing', undefined);
+
+    expect(mockGetConsent).toHaveBeenCalled();
+    expect(mockSendCommand).not.toHaveBeenCalled();
   });
 });
 
@@ -2541,10 +2805,15 @@ describe('syncOnProjectSwitch', () => {
 
 const GRID_WEBVIEW_ID = 'text-collection-1';
 
-function createFinalizeMockPapi(projectKind: ProjectKind = EDITABLE_PROJECT) {
+// `finalizeProjectSwitch` reads the interface mode itself and dispatches `syncOnProjectSwitch`, which
+// reads it too and checks consent. The Simple-mode default matches the common case: the switch this
+// replays side effects for only ever originates from a Power -> Simple mode change.
+function createFinalizeMockPapi(
+  gate: SyncGateStub = {},
+  projectKind: ProjectKind = EDITABLE_PROJECT,
+) {
   const { mockProjectDataProvidersGet } = createProjectKindMocks(projectKind);
-  const mockSendCommand = vi.fn().mockResolvedValue(undefined);
-  const mockWarn = vi.fn();
+  const { sendCommand, mockGetSetting, mockWarn, mockInfo, ...mocks } = createSyncGateStubs(gate);
   const mockRecordProjectOpened = vi.fn().mockResolvedValue(undefined);
   const mockDataProvidersGet = vi.fn().mockImplementation(async (name: string) => {
     if (name === 'platformScripture.recentlyOpenedProjects') {
@@ -2552,9 +2821,6 @@ function createFinalizeMockPapi(projectKind: ProjectKind = EDITABLE_PROJECT) {
     }
     return undefined;
   });
-  // Defaults to 'simple' - matches the common case (the switch this replays side effects for only
-  // ever originates from a Power -> Simple mode change), so most tests don't need to set it.
-  const mockSettingsGet = vi.fn().mockResolvedValue('simple');
   // The Text Collection re-point runs from here, so the mock needs a webViews surface; without one
   // it would take the swallowed-failure path and the assertions below would pass vacuously.
   const mockGetAllOpenWebViewDefinitions = vi
@@ -2569,26 +2835,26 @@ function createFinalizeMockPapi(projectKind: ProjectKind = EDITABLE_PROJECT) {
   // Must cast since the mock only includes the papi properties finalizeProjectSwitch uses.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
-    commands: { sendCommand: mockSendCommand },
+    commands: { sendCommand },
     dataProviders: { get: mockDataProvidersGet },
     projectDataProviders: { get: mockProjectDataProvidersGet },
-    settings: { get: mockSettingsGet },
+    settings: { get: mockGetSetting },
     webViews: {
       getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions,
       reloadWebView: mockReloadWebView,
     },
-    logger: { warn: mockWarn, error: mockError },
+    logger: { warn: mockWarn, info: mockInfo, error: mockError },
   } as unknown as typeof PapiBackend;
   return {
     papi,
-    mockSendCommand,
     mockWarn,
+    mockInfo,
     mockError,
     mockRecordProjectOpened,
     mockDataProvidersGet,
-    mockSettingsGet,
     mockGetAllOpenWebViewDefinitions,
     mockReloadWebView,
+    ...mocks,
   };
 }
 
@@ -2598,12 +2864,48 @@ describe('finalizeProjectSwitch', () => {
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
-    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
-      'proj-1',
-    ]);
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextBibleSendReceive.syncProjects',
+      ['proj-1'],
+      true,
+    );
     expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
       'paratextBibleSendReceive.sendReceiveProjects',
     );
+  });
+
+  it('keeps the progress toast when the user has switched back to Power mode', async () => {
+    const { papi, mockSendCommand } = createFinalizeMockPapi({ mode: 'power' });
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-1',
+    ]);
+  });
+
+  it('still syncs, with the progress toast, when the mode read rejects', async () => {
+    const { papi, mockSendCommand, mockWarn } = createFinalizeMockPapi({ mode: READ_THROWS });
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-1',
+    ]);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('platform.interfaceMode'));
+  });
+
+  it('skips the Simple-only work but still records the project when the mode read rejects', async () => {
+    const { papi, mockReloadWebView, mockRecordProjectOpened } = createFinalizeMockPapi({
+      mode: READ_THROWS,
+    });
+    const applyForProject = vi.fn().mockResolvedValue(undefined);
+
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+    expect(applyForProject).not.toHaveBeenCalled();
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
   });
 
   it('does not await the sync before returning - a hung sync must not block applyForProject or recordProjectOpened', async () => {
@@ -2634,7 +2936,7 @@ describe('finalizeProjectSwitch', () => {
 
   it('does not re-point the Text Collection at a published resource', async () => {
     // The same rule as the editor-column switch, applied through the same function.
-    const { papi, mockReloadWebView } = createFinalizeMockPapi(PUBLISHED_RESOURCE);
+    const { papi, mockReloadWebView } = createFinalizeMockPapi({}, PUBLISHED_RESOURCE);
 
     await finalizeProjectSwitch(papi, 'resource-1', undefined);
 
@@ -2657,8 +2959,7 @@ describe('finalizeProjectSwitch', () => {
   });
 
   it('does not re-point the Text Collection once the user is back in Power mode', async () => {
-    const { papi, mockReloadWebView, mockSettingsGet } = createFinalizeMockPapi();
-    mockSettingsGet.mockResolvedValue('power');
+    const { papi, mockReloadWebView } = createFinalizeMockPapi({ mode: 'power' });
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
@@ -2675,8 +2976,7 @@ describe('finalizeProjectSwitch', () => {
   });
 
   it('does not call applyForProject when the user has since switched back to Power mode', async () => {
-    const { papi, mockSettingsGet } = createFinalizeMockPapi();
-    mockSettingsGet.mockResolvedValue('power');
+    const { papi } = createFinalizeMockPapi({ mode: 'power' });
     const applyForProject = vi.fn().mockResolvedValue(undefined);
 
     await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
@@ -2699,8 +2999,7 @@ describe('finalizeProjectSwitch', () => {
   });
 
   it('records the project as recently opened even when no longer in Simple mode', async () => {
-    const { papi, mockSettingsGet, mockRecordProjectOpened } = createFinalizeMockPapi();
-    mockSettingsGet.mockResolvedValue('power');
+    const { papi, mockRecordProjectOpened } = createFinalizeMockPapi({ mode: 'power' });
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
@@ -4484,6 +4783,222 @@ describe('buildScriptureTextGridWebView', () => {
 
 // #endregion
 
+describe('withDocumentEndOnText', () => {
+  /** `\p \v 1 In the b` as the document's last paragraph; its text is `$.content[2].content[1]`. */
+  const lastParagraph = {
+    type: 'para',
+    marker: 'p',
+    content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the b'],
+  };
+  const endsInText: Usj = {
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN' },
+      { type: 'chapter', marker: 'c', number: '1' },
+      lastParagraph,
+    ],
+  };
+
+  it('brings the document-end spelling (one past the text) onto the end of the text', () => {
+    expect(
+      withDocumentEndOnText({ jsonPath: '$.content[2].content[1]', offset: 9 }, 8, endsInText),
+    ).toEqual({ jsonPath: '$.content[2].content[1]', offset: 8 });
+  });
+
+  it.each<[string, UsjTextContentLocation]>([
+    ['an offset inside the text', { jsonPath: '$.content[2].content[1]', offset: 3 }],
+    ['the end of the text', { jsonPath: '$.content[2].content[1]', offset: 8 }],
+    ['an offset no location rule produces', { jsonPath: '$.content[2].content[1]', offset: 10 }],
+  ])('leaves %s alone', (_name, location) => {
+    expect(withDocumentEndOnText(location, 8, endsInText)).toBe(location);
+  });
+
+  it('leaves one past the end alone on a text that is not the last in the document', () => {
+    const location: UsjTextContentLocation = { jsonPath: '$.content[2].content[1]', offset: 9 };
+    const followed: Usj = {
+      ...endsInText,
+      content: [...endsInText.content, { type: 'para', marker: 'p', content: ['God said'] }],
+    };
+
+    expect(withDocumentEndOnText(location, 8, followed)).toBe(location);
+  });
+});
+describe('validateCommentSelection', () => {
+  const NOT_RESOLVED = '%webView_platformScriptureEditor_error_selectionNotResolved%';
+  const CONTAINS_MARKERS = '%webView_platformScriptureEditor_error_selectionContainsMarkers%';
+  const NO_TEXT = '%webView_platformScriptureEditor_error_noTextSelected%';
+
+  const refrain = 'for his loving kindness endures forever.';
+  const doc: Usj = {
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'PSA' },
+      { type: 'chapter', marker: 'c', number: '136' },
+      // 2: verse text with a footnote and a \nd span
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'In the beginning',
+          {
+            type: 'note',
+            marker: 'f',
+            caller: '+',
+            content: [{ type: 'char', marker: 'ft', content: ['a note'] }],
+          },
+          ' God said ',
+          { type: 'char', marker: 'nd', content: ['LORD'] },
+          ' hello',
+        ],
+      },
+      { type: 'para', marker: 'q2', content: [refrain] },
+      { type: 'para', marker: 'b' },
+      { type: 'para', marker: 'q1', content: [{ type: 'verse', marker: 'v', number: '2' }] },
+      { type: 'para', marker: 'q2', content: [refrain] },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [{ type: 'char', marker: 'w', lemma: 'grace', content: ['grace'] }, ' end'],
+      },
+    ],
+  };
+  const text = '$.content[2].content[1]';
+
+  it('anchors a text range as is', () => {
+    expect(
+      validateCommentSelection(
+        { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+        doc,
+      ),
+    ).toEqual({
+      range: { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+    });
+  });
+
+  it('expands a collapsed caret to the word around it', () => {
+    expect(validateCommentSelection({ start: { jsonPath: text, offset: 10 } }, doc)).toEqual({
+      range: { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+    });
+  });
+
+  it('refuses a collapsed caret between whitespace', () => {
+    expect(
+      validateCommentSelection({ start: { jsonPath: '$.content[2].content[3]', offset: 0 } }, doc),
+    ).toEqual({ notice: NO_TEXT });
+  });
+
+  it('warns for a text path that does not resolve', () => {
+    const result = validateCommentSelection(
+      { start: { jsonPath: '$.content[40].content[1]', offset: 2 } },
+      doc,
+    );
+    expect(result).toMatchObject({ notice: NOT_RESOLVED });
+    expect(result).toHaveProperty('warning');
+  });
+
+  it('warns for an end offset past the length of the text', () => {
+    const result = validateCommentSelection(
+      { start: { jsonPath: text, offset: 2 }, end: { jsonPath: text, offset: 40 } },
+      doc,
+    );
+    expect(result).toMatchObject({ notice: NOT_RESOLVED });
+    expect(result).toHaveProperty('warning');
+  });
+
+  it('warns for a collapsed caret past the length of the text', () => {
+    const result = validateCommentSelection({ start: { jsonPath: text, offset: 17 } }, doc);
+    expect(result).toMatchObject({ notice: NOT_RESOLVED });
+    expect(result).toHaveProperty('warning');
+  });
+
+  it('accepts the document end on the last text', () => {
+    const lastText: Usj = {
+      ...doc,
+      content: [...doc.content.slice(0, 2), { type: 'para', marker: 'p', content: ['The end'] }],
+    };
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: '$.content[2].content[0]', offset: 4 },
+          end: { jsonPath: '$.content[2].content[0]', offset: 8 },
+        },
+        lastText,
+      ),
+    ).toEqual({
+      range: {
+        start: { jsonPath: '$.content[2].content[0]', offset: 4 },
+        end: { jsonPath: '$.content[2].content[0]', offset: 7 },
+      },
+    });
+  });
+
+  it('refuses a range across a character span', () => {
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: '$.content[2].content[3]', offset: 2 },
+          end: { jsonPath: '$.content[2].content[5]', offset: 3 },
+        },
+        doc,
+      ),
+    ).toEqual({ notice: CONTAINS_MARKERS });
+  });
+
+  it('refuses a range across two identical strings in different paragraphs', () => {
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: '$.content[3].content[0]', offset: 4 },
+          end: { jsonPath: '$.content[6].content[0]', offset: 10 },
+        },
+        doc,
+      ),
+    ).toEqual({ notice: CONTAINS_MARKERS });
+  });
+
+  it.each([
+    ['an empty paragraph marker', { jsonPath: "$.content[4]['marker']", propertyOffset: 1 }],
+    [
+      'a line-final verse number',
+      { jsonPath: "$.content[5].content[0]['number']", propertyOffset: 1 },
+    ],
+    [
+      'a lemma that equals the word',
+      { jsonPath: "$.content[7].content[0]['lemma']", propertyOffset: 2 },
+    ],
+  ])('refuses a collapsed caret on %s without a warning', (_name, start) => {
+    expect(validateCommentSelection({ start }, doc)).toEqual({ notice: NO_TEXT });
+  });
+
+  it('refuses a range ending on a property location without a warning', () => {
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: text, offset: 2 },
+          end: { jsonPath: "$.content[5].content[0]['number']", propertyOffset: 1 },
+        },
+        doc,
+      ),
+    ).toEqual({ notice: CONTAINS_MARKERS });
+  });
+
+  it('treats a range end on the next marker as the end of the text before it', () => {
+    const viaMarker = validateCommentSelection(
+      { start: { jsonPath: text, offset: 7 }, end: { jsonPath: '$.content[2].content[2]' } },
+      doc,
+    );
+    const viaText = validateCommentSelection(
+      { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+      doc,
+    );
+    expect(viaMarker).toEqual(viaText);
+    expect(viaMarker).toHaveProperty('range');
+  });
+});
+
 // #region resolveNoteVerseRef
 
 describe('resolveNoteVerseRef (picking a note navigates to its verse)', () => {
@@ -4612,3 +5127,74 @@ describe('resolveNoteVerseRef (picking a note navigates to its verse)', () => {
 });
 
 // #endregion resolveNoteVerseRef
+
+describe('readCommentRangeText', () => {
+  const makeDoc = (content: Usj['content'][number][]): Usj => ({
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [{ type: 'book', marker: 'id', code: 'PSA' }, ...content],
+  });
+  const path = '$.content[1].content[0]';
+  const range = (startOffset: number, endOffset: number) => ({
+    start: { jsonPath: path, offset: startOffset },
+    end: { jsonPath: path, offset: endOffset },
+  });
+  const doc = makeDoc([{ type: 'para', marker: 'p', content: ['In the beginning'] }]);
+
+  it.each([
+    ['a slice of the text', doc, range(3, 6), 'the'],
+    ['the whole text', doc, range(0, 16), 'In the beginning'],
+    [
+      'a path that is gone',
+      makeDoc([{ type: 'para', marker: 'p', content: [] }]),
+      range(3, 6),
+      undefined,
+    ],
+    [
+      'a path that is now a marker',
+      makeDoc([
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'char', marker: 'nd', content: ['the'] }],
+        },
+      ]),
+      range(3, 6),
+      undefined,
+    ],
+    [
+      'text that is now shorter than the range',
+      makeDoc([{ type: 'para', marker: 'p', content: ['In'] }]),
+      range(3, 6),
+      undefined,
+    ],
+  ])('reads %s', (_name, usj, r, expected) => {
+    expect(readCommentRangeText(r, usj)).toBe(expected);
+  });
+});
+
+describe('hasPendingCommentTextChanged', () => {
+  const path = '$.content[1].content[0]';
+  const pending = {
+    range: { start: { jsonPath: path, offset: 3 }, end: { jsonPath: path, offset: 6 } },
+    anchoredText: 'the',
+  };
+  const docWith = (text: string): Usj => ({
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'PSA' },
+      { type: 'para', marker: 'p', content: [text] },
+    ],
+  });
+
+  it.each([
+    ['the anchored text is unchanged', 'In the beginning', false],
+    ['text after the range changed', 'In the beginnings', false],
+    ['text before the range shifted it', 'Oh, in the beginning', true],
+    ['the anchored text itself changed', 'In her beginning', true],
+    ['the text became too short', 'In', true],
+  ])('when %s', (_name, text, expected) => {
+    expect(hasPendingCommentTextChanged(pending, docWith(text))).toBe(expected);
+  });
+});
