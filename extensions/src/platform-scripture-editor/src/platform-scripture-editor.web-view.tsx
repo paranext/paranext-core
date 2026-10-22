@@ -123,6 +123,7 @@ import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } 
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
+import { isInsertCommentChord, runPaletteSessionKeyDown } from './insert-comment-chord.util';
 import { useIsProjectDataLoading } from './copy-limit/use-is-project-data-loading.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import {
@@ -2658,20 +2659,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // insert a footnote/cross-reference, and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
-    /**
-     * Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux). Read by BOTH listeners below:
-     * the capture one claims it while a palette session is open, the bubble one acts on it
-     * otherwise.
-     */
-    const isInsertCommentChord = (event: KeyboardEvent) =>
-      isMac
-        ? event.metaKey &&
-          event.altKey &&
-          // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
-          (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
-        : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
-          (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
-
     // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
     // root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
     // listener, so a window BUBBLE-phase handler runs too late — the paragraph has already split
@@ -2704,23 +2691,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         const session = paletteSession.current;
 
         if (session) {
-          // Decided BEFORE the table runs: the table treats this chord as an ordinary chord —
-          // dismiss the palette, decline the key — and a declined key keeps propagating with the
-          // session already cleared, so the bubble-phase handler below would insert a comment
-          // anyway. The dismissal's refocus then lands on the editor and pulls focus straight back
-          // out of the comment box the user is typing in.
-          //
-          // Claimed, so the chord only closes the palette. That is also what it does once the
-          // palette HAS focus, where the keystroke goes to the renderer and never reaches this web
-          // view at all — so the pre-focus window and the focused case now behave the same.
-          const closesPaletteOnly = isInsertCommentChord(event);
-          // Through the ref so this listener and the palette's forwarded keys provably run the
-          // same handler (and so this effect needs no dependency on it).
-          runPaletteSessionKeyRef.current(event);
-          if (closesPaletteOnly) {
-            event.preventDefault();
-            event.stopPropagation();
-          }
+          // Claims the insert-comment chord, so it only closes the palette rather than also
+          // reaching `handleKeyDown` below. Through the ref so this listener and the palette's
+          // forwarded keys provably run the same handler (and so this effect needs no dependency on
+          // it).
+          runPaletteSessionKeyDown(event, isMac, (key) => runPaletteSessionKeyRef.current(key));
           return;
         }
 
@@ -2787,11 +2762,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
       }
 
-      if (isInsertCommentChord(event)) {
+      if (isInsertCommentChord(event, isMac)) {
         // Nothing here excludes an open marker palette: the capture-phase listener above claims
         // this chord while a session is open, so a palette closes and this never runs. A check
         // here could not do it anyway — the table clears the session synchronously, ahead of this
-        // bubble phase.
+        // bubble phase. See `runPaletteSessionKeyDown`.
         event.preventDefault();
         event.stopPropagation();
         // Swallowed while the editor's right-click menu is up, like the Ctrl+T shortcuts below.
