@@ -25,6 +25,8 @@ describe('getViewOptionsAvailability', () => {
   it('reports noProject when no project is selected', () => {
     expect(
       getViewOptionsAvailability({
+        hasProject: false,
+        isPublishedResource: false,
         textConnectionState: { status: 'noSource' },
         sources: undefined,
         hasSettingsError: false,
@@ -35,6 +37,8 @@ describe('getViewOptionsAvailability', () => {
   it('reports loading while the provider for the selected project is still resolving', () => {
     expect(
       getViewOptionsAvailability({
+        hasProject: true,
+        isPublishedResource: false,
         textConnectionState: { status: 'loading' },
         sources: undefined,
         hasSettingsError: false,
@@ -47,6 +51,8 @@ describe('getViewOptionsAvailability', () => {
     // than spinning forever.
     expect(
       getViewOptionsAvailability({
+        hasProject: true,
+        isPublishedResource: false,
         textConnectionState: { status: 'unavailable' },
         sources: undefined,
         hasSettingsError: false,
@@ -60,6 +66,8 @@ describe('getViewOptionsAvailability', () => {
     // trips. Treating a `ready` provider as operable is what enabled controls over no data.
     expect(
       getViewOptionsAvailability({
+        hasProject: true,
+        isPublishedResource: false,
         textConnectionState: readyProvider(),
         sources: undefined,
         hasSettingsError: false,
@@ -70,6 +78,8 @@ describe('getViewOptionsAvailability', () => {
   it('reports ready only once the provider resolved and the sources assembled', () => {
     expect(
       getViewOptionsAvailability({
+        hasProject: true,
+        isPublishedResource: false,
         textConnectionState: readyProvider(),
         sources: someSources(),
         hasSettingsError: false,
@@ -83,6 +93,8 @@ describe('getViewOptionsAvailability', () => {
     (['noSource', 'loading', 'unavailable'] as const).forEach((status) => {
       expect(
         getViewOptionsAvailability({
+          hasProject: status !== 'noSource',
+          isPublishedResource: false,
           textConnectionState: { status },
           sources: someSources(),
           hasSettingsError: false,
@@ -97,6 +109,8 @@ describe('getViewOptionsAvailability', () => {
     // never going to load.
     expect(
       getViewOptionsAvailability({
+        hasProject: true,
+        isPublishedResource: false,
         textConnectionState: readyProvider(),
         sources: undefined,
         hasSettingsError: true,
@@ -109,6 +123,8 @@ describe('getViewOptionsAvailability', () => {
     // the more useful ones.
     expect(
       getViewOptionsAvailability({
+        hasProject: false,
+        isPublishedResource: false,
         textConnectionState: { status: 'noSource' },
         sources: undefined,
         hasSettingsError: true,
@@ -116,10 +132,38 @@ describe('getViewOptionsAvailability', () => {
     ).toBe('noProject');
     expect(
       getViewOptionsAvailability({
+        hasProject: true,
+        isPublishedResource: false,
         textConnectionState: { status: 'unavailable' },
         sources: undefined,
         hasSettingsError: true,
       }),
     ).toBe('unavailable');
+  });
+
+  it('reports resource for a published resource, whose settings are never bound', () => {
+    expect(
+      getViewOptionsAvailability({
+        hasProject: true,
+        isPublishedResource: true,
+        textConnectionState: { status: 'noSource' },
+        sources: undefined,
+        hasSettingsError: false,
+      }),
+    ).toBe('resource');
+  });
+
+  it('reports loading, not noProject, while a selected project is not yet bound', () => {
+    // The settings stay unbound until the project is known not to be a published resource, so
+    // `noSource` alone does not mean nothing is selected.
+    expect(
+      getViewOptionsAvailability({
+        hasProject: true,
+        isPublishedResource: false,
+        textConnectionState: { status: 'noSource' },
+        sources: undefined,
+        hasSettingsError: false,
+      }),
+    ).toBe('loading');
   });
 });

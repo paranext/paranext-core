@@ -174,6 +174,35 @@ describe('CommentListPanel current-user-unavailable state', () => {
   });
 });
 
+describe('CommentListPanel published resource', () => {
+  const RESOURCE_MESSAGE = EN_STRINGS['%webView_legacyCommentManager_resourceHasNoComments%'];
+
+  it('says a resource has no comments instead of loading, with no filters to set', () => {
+    // A resource has no comments provider, so the panel would otherwise stay loading for good.
+    renderPanel({ isLoading: true, isPublishedResource: true });
+
+    expect(RESOURCE_MESSAGE).toBeTruthy();
+    expect(screen.getByText(RESOURCE_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: PRESET_ARIA })).not.toBeInTheDocument();
+  });
+
+  it('shows the English message, not its key, before the localized strings arrive', () => {
+    // `useLocalizedStrings` seeds each key with itself until the real strings load.
+    const key = '%webView_legacyCommentManager_resourceHasNoComments%';
+    renderPanel({ isPublishedResource: true, localizedStrings: { ...STRINGS, [key]: key } });
+
+    expect(screen.getByText(RESOURCE_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText(key)).not.toBeInTheDocument();
+  });
+
+  it('does not show the message for a project', () => {
+    renderPanel();
+
+    expect(screen.queryByText(RESOURCE_MESSAGE)).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: PRESET_ARIA })).toBeInTheDocument();
+  });
+});
+
 describe('CommentListPanel filter toolbar', () => {
   it('renders the preset and scope dropdowns directly in the toolbar', () => {
     renderPanel();

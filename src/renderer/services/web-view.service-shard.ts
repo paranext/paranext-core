@@ -1149,7 +1149,8 @@ async function loadLayout(
       return;
     }
     if (enabledEntries.length === 0) {
-      // Nothing to merge (the common/vanilla case) — load the base layout directly and skip the clone.
+      // Nothing to merge (an empty supplement, or every entry's flag off) — load the base layout
+      // directly and skip the clone.
       dockLayoutVar.loadLayout(layoutToLoad);
       layoutLoadGenerationInDock = thisGeneration;
       emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);

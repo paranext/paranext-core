@@ -102,6 +102,7 @@ const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_clo
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
 const CATALOG_ERROR_KEY = '%webView_scriptureTextGrid_catalogUnavailable%';
 const CATALOG_RETRY_KEY = '%webView_scriptureTextGrid_retry%';
+const RESOURCE_HAS_NO_COLLECTION_KEY = '%webView_scriptureTextGrid_resourceHasNoTextCollection%';
 const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
 // Screen-reader announcements for the chapter-context split opening/closing.
 const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
@@ -120,6 +121,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   SETTINGS_UNAVAILABLE_KEY,
   CHAPTER_CONTEXT_CLOSE_KEY,
   EMPTY_STATE_KEY,
+  RESOURCE_HAS_NO_COLLECTION_KEY,
   CATALOG_ERROR_KEY,
   CATALOG_RETRY_KEY,
   CELL_ACCESSIBLE_NAME_KEY,
@@ -207,8 +209,15 @@ function ScriptureTextGridProjectView({
   initializeOverlayOnce,
   onAnnounce,
 }: ScriptureTextGridProjectViewProps) {
-  const { sources, textConnectionPdp, textConnectionState, isOrderPending, hasSettingsError } =
-    useTextCollectionSources(projectId);
+  // A published resource gets no `textConnectionPdp`, which every write below goes through.
+  const {
+    sources,
+    textConnectionPdp,
+    textConnectionState,
+    isOrderPending,
+    hasSettingsError,
+    isPublishedResource,
+  } = useTextCollectionSources(projectId);
 
   // Latest sources for the async callbacks below — reading the render-closure `sources` would let a
   // rapid second toggle (or a toggle mid-install) compute its next-state from a pre-write snapshot
@@ -306,16 +315,18 @@ function ScriptureTextGridProjectView({
     hasSources: sources !== undefined,
     hasCatalogError,
     isLoading: isLoadingCachedResources || isLoadingLocalizedStrings,
+    isPublishedResource,
   });
 
   // The grid is one web view hosting many projects, so its members are invisible to global
   // navigation UI unless declared here.
   // `resources` — and so `displayedProjectIds` — is transiently empty until the sources and the
   // cached DBL list have both loaded, which is indistinguishable from "every project was removed".
+  // A published resource displays nothing, which is a complete answer as soon as it is known.
   usePublishNavigableProjectIds(
     useWebViewState,
     displayedProjectIds,
-    sources !== undefined && !isLoadingCachedResources,
+    isPublishedResource || (sources !== undefined && !isLoadingCachedResources),
     // A project switch re-points this panel by reloading it, which reuses the web view id, so the
     // published list would otherwise outlive the project it was built for.
     projectId,
@@ -324,14 +335,23 @@ function ScriptureTextGridProjectView({
   // One value drives both whether the View Options controls are operable and the reason shown when
   // they are not, so the two cannot disagree.
   const viewOptionsAvailability = useMemo(
-    () => getViewOptionsAvailability({ textConnectionState, sources, hasSettingsError }),
-    [textConnectionState, sources, hasSettingsError],
+    () =>
+      getViewOptionsAvailability({
+        hasProject: projectId !== undefined,
+        isPublishedResource,
+        textConnectionState,
+        sources,
+        hasSettingsError,
+      }),
+    [projectId, isPublishedResource, textConnectionState, sources, hasSettingsError],
   );
   const disabledMessage = useMemo(() => {
     // Resolved rather than indexed: `useLocalizedStrings` seeds its result with the key itself
     // until the real value arrives, and rendering that shows literal `%…%` text.
     if (viewOptionsAvailability === 'noProject')
       return resolveLocalizedString(localizedStrings, NO_PROJECT_KEY);
+    if (viewOptionsAvailability === 'resource')
+      return resolveLocalizedString(localizedStrings, RESOURCE_HAS_NO_COLLECTION_KEY);
     if (viewOptionsAvailability === 'unavailable')
       return resolveLocalizedString(localizedStrings, NOT_SUPPORTED_KEY);
     if (viewOptionsAvailability === 'settingsError')
@@ -474,6 +494,12 @@ function ScriptureTextGridProjectView({
     ),
   );
 
+  // Undefined until the strings load, so it cannot flash a raw `%key%`.
+  const resourceHasNoCollectionMessage = resolveLocalizedString(
+    localizedStrings,
+    RESOURCE_HAS_NO_COLLECTION_KEY,
+  );
+
   return (
     <>
       <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
@@ -541,6 +567,15 @@ function ScriptureTextGridProjectView({
               message={localizedStrings[CATALOG_ERROR_KEY]}
               retryLabel={localizedStrings[CATALOG_RETRY_KEY]}
               onRetry={refetchCatalog}
+            />
+          </div>
+        )}
+        {gridBodyState === 'resource' && resourceHasNoCollectionMessage && (
+          <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
+            <EmptyState
+              id="scripture-text-grid-resource-state"
+              className="tw:text-center"
+              message={resourceHasNoCollectionMessage}
             />
           </div>
         )}

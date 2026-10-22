@@ -47,8 +47,7 @@ export type PickerResource = {
 /**
  * Enumerate every locally-installed read-only reference resource and resolve its display metadata.
  * Filters to `isEditable === false` to exclude the user's own editable translation projects while
- * including both DBL-published resources and locally-installed read-only resources (e.g. VULGP83,
- * TNN, TND, HBK) that have `isPublished === false` but `isEditable === false`.
+ * including every resource, DBL-published or locally installed (e.g. VULGP83, TNN, TND, HBK).
  *
  * Note: the renderer uses a similar enumerate-and-resolve pattern in
  * `src/renderer/hooks/use-project-picker-data.hook.ts`. A shared utility isn't possible here
@@ -58,9 +57,10 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
   try {
     // Filter to `platform.base` rather than `platformScripture.USJ_Chapter` so that
     // commentary/notes resources that do not implement USJ are included.
-    // Then filter to `isEditable === false`: DBL resources always have this flag; locally-installed
-    // read-only resources (VULGP83, TNN, TND, HBK) have `Editable=F` in their Settings.xml and
-    // therefore also get `isEditable: false`, even though `isPublished` is `false` for them.
+    // Then filter to `isEditable === false`: DBL resources always have this flag, and locally
+    // installed `.p8z` resources (VULGP83, TNN, TND, HBK) have `Editable=F` in their Settings.xml.
+    // Both are resource projects, so `isPublished` is `true` for them too. A plain project
+    // marked `Editable=F`, such as the WEB sample, also passes this filter.
     // The user's own editable translation projects have `isEditable: true` and are excluded.
     // Per the project-metadata model: absence means editable, so the test MUST be `=== false`.
     const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
