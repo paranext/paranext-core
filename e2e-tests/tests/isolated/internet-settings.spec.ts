@@ -65,19 +65,27 @@ test.describe('Internet & Connectivity settings', () => {
   // that nothing key-shaped reaches the screen.
   //
   // Opened with Shift held so the server section (and its own localization keys) renders — a plain
-  // click on Production leaves it hidden; see `computeCanEditServer`.
+  // click on Production leaves it hidden; see `computeCanEditServer`. Pinned to Production first
+  // (like the Shift+click/Shift+Enter tests below) so this still exercises that path on a machine
+  // already persisted off Production, where Shift would otherwise do nothing observable.
   test('renders no unresolved localization keys', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
-    await openInternetSettings(mainPage, { shiftKey: true });
-    const frame = internetSettingsFrame(mainPage);
-    await waitForSettingsLoaded(frame);
-    await expandDeveloperSection(frame);
+    const originalServer = await setPersistedServer(mainPage, 'Production');
 
-    const text = await frame.locator('body').innerText();
-    expect(text).not.toMatch(/%[a-zA-Z0-9_]+%/);
-    // Positive control: this corpus is the panel's real text, not an empty string that would
-    // satisfy the assertion above no matter what.
-    expect(text).toContain('Internet & connectivity');
+    try {
+      await openInternetSettings(mainPage, { shiftKey: true });
+      const frame = internetSettingsFrame(mainPage);
+      await waitForSettingsLoaded(frame);
+      await expandDeveloperSection(frame);
+
+      const text = await frame.locator('body').innerText();
+      expect(text).not.toMatch(/%[a-zA-Z0-9_]+%/);
+      // Positive control: this corpus is the panel's real text, not an empty string that would
+      // satisfy the assertion above no matter what.
+      expect(text).toContain('Internet & connectivity');
+    } finally {
+      await setPersistedServer(mainPage, originalServer);
+    }
   });
 
   test('shows 2 active radio rows and 3 coming-soon rows with badges', async ({ mainPage }) => {
@@ -220,24 +228,42 @@ test.describe('Internet & Connectivity settings', () => {
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await openInternetSettings(mainPage, { shiftKey: true });
-    const frame = internetSettingsFrame(mainPage);
-    await waitForSettingsLoaded(frame);
+    // Seeded rather than assumed: a developer machine can legitimately be persisted on QA, where
+    // the server section would already be visible without Shift and the test would pass even if
+    // the Shift gesture did nothing.
+    const originalServer = await setPersistedServer(mainPage, 'Production');
 
-    await expandDeveloperSection(frame);
-    await expect(serverTypeRadio(frame, 'production')).toBeVisible();
+    try {
+      await openInternetSettings(mainPage, { shiftKey: true });
+      const frame = internetSettingsFrame(mainPage);
+      await waitForSettingsLoaded(frame);
+
+      await expandDeveloperSection(frame);
+      await expect(serverTypeRadio(frame, 'production')).toBeVisible();
+    } finally {
+      await setPersistedServer(mainPage, originalServer);
+    }
   });
 
   test('Shift+Enter on the focused row reveals the server section, matching Shift+click', async ({
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await openInternetSettings(mainPage, { shiftKey: true, activation: 'keyboard' });
+    // Seeded rather than assumed: a developer machine can legitimately be persisted on QA, where
+    // the server section would already be visible without Shift and the test would pass even if
+    // the Shift gesture did nothing.
+    const originalServer = await setPersistedServer(mainPage, 'Production');
 
-    const frame = internetSettingsFrame(mainPage);
-    await waitForSettingsLoaded(frame);
-    await expandDeveloperSection(frame);
-    await expect(serverTypeRadio(frame, 'production')).toBeVisible();
+    try {
+      await openInternetSettings(mainPage, { shiftKey: true, activation: 'keyboard' });
+
+      const frame = internetSettingsFrame(mainPage);
+      await waitForSettingsLoaded(frame);
+      await expandDeveloperSection(frame);
+      await expect(serverTypeRadio(frame, 'production')).toBeVisible();
+    } finally {
+      await setPersistedServer(mainPage, originalServer);
+    }
   });
 
   // Complements the "while on Production" case above: once the persisted server is already
