@@ -693,7 +693,8 @@ declare module 'papi-shared-types' {
      *   first pointed at that editor's project when it shows another one. If omitted, the panel is
      *   assumed to show the right project already.
      * @returns The webView ID of the panel, or `undefined` if it isn't open in the current layout
-     * @throws If the panel's WebView Controller cannot be obtained to apply the selection
+     * @throws If the panel's WebView Controller cannot be obtained to apply the selection, or if
+     *   the panel shows another project and can't be pointed at the editor's project
      */
     'legacyCommentManager.selectCommentThreadInPanel': (
       threadId: string,

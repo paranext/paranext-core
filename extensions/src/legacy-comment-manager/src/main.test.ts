@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => {
     getOpenWebViewDefinition: vi.fn<
       (webViewId: string) => Promise<{ projectId?: string } | undefined>
     >(async () => undefined),
-    reloadWebView: vi.fn(async () => undefined),
+    reloadWebView: vi.fn(async (): Promise<string | undefined> => undefined),
     getWebViewController: vi.fn(
       async (): Promise<{ selectThread: (threadId: string) => Promise<void> } | undefined> =>
         undefined,
@@ -191,6 +191,8 @@ describe('legacy comment manager main.ts activation', () => {
      */
     function arrange(panelProjectId: string | undefined, editorProjectId: string | undefined) {
       mocks.openWebView.mockResolvedValue('comments-tab');
+      // A successful reload resolves to the reloaded web view's ID
+      mocks.reloadWebView.mockResolvedValue('comments-tab');
       mocks.getWebViewController.mockResolvedValue({ selectThread });
       mocks.getOpenWebViewDefinition.mockImplementation(async (id: string) => {
         if (id === 'comments-tab') return { projectId: panelProjectId };
@@ -249,18 +251,19 @@ describe('legacy comment manager main.ts activation', () => {
       ['rejects', () => mocks.reloadWebView.mockRejectedValueOnce(new Error('window closing'))],
       ['returns no web view', () => mocks.reloadWebView.mockResolvedValueOnce(undefined)],
     ])(
-      'still selects, and clears the pending project, when the panel reload %s',
+      'rejects without selecting, and clears the pending project, when the panel reload %s',
       async (_outcome, arrangeReload) => {
         arrange('project-A', 'project-B');
         arrangeReload();
 
-        await expect(select('thread-1', true, 'editor-1')).resolves.toBe('comments-tab');
+        await expect(select('thread-1', true, 'editor-1')).rejects.toThrow('project-B');
 
-        expect(selectThread).toHaveBeenCalledWith('thread-1');
+        // The panel is known to show another project, where the thread can't be found; selecting
+        // it there would leave the list's pending selection stuck.
+        expect(selectThread).not.toHaveBeenCalled();
         // A pending project the reload never consumed would be picked up by a later, unrelated
         // panel load.
         expect(mocks.setPendingCommentListPanelProjectId).toHaveBeenLastCalledWith(undefined);
-        expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('project-B'));
       },
     );
 

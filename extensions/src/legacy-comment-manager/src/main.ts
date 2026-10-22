@@ -225,6 +225,7 @@ async function showCommentListPanel(
  *
  * @param panelWebViewId The ID of the open Column 3 Comment List panel
  * @param editorWebViewId The scripture editor whose project the panel should show
+ * @throws If the panel shows another project and reloading it onto the editor's project fails
  */
 async function showEditorProjectInCommentListPanel(
   panelWebViewId: string,
@@ -262,9 +263,11 @@ async function showEditorProjectInCommentListPanel(
   }
   if (failure) {
     // A failed reload may never have consumed the pending project; clear it so a later, unrelated
-    // panel load doesn't pick it up. The caller still selects in the panel as it is.
+    // panel load doesn't pick it up.
     setPendingCommentListPanelProjectId(undefined);
-    logger.warn(`Could not point the Comment List panel at project ${editorProjectId}: ${failure}`);
+    throw new Error(
+      `Could not point the Comment List panel at project ${editorProjectId}: ${failure}`,
+    );
   }
 }
 
@@ -282,6 +285,8 @@ async function showEditorProjectInCommentListPanel(
  *   pointed at that editor's project when it shows another one. If omitted, the panel is assumed to
  *   show the right project already.
  * @returns The webView ID of the panel, or `undefined` if it isn't open in the current layout
+ * @throws If the panel shows another project and can't be pointed at the editor's project, since
+ *   the thread can't be found there and selecting it would leave the panel waiting for it
  */
 async function selectCommentThreadInPanel(
   threadId: string,
