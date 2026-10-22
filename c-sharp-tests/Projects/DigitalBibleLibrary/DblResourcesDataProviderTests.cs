@@ -628,7 +628,11 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         {
             var alerts = new List<AlertEntry>
             {
-                new(@"Failed reading C:\Users\someone\secret\file.xml", "Paratext", AlertLevel.Error),
+                new(
+                    @"Failed reading C:\Users\someone\secret\file.xml",
+                    "Paratext",
+                    AlertLevel.Error
+                ),
             };
 
             var exception = Assert.Throws<Exception>(
@@ -669,11 +673,8 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         [Test]
         public async Task GetDblResources_ACatalogWithNoWhitelistedResourceLeavesInstallStatusAnsweringFromDisk()
         {
-            DblResourcesDataProvider provider = new(
-                Client,
-                ParatextProjects,
-                () => [ResourceWithUid(NotWhitelistedUid)]
-            );
+            DblResourcesDataProvider provider =
+                new(Client, ParatextProjects, () => [ResourceWithUid(NotWhitelistedUid)]);
             var installed = AddInstalledResourceProject(WhitelistedUid);
 
             var exception = Assert.ThrowsAsync<Exception>(() => provider.GetDblResources(default));
@@ -695,7 +696,10 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         {
             using DummyScrText existing = new();
             var fetches = new Queue<List<InstallableResource>>(
-                [[UpToDateResource(WhitelistedUid, existing)], []]
+                [
+                    [UpToDateResource(WhitelistedUid, existing)],
+                    [],
+                ]
             );
             DblResourcesDataProvider provider = new(Client, ParatextProjects, fetches.Dequeue);
 
@@ -714,18 +718,19 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         [Test]
         public void GetDblResources_CapturesAnAlertRaisedDuringTheFetchIntoTheThrownException()
         {
-            DblResourcesDataProvider provider = new(
-                Client,
-                ParatextProjects,
-                () =>
-                {
-                    Alert.Show(
-                        "Paratext was not able to connect to the DBL server to retrieve available resources.",
-                        "Paratext"
-                    );
-                    return [];
-                }
-            );
+            DblResourcesDataProvider provider =
+                new(
+                    Client,
+                    ParatextProjects,
+                    () =>
+                    {
+                        Alert.Show(
+                            "Paratext was not able to connect to the DBL server to retrieve available resources.",
+                            "Paratext"
+                        );
+                        return [];
+                    }
+                );
 
             var exception = Assert.ThrowsAsync<Exception>(() => provider.GetDblResources(default));
 
@@ -740,22 +745,25 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         [Test]
         public void GetDblResources_LogsACapturedAlertEvenWhenTheFetcherThrows()
         {
-            DblResourcesDataProvider provider = new(
-                Client,
-                ParatextProjects,
-                () =>
-                {
-                    Alert.Show("alert raised before the fetcher failed", "Paratext");
-                    throw new InvalidOperationException("network exploded");
-                }
-            );
+            DblResourcesDataProvider provider =
+                new(
+                    Client,
+                    ParatextProjects,
+                    () =>
+                    {
+                        Alert.Show("alert raised before the fetcher failed", "Paratext");
+                        throw new InvalidOperationException("network exploded");
+                    }
+                );
 
             using var output = new StringWriter();
             TextWriter previousOut = Console.Out;
             Console.SetOut(output);
             try
             {
-                Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetDblResources(default));
+                Assert.ThrowsAsync<InvalidOperationException>(
+                    () => provider.GetDblResources(default)
+                );
             }
             finally
             {
@@ -774,15 +782,16 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
         public void GetDblResources_LogsACapturedAlertFromASuccessfulFetch()
         {
             using DummyScrText existing = new();
-            DblResourcesDataProvider provider = new(
-                Client,
-                ParatextProjects,
-                () =>
-                {
-                    Alert.Show("non-fatal warning during a successful fetch", "Paratext");
-                    return [UpToDateResource(WhitelistedUid, existing)];
-                }
-            );
+            DblResourcesDataProvider provider =
+                new(
+                    Client,
+                    ParatextProjects,
+                    () =>
+                    {
+                        Alert.Show("non-fatal warning during a successful fetch", "Paratext");
+                        return [UpToDateResource(WhitelistedUid, existing)];
+                    }
+                );
 
             using var output = new StringWriter();
             TextWriter previousOut = Console.Out;
@@ -796,7 +805,10 @@ namespace TestParanextDataProvider.Projects.DigitalBibleLibrary
                 Console.SetOut(previousOut);
             }
 
-            Assert.That(output.ToString(), Does.Contain("non-fatal warning during a successful fetch"));
+            Assert.That(
+                output.ToString(),
+                Does.Contain("non-fatal warning during a successful fetch")
+            );
         }
     }
 }

@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => {
     getMetadataForAllProjects: vi.fn(),
     readUserData: vi.fn(),
     writeUserData: vi.fn(),
-    getMetadataForAllProjects: vi.fn(),
     projectsChangedHandlers,
   };
 });
@@ -120,12 +119,6 @@ async function refreshResourceFlags(shouldRecomputeUpdateStatus?: boolean) {
   const handler = mocks.registeredCommands.get('platformGetResources.refreshResourceFlags');
   if (!handler) throw new Error('refreshResourceFlags was not registered');
   return handler(shouldRecomputeUpdateStatus);
-}
-
-async function getLocalNonDblResources() {
-  const handler = mocks.registeredCommands.get('platformGetResources.getLocalNonDblResources');
-  if (!handler) throw new Error('getLocalNonDblResources was not registered');
-  return handler();
 }
 
 /** Every catalog this module persisted, parsed back, oldest first. */
@@ -333,7 +326,7 @@ describe('platformGetResources activation', () => {
     provider.getDblResources.mockResolvedValueOnce([freshRow]);
     await expect(getCachedResources()).resolves.toEqual({
       status: 'available',
-      resources: [freshRow],
+      resources: [{ ...freshRow, isRestrictedAsModelText: false }],
     });
 
     // One background attempt, one rejected on-demand attempt, one successful on-demand attempt.
