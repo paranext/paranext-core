@@ -1860,8 +1860,9 @@ export type InternetUse = "Enabled" | "VpnRequired" | "Disabled" | "ProxyOnly";
  * `InternetSettings.xml` is seeded once from a co-installed Paratext 9 on first launch (the two
  * apps keep separate copies thereafter), so a stored value may name an option this app does not
  * implement yet (the "Coming soon" rows). Such a value is shown selected and called out in a banner
- * rather than silently replaced — callers that gate on a usable selection (the first-run wizard's
- * Next button) should refuse to advance until this returns true.
+ * rather than swapped for another row — callers that gate on a usable selection (the first-run
+ * wizard's Next button) should refuse to advance until this returns true. (The data provider
+ * replaces a stored `VpnRequired` with `Disabled` at startup, so in practice this is `ProxyOnly`.)
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
@@ -1883,7 +1884,7 @@ export type InternetAccessOptionListProps = {
 	disabled: boolean;
 };
 /**
- * The five internet-access options as radio rows. Each row's description sits behind an info icon
+ * The internet-access options as radio rows. Each row's description sits behind an info icon
  * button, revealed as a tooltip on hover or keyboard focus.
  *
  * The descriptions run to two sentences — longer than `Guidelines/Tooltips` allows a tooltip on a

@@ -9,7 +9,7 @@ import {
 import { InternetSettingsStep } from './internet-settings-step.component';
 
 const MOCK_SETTINGS = {
-  permittedInternetUse: 'VpnRequired' as const,
+  permittedInternetUse: 'Disabled' as const,
   selectedServer: 'Production' as const,
   proxyPort: 0,
 };
@@ -51,7 +51,7 @@ const meta: Meta<typeof InternetSettingsStep> = {
   beforeEach() {
     // Each story starts before the user has chosen, whatever was clicked in the story before it.
     resetInternetUseChoiceForTesting();
-    // Default: provider available, settings loaded (VPN Required).
+    // Default: provider available, settings loaded ("Disable access…").
     return mockHooks();
   },
 };
@@ -78,9 +78,9 @@ export const Loading: Story = {
 };
 
 /**
- * Settings loaded with VPN Required stored, as ParatextData saves on first startup. No option is
- * selected and Next stays disabled until the user picks one, so a stored value nobody chose is not
- * presented as their choice.
+ * Settings loaded with "Disable access…" stored, as on a first startup. No option is selected and
+ * Next stays disabled until the user picks one, so a stored value nobody chose is not presented as
+ * their choice.
  */
 export const Default: Story = {};
 
@@ -103,7 +103,7 @@ export const ChoiceAlreadyMade: Story = {
  */
 export const UnsupportedStoredValue: Story = {
   beforeEach() {
-    return mockHooks({ value: { ...MOCK_SETTINGS, permittedInternetUse: 'Disabled' } });
+    return mockHooks({ value: { ...MOCK_SETTINGS, permittedInternetUse: 'ProxyOnly' } });
   },
 };
 

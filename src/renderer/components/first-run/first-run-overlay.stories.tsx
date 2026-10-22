@@ -3,6 +3,7 @@ import type { LanguageInfo } from 'platform-bible-react';
 import {
   InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
+  type InternetUse,
 } from 'platform-bible-react/experimental';
 import { useEffect, useState } from 'react';
 import { FirstRunGate } from './first-run-overlay.component';
@@ -65,9 +66,7 @@ const optionListStrings = getLocalizedStrings([
 ]);
 
 function InternetSettingsDemoStep({ setCanProceed }: FirstRunStepProps) {
-  const [value, setValue] = useState<'Enabled' | 'VpnRequired' | 'Disabled' | 'ProxyOnly'>(
-    'VpnRequired',
-  );
+  const [value, setValue] = useState<InternetUse>('Disabled');
   // In an effect, not during render — calling the shell's setter mid-render updates a parent while
   // this component is rendering, which React rejects.
   useEffect(() => setCanProceed?.(true), [setCanProceed]);

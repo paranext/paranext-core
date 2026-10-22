@@ -16,7 +16,7 @@ const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDa
 // consumers sit on opposite sides of the core/extension boundary and `paratext-registration` is a
 // types-only module, so there is no shared runtime module to hoist this into.
 const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
-  permittedInternetUse: 'VpnRequired',
+  permittedInternetUse: 'Disabled',
   selectedServer: 'Production',
   proxyPort: 0,
 };

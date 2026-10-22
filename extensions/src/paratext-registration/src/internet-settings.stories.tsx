@@ -18,7 +18,7 @@ import { SaveState } from './utils';
 const localizedStrings = getLocalizedStrings(INTERNET_SETTINGS_STRING_KEYS);
 
 const defaultSettings: InternetSettings = {
-  permittedInternetUse: 'VpnRequired',
+  permittedInternetUse: 'Disabled',
   selectedServer: 'Production',
   proxyPort: 0,
 };
@@ -72,7 +72,10 @@ function createDecorator(config: DecoratorConfig) {
   };
 }
 
-/** Default: VPN-required selected, Reset and Save buttons disabled (no changes yet). */
+/**
+ * Default: "Disable access to some Bible translation services" selected, Reset and Save buttons
+ * disabled (no changes yet).
+ */
 export const Default: Story = {
   decorators: [createDecorator({})],
 };
@@ -86,16 +89,8 @@ export const Default: Story = {
 export const UnsupportedStoredValue: Story = {
   decorators: [
     createDecorator({
-      initialSettings: {
-        permittedInternetUse: 'Disabled',
-        selectedServer: 'Production',
-        proxyPort: 0,
-      },
-      savedInternetSettings: {
-        permittedInternetUse: 'Disabled',
-        selectedServer: 'Production',
-        proxyPort: 0,
-      },
+      initialSettings: { ...defaultSettings, permittedInternetUse: 'ProxyOnly' },
+      savedInternetSettings: { ...defaultSettings, permittedInternetUse: 'ProxyOnly' },
     }),
   ],
 };
@@ -106,7 +101,7 @@ export const Loading: Story = {
 };
 
 /**
- * User has changed the selection (Unrestricted vs the saved VPN-required). Reset and Save and
+ * User has changed the selection (Unrestricted vs the saved "Disable access…"). Reset and Save and
  * restart are enabled.
  */
 export const UnsavedChanges: Story = {

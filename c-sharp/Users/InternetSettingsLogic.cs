@@ -49,4 +49,16 @@ internal static class InternetSettingsLogic
         && requested != InternetUse.ProxyOnly
             ? requested
             : null;
+
+    /// <summary>
+    /// The RawStatus to save at startup in place of <paramref name="savedRawStatus"/>, or null to
+    /// leave it. A saved <see cref="InternetUse.VpnRequired"/> — "Block internet when in sensitive
+    /// locations", which Platform.Bible does not implement yet — becomes
+    /// <see cref="InternetUse.Disabled"/>, the most restrictive option the app offers.
+    /// </summary>
+    // TODO(PT-4900): when the sensitive-locations option is built, stop replacing a VpnRequired the
+    // user chose. Deleting this outright would turn a file that older Platform.Bible builds saved
+    // for "Disable access to some Bible translation services" into "sensitive locations".
+    public static InternetUse? MigratedRawStatus(InternetUse savedRawStatus) =>
+        savedRawStatus == InternetUse.VpnRequired ? InternetUse.Disabled : null;
 }

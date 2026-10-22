@@ -277,10 +277,10 @@ async function getInternetSettings(): Promise<InternetSettings> {
 
 /**
  * Put the permitted internet use back to what the machine started with. The Internet Settings step
- * writes each selection straight to ParatextData's own internet settings, which are shared with a
- * co-installed Paratext 9 rather than scoped to the test profile. Writes back what the provider
- * just returned with only that one field changed — the same write the step makes, so the masked
- * secrets in the read are kept as they are.
+ * writes each selection straight to ParatextData's own internet settings, which every
+ * Platform.Bible build on this account shares rather than being scoped to the test profile. Writes
+ * back what the provider just returned with only that one field changed — the same write the step
+ * makes, so the masked secrets in the read are kept as they are.
  */
 async function restorePermittedInternetUse(original: string): Promise<void> {
   const current = await getInternetSettings();

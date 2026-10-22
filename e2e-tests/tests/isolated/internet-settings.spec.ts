@@ -4,8 +4,8 @@
  * Covers:
  *
  * - Opening via profile popover
- * - Radio row visibility (2 active, 3 coming-soon with badges) and descriptions revealed from each
- *   option's info button
+ * - Radio row visibility (active and coming-soon rows, with badges) and descriptions revealed from
+ *   each option's info button
  * - Descriptions staying shut for a programmatic focus, which the panel takes on load
  * - Reset and Save and restart button state (disabled when no changes, enabled after change)
  * - Reset restores original selection (buttons become disabled again)
@@ -22,6 +22,7 @@ import {
   expandDeveloperSection,
   internetSettingsFrame,
   internetUseRadio,
+  internetUseRadios,
   openInternetSettings,
   openInternetSettingsPanel,
   openUserProfilePopover,
@@ -67,7 +68,7 @@ test.describe('Internet & Connectivity settings', () => {
     expect(text).toContain('Internet & connectivity');
   });
 
-  test('shows 2 active radio rows and 3 coming-soon rows with badges', async ({ mainPage }) => {
+  test('shows 2 active radio rows and 2 coming-soon rows with badges', async ({ mainPage }) => {
     const frame = await openInternetSettingsPanel(mainPage);
     await waitForSettingsLoaded(frame);
 
@@ -86,15 +87,14 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(descriptionTooltip(frame)).toHaveCount(0);
 
     // Coming-soon rows have disabled radio buttons
-    // %paratextRegistration_description_internetUse_option_Disabled_2%
-    await expect(internetUseRadio(frame, 'Disable all Internet access')).toBeDisabled();
     await expect(
       internetUseRadio(frame, /Block internet when in sensitive locations/),
     ).toBeDisabled();
     await expect(internetUseRadio(frame, /Configure proxy/)).toBeDisabled();
+    await expect(internetUseRadios(frame)).toHaveCount(4);
 
-    // Three "Coming soon" badges appear
-    await expect(frame.getByText('Coming soon')).toHaveCount(3);
+    // Two "Coming soon" badges appear
+    await expect(frame.getByText('Coming soon')).toHaveCount(2);
 
     // The per-row "Coming soon" badges above are the only marker of the unavailable options; the
     // list carries no footer note, which also keeps the first-run wizard's Next button in view.

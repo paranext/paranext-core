@@ -264,8 +264,8 @@ internal class ParatextProjectSendReceiveService(
     /// Whether internet use resolves to enabled (<paramref name="effectiveInternetUse"/>, ParatextData's
     /// <c>InternetAccess.Status</c>) and the saved setting (<paramref name="savedInternetUse"/>,
     /// <c>InternetAccess.RawStatus</c>) does not turn off Send/Receive. Both are needed:
-    /// ParatextData resolves the saved "Disable access to some Bible translation services" to enabled
-    /// outside sensitive locations, but <see cref="InternetServicesGate"/> refuses Send/Receive for it.
+    /// ParatextData resolves a saved <see cref="InternetUse.VpnRequired"/> to enabled outside
+    /// sensitive locations, but <see cref="InternetServicesGate"/> refuses Send/Receive for it.
     /// </summary>
     internal static bool AllowsServerLookup(
         InternetUse effectiveInternetUse,

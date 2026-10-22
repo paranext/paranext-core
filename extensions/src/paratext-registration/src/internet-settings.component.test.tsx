@@ -43,10 +43,8 @@ const mockLocalizedStrings: LanguageStrings = {
   // Minimum required for sub-components to render
   '%paratextRegistration_description_internetUse_option_Enabled_2%': 'Unrestricted',
   '%paratextRegistration_description_internetUse_option_Enabled_details_2%': '',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_2%': 'VPN sentinel',
+  '%paratextRegistration_description_internetUse_option_VpnRequired_2%': 'Disable access sentinel',
   '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%': '',
-  '%paratextRegistration_description_internetUse_option_Disabled_2%': 'Blocked sentinel',
-  '%paratextRegistration_description_internetUse_option_Disabled_details%': '',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%':
     'Sensitive sentinel',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%': '',
@@ -61,7 +59,7 @@ const mockLocalizedStrings: LanguageStrings = {
 };
 
 const defaultSettings: InternetSettings = {
-  permittedInternetUse: 'VpnRequired',
+  permittedInternetUse: 'Disabled',
   selectedServer: 'Production',
   proxyPort: 0,
 };
