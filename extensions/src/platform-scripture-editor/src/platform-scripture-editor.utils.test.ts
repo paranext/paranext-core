@@ -27,6 +27,7 @@ import {
   buildScriptureEditorWebViewState,
   UNSUPPORTED_REASON_WEB_VIEW_STATE_KEY,
   UNSUPPORTED_PROJECT_IDS_RETRY_DELAY_MS,
+  showsReadOnlyMarkersView,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
   resolveViewTypeForInterfaceMode,
@@ -4427,6 +4428,24 @@ describe('getNextViewTypeInCycle', () => {
       expect(getNextViewTypeInCycle(current, false)).toBeUndefined();
     });
   });
+});
+
+describe('showsReadOnlyMarkersView', () => {
+  it('is true for a saved markers view in Power, where the editor shows it read-only', () => {
+    expect(showsReadOnlyMarkersView('markers', true)).toBe(true);
+  });
+
+  it('is false for a saved markers view outside Power, where the editor shows the editable Preview', () => {
+    expect(showsReadOnlyMarkersView('markers', false)).toBe(false);
+  });
+
+  it.each([['formatted'], ['standard'], [undefined], [42]])(
+    'is false for a saved view type of %s',
+    (viewType) => {
+      expect(showsReadOnlyMarkersView(viewType, true)).toBe(false);
+      expect(showsReadOnlyMarkersView(viewType, false)).toBe(false);
+    },
+  );
 });
 
 describe('isMissingBookError', () => {
