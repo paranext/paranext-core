@@ -76,7 +76,7 @@
       {
         "label": "%mainMenu_helpInfo_showTour%",
         "hiddenInterfaceModes": ["power"],
-        "localizeNotes": "Application main menu > Help > Show the tour",
+        "localizeNotes": "Application main menu > Help > Show the tour. Hidden in Power mode: Power's Help menu leaves the tour out; remove \"power\" from hiddenInterfaceModes to restore it",
         "group": "platform.helpInfo",
         "order": 3,
         "command": "platform.showOnboardingTour"
