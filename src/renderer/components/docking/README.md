@@ -88,8 +88,12 @@ in "rc-dock internals we depend on".
 
 The patch edits only rc-dock's `es/` build (the one webpack bundles). Vitest loads `lib/`, so unit
 tests don't see the patch unless they import `rc-dock/es/...` directly
-(`rc-dock-tab-cache-patch.test.ts` does).
+(`rc-dock-tab-cache-patch.test.ts` and `rc-dock-dock-move-patch.test.tsx` do).
 
+- `DockLayout.dockMove`: swaps the source and target for the live layout objects with the same ids
+  (`findLiveLayoutData`) before moving. A drag holds the tab it picked up, and `updateTab` replaces
+  that tab and its ancestors; without the swap, a tab updated mid-drag (common right after it opens)
+  vanishes on an edge drop, or shows up twice when dropped on its own panel's edge.
 - `DockLayout.updateTab`: updating a tab without activating it no longer focuses that tab's panel.
 - `DockLayout.setDropRect`: guards a `null` `oldStates.dropRect` on a doubled `'remove'`.
 - `DockTabs` `isPopupDiv`: tells the overflow dropdown's hidden tab copies apart from the real strip

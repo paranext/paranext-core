@@ -1,8 +1,63 @@
 diff --git a/node_modules/rc-dock/es/DockLayout.js b/node_modules/rc-dock/es/DockLayout.js
-index bac288d..6e25d88 100644
+index bac288d..ea43637 100644
 --- a/node_modules/rc-dock/es/DockLayout.js
 +++ b/node_modules/rc-dock/es/DockLayout.js
-@@ -258,7 +258,17 @@ export class DockLayout extends DockPortalManager {
+@@ -21,6 +21,34 @@ import * as Serializer from "./Serializer";
+ import * as DragManager from "./dragdrop/DragManager";
+ import { MaxBox } from "./MaxBox";
+ import { WindowBox } from "./WindowBox";
++/**
++ * patch-package notes:
++ *
++ * Returns the tab, panel or box in `layout` with the same id and kind as `data`, or `data` itself
++ * if there is none.
++ *
++ * `dockMove` gets objects that can be out of date: a drag passes the tab or panel it picked up when
++ * the drag started, and a drop target passes the panel or box it last rendered with. `updateTab`
++ * replaces a tab, its panel and every box above it with new copies, and the app updates tabs often
++ * (title, focus, a web view saving its state), most of all right after a tab opens. rc-dock's
++ * layout algorithms find things by object identity, so moving a replaced tab rebuilds the layout
++ * from its replaced ancestors, which drops the live tab, and a split to an edge then cannot find
++ * its target and adds nothing: the tab vanishes. Dropped onto its own panel's edge, the tab shows
++ * up twice instead. Swapping in the live objects first makes the move work on the current layout.
++ */
++function findLiveLayoutData(layout, data) {
++    if (!data || data.id == null) {
++        return data;
++    }
++    let filter = Algorithm.Filter.AnyTab;
++    if ('tabs' in data) {
++        filter = Algorithm.Filter.AnyPanel;
++    }
++    else if ('children' in data) {
++        filter = Algorithm.Filter.Box | Algorithm.Filter.EveryWhere;
++    }
++    return Algorithm.find(layout, data.id, filter) || data;
++}
+ class DockPortalManager extends React.PureComponent {
+     constructor() {
+         super(...arguments);
+@@ -162,6 +190,19 @@ export class DockLayout extends DockPortalManager {
+      */
+     dockMove(source, target, direction, floatPosition) {
+         let layout = this.getLayout();
++        /**
++         * patch-package notes:
++         *
++         * Work on the live layout objects, not the possibly replaced ones the caller holds (see
++         * `findLiveLayoutData`). Only a source that was placed in a layout (it has a `parent`) is
++         * swapped: a brand-new tab being added is not in the layout yet and must be added as given.
++         */
++        if (source && source.parent) {
++            source = findLiveLayoutData(layout, source);
++        }
++        if (target && typeof target !== 'string') {
++            target = findLiveLayoutData(layout, target);
++        }
+         if (direction === 'maximize') {
+             layout = Algorithm.maximize(layout, source);
+             this.panelToFocus = source.id;
+@@ -258,7 +299,17 @@ export class DockLayout extends DockPortalManager {
                  if (!makeActive) {
                      // restore the previous activeId
                      panelData.activeId = activeId;
@@ -21,7 +76,7 @@ index bac288d..6e25d88 100644
                  }
              }
              else if (makeActive && panelData.activeId !== id) {
-@@ -316,7 +326,21 @@ export class DockLayout extends DockPortalManager {
+@@ -316,7 +367,21 @@ export class DockLayout extends DockPortalManager {
          if (dropRect) {
              if (direction === 'remove') {
                  this.setState((oldStates) => {
