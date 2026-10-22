@@ -2103,10 +2103,33 @@ declare module 'platform-scripture' {
    * - `queued`: The job is waiting to run
    * - `running`: The job is currently running
    * - `stopped`: The job was stopped by the user
-   * - `errored`: The job encountered an error and is no longer running
-   * - `completed`: The job completed successfully
+   * - `errored`: The job itself failed and is no longer running. A check that could not run does not
+   *   make the job errored; see {@link CheckJobStatusReport.checkErrors}.
+   * - `completed`: The job finished. Checks that could not run are listed in
+   *   {@link CheckJobStatusReport.checkErrors}
    */
   export type CheckJobStatus = 'queued' | 'running' | 'stopped' | 'errored' | 'completed';
+
+  /**
+   * A check that could not run during a check job, with the message it gave. The other checks in
+   * the job still ran and reported their results.
+   *
+   * @experimental
+   */
+  export type CheckJobError = {
+    /**
+     * ID of the check that could not run
+     *
+     * @experimental
+     */
+    checkId: string;
+    /**
+     * Message from the check explaining why it could not run. Not localized.
+     *
+     * @experimental
+     */
+    message: string;
+  };
 
   /**
    * Represents the current status of a potentially running check job, including the results found
@@ -2127,6 +2150,15 @@ declare module 'platform-scripture' {
     nextResults?: CheckRunResult[];
     /** If the job encountered an error, this will contain the error message */
     error?: string;
+    /**
+     * Checks that could not run. Each distinct check and message pair is listed once, so a check
+     * that failed in different ways can appear more than once. A job whose checks partly or wholly
+     * failed still ends `completed`; the results of the other checks are in `nextResults` as
+     * usual.
+     *
+     * @experimental
+     */
+    checkErrors?: CheckJobError[];
     /**
      * Total time in milliseconds that the check operation has taken to run. This is the total time
      * from when the job started until now if the job is still running. If the job is no longer
@@ -2230,10 +2262,57 @@ declare module 'platform-scripture' {
     ) => Promise<boolean>;
   };
 
+  /**
+   * Whether a check is ready to run on a project:
+   *
+   * - `ready`: the check can run
+   * - `setupRequired`: the check's settings or inventory are incomplete; its results may be
+   *   unreliable
+   * - `notApplicable`: the project has chosen not to use what the check checks (for example, it uses
+   *   no quotation marks). The check returns no results and reports no error.
+   *
+   * @experimental
+   */
+  export type CheckSetupStatus = 'ready' | 'setupRequired' | 'notApplicable';
+
+  /**
+   * Setup status of one check for one project
+   *
+   * @experimental
+   */
+  export type CheckSetupState = {
+    /**
+     * Whether the check is ready to run on the project
+     *
+     * @experimental
+     */
+    status: CheckSetupStatus;
+    /**
+     * Only when `status` is `notApplicable`: why the check does not apply to the project. A
+     * localize key. Consumers localize it themselves; the keys platform-scripture defines are
+     * `%checkSetup_notApplicable_quotationMarksNotUsed%` and
+     * `%checkSetup_notApplicable_quotationTypesNotEnabled%`.
+     *
+     * @experimental
+     */
+    reason?: LocalizeKey;
+  };
+
   /** Functions that provide configuration data for a specific check */
   export type CheckConfigurationProvider = {
-    /** Returns if setup/configuration for the check has been completed */
+    /**
+     * Returns if setup/configuration for the check has been completed. A check that does not apply
+     * to the project counts as set up. Invalid quotation rules count as not set up. See
+     * {@link CheckConfigurationProvider.lookUpCheckSetupStatus} for the reason.
+     */
     isCheckSetupForProject: (checkId: string, projectId: string) => Promise<boolean>;
+    /**
+     * Returns whether the check is ready to run on the project, needs setup first, or does not
+     * apply to it
+     *
+     * @experimental
+     */
+    lookUpCheckSetupStatus: (checkId: string, projectId: string) => Promise<CheckSetupState>;
   };
 
   /**
@@ -3021,6 +3100,27 @@ declare module 'platform-scripture' {
   }
 
   // #endregion Markers Checklist Types
+
+  /**
+   * The copyright notice to show when a project is opened: the value of the
+   * `platformScripture.copyrightNotice` project setting. Treat a `kind` not listed here as `none`,
+   * since a newer backend may add kinds.
+   *
+   * - `none`: no notice.
+   * - `notification`: any project whose copyright starts with "Notification:", as the ESV's does.
+   *   `bannerText` is the rest of that first paragraph and `details` the rest of the copyright.
+   * - `restrictedLicense`: a resource that is a traditionally licensed Biblica text, for reference
+   *   only and not to be used as the basis of a new translation. Only resources get it.
+   *   `copyrightYears` is the years in its copyright statement (e.g. "1973, 1978, 1984, 2011"), or
+   *   "" when it names none.
+   *
+   * `name` is the project's short name and `fullName` its full name, which is the short name when
+   * it has none. `details` is plain text with one paragraph per line (`\n`), never HTML.
+   */
+  export type CopyrightNotice =
+    | { kind: 'none' }
+    | { kind: 'notification'; name: string; fullName: string; bannerText: string; details: string }
+    | { kind: 'restrictedLicense'; name: string; fullName: string; copyrightYears: string };
 }
 
 declare module 'papi-shared-types' {
@@ -3058,6 +3158,7 @@ declare module 'papi-shared-types' {
     ResourceReferenceList,
     IRecentlyOpenedProjectsService,
     IFindHistoryDataProvider,
+    CopyrightNotice,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -3528,6 +3629,14 @@ declare module 'papi-shared-types' {
      * `†` (ViewUsfmXhtmlConverter.cs:73-74).
      */
     'platformScripture.crossRefCallers': string;
+
+    /**
+     * The copyright notice to show when this project is opened: `restrictedLicense` only for
+     * resources; `notification` for any project whose copyright starts with "Notification:";
+     * otherwise `none`. Computed from its copyright, names and DBL id; read-only through the
+     * settings surface.
+     */
+    'platformScripture.copyrightNotice': CopyrightNotice;
   }
 
   export interface NetworkEvents {

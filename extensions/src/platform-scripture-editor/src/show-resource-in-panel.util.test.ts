@@ -808,6 +808,7 @@ describe('showResourceInReferencePanel', () => {
       // Having given up on the catalog once, it does not wait for it a second time.
       expect(mocks.sendCommand).toHaveBeenCalledWith(
         'platformGetResources.getLocalNonDblResources',
+        false,
         0,
       );
     });
@@ -824,7 +825,7 @@ describe('showResourceInReferencePanel', () => {
       const localListCall = mocks.sendCommand.mock.calls.find(
         ([command]) => command === 'platformGetResources.getLocalNonDblResources',
       );
-      expect(localListCall?.[1]).toBeGreaterThan(0);
+      expect(localListCall?.[2]).toBeGreaterThan(0);
     });
 
     it('answers, and lets the next show start, without waiting for its warning to be sent', async () => {

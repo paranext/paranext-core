@@ -147,6 +147,7 @@ async function findCatalogEntry(resourceProjectId: string): Promise<CatalogLooku
     try {
       const localEntries = await papi.commands.sendCommand(
         'platformGetResources.getLocalNonDblResources',
+        false,
         hasCatalogTimedOut ? 0 : CATALOG_READ_WAIT_MS,
       );
       entry = localEntries.find(coversResource);

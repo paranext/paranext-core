@@ -99,6 +99,12 @@ export type ResourcePickerDialogOptions = DialogOptions & {
    * one that is already on disk. Defaults to true.
    */
   allowSelectingInstalled?: boolean;
+  /**
+   * When true, texts whose licensing terms prohibit their use as a model or base for a new
+   * translation are shown greyed out, with the reason, and cannot be picked. Set it when picking a
+   * model text, not a reference text. Defaults to false.
+   */
+  disableRestrictedModelTexts?: boolean;
 };
 
 /**

@@ -228,14 +228,14 @@ declare module 'platform-scripture-editor' {
    */
   export type ScriptureRange = {
     /**
-     * Starting point where the check result applies in the document
+     * Starting point of the range in the document
      *
      * Note: some forms of this type are deprecated and will be removed eventually; see
      * {@link ScriptureLocation} for details.
      */
     start: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
     /**
-     * Ending point where the check result applies in the document
+     * Ending point of the range in the document.
      *
      * Note: some forms of this type are deprecated and will be removed eventually; see
      * {@link ScriptureLocation} for details.
@@ -467,8 +467,8 @@ declare module 'platform-scripture-editor' {
      * If the editor has already reported a selection, resolves immediately with that value (or
      * `undefined` if the editor reported no selection). If the editor has not yet reported any
      * selection at the time of the call, waits up to 10 seconds for the first selection and
-     * **rejects** if none arrives in that window — callers should be prepared to handle a rejected
-     * promise as well as a resolved `undefined`.
+     * resolves with `undefined` if none arrives in that window. Rejects only if the editor's
+     * controller is disposed while waiting.
      *
      * @returns The current selection range, or `undefined` if the editor reported no selection
      */

@@ -85,7 +85,29 @@ const provider = {
   getDblResources: vi.fn(async () => [NOT_INSTALLED]),
   recomputeDblResourcesUpdateStatus: vi.fn(async () => ({})),
   recomputeDblResourcesInstallStatus: vi.fn(async () => ({})),
+  listModelTextRestrictions: vi.fn(
+    async (): Promise<{ dblIds: string[]; projectIds: string[] }> => ({
+      dblIds: [],
+      projectIds: [],
+    }),
+  ),
 };
+
+/** A restrictions fetch that never settles, as from a backend that is still starting up. */
+function neverAnswerModelTextRestrictions() {
+  provider.listModelTextRestrictions.mockImplementation(() => new Promise(() => {}));
+}
+
+/** Whether `promise` has settled once pending timers and microtasks up to `ms` from now have run. */
+async function hasSettledWithin(promise: Promise<unknown>, ms: number): Promise<boolean> {
+  const settled = promise.then(
+    () => true,
+    () => true,
+  );
+  await vi.advanceTimersByTimeAsync(ms);
+  // An already-settled `settled` wins the race, since it comes first
+  return Promise.race([settled, Promise.resolve(false)]);
+}
 
 let registrations: UnsubscriberAsyncList;
 
@@ -98,16 +120,19 @@ async function activateWithFreshModule() {
   await activate({ executionToken: {}, elevatedPrivileges: {}, registrations } as never);
 }
 
-async function getCachedResources() {
+async function getCachedResources(shouldWaitForModelTextRestrictions?: boolean) {
   const handler = mocks.registeredCommands.get('platformGetResources.getCachedResources');
   if (!handler) throw new Error('getCachedResources was not registered');
-  return handler();
+  return handler(shouldWaitForModelTextRestrictions);
 }
 
-async function getLocalNonDblResources(...args: unknown[]) {
+async function getLocalNonDblResources(
+  shouldWaitForModelTextRestrictions?: boolean,
+  catalogWaitMs?: number,
+) {
   const handler = mocks.registeredCommands.get('platformGetResources.getLocalNonDblResources');
   if (!handler) throw new Error('getLocalNonDblResources was not registered');
-  return handler(...args);
+  return handler(shouldWaitForModelTextRestrictions, catalogWaitMs);
 }
 
 async function refreshResourceFlags(shouldRecomputeUpdateStatus?: boolean) {
@@ -132,12 +157,71 @@ describe('platformGetResources activation', () => {
     mocks.writeUserData.mockResolvedValue(undefined);
     mocks.dataProvidersGet.mockResolvedValue(provider);
     provider.recomputeDblResourcesInstallStatus.mockResolvedValue({});
+    provider.listModelTextRestrictions.mockResolvedValue({ dblIds: [], projectIds: [] });
+    // A resource installed outside the DBL catalog, such as one copied in by hand
+    mocks.getMetadataForAllProjects.mockResolvedValue([
+      { id: 'COPIED1', name: 'COPIED', isEditable: false },
+    ]);
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     // Clears the 12-hour refresh interval and the project-change subscription.
     await registrations.runAllUnsubscribers();
     vi.restoreAllMocks();
+  });
+
+  it('marks a hand-copied restricted text once the set of projects changes', async () => {
+    // A resource copied in by hand has no catalog row, so only the backend's project ids can name
+    // it, and the project-change event is the only thing that announces it.
+    await activateWithFreshModule();
+    expect(await getLocalNonDblResources(true)).toEqual([
+      expect.objectContaining({ projectId: 'COPIED1', isRestrictedAsModelText: false }),
+    ]);
+    // Only the backend's next answer names the copied text
+    provider.listModelTextRestrictions.mockResolvedValue({ dblIds: [], projectIds: ['COPIED1'] });
+
+    mocks.projectsChangedHandlers.forEach((handler) => handler());
+
+    await vi.waitFor(async () =>
+      expect(await getLocalNonDblResources(true)).toEqual([
+        expect.objectContaining({ projectId: 'COPIED1', isRestrictedAsModelText: true }),
+      ]),
+    );
+  });
+
+  it('answers a read that does not ask for the model-text restrictions without waiting for them', async () => {
+    vi.useFakeTimers();
+    neverAnswerModelTextRestrictions();
+    await activateWithFreshModule();
+
+    expect(await hasSettledWithin(getCachedResources(), 0)).toBe(true);
+    const waitingRead = getCachedResources(true);
+    expect(await hasSettledWithin(waitingRead, 1999)).toBe(false);
+    expect(await hasSettledWithin(waitingRead, 1)).toBe(true);
+  });
+
+  it('waits for the model-text restrictions once, and boundedly, when listing local resources', async () => {
+    vi.useFakeTimers();
+    neverAnswerModelTextRestrictions();
+    await activateWithFreshModule();
+    // With the catalog in memory, the read below joins a flag sync, and the restrictions fetch that
+    // sync starts hangs
+    expect(await hasSettledWithin(getCachedResources(), 0)).toBe(true);
+
+    expect(await hasSettledWithin(getLocalNonDblResources(true), 2000)).toBe(true);
+  });
+
+  it('settles a flag refresh without waiting for the model-text restrictions', async () => {
+    // Text panels and the Get Resources list await this before reading the catalog, and none of
+    // them reads the restrictions
+    vi.useFakeTimers();
+    neverAnswerModelTextRestrictions();
+    await activateWithFreshModule();
+    expect(await hasSettledWithin(getCachedResources(), 0)).toBe(true);
+
+    expect(await hasSettledWithin(refreshResourceFlags(false), 0)).toBe(true);
+    expect(await hasSettledWithin(refreshResourceFlags(true), 0)).toBe(true);
   });
 
   it('re-reads the derived flags when the set of projects changes', async () => {
@@ -495,7 +579,7 @@ describe('platformGetResources.getLocalNonDblResources', () => {
     await activateWithFreshModule();
     vi.useFakeTimers();
     try {
-      const resources = getLocalNonDblResources(5000);
+      const resources = getLocalNonDblResources(false, 5000);
       await vi.advanceTimersByTimeAsync(5000);
 
       await expect(resources).resolves.toEqual([expect.objectContaining({ projectId: 'VULGP83' })]);

@@ -150,6 +150,16 @@ export function routeMarkerPaletteKey<TItem extends MarkerMenuItem>(
       applyUnlessEditorChanged(() => {
         const selected = session.items.find((item) => item.marker === marker);
         if (!selected) return;
+        // A note inserted while the palette is up opens its editor (the footnotes pane's row in
+        // Standard view), and the palette's closing then hands focus back to the main editor,
+        // which ends that editing session. Inserted once the palette has closed instead, the way a
+        // highlighted commit (Enter) applies, the note's editor opens last and keeps the caret.
+        // Whether the editor has focus does not tell: the palette can be showing before it takes
+        // focus, and its closing hands focus back all the same.
+        if (selected.kind === 'note') {
+          session.itemToApplyOnClose = selected;
+          return;
+        }
         restoreCaret();
         editorRef.current?.applyMarkerMenuSelection(selected, {
           trigger: 'backslash',

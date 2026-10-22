@@ -2,7 +2,8 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as React from 'react';
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { createPortal } from 'react-dom';
 import { CONTENT_ZOOM_SCOPE_ATTRIBUTE } from 'platform-bible-react';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
@@ -12,6 +13,9 @@ vi.mock('@papi/frontend', () => ({ logger: { warn: mockWarn } }));
 
 /** Verse blocks the mocked cell renders in aligned mode; `top` is the stubbed geometry. */
 let alignedVerseBlocks: { start: number; end: number; top: number }[] = [];
+
+/** When set, each cell also renders a window portalled out of it, as its copyright notice does */
+const cellWindow = { isOpen: false };
 
 const mockResourceCell = vi.fn(
   ({
@@ -38,63 +42,79 @@ const mockResourceCell = vi.fn(
     showDragHandle?: boolean;
     reorderHandleLabel?: string;
     onReorderKeyDown?: (event: React.KeyboardEvent) => void;
-    headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
-  }) => (
-    <div
-      data-testid={`cell-${resourceRef.projectId}`}
-      data-view-mode={viewMode}
-      data-zoom-area={zoomArea}
-    >
-      {`${resourceRef.label}@${scrRef.verseNum}`}
-      {/* The real cell's header band, which is the reorder drag source — the column itself must not
-          be draggable, or a click-drag over the text starts a reorder instead of selecting. */}
-      {headerDrag ? (
-        <div
-          data-cell-header
-          data-testid={`header-${resourceRef.resourceId}`}
-          draggable
-          onDragStart={headerDrag.onDragStart}
-          onDragEnd={headerDrag.onDragEnd}
-        />
-      ) : undefined}
-      {/* In the aligned grid the real cell renders an editor whose verse blocks carry the range the
+    headerDrag?: { onDragStart: (event: React.DragEvent) => void; onDragEnd: () => void };
+  }) => {
+    const portalledWindow = cellWindow.isOpen
+      ? createPortal(
+          <div role="dialog" aria-label={`Window from ${resourceRef.label}`}>
+            <button type="button">Close</button>
+          </div>,
+          document.body,
+        )
+      : undefined;
+    return (
+      <div
+        data-testid={`cell-${resourceRef.projectId}`}
+        data-view-mode={viewMode}
+        data-zoom-area={zoomArea}
+      >
+        <span>{`${resourceRef.label}@${scrRef.verseNum}`}</span>
+        <span data-testid={`verse-text-${resourceRef.projectId}`}>verse text</span>
+        {/* The real cell's header band, which is the reorder drag source — the column itself must
+            not be draggable, or a click-drag over the text starts a reorder instead of selecting.
+            The copyright indicator, which opens the portalled window, sits in it when there is one. */}
+        {headerDrag ? (
+          <div
+            data-cell-header
+            data-testid={`header-${resourceRef.resourceId}`}
+            draggable
+            onDragStart={headerDrag.onDragStart}
+            onDragEnd={headerDrag.onDragEnd}
+          >
+            {portalledWindow}
+          </div>
+        ) : (
+          portalledWindow
+        )}
+        {/* In the aligned grid the real cell renders an editor whose verse blocks carry the range the
           layout places them on, and which the reference scroll targets. Stand in for those, with
           the geometry the scroll reads (jsdom measures nothing) declared per element. */}
-      {viewMode === 'aligned' ? (
-        <>
-          <div data-cell-header data-stub-top="0" data-stub-height="20" />
-          {alignedVerseBlocks.map((block) => (
-            <div
-              key={block.start}
-              className="verse-block"
-              data-testid={`block-${resourceRef.projectId}-${block.start}`}
-              data-verse-start={block.start}
-              data-verse-end={block.end}
-              data-stub-top={block.top}
-            />
-          ))}
-        </>
-      ) : undefined}
-      {showDragHandle ? (
-        // Mirror the real wiring: a focusable grip that forwards keydown and exposes its id.
-        // NOTE: the real `ResourceCellView` renders this only in its header-band layout, so a verse
-        // -view test that uses it is exercising the handler, not the rendered UI. The grip's own
-        // presence is covered against the real component in `resource-cell-view.component.test.tsx`.
-        <button
-          type="button"
-          data-reorder-handle-id={resourceRef.resourceId}
-          data-testid={`grip-${resourceRef.resourceId}`}
-          aria-label={reorderHandleLabel}
-          // Mirror the real grip: stop click bubbling so a reorder grip click never activates the
-          // enclosing verse listitem's chapter-context split.
-          onClick={(event: React.MouseEvent) => event.stopPropagation()}
-          onKeyDown={onReorderKeyDown}
-        >
-          grip
-        </button>
-      ) : undefined}
-    </div>
-  ),
+        {viewMode === 'aligned' ? (
+          <>
+            <div data-cell-header data-stub-top="0" data-stub-height="20" />
+            {alignedVerseBlocks.map((block) => (
+              <div
+                key={block.start}
+                className="verse-block"
+                data-testid={`block-${resourceRef.projectId}-${block.start}`}
+                data-verse-start={block.start}
+                data-verse-end={block.end}
+                data-stub-top={block.top}
+              />
+            ))}
+          </>
+        ) : undefined}
+        {showDragHandle ? (
+          // Mirror the real wiring: a focusable grip that forwards keydown and exposes its id.
+          // NOTE: the real `ResourceCellView` renders this only in its header-band layout, so a verse
+          // -view test that uses it is exercising the handler, not the rendered UI. The grip's own
+          // presence is covered against the real component in `resource-cell-view.component.test.tsx`.
+          <button
+            type="button"
+            data-reorder-handle-id={resourceRef.resourceId}
+            data-testid={`grip-${resourceRef.resourceId}`}
+            aria-label={reorderHandleLabel}
+            // Mirror the real grip: stop click bubbling so a reorder grip click never activates the
+            // enclosing verse listitem's chapter-context split.
+            onClick={(event: React.MouseEvent) => event.stopPropagation()}
+            onKeyDown={onReorderKeyDown}
+          >
+            grip
+          </button>
+        ) : undefined}
+      </div>
+    );
+  },
 );
 
 vi.mock('./resource-cell.component', () => ({
@@ -163,6 +183,7 @@ function renderGrid(gridResources: typeof resources, options: RenderOptions = {}
 beforeEach(() => {
   mockResourceCell.mockClear();
   mockWarn.mockClear();
+  cellWindow.isOpen = false;
 });
 
 describe('ScriptureTextGrid', () => {
@@ -1317,4 +1338,136 @@ describe('ScriptureTextGrid — aligned (Grid) view', () => {
       expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
     });
   });
+});
+
+describe('ScriptureTextGrid — events from inside a verse item', () => {
+  function renderActivatableGrid() {
+    const onChapterContextChange = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        onChapterContextChange={onChapterContextChange}
+      />,
+    );
+    return onChapterContextChange;
+  }
+
+  it('opens the chapter view for a click on the verse text', () => {
+    const onChapterContextChange = renderActivatableGrid();
+
+    fireEvent.click(screen.getByTestId('verse-text-b'));
+
+    expect(onChapterContextChange).toHaveBeenCalledWith(resources[1]);
+  });
+
+  it('ignores a click inside a window portalled out of a cell', () => {
+    cellWindow.isOpen = true;
+    const onChapterContextChange = renderActivatableGrid();
+
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Window from KJV' })).getByRole('button', {
+        name: 'Close',
+      }),
+    );
+
+    expect(onChapterContextChange).not.toHaveBeenCalled();
+  });
+
+  it.each(['Enter', ' '])(
+    'opens the chapter view for %j pressed on the verse item itself',
+    (key) => {
+      const onChapterContextChange = renderActivatableGrid();
+
+      fireEvent.keyDown(screen.getAllByRole('listitem')[1], { key });
+
+      expect(onChapterContextChange).toHaveBeenCalledWith(resources[1]);
+    },
+  );
+
+  it.each(['Enter', ' '])(
+    'leaves %j pressed on a control inside the verse item to that control',
+    (key) => {
+      cellWindow.isOpen = true;
+      const onChapterContextChange = renderActivatableGrid();
+
+      const isNotCancelled = fireEvent.keyDown(
+        within(screen.getByRole('dialog', { name: 'Window from KJV' })).getByRole('button', {
+          name: 'Close',
+        }),
+        { key },
+      );
+
+      expect(isNotCancelled).toBe(true);
+      expect(onChapterContextChange).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('ScriptureTextGrid — drags inside a window portalled out of a cell', () => {
+  function renderReorderableGrid(viewMode: 'verse' | 'chapter') {
+    cellWindow.isOpen = true;
+    const onReorder = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode={viewMode}
+        onReorder={onReorder}
+      />,
+    );
+    const dropTargets = screen.getAllByTestId(
+      viewMode === 'verse'
+        ? 'scripture-text-grid-cell-draggable'
+        : 'scripture-text-grid-column-drop-target',
+    );
+    // The verse view drags a whole verse item; the chapter view drags a column by its header
+    const dragSourceOf = (index: number) =>
+      viewMode === 'verse'
+        ? dropTargets[index]
+        : screen.getByTestId(`header-${resources[index].resourceId}`);
+    return { onReorder, dropTargets, dragSourceOf };
+  }
+
+  function closeButtonInWindowFrom(label: string) {
+    return within(screen.getByRole('dialog', { name: `Window from ${label}` })).getByRole(
+      'button',
+      {
+        name: 'Close',
+      },
+    );
+  }
+
+  it.each(['verse', 'chapter'] as const)(
+    'starts no reorder for a drag that begins in the window (%s view)',
+    (viewMode) => {
+      const { onReorder, dropTargets } = renderReorderableGrid(viewMode);
+
+      fireEvent.dragStart(closeButtonInWindowFrom('KJV'));
+      fireEvent.drop(dropTargets[0]);
+
+      expect(onReorder).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['verse', 'chapter'] as const)(
+    'neither highlights nor drops onto a cell for a drag over its window (%s view)',
+    (viewMode) => {
+      const { onReorder, dropTargets, dragSourceOf } = renderReorderableGrid(viewMode);
+      fireEvent.dragStart(dragSourceOf(1)); // drag KJV
+
+      fireEvent.dragOver(closeButtonInWindowFrom('WEB'));
+      expect(dropTargets[0].className).not.toContain('tw:ring-2');
+      fireEvent.drop(closeButtonInWindowFrom('WEB'));
+      expect(onReorder).not.toHaveBeenCalled();
+
+      // The same drag over the cell itself does reach it
+      fireEvent.dragOver(dropTargets[0]);
+      expect(dropTargets[0].className).toContain('tw:ring-2');
+      fireEvent.drop(dropTargets[0]);
+      expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
+    },
+  );
 });

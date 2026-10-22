@@ -1181,6 +1181,12 @@ export default function FootnoteEditor({
       const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
       if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
         // Prevents adding additional note nodes or other nodes after the main footnote node
+        // `usj` is the settled document, so a pending block-marker literal typed into the wrapper
+        // paragraph OUTSIDE the note (dead space the caret guards below keep the caret out of) can
+        // settle into a second root paragraph the live tree does not have yet; the live op below then
+        // trims scaffolding bytes only — the note op, the only thing saved, is untouched. Inside the
+        // note nothing can add a root block: a note settles only its own content and refuses a
+        // fragment that tokenizes to more than one paragraph.
         if (usj.content.length > 1) {
           setTimeout(() => {
             // Retains the first two nodes which are the added paragraph node (for now) and the
@@ -1659,6 +1665,11 @@ export default function FootnoteEditor({
       const editorInput =
         editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
       if (!editorInput || document.activeElement !== editorInput) return;
+      // Focus held by an overlay in ANOTHER document (the marker palette) leaves this document's
+      // active element on the editor, so the check above still passes. Snapping then would
+      // re-select the note end under a palette commit that is about to restore the caret the user
+      // last saw, so the commit would keep the snapped caret instead.
+      if (!document.hasFocus()) return;
       // Only a COLLAPSED caret is snapped. A drag-select that merely STARTS in the wrapper
       // dead space is a selection the user is still building (its live end may be inside the
       // note), and collapsing it via selectNote(0) destroyed the drag mid-gesture — in every

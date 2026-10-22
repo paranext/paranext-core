@@ -90,16 +90,15 @@ const usjReaderWriterOptionsParatext3_0: UsjReaderWriterOptions = {
 const matthew1And2Usfm = readTestDataFile('web-matthew-1-and-2.usfm');
 
 /**
- * WEB Matthew 1-2 output in USJ from Paratext 10 Studio 0.3.0-rc.0 (version 3.1 replaced with 3.0
- * in the USJ marker because that is more accurate. The USJ version handling isn't great yet).
+ * WEB Matthew 1-2 output in USJ from Paratext 10 0.3.0-rc.0 (version 3.1 replaced with 3.0 in the
+ * USJ marker because that is more accurate. The USJ version handling isn't great yet).
  *
  * Also includes the chapter marker for chapter 3 but no contents of chapter 3.
  */
 const matthew1And2Usj: Usj = JSON.parse(readTestDataFile('web-matthew-1-and-2.usj'));
 
 /**
- * Small portion of WEB Matthew 2 output in USJ from Paratext 10 Studio 0.3.0-rc.0 and modified by
- * hand.
+ * Small portion of WEB Matthew 2 output in USJ from Paratext 10 0.3.0-rc.0 and modified by hand.
  *
  * Includes the first paragraph and last two paragraphs of chapter 2 with verses 21 and 22 combined.
  */
@@ -118,8 +117,8 @@ const matthew2verseRangeUsj = JSON.parse(readTestDataFile('web-matthew-2-verse-r
 const webMatthew5Usfm = readTestDataFile('web-matthew-5-section-header.usfm');
 
 /**
- * WEB Matthew 1-2 output in USJ from Paratext 10 Studio 0.3.0-rc.0 (version 3.1 replaced with 3.0
- * in the USJ marker because that is more accurate. The USJ version handling isn't great yet).
+ * WEB Matthew 1-2 output in USJ from Paratext 10 0.3.0-rc.0 (version 3.1 replaced with 3.0 in the
+ * USJ marker because that is more accurate. The USJ version handling isn't great yet).
  *
  * Also includes the chapter marker for chapter 3 but no contents of chapter 3.
  */
@@ -582,6 +581,38 @@ function test_JsonPathToUsjNodeAndDocumentLocation(
   });
 }
 
+const wordWithLemmaEqualToItsText = {
+  type: 'char',
+  marker: 'w',
+  content: ['grace'],
+  lemma: 'grace',
+};
+const duplicateSiblingsUsj: Usj = {
+  type: USJ_TYPE,
+  // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  version: '3.0' as typeof USJ_VERSION,
+  content: [
+    { type: 'book', marker: 'id', code: 'GEN', content: [] },
+    { type: 'chapter', marker: 'c', number: '1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1' },
+        { type: 'char', marker: 'nd', content: ['In'] },
+        ' ',
+        { type: 'char', marker: 'bd', content: ['the'] },
+        ' ',
+        'beginning',
+      ],
+    },
+    { type: 'para', marker: 'q2', content: ['for his loving kindness endures forever.'] },
+    { type: 'para', marker: 'q2', content: ['for his loving kindness endures forever.'] },
+    { type: 'para', marker: 'p', content: [wordWithLemmaEqualToItsText] },
+  ],
+};
+
 describe('jsonPathToUsfmVerseRefVerseLocation translates USJ jsonPath to UsfmVerseLocation', () => {
   test('Matthew 1-2 WEB 3.0', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
@@ -633,6 +664,13 @@ describe('jsonPathToUsfmVerseRefVerseLocation translates USJ jsonPath to UsfmVer
       }).jsonPathToUsfmVerseRefVerseLocation('');
     }).toThrow('No result found for JSONPath query: ');
   });
+
+  test('a string with an identical sibling resolves to the one its jsonPath names', () => {
+    const usjDoc = new UsjReaderWriter(duplicateSiblingsUsj);
+    const first = usjDoc.jsonPathToUsfmVerseRefVerseLocation('$.content[2].content[2]');
+    const second = usjDoc.jsonPathToUsfmVerseRefVerseLocation('$.content[2].content[4]');
+    expect(second.offset).toBe((first.offset ?? 0) + ' \\bd the\\bd*'.length);
+  });
 });
 
 describe('jsonPathToUsjNodeAndDocumentLocation translates USJ jsonPath to UsjNodeAndDocumentLocation', () => {
@@ -654,6 +692,29 @@ describe('jsonPathToUsjNodeAndDocumentLocation translates USJ jsonPath to UsjNod
         content: [],
       }).jsonPathToUsjNodeAndDocumentLocation('');
     }).toThrow('No result found for JSONPath query: ');
+  });
+
+  test('a string with an identical sibling resolves to the one its jsonPath names', () => {
+    const usjDoc = new UsjReaderWriter(duplicateSiblingsUsj);
+    [
+      '$.content[2].content[2]',
+      '$.content[2].content[4]',
+      '$.content[3].content[0]',
+      '$.content[4].content[0]',
+    ].forEach((jsonPath) => {
+      expect(usjDoc.jsonPathToUsjNodeAndDocumentLocation(jsonPath).documentLocation).toEqual({
+        jsonPath,
+        offset: 0,
+      });
+    });
+  });
+
+  test('a property value is not content, even when it equals a content string', () => {
+    const usjDoc = new UsjReaderWriter(duplicateSiblingsUsj);
+    expect(() =>
+      usjDoc.jsonPathToUsjNodeAndDocumentLocation("$.content[5].content[0]['lemma']"),
+    ).toThrow();
+    expect(() => usjDoc.jsonPathToUsjNodeAndDocumentLocation("$.content[3]['marker']")).toThrow();
   });
 });
 

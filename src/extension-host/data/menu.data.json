@@ -66,19 +66,10 @@
         "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
       },
       {
-        "label": "%mainMenu_helpInfo_visitFeatureRoadmapPage%",
-        "hiddenInterfaceModes": ["simple"],
-        "localizeNotes": "Application main menu > Help > Visit Feature Roadmap Page. Hidden in Simple mode: the roadmap addresses people following the product's development rather than translators doing their work",
-        "group": "platform.helpInfo",
-        "order": 3,
-        "command": "platform.visitFeatureRoadmapPage",
-        "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
-      },
-      {
         "label": "%mainMenu_helpInfo_showTour%",
         "localizeNotes": "Application main menu > Help > Show the tour",
         "group": "platform.helpInfo",
-        "order": 4,
+        "order": 3,
         "command": "platform.showOnboardingTour"
       },
       {
