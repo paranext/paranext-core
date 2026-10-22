@@ -274,14 +274,46 @@ describe('joinGroupsWithSeparators', () => {
     );
 
   it('puts one separator between two groups that have items', () => {
-    expect(join([['a', ['a1', 'a2']], ['b', ['b1']]])).toEqual(['a1', 'a2', '--b', 'b1']);
+    expect(
+      join([
+        ['a', ['a1', 'a2']],
+        ['b', ['b1']],
+      ]),
+    ).toEqual(['a1', 'a2', '--b', 'b1']);
   });
 
-  it.each([
-    ['a leading group', [['a', []], ['b', ['b1']], ['c', ['c1']]], ['b1', '--c', 'c1']],
-    ['a middle group', [['a', ['a1']], ['b', []], ['c', ['c1']]], ['a1', '--c', 'c1']],
-    ['a trailing group', [['a', ['a1']], ['b', ['b1']], ['c', []]], ['a1', '--b', 'b1']],
-  ] as [string, [string, string[]][], string[]][])(
+  /** Each case: a description, the groups as `[groupKey, items]`, and the joined result */
+  const emptiedGroupCases: [string, [string, string[]][], string[]][] = [
+    [
+      'a leading group',
+      [
+        ['a', []],
+        ['b', ['b1']],
+        ['c', ['c1']],
+      ],
+      ['b1', '--c', 'c1'],
+    ],
+    [
+      'a middle group',
+      [
+        ['a', ['a1']],
+        ['b', []],
+        ['c', ['c1']],
+      ],
+      ['a1', '--c', 'c1'],
+    ],
+    [
+      'a trailing group',
+      [
+        ['a', ['a1']],
+        ['b', ['b1']],
+        ['c', []],
+      ],
+      ['a1', '--b', 'b1'],
+    ],
+  ];
+
+  it.each(emptiedGroupCases)(
     'leaves no stray separator for %s with no items',
     (_, groups, expected) => {
       expect(join(groups)).toEqual(expected);
@@ -289,7 +321,12 @@ describe('joinGroupsWithSeparators', () => {
   );
 
   it('returns nothing when every group is empty', () => {
-    expect(join([['a', []], ['b', []]])).toEqual([]);
+    expect(
+      join([
+        ['a', []],
+        ['b', []],
+      ]),
+    ).toEqual([]);
     expect(join([])).toEqual([]);
   });
 });
