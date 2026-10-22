@@ -219,6 +219,25 @@ describe('TabDropdownMenu', () => {
     expect(screen.queryByText('Edit')).not.toBeInTheDocument();
   });
 
+  it('puts no separator between two groups of one column', async () => {
+    await openMenu({
+      columns: { 'test.project': { label: 'Project', order: 1 } },
+      groups: {
+        'test.first': { column: 'test.project', order: 1 },
+        'test.second': { column: 'test.project', order: 2 },
+      },
+      items: [
+        { label: 'First', localizeNotes: '', group: 'test.first', order: 1, command: 'test.a' },
+        { label: 'Second', localizeNotes: '', group: 'test.second', order: 1, command: 'test.b' },
+      ],
+    });
+
+    // Positive control: both groups render, so there is something a separator could divide
+    expect(screen.getByRole('menuitem', { name: 'First' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Second' })).toBeInTheDocument();
+    expect(screen.queryAllByRole('separator')).toHaveLength(0);
+  });
+
   it('shows no heading when only one section has items', async () => {
     await openMenu({
       ...EDITOR_MENU,

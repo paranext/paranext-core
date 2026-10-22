@@ -7,6 +7,7 @@ import {
   getMenuSectionsWithItems,
   getSortedMenuColumns,
   getSubMenuGroupKeysForMenuItemId,
+  joinGroupsWithSeparators,
 } from './menu.util';
 
 /** Columns carrying the extensibility flags a served menu puts alongside the columns themselves */
@@ -262,5 +263,33 @@ describe('getItemsInGroups', () => {
     ];
     expect(getItemsInGroups(items, ['a', 'c']).map((item) => item.id)).toEqual([1, 3]);
     expect(getItemsInGroups(items, [])).toEqual([]);
+  });
+});
+
+describe('joinGroupsWithSeparators', () => {
+  const join = (groups: [string, string[]][]) =>
+    joinGroupsWithSeparators(
+      groups.map(([groupKey, items]) => ({ groupKey, items })),
+      (groupKey) => `--${groupKey}`,
+    );
+
+  it('puts one separator between two groups that have items', () => {
+    expect(join([['a', ['a1', 'a2']], ['b', ['b1']]])).toEqual(['a1', 'a2', '--b', 'b1']);
+  });
+
+  it.each([
+    ['a leading group', [['a', []], ['b', ['b1']], ['c', ['c1']]], ['b1', '--c', 'c1']],
+    ['a middle group', [['a', ['a1']], ['b', []], ['c', ['c1']]], ['a1', '--c', 'c1']],
+    ['a trailing group', [['a', ['a1']], ['b', ['b1']], ['c', []]], ['a1', '--b', 'b1']],
+  ] as [string, [string, string[]][], string[]][])(
+    'leaves no stray separator for %s with no items',
+    (_, groups, expected) => {
+      expect(join(groups)).toEqual(expected);
+    },
+  );
+
+  it('returns nothing when every group is empty', () => {
+    expect(join([['a', []], ['b', []]])).toEqual([]);
+    expect(join([])).toEqual([]);
   });
 });

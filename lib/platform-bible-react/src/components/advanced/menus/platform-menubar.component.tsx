@@ -23,7 +23,7 @@ import {
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { RefObject, useEffect, useRef } from 'react';
+import { ReactNode, RefObject, useEffect, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
@@ -33,6 +33,8 @@ import {
   getLeadingIconSlot,
   getSortedMenuColumns,
   getSubMenuGroupKeysForMenuItemId,
+  GroupContent,
+  joinGroupsWithSeparators,
   LeadingIconSlot,
 } from './menu.util';
 import MenuItemIcon from './menu-icon.component';
@@ -53,12 +55,16 @@ const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEvent
   }, 0);
 };
 
+const createMenubarSeparator = (groupKey: string) => (
+  <MenubarSeparator key={`separator-${groupKey}`} />
+);
+
 /**
- * Renders the items of the given groups in the order given, with a separator between groups.
+ * Renders the items of the given groups in the order given, one entry per group. A column and a
+ * submenu both join the entries with {@link joinGroupsWithSeparators}, so a separator only ever sits
+ * between two groups that have items.
  *
  * @param groupKeys Keys of the groups to render, already sorted by the groups' `order`
- * @param isSubMenu Whether the groups fill a submenu. A submenu separates only groups that have
- *   items; a column puts a separator after every group but the last that has items.
  * @param leadingSlot The leading icon slot of the list these items render in. A submenu works out
  *   its own from its items.
  */
@@ -66,13 +72,12 @@ const getMenubarContent = (
   groups: Localized<GroupsInMultiColumnMenu>,
   items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
   groupKeys: string[],
-  isSubMenu: boolean,
   onSelectMenuItem: SelectMenuItemHandler,
   leadingSlot: LeadingIconSlot,
-) => {
-  let hasShownItems = false;
-  return groupKeys.flatMap((groupKey, index) => {
-    const groupItems = items
+): GroupContent<ReactNode>[] =>
+  groupKeys.map((groupKey) => ({
+    groupKey,
+    items: items
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
       .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
@@ -122,13 +127,15 @@ const getMenubarContent = (
                     <MenuItemIcon iconName={item.iconNameAfter} menuLabel={item.label} />
                   </MenubarSubTrigger>
                   <MenubarSubContent>
-                    {getMenubarContent(
-                      groups,
-                      items,
-                      subGroupKeys,
-                      true,
-                      onSelectMenuItem,
-                      getLeadingIconSlot(getItemsInGroups(items, subGroupKeys)),
+                    {joinGroupsWithSeparators(
+                      getMenubarContent(
+                        groups,
+                        items,
+                        subGroupKeys,
+                        onSelectMenuItem,
+                        getLeadingIconSlot(getItemsInGroups(items, subGroupKeys)),
+                      ),
+                      createMenubarSeparator,
                     )}
                   </MenubarSubContent>
                 </MenubarSub>
@@ -137,29 +144,8 @@ const getMenubarContent = (
             {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
           </Tooltip>
         );
-      });
-
-    if (isSubMenu) {
-      // Columns keep the index-based rule below, whose output the menubar tests pin; a submenu can
-      // be fed by several groups that may each be empty, so it separates only groups with items.
-      // The separator goes before a group's items, once an earlier group has shown some, so an
-      // emptied group never leaves a stray separator
-      const separator =
-        hasShownItems && groupItems.length > 0
-          ? [<MenubarSeparator key={`separator-${groupKey}`} />]
-          : [];
-      if (groupItems.length > 0) hasShownItems = true;
-      return [...separator, ...groupItems];
-    }
-
-    const itemsWithSeparator = [...groupItems];
-    if (groupItems.length > 0 && index < groupKeys.length - 1) {
-      itemsWithSeparator.push(<MenubarSeparator key={`separator-${groupKey}`} />);
-    }
-
-    return itemsWithSeparator;
-  });
-};
+      }),
+  }));
 
 type PlatformMenubarProps = {
   /** Menu data that is used to populate the Menubar component. */
@@ -292,13 +278,15 @@ export function PlatformMenubar({
               style={{ zIndex: Z_INDEX_ABOVE_DOCK }} // Need to get over the floating web view z-index 200
             >
               <TooltipProvider>
-                {getMenubarContent(
-                  menuData.groups,
-                  menuData.items,
-                  columnGroupKeys,
-                  false,
-                  onSelectMenuItem,
-                  getLeadingIconSlot(getItemsInGroups(menuData.items, columnGroupKeys)),
+                {joinGroupsWithSeparators(
+                  getMenubarContent(
+                    menuData.groups,
+                    menuData.items,
+                    columnGroupKeys,
+                    onSelectMenuItem,
+                    getLeadingIconSlot(getItemsInGroups(menuData.items, columnGroupKeys)),
+                  ),
+                  createMenubarSeparator,
                 )}
               </TooltipProvider>
             </MenubarContent>
