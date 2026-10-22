@@ -22,11 +22,11 @@ function menuItem(command: `${string}.${string}`): MenuItemContainingCommand {
   };
 }
 
-describe('Help menu links open the destinations their labels promise', () => {
-  beforeEach(() => {
-    vi.mocked(commandService.sendCommand).mockClear();
-  });
+beforeEach(() => {
+  vi.mocked(commandService.sendCommand).mockClear();
+});
 
+describe('Help menu links open the destinations their labels promise', () => {
   /**
    * The label and the destination are the two halves of a menu link that can drift apart, and a
    * rename is exactly when that happens: "Community support" is a relabel of the item formerly
@@ -41,12 +41,31 @@ describe('Help menu links open the destinations their labels promise', () => {
     );
   });
 
-  test.each([
-    ['platform.visitGettingStartedPage', 'https://studio.paratext.org/start '],
-    ['platform.visitFeatureRoadmapPage', 'https://studio.paratext.org/roadmap'],
-  ] as const)('%s still opens %s', (command, url) => {
-    handleMenuCommand(menuItem(command));
+  test('Getting started opens the Getting Started page', () => {
+    handleMenuCommand(menuItem('platform.visitGettingStartedPage'));
 
-    expect(commandService.sendCommand).toHaveBeenCalledWith('platform.openWindow', url);
+    expect(commandService.sendCommand).toHaveBeenCalledWith(
+      'platform.openWindow',
+      'https://studio.paratext.org/start',
+    );
+  });
+});
+
+describe('handleMenuCommand falls through to dispatching unhandled commands', () => {
+  /**
+   * A command with no case is sent as itself. The unpublished Feature roadmap id is used so a case
+   * that opens a page for it fails this test.
+   */
+  test('a command with no case is dispatched unchanged rather than opened as a page', () => {
+    handleMenuCommand(menuItem('platform.visitFeatureRoadmapPage'));
+
+    expect(commandService.sendCommand).toHaveBeenCalledWith(
+      'platform.visitFeatureRoadmapPage',
+      undefined,
+    );
+    expect(commandService.sendCommand).not.toHaveBeenCalledWith(
+      'platform.openWindow',
+      expect.anything(),
+    );
   });
 });

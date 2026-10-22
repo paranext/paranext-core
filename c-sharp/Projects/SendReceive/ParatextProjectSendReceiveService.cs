@@ -42,11 +42,12 @@ internal class ParatextProjectSendReceiveService(
     /// Raised whenever this service's sync run bracket opens, resolves its project set, or closes.
     /// Forwarded to the PAPI by <see cref="SyncActivityNotifierService"/>.
     /// <para>
-    /// Scaffolding: nothing in open-source Platform.Bible opens a run bracket (the sync stub bodies
-    /// below throw), so this never fires here. The Paratext 10 patch, which replaces those
-    /// bodies with real implementations, raises it through
-    /// <see cref="RaiseSyncActivityChanged"/> at each transition. Do not remove — removing it breaks
-    /// the patch.
+    /// Contract for an implementation that runs syncs: raise this through
+    /// <see cref="RaiseSyncActivityChanged"/> at each transition of every run, including runs whose
+    /// caller passed <c>suppressProgressNotification</c> — for those that raise no Send/Receive claim
+    /// of their own, this is the only signal the toolbar indicator gets. This class's stub sync
+    /// bodies run no sync, so on their own they never raise it; the Paratext 10 patch replaces those
+    /// bodies and raises it. Do not remove — the patch depends on it.
     /// </para>
     /// <para>
     /// Deliberately derived from the run marker rather than from
@@ -62,26 +63,41 @@ internal class ParatextProjectSendReceiveService(
     /// handler and read live by <see cref="SyncActivityNotifierService"/>'s baseline emit, so both
     /// surfaces report present state rather than a cached copy of the last transition.
     /// <para>
-    /// Scaffolding, as with <see cref="SyncActivityChanged"/>: no sync can run in open-source
-    /// Platform.Bible, so this is always idle here. The Paratext 10 patch replaces the body
-    /// with a real read of its run state.
+    /// This body always reports idle because the stub sync bodies here run no sync. An
+    /// implementation that runs syncs replaces it with a locked read of its run state, so that both
+    /// surfaces report present state.
     /// </para>
     /// </summary>
     public SyncActivityState GetSyncActivity() => new(false, Array.Empty<string>());
 
     /// <summary>
-    /// Whether <paramref name="scrText"/> holds local changes Send/Receive has not sent — see
-    /// <see cref="UnsyncedChangesRule"/>. Local repository reads only (an <c>hg status</c> and a tip
-    /// lookup); never contacts the server. Returns <see langword="null"/> when the repository cannot
-    /// be read (no Mercurial, a broken repository), so the caller can keep its previous answer; the
-    /// failure is logged once per project until a later check of that project succeeds. Read by
-    /// <see cref="UnsyncedChangesTracker"/>.
+    /// Whether <paramref name="scrText"/> holds local changes this user's Send/Receive would send —
+    /// see <see cref="UnsyncedChangesRule"/>. Local repository reads only (an <c>hg status</c> and a
+    /// tip lookup); never contacts the server. Read by <see cref="UnsyncedChangesTracker"/>.
     /// </summary>
+    /// <returns>
+    /// <see langword="true"/> when the project has uncommitted changes, or local commits made since
+    /// the last successful sync. <see langword="false"/> when it has none, when it is not shared, or
+    /// when the current user has no role that may change the project (see remarks).
+    /// <see langword="null"/> when the repository cannot be read (no Mercurial, a broken
+    /// repository), so the caller can keep its previous answer; the failure is logged once per
+    /// project until a later check of that project succeeds.
+    /// </returns>
+    /// <remarks>
+    /// Always <see langword="false"/> when the current user's role cannot change the project (an
+    /// Observer, or not a member): Send/Receive neither commits nor sends for such a user
+    /// (ParatextData's <c>VersionedText.ShareChanges</c> gates both on
+    /// <see cref="PermissionManager.HaveRoleNotObserver"/>), so anything waiting locally, such as
+    /// extension data written into the project's <c>shared</c> folder, could never be sent. The
+    /// role is read from the project's local user list, while Send/Receive decides from the member
+    /// list the server reports; the two can disagree after a role change made only on the server
+    /// (see the unsynced-changes ADR).
+    /// </remarks>
     public bool? HasUnsyncedLocalChanges(ScrText scrText)
     {
         try
         {
-            if (!scrText.IsProjectShared)
+            if (!scrText.IsProjectShared || !scrText.Permissions.HaveRoleNotObserver)
                 return false;
             bool hasUnsyncedChanges = ReadUnsyncedLocalChanges(scrText);
             _unsyncedCheckWarned.TryRemove(scrText.Guid.ToString(), out _);
@@ -121,27 +137,6 @@ internal class ParatextProjectSendReceiveService(
     /// 1 while a server tip lookup failure has been logged and no later lookup has succeeded.
     /// </summary>
     private int _serverTipLookupWarned;
-
-    /// <summary>
-    /// Whether the persistent C# Send/Receive toast should be shown for a sync starting now.
-    /// <para>
-    /// Scaffolding for the Paratext 10 patch, which owns the toast
-    /// (<c>RunWithSyncNotification</c>) and overrides this to suppress it in Simple mode, where
-    /// core's toolbar sync indicator is the single surface instead. The decision hook lives here
-    /// rather than in the patch because it reads a public platform setting
-    /// (<see cref="Settings.INTERFACE_MODE"/>) through public core helpers — no secret, no
-    /// <c>ParatextData.dll</c> — so by the patch's own criteria it is public-by-default, and keeping
-    /// it here removes one more standing conflict against a public file.
-    /// </para>
-    /// <para>
-    /// Returns <see langword="true"/> here, and that default is load-bearing rather than arbitrary:
-    /// core must keep showing whatever sync feedback it shows today. The suppressing override MUST
-    /// NOT ship before the sync-activity signal it hands off to, or Simple mode goes from one sync
-    /// surface to ZERO for the startup sync — the toast gone and no indicator raised in its place.
-    /// If the Paratext 10 work is split across PRs, the signal merges first.
-    /// </para>
-    /// </summary>
-    protected virtual bool ShouldShowPersistentSyncToast() => true;
 
     /// <summary>
     /// Raises <see cref="SyncActivityChanged"/> with <paramref name="snapshot"/>, invoking each
@@ -404,7 +399,19 @@ internal class ParatextProjectSendReceiveService(
     /// <item>An empty array is a no-op.</item>
     /// </list>
     /// </param>
-    protected void SyncProjects(String[]? projectIds)
+    /// <param name="suppressProgressNotification">
+    /// When <see langword="true"/>, do not show the persistent in-progress toast (the one carrying
+    /// Cancel) for this sync; its other notifications, such as failure and role-change toasts, still
+    /// show. Defaults to <see langword="false"/>. When to pass it is part of the TypeScript
+    /// contract: see <c>paratextBibleSendReceive.syncProjects</c> in
+    /// <c>src/@types/paratext-bible-send-receive/index.d.ts</c>.
+    /// In-process C# callers must pass both arguments: <c>PapiClient</c>'s in-process dispatch
+    /// (<c>DynamicInvoke</c>) does not fill optional defaults, so only JSON-RPC callers may omit it.
+    /// An implementation MUST NOT honor it unless it also raises <see cref="SyncActivityChanged"/>
+    /// for the run: the toolbar indicator only sees a claimless sync through that signal, so honoring
+    /// the flag without it leaves a Simple-mode sync with no progress surface at all.
+    /// </param>
+    protected void SyncProjects(String[]? projectIds, bool suppressProgressNotification = false)
     {
 #if DEBUG
         // Dev-only placeholder: paranext-core has no S/R impl. PT10 patches the whole method.

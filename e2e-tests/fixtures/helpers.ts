@@ -2,7 +2,9 @@ import {
   _electron as electron,
   ElectronApplication,
   expect,
+  Frame,
   FrameLocator,
+  Locator,
   Page,
 } from '@playwright/test';
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
@@ -1944,6 +1946,11 @@ export function restoreLeakedSettings(): string[] | undefined {
  * registration to give it and nothing under test that exercises that reminder, so this keeps the
  * recheck from ever firing rather than leaving the suite to race its async resolution.
  *
+ * `platform.internetUseChoiceAsked: true` is pinned so a Power-mode launch does not open the
+ * Internet & connectivity settings on its own: `internet-use-choice-store.ts`'s
+ * `askForInternetUseChoiceIfNeeded` opens them once when the saved internet setting turns off sync
+ * and the Digital Bible Library, which ParatextData's default does.
+ *
  * Exported as a plain function, separate from the fixture that calls it, so its exact contents can
  * be pinned by a unit test without booting Electron.
  */
@@ -1955,6 +1962,7 @@ export function smokeAppSettingsOverrides(
     'platform.interfaceMode': interfaceMode,
     'platform.interfaceLanguage': ['en'],
     'platform.showRegistrationReminderOnStartup': false,
+    'platform.internetUseChoiceAsked': true,
   };
 }
 
@@ -1972,6 +1980,9 @@ export function smokeAppSettingsOverrides(
  * first-run-wizard specs deliberately seed it `false` to exercise the wizard, and the recheck this
  * suppresses only ever runs once it is `true`.
  *
+ * `platform.internetUseChoiceAsked: true` is pinned for the same reason as
+ * {@link smokeAppSettingsOverrides}.
+ *
  * Exported as a plain function, separate from the fixture that calls it, so its exact contents can
  * be pinned by a unit test without booting Electron.
  */
@@ -1982,6 +1993,7 @@ export function isolatedFixtureBaseSettings(
     'platform.interfaceMode': interfaceMode,
     'platform.interfaceLanguage': ['en'],
     'platform.showRegistrationReminderOnStartup': false,
+    'platform.internetUseChoiceAsked': true,
   };
 }
 
@@ -2721,6 +2733,34 @@ export async function getOpenWebViewDefinitions(page: Page): Promise<OpenWebView
     const definitions = await papi.webViews.getAllOpenWebViewDefinitions();
     return definitions.map(({ id, webViewType, projectId }) => ({ id, webViewType, projectId }));
   });
+}
+
+/**
+ * A web view's iframe, resolved once to its live `Frame`.
+ *
+ * Prefer this to a `FrameLocator` for any web view a spec drives repeatedly. A `FrameLocator`
+ * re-resolves its iframe on every call, and in Chromium that resolution is a CDP `DOM.describeNode`
+ * on the iframe element, which serializes the element's attributes — `srcdoc` included, and
+ * `srcdoc` holds the web view's whole inlined bundle (about 15 MB in a development build). Every
+ * read and assertion through a `FrameLocator` then takes seconds before it starts: a `toBeVisible`
+ * with a two-second budget can never pass, and a few steps overrun a five-second product debounce.
+ * Resolving the iframe once pays that cost once.
+ *
+ * Clicks into the frame stay slow even so — Playwright's hit-target check for an element inside an
+ * iframe adopts the iframe element, which is another `describeNode` — so budget seconds per click.
+ *
+ * The returned frame belongs to this iframe only. If the web view is reloaded or closed and
+ * reopened, actions on it fail with "frame was detached" instead of reaching the replacement, so
+ * call this again after anything that replaces the iframe.
+ *
+ * @param iframe The web view's `<iframe>` element in the main page
+ * @param description What the iframe is, for the error when it has no content frame
+ */
+export async function resolveWebViewFrame(iframe: Locator, description: string): Promise<Frame> {
+  await expect(iframe).toBeAttached({ timeout: 30_000 });
+  const frame = await (await iframe.elementHandle())?.contentFrame();
+  if (!frame) throw new Error(`${description} has no content frame`);
+  return frame;
 }
 
 /**

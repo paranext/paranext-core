@@ -1473,6 +1473,14 @@ smoke project (`.github/workflows/test.yml`), and that subset is the only place 
 Chromium no longer firing `unload` in web view iframes: the React web view bootstrap unmounts a
 replaced document's root on `unload`, and `extension-teardown-listeners.spec.ts` goes red if it stops.
 
+### Manually Testing the First-Run Wizard
+
+To bring the setup wizard back in a running app (dev or installed), including as a registered or
+unregistered Paratext 9 user, use the `platform.resetFirstRun` command from DevTools — see
+[Resetting the first-run wizard](../../README.md#resetting-the-first-run-wizard) in the README. The
+automated first-run suites (`e2e-tests/tests/isolated/first-run/`) run in demo mode instead, so
+they do not depend on the machine's Paratext registration.
+
 ### Failure Analysis
 
 | Failure Type          | Diagnosis                       | Fix                                |

@@ -30,9 +30,17 @@ const seedProjects: ChecksSidePanelProject[] = [
 ];
 
 const seedChecksInfo: CheckInfo[] = [
-  { checkId: 'capitalization', checkName: 'Capitalization', isSetup: true },
-  { checkId: 'punctuation', checkName: 'Punctuation', isSetup: true },
-  { checkId: 'characters', checkName: 'Characters', isSetup: false },
+  { checkId: 'capitalization', checkName: 'Capitalization', setupStatus: 'ready' },
+  { checkId: 'punctuation', checkName: 'Punctuation', setupStatus: 'ready' },
+  { checkId: 'characters', checkName: 'Characters', setupStatus: 'setupRequired' },
+  { checkId: 'RepeatedWord', checkName: 'Repeated words', setupStatus: 'ready' },
+  { checkId: 'Quotation', checkName: 'Quotation', setupStatus: 'setupRequired' },
+  {
+    checkId: 'QuotationTypes',
+    checkName: 'Quotation types',
+    setupStatus: 'notApplicable',
+    notApplicableReason: '%checkSetup_notApplicable_quotationMarksNotUsed%',
+  },
 ];
 
 /** Build a check result with sensible defaults so seed data stays terse. */
@@ -128,6 +136,28 @@ const completedJobReport: CheckJobStatusReport = {
   totalResultsCount: seedResults.length,
   nextResults: [],
   totalExecutionTimeMs: 1200,
+};
+
+/**
+ * A completed job in which two checks could not run: Quotation, which needs setup in Paratext 9,
+ * and Repeated words, which failed unexpectedly. The other checks' results remain.
+ */
+const checksCouldNotRunJobReport: CheckJobStatusReport = {
+  ...completedJobReport,
+  // The three seed results in the current chapter (GEN 1) that belong to the checks that ran
+  totalResultsCount: 3,
+  checkErrors: [
+    {
+      checkId: 'Quotation',
+      message:
+        'Quotes settings are invalid for project zzz6.\n\nYou can edit the settings on Project > Project settings > Quotation rules.',
+    },
+    {
+      checkId: 'RepeatedWord',
+      message:
+        'System.NullReferenceException: Object reference not set to an instance of an object.',
+    },
+  ],
 };
 
 const runningJobReport: CheckJobStatusReport = {
@@ -286,6 +316,22 @@ function createDecorator(config: HarnessConfig) {
  */
 export const Populated: Story = {
   decorators: [createDecorator({})],
+};
+
+/**
+ * The job finished but two checks could not run. The check filter labels them "Couldn't run" and
+ * the status bar names them. Under "Show details", the Quotation check, which needs setup, shows
+ * its Paratext 9 message inline and the Repeated words check, which failed unexpectedly, keeps its
+ * message behind "View error". The other checks' results still show.
+ */
+export const CompletedWithChecksThatCouldNotRun: Story = {
+  decorators: [
+    createDecorator({
+      jobStatusReport: checksCouldNotRunJobReport,
+      hasActiveJob: true,
+      initialSelectedCheckTypeIds: ['capitalization', 'punctuation', 'Quotation', 'RepeatedWord'],
+    }),
+  ],
 };
 
 /** A check job is still running — the progress bar and Cancel button show. */

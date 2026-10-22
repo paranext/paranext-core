@@ -61,7 +61,6 @@ import {
   type FootnoteCaretPosition,
   FootnoteEditor,
   type FootnoteEditorHandle,
-  type FootnoteEditorMarkerPalette,
   leftEdgeRect,
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
@@ -83,26 +82,29 @@ import {
   useViewVisibility,
 } from 'platform-bible-react';
 import {
-  clearPaletteSessionIfCurrent,
-  handleMarkerPaletteSessionKeyDown,
+  captureEditorContentSnapshot,
+  hasEditorChanged,
+  type EditorContentSnapshot,
   type MarkerPaletteKeyEvent,
   type MarkerPaletteOpenSession,
+  type MarkerPaletteSessionKind,
   runMarkerPaletteSession,
+  isNoteMarker,
+  routeMarkerPaletteKey,
+  useMarkerPaletteCompositionClose,
+  useMarkerPaletteFocusOutCapture,
+  useMarkerPaletteSessionWriters,
+  type FootnoteEditorMarkerPalette,
 } from 'platform-bible-react/experimental';
 import {
   ABORTED,
-  compareScrRefs,
   formatReplacementString,
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
   isPlatformError,
-  isString,
-  isWhiteSpace,
   LocalizeKey,
   serialize,
-  USFM_MARKERS_MAP_PARATEXT_3_0,
   usfmMarkers,
-  UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
   BOOKS_PRESENT_DEFAULT,
@@ -120,6 +122,8 @@ import {
 import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
+import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
+import { useIsProjectDataLoading } from './copy-limit/use-is-project-data-loading.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import {
   StructureProtectionButton,
@@ -148,6 +152,7 @@ import {
   createNoteAnchorSource,
   createPendingCommentAnchorSource,
   createPendingCommentCenterAnchorSource,
+  EDITOR_LOAD_DELAY_TIME,
   focusPaneSelectedRow,
   getVerseElement,
   keepScrollPositionAcross,
@@ -165,6 +170,7 @@ import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { toBookChapterKey, useScrollToRange } from './use-scroll-to-range.hook';
+import { applyEditorScrRefReport } from './editor-scr-ref-report.util';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
@@ -196,6 +202,9 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectableParagraphMarkers,
   selectCommentThreadInPanelSafe,
+  validateCommentSelection,
+  readCommentRangeText,
+  hasPendingCommentTextChanged,
   shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
   showCommentThreadForInterfaceMode,
@@ -220,7 +229,6 @@ import {
   resolveEditingSessionActivity,
   restoreSelectionIfLost,
   returnFocusToScriptureTextIfDocumentFocused,
-  shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
 import { useGuardedProjectSetting } from './use-guarded-project-setting.hook';
@@ -229,6 +237,7 @@ import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-
 import { CharacterMarkerBarOverlay } from './character-marker-bar/character-marker-bar-overlay.component';
 import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.component';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
+import { shouldRoutePaletteKey } from './palette-key-routing.util';
 import {
   commitVersionHistorySnapshot,
   EDIT_ACTION_BLOCKED_KEY,
@@ -250,15 +259,6 @@ import {
 function PortalContents({ children }: PropsWithChildren) {
   return children;
 }
-
-/**
- * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
- * to listen for the editor to finish loading
- *
- * This is best used for when the editor is transitioning between loads. For the first time the
- * editor loads, use {@link runOnFirstLoad} instead
- */
-const EDITOR_LOAD_DELAY_TIME = 200;
 
 /**
  * Trailing-edge debounce for the keystroke-driven PDP save, in milliseconds. Chosen to kill the
@@ -322,7 +322,9 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // Same reasoning as SYNC_EDIT_BLOCKED_KEY above, for the Edit flyout's blocked-action notice.
   EDIT_ACTION_BLOCKED_KEY,
   '%webView_platformScriptureEditor_error_noTextSelected%',
+  '%webView_platformScriptureEditor_warning_pendingCommentTextChanged%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+  '%webView_platformScriptureEditor_error_selectionNotResolved%',
   ...PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
   ...INSERT_CONTEXT_MENU_STRING_KEYS,
   '%webView_footnoteList_close%',
@@ -588,11 +590,38 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   /**
    * Stores the annotation range for the pending comment being created. This is captured when the
    * user initiates comment creation and used to create the annotation highlight and to extract
-   * selection info when saving the comment.
+   * selection info when saving the comment. `anchoredText` is the text the range named when it was
+   * captured; the pending comment is discarded if the settled document stops naming that text.
    */
   const pendingCommentAnnotationRange = useRef<
-    { range: AnnotationRange; verseRef: SerializedVerseRef } | undefined
+    { range: AnnotationRange; verseRef: SerializedVerseRef; anchoredText?: string } | undefined
   >(undefined);
+
+  /** Latest `onCommentEditorCancel`, readable from the editor's change callback defined before it. */
+  const discardPendingCommentRef = useRef<() => void>(() => {});
+
+  /**
+   * A pending comment is saved against its frozen range, so it cannot outlive a change to the text
+   * that range names — local typing or a remote apply. Discards it, with a notice, when `usj` no
+   * longer has the captured text there. Only a pending comment with a captured text pays for the
+   * comparison.
+   */
+  const discardPendingCommentIfAnchorChanged = useRef((usj: Usj) => {
+    const pendingComment = pendingCommentAnnotationRange.current;
+    if (
+      pendingComment?.anchoredText === undefined ||
+      !hasPendingCommentTextChanged(
+        { range: pendingComment.range, anchoredText: pendingComment.anchoredText },
+        correctEditorUsjVersion(usj),
+      )
+    )
+      return;
+    discardPendingCommentRef.current();
+    papi.notifications.send({
+      message: '%webView_platformScriptureEditor_warning_pendingCommentTextChanged%',
+      severity: 'warning',
+    });
+  });
 
   /** Map from annotationId -> info about the annotation that we need to keep to perform some actions */
   const annotationInfoByIdRef = useRef<
@@ -630,33 +659,37 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const lastFocusOutSelectionRef = useRef<SelectionRange | undefined>(undefined);
 
   /**
+   * The editor's content and caret as focus left it for an open palette — the baseline the change
+   * guard compares against. Captured in the same focusout listener as
+   * {@link lastFocusOutSelectionRef}, and for the same reason: that is the last moment the caret is
+   * readable before Lexical's blur processing nulls it. Only set while a session is open, and
+   * cleared with the session, so an ordinary click away from the editor records nothing.
+   */
+  const paletteBaselineSnapshotRef = useRef<EditorContentSnapshot | undefined>(undefined);
+
+  /**
    * Session state for a standard-view marker-menu palette while it's open (single owner: the
-   * keydown flow in the effect below). Every kind is ACTIVE: the trigger is claimed and never
-   * lands, and typed characters are claimed by the while-open forwarding table and routed into the
-   * palette's query — never the document.
+   * keydown flow in the effect below). The trigger is claimed and never lands, and every typed
+   * character is claimed by the shared key table and routed into the palette's query — never the
+   * document.
    *
-   * `'backslash'` is the collapsed-caret `\` trigger's session. Its palette keeps the overlay's
-   * non-focus-stealing (`passive: true`) DISPLAY — the caret stays visible in the editor — so the
-   * forwarding table is the palette's only key path, not a safety net. The selection-wrap `\`
-   * trigger opens a _focused_ palette tracked as `'selection'`.
+   * Every kind opens the same kind of palette: one that takes real keyboard focus on its LIST
+   * (`focusTarget: 'list'`), renders this session's query read-only, and forwards every key back
+   * here. The editor keeps its caret and stays editable throughout. `'backslash'` is the
+   * collapsed-caret `\` trigger's session; the selection-wrap `\` trigger opens one tracked as
+   * `'selection'`.
    *
-   * `'enter'` only guards against a second Enter re-opening a palette while the first request's
-   * round-trip to the overlay service is still in flight — its palette is always focused too. It
-   * and `'selection'` also carry the capture-phase forwarding table as a SAFETY NET: focused
-   * palettes are designed to be driven by the renderer overlay's own input, but the cross-frame
-   * focus handoff can lose (the editor iframe re-grabs focus on Lexical commits), and without the
-   * safety net the keystrokes then hit the document instead — typing REPLACED the wrapped selection
-   * and Escape fell through to Lexical.
+   * `'enter'` is the Enter-split palette's session. It also guards against a second Enter
+   * re-opening a palette while the first request's round-trip to the overlay service is still in
+   * flight. Every kind carries the capture-phase key table for the window before its palette takes
+   * focus, and receives forwarded keys after; both run the same table, so the semantics do not
+   * change with who holds focus.
    *
    * `token` (allocated from the monotonic counter below) identifies which session an async
    * show-promise settlement belongs to, so a stale promise's cleanup can only clear its own
    * session, never a newer one (see `clearPaletteSessionIfCurrent`).
    */
-  const paletteSession = useRef<
-    | MarkerPaletteOpenSession<MarkerMenuItem>
-    | { kind: 'enter'; token: number; filter: string; items: MarkerMenuItem[] }
-    | undefined
-  >(undefined);
+  const paletteSession = useRef<MarkerPaletteOpenSession<MarkerMenuItem> | undefined>(undefined);
 
   /** Monotonic allocator for {@link paletteSession} tokens. */
   const paletteSessionCounter = useRef(0);
@@ -977,6 +1010,30 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const editorRef = useRef<EditorRef | null>(null);
 
   /**
+   * Whether the editor changed under the open palette. ONE function for both consumers of it: the
+   * session spine, which asks before a highlighted commit, and the key router, which asks before
+   * each TYPED commit.
+   */
+  const hasEditorChangedSinceFocus = useCallback(
+    () =>
+      hasEditorChanged(
+        paletteBaselineSnapshotRef.current,
+        captureEditorContentSnapshot(
+          () => editorRef.current?.getUsj(),
+          () => editorRef.current?.getSelection(),
+        ),
+      ),
+    [],
+  );
+
+  const { setSession: setPaletteSession, clearSessionIfCurrent: clearPaletteSession } =
+    useMarkerPaletteSessionWriters({
+      sessionRef: paletteSession,
+      editorRef,
+      baselineRef: paletteBaselineSnapshotRef,
+    });
+
+  /**
    * Ends the open marker-palette session the way the keydown table's Escape branch does — clear the
    * session and dismiss the overlay.
    *
@@ -989,11 +1046,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const dismissPaletteSessionIfOpen = useCallback(() => {
     if (!paletteSession.current) return;
-    paletteSession.current = undefined;
+    // Cleared here rather than from the show promise: `dismissCommandPalette` is a no-op if no
+    // palette is active yet, so that promise may never settle.
+    setPaletteSession(undefined);
     papi.overlays.dismissCommandPalette(webViewId).catch((error) => {
       logger.warn(`Error dismissing marker palette: ${getErrorMessage(error)}`);
     });
-  }, [webViewId]);
+  }, [webViewId, setPaletteSession]);
 
   // Book/chapter navigation replaces the document the palette was typing into, and it can arrive
   // with no input gesture in this window at all (a scroll group update driven from elsewhere), so
@@ -1300,6 +1359,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       viewType,
     ],
   );
+
+  // A palette cannot commit into a read-only editor (its commit methods throw), and read-only can
+  // arrive mid-session with no user gesture (`isSyncBlocked` during an automatic Send/Receive), so
+  // end the session rather than leave a palette open that nothing but Escape may act on.
+  useEffect(() => {
+    if (!isReadOnlyEffective) return;
+    dismissPaletteSessionIfOpen();
+    // And any palette opened through `footnoteMarkerPalette` for the popover's editor: the popover
+    // owns that session, so the ref above says nothing about it, and one left open over a
+    // read-only note is just as unable to commit.
+    //
+    // Unconditional, with nothing tracked: `dismissCommandPalette` already returns immediately
+    // when no palette is active for this web view. A boolean could not track it correctly anyway —
+    // on the `\` reopen path the REPLACED palette's ABORTED rejection lands after the replacement
+    // has already set the flag, which would clear it while a palette is open and focused.
+    papi.overlays.dismissCommandPalette(webViewId).catch((error) => {
+      logger.warn(`Error dismissing footnote marker palette: ${getErrorMessage(error)}`);
+    });
+  }, [isReadOnlyEffective, dismissPaletteSessionIfOpen, webViewId]);
 
   /**
    * Mirrors of {@link isReadOnlyEffective} and {@link viewType} readable from the stable
@@ -1642,6 +1720,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // editor had not applied yet is overwritten, exactly as the incoming document overwrites the
     // rest of the chapter.
     if (editingNoteKey.current) closeFootnoteEditorRef.current(false);
+    // An external apply never reaches `onUsjChange`, so a pending comment is checked here too.
+    discardPendingCommentIfAnchorChanged.current(usj);
     editorRef.current?.setUsj(usj);
     // A hidden pane is left without a document; showing it fetches the editor's, which is this one
     // from here on (`getUsj()` returns what `setUsj` was just handed).
@@ -1656,13 +1736,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // `computeRangeScrollTop` in editor-dom.util.ts for exactly where it lands.
   //
   // Hidden case: those panels drive this editor from elsewhere, and in Power mode they can share its
-  // tab stack. The selection is applied at once; the scroll waits for this tab to be shown, then
-  // runs once, instantly, for the latest request. See `useScrollToRange`.
-  const { requestScrollToRange, consumeRangeScrollClaimFor } = useScrollToRange({
-    editorRef,
-    editorChapterKey,
-    isViewVisible,
-  });
+  // tab stack. The selection is applied as soon as this web view shows the range's verse, hidden or
+  // not (it is data, with no geometry); the scroll waits for this tab to be shown, then runs once,
+  // instantly, for the latest request. See `useScrollToRange`.
+  const { requestScrollToRange, consumeRangeScrollClaimFor, onEditorScrRefChange } =
+    useScrollToRange({
+      editorRef,
+      editorChapterKey,
+      isViewVisible,
+      scrRef,
+    });
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
    * it without the editor unmounting and remounting. We need to re-parent the editor when container
@@ -1708,10 +1791,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [localizedStrings],
   );
 
-  // Opening the paragraph switcher's Radix popover takes focus off `.editor-input`, where Lexical's
-  // blur processing can null the selection — and `formatPara` needs one, so the retag would refuse.
-  // The `\` and Enter palettes restore it the same way before they apply, and so does every path
-  // that hands focus back to the text (see `returnFocusToScriptureText`).
+  // Puts the caret back when the live selection was nulled, from the focus-out capture. Anything
+  // that takes focus off `.editor-input` can trigger that: the paragraph switcher's Radix popover
+  // (where `formatPara` then needs a selection, so the retag would refuse) and a mouse click on a
+  // marker palette, which renders outside this document. The single place every palette commit and
+  // dismissal goes through, so one rule covers them all — as does every path that hands focus back
+  // to the text (see `returnFocusToScriptureText`). A no-op when the selection is intact.
   const restoreEditorSelection = useCallback(() => {
     restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
   }, []);
@@ -1729,7 +1814,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   const insertCommentAtCurrentSelection = useCallback(() => {
-    const selection = currentSelectionRef.current;
+    // The editor's own read flushes pending marker edits, so it is always the settled selection;
+    // the cached ref can lag a change that has not been reported yet.
+    const selection = editorRef.current?.getSelection();
 
     // Comment creation is gated by canUserCreateComments (not read-only), so it must be blocked
     // separately during an automatic Send/Receive. Guarding here covers both the hotkey and the
@@ -1749,124 +1836,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
 
     // Validate that the selection doesn't contain markers, and that there is meaningful content.
-    // `selection`'s jsonPaths address the LIVE tree (EditorRef.getSelection's contract), while
-    // `getUsj()` returns the SETTLED document — identical when nothing is pending, but while a
-    // command surface has in-progress input elsewhere in the document, settled indices can shift
-    // out from under a jsonPath captured earlier. `jsonPathToUsjNodeAndDocumentLocation` throws
-    // outright when a path no longer resolves at all, and can otherwise resolve to a
-    // still-valid-but-DIFFERENT node whose string is a different length than the live one the
-    // offsets below were computed against — both guarded here rather than trusted, since neither
-    // is distinguishable from a genuine marker-boundary case by the caller.
+    // `selection`'s jsonPaths address the SETTLED document per EditorRef.getSelection's contract
+    // — the same document `getUsj()` returns — so they should always resolve here and land on a
+    // node whose string is the length the offsets were computed against. For a TEXT location, a
+    // path that cannot be resolved, or an offset past its node, is a bug or a race, not a legitimate
+    // state (the one exception is one past the end of the document's last text, which is the
+    // document end). The validation turns either case into a warning instead of a mis-anchored
+    // comment or a crash.
     const editorUsj = editorRef.current?.getUsj();
     const editorUsjCorrected = editorUsj ? correctEditorUsjVersion(editorUsj) : undefined;
+    let anchoredText: string | undefined;
     if (editorUsjCorrected) {
-      const usjRW = new UsjReaderWriter(editorUsjCorrected, {
-        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-      });
-
-      let startNodeAndDocumentLocation;
-      let endNodeAndDocumentLocation;
-      try {
-        startNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
-          selection.start.jsonPath,
-        );
-        endNodeAndDocumentLocation = selection.end
-          ? usjRW.jsonPathToUsjNodeAndDocumentLocation(selection.end.jsonPath)
-          : startNodeAndDocumentLocation;
-      } catch {
-        // A path that no longer resolves at all against the settled tree: same fail-safe response
-        // as an unresolvable selection below, not a crash.
-        papi.notifications.send({
-          message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
-          severity: 'warning',
-        });
+      const validation = validateCommentSelection(selection, editorUsjCorrected);
+      if ('notice' in validation) {
+        if (validation.warning) logger.warn(validation.warning);
+        papi.notifications.send({ message: validation.notice, severity: 'warning' });
         return;
       }
-
-      const startNode = startNodeAndDocumentLocation?.node;
-      const isStartNodeAString = isString(startNode);
-
-      // Make sure the selection is in a string and doesn't span multiple USJ nodes
-      const selectionHasMarker =
-        !isStartNodeAString ||
-        startNodeAndDocumentLocation?.node !== endNodeAndDocumentLocation?.node;
-
-      if (selectionHasMarker) {
-        papi.notifications.send({
-          message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
-          severity: 'warning',
-        });
-        return;
-      }
-
-      // If the selection is collapsed (cursor with no range), require a non-whitespace character
-      // on at least one side of the cursor position so the backend code can select the word
-      const startTextDocumentLocation = selection.start;
-      const endTextDocumentLocation = selection.end ?? selection.start;
-      const isCollapsed =
-        UsjReaderWriter.isUsjDocumentLocationForTextContent(startTextDocumentLocation) &&
-        UsjReaderWriter.isUsjDocumentLocationForTextContent(endTextDocumentLocation) &&
-        startTextDocumentLocation.jsonPath === endTextDocumentLocation.jsonPath &&
-        startTextDocumentLocation.offset === endTextDocumentLocation.offset;
-      // A live-tree offset that no longer fits the settled string it resolved to: concrete
-      // evidence the two snapshots disagree about this node's content, not just a stale offset —
-      // proceeding would either mis-anchor the comment or (for offset > length) walk off the end
-      // of `startNode` below. Bail out the same way an unresolvable path already does.
-      if (
-        isCollapsed &&
-        'offset' in startTextDocumentLocation &&
-        startTextDocumentLocation.offset > startNode.length
-      ) {
-        papi.notifications.send({
-          message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
-          severity: 'warning',
-        });
-        return;
-      }
-      if (isCollapsed) {
-        if (!('offset' in startTextDocumentLocation)) {
-          papi.notifications.send({
-            message: '%webView_platformScriptureEditor_error_noTextSelected%',
-            severity: 'warning',
-          });
-          return;
-        }
-        const { offset } = startTextDocumentLocation;
-        let charBefore = offset > 0 ? startNode[offset - 1] : '';
-        let charAfter = offset < startNode.length ? startNode[offset] : '';
-        if (
-          (charBefore.length === 0 || isWhiteSpace(charBefore)) &&
-          (charAfter.length === 0 || isWhiteSpace(charAfter))
-        ) {
-          papi.notifications.send({
-            message: '%webView_platformScriptureEditor_error_noTextSelected%',
-            severity: 'warning',
-          });
-          return;
-        }
-
-        // Expand the annotation range to include surrounding non-whitespace characters.
-        // This is a quick and dirty way to do this; the backend will do this properly with the
-        // definition of whitespace according to the project
-        let tempOffset = offset; // Start at the cursor position because that is charAfter
-        while (charAfter.length > 0 && !isWhiteSpace(charAfter)) {
-          charAfter = tempOffset + 1 < startNode.length ? startNode[tempOffset + 1] : '';
-          tempOffset += 1;
-        }
-        annotationRange.end = {
-          ...annotationRange.end,
-          offset: tempOffset,
-        };
-        tempOffset = offset - 1; // Start at the character before the cursor since charBefore is already one step before the offset
-        while (charBefore.length > 0 && !isWhiteSpace(charBefore)) {
-          charBefore = tempOffset > 0 ? startNode[tempOffset - 1] : '';
-          tempOffset -= 1;
-        }
-        annotationRange.start = {
-          ...annotationRange.start,
-          offset: tempOffset + 1, // +1 to move back to the first non-whitespace character
-        };
-      }
+      annotationRange.start = { ...validation.range.start };
+      annotationRange.end = { ...validation.range.end };
+      anchoredText = readCommentRangeText(validation.range, editorUsjCorrected);
     }
 
     // Try to find the selected text element to anchor the popover to. No rendered editor content
@@ -1877,7 +1866,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     const editorContainer = document.querySelector<HTMLElement>('.usfm');
     if (!editorContainer) return;
 
-    pendingCommentAnnotationRange.current = { range: annotationRange, verseRef: scrRef };
+    pendingCommentAnnotationRange.current = {
+      range: annotationRange,
+      verseRef: scrRef,
+      anchoredText,
+    };
 
     // Create a temporary annotation to highlight the selected text
     editorRef.current?.setAnnotation(
@@ -1892,7 +1885,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (domSelection && domSelection.rangeCount > 0) {
       const range = domSelection.getRangeAt(0).cloneRange();
       commentPopoverAnchor.setSource(
-        createPendingCommentAnchorSource(range, PENDING_COMMENT_ANNOTATION_ID, editorContainer),
+        createPendingCommentAnchorSource(
+          range,
+          () =>
+            editorRef.current?.getAnnotationRanges(
+              ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+              PENDING_COMMENT_ANNOTATION_ID,
+            ) ?? [],
+          editorContainer,
+        ),
       );
     } else {
       // Fallback to center of editor viewport
@@ -2013,8 +2014,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // Requested before navigating, so the jump records the chapter it started from.
           requestScrollToRange(range, targetScrRef);
           // Keeps the scroll group on the range's verse. The verse scroll this sets off stands down
-          // for a reference a range scroll owns (see the scroll effect below).
-          if (compareScrRefs(scrRef, targetScrRef) !== 0) setScrRefWithScroll(targetScrRef);
+          // for a reference a range scroll owns (see the scroll effect below). Always asserted, even
+          // when this web view already shows the verse: the `scrRef` rendered here can lag the
+          // scroll group, which another view may have just moved elsewhere. A no-op when the group
+          // is already there.
+          setScrRefWithScroll(targetScrRef);
           break;
         }
         case 'updateDecorations': {
@@ -2196,7 +2200,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // If this is a click action, set the editor selection to the annotation's range so the
             // user sees it when the command runs.
             if (action === 'clicked') {
-              scrollToAnnotation(annotationId);
+              scrollToAnnotation(
+                () => editorRef.current?.getAnnotationRanges(annotationType, annotationId) ?? [],
+              );
               editorRef.current?.setSelection(annotationRange);
             }
 
@@ -2329,17 +2335,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [showMarkersMenu]);
 
   /**
-   * Opens a marker-menu palette (the standard-view `\` trigger's apply path — see
-   * `EditorRef.applyMarkerMenuSelection`). Takes the already-resolved context/items so it can be
-   * reused wherever a marker menu needs to be shown from a `MarkerMenuContext` (e.g. the
-   * marker-glyph click popover), not just from the live keydown flow below.
-   *
-   * `passive` selects the collapsed-caret flavor: a `'backslash'` session driven entirely by the
-   * while-open forwarding table, shown in the overlay's non-focus-stealing (`passive: true`)
-   * display. Both flavors are ACTIVE — the caller claims the trigger and the table claims every
-   * filter character, so nothing of the palette's ever lands in the document.
-   */
-  /**
    * Always-current {@link runPaletteSessionKey} (assigned below, once it exists). The palette
    * captures its forwarded-key callback ONCE, when shown, while the handler it must run is rebuilt
    * whenever the session or its dependencies change — the ref is what keeps a long-lived callback
@@ -2347,22 +2342,42 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const runPaletteSessionKeyRef = useRef<(event: MarkerPaletteKeyEvent) => void>(() => {});
 
+  /**
+   * Opens a marker-menu palette of the given kind through the shared session spine. Takes the
+   * already-resolved context/items so it can be reused wherever a marker menu needs to be shown
+   * from a `MarkerMenuContext`, not just from the live keydown flow below.
+   *
+   * - `'backslash'` / `'selection'` — the `\` trigger's palettes (collapsed caret / text selected),
+   *   applied through `EditorRef.applyMarkerMenuSelection`.
+   * - `'enter'` — the Enter-triggered paragraph-split palette (`getEnterMenuItems`), applied through
+   *   `EditorRef.splitParagraphWithMarker`. The web view claimed the Enter, so the split is pending
+   *   until an item is chosen.
+   *
+   * The caller claims the trigger and the table claims every filter character, so nothing of the
+   * palette's ever lands in the document. Every kind opens the same kind of palette: it takes real
+   * keyboard focus on its LIST, shows this session's query read-only, and forwards every key back
+   * here, so one table decides what each key means wherever focus happens to be.
+   */
   const openMarkerPalette = useCallback(
-    (ctx: MarkerMenuAnchorContext, items: MarkerMenuItem[], openOptions: { passive: boolean }) => {
-      const { passive } = openOptions;
+    (ctx: MarkerMenuAnchorContext, items: MarkerMenuItem[], kind: MarkerPaletteSessionKind) => {
+      const isEnter = kind === 'enter';
       runMarkerPaletteSession({
         items,
-        passive,
-        // Space COMMITS (like Enter) when the typed filter exactly names a NOTE marker:
-        // materializing the typed `\f ` literal instead would hand it to the Tier-2
-        // tokenizer, which mid-text absorbs the following word into the new footnote as its
-        // caller. Committing inserts an empty footnote exactly like `\f` + Enter.
-        shouldSpaceCommit: (filter) => shouldSpaceCommitNoteMarker(items, filter),
+        kind,
+        // The stylesheet half of the Space note rule (PT9's `MarkerDropdownControl`): the table
+        // pairs this with its own `items` to decide between inserting an empty footnote and
+        // inserting nothing. Read from the stylesheet rather than from `items`, because a note
+        // marker this palette does not offer is absent from that list exactly when the rule
+        // matters — the Enter palette's source is paragraph markers, and a `\` palette at some
+        // carets offers no notes either.
+        // Same stylesheet the items come from: while the data provider is loading, or after it
+        // errors, `styleInfo` is undefined and the list is built from the default. Reading the raw
+        // value here would turn the rule off exactly when the default list is offering `f`, and
+        // `\` `f` Space would write the raw `\f ` literal this rule exists to prevent.
+        isNoteMarker: (marker) => isNoteMarker(styleInfo ?? defaultStyleInfo, marker),
         sessionCounterRef: paletteSessionCounter,
-        setSession: (session) => {
-          paletteSession.current = session;
-        },
-        clearSessionIfCurrent: (token) => clearPaletteSessionIfCurrent(paletteSession, token),
+        setSession: setPaletteSession,
+        clearSessionIfCurrent: clearPaletteSession,
         // Through the ref so the palette always runs the CURRENT handler — the callback is
         // captured once, at show time, while the session it drives is replaced on every reopen.
         runSessionKey: (event) => runPaletteSessionKeyRef.current(event),
@@ -2375,7 +2390,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               // during that await were dropped.
               items: markerMenuItemsToResolvedPaletteItems(items, localizedStrings),
               anchor: ctx.anchorRect,
-              passive,
+              // Focus goes to the palette's LIST, never a text box. That is what keeps composed
+              // input out of the verse: an IME or a dead key begins composing in any focused
+              // input whatever a handler cancels, while on a list no composition starts at all.
+              // The editor keeps its caret and stays editable the whole time.
+              focusTarget: 'list',
               // Marker palettes filter on the label ONLY (the label IS the marker): an exact
               // typed marker must never be buried under items whose descriptions contain the
               // typed text.
@@ -2385,13 +2404,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               // "Search...". Passed as the key, not a resolved string: the overlay renders in the
               // renderer frame and localizes it there (the palette-open path only awaits
               // localization for ITEM text, so a key here does not reintroduce the
-              // dropped-keystroke window). Inert for the passive flavor, which has no search
-              // field.
-              placeholder: '%markerMenu_searchPlaceholder%',
+              // dropped-keystroke window). The Enter palette has its own key: it chooses the
+              // marker for the NEW paragraph the split creates and leaves the current paragraph's
+              // style alone, so the paragraph-style menu's "change paragraph style" prompt would
+              // describe the opposite of what happens.
+              placeholder: isEnter
+                ? '%markerMenu_searchPlaceholder_newParagraph%'
+                : '%markerMenu_searchPlaceholder%',
               keyForwarding,
-              // Exact containment only: typing a marker and pressing Space must agree
-              // byte-for-byte with the rendered list (keyForwarding already forces this;
-              // stated so the semantic survives if the forwarding wiring ever changes).
+              // No fuzzy scoring: typing a marker and pressing Space must agree byte-for-byte
+              // with the rendered list. Focusing the list already forces host-side matching —
+              // a label PREFIX match, as PT9's marker dropdown does — so this is stated to keep
+              // the semantic if the focus or forwarding wiring ever changes.
               disableFuzzyMatching: true,
             },
             webViewId,
@@ -2400,20 +2424,34 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // selection (live-observed: the `\f` literal stranded in the document, no footnote
         // created, and the literal then reached the PDP as data), so a nulled selection is
         // restored from the focus-out capture before the spine focuses and applies.
-        restoreSelectionIfLost: () =>
-          restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current),
+        restoreSelectionIfLost: () => restoreEditorSelection(),
+        hasEditorChangedSinceFocus,
         focusEditor: () => editorRef.current?.focus(),
-        applyItem: (selected) =>
+        applyItem: (selected) => {
+          if (isEnter) {
+            editorRef.current?.splitParagraphWithMarker(selected.marker);
+            return;
+          }
           editorRef.current?.applyMarkerMenuSelection(selected, {
             trigger: 'backslash',
             // ACTIVE palette: the trigger was claimed and never landed, so there is never a
             // literal prefix for the apply to clean up.
             literalPrefixLanded: false,
-          }),
-        onShowError: (error) => warnUnlessReplaced('marker palette', error),
+          });
+        },
+        onShowError: (error) =>
+          warnUnlessReplaced(isEnter ? 'Enter palette' : 'marker palette', error),
       });
     },
-    [webViewId, localizedStrings],
+    [
+      webViewId,
+      localizedStrings,
+      setPaletteSession,
+      clearPaletteSession,
+      restoreEditorSelection,
+      styleInfo,
+      hasEditorChangedSinceFocus,
+    ],
   );
 
   /**
@@ -2426,9 +2464,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (!ctx) return false;
     const items = getMarkerMenuItems(styleInfo ?? defaultStyleInfo, ctx);
     if (items.length === 0) return false;
-    openMarkerPalette(ctx, items, { passive: !ctx.hasTextSelection });
+    openMarkerPalette(ctx, items, ctx.hasTextSelection ? 'selection' : 'backslash');
     return true;
   }, [openMarkerPalette, styleInfo]);
+
+  useMarkerPaletteCompositionClose({
+    isSessionOpen: useCallback(() => !!paletteSession.current, []),
+    dismiss: dismissPaletteSessionIfOpen,
+    target: window,
+  });
 
   /**
    * Routes ONE key through the open session — the single implementation behind both entry points:
@@ -2444,36 +2488,49 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const runPaletteSessionKey = useCallback(
     (event: MarkerPaletteKeyEvent) => {
-      const session = paletteSession.current;
-      if (!session) return;
-      const outcome = handleMarkerPaletteSessionKeyDown(event, session, {
-        update: (update) => papi.overlays.updateCommandPalette(webViewId, update),
-        commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
-        dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
-        commitTyped: (typed) => editorRef.current?.commitTypedMarker(typed),
-        commitTypedAndReopen: (typed) => {
-          // The `\` commit: same materialization as Space with NO terminating space, then a
-          // fresh palette for the backslash just pressed. Showing a new palette replaces the
-          // current overlay (the old show promise rejects ABORTED, already handled), so there is
-          // no explicit dismiss to sequence against the commit.
-          editorRef.current?.commitTypedMarker(typed, { trailingSpace: false });
-          openMarkerPaletteAtCaret();
+      // A read-only editor cannot take a commit: every commit method throws in read-only mode.
+      // `isReadOnlyEffective` folds in `isSyncBlocked`, which a scheduled Send/Receive flips with
+      // no user gesture, and the effect that ends the session on that flip is a React effect plus
+      // an async round trip — so there is a window where keys still arrive. They arrive HERE,
+      // forwarded from the focused palette, which is why the capture-path gate alone is not
+      // enough. End the session instead of routing the key.
+      if (isReadOnlyEffective && paletteSession.current) {
+        dismissPaletteSessionIfOpen();
+        return;
+      }
+      const routed = routeMarkerPaletteKey(event, {
+        sessionRef: paletteSession,
+        editorRef,
+        palette: {
+          update: (update: { filterText?: string; moveSelection?: number }) =>
+            papi.overlays.updateCommandPalette(webViewId, update),
+          commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
+          dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
         },
-        commitTypedCloser: (typed) => editorRef.current?.commitTypedCloser(typed),
-        commitItem: (marker) => {
-          const selected = session.items.find((item) => item.marker === marker);
-          if (!selected) return;
-          editorRef.current?.applyMarkerMenuSelection(selected, {
-            trigger: 'backslash',
-            literalPrefixLanded: false,
-          });
-        },
+        restoreCaret: restoreEditorSelection,
+        reopenAtCaret: openMarkerPaletteAtCaret,
+        clearSessionIfCurrent: clearPaletteSession,
+        hasEditorChangedSinceFocus,
       });
-      // Clear only if this session is still the current one: a `\` commit opens a REPLACEMENT
-      // session synchronously inside the table call, and an unconditional clear would kill it.
-      if (outcome === 'ended') clearPaletteSessionIfCurrent(paletteSession, session.token);
+      // The palette outlived its session: it holds real focus and forwards EVERY key here, so
+      // returning would swallow them all — Escape included — leaving a box the keyboard cannot get
+      // out of. Reachable because a chapter change or a read-only flip clears the session ref
+      // eagerly (it has to: `dismissCommandPalette` no-ops while the show request is still in
+      // flight), after which the palette can still mount and take focus. Close it.
+      if (routed === 'no-session')
+        papi.overlays.dismissCommandPalette(webViewId).catch((error) => {
+          logger.warn(`Error dismissing orphaned marker palette: ${getErrorMessage(error)}`);
+        });
     },
-    [webViewId, openMarkerPaletteAtCaret],
+    [
+      webViewId,
+      openMarkerPaletteAtCaret,
+      restoreEditorSelection,
+      isReadOnlyEffective,
+      dismissPaletteSessionIfOpen,
+      clearPaletteSession,
+      hasEditorChangedSinceFocus,
+    ],
   );
 
   useEffect(() => {
@@ -2481,66 +2538,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [runPaletteSessionKey]);
 
   /**
-   * Opens the Enter-triggered paragraph-split palette (`getEnterMenuItems` /
-   * `EditorRef.splitParagraphWithMarker`). Always a focused palette — nothing lands on the Enter
-   * keypress itself, so there's no forwarding table to drive and no literal prefix to clean up.
-   */
-  const openEnterPalette = useCallback(
-    (ctx: MarkerMenuAnchorContext, items: MarkerMenuItem[]) => {
-      paletteSessionCounter.current += 1;
-      const token = paletteSessionCounter.current;
-      paletteSession.current = { kind: 'enter', token, filter: '', items };
-
-      papi.overlays
-        .showCommandPalette(
-          {
-            // Pre-resolved for the same reason as the `\` palette above: no localization await,
-            // so the palette is drivable the moment it is requested.
-            items: markerMenuItemsToResolvedPaletteItems(items, localizedStrings),
-            anchor: ctx.anchorRect,
-            passive: false,
-            // Marker palette: label-only matching, same as the `\` palette above.
-            searchFields: ['label'],
-          },
-          webViewId,
-        )
-        .then((id) => {
-          clearPaletteSessionIfCurrent(paletteSession, token);
-          // The Enter palette is always focused, so the editor is blurred the whole time it is
-          // open and Lexical's blur processing can null the live selection; a nulled selection
-          // makes the split land at the document end (focus() cannot restore it). Put the caret
-          // back from the focus-out capture before splitting, same as the `\` palette above.
-          restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
-          if (id !== undefined) editorRef.current?.splitParagraphWithMarker(id);
-          editorRef.current?.focus();
-          return undefined;
-        })
-        .catch((error: unknown) => {
-          clearPaletteSessionIfCurrent(paletteSession, token);
-          editorRef.current?.focus();
-          warnUnlessReplaced('Enter palette', error);
-        });
-    },
-    [webViewId, localizedStrings],
-  );
-
-  /**
    * `FootnoteEditor`'s marker-palette driver, wrapping `papi.overlays.*` with this web view's
    * `webViewId`. Built once and passed down so the popover's own editor gets the same PT9-parity
    * `\` palette as the main editor without `platform-bible-react` depending on the overlay service
-   * directly. Unlike `openMarkerPalette`/`openEnterPalette` above, this carries no session tracking
-   * of its own — the popover's `FootnoteEditor` owns its own session state and only needs the four
-   * overlay primitives forwarded through. Anchor coordinates from the popover's own inner editor
-   * are already iframe-relative (same iframe as this web view), so they're passed straight through
-   * with no translation.
+   * directly. Unlike `openMarkerPalette` above, this carries no session tracking of its own — the
+   * popover's `FootnoteEditor` owns its own session state and only needs the four overlay
+   * primitives forwarded through. Anchor coordinates from the popover's own inner editor are
+   * already iframe-relative (same iframe as this web view), so they're passed straight through with
+   * no translation.
    */
   const footnoteMarkerPalette = useMemo<FootnoteEditorMarkerPalette>(
     () => ({
-      // All FOUR parameters forwarded. TypeScript accepts a shorter implementation arity, so a
-      // three-parameter version compiled while silently dropping `keyForwarding` — the popover's
-      // selection-`\` palette then opened focus-stealing with no forwarding, and the Space/`*`/
-      // `\`/Backspace commit semantics never ran.
-      show: (items, anchor, passive, keyForwarding) => {
+      // One options object rather than positional parameters, which is what makes a dropped
+      // argument unrepresentable: TypeScript accepts a SHORTER implementation arity, so with
+      // positional parameters an implementation that omits `keyForwarding` still compiles. The
+      // popover's selection-`\` palette would then open focus-stealing with no forwarding, and the
+      // Space/`*`/`\`/Backspace commit semantics would never run.
+      show: ({ items, anchor, keyForwarding }) => {
         noteEditorPalettesOpen.current += 1;
         const shown = papi.overlays.showCommandPalette(
           {
@@ -2551,7 +2565,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // has already moved on.
             items: resolvePaletteItemStrings(items, localizedStrings),
             anchor,
-            passive,
+            // Same as the main editor's marker palettes: focus the LIST, never a text box, so no
+            // IME or dead-key composition can start while the palette is open.
+            focusTarget: 'list',
             keyForwarding,
             // Marker palette: label-only matching (the label IS the marker), same as the main
             // editor's `\`/Enter palettes above.
@@ -2559,8 +2575,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // The same placeholder the main editor's marker palettes use, so the popover's palette
             // does not fall back to the generic "Search...".
             placeholder: '%markerMenu_searchPlaceholder%',
-            // Exact containment only, same as the main editor's marker palettes: the rendered
-            // list participates in commit semantics.
+            // No fuzzy scoring, same as the main editor's marker palettes: the rendered list
+            // participates in commit semantics. Focusing the list makes the match a label PREFIX
+            // one, which is what PT9's marker dropdown does.
             disableFuzzyMatching: true,
           },
           webViewId,
@@ -2590,16 +2607,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // editor's own input inside editorContainerRef — the footnote popover's editor renders in a
   // portal outside it and keeps its own capture. Cleared on book/chapter change: the capture is
   // in content coordinates, so it must never be restored into different chapter content.
+  useMarkerPaletteFocusOutCapture({
+    containerRef: editorContainerRef,
+    editorRef,
+    selectionRef: lastFocusOutSelectionRef,
+    baselineRef: paletteBaselineSnapshotRef,
+    isSessionOpen: useCallback(() => !!paletteSession.current, []),
+    target: window,
+  });
+
+  // The capture is in CONTENT coordinates, so it must never be restored into a different chapter's
+  // content. Clearing it is this web view's own concern — the popover has no chapter of its own.
   useEffect(() => {
     lastFocusOutSelectionRef.current = undefined;
-    const handleFocusOut = (event: FocusEvent) => {
-      const editorInput = editorContainerRef.current?.querySelector('.editor-input');
-      if (!editorInput || event.target !== editorInput) return;
-      const selection = editorRef.current?.getSelection();
-      if (selection) lastFocusOutSelectionRef.current = selection;
-    };
-    window.addEventListener('focusout', handleFocusOut);
-    return () => window.removeEventListener('focusout', handleFocusOut);
   }, [scrRef.book, scrRef.chapterNum]);
 
   // #endregion Marker Palettes
@@ -2634,6 +2654,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // insert a footnote/cross-reference, and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
+    /**
+     * Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux). Read by BOTH listeners below:
+     * the capture one claims it while a palette session is open, the bubble one acts on it
+     * otherwise.
+     */
+    const isInsertCommentChord = (event: KeyboardEvent) =>
+      isMac
+        ? event.metaKey &&
+          event.altKey &&
+          // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
+          (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
+        : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
+          (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
+
     // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
     // root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
     // listener, so a window BUBBLE-phase handler runs too late — the paragraph has already split
@@ -2654,13 +2688,35 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Scoped to the MAIN editor instance via `isFocused()`, not a global `.editor-input` query:
       // the footnote-editor popover renders its own `.editor-input`, and a captured element goes
       // stale across an editor remount. Evaluated per-event so it always reflects current focus.
-      if (viewType === 'standard' && !isReadOnlyEffective && editorRef.current?.isFocused()) {
+      // Once the palette has focus the editor does not, and its keys arrive through key forwarding
+      // instead — this path covers only the frames between the trigger and that handoff.
+      if (
+        shouldRoutePaletteKey({
+          viewType,
+          isReadOnly: isReadOnlyEffective,
+          isEditorFocused: !!editorRef.current?.isFocused(),
+        })
+      ) {
         const session = paletteSession.current;
 
         if (session) {
+          // Decided BEFORE the table runs: the table treats this chord as an ordinary chord —
+          // dismiss the palette, decline the key — and a declined key keeps propagating with the
+          // session already cleared, so the bubble-phase handler below would insert a comment
+          // anyway. The dismissal's refocus then lands on the editor and pulls focus straight back
+          // out of the comment box the user is typing in.
+          //
+          // Claimed, so the chord only closes the palette. That is also what it does once the
+          // palette HAS focus, where the keystroke goes to the renderer and never reaches this web
+          // view at all — so the pre-focus window and the focused case now behave the same.
+          const closesPaletteOnly = isInsertCommentChord(event);
           // Through the ref so this listener and the palette's forwarded keys provably run the
           // same handler (and so this effect needs no dependency on it).
           runPaletteSessionKeyRef.current(event);
+          if (closesPaletteOnly) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
           return;
         }
 
@@ -2673,10 +2729,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             event.stopPropagation();
             return;
           }
-          // ACTIVE palette: the trigger never lands, whatever the selection shape — typing
-          // filters the palette, not the document. In capture phase the claim keeps Lexical
-          // from ever seeing the `\`. (`passive` still selects the overlay's
-          // non-focus-stealing display for the collapsed caret.)
+          // The trigger never lands, whatever the selection shape — typing filters the palette,
+          // not the document. In capture phase the claim keeps Lexical from ever seeing the `\`.
+          // Every kind opens the same way: focus goes to the palette's LIST.
           // Claimed only when a palette actually opens: with nothing to offer, the `\` is an
           // ordinary character and must still reach the document.
           if (openMarkerPaletteAtCaret()) {
@@ -2704,7 +2759,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           if (items.length === 0) return;
           event.preventDefault();
           event.stopPropagation();
-          openEnterPalette(ctx, items);
+          openMarkerPalette(ctx, items, 'enter');
         }
       }
     };
@@ -2728,14 +2783,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
       }
 
-      const isInsertCommentHotkey = isMac
-        ? event.metaKey &&
-          event.altKey &&
-          // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
-          (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
-        : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
-          (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
-      if (isInsertCommentHotkey) {
+      if (isInsertCommentChord(event)) {
+        // Nothing here excludes an open marker palette: the capture-phase listener above claims
+        // this chord while a session is open, so a palette closes and this never runs. A check
+        // here could not do it anyway — the table clears the session synchronously, ahead of this
+        // bubble phase.
         event.preventDefault();
         event.stopPropagation();
         // Swallowed while the editor's right-click menu is up, like the Ctrl+T shortcuts below.
@@ -2791,7 +2843,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     viewType,
     styleInfo,
     openMarkerPaletteAtCaret,
-    openEnterPalette,
+    openMarkerPalette,
+    dismissPaletteSessionIfOpen,
   ]);
 
   // #endregion Keydown Routing
@@ -2845,19 +2898,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const setScrRefNoScroll = useCallback(
     (newVerseLocation: SerializedVerseRef) => {
-      // Preserve versificationStr so the PDP selector doesn't change on every click. Against
-      // platform-editor 0.8.15 the fallback is a no-op: `positionToScrRef` carries the host's
-      // `versificationStr` on every position report (a document states no versification of its
-      // own), and that plugin is the sole caller of this handler. Kept as cheap insurance in case
-      // that contract changes — versions before 0.8.15 reported positions without it.
-      const preservedLocation: SerializedVerseRef = {
-        ...newVerseLocation,
-        versificationStr: newVerseLocation.versificationStr ?? scrRef.versificationStr,
-      };
-      internalVerseLocationRef.current = preservedLocation;
-      setScrRefWithScroll(preservedLocation);
+      // A report of the user's own caret move gives up on any pending range jump now, so it cannot
+      // land later on top of wherever the user just clicked; the hook tells the engine's book
+      // correction apart and keeps the jump for that. Preserving `versificationStr` keeps the PDP
+      // selector from changing on every click.
+      applyEditorScrRefReport(newVerseLocation, {
+        currentVersificationStr: scrRef.versificationStr,
+        onEditorScrRefChange,
+        setScrRef: (preservedLocation) => {
+          internalVerseLocationRef.current = preservedLocation;
+          setScrRefWithScroll(preservedLocation);
+        },
+      });
     },
-    [setScrRefWithScroll, scrRef.versificationStr],
+    [onEditorScrRefChange, setScrRefWithScroll, scrRef.versificationStr],
   );
 
   /**
@@ -2901,6 +2955,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // `whichUpdates` set to `*` because we need to receive all updates instead of just ones that
     // are not deeply equal so we can tell when the PDP finished processing our latest changes sent
     useMemo(() => ({ whichUpdates: '*' }), []),
+  );
+
+  // The copy limit is resolved here, below the chapter subscription, because it depends on whether
+  // the chapter text is loading (see `blockCopyWhileChapterLoads`). No project source: this web
+  // view's project changes only by reloading it, which remounts it.
+  const isChapterTextLoading = useIsProjectDataLoading(chapterUsjSelector, isUsjFromPdpLoading);
+  const copyLimit = useChapterCopyLimit(projectId, scrRef, isChapterTextLoading);
+  /** `options` with the chapter's copy limit, for every copy surface the editor's text reaches. */
+  const editorOptionsWithCopyLimit = useMemo<EditorOptions>(
+    () => ({ ...options, copyLimit }),
+    [options, copyLimit],
   );
   // What the failure in hand IS, independent of what is on screen. Parsed once per failure, and
   // deliberately not keyed on the reference: the same held error is re-read on every navigation, and
@@ -3750,7 +3815,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         onClose={closePaneFootnoteEditorFromInside}
         onNoteEdit={onFootnoteEditorNoteEdit}
         scrRef={scrRef}
-        editorOptions={options}
+        editorOptions={editorOptionsWithCopyLimit}
         defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
         localizedStrings={localizedStrings}
         parentEditorRef={editorRef}
@@ -3762,7 +3827,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       closePaneFootnoteEditorFromInside,
       onFootnoteEditorNoteEdit,
       scrRef,
-      options,
+      editorOptionsWithCopyLimit,
       localizedStrings,
       footnoteMarkerPalette,
     ],
@@ -3976,38 +4041,36 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // updates report, while programmatic applies (e.g. the footnote popover's
       // `replaceEmbedUpdate` save) report `'remote'`. An EXTERNAL apply (`setEditorUsj` →
       // `EditorRef.setUsj`) must never refresh this stamp, and it cannot: the editor loads
-      // external content under its change-suppression tag (`EXTERNAL_USJ_MUTATION_TAG`, excluded
-      // by `DeltaOnChangePlugin`'s ignore list), so it never reaches this callback at all — the
-      // source gate is belt-and-braces on top of that.
+      // external content under its change-suppression tag (`EXTERNAL_USJ_MUTATION_TAG`, skipped by
+      // the editor's own single commit listener, `handleCommit` in `Editor.tsx`), so it never
+      // reaches this callback at all — the source gate is belt-and-braces on top of that.
       if (source === 'local') lastLocalEditTimestamp.current = Date.now();
+      discardPendingCommentIfAnchorChanged.current(usj);
+      // The editor changed under an open palette. Close it rather than leave it floating over text
+      // it no longer describes: a commit applies at the caret, and that caret may have moved with
+      // the content. The spine refuses such a commit too, but refusing LOOKS like nothing
+      // happening, so close at the moment of the change and let the user reopen where they want.
+      //
+      // Reachable with no keystroke at all — a drag-and-drop, a context-menu paste, an incoming
+      // update for this chapter — which is why this lives here rather than in the key table. The
+      // guard reads false until the palette has taken focus and a baseline exists, and the session
+      // is already cleared by the time a palette's own commit lands here, so neither self-triggers.
+      if (paletteSession.current && hasEditorChangedSinceFocus()) dismissPaletteSessionIfOpen();
       // Capture the current chapter's save fn and chapter key into the debounce payload so a
       // pending trailing save always targets the chapter this content was typed in.
       //
-      // Schedule the SETTLED, transient-excluded snapshot (`EditorRef.getUsj()`), not the raw
-      // `usj` this callback was invoked with: `onUsjChange`'s payload is the unsettled document as
-      // typed, and `setTransientInput`'s exclusion applies only to `getUsj()`. A pending trailing
-      // save can fire via the cross-chapter flush (`performDebouncedPdpSave`'s `capturedSave`
-      // branch) or via the editor-unavailable fallback in its same-chapter branch — neither of
-      // those can re-read the editor safely at fire time (the chapter has moved on, or the editor
-      // is gone), so the snapshot captured HERE, at schedule time, is what they replay. Reading it
-      // settled and transient-excluded now means both replay paths carry canonical bytes instead
-      // of a stray palette trigger literal. Falls back to the raw `usj` only if the editor is
-      // unavailable at this exact keystroke (should not happen in practice — `onUsjChange` only
-      // fires from a mounted editor).
+      // Schedule the settled, transient-excluded snapshot (`EditorRef.getUsj()`): `onUsjChange`'s
+      // `usj` payload is itself this same settled, transient-excluded document, so this call
+      // returns an equal value — `readSettledUsj` is memoized, so re-deriving it here is free. A
+      // pending trailing save can fire via the cross-chapter flush (`performDebouncedPdpSave`'s
+      // `capturedSave` branch) or via the editor-unavailable fallback in its same-chapter branch —
+      // neither of those can re-read the editor safely at fire time (the chapter has moved on, or
+      // the editor is gone), so the snapshot captured HERE, at schedule time, is what they replay.
+      // Falls back to the raw `usj` argument only if the editor is unavailable at this exact
+      // keystroke (should not happen in practice — `onUsjChange` only fires from a mounted editor).
       //
-      // Read ONCE and shared with the pane's live-document publish below: both need the same
-      // settled snapshot, and a second `getUsj()` would re-serialize the whole chapter per
-      // keystroke.
-      //
-      // LOAD-BEARING: reverting `settledUsj` back to the plain `usj`
-      // argument compiles and passes every existing test — this web view has no component-level
-      // test harness for its save-scheduling path — but silently reopens a live corruption class:
-      // a save that fires mid-keystroke (the debounce timer, a window-blur flush, or the
-      // cross-chapter flush) would then schedule the UNSETTLED bytes directly, bypassing
-      // `setTransientInput`'s exclusion entirely, so an in-progress command-surface literal (e.g. a
-      // marker-palette trigger) could reach disk as a phantom marker even when the exclusion itself
-      // is working correctly. Only a live check (type a trigger literal, force a save before the
-      // surface consumes it, inspect the saved bytes) catches a regression on this line.
+      // Read once and shared with the pane's live-document publish below: both need the same
+      // settled snapshot.
       const settledUsj = editorRef.current?.getUsj() ?? usj;
       saveUsjToPdpDebounced.schedule(
         settledUsj,
@@ -4084,6 +4147,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     },
     [
       closeFootnoteEditor,
+      dismissPaletteSessionIfOpen,
+      hasEditorChangedSinceFocus,
       openNoteEditorOnNewNote,
       publishLiveEditorUsjIfNotesChanged,
       saveUsjToPdpDebounced,
@@ -4091,6 +4156,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   // #endregion Debounced Save Scheduling
+
+  // Looked up once per web view and reused: a lookup per selection change would be a PAPI round
+  // trip each time. Awaited rather than read from a hook so the editor's first reports, made while
+  // the web view is still loading, are not dropped before the controller is found.
+  const webViewControllerPromiseRef = useRef<
+    | ReturnType<typeof papi.webViews.getWebViewController<typeof SCRIPTURE_EDITOR_WEBVIEW_TYPE>>
+    | undefined
+  >(undefined);
 
   /**
    * Handle selection changes in the editor. Updates the local ref and notifies the backend so it
@@ -4122,14 +4195,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       // Notify the backend of the selection change via WebViewController method
       try {
-        const webViewController = await papi.webViews.getWebViewController(
-          'platformScriptureEditor.react',
+        webViewControllerPromiseRef.current ??= papi.webViews.getWebViewController(
+          SCRIPTURE_EDITOR_WEBVIEW_TYPE,
           webViewId,
         );
-        if (webViewController) {
-          await webViewController.updateSelectionInternal(scriptureSelection);
-        }
+        const webViewController = await webViewControllerPromiseRef.current;
+        if (webViewController) await webViewController.updateSelectionInternal(scriptureSelection);
+        // Not found yet, so look again next time
+        else webViewControllerPromiseRef.current = undefined;
       } catch (e) {
+        webViewControllerPromiseRef.current = undefined;
         logger.debug(`Failed to notify backend of selection change: ${getErrorMessage(e)}`);
       }
     },
@@ -4275,6 +4350,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
     setShowCommentEditor(false);
   }, []);
+
+  discardPendingCommentRef.current = onCommentEditorCancel;
 
   /** Flag to indicate if a comment submission is in progress so we don't submit multiple times */
   const isSubmittingComment = useRef(false);
@@ -4638,7 +4715,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               ref={editorRef}
               scrRef={scrRef}
               onScrRefChange={setScrRefNoScroll}
-              options={options}
+              options={editorOptionsWithCopyLimit}
               logger={logger}
               onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
               onSelectionChange={handleSelectionChange}
@@ -4941,6 +5018,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 // beside it shows a spinner.
                 isLoading={!liveEditorUsj && usjFromPdp === defaultUsj}
                 zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
+                copyLimit={editorOptionsWithCopyLimit.copyLimit}
               >
                 {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                 <OutPortal node={editorPortalNode} />
@@ -4984,7 +5062,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onClose={onFootnoteEditorClose}
             onNoteEdit={onFootnoteEditorNoteEdit}
             scrRef={scrRef}
-            editorOptions={options}
+            editorOptions={editorOptionsWithCopyLimit}
             defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
             localizedStrings={localizedStrings}
             parentEditorRef={editorRef}

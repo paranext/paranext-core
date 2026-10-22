@@ -601,8 +601,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
                 // OpenRPC contract honest about what the shim actually accepts.
                 enum: [...Object.keys(scopeFilterToLabelKey), 'unfiltered'],
                 description:
-                  'Scope to pre-apply; omitting it resets scope to all-books. Also accepts the ' +
-                  "deprecated 'unfiltered' value, which maps to all-books.",
+                  'Scope to pre-apply. Omitting it resets scope to all-books when filtersToSet ' +
+                  'is given; an open with neither uses the stored scope, or current-chapter. ' +
+                  "Also accepts the deprecated 'unfiltered' value, which maps to all-books.",
               },
             },
           },

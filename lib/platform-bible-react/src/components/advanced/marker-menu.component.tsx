@@ -22,11 +22,12 @@ export const MARKER_MENU_STRING_KEYS = Object.freeze([
   '%markerMenu_disallowed_label%',
   '%markerMenu_noResults%',
   '%markerMenu_searchPlaceholder%',
-  // These three keys are not read by this component directly; they are provided here so callers
+  // These four keys are not read by this component directly; they are provided here so callers
   // can localize them and pass the result into the optional `searchPlaceholder` prop to override
   // the default search-field placeholder.
   '%markerMenu_searchPlaceholder_character%',
   '%markerMenu_searchPlaceholder_insert%',
+  '%markerMenu_searchPlaceholder_newParagraph%',
   '%markerMenu_searchPlaceholder_paragraph%',
 ] as const);
 

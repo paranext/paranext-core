@@ -91,19 +91,25 @@ const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
  *   who upgrades mid-session has a real "Current chapter"-style preference sitting in their saved
  *   layout that the new store has never recorded for this project; consulted ONLY when
  *   `hasStoredFilterSelection` says this project's new store is genuinely empty, so a real (even
- *   default-valued) stored selection always wins over this one-time migration fallback. There is no
- *   equivalent migration for the preset axis: the merge base kept `filters` as plain, unpersisted
- *   `useState`, so there is nothing under any old key to read back for it.
+ *   default-valued) stored selection always wins over this one-time migration fallback. Released
+ *   builds stored the deprecated {@link LegacyScopeFilter} `'unfiltered'` here, so the value goes
+ *   through `resolveScopeFilter` before it reaches `scopeFieldsUsed`. There is no equivalent
+ *   migration for the preset axis: the merge base kept `filters` as plain, unpersisted `useState`,
+ *   so there is nothing under any old key to read back for it.
  */
 function loadInitialSelection(
   projectId: string | undefined,
-  legacyPersistedScopeFilter: ScopeFilter | undefined,
+  legacyPersistedScopeFilter: ScopeFilter | LegacyScopeFilter | undefined,
 ): CurrentCommentListView {
   if (!projectId) return { filters: DEFAULT_COMMENT_FILTERS, scopeFilter: DEFAULT_SCOPE_FILTER };
   if (!hasStoredFilterSelection(projectId)) {
     return {
       filters: DEFAULT_COMMENT_FILTERS,
-      scopeFilter: legacyPersistedScopeFilter ?? DEFAULT_SCOPE_FILTER,
+      // Resolved only when present: `resolveScopeFilter(undefined)` is all-books, not the default.
+      scopeFilter:
+        legacyPersistedScopeFilter === undefined
+          ? DEFAULT_SCOPE_FILTER
+          : resolveScopeFilter(legacyPersistedScopeFilter),
     };
   }
   const stored = loadFilterSelection(projectId);
@@ -282,7 +288,7 @@ global.webViewComponent = function CommentListWebView({
   // see that function's `legacyPersistedScopeFilter` param doc. Never written back through this
   // setter: this view no longer owns that key going forward, it only reads whatever a prior build
   // left there.
-  const [legacyPersistedScopeFilter] = useWebViewState<ScopeFilter | undefined>(
+  const [legacyPersistedScopeFilter] = useWebViewState<ScopeFilter | LegacyScopeFilter | undefined>(
     'scopeFilter',
     undefined,
   );
@@ -1031,10 +1037,17 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp],
   );
 
+  // Counts clicks so a failure that arrives late can tell whether the user has since clicked
+  // another thread.
+  const verseRefClickCountRef = useRef(0);
+
   const handleVerseRefClick = useCallback(
     (thread: LegacyCommentThread) => {
       const { verseRef } = VerseRef.tryParse(thread.verseRef ?? '');
       if (!verseRef.valid) return;
+
+      verseRefClickCountRef.current += 1;
+      const clickCount = verseRefClickCountRef.current;
 
       // This view is causing the upcoming scroll-group change; a click inside the list must never
       // scroll the list, so record the reference for the sync-scroll hook to swallow.
@@ -1042,11 +1055,35 @@ global.webViewComponent = function CommentListWebView({
 
       if (editorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
-        const location = {
-          verseRef: verseRef.toJSON(),
-          offset: Math.max(0, (thread.comments[0]?.startPosition ?? 0) - 1),
+        // `startPosition` is the USFM offset of the comment's first character from the verse's own
+        // backslash, which is what the editor expects. It is -1 when the comment has no position.
+        const offset = Math.max(0, thread.comments[0]?.startPosition ?? 0);
+        const location = { verseRef: verseRef.toJSON(), offset };
+        // Only fall back for the latest click: a slow failure for an earlier thread would
+        // otherwise jump the scroll group back to it, away from the one the user is now reading.
+        const fallBackToVerse = (e: unknown) => {
+          logger.warn(
+            `Comment list: failed to select the comment's range in the editor: ${getErrorMessage(e)}`,
+          );
+          if (verseRefClickCountRef.current !== clickCount) return;
+          // Recorded again so the sync-scroll hook swallows this change too; it is also caused by
+          // a click inside this list.
+          recordSelfInitiatedNavigation(thread.verseRef);
+          setScrRef(verseRef.toJSON());
         };
-        editorWebViewController.selectRange({ start: location, end: location });
+        // The fallback covers a conversion failure in `convertScriptureRangeToEditorRange` or a
+        // delivery failure (`selectRange` resolves once the message is posted to the editor, and
+        // the tab can close between this callback being handed to the list and the click, leaving
+        // a revoked proxy whose property read throws synchronously). It moves this list's own
+        // scroll group, which was copied once when the list opened. If the editor cannot place the
+        // exact range, it still moves to the range's verse itself, so nothing more is needed here.
+        try {
+          editorWebViewController
+            .selectRange({ start: location, end: location })
+            .catch(fallBackToVerse);
+        } catch (e) {
+          fallBackToVerse(e);
+        }
       } else {
         setScrRef(verseRef.toJSON());
       }
