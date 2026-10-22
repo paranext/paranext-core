@@ -52,7 +52,7 @@ const APP_MENU_NAME = /^Platform$/i;
 /**
  * Localized label the launcher menu item had. Power's main menu hides that item on purpose, so this
  * is only used to assert it is absent; the exact match avoids confusion with sibling items such as
- * "Open" or "Open Dictionary: Hebrew/Greek".
+ * "Open".
  */
 const ER_MENU_ITEM_NAME = /^Open Enhanced Resource$/i;
 
