@@ -2307,6 +2307,179 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   the id scheme that replaced it.
 - **Source:** PT-4464.
 
+## adr-editor-annotation-exact-locations: An annotation holds exactly the bytes its range names, and removal reporting follows whatever holds it now
+
+- **Date:** 2026-09-29
+- **Status:** Accepted
+- **Context:** TJ's round-8 ask was that both directions of the annotation position model are
+  exact: the bytes a `setAnnotation` range names must be exactly the bytes the editor holds the
+  annotation on, and removal reporting must follow whatever currently holds the annotation rather
+  than a point-in-time test. An audit, productized into a permanent oracle
+  (`scripture-editors/packages/platform/src/editor/annotationLocations/`, one `it` per corpus and
+  view), found that the wrap behind `setAnnotation`, `CommentPlugin`, and the Tier-2 settle's
+  restore (`typedMarkWrap.utils.ts`) read `anchor.offset`/`focus.offset` as raw text offsets even
+  against element points — misreading an element's child index as a text offset at both range
+  ends, including the document end — moved any inline element the range merely touched into the
+  mark whole regardless of how much of it the range covered, and had no collapsed-range check at
+  all. Separately, removal reporting (`hadMarks`) was a permanent latch set the first time a mark
+  ever held the annotation, so an annotation set over a pending edit and then settled onto display
+  bytes alone never reported its own loss.
+- **Decision:** Convert both range points to carets on leaves before the wrap loop and measure
+  every node's coverage by caret order, not raw offsets; return immediately for a collapsed
+  selection. An inline element moves into the mark whole only when the range covers it whole, from
+  in front of its first leaf through behind its last; a fully covered element still takes its own
+  opening separator with it when it moves, rather than leaving that separator stranded outside the
+  mark. A range that only partly covers an element is handled byte by byte instead: its content
+  text is split and marked piece by piece, and its own marker glyphs become display-byte carriers
+  holding the same annotation wherever the range passes over them. Removal reporting is decided by
+  what holds the annotation NOW, not by what ever held it: the holder set is recomputed from the
+  document after every settle, so the loss of an annotation's last holder — a mark or a
+  display-byte carrier — fires one more report through display bytes, `"removed"` or `"destroyed"`,
+  exactly once; an annotation whose marks still exist keeps reporting through its marks only.
+  Painting stays whole-node, per `adr-editor-annotations-on-display-bytes`. _(Superseded by
+  `adr-editor-annotations-paint-exactly`: painting now follows the held bytes exactly.)_
+- **Alternatives:** Splitting the covered inline element into two elements to carry a partial mark
+  — rejected: it clones the element and changes the document, which `setAnnotation` promises never
+  to do. Keeping the whole-element move and documenting the extra bytes it marks — rejected: bytes
+  nobody named must be fixed, not left as a documented gap. Never moving an element into a mark
+  even when the range covers it whole, keeping glyph carriers plus a separate content mark instead
+  — rejected: it multiplies marks, so one host registration gets more `"destroyed"` calls than
+  before, and turns one comment into an extra `zmsc` pair inside the element on export — the
+  opposite of what a fix should do. A permanent `hadMarks` latch — rejected: an annotation that
+  settles onto display bytes alone, with nothing having yet reported its removal, would never
+  report it.
+- **Consequences:** A comment or check set from content into part of a char span can now sit
+  INSIDE the span rather than wrapping it whole, so a mark can appear nested inside the element it
+  annotates, and the exporter writes a `zmsc` pair inside the span for it — the same shape a
+  comment crossing a verse boundary already produces. The same range set exactly on the span's own
+  opening glyph still moves the span whole, because the glyph branch claims the wrap's target
+  parent before the partial-coverage path runs — so two annotations holding the same bytes can
+  differ in mark count depending on where the range started, by construction, not as a bug; both
+  hold exactly the named bytes. The permanent oracle is the regression net for both halves of this
+  decision — exact coverage and exact removal reporting — on every future change to the wrap or the
+  removal path.
+- **Source:** PT-4370 round 8; paranext-core PR #2823, scripture-editors PR
+  paranext/scripture-editors#11.
+
+## adr-editor-annotations-on-display-bytes: An annotation over display bytes is carrier node state, never a mark wrapping them
+
+- **Date:** 2026-09-28
+- **Status:** Accepted; its painting (whole-carrier classes, class lookups) superseded by
+  `adr-editor-annotations-paint-exactly`
+- **Context:** A checks result, a comment, or any other `setAnnotation` caller must be able to
+  annotate essentially any location the position model resolves — a marker glyph, a verse or
+  chapter number, a note caller, an attribute value — not only ordinary content text. The editor's
+  existing annotation mechanism wraps the addressed range in a `TypedMarkNode` mark. Every
+  display-run scanner (the attribute-run piece walkers, the verse and milestone run readers, the
+  settle rewrite in `$syncDisplayRun`) finds a run's pieces by POSITION and requires the run's value
+  to be a single text node; a mark node sitting inside a run breaks that assumption and corrupts the
+  run — duplicating bytes, losing a milestone's attribute, or reporting an owner destroyed when it
+  is not. This corruption class had already been found and fixed piecemeal several times before this
+  decision (`typedMarkWrap.utils.ts`'s guard history, commits `338ed25a`, `2ec657fd`, `0f9883cb`,
+  `686d5754`).
+- **Decision:** An annotation that covers display bytes is never expressed as a mark wrapping them.
+  Instead the CARRIER node itself (the marker glyph, the verse/chapter node, the note-caller text,
+  the attribute-run text) holds a new node state, `displayAnnotationsState`
+  (`{ basis, annotations: [{ type, id, start, end }] }`), remapped through a character alignment of
+  the carrier's old and new text whenever that text changes, so the tree shape every scanner,
+  settle rewrite, and exporter depends on is completely unchanged. Painting and events come from a
+  per-editor index that adds the same class names `TypedMarkNode` would (`<typedMark>-<type>`,
+  `<typedMarkOverlap>-<type>`, `annotationId-<id>`) plus `display-annotation` to the carrier's DOM
+  element, so host CSS and `scrollToAnnotation` (`.annotationId-<id>`) work unchanged. _(Superseded
+  by `adr-editor-annotations-paint-exactly`: only a carrier painted in full gets the classes, and
+  hosts find annotations with `EditorRef.getAnnotationRanges`.)_ `getUsj()`
+  carries none of this — attribute values are plain strings with no sub-string annotation shape in
+  USJ — so the host re-applies its own anchors after a reload, as it already does today.
+- **Alternatives:** **Option A — let marks sit inside display runs and make every reader
+  mark-transparent.** Rejected: dozens of call sites (`$charClosingGlyph`, the char/note/para
+  constructs, the Tier-1/Tier-2 engines, `$runPieceOf`/`$displayBytesOf`) read a run's pieces as
+  DIRECT children, and the writer re-wraps by offset; every one would need a "logical sibling
+  through marks" rule, and a missed one reintroduces exactly the corruption class this decision
+  avoids. **CSS Custom Highlight API for exact, sub-carrier painting instead of node state.**
+  Rejected for now: `::highlight()` only applies `color`, `background-color`, `text-decoration` and
+  `text-shadow` — it cannot express the class-based CSS hosts already generate (border, padding,
+  font-weight, opacity), so it cannot replace the carrier's class-based painting outright. The
+  stored range stays exact regardless of which paints it, so adopting the Highlight API later for
+  finer-grained painting needs no data-model change.
+- **Consequences:** The carrier is painted WHOLE even where the stored range covers only part of
+  it — a check naming one attribute's value highlights the whole attribute-run text, and a check on
+  a verse number highlights the glyph's whole `\v 12 ` — because splitting the carrier node is the
+  corruption this decision exists to avoid. _(Superseded by `adr-editor-annotations-paint-exactly`,
+  which paints the held part with the Highlight API rejected for now below.)_ The exact range is stored regardless, so painting only
+  the named bytes (the Highlight API, or overlay rectangles) can be added later without redoing this
+  work. No `zmsc` (or other USJ shape) exists for an annotation held only on display bytes;
+  `getUsj()` never carries it, and a host that needs it back after a `setUsj` reload re-applies from
+  its own anchors. PT-4804 (`TypedMarkNode.remove` firing `"destroyed"` per mark node even while
+  other marks of the same id survive) is unchanged by this decision — the carrier path is a
+  distinct removal accounting that does not touch marks' existing behavior.
+- **Source:** PT-4370; paranext-core PR #2823, scripture-editors PR paranext/scripture-editors#11.
+
+## adr-editor-annotations-paint-exactly: An annotation paints exactly the bytes it holds, and hosts find it by its ranges
+
+- **Date:** 2026-10-01
+- **Status:** Accepted
+- **Context:** `adr-editor-annotations-on-display-bytes` held an annotation exactly but painted its
+  carrier whole: a check on `G5485` lit all of `|lemma="grace" strong="G5485"`, one on the `2` of
+  `\v 12 ` lit the glyph and its trailing space, and a click anywhere on a run fired every
+  annotation it held. The same entry deferred the CSS Custom Highlight API because `::highlight()`
+  cannot paint most of what host class rules set.
+- **Decision:** Paint from what each annotation holds. A leaf every annotation on it covers in full
+  keeps element classes (`<typedMark>-<type>`, `<typedMarkOverlap>-<type>`, `annotationId-<id>`,
+  `display-annotation`), so host styling, `:hover` and element events are unchanged there. A
+  display byte held only in part is painted with a CSS Custom Highlight per class set, which the
+  editor styles by translating the host's own class rules: it measures a hidden probe carrying the
+  classes against one carrying none and copies what differs among `background-color`, `color`,
+  `text-decoration` and `text-shadow`; a bottom border becomes an underline. Every other property,
+  and `:hover`, applies only to bytes painted as elements. Whitespace between two held bytes of one
+  annotation in one block (a separator, a char opener's no-break space) is painted, so `12 In` has
+  no hole; whitespace at an annotation's edges never is. Bytes a view does not display (a `\va`
+  where markers are hidden) are held and reported on removal but paint nothing. A read-only
+  decorator's holds are stored in the bytes it stands for and mapped onto what it draws only when
+  read, so a collapse, an expand, or a write while it is drawn differently never widens one. Click
+  and hover fire only for the annotation painted under the pointer. Hosts measure, scroll to and
+  hit-test an annotation with `EditorRef.getAnnotationRanges(type, id)` — live DOM ranges over
+  everything it paints, in document order — never by its class, which no element carries where a
+  highlight paints; `platform-scripture-editor`'s `editor-dom.util.ts` does.
+- **Alternatives:** **Keep whole-carrier painting** — rejected: it shows more than the check or
+  comment names, and its click target is wider than what is painted. **Split the carrier to wrap
+  the held part in an element** — rejected for the reason `adr-editor-annotations-on-display-bytes`
+  gives: it is the run-corrupting shape that entry exists to avoid. **Overlay rectangles** —
+  rejected: they must be repositioned on every reflow and scroll, and take no part in the host's
+  class rules. **Ask hosts for highlight-specific styles** — rejected: hosts keep one class
+  contract, and the editor translates it.
+- **Consequences:** A partly held byte cannot show borders, padding, font changes or `:hover`
+  styling; a host that needs them there needs the byte held whole. Without the highlight API a held
+  display byte is painted whole. A host that still looks annotations up by `.annotationId-<id>`
+  misses partly held display bytes; CSS rules keyed on the class keep working, since the editor
+  translates them. The annotation-location oracle checks painted bytes against held bytes plus
+  interior whitespace in every view.
+- **Source:** PT-4370 round 9; paranext-core PR #2823, scripture-editors PR
+  paranext/scripture-editors#11.
+
+## adr-editor-collapsed-note-hides-its-annotations: An annotation inside a collapsed note is not shown, as in Paratext 9
+
+- **Date:** 2026-10-01
+- **Status:** Accepted
+- **Context:** A collapsed note shows only its caller. An annotation on its hidden content (its
+  `\fr`/`\ft` text, its marker glyphs) held the hidden bytes and showed nothing, but one on the
+  note's `\cat` was held by the caller and painted it, so a check on a category lit up a caller.
+  Paratext 9 shows no annotation inside a closed note: `Standard.xslt` renders a closed note as its
+  caller span and writes the note's content only into comments
+  (`ParatextInternalShared/ScriptureViews/Standard.xslt:352-437`), and an annotation can attach only
+  to a fragment (`ParatextInternalShared/ScriptureEditor/Annotator.cs:264-280`), which `\cat` never
+  is.
+- **Decision:** Follow Paratext 9. An annotation inside a collapsed note's content, the undisplayed
+  `\cat` included, is not shown and is never painted on the caller; the caller holds an annotation
+  only when the range names the caller itself. The hidden content keeps its holders, invisible, so
+  the annotation reappears when the note is expanded and still reports its removal. A position on an
+  undisplayed category resolves behind the note's caller, the closest position to its left.
+- **Alternatives:** **Paint the caller for any annotation inside the note** — rejected: it differs
+  from Paratext 9 and makes a caller look checked when only its hidden content is. **Drop holds on
+  hidden content** — rejected: expanding the note would lose the annotation, and its removal would
+  never be reported.
+- **Consequences:** A host that wants a collapsed note's annotations visible has to expand the note.
+- **Source:** PT-4370 round 9; scripture-editors commit `c3a19c19` (paranext/scripture-editors#11).
+
 ## adr-editor-context-menu-follows-its-area-via-a-container: The editor library renders its context menu into an element the host supplies
 
 - **Status:** Withdrawn. The slug is retired with the entry and will not be reused.
@@ -2356,6 +2529,153 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   inlining a fourth copy.
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
+
+## adr-editor-opener-rename-renames-closer: A char opener rename renames its closer, and a pending `getUsj()` equals the settled document
+
+- **Date:** 2026-10-01
+- **Status:** Accepted
+- **Context:** Typing a name byte after a char opener (`\w grace\w*` + `x`) puts `\wx grace\w*` on
+  screen. The live settle renamed opener and closer in place, but `getUsj()` while the edit was
+  pending re-tokenized the paragraph and returned an unknown `\wx` with an unmatched `\w*`; the same
+  bytes typed into the content text instead of the glyph settled through that re-tokenize too. One
+  keystroke therefore had two settled documents, depending on the node it landed in and on when the
+  host asked.
+- **Decision:** An opener rename renames its closer, on screen, in `getUsj()` while pending, and on
+  settle; one decision (`$pendingCharOpenerRename`) feeds the live settle, the read-only settle and
+  the settled-position basis. `getUsj()` while an edit is pending equals the document after it
+  settles. The editor repo enforces this with a generated oracle: every single keystroke (a name
+  character, space, `*`, `\`, `|`, Backspace, Delete, and delete-then-type) at every offset of every
+  editable node over a corpus of paragraphs, spans, notes, verses and milestones, in the Standard,
+  expanded-notes and unformatted views, must give pending `getUsj()` equal to settled `getUsj()`,
+  a screen equal to the saved file byte for byte (whitespace included, normalized only as a USFM
+  reader would), and every caret position reporting exactly what the same bytes report once
+  settled — or, only where the settled document has nothing there, what the closest position to
+  their left reports. Cases it still lists each carry their reason, and the list must only shrink.
+- **Alternatives:** **Leave the closer and let the settle produce an unknown marker** — rejected: the
+  user sees a renamed span, and the file would not match it. **Hand-picked pending-versus-settled
+  cases** — rejected: none of them covered an opener rename on a closed span, which is how this
+  divergence went unseen.
+- **Consequences:** A host may read `getUsj()` at any moment without waiting for a settle. A change
+  to the settle or the position model that breaks the contract fails the oracle rather than a host.
+- **Source:** PT-4370 round 9; scripture-editors commits `17ac1ed0`, `c74ea17c`, `1eb8296e`,
+  `f7e8c2a0` (paranext/scripture-editors#11).
+
+## adr-editor-outbound-positions-snap-left: The editor reports every caret, snapping bytes with no settled counterpart left
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** Under `adr-editor-positions-are-settled-coordinates` the editor translates live
+  positions into the settled document `getUsj()` returns. While a typed literal is pending, some of
+  its bytes had no settled counterpart the translation could find, and `getSelection` /
+  `onSelectionChange` answered `undefined` for them — the same answer as "there is no selection", so
+  a host could not tell a cleared selection from a caret the editor could not express. Two of those
+  shapes are ordinary USJ positions (a typed `\cat` folds into a note's `category`; a typed figure's
+  `|src="…"` is its `file`/`size`/`ref` attributes); the rest are bytes the settle genuinely spells
+  differently from how they were typed (a figure's typed `file="…"` settles to `src="…"`), and two
+  such literals in one paragraph left the whole paragraph untranslatable.
+- **Decision:** No position ever answers `undefined` for a real caret, and no location is refused
+  outright unless it names nothing in the settled document at all — outbound reporting and inbound
+  writes (`setSelection`, `setAnnotation`, `insertNote`) share the one aligner, so neither direction
+  has its own private rule. Bytes the settled document carries as attributes map exactly, to the
+  location `UsjReaderWriter` gives the same USFM byte. Anything else with no settled counterpart
+  snaps LEFT to the nearest translatable position at or before it — the rule this editor already
+  applies to a USFM byte with no USJ representation — each end of a range on its own, and the front
+  of the scope when nothing in it translates. A scope's run pairing holds for as much of the scope
+  as it can, so a caret in front of an unpairable literal still reports exactly, and a scope paired
+  only in part is never refused as a whole inbound either — it snaps LEFT the same as outbound.
+  Inbound refuses (and logs) only a location that names nothing in the settled document at all. A
+  memoized plan the live tree has moved on from is rebuilt from the current tree — and the rebuild
+  logged as an error — never refused; no read against a stale plan reaches a host as a refusal.
+- **Alternatives:** **Keep refusing untranslatable carets** — rejected: `undefined` would keep two
+  meanings, and a host would have to guess whether to clear its selection. **A separate refusal
+  signal on the selection callback** — rejected: every host would need to handle a state no user
+  action can resolve, while the nearest earlier location is always a sound answer. **Snap to the
+  nearest position in either direction** — rejected: it would disagree with the snap-left rule USFM
+  bytes already follow, and a caret could report a position past bytes it has not reached. **Refuse
+  inbound whenever a scope pairs only in part** — rejected: a pending scope commonly carries one
+  unpairable byte alongside many pairable ones, and refusing the whole scope over that one byte
+  blocks far more valid inbound writes than the snap costs in precision; inbound accepts the same
+  imprecision outbound already does.
+- **Consequences:** `undefined` from `getSelection` / `onSelectionChange` means "no selection", so a
+  host (`handleSelectionChange` in `platform-scripture-editor.web-view.tsx`) can treat it as a
+  cleared selection. A position read while such a literal is pending and set back lands on the
+  snapped representative, not on the byte — the same lossy round trip as any snapped-left byte, in
+  either direction: an inbound `setSelection` / `setAnnotation` / `insertNote` location landing on an
+  unpairable byte writes at the snapped representative instead of being refused. A stale memoized
+  plan triggers a rebuild, logged as an error, rather than a refusal, so a host never has to retry a
+  write because the editor's own cache fell behind. The editor-side rule and its tests live in the
+  editor repo (`docs/standard-view-invariants.md`, "A position has one spelling").
+- **Source:** PT-4370; paranext-core PR #2823, scripture-editors PR paranext/scripture-editors#11.
+
+## adr-editor-positions-are-settled-coordinates: The platform editor's public position API is settled coordinates, translated once at the editor boundary
+
+- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Context:** Standard view introduced mid-edit "unsettled" document state in the platform editor:
+  while a command surface (a palette, in-progress marker input) holds a pending edit, the live
+  Lexical tree and the settled USJ document can disagree about a node's content and its indices.
+  `getUsj()` always returned the SETTLED document, but every position API — `getSelection`,
+  `onSelectionChange`, `setSelection`, `setAnnotation`, `insertNote` — read and wrote the LIVE tree,
+  so a host that only ever sees `getUsj()` (`platform-scripture-editor.web-view.tsx` in this repo)
+  had no way to reconcile a jsonPath captured from a selection against the document it can actually
+  read. `insertCommentAtCurrentSelection`'s pre-existing guard papered over exactly this mismatch by
+  treating an unresolvable path or an out-of-range offset as recoverable rather than a bug.
+- **Decision:** Make every public editor position address the settled document, with the live/settled
+  translation done once, inside the editor, at the API boundary. An identity fast path applies when
+  nothing is pending. Otherwise each pending settle scope is materialized in a headless scratch
+  Lexical editor, and positions are mapped across that re-tokenization using the engine's
+  whitespace-tolerant fragment byte anchor, plus a top-level index correction for scopes that split
+  or merge paragraphs. A USFM byte with no USJ representation (the `+` of a nested marker, the second
+  `/` of `//`, an attribute's `|`, `=`, `"`, or the space between attributes) snaps LEFT to the
+  nearest representable location, so a position anchored to one of those bytes round-trips lossily by
+  design. The same mapping serves both directions — a `setSelection` / `setAnnotation` / `insertNote`
+  location resolves through the identical byte aligner, so inbound carries no rule of its own; see
+  `adr-editor-outbound-positions-snap-left` for the snap-left boundary rule this produces. The
+  identity fast path is only sound because the logical content model every position
+  resolves through measures text exactly as serialization writes it — including Standard view's
+  space-run collapse, whose dropped spaces the model excludes by the same shared definition the
+  serializer collapses with. Collapse is view-dependent, so the whole position layer takes the
+  editor's view options explicitly.
+- **Alternatives:** **A PT9-style debounced settle** — rejected: the settle's caret exemption already
+  exempts exactly the node being resolved, so debouncing buys nothing there; transient palette input
+  is a declaration, not a pend, so there is nothing to debounce; and a mutating settle would push its
+  own history entries, corrupting undo. **Verse-anchored positions** — dropped: re-anchoring by verse
+  only helps when re-resolving a *stored* position against a document that has since CHANGED; it does
+  nothing for the ordinary case of reading a position back against the document as it stands right
+  now, so the relative (jsonPath + offset) API has to be supported regardless. **A live-coordinate API
+  with host-side translation** — rejected: hosts such as `platform-scripture-editor.web-view.tsx`
+  cannot see the live Lexical tree at all, only `getUsj()`'s settled snapshot, so they would have
+  nothing to translate against. **For the space-run collapse specifically:** normalizing runs when a
+  document loads does nothing, because ParatextData's USFM→USX conversion already collapses them
+  (`UsfmToken.Tokenize` with `preserveWhitespace: false`), so every run in the editor was typed;
+  collapsing a typed run on the idle settle cannot close the gap either, because the idle clock
+  re-arms on every keystroke and the 700 ms debounced save fires before it, so positions a host
+  derives from a save can arrive while the run is still on screen; and a per-editor lookup of the
+  view in place of an explicit parameter was rejected as ambient state that lags a view change.
+- **Consequences:** Hosts never see live coordinates — `getSelection` and every other public
+  position are guaranteed settled, with one exception: an update that creates the document's first
+  pending edit and moves the selection within itself sends that one `onSelectionChange` report in
+  live coordinates, immediately followed by a settled one, so a host that must resolve a position
+  against `getUsj()` calls `getSelection()` instead of reusing a cached report.
+  `platform-scripture-editor.web-view.tsx`'s unresolvable-path and offset-past-length checks on a
+  TEXT location are a fail-safe against a bug or a race, never an expected state — except one past
+  the end of the document's last text, which is the document end
+  (`adr-usj-locations-have-one-spelling`); property, closing-marker and attribute locations are
+  legitimate positions that are not text. Positions anchored to a snapped-left byte round-trip
+  lossily. `ContentJsonPath` / `PropertyJsonPath` were widened to eight clauses in both
+  `platform-bible-utils` (this repo) and the editor's own copy: real Standard-view nesting already
+  exceeded the four-clause cap with nothing pending (table → row → cell → note → char → nested char
+  → text is seven clauses), and a scratch-scope remap is a secondary consumer of the same widened
+  bound. Locations cross between the repos in both directions, so the two `ContentJsonPath`
+  declarations had to be widened in lock-step or one repo's typecheck failed; there is now one
+  declaration, owned by the editor package (`adr-usj-location-types-come-from-scripture-utilities`).
+  The live/settled translation runs only while something is pending, scoped per pending settle scope and
+  memoized on that scope's content, so the identity fast path keeps the common (nothing pending) case
+  free. A memoized scope the live tree has since moved on from is rebuilt from the current tree, and
+  the rebuild is logged as an error rather than surfaced to a host as a refusal.
+- **Source:** PT-4370; paranext-core PR #2823, scripture-editors PR paranext/scripture-editors#11. The guard this decision
+  documents is `insertCommentAtCurrentSelection` in
+  `extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`.
 
 ## adr-empty-is-zero-state-primitive: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
 
@@ -9204,6 +9524,80 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   anchors for the patch. Any core change touching a file the patch edits requires regenerating the
   Paratext 10 patch.
 - **Source:** PT-4558 (PR #2855).
+
+## adr-usj-location-types-come-from-scripture-utilities: `platform-bible-utils` re-exports the USJ document-location types instead of declaring its own copy
+
+- **Date:** 2026-10-15
+- **Status:** Accepted
+- **Context:** `platform-bible-utils` (`src/scripture/usj-reader-writer.model.ts`) and the editor's
+  `@eten-tech-foundation/scripture-utilities`
+  (`packages/utilities/src/converters/usj/usj-document-location.model.ts` in `scripture-editors`)
+  each declared `ContentJsonPath`, `PropertyJsonPath`, `UsjDocumentLocation` and its seven member
+  location types. The copies were identical, member for member, and had to stay that way: locations
+  cross between the repos in both directions (core passes locations into the editor's `EditorRef`
+  and stores the editor's reports in its own types), so a change to either copy alone failed one
+  repo's typecheck. Every change — widening `ContentJsonPath` to eight clauses, documenting the
+  tricky positions and the text-end alias — was written, tested and documented twice.
+  `platform-bible-utils` already depends on the package and re-exports its `Usj` type.
+- **Decision:** The editor package owns the declarations. `usj-reader-writer.model.ts` re-exports
+  the ten types with `export type { … } from '@eten-tech-foundation/scripture-utilities'`, and
+  `platform-bible-utils`' public index keeps exporting the same names, so consumers import them
+  exactly as before. Its own depth test is deleted; the package's
+  `usj-document-location.model.test.ts` covers the bound.
+- **Alternatives:** **Keep the mirrored copies under a lock-step rule** (the previous practice,
+  stated in Standard View invariants) — rejected: it doubles every change and its tests, and nothing
+  but a reviewer's memory kept the TSDoc in step. **Move the declarations into `platform-bible-utils`
+  and have the editor import them** — rejected: `platform-bible-utils` already depends on
+  `scripture-utilities`, so the reverse dependency would be a cycle, and the editor is where
+  locations are produced.
+- **Consequences:** One declaration. `platform-bible-utils`' bundled `.d.ts` imports these types
+  from the editor package, as it already does for `Usj`, so changing them happens in
+  `scripture-editors` and reaches core when core stages that editor build. The package declares the
+  seven member location types as `interface`s where `platform-bible-utils` had `type` aliases with
+  the same members: an interface has no implicit index signature, so a location is no longer
+  assignable to a type like `Record<string, unknown>` (nothing in this repo relied on that). The
+  package's TSDoc on `UsjDocumentLocation` names `UsjLocation` and `UsfmVerseLocation` as code
+  spans, not links, because those types live only in `platform-bible-utils`.
+- **Source:** PT-4370; paranext-core PR #2823, scripture-editors PR paranext/scripture-editors#11.
+
+## adr-usj-locations-have-one-spelling: Every USFM position has one canonical USJ location
+
+- **Date:** 2026-09-23
+- **Status:** Accepted
+- **Context:** `UsjDocumentLocation` gives `offset` a meaning only on a text content string, but the
+  platform editor reported a caret with no text beside it — in front of a marker, inside an empty
+  paragraph, at a paragraph's or the document's end — as a container plus a content index
+  (`{ jsonPath: "$.content[2]", offset: 0 }`) or the root plus one (`{ jsonPath: "$", offset: 3 }`).
+  No host resolver is specified to read those shapes; `UsjReaderWriter` never produces them, and a
+  consumer walking from the container's path measured the whole container instead of a gap.
+- **Decision:** Every USFM position has exactly one USJ location, and `UsjReaderWriter`'s
+  `usfmVerseLocationToUsjDocumentLocation` is the oracle for which: a gap in front of a marker object
+  is that marker's location; the character after a token with no other home (the space after a
+  marker name, a line's newline) is addressed on that token at its length (text `offset: length`,
+  `['marker']` at the marker's length, `closingMarkerOffset` at the closer's length); the end of the
+  document is one past the final newline, on the last token (that form plus one); a root point
+  between blocks is the next block's start. One alias is allowed: the end of a text string directly
+  followed by a marker or closer may also be spelled as that string's `offset` at its length, which
+  is how the editor reports a caret held at the end of the text. The editor emits only these, and
+  keeps accepting the older container-and-index shapes, resolving each as the location of the gap it
+  names. Because of the alias, hosts compare locations through
+  `usjDocumentLocationToUsfmVerseRefVerseLocation`, never by shape.
+- **Alternatives:** **Keep emitting container-and-index as an editor-only convention** — rejected:
+  it is a second spelling of positions `UsjReaderWriter` already names, so every host would need its
+  own translation. **Define the document end as its own shape** (the root with no offset) —
+  rejected: the root location already means the document's start, and the end has a USFM index the
+  existing forms can address.
+- **Consequences:** A text offset one past its string's end is legitimate on the document's last
+  text only — it is the document end — so host checks that treat any offset past a node as a
+  contract violation must allow exactly that one (`withDocumentEndOnText` in
+  `platform-scripture-editor.utils.ts`). `UsjReaderWriter` itself is unchanged: it accepts offsets
+  past a token's end without bounds checks. One shape has no distinct answer: an `optbreak` ending a
+  line, where every byte after it maps to the optbreak's own marker location. The rules, with an
+  example of each tricky position, are written on the location model (`UsjDocumentLocation` in
+  `@eten-tech-foundation/scripture-utilities`, which `platform-bible-utils` re-exports) and in each
+  repo's Standard View invariants.
+- **Source:** PT-3683 (decision comment 19735); scripture-editors PR paranext/scripture-editors#11,
+  paranext-core PR #2823.
 
 ## adr-web-view-content-zoom-in-iframe-shortcuts: Content-zoom chords are handled by a platform-injected bootstrap inside each web view
 

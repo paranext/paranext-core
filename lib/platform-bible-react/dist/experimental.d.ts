@@ -1368,6 +1368,13 @@ export interface MarkerPaletteOpenSession<TItem extends {
 	/** Identifies this session to async settle-time cleanup, from the consumer's monotonic counter. */
 	token: number;
 	items: readonly TItem[];
+	/**
+	 * An item a typed commit chose but left for the session's close to apply, through the same path
+	 * as a highlighted commit: the caret restored, the editor focused, then the item applied. Set by
+	 * `routeMarkerPaletteKey` for a note marker committed with Space, so the note's editor opens
+	 * after the overlay service has handed focus back to the main editor rather than before it.
+	 */
+	itemToApplyOnClose?: TItem;
 }
 /**
  * The per-consumer half of a marker-palette session — everything the shared spine cannot own

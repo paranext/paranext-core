@@ -53,6 +53,10 @@ import {
   resolveNoteEditingSurface,
   shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
+  validateCommentSelection,
+  readCommentRangeText,
+  hasPendingCommentTextChanged,
+  withDocumentEndOnText,
   selectableParagraphMarkers,
   PROGRAMMATICALLY_APPLIED_PARAGRAPH_MARKERS,
 } from './platform-scripture-editor.utils';
@@ -99,6 +103,45 @@ const SAMPLE_USFM_CHAPTER = String.raw`\id GEN GEN - Genesis
 \v 1 In the beginning God created the heavens and the earth.
 \v 2 Now the earth was formless and empty.
 \v 3 And God said, "Let there be light," and there was light.`;
+
+// Sample USJ chapter data for Genesis chapter 2. Chapter USJ only carries the book `id` marker
+// when the chapter is 1 (the intro content before chapter 1 belongs to chapter 1's USJ); a
+// chapter-2 (or later) document has no `id` marker to derive a book ID from.
+const SAMPLE_USJ_CHAPTER_2 = Object.freeze({
+  type: 'USJ',
+  version: '3.0',
+  content: [
+    { type: 'chapter', marker: 'c', number: '2', sid: 'GEN 2' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1', sid: 'GEN 2:1' },
+        'Thus the heavens and the earth were finished.',
+      ],
+    },
+  ],
+});
+
+// Sample USJ chapter data for Genesis chapter 1 with a `nd` char span nested in verse 1's text
+const SAMPLE_USJ_CHAPTER_WITH_CHAR_SPAN = Object.freeze({
+  type: 'USJ',
+  version: '3.0',
+  content: [
+    { type: 'book', marker: 'id', code: 'GEN', content: ['GEN - Genesis'] },
+    { type: 'chapter', marker: 'c', number: '1', sid: 'GEN 1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' },
+        'In the beginning ',
+        { type: 'char', marker: 'nd', content: ['GOD'] },
+        ' created the heavens and the earth.',
+      ],
+    },
+  ],
+});
 
 // Special object to pass into `createMockPapi` to make the USJ chapter return nothing
 const USJ_NOTHING = {};
@@ -363,6 +406,57 @@ describe('convertScriptureRangeToEditorRange', () => {
       // USFM offset 10 - verse marker '\v 2 ' (5 chars) = USJ offset 5
       expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[3]');
       expect(getOffset(result.editorRange.end)).toBe(5);
+    });
+  });
+
+  describe('Book ID fallback for USJ document locations outside chapter 1', () => {
+    it("derives the verse from a chapter-2 USJ using the range's own book id", async () => {
+      const { papi } = createMockPapi(SAMPLE_USJ_CHAPTER_2);
+      // UsjFlatChapterLocation format (book + chapterNum + documentLocation); chapter 2's USJ has
+      // no `id` marker to derive a book ID from
+      const range: ScriptureRange = {
+        start: {
+          book: 'GEN',
+          chapterNum: 2,
+          documentLocation: { jsonPath: '$.content[1].content[0]' },
+        },
+        end: {
+          book: 'GEN',
+          chapterNum: 2,
+          documentLocation: { jsonPath: '$.content[1].content[1]', offset: 5 },
+        },
+      };
+
+      const result = await convertScriptureRangeToEditorRange(papi, range, PROJECT_ID);
+
+      expect(result.verseRef.book).toBe('GEN');
+      expect(result.verseRef.chapterNum).toBe(2);
+      expect(result.verseRef.verseNum).toBe(1);
+      expect(result.editorRange.start.jsonPath).toBe('$.content[1].content[0]');
+      expect(result.editorRange.end.jsonPath).toBe('$.content[1].content[1]');
+      expect(getOffset(result.editorRange.end)).toBe(5);
+    });
+  });
+
+  describe('Collapsed ranges', () => {
+    // USFM offset 26 in verse 1 is the settled position right at the start of the `nd` char
+    // span's text ("GOD"), after the marker's own backslash+code: content[2] is the `p`
+    // paragraph, content[2] within that is the `nd` char node, and content[0] within that is its
+    // text
+    const expectedCollapsedLocation = { jsonPath: '$.content[2].content[2].content[0]', offset: 0 };
+
+    it('resolves both ends to the same location when `range.end` equals `range.start`, at settled offset 0 of a char span text', async () => {
+      const { papi } = createMockPapi(SAMPLE_USJ_CHAPTER_WITH_CHAR_SPAN);
+      const point: ScriptureRange['start'] = {
+        scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+        offset: 26,
+      };
+      const range: ScriptureRange = { start: point, end: point };
+
+      const result = await convertScriptureRangeToEditorRange(papi, range, PROJECT_ID);
+
+      expect(result.editorRange.start).toEqual(expectedCollapsedLocation);
+      expect(result.editorRange.end).toEqual(result.editorRange.start);
     });
   });
 
@@ -4664,6 +4758,222 @@ describe('buildScriptureTextGridWebView', () => {
 
 // #endregion
 
+describe('withDocumentEndOnText', () => {
+  /** `\p \v 1 In the b` as the document's last paragraph; its text is `$.content[2].content[1]`. */
+  const lastParagraph = {
+    type: 'para',
+    marker: 'p',
+    content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the b'],
+  };
+  const endsInText: Usj = {
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'GEN' },
+      { type: 'chapter', marker: 'c', number: '1' },
+      lastParagraph,
+    ],
+  };
+
+  it('brings the document-end spelling (one past the text) onto the end of the text', () => {
+    expect(
+      withDocumentEndOnText({ jsonPath: '$.content[2].content[1]', offset: 9 }, 8, endsInText),
+    ).toEqual({ jsonPath: '$.content[2].content[1]', offset: 8 });
+  });
+
+  it.each<[string, UsjTextContentLocation]>([
+    ['an offset inside the text', { jsonPath: '$.content[2].content[1]', offset: 3 }],
+    ['the end of the text', { jsonPath: '$.content[2].content[1]', offset: 8 }],
+    ['an offset no location rule produces', { jsonPath: '$.content[2].content[1]', offset: 10 }],
+  ])('leaves %s alone', (_name, location) => {
+    expect(withDocumentEndOnText(location, 8, endsInText)).toBe(location);
+  });
+
+  it('leaves one past the end alone on a text that is not the last in the document', () => {
+    const location: UsjTextContentLocation = { jsonPath: '$.content[2].content[1]', offset: 9 };
+    const followed: Usj = {
+      ...endsInText,
+      content: [...endsInText.content, { type: 'para', marker: 'p', content: ['God said'] }],
+    };
+
+    expect(withDocumentEndOnText(location, 8, followed)).toBe(location);
+  });
+});
+describe('validateCommentSelection', () => {
+  const NOT_RESOLVED = '%webView_platformScriptureEditor_error_selectionNotResolved%';
+  const CONTAINS_MARKERS = '%webView_platformScriptureEditor_error_selectionContainsMarkers%';
+  const NO_TEXT = '%webView_platformScriptureEditor_error_noTextSelected%';
+
+  const refrain = 'for his loving kindness endures forever.';
+  const doc: Usj = {
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'PSA' },
+      { type: 'chapter', marker: 'c', number: '136' },
+      // 2: verse text with a footnote and a \nd span
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'In the beginning',
+          {
+            type: 'note',
+            marker: 'f',
+            caller: '+',
+            content: [{ type: 'char', marker: 'ft', content: ['a note'] }],
+          },
+          ' God said ',
+          { type: 'char', marker: 'nd', content: ['LORD'] },
+          ' hello',
+        ],
+      },
+      { type: 'para', marker: 'q2', content: [refrain] },
+      { type: 'para', marker: 'b' },
+      { type: 'para', marker: 'q1', content: [{ type: 'verse', marker: 'v', number: '2' }] },
+      { type: 'para', marker: 'q2', content: [refrain] },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [{ type: 'char', marker: 'w', lemma: 'grace', content: ['grace'] }, ' end'],
+      },
+    ],
+  };
+  const text = '$.content[2].content[1]';
+
+  it('anchors a text range as is', () => {
+    expect(
+      validateCommentSelection(
+        { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+        doc,
+      ),
+    ).toEqual({
+      range: { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+    });
+  });
+
+  it('expands a collapsed caret to the word around it', () => {
+    expect(validateCommentSelection({ start: { jsonPath: text, offset: 10 } }, doc)).toEqual({
+      range: { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+    });
+  });
+
+  it('refuses a collapsed caret between whitespace', () => {
+    expect(
+      validateCommentSelection({ start: { jsonPath: '$.content[2].content[3]', offset: 0 } }, doc),
+    ).toEqual({ notice: NO_TEXT });
+  });
+
+  it('warns for a text path that does not resolve', () => {
+    const result = validateCommentSelection(
+      { start: { jsonPath: '$.content[40].content[1]', offset: 2 } },
+      doc,
+    );
+    expect(result).toMatchObject({ notice: NOT_RESOLVED });
+    expect(result).toHaveProperty('warning');
+  });
+
+  it('warns for an end offset past the length of the text', () => {
+    const result = validateCommentSelection(
+      { start: { jsonPath: text, offset: 2 }, end: { jsonPath: text, offset: 40 } },
+      doc,
+    );
+    expect(result).toMatchObject({ notice: NOT_RESOLVED });
+    expect(result).toHaveProperty('warning');
+  });
+
+  it('warns for a collapsed caret past the length of the text', () => {
+    const result = validateCommentSelection({ start: { jsonPath: text, offset: 17 } }, doc);
+    expect(result).toMatchObject({ notice: NOT_RESOLVED });
+    expect(result).toHaveProperty('warning');
+  });
+
+  it('accepts the document end on the last text', () => {
+    const lastText: Usj = {
+      ...doc,
+      content: [...doc.content.slice(0, 2), { type: 'para', marker: 'p', content: ['The end'] }],
+    };
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: '$.content[2].content[0]', offset: 4 },
+          end: { jsonPath: '$.content[2].content[0]', offset: 8 },
+        },
+        lastText,
+      ),
+    ).toEqual({
+      range: {
+        start: { jsonPath: '$.content[2].content[0]', offset: 4 },
+        end: { jsonPath: '$.content[2].content[0]', offset: 7 },
+      },
+    });
+  });
+
+  it('refuses a range across a character span', () => {
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: '$.content[2].content[3]', offset: 2 },
+          end: { jsonPath: '$.content[2].content[5]', offset: 3 },
+        },
+        doc,
+      ),
+    ).toEqual({ notice: CONTAINS_MARKERS });
+  });
+
+  it('refuses a range across two identical strings in different paragraphs', () => {
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: '$.content[3].content[0]', offset: 4 },
+          end: { jsonPath: '$.content[6].content[0]', offset: 10 },
+        },
+        doc,
+      ),
+    ).toEqual({ notice: CONTAINS_MARKERS });
+  });
+
+  it.each([
+    ['an empty paragraph marker', { jsonPath: "$.content[4]['marker']", propertyOffset: 1 }],
+    [
+      'a line-final verse number',
+      { jsonPath: "$.content[5].content[0]['number']", propertyOffset: 1 },
+    ],
+    [
+      'a lemma that equals the word',
+      { jsonPath: "$.content[7].content[0]['lemma']", propertyOffset: 2 },
+    ],
+  ])('refuses a collapsed caret on %s without a warning', (_name, start) => {
+    expect(validateCommentSelection({ start }, doc)).toEqual({ notice: NO_TEXT });
+  });
+
+  it('refuses a range ending on a property location without a warning', () => {
+    expect(
+      validateCommentSelection(
+        {
+          start: { jsonPath: text, offset: 2 },
+          end: { jsonPath: "$.content[5].content[0]['number']", propertyOffset: 1 },
+        },
+        doc,
+      ),
+    ).toEqual({ notice: CONTAINS_MARKERS });
+  });
+
+  it('treats a range end on the next marker as the end of the text before it', () => {
+    const viaMarker = validateCommentSelection(
+      { start: { jsonPath: text, offset: 7 }, end: { jsonPath: '$.content[2].content[2]' } },
+      doc,
+    );
+    const viaText = validateCommentSelection(
+      { start: { jsonPath: text, offset: 7 }, end: { jsonPath: text, offset: 16 } },
+      doc,
+    );
+    expect(viaMarker).toEqual(viaText);
+    expect(viaMarker).toHaveProperty('range');
+  });
+});
+
 // #region resolveNoteVerseRef
 
 describe('resolveNoteVerseRef (picking a note navigates to its verse)', () => {
@@ -4792,3 +5102,74 @@ describe('resolveNoteVerseRef (picking a note navigates to its verse)', () => {
 });
 
 // #endregion resolveNoteVerseRef
+
+describe('readCommentRangeText', () => {
+  const makeDoc = (content: Usj['content'][number][]): Usj => ({
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [{ type: 'book', marker: 'id', code: 'PSA' }, ...content],
+  });
+  const path = '$.content[1].content[0]';
+  const range = (startOffset: number, endOffset: number) => ({
+    start: { jsonPath: path, offset: startOffset },
+    end: { jsonPath: path, offset: endOffset },
+  });
+  const doc = makeDoc([{ type: 'para', marker: 'p', content: ['In the beginning'] }]);
+
+  it.each([
+    ['a slice of the text', doc, range(3, 6), 'the'],
+    ['the whole text', doc, range(0, 16), 'In the beginning'],
+    [
+      'a path that is gone',
+      makeDoc([{ type: 'para', marker: 'p', content: [] }]),
+      range(3, 6),
+      undefined,
+    ],
+    [
+      'a path that is now a marker',
+      makeDoc([
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'char', marker: 'nd', content: ['the'] }],
+        },
+      ]),
+      range(3, 6),
+      undefined,
+    ],
+    [
+      'text that is now shorter than the range',
+      makeDoc([{ type: 'para', marker: 'p', content: ['In'] }]),
+      range(3, 6),
+      undefined,
+    ],
+  ])('reads %s', (_name, usj, r, expected) => {
+    expect(readCommentRangeText(r, usj)).toBe(expected);
+  });
+});
+
+describe('hasPendingCommentTextChanged', () => {
+  const path = '$.content[1].content[0]';
+  const pending = {
+    range: { start: { jsonPath: path, offset: 3 }, end: { jsonPath: path, offset: 6 } },
+    anchoredText: 'the',
+  };
+  const docWith = (text: string): Usj => ({
+    type: USJ_TYPE,
+    version: USJ_VERSION,
+    content: [
+      { type: 'book', marker: 'id', code: 'PSA' },
+      { type: 'para', marker: 'p', content: [text] },
+    ],
+  });
+
+  it.each([
+    ['the anchored text is unchanged', 'In the beginning', false],
+    ['text after the range changed', 'In the beginnings', false],
+    ['text before the range shifted it', 'Oh, in the beginning', true],
+    ['the anchored text itself changed', 'In her beginning', true],
+    ['the text became too short', 'In', true],
+  ])('when %s', (_name, text, expected) => {
+    expect(hasPendingCommentTextChanged(pending, docWith(text))).toBe(expected);
+  });
+});

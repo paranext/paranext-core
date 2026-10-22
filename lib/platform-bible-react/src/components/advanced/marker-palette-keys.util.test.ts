@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MutableRefObject, RefObject } from 'react';
 import type { EditorRef, MarkerMenuItem } from '@eten-tech-foundation/platform-editor';
 import { routeMarkerPaletteKey } from './marker-palette-keys.util';
-import type { MarkerPaletteOpenSession } from './marker-palette-session.util';
+import {
+  runMarkerPaletteSession,
+  type MarkerPaletteOpenSession,
+} from './marker-palette-session.util';
 import type { EditorContentSnapshot } from './marker-palette-change-guard.util';
 
 /** Only `marker` takes part in anything this module does; the rest is what the type requires. */
@@ -210,5 +213,106 @@ describe('routeMarkerPaletteKey — the change guard on TYPED commits', () => {
 
     expect(routeMarkerPaletteKey(makeEvent(' '), options)).toBe('routed');
     expect(editor.commitTypedMarker).toHaveBeenCalled();
+  });
+});
+
+describe('routeMarkerPaletteKey with the session spine — Space on a note marker', () => {
+  /**
+   * A real spine session whose palette dismissal settles the show promise, as the overlay service
+   * does, so the spine's settle handler runs after the table's commit-then-dismiss.
+   */
+  function openSession(filter: string, { editorFocused = false } = {}) {
+    const events: string[] = [];
+    let settleShow: (id: string | undefined) => void = () => {};
+    const shown = new Promise<string | undefined>((resolve) => {
+      settleShow = resolve;
+    });
+    const editor = {
+      isFocused: () => editorFocused,
+      focus: vi.fn(() => events.push('focus editor')),
+      commitTypedMarker: vi.fn(() => events.push('commit')),
+      commitTypedCloser: vi.fn(),
+      applyMarkerMenuSelection: vi.fn((selected: MarkerMenuItem) =>
+        events.push(`apply ${selected.marker}`),
+      ),
+    };
+    // EditorRef has many required methods; only these five are reachable from here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const editorRef = { current: editor } as unknown as RefObject<EditorRef | null>;
+    const sessionRef: MutableRefObject<MarkerPaletteOpenSession<MarkerMenuItem> | undefined> = {
+      current: undefined,
+    };
+    const clearSessionIfCurrent = (token: number) => {
+      if (sessionRef.current?.token === token) sessionRef.current = undefined;
+    };
+    runMarkerPaletteSession<MarkerMenuItem>({
+      items: [{ marker: 'f', kind: 'note', isBasic: true }, item('wj')],
+      kind: 'backslash',
+      isNoteMarker: (marker) => marker === 'f',
+      sessionCounterRef: { current: 0 },
+      setSession: (session) => {
+        sessionRef.current = session;
+      },
+      clearSessionIfCurrent,
+      runSessionKey: () => {},
+      show: () => shown,
+      restoreSelectionIfLost: () => {},
+      focusEditor: () => editor.focus(),
+      applyItem: (selected) => editor.applyMarkerMenuSelection(selected),
+      onShowError: () => {},
+    });
+    if (sessionRef.current) sessionRef.current.filter = filter;
+    const options = {
+      sessionRef,
+      editorRef,
+      palette: {
+        update: vi.fn(),
+        commit: vi.fn(),
+        dismiss: vi.fn(() => settleShow(undefined)),
+      },
+      restoreCaret: () => {},
+      reopenAtCaret: () => true,
+      clearSessionIfCurrent,
+    };
+    return { events, shown, options };
+  }
+
+  /** Lets the spine's settle handler run. */
+  const settle = async (shown: Promise<string | undefined>) => {
+    await shown;
+    await Promise.resolve();
+  };
+
+  it('inserts the note after the palette closes and the editor has focus back, as Enter does', async () => {
+    // The note's editor (the footnotes pane's row in Standard view) opens when the note goes in.
+    // Inserted while the palette still held focus, the palette's closing handed focus back to the
+    // main editor afterwards, which ended that editing session.
+    const { events, shown, options } = openSession('f');
+
+    routeMarkerPaletteKey(makeEvent(' '), options);
+    expect(events).toEqual([]);
+    await settle(shown);
+
+    expect(events).toEqual(['focus editor', 'apply f']);
+  });
+
+  it('waits for the palette to close even when the editor still has focus', async () => {
+    // The palette can be showing before it takes focus; its closing hands focus back all the same.
+    const { events, shown, options } = openSession('f', { editorFocused: true });
+
+    routeMarkerPaletteKey(makeEvent(' '), options);
+    expect(events).toEqual([]);
+    await settle(shown);
+
+    expect(events).toEqual(['focus editor', 'apply f']);
+  });
+
+  it('applies any other Space commit at once', async () => {
+    const { events, shown, options } = openSession('wj');
+
+    routeMarkerPaletteKey(makeEvent(' '), options);
+    await settle(shown);
+
+    expect(events).toEqual(['commit', 'focus editor']);
   });
 });

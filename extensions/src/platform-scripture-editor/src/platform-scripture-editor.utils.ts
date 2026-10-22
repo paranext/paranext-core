@@ -33,6 +33,8 @@ import {
   formatReplacementString,
   getErrorMessage,
   isLocalizeKey,
+  isString,
+  isWhiteSpace,
   isParagraphMarker,
   isPlatformError,
   LanguageStrings,
@@ -44,6 +46,7 @@ import {
   usfmMarkers,
   UsjDocumentLocation,
   UsjReaderWriter,
+  UsjTextContentLocation,
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
@@ -151,6 +154,225 @@ export function correctEditorUsjVersion(editorUsj: Usj): Usj {
   // well right now
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
+}
+
+/** Whether `jsonPath` names the very last item of `usj`: the last item at every level. */
+function isFinalItemOfDocument(usj: Usj, jsonPath: string): boolean {
+  const indexes = Array.from(jsonPath.matchAll(/content\[(\d+)\]/g), (match) => Number(match[1]));
+  if (indexes.length === 0) return false;
+  let { content }: { content?: MarkerContent[] } = usj;
+  return indexes.every((index) => {
+    if (!content || index !== content.length - 1) return false;
+    const item = content[index];
+    content = typeof item === 'string' ? undefined : item.content;
+    return true;
+  });
+}
+
+/**
+ * A selection location on a text node of `textLength` characters, brought onto that text. The end
+ * of the document is spelled on the document's last text as one past the text's end (see
+ * `UsjDocumentLocation`), and a caret there sits at the end of that text, so that offset becomes
+ * the text's length. Every other location is returned as is — including that offset on any other
+ * text, or an offset further past the end, neither of which a location spells and which a caller
+ * should treat as the defect it is.
+ *
+ * @param location The location on text, as the editor reported it.
+ * @param textLength The length of the text node the location resolved to.
+ * @param usj The document the location addresses.
+ * @returns `location`, with the document-end offset brought onto the end of the text.
+ */
+export function withDocumentEndOnText(
+  location: UsjTextContentLocation,
+  textLength: number,
+  usj: Usj,
+): UsjTextContentLocation {
+  if (location.offset !== textLength + 1) return location;
+  if (!isFinalItemOfDocument(usj, location.jsonPath)) return location;
+  return { ...location, offset: textLength };
+}
+
+/** The notice shown when a comment cannot be anchored to the selection. */
+export type CommentSelectionNoticeKey =
+  | '%webView_platformScriptureEditor_error_selectionNotResolved%'
+  | '%webView_platformScriptureEditor_error_selectionContainsMarkers%'
+  | '%webView_platformScriptureEditor_error_noTextSelected%';
+
+/**
+ * The outcome of validating a selection for a new comment: the range to annotate, or the notice to
+ * show instead. `warning` is set only when the selection broke the settled-document contract (a
+ * defect worth logging), not when the user selected something a comment cannot anchor to.
+ */
+export type CommentSelectionValidation =
+  | { range: { start: UsjDocumentLocation; end: UsjDocumentLocation } }
+  | { notice: CommentSelectionNoticeKey; warning?: string };
+
+const NOTICE_NOT_RESOLVED: CommentSelectionNoticeKey =
+  '%webView_platformScriptureEditor_error_selectionNotResolved%';
+const NOTICE_CONTAINS_MARKERS: CommentSelectionNoticeKey =
+  '%webView_platformScriptureEditor_error_selectionContainsMarkers%';
+const NOTICE_NO_TEXT: CommentSelectionNoticeKey =
+  '%webView_platformScriptureEditor_error_noTextSelected%';
+
+/**
+ * Reads the text a validated comment range names. {@link validateCommentSelection} guarantees both
+ * ends are text locations on the same path, so the range names one slice of one string.
+ *
+ * @param range A range from {@link validateCommentSelection}
+ * @param usj The document to read from
+ * @returns The named text, or `undefined` if the path no longer resolves to a string or the offsets
+ *   no longer fit inside it
+ */
+export function readCommentRangeText(
+  range: { start: UsjDocumentLocation; end: UsjDocumentLocation },
+  usj: Usj,
+): string | undefined {
+  if (
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(range.start) ||
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(range.end) ||
+    range.start.jsonPath !== range.end.jsonPath
+  )
+    return undefined;
+  try {
+    const usjRW = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
+    const node = usjRW.jsonPathToUsjNodeAndDocumentLocation(range.start.jsonPath)?.node;
+    if (!isString(node)) return undefined;
+    const { offset: startOffset } = range.start;
+    const { offset: endOffset } = range.end;
+    if (startOffset < 0 || endOffset < startOffset || endOffset > node.length) return undefined;
+    return node.slice(startOffset, endOffset);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether a pending comment must be discarded because the text it is anchored to is no longer what
+ * was selected. The comment is saved against the frozen range, so a range that now names other text
+ * (or none) would store the comment on the wrong characters.
+ *
+ * @param pending The pending comment's frozen range and the text it named when captured
+ * @param usj The current settled document
+ */
+export function hasPendingCommentTextChanged(
+  pending: {
+    range: { start: UsjDocumentLocation; end: UsjDocumentLocation };
+    anchoredText: string;
+  },
+  usj: Usj,
+): boolean {
+  return readCommentRangeText(pending.range, usj) !== pending.anchoredText;
+}
+
+/**
+ * A range end that names a marker object, with no offset, is the same USFM position as the end of
+ * the string right before that marker (Find and Checks spell "up to the footnote" this way). It is
+ * rewritten onto that string so it validates the same as the text-end spelling.
+ */
+function withMarkerEndOnPrecedingText(
+  end: UsjDocumentLocation,
+  usjRW: UsjReaderWriter,
+): UsjDocumentLocation {
+  const keys = Object.keys(end);
+  if (keys.length !== 1 || !('jsonPath' in end)) return end;
+  const match = /^(.*content\[)(\d+)\]$/.exec(end.jsonPath);
+  if (!match || Number(match[2]) < 1) return end;
+  const previousJsonPath = `${match[1]}${Number(match[2]) - 1}]`;
+  try {
+    const previous = usjRW.jsonPathToUsjNodeAndDocumentLocation(previousJsonPath);
+    if (!isString(previous?.node)) return end;
+    const { documentLocation } = previous;
+    if (!UsjReaderWriter.isUsjDocumentLocationForTextContent(documentLocation)) return end;
+    return { ...documentLocation, offset: previous.node.length };
+  } catch {
+    return end;
+  }
+}
+
+/**
+ * Validates a selection as the anchor of a new comment against the settled document the selection
+ * addresses, and expands a collapsed caret to the word around it.
+ *
+ * @param selection The editor's (settled) selection
+ * @param usj The settled document
+ * @returns The range to annotate, or the notice to show (and whether it is a defect to log)
+ */
+export function validateCommentSelection(
+  selection: { start: UsjDocumentLocation; end?: UsjDocumentLocation },
+  usj: Usj,
+): CommentSelectionValidation {
+  const usjRW = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
+  const { start } = selection;
+  const end = selection.end ? withMarkerEndOnPrecedingText(selection.end, usjRW) : start;
+
+  // A property, closing-marker or attribute location is not text, whatever its path resolves to
+  if (
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(start) ||
+    !UsjReaderWriter.isUsjDocumentLocationForTextContent(end)
+  ) {
+    const isCollapsed = !selection.end || serialize(selection.end) === serialize(start);
+    return { notice: isCollapsed ? NOTICE_NO_TEXT : NOTICE_CONTAINS_MARKERS };
+  }
+
+  let startNode;
+  try {
+    startNode = usjRW.jsonPathToUsjNodeAndDocumentLocation(start.jsonPath)?.node;
+    // Throws if the end does not resolve either
+    usjRW.jsonPathToUsjNodeAndDocumentLocation(end.jsonPath);
+  } catch (e) {
+    return {
+      notice: NOTICE_NOT_RESOLVED,
+      warning: `Comment insertion: selection jsonPath start=${start.jsonPath} end=${end.jsonPath} does not resolve against the settled USJ! ${getErrorMessage(e)}`,
+    };
+  }
+
+  // Strings compare by value, so identical sibling strings must be told apart by their paths
+  if (!isString(startNode) || start.jsonPath !== end.jsonPath)
+    return { notice: NOTICE_CONTAINS_MARKERS };
+
+  // A caret at the end of the document is spelled one past the end of the last text; it sits at
+  // the end of that text, which is where the comment anchors.
+  const textStart = withDocumentEndOnText(start, startNode.length, usj);
+  const textEnd = withDocumentEndOnText(end, startNode.length, usj);
+
+  // An offset past the node means the settled-document contract was broken by a bug or a race;
+  // anchoring there would place the comment past the text.
+  const offsetPastEnd = [textStart, textEnd].find((location) => location.offset > startNode.length);
+  if (offsetPastEnd)
+    return {
+      notice: NOTICE_NOT_RESOLVED,
+      warning: `Comment insertion: selection offset ${offsetPastEnd.offset} at ${textStart.jsonPath} is past the end of the settled node (length ${startNode.length})!`,
+    };
+
+  if (textStart.offset !== textEnd.offset) return { range: { start: textStart, end: textEnd } };
+
+  // Collapsed: require a non-whitespace character beside the caret and expand to that word. This
+  // is approximate; the backend selects the word by the project's definition of whitespace.
+  const { offset } = textStart;
+  let charBefore = offset > 0 ? startNode[offset - 1] : '';
+  let charAfter = offset < startNode.length ? startNode[offset] : '';
+  if (
+    (charBefore.length === 0 || isWhiteSpace(charBefore)) &&
+    (charAfter.length === 0 || isWhiteSpace(charAfter))
+  )
+    return { notice: NOTICE_NO_TEXT };
+
+  let endOffset = offset;
+  while (charAfter.length > 0 && !isWhiteSpace(charAfter)) {
+    charAfter = endOffset + 1 < startNode.length ? startNode[endOffset + 1] : '';
+    endOffset += 1;
+  }
+  let startOffset = offset - 1;
+  while (charBefore.length > 0 && !isWhiteSpace(charBefore)) {
+    charBefore = startOffset > 0 ? startNode[startOffset - 1] : '';
+    startOffset -= 1;
+  }
+  return {
+    range: {
+      start: { ...textStart, offset: startOffset + 1 },
+      end: { ...textEnd, offset: endOffset },
+    },
+  };
 }
 
 /** Where a note is edited: the footnotes pane (Standard view), the popover, or nowhere. */
@@ -811,10 +1033,15 @@ export async function convertScriptureRangeToEditorRange(
     endVerseOffset === undefined ? endVerseRef : { verseRef: endVerseRef, offset: endVerseOffset },
   );
 
-  // If we don't have which verse we're setting the scroll group to, get it
+  // If we don't have which verse we're setting the scroll group to, get it. A USJ document
+  // location range only carries a chapter's own USJ, which has a book `id` marker for chapter 1
+  // and lacks one otherwise (see UsjChapterLocation), so fall back to the book already resolved
+  // above for this range.
   if (startVerseRef.verseNum === -1) {
-    const startUsfmLocation =
-      usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(startDocumentLocation);
+    const startUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
+      startDocumentLocation,
+      startVerseRef.book,
+    );
     startVerseRef.verseNum = startUsfmLocation.verseRef.verseNum;
   }
 
