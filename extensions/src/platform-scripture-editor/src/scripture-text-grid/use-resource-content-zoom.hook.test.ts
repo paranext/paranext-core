@@ -70,6 +70,19 @@ describe('useResourceContentZoom', () => {
     expect(result.current.hasOwnLevel('ABC')).toBe(true);
   });
 
+  it('ignores a level saved under the retired per-resource zoom state key', () => {
+    // Levels used to be saved per resource id under `zoomByResourceId`. The platform's content
+    // zoom levels are now the only source, so a level left under the old key has no effect.
+    const { useFakeWebViewState } = makeWebViewState({
+      'platform.contentZoomLevels': {},
+      zoomByResourceId: { ABC: 1.4 },
+    });
+    const { result } = renderHook(() => useResourceContentZoom('wv-grid', useFakeWebViewState));
+
+    expect(result.current.getZoom('ABC')).toBe(1);
+    expect(result.current.hasOwnLevel('ABC')).toBe(false);
+  });
+
   it('gives a resource without a level of its own the Tab content default zoom', () => {
     mockUseSetting.mockReturnValue([1.2, vi.fn(), vi.fn(), false]);
     const { result } = renderController({ 'resource-abc': 1.4 });

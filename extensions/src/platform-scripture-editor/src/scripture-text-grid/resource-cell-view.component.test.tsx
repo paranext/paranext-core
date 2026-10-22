@@ -1472,6 +1472,33 @@ describe('ResourceCellView content zoom marker', () => {
         ?.contains(screen.getByText('verse-blocks')),
     ).toBe(true);
   });
+
+  it('lets Ctrl/⌘+wheel over the text reach the platform’s content zoom', () => {
+    // The platform zooms the area under the pointer from its own window-level wheel listener; a
+    // cell that consumed the wheel, or zoomed on its own, would stop that or double it.
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        zoomArea={ZOOM_AREA}
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        editor={<span>Blessed are the poor in spirit</span>}
+      />,
+    );
+    const reachedWindow = vi.fn((event: WheelEvent) => event.defaultPrevented);
+    window.addEventListener('wheel', reachedWindow);
+
+    fireEvent.wheel(screen.getByText('Blessed are the poor in spirit'), {
+      ctrlKey: true,
+      deltaY: -120,
+    });
+
+    window.removeEventListener('wheel', reachedWindow);
+    expect(reachedWindow).toHaveBeenCalledOnce();
+    expect(reachedWindow.mock.results[0].value).toBe(false);
+  });
 });
 
 // The header band is the reorder drag source for both the chapter row and the Grid view. Asserted

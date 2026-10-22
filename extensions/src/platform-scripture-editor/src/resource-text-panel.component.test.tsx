@@ -407,6 +407,47 @@ describe('ResourceTextPanel content zoom placement', () => {
     expect(scrollBox.contains(marker)).toBe(true);
     expect(scrollBox.closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`)).toBeNull();
   });
+
+  it('zooms Bible texts and commentaries as separate areas, so each remembers its own level', () => {
+    // Both web view types share this component and a memory identity (their container project), so
+    // the area id is the only thing that keeps their remembered levels apart.
+    const { unmount } = renderPanel();
+    expect(document.querySelectorAll(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`)).toHaveLength(1);
+    expect(
+      screen.getByTestId('editorial').closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`),
+    ).toHaveAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE, 'bible-texts');
+    unmount();
+
+    renderPanel({
+      resourceType: 'CommentaryResource',
+      filteredResources: [COMMENTARY_ROW],
+      selectedRef: COMMENTARY_ROW,
+      dblResources: [INSTALLED_COMMENTARY],
+    });
+    expect(
+      screen.getByTestId('editorial').closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`),
+    ).toHaveAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE, 'commentaries');
+  });
+
+  it('keeps the resource selector and the copyright notice at interface scale', () => {
+    renderPanel({ copyrightNotice: <p>Copyright notice</p> });
+    expectEditorShowing();
+
+    expect(
+      screen.getByRole('button', { name: /WEB/ }).closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`),
+    ).toBeNull();
+    expect(
+      screen.getByText('Copyright notice').closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`),
+    ).toBeNull();
+  });
+
+  it("keeps the panel's messages at interface scale", () => {
+    renderPanel({ usjPossiblyError: missingBookError('MAT') });
+
+    expect(
+      screen.getByText(BIBLE_TEXT_MISSING_BOOK).closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`),
+    ).toBeNull();
+  });
 });
 
 describe('ResourceTextPanel logging', () => {

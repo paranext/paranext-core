@@ -1004,6 +1004,27 @@ describe('ModelTextPanel', () => {
     expect(scrollBox.closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`)).toBeNull();
   });
 
+  it('zooms the text as the model-text area, keeping the label row at interface scale', async () => {
+    // The label row is pinned to 42 px so its bottom edge lines up with the editor's toolbar and
+    // Column 3's tab bar; scaling it with the text would break that alignment at every level but
+    // 100 %.
+    renderPanel({
+      modelTextsState: readyState(configuredModelText('uid-web')),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter: vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' })),
+    });
+    const scrollBox = screen.getByTestId(MODEL_TEXT_EDITOR_CONTAINER_TEST_ID);
+    await waitFor(() => expect(scrollBox).toHaveClass('tw:overflow-auto'));
+
+    const markers = document.querySelectorAll(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`);
+    expect(markers).toHaveLength(1);
+    expect(markers[0]).toHaveAttribute(CONTENT_ZOOM_ROOT_ATTRIBUTE, 'model-text');
+    expect(markers[0]).toContainElement(screen.getByTestId('editorial'));
+    expect(
+      screen.getByTestId('model-text-header').closest(`[${CONTENT_ZOOM_ROOT_ATTRIBUTE}]`),
+    ).toBeNull();
+  });
+
   it('passes the resource copy limit into the editor options once the chapter has loaded', async () => {
     renderPanel({
       modelTextsState: readyState(configuredModelText('uid-web')),
