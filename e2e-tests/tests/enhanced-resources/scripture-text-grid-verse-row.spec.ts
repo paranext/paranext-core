@@ -38,6 +38,7 @@ import {
   openCellContextMenu,
   openScriptureTextGrid,
   readResourceZoomArea,
+  readSettingsDefaultZoom,
   restoreScriptureTextGridProjectSettings,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
 } from './scripture-text-grid.page';
@@ -274,12 +275,17 @@ test.describe('Text Collection verse row', () => {
         sendCommandWithId(mainPage, CONTENT_ZOOM_COMMANDS.reset, webViewId, areaId),
       ),
     );
-    const readRowZoom = () =>
-      rows
-        .first()
-        .locator('.stg-verse-row')
-        .evaluate((row) => getComputedStyle(row).getPropertyValue('--stg-zoom').trim());
-    const defaultZoom = await readRowZoom();
+    const readRowZoom = async () =>
+      Number(
+        await rows
+          .first()
+          .locator('.stg-verse-row')
+          .evaluate((row) => getComputedStyle(row).getPropertyValue('--stg-zoom').trim()),
+      );
+    // The reset reaches the iframe asynchronously, so wait until the row shows the default level;
+    // reading it straight away could capture a level an earlier run left behind.
+    const defaultZoom = await readSettingsDefaultZoom(mainPage);
+    await expect.poll(readRowZoom).toBeCloseTo(defaultZoom, 5);
 
     const before = await lineOneStarts();
     expect(before.length).toBeGreaterThan(1);
@@ -291,7 +297,7 @@ test.describe('Text Collection verse row', () => {
     // The item's accessible name ends with its shortcut keycaps, so match the start only.
     const menu = await openCellContextMenu(stg.frame, rows.first());
     await menu.getByRole('menuitem', { name: /^Zoom in/i }).click();
-    await expect.poll(readRowZoom).not.toBe(defaultZoom);
+    await expect.poll(readRowZoom).toBeGreaterThan(defaultZoom);
 
     const after = await lineOneStarts();
     // The exclusion divides by `--stg-zoom`, so line 1 must start in the same place on screen
