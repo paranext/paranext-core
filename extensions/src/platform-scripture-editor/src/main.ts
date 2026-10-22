@@ -49,7 +49,7 @@ import {
   buildScriptureTextGridWebView,
   type TextCollectionPanelOptions,
   selectProjectIdsForOpenMode,
-  showsReadOnlyMarkersView,
+  showsReadOnlyPreview,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
   toScriptureEditorInfos,
@@ -588,11 +588,11 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
     // isReadOnly/markers already computed), matching the same fail-open convention the webview's
     // own reactive `canUserEditScripture` signal uses — so the open-time label and the live gate
     // never disagree about which direction an error should bias.
-    // A saved markers view is read-only only where it is shown as markers: outside Power the editor
-    // shows it as the editable formatted view
+    // Preview is read-only only in Power: outside Power a saved formatted view is the editable
+    // Simple view
     let isReadOnlyForTitle =
       isReadOnly ||
-      showsReadOnlyMarkersView(savedWebViewStateUpdated.viewType, interfaceMode === 'power');
+      showsReadOnlyPreview(savedWebViewStateUpdated.viewType, interfaceMode === 'power');
     if (!isReadOnlyForTitle && projectId) {
       try {
         const scriptureEditPermissionsPdp = await papi.projectDataProviders.get(
@@ -1301,7 +1301,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     changeScriptureView,
     {
       method: {
-        summary: 'Change the Scripture view type in the editor',
+        summary: 'Toggle the editor between Standard view and Preview (Power mode only)',
         params: [
           {
             name: 'webViewId',
@@ -1328,7 +1328,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     {
       method: {
         'x-experimental': true,
-        summary: 'Show Standard view in the editor (Preview outside Power mode)',
+        summary: 'Show Standard view in the editor (the Simple view outside Power mode)',
         params: [
           {
             name: 'webViewId',
@@ -1355,7 +1355,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     {
       method: {
         'x-experimental': true,
-        summary: 'Show Preview (the formatted view) in the editor',
+        summary:
+          'Show Preview, the read-only formatted view, in the editor (the Simple view outside Power mode)',
         params: [
           {
             name: 'webViewId',
