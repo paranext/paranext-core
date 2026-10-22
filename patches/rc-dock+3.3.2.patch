@@ -1,8 +1,8 @@
 diff --git a/node_modules/rc-dock/es/DockLayout.js b/node_modules/rc-dock/es/DockLayout.js
-index bac288d..68b79be 100644
+index bac288d..b28bfe8 100644
 --- a/node_modules/rc-dock/es/DockLayout.js
 +++ b/node_modules/rc-dock/es/DockLayout.js
-@@ -161,6 +161,32 @@ export class DockLayout extends DockPortalManager {
+@@ -161,6 +161,38 @@ export class DockLayout extends DockPortalManager {
       * @param floatPosition @inheritDoc
       */
      dockMove(source, target, direction, floatPosition) {
@@ -27,15 +27,21 @@ index bac288d..68b79be 100644
 +        if (target && typeof target !== 'string' && target.id != null) {
 +            target = this.find(target.id, Algorithm.Filter.All) || target;
 +        }
-+        if (source && target && typeof target !== 'string' && target.id === source.id) {
-+            // Dropped onto itself. rc-dock's own drop handlers check this by object identity, which
-+            // a replaced object gets past.
-+            return;
++        if (source && target && typeof target !== 'string' && direction !== 'float') {
++            // Dropped onto itself, or a whole tab group dropped next to one of its own tabs. rc-dock's
++            // own drop handlers check these by object identity, which a replaced object gets past. A
++            // float ignores the target, and a tab group's own float drop targets pass the group itself.
++            if (target.id === source.id) {
++                return;
++            }
++            if ('tabs' in source && !('tabs' in target) && !('children' in target) && target.parent && target.parent.id === source.id) {
++                return;
++            }
 +        }
          let layout = this.getLayout();
          if (direction === 'maximize') {
              layout = Algorithm.maximize(layout, source);
-@@ -258,7 +284,17 @@ export class DockLayout extends DockPortalManager {
+@@ -258,7 +290,17 @@ export class DockLayout extends DockPortalManager {
                  if (!makeActive) {
                      // restore the previous activeId
                      panelData.activeId = activeId;
@@ -54,7 +60,7 @@ index bac288d..68b79be 100644
                  }
              }
              else if (makeActive && panelData.activeId !== id) {
-@@ -316,7 +352,21 @@ export class DockLayout extends DockPortalManager {
+@@ -316,7 +358,21 @@ export class DockLayout extends DockPortalManager {
          if (dropRect) {
              if (direction === 'remove') {
                  this.setState((oldStates) => {
