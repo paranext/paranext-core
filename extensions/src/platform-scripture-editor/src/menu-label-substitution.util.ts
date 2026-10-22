@@ -13,9 +13,12 @@ const TEXT_FIELDS: TextField[] = ['label', 'tooltip', 'searchTerms'];
  * with the whitespace before it.
  */
 function fillProjectName(text: string, projectName: string): string {
-  // Native `includes`/`split` are correct here: the code looks only for the literal ASCII token
-  // and splits on the exact boundary it matched, inserting the name verbatim. A combining mark
-  // fused onto the closing brace would mean the token was not written as the token.
+  // Accepted deviation from `.claude/rules/code-quality/native-string-vs-grapheme-helpers.md`,
+  // which allows native string methods only when the haystack is ASCII by construction. This
+  // haystack is localized text, but the needle is a fixed ASCII token that translators copy as is,
+  // and native `includes`, `split` and `replace` only ever look for that exact token and insert the
+  // name verbatim. A grapheme-aware search would differ only if a combining mark were fused onto
+  // the closing brace, and then the text no longer contains the token as written.
   if (!text.includes(PROJECT_NAME_PLACEHOLDER)) return text;
   if (projectName === '') return text.replace(PROJECT_NAME_PLACEHOLDER_WITH_LEADING_SPACE, '');
   return text.split(PROJECT_NAME_PLACEHOLDER).join(projectName);
