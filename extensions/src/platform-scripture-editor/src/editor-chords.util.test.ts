@@ -16,6 +16,8 @@ function keyEvent(key: string, modifiers: Partial<Omit<ChordEvent, 'key'>> = {})
     altKey: false,
     shiftKey: false,
     repeat: false,
+    isComposing: false,
+    keyCode: 0,
     ...modifiers,
   };
 }
@@ -96,6 +98,16 @@ describe('matchEditorChord', () => {
 
   it('does not map a plain t', () => {
     expect(chordOf(keyEvent('t'))).toBeUndefined();
+  });
+
+  // An input method (IME) that is still composing owns the key: Japanese IMEs convert to katakana
+  // with F7, so claiming it would toggle the footnotes pane and lose the conversion.
+  it.each([
+    ['F7 while composing', keyEvent('F7', { isComposing: true })],
+    ['F7 reported as the IME key (229)', keyEvent('F7', { keyCode: 229 })],
+    ['Ctrl+T while composing', keyEvent('t', { ctrlKey: true, isComposing: true })],
+  ])('leaves %s to the input method', (_, event) => {
+    expect(matchEditorChord(event)).toBeUndefined();
   });
 });
 

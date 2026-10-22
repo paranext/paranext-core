@@ -26,10 +26,18 @@ export type EditorChordMatch = {
  * the macOS menu bar's. A held key (auto-repeat) still matches but is reported as a repeat, so the
  * caller can keep the key's default action (macOS Ctrl+T transposes characters) from firing while
  * holding a chord acts once.
+ *
+ * A key an input method (IME) is still composing with is never a chord: Japanese IMEs convert to
+ * katakana with F7, and the key reports `isComposing` (keyCode 229 in some browsers) while they
+ * do.
  */
 export function matchEditorChord(
-  event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'repeat'>,
+  event: Pick<
+    KeyboardEvent,
+    'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'repeat' | 'isComposing' | 'keyCode'
+  >,
 ): EditorChordMatch | undefined {
+  if (event.isComposing || event.keyCode === 229) return undefined;
   if (event.altKey || event.metaKey) return undefined;
   const chord = findChord(event);
   return chord ? { chord, isRepeat: event.repeat } : undefined;
