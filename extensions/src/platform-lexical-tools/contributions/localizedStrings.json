@@ -3,7 +3,7 @@
     "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg%": {
       "deprecationInfo": {
         "date": "2026-10-20",
-        "message": "Relabeled to \"Open Dictionary: Hebrew/Greek\". The new key is %platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%."
+        "message": "Relabeled to \"Dictionary: SDBH/SDBG\". The new key is %platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%."
       }
     },
     "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%": {
@@ -42,7 +42,7 @@
       "%platformLexicalTools_dictionary_trackProjectDropdownLabel%": "Track Biblical Terms",
       "%platformLexicalTools_mainMenu_openDictionary%": "Open Dictionary",
       "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg%": "Open Dictionary: SDBH/SDBG",
-      "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%": "Open Dictionary: Hebrew/Greek",
+      "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%": "Dictionary: SDBH/SDBG",
       "%platformLexicalTools_mainMenu_openHebGrkDictionary%": "Open HEBGRK Dictionary",
       "%platformLexicalTools_webViewMenu_openDictionary%": "Open Dictionary"
     },
@@ -71,7 +71,7 @@
       "%platformLexicalTools_dictionary_trackProjectDropdownLabel%": "Hacer un seguimiento de vocablos bíblicos",
       "%platformLexicalTools_mainMenu_openDictionary%": "Abrir diccionario",
       "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg%": "Abrir diccionario: SDBH/SDBG",
-      "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%": "Abrir diccionario: hebreo/griego",
+      "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg_2%": "Diccionario: SDBH/SDBG",
       "%platformLexicalTools_mainMenu_openHebGrkDictionary%": "Abrir diccionario HEBGRK",
       "%platformLexicalTools_webViewMenu_openDictionary%": "Abrir diccionario"
     }
