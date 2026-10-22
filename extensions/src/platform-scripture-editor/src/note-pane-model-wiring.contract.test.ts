@@ -1,8 +1,13 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import {
+  descendants,
+  effectDependenciesCalling,
+  objectLiteralShape,
+  parseWebViewSource,
+  propExpressions,
+  variableInitializer,
+} from './web-view-source.test-utils';
 
 /*
  * Guards how `platform-scripture-editor.web-view.tsx` applies the footnotes-pane note model. A
@@ -13,93 +18,73 @@ import { describe, expect, it } from 'vitest';
  * is a source-reading contract test, like `copy-limit-wiring.contract.test.ts`.
  */
 
-const SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
-const WEB_VIEW_FILE = path.join(SRC_DIR, 'platform-scripture-editor.web-view.tsx');
+const EQUALITY_OPERATORS = new Set([
+  ts.SyntaxKind.EqualsEqualsEqualsToken,
+  ts.SyntaxKind.ExclamationEqualsEqualsToken,
+  ts.SyntaxKind.EqualsEqualsToken,
+  ts.SyntaxKind.ExclamationEqualsToken,
+]);
 
-/** The source text of the `propName` expression on every `<tagName>` element in the file. */
-function propExpressions(sourceFile: ts.SourceFile, tagName: string, propName: string): string[] {
-  const found: string[] = [];
-  const visit = (node: ts.Node) => {
+const isStandardLiteral = (node: ts.Node) =>
+  ts.isStringLiteralLike(node) && node.text === 'standard';
+
+/**
+ * Names the place a check against `'standard'` sits, so an unexpected one shows in the diff. A
+ * check counts as one of the allowed places only when it is part of that place's own condition or
+ * arguments, not merely somewhere inside the code that place guards.
+ */
+function labelStandardCheck(sourceFile: ts.SourceFile, check: ts.Node): string {
+  const contains = (container: ts.Node) =>
+    check.getStart(sourceFile) >= container.getStart(sourceFile) &&
+    check.getEnd() <= container.getEnd();
+  for (let node = check.parent; node; node = node.parent) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(sourceFile) === 'getViewOptionsForType')
+      return 'getViewOptionsForType';
+    if (ts.isIfStatement(node) && contains(node.expression)) {
+      const condition = node.expression.getText(sourceFile);
+      if (condition.includes("=== 't'")) return 'Ctrl+T insert';
+      if (condition.includes('defaultMarkersMenuTrigger')) return 'main-text marker menu trigger';
+    }
     if (
-      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
-      node.tagName.getText(sourceFile) === tagName
+      ts.isCallExpression(node) &&
+      node.expression.getText(sourceFile) === 'useProjectStylesheet' &&
+      node.arguments.some(contains)
     )
-      node.attributes.properties.forEach((attribute) => {
-        if (
-          ts.isJsxAttribute(attribute) &&
-          attribute.name.getText(sourceFile) === propName &&
-          attribute.initializer &&
-          ts.isJsxExpression(attribute.initializer) &&
-          attribute.initializer.expression
-        )
-          found.push(attribute.initializer.expression.getText(sourceFile));
-      });
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return found;
-}
-
-/** Names the place a `=== 'standard'` comparison sits, so an unexpected one shows in the diff. */
-function labelStandardComparison(sourceFile: ts.SourceFile, comparison: ts.Node): string {
-  const ancestors: ts.Node[] = [];
-  for (let node = comparison.parent; node; node = node.parent) ancestors.push(node);
-  // The allowed places first, wherever they sit among the ancestors.
-  if (
-    ancestors.some(
-      (node) =>
-        ts.isVariableDeclaration(node) && node.name.getText(sourceFile) === 'getViewOptionsForType',
-    )
-  )
-    return 'getViewOptionsForType';
-  if (
-    ancestors.some(
-      (node) => ts.isIfStatement(node) && node.expression.getText(sourceFile).includes("=== 't'"),
-    )
-  )
-    return 'Ctrl+T insert';
-  if (
-    ancestors.some(
-      (node) =>
-        ts.isCallExpression(node) && node.expression.getText(sourceFile) === 'useProjectStylesheet',
-    )
-  )
-    return 'useProjectStylesheet';
+      return 'useProjectStylesheet';
+  }
   // Anything else: the first line of the nearest statement, so the failure diff shows where it is.
-  const statement = ancestors.find((node) => ts.isStatement(node) && !ts.isBlock(node));
-  return (statement ?? comparison).getText(sourceFile).split('\n')[0].trim();
+  let statement: ts.Node = check;
+  while (statement.parent && !(ts.isStatement(statement) && !ts.isBlock(statement)))
+    statement = statement.parent;
+  return statement.getText(sourceFile).split('\n')[0].trim();
 }
 
-/** Every comparison of something to `'standard'` with `===`, labelled, in source order. */
-function standardComparisonLabels(sourceFile: ts.SourceFile): string[] {
-  const found: string[] = [];
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken &&
-      node.right.getText(sourceFile) === "'standard'"
+/**
+ * Every check of something against `'standard'` — an equality or inequality comparison with the
+ * literal on either side, or a `case 'standard':` — labelled, in source order.
+ */
+function standardCheckLabels(sourceFile: ts.SourceFile): string[] {
+  return descendants(sourceFile)
+    .filter(
+      (node) =>
+        (ts.isBinaryExpression(node) &&
+          EQUALITY_OPERATORS.has(node.operatorToken.kind) &&
+          (isStandardLiteral(node.left) || isStandardLiteral(node.right))) ||
+        (ts.isCaseClause(node) && isStandardLiteral(node.expression)),
     )
-      found.push(labelStandardComparison(sourceFile, node));
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return found;
+    .map((node) => labelStandardCheck(sourceFile, node));
 }
 
 describe('note pane model wiring (platform-scripture-editor.web-view.tsx)', () => {
-  const sourceFile = ts.createSourceFile(
-    WEB_VIEW_FILE,
-    readFileSync(WEB_VIEW_FILE, 'utf-8'),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const sourceFile = parseWebViewSource();
 
-  it('compares the view to Standard only where Standard alone is meant', () => {
+  it('checks the view against Standard only where Standard alone is meant', () => {
     // Every other Standard-only note check goes through `usesPaneNoteModel`.
-    expect(standardComparisonLabels(sourceFile)).toEqual([
+    expect(standardCheckLabels(sourceFile)).toEqual([
       // Standard view's own view options
       'getViewOptionsForType',
+      // The `\` marker menu in the main text; Standard view types markers in place instead
+      'main-text marker menu trigger',
       // The insert shortcuts stay Standard-only
       'Ctrl+T insert',
       // Which stylesheet mode the text renders in; not a note check
@@ -119,17 +104,48 @@ describe('note pane model wiring (platform-scripture-editor.web-view.tsx)', () =
     ]);
   });
 
-  it('runs the pane row editor with structure protection off, as Power’s is', () => {
+  it('runs the pane row editor on the pane’s view options with structure protection off, as Power’s is', () => {
     // A note has no verse or paragraph structure of its own to protect, and 'protected' claims
     // Enter before the note's own `\fp` handling can run.
-    expect(sourceFile.getText()).toMatch(
-      /\(\{\s*\.\.\.editorOptionsWithCopyLimit,\s*view: footnotesPaneViewOptions,\s*structureProtectionMode: 'off',\s*\}\)/,
+    const { properties } = objectLiteralShape(
+      sourceFile,
+      variableInitializer(sourceFile, 'paneFootnoteEditorOptions'),
     );
+    expect(properties).toMatchObject({
+      view: 'footnotesPaneViewOptions',
+      structureProtectionMode: "'off'",
+    });
   });
 
   it('re-derives the caller highlight when the pane model changes, not just the view', () => {
-    expect(sourceFile.getText()).toMatch(
-      /applyCallerHighlight\(\);\s*\}, \[viewType, usesPaneModel, applyCallerHighlight\]\)/,
+    const effects = effectDependenciesCalling(sourceFile, 'applyCallerHighlight');
+    expect(effects.some((dependencies) => dependencies.includes('viewType'))).toBe(true);
+    expect(
+      effects
+        .filter((dependencies) => dependencies.includes('viewType'))
+        .every((dependencies) => dependencies.includes('usesPaneModel')),
+    ).toBe(true);
+  });
+
+  it('leaves a pane row merely selected while a popover still holds the session', () => {
+    // The popover applies its text only on Save, so a row editor opened over it would discard
+    // what was typed.
+    const handler = variableInitializer(sourceFile, 'handleFootnoteEditRequested');
+    const guard = descendants(handler).find(
+      (node): node is ts.IfStatement =>
+        ts.isIfStatement(node) &&
+        node.expression.getText(sourceFile) === 'showFootnoteEditorRef.current' &&
+        ts.isReturnStatement(node.thenStatement),
     );
+    const firstEdit = descendants(handler).find(
+      (node) =>
+        ts.isCallExpression(node) &&
+        ['closeFootnoteEditorRef.current', 'navigateToNote', 'startPaneNoteEdit'].includes(
+          node.expression.getText(sourceFile),
+        ),
+    );
+    expect(guard).toBeDefined();
+    expect(firstEdit).toBeDefined();
+    expect(guard?.getStart(sourceFile)).toBeLessThan(firstEdit?.getStart(sourceFile) ?? 0);
   });
 });
