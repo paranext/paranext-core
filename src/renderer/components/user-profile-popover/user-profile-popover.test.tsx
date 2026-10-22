@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { useState } from 'react';
 import { newPlatformError, type PlatformError } from 'platform-bible-utils';
 import type { ServerType } from 'paratext-registration';
 import { logger } from '@shared/services/logger.service';
@@ -15,6 +16,31 @@ import { UserProfilePopover } from './user-profile-popover.component';
 
 vi.mock('@renderer/services/interface-language-restart-prompt', () => ({
   offerRestartAfterInterfaceLanguageChange: vi.fn(async () => {}),
+}));
+
+/**
+ * Lets tests simulate `paratextRegistration.internetSettingsDataProvider` registering AFTER the
+ * popover's first render — the PT-4417 scenario `NetworkSettingsRow`'s retry key works around.
+ */
+const { emitNetworkObjectCreated, mockOnDidCreateNetworkObject } = vi.hoisted(() => {
+  const handlers = new Set<(details: { id: string }) => void>();
+  return {
+    mockOnDidCreateNetworkObject: (handler: (details: { id: string }) => void) => {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    emitNetworkObjectCreated: (details: { id: string }) => {
+      handlers.forEach((handler) => handler(details));
+    },
+  };
+});
+
+vi.mock('@shared/services/network-object.service', () => ({
+  onDidCreateNetworkObject: mockOnDidCreateNetworkObject,
+}));
+
+vi.mock('@shared/services/data-provider.service', () => ({
+  getDataProviderObjectId: (providerName: string) => `${providerName}-data`,
 }));
 
 // Radix Popover/Tooltip use ResizeObserver internally; jsdom doesn't provide it, so we stub a
@@ -130,7 +156,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       return [mockState.interfaceLanguage, mockState.setInterfaceLanguage, vi.fn(), false];
     return [undefined, mockSetter(), vi.fn(), false];
   }),
-  useData: vi.fn(() => ({
+  useData: vi.fn((dataProviderSource: unknown) => ({
     CurrentTheme: vi.fn(() => [
       {
         type: mockState.themeType,
@@ -145,17 +171,30 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     AvailableInterfaceLanguages: vi.fn((_selector: undefined, defaultValue: unknown) => [
       mockState.availableLanguages ?? defaultValue,
     ]),
-    InternetSettings: vi.fn((_selector: undefined, defaultValue: unknown) => [
-      mockState.internetSettings ?? defaultValue,
-      mockSetter(),
-      // Mirrors the real hook: with no data provider, the subscription never resolves and
-      // `isLoading` stays `true` forever — not just until the mock state supplies a value.
-      !mockState.internetSettingsProviderAvailable || mockState.internetSettings === undefined,
-    ]),
+    InternetSettings: vi.fn((_selector: undefined, defaultValue: unknown) => {
+      // Depends on `dataProviderSource` (the possibly-stuck-at-mount value `useDataProvider`
+      // below returned), not the live `mockState` flag directly — otherwise this mock would
+      // "self-heal" on any re-render regardless of whether the real hook's stuck-forever bug
+      // (PT-4417) is actually worked around, and the regression tests would pass unconditionally.
+      const isProviderAvailable = dataProviderSource !== undefined;
+      return [
+        isProviderAvailable ? (mockState.internetSettings ?? defaultValue) : defaultValue,
+        mockSetter(),
+        // Mirrors the real hook: with no data provider, the subscription never resolves and
+        // `isLoading` stays `true` forever — not just until the mock state supplies a value.
+        !isProviderAvailable || mockState.internetSettings === undefined,
+      ];
+    }),
   })),
   useDataProvider: vi.fn((providerName: string) => {
+    // Captured ONCE at mount, like the real `useDataProvider`/`createUseNetworkObjectHook`: a
+    // lookup that comes back empty on its first attempt is never retried on its own (PT-4417), so
+    // later flipping `mockState.internetSettingsProviderAvailable` must NOT change what an
+    // already-mounted component instance sees. Only an actual remount re-reads it.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [wasAvailableAtMount] = useState(() => mockState.internetSettingsProviderAvailable);
     if (providerName === 'paratextRegistration.internetSettingsDataProvider')
-      return mockState.internetSettingsProviderAvailable ? {} : undefined;
+      return wasAvailableAtMount ? {} : undefined;
     return undefined;
   }),
 }));
@@ -464,6 +503,44 @@ describe('UserProfilePopover server badge', () => {
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     await screen.findByTestId('user-profile-action-network');
     expect(screen.queryByTestId('user-profile-server-badge')).not.toBeInTheDocument();
+  });
+
+  test('recovers once the internet settings data provider registers after the popover already rendered without it (PT-4417)', async () => {
+    setMockSetting('internetSettingsProviderAvailable', false);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-action-network');
+    expect(screen.queryByTestId('user-profile-server-badge')).not.toBeInTheDocument();
+
+    // The provider finishes registering after this first render. useDataProvider/useData have
+    // nothing to retry from in that case (PT-4417: a lookup that comes back empty on its very first
+    // attempt is never retried), so recovery depends on the retry key remounting NetworkSettingsRow.
+    setMockSetting('internetSettingsProviderAvailable', true);
+    act(() => {
+      emitNetworkObjectCreated({ id: 'paratextRegistration.internetSettingsDataProvider-data' });
+    });
+
+    expect(await screen.findByTestId('user-profile-server-badge')).toBeInTheDocument();
+  });
+
+  test('only remounts the row for the internet settings provider’s own registration event', async () => {
+    setMockSetting('internetSettingsProviderAvailable', false);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    await screen.findByTestId('user-profile-action-network');
+
+    setMockSetting('internetSettingsProviderAvailable', true);
+    act(() => {
+      emitNetworkObjectCreated({ id: 'someOtherExtension.someOtherDataProvider-data' });
+    });
+    expect(screen.queryByTestId('user-profile-server-badge')).not.toBeInTheDocument();
+
+    // Positive control: the harness can make the badge appear, so the assertion above is not
+    // vacuously true (it fires a matching id, proving a mismatched one really was ignored).
+    act(() => {
+      emitNetworkObjectCreated({ id: 'paratextRegistration.internetSettingsDataProvider-data' });
+    });
+    expect(await screen.findByTestId('user-profile-server-badge')).toBeInTheDocument();
   });
 
   test('is absent when the internet settings read fails', async () => {
