@@ -140,7 +140,7 @@ describe('The Power main menu is laid out as designed', () => {
   test.each([
     ['platformGetResources.openGetResources', 'Get resources'],
     ['platformGetResources.openHome', 'Open'],
-    ['platformLexicalTools.openDictionary', 'Open Dictionary: Hebrew/Greek'],
+    ['platformLexicalTools.openDictionary', 'Dictionary: SDBH/SDBG'],
     ['platform.createWindow', 'New window'],
     ['platform.visitGettingStartedPage', 'Browse help'],
     ['paratextRegistration.showParatextRegistration', 'Registration information'],
@@ -236,7 +236,7 @@ describe('Extension-contributed main menu items are gated for Simple mode', () =
    */
   const HIDDEN_IN_SIMPLE = [
     ['Open', 'platformGetResources.openHome'],
-    ['Open Dictionary: Hebrew/Greek', 'platformLexicalTools.openDictionary'],
+    ['Dictionary: SDBH/SDBG', 'platformLexicalTools.openDictionary'],
     ['Open enhanced resource', 'platformEnhancedResources.openEnhancedResource'],
     ['Registration information', 'paratextRegistration.showParatextRegistration'],
   ] as const;
