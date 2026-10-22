@@ -28,7 +28,8 @@ async function fetchInstalledDblResources(): Promise<DblResourceInstallStatus> {
  * Asks whose answers stand in for one another: the same references, with no install from this grid
  * in between. `lastAnswered` is the newest answer any of them got, and `lastAnsweredAsk` is the
  * order that ask started in, so a slow earlier ask cannot overwrite a newer answer.
- * `lastAnsweredProjectsChange` is the count of project changes that answer had seen.
+ * `lastAnsweredProjectsChange` is the count of project changes that answer had seen, or, before any
+ * answer, the count when the generation started.
  */
 type Generation = {
   asksStarted: number;
@@ -101,12 +102,17 @@ export function useDblInstallLookup({
     }, [requestProjectsReask]),
   );
 
+  // A new generation starts level with the project changes seen so far, so only a change after it
+  // starts can let an empty scan in. Read through a ref so a project change does not itself start a
+  // new generation.
+  const projectsChangeCountRef = useRef(projectsChangeCount);
+  projectsChangeCountRef.current = projectsChangeCount;
   const generation = useMemo(
     (): Generation => ({
       asksStarted: 0,
       lastAnsweredAsk: 0,
       lastAnswered: undefined,
-      lastAnsweredProjectsChange: 0,
+      lastAnsweredProjectsChange: projectsChangeCountRef.current,
     }),
     // `refreshCounter` is a trigger (value unread): an install changes what is on disk.
     // eslint-disable-next-line react-hooks/exhaustive-deps
