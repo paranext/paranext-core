@@ -33,6 +33,7 @@ import {
   ProjectOption,
   shouldRefreshChecksInfo,
 } from './checks-side-panel.utils';
+import { callControllerSafely } from './find/find.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
 import {
   ChecksSidePanel,
@@ -90,6 +91,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const [checksInfoRefreshKey, setChecksInfoRefreshKey] = useState(0);
   const [checkResults, setCheckResults] = useState<CheckRunResult[]>(() => defaultCheckResults);
   const checkResultsRef = useRef<CheckRunResult[]>(checkResults);
+  /** The result id the editor was last asked to select, so a late failure knows if it is stale. */
+  const lastSelectRequestIdRef = useRef<string | undefined>(undefined);
   const [isResultLoadingCancelled, setIsResultLoadingCancelled] = useState(false);
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => [...CHECKS_SIDE_PANEL_STRING_KEYS], []),
@@ -549,14 +552,38 @@ global.webViewComponent = function ChecksSidePanelWebView({
                 },
               }
             : location;
-        editorWebViewController.selectRange({
-          // Transform deprecated check result locations to the new format. The old check result
-          // types don't have book/chapter info in the location, so we need to add them.
-          start: normalizeLocation(selectedResult.start),
-          end: normalizeLocation(selectedResult.end),
-        });
+        // Records which result the editor was last asked for, so a failure that arrives late can
+        // tell whether the user has since moved on.
+        lastSelectRequestIdRef.current = id;
+        // `callControllerSafely`, not a bare `.catch`: the tab can close between this callback
+        // being handed to the result list and the user activating it, leaving a revoked proxy
+        // whose property read throws SYNCHRONOUSLY, before there is a promise to catch on.
+        callControllerSafely(
+          () =>
+            editorWebViewController.selectRange({
+              // Transform deprecated check result locations to the new format. The old check result
+              // types don't have book/chapter info in the location, so we need to add them.
+              start: normalizeLocation(selectedResult.start),
+              end: normalizeLocation(selectedResult.end),
+            }),
+          (e) => {
+            logger.warn(`Checks: failed to select result in editor: ${getErrorMessage(e)}`);
+            // Only fall back for the result still selected. A slow failure for a result the user
+            // has since replaced with another selection would otherwise jump the scroll group
+            // back to it, away from the one they are now reading.
+            if (lastSelectRequestIdRef.current !== id) return;
+            // The fallback covers a conversion failure in `convertScriptureRangeToEditorRange` or
+            // a delivery failure (`selectRange` resolves once the message is posted to the editor,
+            // and a closed tab leaves a revoked proxy). It moves this panel's own scroll group,
+            // which was copied once when the panel opened. If the editor cannot place the exact
+            // range, it still moves to the range's verse itself, so nothing more is needed here.
+            setScrRef(selectedResult.verseRef);
+          },
+        );
       } else {
-        // Could not get controller to set specific range, so at least set the verse ref
+        // Could not get controller to set specific range, so at least set the verse ref. A late
+        // failure for an earlier request must not move back from it.
+        lastSelectRequestIdRef.current = undefined;
         setScrRef(selectedResult.verseRef);
       }
     },

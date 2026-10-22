@@ -68,6 +68,12 @@ export type {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 export type {
+  RequestRegistryTokens,
+  RegistryAccessToken,
+  RegistryAccessTokenRequest,
+  RegistryReadScope,
+} from '@shared/models/request-registry-tokens-privilege.model';
+export type {
   ExtensionDataEnumerationProjectDataTypes,
   ExtensionDataListScope,
   ExtensionDataScope,

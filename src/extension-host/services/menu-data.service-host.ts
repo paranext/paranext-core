@@ -68,11 +68,11 @@ class MenuDataDataProviderEngine
    * menu up by, and the items in a tab menu act on the tab rather than on its contents
    */
   private defaultTabMenu: Localized<SingleColumnMenu> = { groups: {}, items: [] };
-  private unsubscribeOnDidResyncContributions: Unsubscriber | undefined;
-  private unsubscribeFromInterfaceMode: UnsubscriberAsync | undefined;
   private currentMode: InterfaceMode = 'power';
   private isDisposed = false;
   private readonly platform: typeof process.platform;
+  #unsubscribeOnDidResyncContributions: Unsubscriber | undefined;
+  #unsubscribeFromInterfaceMode: UnsubscriberAsync | undefined;
 
   constructor(
     unlocalizedMenuData: PlatformMenus,
@@ -81,7 +81,7 @@ class MenuDataDataProviderEngine
     super();
     this.platform = platform;
     this.#loadAllMenuData(unlocalizedMenuData, unlocalizedMenuData);
-    this.unsubscribeOnDidResyncContributions = onDidResyncContributions(() => this.rebuildMenus());
+    this.#unsubscribeOnDidResyncContributions = onDidResyncContributions(() => this.rebuildMenus());
     this.#subscribeToInterfaceMode();
   }
 
@@ -164,13 +164,13 @@ class MenuDataDataProviderEngine
 
   async dispose(): Promise<boolean> {
     this.isDisposed = true;
-    if (this.unsubscribeFromInterfaceMode) {
-      await this.unsubscribeFromInterfaceMode();
-      this.unsubscribeFromInterfaceMode = undefined;
+    if (this.#unsubscribeFromInterfaceMode) {
+      await this.#unsubscribeFromInterfaceMode();
+      this.#unsubscribeFromInterfaceMode = undefined;
     }
-    if (this.unsubscribeOnDidResyncContributions) {
-      const success = this.unsubscribeOnDidResyncContributions();
-      this.unsubscribeOnDidResyncContributions = undefined;
+    if (this.#unsubscribeOnDidResyncContributions) {
+      const success = this.#unsubscribeOnDidResyncContributions();
+      this.#unsubscribeOnDidResyncContributions = undefined;
       return success;
     }
     return true;
@@ -225,7 +225,7 @@ class MenuDataDataProviderEngine
         if (this.isDisposed) {
           await unsub();
         } else {
-          this.unsubscribeFromInterfaceMode = unsub;
+          this.#unsubscribeFromInterfaceMode = unsub;
         }
       } catch (error) {
         logger.warn(`Menu data service failed to subscribe to platform.interfaceMode: ${error}`);
