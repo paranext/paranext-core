@@ -663,17 +663,21 @@ export async function openCommentListAndSelectThreadSafe(
  * @param bringToFront Whether to also bring the panel's tab to the front. Pass `false` for
  *   background confirmation (e.g. after inserting a comment, so the user's current Column 3 tab
  *   isn't interrupted) or `true` for an explicit "show me this comment" navigation.
+ * @param editorWebViewId The editor the thread belongs to. If given, the panel is first pointed at
+ *   that editor's project when it shows another one.
  */
 export async function selectCommentThreadInPanelSafe(
   papi: typeof PapiBackend | typeof PapiFrontend,
   threadId: string,
   bringToFront: boolean,
+  editorWebViewId?: string,
 ): Promise<void> {
   try {
     const panelWebViewId = await papi.commands.sendCommand(
       'legacyCommentManager.selectCommentThreadInPanel',
       threadId,
       bringToFront,
+      editorWebViewId,
     );
     if (!panelWebViewId) throw new Error('No WebView ID returned');
   } catch (e) {
@@ -687,13 +691,14 @@ export async function selectCommentThreadInPanelSafe(
  * Brings a comment thread into view where the current interface mode keeps comments. Power mode
  * opens (or focuses) the editor-anchored comment list on the thread. Simple mode has no such list —
  * its comments live in the fixed Column 3 Comments tab — so that tab is brought to the front with
- * the thread selected instead; opening the editor-anchored list there would add a second Comments
- * column. Logs and swallows any failure, like the two functions it chooses between.
+ * the thread selected instead, after pointing that tab at the editor's project if it shows another
+ * one; opening the editor-anchored list there would add a second Comments column. Logs and swallows
+ * any failure, like the two functions it chooses between.
  *
  * @param papi The PAPI to send the navigation command through
  * @param options.isPowerMode Whether the app is in Power interface mode
- * @param options.editorWebViewId The ID of the editor web view the thread belongs to (used in Power
- *   mode to find the project's comment list)
+ * @param options.editorWebViewId The ID of the editor web view the thread belongs to, which decides
+ *   the project whose comments are shown
  * @param options.threadId The ID of the thread to show
  */
 export async function showCommentThreadForInterfaceMode(
@@ -709,7 +714,7 @@ export async function showCommentThreadForInterfaceMode(
     return;
   }
 
-  await selectCommentThreadInPanelSafe(papi, threadId, true);
+  await selectCommentThreadInPanelSafe(papi, threadId, true, editorWebViewId);
 }
 
 // #region USJ location conversion helper functions

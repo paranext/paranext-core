@@ -680,19 +680,25 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Selects/scrolls to a specific thread in the fixed Column 3 Comment List panel, without
-     * reloading it. Optionally also brings the panel's tab to the front.
+     * Selects/scrolls to a specific thread in the fixed Column 3 Comment List panel. Optionally
+     * also brings the panel's tab to the front. The panel is reloaded only when `editorWebViewId`
+     * is given and the panel shows a different project, which discards any in-progress inline edit
+     * in it.
      *
      * @param threadId The ID of the thread to select and scroll to in the panel
      * @param bringToFront Whether to also bring the panel's tab to the front. Pass `false` for
      *   background confirmation (e.g. after inserting a comment, so the user's current Column 3 tab
      *   isn't interrupted) or `true` for an explicit "show me this comment" navigation.
+     * @param editorWebViewId The scripture editor the thread belongs to. If given, the panel is
+     *   first pointed at that editor's project when it shows another one. If omitted, the panel is
+     *   assumed to show the right project already.
      * @returns The webView ID of the panel, or `undefined` if it isn't open in the current layout
      * @throws If the panel's WebView Controller cannot be obtained to apply the selection
      */
     'legacyCommentManager.selectCommentThreadInPanel': (
       threadId: string,
       bringToFront: boolean,
+      editorWebViewId?: string,
     ) => Promise<string | undefined>;
 
     /**

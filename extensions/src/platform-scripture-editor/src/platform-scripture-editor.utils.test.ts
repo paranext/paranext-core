@@ -4628,7 +4628,7 @@ describe('showCommentThreadForInterfaceMode', () => {
 
   const options = { editorWebViewId: 'editor-1', threadId: 'thread-1' };
 
-  it('raises the Column 3 Comments tab on the thread in Simple mode, and opens nothing else', async () => {
+  it("raises the Column 3 Comments tab on the thread in Simple mode, for the editor's project, and opens nothing else", async () => {
     const { papi, sendCommand } = makeMockPapi();
 
     await showCommentThreadForInterfaceMode(papi, { ...options, isPowerMode: false });
@@ -4638,6 +4638,7 @@ describe('showCommentThreadForInterfaceMode', () => {
       'legacyCommentManager.selectCommentThreadInPanel',
       'thread-1',
       true,
+      'editor-1',
     );
   });
 

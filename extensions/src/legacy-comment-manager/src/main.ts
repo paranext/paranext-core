@@ -217,21 +217,62 @@ async function showCommentListPanel(
 }
 
 /**
- * Selects/scrolls to a specific thread in the fixed Column 3 Comment List panel — without reloading
- * the panel. Reloading (as {@link openCommentListPanel} does) remounts the panel's React root, which
- * would discard any in-progress inline edit; this function assumes the panel is already showing the
- * right project (it does not accept a `projectId`) and only changes which thread is selected and,
- * optionally, which tab is in front.
+ * Points the Column 3 Comment List panel at the editor's project when it is showing a different
+ * one, the same way {@link openCommentListPanel} does on a project switch. Otherwise a thread from
+ * that editor can't be found in the panel. Reloading discards any in-progress inline edit in the
+ * panel, so it happens only on a mismatch. If either project can't be resolved, the panel is left
+ * as it is.
+ *
+ * @param panelWebViewId The ID of the open Column 3 Comment List panel
+ * @param editorWebViewId The scripture editor whose project the panel should show
+ */
+async function showEditorProjectInCommentListPanel(
+  panelWebViewId: string,
+  editorWebViewId: string,
+): Promise<void> {
+  let editorProjectId: string | undefined;
+  let panelProjectId: string | undefined;
+  try {
+    const [editorDefinition, panelDefinition] = await Promise.all([
+      papi.webViews.getOpenWebViewDefinition(editorWebViewId),
+      papi.webViews.getOpenWebViewDefinition(panelWebViewId),
+    ]);
+    editorProjectId = editorDefinition?.projectId;
+    panelProjectId = panelDefinition?.projectId;
+  } catch (e) {
+    logger.warn(
+      `Could not compare the projects of web view ${editorWebViewId} and the Comment List panel: ${getErrorMessage(e)}`,
+    );
+    return;
+  }
+  if (!editorProjectId || editorProjectId === panelProjectId) return;
+
+  setPendingCommentListPanelProjectId(editorProjectId);
+  await papi.webViews.reloadWebView(commentListPanelWebViewType, panelWebViewId, {
+    // The caller's probe already raised the tab if it was asked to
+    bringToFront: false,
+  });
+}
+
+/**
+ * Selects/scrolls to a specific thread in the fixed Column 3 Comment List panel. The panel is
+ * reloaded only when `editorWebViewId` is given and the panel shows a different project; reloading
+ * remounts the panel's React root, which discards any in-progress inline edit. Otherwise this only
+ * changes which thread is selected and, optionally, which tab is in front.
  *
  * This implements the `legacyCommentManager.selectCommentThreadInPanel` command.
  *
  * @param threadId The ID of the thread to select and scroll to in the panel
  * @param bringToFront Whether to also bring the panel's tab to the front
+ * @param editorWebViewId The scripture editor the thread belongs to. If given, the panel is first
+ *   pointed at that editor's project when it shows another one. If omitted, the panel is assumed to
+ *   show the right project already.
  * @returns The webView ID of the panel, or `undefined` if it isn't open in the current layout
  */
 async function selectCommentThreadInPanel(
   threadId: string,
   bringToFront: boolean,
+  editorWebViewId?: string,
 ): Promise<string | undefined> {
   // Same existingId: '?' probe openCommentListPanel uses to find the singleton Column 3 panel.
   const panelWebViewId = await papi.webViews.openWebView(
@@ -242,6 +283,8 @@ async function selectCommentThreadInPanel(
   if (!panelWebViewId) {
     throw new Error('Comment List Panel is not open in the current layout');
   }
+
+  if (editorWebViewId) await showEditorProjectInCommentListPanel(panelWebViewId, editorWebViewId);
 
   const panelController = await papi.webViews.getWebViewController(
     commentListPanelWebViewType,
