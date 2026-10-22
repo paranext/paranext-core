@@ -2239,12 +2239,13 @@ function PlatformScriptureEditor({
         }
         case 'changeScriptureView': {
           // Cycle through the available views for QA (a temporary affordance, to be replaced by
-          // the polished power-default view + menu). The cycle is mode-aware: standard view is
-          // power-mode-only, so simple mode stays on formatted (see `getNextViewTypeInCycle` for
-          // the full cycle semantics and why it switches on `viewType` rather than
-          // `viewOptions.markerMode`).
+          // the polished power-default view + menu). The cycle is mode-aware: simple mode has only
+          // the formatted view, so there it changes nothing and the view type saved in Power stays
+          // (see `getNextViewTypeInCycle` for the full cycle semantics and why it switches on
+          // `viewType` rather than `viewOptions.markerMode`).
           endPaneNoteEdit();
-          setViewType(getNextViewTypeInCycle(viewType, isPowerMode));
+          const nextViewType = getNextViewTypeInCycle(viewType, isPowerMode);
+          if (nextViewType) setViewType(nextViewType);
           break;
         }
         case 'setScriptureView': {
