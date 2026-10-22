@@ -928,6 +928,17 @@ describe('createInsertContextMenuItems', () => {
     expect(noCommentPermission.map((i) => !!i.isDisabled)).toEqual([true, false, false, false]);
   });
 
+  it('keeps Insert comment selectable in read-only text when the user may comment', () => {
+    const items = createInsertContextMenuItems(strings, makeActions(), {
+      ...ENABLED,
+      isReadOnly: true,
+      canUserCreateComments: true,
+      isSyncBlocked: false,
+    });
+    expect(items[0].isDisabled).toBe(false);
+    expect(items.slice(1).every((i) => i.isDisabled)).toBe(true);
+  });
+
   // A sync freeze reaches the note inserts through the editor's own read-only state, so only the
   // comment insert — which does not go through the editor — needs the flag directly.
   it('disables the comment insert while sync-blocked', () => {
