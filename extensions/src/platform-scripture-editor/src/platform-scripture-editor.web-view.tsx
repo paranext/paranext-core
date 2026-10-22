@@ -896,8 +896,8 @@ function PlatformScriptureEditor({
   // never be shown there, because simple mode pairs with structure protection, which intentionally
   // blocks the paragraph-marker edits Standard view's editing affordances are built around. In
   // Power, a saved 'markers' (a value from earlier versions) shows as Standard view, so once the
-  // interface mode is known this is never 'markers'. A never-saved Power tab shows Standard view, the Power default, ahead of the
-  // correction effect above saving it.
+  // interface mode is known this is never 'markers'. A never-saved Power tab shows Standard view,
+  // the Power default, ahead of the correction effect above saving it.
   // The coercion is DERIVED for display, never written back: persisting it would destroy the
   // user's choice permanently — flipping back to power mode could not restore it, because the
   // one-shot power-default correction above is gated on `hadPersistedViewTypeAtMount` and its
