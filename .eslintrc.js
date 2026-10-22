@@ -1,3 +1,8 @@
+const { rules: airbnbStyleRules } = require('eslint-config-airbnb-base/rules/style');
+
+const POWER_MONITOR_LOG_ONLY_MESSAGE =
+  'power-monitor-logging.service.ts only logs power transitions, so it loads nothing but the logger. Acting on a transition (e.g. reconnecting on resume) belongs in a module of its own.';
+
 module.exports = {
   // TODO: propagate root: true to paranext-multi-extension-template and paranext-extension-template
   root: true,
@@ -200,6 +205,47 @@ module.exports = {
       files: ['e2e-tests/**/*.ts', 'e2e-tests/**/*.tsx'],
       rules: {
         'react-hooks/rules-of-hooks': 'off',
+      },
+    },
+    {
+      // The power monitor handlers are diagnosis only: they log OS power transitions and must never
+      // act on them (a reconnect on resume is deliberately out of scope). Acting means calling into
+      // another module, so the service may load nothing at runtime but the logger. Type-only
+      // imports are erased by the compiler, so they are allowed.
+      files: ['src/main/services/power-monitor-logging.service.ts'],
+      rules: {
+        // Superseded here by the TypeScript version below, which can tell type-only imports apart.
+        'no-restricted-imports': 'off',
+        '@typescript-eslint/no-restricted-imports': [
+          'error',
+          {
+            patterns: [
+              {
+                // Gitignore semantics: a file cannot be re-included while a folder above it is still
+                // excluded, so each folder on the way down to the logger is re-included first.
+                group: [
+                  '*',
+                  '!@shared/',
+                  '@shared/*',
+                  '!@shared/services/',
+                  '@shared/services/*',
+                  '!@shared/services/logger.service',
+                ],
+                allowTypeImports: true,
+                message: POWER_MONITOR_LOG_ONLY_MESSAGE,
+              },
+            ],
+          },
+        ],
+        // Restating a rule replaces its whole configuration, so airbnb's own entries are kept.
+        'no-restricted-syntax': [
+          ...airbnbStyleRules['no-restricted-syntax'],
+          { selector: 'ImportExpression', message: POWER_MONITOR_LOG_ONLY_MESSAGE },
+          {
+            selector: "CallExpression[callee.name='require']",
+            message: POWER_MONITOR_LOG_ONLY_MESSAGE,
+          },
+        ],
       },
     },
     {
