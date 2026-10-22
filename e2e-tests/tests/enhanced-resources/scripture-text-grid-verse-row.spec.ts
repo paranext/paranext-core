@@ -29,13 +29,17 @@
  * fixtures); run locally after opening the app with --remote-debugging-port=9223.
  */
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { waitForAppReady, waitForOpenWebViewIdByType } from '../../fixtures/helpers';
+import { CONTENT_ZOOM_COMMANDS, sendCommandWithId } from '../../fixtures/scripture-editor-helpers';
 import { closeAllNonHomeDockTabs } from './test-helpers';
 import {
   discoverAdminTextConnectionProject,
   flagResourcesAndOpenScriptureTextGrid,
+  openCellContextMenu,
   openScriptureTextGrid,
+  readResourceZoomArea,
   restoreScriptureTextGridProjectSettings,
+  SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
 } from './scripture-text-grid.page';
 import type { FlaggedResourceItem } from './scripture-text-grid.page';
 
@@ -80,8 +84,24 @@ type RowGeometry = {
   lineStarts: number[];
 };
 
+/** Zoom areas a test zoomed, so `afterEach` can return them to the default whatever happened. */
+let zoomedAreas: { webViewId: string; areaIds: string[] } | undefined;
+
 test.describe('Text Collection verse row', () => {
+  // Returns every zoomed area to the default so a run does not ratchet the shared zoom memory for
+  // the next one. Best-effort — cleanup must not fail the test.
   test.afterEach(async ({ mainPage }) => {
+    const zoomed = zoomedAreas;
+    zoomedAreas = undefined;
+    if (zoomed) {
+      await Promise.all(
+        zoomed.areaIds.map((areaId) =>
+          sendCommandWithId(mainPage, CONTENT_ZOOM_COMMANDS.reset, zoomed.webViewId, areaId).catch(
+            () => {},
+          ),
+        ),
+      );
+    }
     await restoreScriptureTextGridProjectSettings(mainPage);
     await closeAllNonHomeDockTabs(mainPage);
   });
@@ -100,7 +120,9 @@ test.describe('Text Collection verse row', () => {
     const stg = await openScriptureTextGrid(mainPage, projectId);
 
     const rows = stg.frame.locator('[role="listitem"]');
-    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    // A row is visible while its cell is still a placeholder, which has no editor to measure.
+    await expect(rows.nth(0).locator('.editor-input')).toBeVisible({ timeout: 15_000 });
+    await expect(rows.nth(1).locator('.editor-input')).toBeVisible({ timeout: 15_000 });
 
     const geometries: RowGeometry[] = await stg.frame.locator('body').evaluate(() => {
       const measure = (row: Element): RowGeometry | undefined => {
@@ -212,7 +234,9 @@ test.describe('Text Collection verse row', () => {
     const stg = await openScriptureTextGrid(mainPage, projectId);
 
     const rows = stg.frame.locator('[role="listitem"]');
-    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    // A row is visible while its cell is still a placeholder, which has no editor to measure.
+    await expect(rows.nth(0).locator('.editor-input')).toBeVisible({ timeout: 15_000 });
+    await expect(rows.nth(1).locator('.editor-input')).toBeVisible({ timeout: 15_000 });
 
     /**
      * Where each row's line 1 starts on screen, measured in from the row's inline-start edge. This
@@ -237,6 +261,26 @@ test.describe('Text Collection verse row', () => {
         }),
       );
 
+    // Start every row at the default level, so a level an earlier run left behind can neither make
+    // the poll below pass before the click lands nor leave Zoom In disabled at the maximum.
+    const webViewId = await waitForOpenWebViewIdByType(mainPage, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
+    const areaIds = await Promise.all([
+      readResourceZoomArea(rows.nth(0)),
+      readResourceZoomArea(rows.nth(1)),
+    ]);
+    zoomedAreas = { webViewId, areaIds };
+    await Promise.all(
+      areaIds.map((areaId) =>
+        sendCommandWithId(mainPage, CONTENT_ZOOM_COMMANDS.reset, webViewId, areaId),
+      ),
+    );
+    const readRowZoom = () =>
+      rows
+        .first()
+        .locator('.stg-verse-row')
+        .evaluate((row) => getComputedStyle(row).getPropertyValue('--stg-zoom').trim());
+    const defaultZoom = await readRowZoom();
+
     const before = await lineOneStarts();
     expect(before.length).toBeGreaterThan(1);
     expect(before[0]).toBeGreaterThan(0);
@@ -244,16 +288,10 @@ test.describe('Text Collection verse row', () => {
 
     // Verse rows have no zoom kebab (that lives in the chapter header band), so drive zoom through
     // the right-click menu, which the cell wrapper exposes in both view modes.
-    await rows.first().click({ button: 'right' });
-    await stg.frame.getByRole('menuitem', { name: /^Zoom In$/i }).click();
-    await expect
-      .poll(() =>
-        rows
-          .first()
-          .locator('.stg-verse-row')
-          .evaluate((row) => getComputedStyle(row).getPropertyValue('--stg-zoom').trim()),
-      )
-      .not.toBe('1');
+    // The item's accessible name ends with its shortcut keycaps, so match the start only.
+    const menu = await openCellContextMenu(stg.frame, rows.first());
+    await menu.getByRole('menuitem', { name: /^Zoom in/i }).click();
+    await expect.poll(readRowZoom).not.toBe(defaultZoom);
 
     const after = await lineOneStarts();
     // The exclusion divides by `--stg-zoom`, so line 1 must start in the same place on screen

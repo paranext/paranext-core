@@ -1031,76 +1031,6 @@ describe('ResourceCellView zoom menus', () => {
     expect(onResetZoom).toHaveBeenCalledTimes(1);
   });
 
-  it('choosing a zoom item in the right-click menu does not bubble a click to the verse row around the cell', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const onRowClick = vi.fn();
-    const onZoomIn = vi.fn();
-    render(
-      // Test-only click sink standing in for the verse `listitem`, whose click opens the chapter
-      // panel; it is not a real interactive control, so the a11y interactivity rules do not apply.
-      // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
-      <div onClick={onRowClick}>
-        <ResourceCellView
-          state="ready"
-          zoomArea={ZOOM_AREA}
-          label="WEB"
-          textDirection="ltr"
-          localizedStrings={menuStrings}
-          copyLimit={undefined}
-          editor={<span>verse</span>}
-          nameDisplay="inline"
-          zoomMenuLabels={zoomMenuLabels}
-          onZoomIn={onZoomIn}
-        />
-      </div>,
-    );
-    fireEvent.contextMenu(screen.getByText('verse'));
-    await user.click(zoomMenuItem('Zoom in'));
-    // Positive control: the item was really chosen, so the silence below is about the bubbling.
-    expect(onZoomIn).toHaveBeenCalledTimes(1);
-    expect(onRowClick).not.toHaveBeenCalled();
-  });
-
-  it('pressing Enter or Space on a zoom item in the right-click menu does not bubble the key to the verse row around the cell', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const onRowKeyDown = vi.fn();
-    const onZoomIn = vi.fn();
-    const onZoomOut = vi.fn();
-    render(
-      // Test-only key sink standing in for the verse `listitem`, whose Enter/Space opens the chapter
-      // panel; it is not a real interactive control, so the a11y interactivity rules do not apply.
-      // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-      <div onKeyDown={onRowKeyDown}>
-        <ResourceCellView
-          state="ready"
-          zoomArea={ZOOM_AREA}
-          label="WEB"
-          textDirection="ltr"
-          localizedStrings={menuStrings}
-          copyLimit={undefined}
-          editor={<span>verse</span>}
-          nameDisplay="inline"
-          zoomMenuLabels={zoomMenuLabels}
-          onZoomIn={onZoomIn}
-          onZoomOut={onZoomOut}
-        />
-      </div>,
-    );
-    fireEvent.contextMenu(screen.getByText('verse'));
-    zoomMenuItem('Zoom in').focus();
-    await user.keyboard('{Enter}');
-    fireEvent.contextMenu(screen.getByText('verse'));
-    zoomMenuItem('Zoom out').focus();
-    await user.keyboard(' ');
-    // Positive controls: both items were really chosen by key, so the silence below is about the
-    // bubbling.
-    expect(onZoomIn).toHaveBeenCalledTimes(1);
-    expect(onZoomOut).toHaveBeenCalledTimes(1);
-    const keysSeenByRow = onRowKeyDown.mock.calls.map(([event]) => event.key);
-    expect(keysSeenByRow).not.toContain('Enter');
-    expect(keysSeenByRow).not.toContain(' ');
-  });
-
   it('header layout: the "⋮" button, named for the resource, opens the three zoom items without Copy', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onZoomIn = vi.fn();
@@ -1647,21 +1577,78 @@ describe('ResourceCellView verse row layout', () => {
       .mockImplementation(function measureElement(this: HTMLElement) {
         return new DOMRect(0, 0, this.classList.contains('stg-verse-name') ? 41.5 : 0, 20);
       });
-    renderCells(
-      <ResourceCellView
-        zoomArea={ZOOM_AREA}
-        copyLimit={undefined}
-        state="ready"
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={localizedStrings}
-        nameDisplay="inline"
-        editor={<span>In the beginning</span>}
-      />,
-    );
-    const row = document.querySelector<HTMLElement>('.stg-verse-row');
-    expect(row?.style.getPropertyValue('--stg-name-width')).toBe('41.5px');
-    measure.mockRestore();
+    try {
+      renderCells(
+        <ResourceCellView
+          zoomArea={ZOOM_AREA}
+          copyLimit={undefined}
+          state="ready"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          nameDisplay="inline"
+          editor={<span>In the beginning</span>}
+        />,
+      );
+      const row = document.querySelector<HTMLElement>('.stg-verse-row');
+      expect(row?.style.getPropertyValue('--stg-name-width')).toBe('41.5px');
+    } finally {
+      measure.mockRestore();
+    }
+  });
+
+  it('catches up on the name width once a row mounted in a hidden tab is shown', () => {
+    // A row in a hidden tab has no layout, so its first measurement is 0; the observer's report
+    // when the tab is shown is what publishes the width.
+    let nameWidth = 0;
+    const measure = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function measureElement(this: HTMLElement) {
+        return new DOMRect(0, 0, this.classList.contains('stg-verse-name') ? nameWidth : 0, 20);
+      });
+    // Reports a resize only for an element the component asked it to observe, as the browser does.
+    const observed = new Set<Element>();
+    let reportResize: (() => void) | undefined;
+    const disconnect = vi.fn();
+    const CapturingResizeObserver = vi.fn((callback: () => void) => {
+      reportResize = () => {
+        if (observed.size > 0) callback();
+      };
+      return {
+        observe: (target: Element) => observed.add(target),
+        unobserve: (target: Element) => observed.delete(target),
+        disconnect,
+      };
+    });
+    vi.stubGlobal('ResizeObserver', CapturingResizeObserver);
+    try {
+      const { unmount } = renderCells(
+        <ResourceCellView
+          zoomArea={ZOOM_AREA}
+          copyLimit={undefined}
+          state="ready"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          nameDisplay="inline"
+          editor={<span>In the beginning</span>}
+        />,
+      );
+      const row = document.querySelector<HTMLElement>('.stg-verse-row');
+      // Positive control: the row rendered, so the missing width is the zero being skipped.
+      expect(row).not.toBeNull();
+      expect(row?.style.getPropertyValue('--stg-name-width')).toBe('');
+
+      nameWidth = 41.5;
+      act(() => reportResize?.());
+      expect(row?.style.getPropertyValue('--stg-name-width')).toBe('41.5px');
+
+      unmount();
+      expect(disconnect).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+      measure.mockRestore();
+    }
   });
 
   it('carries the classes the verse stylesheet scopes its float exclusion on', () => {
@@ -1831,6 +1818,33 @@ describe('ResourceCellView verse row disclosure control', () => {
     const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
     expect(control).toHaveAttribute('aria-expanded', 'true');
     expect(control).toHaveAttribute('aria-controls', 'panel-1');
+  });
+
+  it('toggles once for a double-click on the name', () => {
+    const onDisclosureActivate = vi.fn();
+    renderCells(
+      <ResourceCellView
+        zoomArea={ZOOM_AREA}
+        copyLimit={undefined}
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<span>In the beginning</span>}
+        onDisclosureActivate={onDisclosureActivate}
+        disclosureAccessibleName="WEB, MAT 5:3"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, MAT 5:3' });
+
+    fireEvent.click(control, { detail: 1 });
+    fireEvent.click(control, { detail: 2 });
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(1);
+
+    // Positive control: a keyboard activation (detail 0) still toggles.
+    fireEvent.click(control, { detail: 0 });
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(2);
   });
 
   it("cancels a held Enter's auto-repeats, so holding it toggles once", () => {

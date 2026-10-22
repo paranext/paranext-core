@@ -406,8 +406,13 @@ function ResourceNameDisclosure({
         onKeyDown={(event) => {
           if (event.key === 'Enter' && event.repeat) event.preventDefault();
         }}
-        // The enclosing row ignores clicks on controls inside it, so this click toggles only once.
-        onClick={onActivate}
+        // The enclosing row ignores clicks on controls inside it, so each click toggles only once
+        // here. The second click of a double-click would undo the first, so it is ignored; Enter and
+        // Space activate with a detail of 0, so they are unaffected.
+        onClick={(event) => {
+          if (event.detail > 1) return;
+          onActivate();
+        }}
         className={`tw:h-auto tw:min-w-0 tw:justify-start tw:p-0 tw:no-underline tw:hover:no-underline ${className ?? ''}`}
       >
         {/* Truncation lives on this span because `Button` is `inline-flex`, and text-overflow
@@ -819,18 +824,10 @@ export function ResourceCellView({
               style={{ left: rightClickMenuPos?.x ?? 0, top: rightClickMenuPos?.y ?? 0 }}
             />
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            // The menu is portaled out of the cell's DOM, but React still bubbles its synthetic
-            // events through the component tree, so a click on an item, or Enter/Space choosing one,
-            // would reach the verse `listitem` around this cell and open that row's chapter panel
-            // (the same reason `book-chapter-control.component.tsx` stops keys on its portaled
-            // popover). Only Enter and Space are stopped, so the zoom chords still reach the pane's
-            // own key handling while the menu is open; Radix handles Escape on the document.
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
-            }}
-          >
+          {/* Portaled out of the cell's DOM, but React still bubbles its clicks through the component
+              tree to the verse row around this cell, which ignores clicks that land outside it in
+              the DOM (`isClickOnRowItself` in scripture-text-grid.component.tsx). */}
+          <DropdownMenuContent>
             <DropdownMenuItem
               disabled={!selectedText}
               onSelect={() => {

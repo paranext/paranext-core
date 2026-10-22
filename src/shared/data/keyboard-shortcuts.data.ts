@@ -637,8 +637,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-text-grid-move-between-cells',
-    purpose:
-      "Move to the next or previous control in the Scripture Text Grid — each verse row's name control, plus its reorder grip when reordering is enabled",
+    purpose: 'Move to the next or previous control in the Scripture Text Grid',
     category: 'Navigation',
     context: 'Scripture Text Grid web view',
     keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
@@ -656,16 +655,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-text-grid-reorder-cell',
-    // The reorder grip is rendered only by the header-band layout, which is the chapter and grid
-    // views; the verse view hangs its resource name inline and shows no grip, so there is nothing
-    // to focus there and the arrow keys never reach the handler. Tracked as PT-4184 follow-up.
-    purpose: 'Reorder the focused Scripture Text Grid column one position (chapter and grid views)',
+    // One handler serves every view: ↑ and ← move toward the start, ↓ and → toward the end. The
+    // vertical pair suits the verse view's stacked rows, the horizontal pair the side-by-side columns.
+    purpose:
+      'Move the resource whose reorder grip has focus one position toward the start or the end',
     category: 'View',
     context: 'Scripture Text Grid web view',
     keys: {
-      macOS: '← / →',
-      windows: '← / →',
-      linux: '← / →',
+      macOS: '↑ / ↓ / ← / →',
+      windows: '↑ / ↓ / ← / →',
+      linux: '↑ / ↓ / ← / →',
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',

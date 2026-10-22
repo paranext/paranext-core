@@ -614,14 +614,22 @@ test.describe('Scripture Text Grid accessibility', () => {
     // `FrameLocator` has no `evaluate` (Playwright 1.58). Going through a locator inside the
     // frame runs this in the FRAME's document, which is the point: reading
     // `document.activeElement` from the parent would pass even if focus escaped the iframe.
-    const focused = await stg.frame.locator('body').evaluate(() => ({
-      isRowControl: document.activeElement?.hasAttribute('data-disclosure-control') ?? false,
-      label: document.activeElement?.getAttribute('aria-label') ?? undefined,
-    }));
-    // Tab may land on the next row's control or on this row's reorder grip; either way it must stay
-    // inside the list rather than falling into the editor's contenteditable surface.
+    const focused = await stg.frame.locator('body').evaluate(() => {
+      const element = document.activeElement;
+      return {
+        label: element?.getAttribute('aria-label') ?? undefined,
+        isInsideRow: !!element?.closest('[role="listitem"]'),
+        isRowControl: !!element?.matches('[data-disclosure-control], [data-reorder-handle-id]'),
+        isEditable: element instanceof HTMLElement && element.isContentEditable,
+      };
+    });
+    // The grip leads each row, before its name, so Tab from row 1's name lands on row 2's grip (or
+    // on row 2's name when reordering is off). Either way it is a row control, not the editor's
+    // contenteditable surface.
     expect(focused.label).not.toBe(firstLabel);
-    expect(focused.isRowControl || focused.label?.length).toBeTruthy();
+    expect(focused.isInsideRow).toBe(true);
+    expect(focused.isRowControl).toBe(true);
+    expect(focused.isEditable).toBe(false);
   });
 
   test('focused row control shows a focus ring', async ({ mainPage }) => {
