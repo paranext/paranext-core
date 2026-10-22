@@ -8033,7 +8033,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Alternatives:** Leave each surface to scope its own list — rejected: that is the bug, and the
   two definitions drifted apart within one component. Reset the language selection when the type
   filter changes — rejected: in Get Resources that selection is persisted web view state seeded from
-  installed resources, so a reset destroys a user's choice on a transient type change. Drop a
+  installed resources, so a reset destroys a user's choice on a transient type change. *(Amended
+  2026-10-22: PT-4700 removed the seeding, so the selection starts empty. The rejection still holds,
+  because a reset would still destroy a language the user picked.)* Drop a
   hidden value the next time the selection changes — rejected: it is the same loss by a different
   route, and it makes the result depend on the path the user took: widening the type filter first
   brings the language back, while toggling any other language first loses it. Pass the raw

@@ -480,12 +480,12 @@ export function GetResources({
   /**
    * The language selection split into the languages the filter offers and the ones it is holding.
    *
-   * This selection is persisted across sessions and seeded from installed resources, so narrowing
-   * the type filter can leave a language selected that no longer has a row. Filtering on the raw
-   * selection would empty the grid, and the badge for a language absent from the options renders
-   * with no label — an X the user has to guess at. So only `effectiveLanguages` filters rows or
-   * reaches the language filter; held languages are written back on every change and apply again
-   * once the type filter offers them.
+   * This selection persists in web view state for as long as the dialog stays in the layout, so
+   * narrowing the type filter can leave a language selected that no longer has a row. Filtering on
+   * the raw selection would empty the grid, and the badge for a language absent from the options
+   * renders with no label — an X the user has to guess at. So only `effectiveLanguages` filters
+   * rows or reaches the language filter; held languages are written back on every change and apply
+   * again once the type filter offers them.
    */
   const { offered: effectiveLanguages, held: heldLanguages } = useMemo(
     () => partitionFilterSelection(selectedLanguages, languageOptions),

@@ -93,8 +93,6 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     resolvedResources.length > 0,
   );
 
-  const [isInitialized, setIsInitialized] = useState<boolean>(false);
-
   const [selectedTypes, setSelectedTypes] = useWebViewState<string[]>('typeFilter', [
     'ScriptureResource',
   ]);
@@ -106,34 +104,6 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId),
     [],
   );
-
-  // When no languages are selected on the first render of this component, set default selection to
-  // languages that have resources installed
-  useEffect(() => {
-    if (isInitialized) return;
-    if (selectedLanguages.length > 0) {
-      setIsInitialized(true);
-      return;
-    }
-    if (resolvedResources.length > 0 && selectedLanguages.length === 0) {
-      setSelectedLanguages(
-        Array.from(
-          new Set(
-            resolvedResources
-              .filter((resource) => resource.installed === true)
-              .map((resource) => resource.bestLanguageName),
-          ),
-        ),
-      );
-      setIsInitialized(true);
-    }
-  }, [
-    selectedLanguages.length,
-    setSelectedLanguages,
-    isInitialized,
-    setIsInitialized,
-    resolvedResources,
-  ]);
 
   const [installInfo, setInstallInfo] = useState<InstallInfo[]>([]);
 
