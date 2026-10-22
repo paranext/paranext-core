@@ -8,7 +8,7 @@ import * as SillsdevScripture from '@sillsdev/scripture';
 import * as papiCore from '@shared/services/papi-core.service';
 import papiFrontend, { Papi } from '@renderer/services/papi-frontend.service';
 import { getModuleSimilarApiMessage } from '@shared/utils/util';
-import { WebViewErrorBoundary as WebViewErrorBoundaryComponent } from '@renderer/components/web-view-error-boundary.component';
+import { renderWebViewInErrorBoundary as renderWebViewInErrorBoundaryFunction } from '@renderer/components/web-view-error-boundary.component';
 import { useWebViewState } from '@renderer/hooks/use-web-view-state.hook';
 import { useWebViewScrollGroupScrRef } from '@renderer/hooks/use-web-view-scroll-group-scr-ref.hook';
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
@@ -137,10 +137,10 @@ declare global {
   var ReactDom: typeof ReactDOM;
   var ReactDOMClient: ReactDOMClientType;
   var createRoot: typeof ReactDOMClient.createRoot;
-  // Wraps each web view's root element so a render throw shows a message instead of blanking the
-  // pane. Exposed here for the same reason as `createRoot`: the web view service renders it from
-  // inside the iframe's generated script, where only globals are in scope.
-  var WebViewErrorBoundary: typeof WebViewErrorBoundaryComponent;
+  // Renders each web view's component inside its error boundary, so a render throw shows a message
+  // instead of blanking the pane. Exposed here for the same reason as `createRoot`: the web view
+  // service calls it from inside the iframe's generated script, where only globals are in scope.
+  var renderWebViewInErrorBoundary: typeof renderWebViewInErrorBoundaryFunction;
   var SillsdevScripture: SillsdevScriptureType;
   // Web view cleanup functions for iframe content
   var webViewCleanup: WebViewCleanup;
@@ -158,7 +158,7 @@ globalThis.ReactJsxRuntime = ReactJsxRuntime;
 globalThis.ReactDom = ReactDOM;
 globalThis.ReactDOMClient = ReactDOMClient;
 globalThis.createRoot = ReactDOMClient.createRoot;
-globalThis.WebViewErrorBoundary = WebViewErrorBoundaryComponent;
+globalThis.renderWebViewInErrorBoundary = renderWebViewInErrorBoundaryFunction;
 globalThis.SillsdevScripture = SillsdevScripture;
 globalThis.webViewRequire = webViewRequire;
 // We store the hook reference because we need it to bind it to the webview's iframe 'window' context
