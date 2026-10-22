@@ -59,7 +59,14 @@ export {
   isCharacterMarker,
   isParagraphMarker,
 } from './markers/usfm-markers';
-export { MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR, ZOOM_STEP } from './content-zoom.util';
+export {
+  MIN_ZOOM_FACTOR,
+  MAX_ZOOM_FACTOR,
+  ZOOM_STEP,
+  CONTENT_ZOOM_IN_SHORTCUT,
+  CONTENT_ZOOM_OUT_SHORTCUT,
+  CONTENT_ZOOM_RESET_SHORTCUT,
+} from './content-zoom.util';
 
 // Enums
 export { Section } from './scripture/scripture-util';
@@ -131,6 +138,7 @@ export {
   transformAndEnsureRegExpRegExpArray,
   collapseMiddleWords,
 } from './string-util';
+export { truncateToCopyLimit } from './copy-limit.util';
 export { getPaneSizeLimits } from './pane-utils';
 export { newPlatformError, isPlatformError } from './platform-error';
 export { default as deepEqual } from './equality-checking';
@@ -149,6 +157,7 @@ export {
   compareProjectShortNames,
   type ProjectNames,
 } from './project-util';
+export { createCachedInitializer } from './promises/cached-initializer';
 export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
 export { MODIFIER_KEYS, getLocalizeKeyForPhysicalKey } from './keyboard-util';
 export { computeEffectiveStructureProtection } from './structure-protection.util';
@@ -172,6 +181,7 @@ export type {
   CanHaveOnDidDispose,
 } from './lifetime-management/disposal.model';
 export type { PaneSizeLimitsOptions } from './pane-utils';
+export type { ContentZoomShortcut } from './content-zoom.util';
 export type { PlatformError, PlatformErrorCode } from './platform-error';
 export type {
   PlatformEventHandler,

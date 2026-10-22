@@ -41,7 +41,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_open_status%': 'Test Sync status',
       '%toolbar_sync_status_synced%': 'Test Synced',
       '%toolbar_sync_status_syncing%': 'Test Syncing',
+      '%toolbar_sync_popover_unsynced_receive%': 'Test Changes to receive:',
+      '%toolbar_sync_popover_unsynced_send%': 'Test Changes to send:',
       '%toolbar_sync_status_unknown%': 'Test Sync status unavailable',
+      '%toolbar_sync_status_unsynced%': 'Test Unsynced changes',
       '%mainMenu_openHome%': 'Home',
       '%projectPicker_no_results%': 'Test no projects found',
       '%projectPicker_readOnly_label%': 'Test read-only',
@@ -415,9 +418,9 @@ describe('PlatformBibleToolbar — Sync button', () => {
 
   it('is rendered despite unavailable send/receive once the backend reports a sync', async () => {
     // Syncs also start from paths that never touch the send/receive extension — `startup-tasks.ts`
-    // calls the dotnet `syncProjects` command directly. In Simple mode the persistent toast is
-    // suppressed in favour of this indicator, so hiding it on a settled `false` would leave a real,
-    // multi-minute sync with no surface and no way to cancel.
+    // calls the dotnet `syncProjects` command directly. In Simple mode that call suppresses the
+    // dotnet progress toast in favour of this indicator, so hiding it on a settled `false` would
+    // leave a real, multi-minute sync with no surface and no way to cancel.
     vi.mocked(useSendReceiveAvailability).mockReturnValue(false);
     mockSendCommand(false);
     render(<PlatformBibleToolbar />);

@@ -5,12 +5,12 @@ import {
 } from '@shared/services/project-settings.service-model';
 import { networkObjectService } from '@shared/services/network-object.service';
 import {
+  createCachedInitializer,
   createSyncProxyForAsyncObject,
   Localized,
   ReferencedItem,
   transformAndEnsureRegExpRegExpArray,
 } from 'platform-bible-utils';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
 import { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import { areProjectInterfacesIncluded } from '@shared/models/project-lookup.service-model';

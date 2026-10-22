@@ -1,6 +1,7 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { ButtonGroup } from '@/components/shadcn-ui/button-group';
 import { CancelAcceptButtons } from '@/components/basics/cancel-accept-buttons.component';
+import { cn } from '@/utils/shadcn-ui/utils';
 import {
   defaultStyleInfo,
   DeltaOp,
@@ -19,26 +20,43 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import { Copy } from 'lucide-react';
 import {
-  clearPaletteSessionIfCurrent,
-  handleMarkerPaletteSessionKeyDown,
   isImeCompositionKeyEvent,
   type MarkerPaletteKeyEvent,
 } from '@/components/advanced/marker-palette-keydown.util';
 import {
+  captureEditorContentSnapshot,
+  hasEditorChanged,
+  type EditorContentSnapshot,
+} from '@/components/advanced/marker-palette-change-guard.util';
+import {
   runMarkerPaletteSession,
   type MarkerPaletteOpenSession,
 } from '@/components/advanced/marker-palette-session.util';
+import { routeMarkerPaletteKey } from '@/components/advanced/marker-palette-keys.util';
+import { useMarkerPaletteCompositionClose } from '@/components/advanced/use-marker-palette-composition-close.hook';
+import { useMarkerPaletteFocusOutCapture } from '@/components/advanced/use-marker-palette-focus-out-capture.hook';
+import { useMarkerPaletteSessionWriters } from '@/components/advanced/use-marker-palette-session-writers.hook';
+import { isNoteMarker } from '@/components/advanced/marker-palette-filter.util';
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  Ref,
   RefObject,
 } from 'react';
 import '@/components/advanced/footnote-editor/editor-overrides.css';
-import { ABORTED, getErrorMessage, isPlatformError, type PaletteItem } from 'platform-bible-utils';
+import {
+  ABORTED,
+  deepEqual,
+  getErrorMessage,
+  isPlatformError,
+  truncateToCopyLimit,
+  type PaletteItem,
+} from 'platform-bible-utils';
 import type { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -59,20 +77,66 @@ import {
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
+import { isEditorContextMenuOpenFor } from '../editor-context-menu.util';
 import { MarkerMenu } from '../marker-menu.component';
-import { generateInlineMarkerMenuListItems } from './footnote-editor.utils';
+import { generateInlineMarkerMenuListItems, isUnclosedNoteOp } from './footnote-editor.utils';
+import { FootnoteCaretPosition } from '../footnotes/footnotes.types';
+
+/**
+ * What a host can ask an inline `FootnoteEditor` to do directly, rather than through props.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
+ */
+export interface FootnoteEditorHandle {
+  /**
+   * Applies to the parent editor whatever inline edit is still sitting inside the live-apply
+   * debounce, right now.
+   *
+   * A host that ends an editing session must call this BEFORE tearing its own bookkeeping down.
+   * Unmounting this component flushes too, but that happens a commit later, by which time the host
+   * no longer recognizes the apply as the session's own tail — and a note replacement that arrives
+   * unattributed is indistinguishable from a newly inserted note. A no-op when nothing is pending
+   * or the note is unchanged.
+   */
+  flushPendingEdits: () => void;
+  /** Puts DOM focus back in the note text, on the caret the editor last held. */
+  focus: () => void;
+  /**
+   * Whether DOM focus is anywhere in this editor - its note text or its own controls. Reads the
+   * document's active element, so it stays true while the window itself is not focused.
+   */
+  containsFocus: () => boolean;
+}
 
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
-  /** Class name for styling the embedded `Editor` component in this editor popover */
+  /** Class name for styling the `Editor` this component embeds for the note's text */
   classNameForEditor?: string;
   /** Delta ops for the current note being edited that are applied to the note editorial */
   noteOps: DeltaOpInsertNoteEmbed[] | undefined;
-  /** External function to handle closing the footnote editor */
+  /**
+   * Called when the editing session ends, which is the host's cue to stop rendering this component.
+   * Edits are KEPT on every path but popover Cancel:
+   *
+   * - Popover Save: the note is applied to the parent first.
+   * - Popover Cancel: nothing is applied.
+   * - A book or chapter change: saved as Save saves (popover), or flushed (inline).
+   * - Escape in the inline editor (from its text or its own controls): whatever is still inside the
+   *   live-apply debounce is applied first. An Escape that a layer inside the editor claims to
+   *   close itself (the marker palette, the editor's right-click menu, a tooltip) does not end the
+   *   session.
+   */
   onClose: () => void;
   /** The scripture reference for the parent editor */
   scrRef: SerializedVerseRef;
-  /** The unique note key to identify the note being edited used to apply changes to the note */
+  /**
+   * The unique note key to identify the note being edited used to apply changes to the note.
+   *
+   * Read at apply time, not at load time: a new key on its own does NOT reload the editor's
+   * document, because an inline session's own live-apply re-keys the note it is editing on every
+   * apply and reloading there would discard the caret and anything still inside the apply debounce.
+   * To load a different note, hand over a new `noteOps` ARRAY IDENTITY (alongside its key).
+   */
   noteKey: string | undefined;
   /** View options of the parent editor */
   editorOptions: EditorOptions;
@@ -93,20 +157,44 @@ export interface FootnoteEditorProps {
    */
   parentEditorRef?: RefObject<EditorRef | null>;
   /**
+   * When true, renders for in-place embedding (e.g. inside a footnotes pane row) instead of a
+   * popover: fluid width (no width-lock), no Save/Cancel buttons, and edits apply live to the
+   * parent editor (debounced) rather than on explicit save. This mode is fixed for the component's
+   * lifetime - toggling it on a mounted instance is unsupported (e.g. the popover width-lock effect
+   * never clears a previously-locked `style.width` when `inline` flips to `true`, so the container
+   * stays stuck at its old fixed width instead of going fluid).
+   *
+   * @default false
+   */
+  inline?: boolean;
+  /**
+   * Imperative handle for an inline-mode host. See {@link FootnoteEditorHandle}.
+   *
+   * @experimental This property is unstable and may change shape or disappear without notice
+   */
+  ref?: Ref<FootnoteEditorHandle>;
+  /**
+   * Where to place the caret in the note text after the note loads. `'end'` matches PT9's
+   * caller-click behavior; a `utf16Offset` supports caret-where-you-clicked from a pane row.
+   * Omitting it is the same as `'end'` — the editor always places a caret, so a note opened from
+   * any surface is ready to type in.
+   */
+  initialCaretPosition?: FootnoteCaretPosition;
+  /**
    * Optional marker-palette driver (standard-view host wiring for PT9 parity). When provided in
-   * editable marker mode, a typed `\` inside this popover's own editor opens the same palette the
-   * main editor uses instead of the built-in inline markers menu below; when absent, editable mode
-   * falls back to pass-through-only behavior (literal typing works, no menu) — a graceful
+   * editable marker mode, a typed `\` inside this component's own note text opens the same palette
+   * the main editor uses instead of the built-in inline markers menu below; when absent, editable
+   * mode falls back to pass-through-only behavior (literal typing works, no menu) — a graceful
    * degradation for hosts that haven't wired one up. Never consulted outside editable marker mode —
    * the built-in `MarkerMenu` popup below owns that path unconditionally.
    */
   markerPalette?: FootnoteEditorMarkerPalette;
   /**
-   * Called whenever the user edits the note in this popover: a content change (the auto-save path),
+   * Called whenever the user edits the note in this editor: a content change (the auto-save path),
    * a caller-type change, or a custom-caller change. NOT called for programmatic initialization
-   * (popover mount / initial content load). Carries no data — `onChange` is the data path — so
-   * hosts can use it as a pure liveness signal for the editing session (e.g. refreshing a staleness
-   * clock so a long live edit is never treated as an abandoned session).
+   * (mount / initial content load). Carries no data — `onChange` is the data path — so hosts can
+   * use it as a pure liveness signal for the editing session (e.g. refreshing a staleness clock so
+   * a long live edit is never treated as an abandoned session).
    */
   onNoteEdit?: () => void;
 }
@@ -120,23 +208,25 @@ export interface FootnoteEditorProps {
  */
 export interface FootnoteEditorMarkerPalette extends PaletteDriver {
   /**
-   * Shows the palette anchored at the given position. `passive` mirrors
-   * `CommandPaletteRequest.passive` — when true, the palette never steals focus and its filter and
-   * highlighted selection are driven externally via the driver's `update`.
+   * Shows the palette anchored at the given position.
+   *
+   * ONE options object, deliberately, rather than positional parameters: TypeScript accepts an
+   * implementation with a shorter arity, so a version that omitted the last parameter compiled
+   * while silently dropping it — which is how the popover's selection palette once opened with no
+   * key forwarding at all, and none of its commit semantics ran.
    *
    * @returns The selected item's `id`, or `undefined` if dismissed.
    */
-  show(
-    items: PaletteItem[],
-    anchor: { x: number; y: number; width?: number; height?: number },
-    passive: boolean,
+  show(options: {
+    items: PaletteItem[];
+    anchor: { x: number; y: number; width?: number; height?: number };
     /**
      * Keys the session claims while the palette is open. The palette forwards exactly these back
      * instead of acting on them, so the session's semantics run whichever document holds focus —
-     * without it, a palette that takes focus silently takes the session's keys with it.
+     * and a list-focused palette forwards every key regardless.
      */
-    keyForwarding?: PaletteKeyForwarding,
-  ): Promise<string | undefined>;
+    keyForwarding?: PaletteKeyForwarding;
+  }): Promise<string | undefined>;
 }
 
 /**
@@ -162,6 +252,49 @@ export function markerMenuItemToPaletteItem(item: EditorMarkerMenuItem): Palette
     badge: item.kind === 'closeTag' ? '%markerMenu_endTag_label%' : undefined,
     muted: !item.isBasic,
   };
+}
+
+/** How many units of a document `ops` insert: a string's length, one per embed. */
+function deltaOpsLength(ops: DeltaOp[]): number {
+  return ops.reduce(
+    (length, op) => length + (typeof op.insert === 'string' ? op.insert.length : 1),
+    0,
+  );
+}
+
+/**
+ * Whether `ops` begin with exactly the content `prefix` inserts, however either splits its text.
+ * Walks both lists in step and stops when `prefix` runs out, so the cost follows `prefix`, not
+ * everything in `ops`.
+ */
+function deltaOpsStartWith(ops: DeltaOp[], prefix: DeltaOp[]): boolean {
+  let opIndex = 0;
+  // How far into `ops[opIndex]`'s text the comparison has reached.
+  let opOffset = 0;
+  return prefix.every((prefixOp) => {
+    if (typeof prefixOp.insert !== 'string') {
+      const op = ops[opIndex];
+      if (opOffset !== 0 || !op || !deepEqual(op, prefixOp)) return false;
+      opIndex += 1;
+      return true;
+    }
+    let remaining = prefixOp.insert;
+    while (remaining.length > 0) {
+      const op = ops[opIndex];
+      if (!op || typeof op.insert !== 'string' || !deepEqual(op.attributes, prefixOp.attributes))
+        return false;
+      const available = op.insert.slice(opOffset);
+      const compared = Math.min(available.length, remaining.length);
+      if (available.slice(0, compared) !== remaining.slice(0, compared)) return false;
+      remaining = remaining.slice(compared);
+      opOffset += compared;
+      if (opOffset === op.insert.length) {
+        opIndex += 1;
+        opOffset = 0;
+      }
+    }
+    return true;
+  });
 }
 
 /**
@@ -220,6 +353,12 @@ function crossReferenceToFootnoteOp(op: DeltaOp) {
   }
 }
 
+/** Debounce interval for inline-mode live application of note edits to the parent editor. */
+export const INLINE_APPLY_DEBOUNCE_MS = 300;
+
+/** The custom caller offered for a note that does not have one of its own yet. */
+const DEFAULT_CUSTOM_CALLER = '*';
+
 // TODO: Remove this once the new marker menu is implemented with correct logic
 /**
  * This is for a temporary fix to get the markers menu to work by having the default usj include a
@@ -259,6 +398,9 @@ export default function FootnoteEditor({
   defaultMarkerMenuTrigger,
   localizedStrings,
   parentEditorRef,
+  inline = false,
+  ref,
+  initialCaretPosition,
   markerPalette,
   onNoteEdit,
 }: FootnoteEditorProps) {
@@ -269,6 +411,46 @@ export default function FootnoteEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   /* eslint-enable no-null/no-null */
 
+  // The note key can be re-minted by the parent editor whenever the embed is replaced
+  // (live-apply does this constantly in inline mode). Only a new `noteOps` array means
+  // "load a different note"; the key alone must never trigger a reload, so track it in
+  // a ref instead of using it as a load-effect dependency.
+  const noteKeyRef = useRef(noteKey);
+  useEffect(() => {
+    noteKeyRef.current = noteKey;
+  }, [noteKey]);
+
+  // `initialCaretPosition` is a load-time-only input, like `noteKey`: it must not trigger a
+  // reload of the note, so the load effect below reads it via a ref updated per render rather
+  // than depending on it directly.
+  const initialCaretPositionRef = useRef(initialCaretPosition);
+  useEffect(() => {
+    initialCaretPositionRef.current = initialCaretPosition;
+  }, [initialCaretPosition]);
+
+  /**
+   * Puts the caret where this editing session should begin: at the consumer's
+   * `initialCaretPosition` when it gave one, and otherwise at the end of the note's text - PT9's
+   * "ready to type immediately". `0` is this editor's own note index; it always holds exactly one
+   * note (see the other `getNoteOps(0)` call sites below).
+   *
+   * The editor resolves a position against its own nodes (`EditorRef.selectNoteTextOffset`), over
+   * the note's CONTENT text and its runs' markers — the same text `FootnoteItem` renders in a row's
+   * `.textual-note-body`, addressed as {@link FootnoteCaretPosition} defines. Nothing here measures
+   * the DOM, so the placement needs no deferral: the note it addresses exists as soon as the load's
+   * `applyUpdate` has run, and because the caret becomes the editor's OWN remembered selection, a
+   * `focus()` alongside re-asserts it rather than overwriting it.
+   */
+  const placeInitialCaret = useCallback(() => {
+    const caretPosition = initialCaretPositionRef.current;
+    if (caretPosition !== undefined && caretPosition !== 'end')
+      editorRef.current?.selectNoteTextOffset(0, caretPosition.utf16Offset, {
+        field: caretPosition.field,
+        glyph: caretPosition.glyph,
+      });
+    else editorRef.current?.selectNote(0);
+  }, []);
+
   // Lock the container width to its natural rendered width so content changes (e.g. switching
   // language, undo/redo enabling) don't cause the popover to resize while editing.
   // useLayoutEffect fires after DOM layout but before paint, so the measured width is the natural
@@ -278,15 +460,17 @@ export default function FootnoteEditor({
   // as `style.width` would apply the zoom a second time and make the editor wider than its pop-up.
   // The computed value is in the element's own CSS pixels and keeps sub-pixel precision.
   useLayoutEffect(() => {
+    // Inline mode lives in a pane and must track its container's width instead of locking.
+    if (inline) return;
     if (!containerRef.current) return;
     const width = parseFloat(getComputedStyle(containerRef.current).width);
     if (width > 0) containerRef.current.style.width = `${width}px`;
-  }, []);
+  }, [inline]);
 
   const [callerType, setCallerType] = useState<FootnoteCallerType>('generated');
   const [originalCallerType, setOriginalCallerType] = useState<FootnoteCallerType>('generated');
-  const [customCaller, setCustomCaller] = useState<string>('*');
-  const [originalCustomCaller, setOriginalCustomCaller] = useState<string>('*');
+  const [customCaller, setCustomCaller] = useState<string>(DEFAULT_CUSTOM_CALLER);
+  const [originalCustomCaller, setOriginalCustomCaller] = useState<string>(DEFAULT_CUSTOM_CALLER);
 
   const [noteType, setNoteType] = useState<string>('f');
 
@@ -297,6 +481,87 @@ export default function FootnoteEditor({
   const [canRedo, setCanRedo] = useState(false);
   const hasInitializedEditor = useRef(false);
   const initialNoteOpsJson = useRef('');
+  /** Whether the user has changed this note since it loaded (see `flushPendingEdits`). */
+  const hasUserEditsRef = useRef(false);
+
+  /**
+   * What the parent editor is known to hold for this note: the op it was loaded with, then whatever
+   * each inline apply wrote. Compared against before applying so an unchanged note is never written
+   * back (see {@link saveCurrentNoteOp}). Held as the op itself and compared STRUCTURALLY: a
+   * serialized comparison would call two notes with the same content different whenever their keys
+   * happened to be written in a different order, which is exactly the silent re-key this dedupe
+   * exists to prevent.
+   */
+  const lastAppliedNoteOpRef = useRef<DeltaOpInsertNoteEmbed | undefined>(undefined);
+
+  /**
+   * Text that has left the note and belongs right after it in the Scripture text. This editor's
+   * paragraph holds the note alone, so anything that turns up after the note has left it - typing
+   * the note's closer (`\f*`) in the middle of an unclosed note closes the note there, and the rest
+   * of what was in it belongs after the note. It is taken out of this editor as soon as it appears
+   * (see {@link takeTextAfterNote}) and reaches the parent with the next apply.
+   *
+   * Kept in step with this editor's undo history (see {@link followCarriedTextThroughHistory}): the
+   * undo that opens the note again puts the text back in it, so none belongs after the note until a
+   * redo closes it again.
+   */
+  const carriedTextRef = useRef<DeltaOp[]>([]);
+  /** What the parent holds right after the note from {@link carriedTextRef}, as last applied. */
+  const appliedCarriedTextRef = useRef<DeltaOp[]>([]);
+  /**
+   * Carried text an undo put back into the note, with the note as it was on either side of that
+   * undo, so a redo from exactly there carries the text out again. Dropped once the note changes in
+   * any other way, which is also when this editor's redo history is gone.
+   */
+  const undoneCarryRef = useRef<
+    { text: DeltaOp[]; closedNoteOp: DeltaOp; openNoteOp: DeltaOp } | undefined
+  >(undefined);
+  /** The note as of the last content change, to tell an undo or redo that opens or closes it. */
+  const lastNoteOpRef = useRef<DeltaOp | undefined>(undefined);
+
+  const takeTextAfterNote = useCallback(() => {
+    // Taken as part of the undo step that closed the note, so one undo opens it again with the
+    // text back inside rather than bringing the text back after it (where it would be taken again).
+    const taken = editorRef.current?.takeOpsAfterNote(0);
+    if (!taken?.length) return;
+    carriedTextRef.current = [...carriedTextRef.current, ...taken];
+    undoneCarryRef.current = undefined;
+  }, []);
+
+  /**
+   * Follows the carried text through an undo or redo that crosses the note's close. Only an undo
+   * opens a closed note here - this editor protects the closer - and only the redo of that undo
+   * closes it again with nothing left after it; any other change ends the chance of that redo.
+   */
+  const followCarriedTextThroughHistory = useCallback(
+    (previousNoteOp: DeltaOp | undefined, noteOp: DeltaOp) => {
+      if (!previousNoteOp) return;
+      const wasOpen = isUnclosedNoteOp(previousNoteOp);
+      const isOpen = isUnclosedNoteOp(noteOp);
+      if (!wasOpen && isOpen) {
+        undoneCarryRef.current = {
+          text: carriedTextRef.current,
+          closedNoteOp: previousNoteOp,
+          openNoteOp: noteOp,
+        };
+        carriedTextRef.current = [];
+        return;
+      }
+      const undone = undoneCarryRef.current;
+      if (!undone) return;
+      if (
+        wasOpen &&
+        !isOpen &&
+        deepEqual(previousNoteOp, undone.openNoteOp) &&
+        deepEqual(noteOp, undone.closedNoteOp) &&
+        !editorRef.current?.getOpsAfterNote(0)?.length
+      ) {
+        carriedTextRef.current = undone.text;
+        undoneCarryRef.current = undefined;
+      } else if (!deepEqual(noteOp, undone.openNoteOp)) undoneCarryRef.current = undefined;
+    },
+    [],
+  );
 
   const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
 
@@ -325,10 +590,10 @@ export default function FootnoteEditor({
    * scoped to this popover's own `.editor-input` and driven by its own `editorRef`. Both kinds are
    * ACTIVE: the trigger is claimed and never lands, and typed characters filter the palette through
    * the shared capture-phase table (`handleMarkerPaletteSessionKeyDown`) — never the document. The
-   * collapsed-caret trigger opens a non-focus-stealing palette (`kind: 'backslash'`); the
-   * selection-wrap trigger opens a FOCUSED palette tracked as `kind: 'selection'`, whose keys the
-   * table claims wholesale because the cross-frame focus handoff can lose, and an unclaimed
-   * keystroke would replace the wrapped selection.
+   * collapsed-caret trigger opens one tracked as `kind: 'backslash'`; the selection-wrap trigger
+   * opens one tracked as `kind: 'selection'`. Both focus the palette's LIST — the kind decides how
+   * a commit APPLIES, not focus — and the table claims their keys wholesale because the cross-frame
+   * focus handoff can lose, and an unclaimed keystroke would replace the wrapped selection.
    */
   const paletteSession = useRef<MarkerPaletteOpenSession<EditorMarkerMenuItem> | undefined>(
     undefined,
@@ -336,6 +601,23 @@ export default function FootnoteEditor({
 
   /** Monotonic allocator for {@link paletteSession} tokens. */
   const paletteSessionCounter = useRef(0);
+
+  const markerPaletteRef = useRef(markerPalette);
+  useEffect(() => {
+    markerPaletteRef.current = markerPalette;
+  }, [markerPalette]);
+
+  // A session outliving this editor would leave the palette on screen offering items there is no
+  // longer a note to apply to, and its host still counting a palette as open (which reads as an
+  // editing session in progress). Every close unmounts this component, so this covers them all.
+  useEffect(
+    () => () => {
+      if (!paletteSession.current) return;
+      paletteSession.current = undefined;
+      markerPaletteRef.current?.dismiss();
+    },
+    [],
+  );
 
   /**
    * Last live USJ selection of this popover's editor, captured as focus left it (the focusout
@@ -345,6 +627,37 @@ export default function FootnoteEditor({
    * note loads so a stale capture can never place a commit inside the wrong note.
    */
   const lastFocusOutSelectionRef = useRef<SelectionRange | undefined>(undefined);
+
+  /**
+   * This popover editor's content and caret as focus left it for an open palette — the baseline the
+   * change guard compares against. Same moment and same reason as the capture above: it is the last
+   * point the caret is readable before Lexical's blur processing nulls it.
+   */
+  const paletteBaselineSnapshotRef = useRef<EditorContentSnapshot | undefined>(undefined);
+
+  /**
+   * Whether this note changed under the open palette. ONE function for both consumers of it: the
+   * session spine, which asks before a highlighted commit, and the key router, which asks before
+   * each TYPED commit.
+   */
+  const hasEditorChangedSinceFocus = useCallback(
+    () =>
+      hasEditorChanged(
+        paletteBaselineSnapshotRef.current,
+        captureEditorContentSnapshot(
+          () => editorRef.current?.getUsj(),
+          () => editorRef.current?.getSelection(),
+        ),
+      ),
+    [],
+  );
+
+  const { setSession: setPaletteSession, clearSessionIfCurrent: clearPaletteSession } =
+    useMarkerPaletteSessionWriters({
+      sessionRef: paletteSession,
+      editorRef,
+      baselineRef: paletteBaselineSnapshotRef,
+    });
 
   /**
    * Restores the caret when the editor's selection has been lost, leaving a live one alone.
@@ -439,71 +752,6 @@ export default function FootnoteEditor({
     return !!noteElement && !!anchorNode && noteElement.contains(anchorNode);
   }, []);
 
-  // When the component loads, applies the note ops to the current editor, gets the note ref and caller
-  useEffect(() => {
-    let timeout: ReturnType<typeof setTimeout>;
-    let reassertFrame: ReturnType<typeof requestAnimationFrame> | undefined;
-    let reassertTimeout: ReturnType<typeof setTimeout> | undefined;
-    hasInitializedEditor.current = false;
-    lastFocusOutSelectionRef.current = undefined;
-    setIsAtInitialState(true);
-    const noteOp = noteOps?.at(0);
-    if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
-      const rawCaller = noteOp.insert.note?.caller;
-      // Parses the current caller
-      let parsedCallerType: FootnoteCallerType = 'custom';
-      if (rawCaller === GENERATOR_NOTE_CALLER) {
-        parsedCallerType = 'generated';
-      } else if (rawCaller === HIDDEN_NOTE_CALLER) {
-        parsedCallerType = 'hidden';
-      } else if (rawCaller) {
-        setCustomCaller(rawCaller);
-        setOriginalCustomCaller(rawCaller);
-      }
-      setCallerType(parsedCallerType);
-      setOriginalCallerType(parsedCallerType);
-      // Assigns note type
-      setNoteType(noteOp.insert.note?.style ?? 'f');
-      timeout = setTimeout(() => {
-        // Inserts the note node to be edited as a delta operation, at OT index 0: the wrapper
-        // paragraph renders NO marker prefix in any marker mode (`showParaMarkerPrefixes: false`
-        // in the options above), so there are no prefix bytes to retain past — index 0 IS the
-        // start of the paragraph's content.
-        editorRef.current?.applyUpdate([noteOp]);
-        // Land the caret at the end of the last footnote-text char span (`\ft`/`\xt`) to match
-        // PT9 behavior of being ready to type immediately. `0` is this popover's own note index —
-        // it always holds exactly one note (see the other `getNoteOps(0)` call sites below).
-        // Applies to REOPENED notes too: each popover instance mounts fresh, so there is never a
-        // prior caret to preserve — only Radix's open-autofocus parking the DOM caret at the
-        // wrapper-para start (outside the note body), where Enter plain-split and the `\`
-        // palette both resolved against the WRONG context.
-        editorRef.current?.selectNote(0);
-        editorRef.current?.focus();
-        // Radix's open-autofocus (load-bearing for the focus handoff into this popover —
-        // preventing it was falsified live) can land AFTER this and park the DOM caret at the
-        // wrapper-para start, where Enter plain-splits instead of inserting \fp.
-        // Re-assert the note selection once the autofocus has settled (a frame plus a
-        // macrotask later); skipped when the caret is already inside the note so a user's own
-        // click is never overridden.
-        reassertFrame = requestAnimationFrame(() => {
-          reassertTimeout = setTimeout(() => {
-            if (isDomCaretInsideNote()) return;
-            editorRef.current?.selectNote(0);
-            editorRef.current?.focus();
-          }, 0);
-        });
-      }, 0);
-    }
-
-    return () => {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-      if (reassertFrame !== undefined) cancelAnimationFrame(reassertFrame);
-      if (reassertTimeout !== undefined) clearTimeout(reassertTimeout);
-    };
-  }, [noteOps, noteKey, isDomCaretInsideNote]);
-
   /**
    * Gets the current note op from the editor, applies the given caller, calls onChange, and
    * optionally applies the change to the parent editor via replaceEmbedUpdate.
@@ -525,12 +773,49 @@ export default function FootnoteEditor({
       const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
       if (currentNoteOp && isInsertEmbedOpOfType('note', currentNoteOp)) {
         onChange?.([currentNoteOp]);
-        if (applyToParent && parentEditorRef && noteKey) {
-          parentEditorRef.current?.replaceEmbedUpdate(noteKey, [currentNoteOp]);
+        if (applyToParent && parentEditorRef && noteKeyRef.current) {
+          // `replaceEmbedUpdate` always swaps the note node, which re-mints its key, but the
+          // parent only announces the swap (and the new key) when the document actually changed.
+          // In inline mode the host holds that key for every later apply, so re-keying the note
+          // behind its back with content it already has would silently strand the session. The
+          // popover deliberately keeps applying unconditionally: its Save is also what confirms a
+          // newly inserted note, which would otherwise be discarded as abandoned on close.
+          // Text still after the note in this editor is carried text whose take (deferred out of
+          // the change listener) has not run yet. It is read, not taken, so a session that ends
+          // before the take still carries it, and the take later yields the same ops.
+          const carriedText = [
+            ...carriedTextRef.current,
+            ...(editorRef.current?.getOpsAfterNote(0) ?? []),
+          ];
+          const appliedCarriedText = appliedCarriedTextRef.current;
+          const isCarriedTextChanged = !deepEqual(carriedText, appliedCarriedText);
+          if (
+            inline &&
+            !isCarriedTextChanged &&
+            deepEqual(currentNoteOp, lastAppliedNoteOpRef.current)
+          )
+            return;
+          lastAppliedNoteOpRef.current = currentNoteOp;
+          const replaceOps: DeltaOp[] = [currentNoteOp];
+          if (isCarriedTextChanged) {
+            // What an earlier apply put after the note is replaced only while it is still there as
+            // applied: text since edited in the Scripture text is the user's, and stays.
+            const isAppliedTextInPlace =
+              appliedCarriedText.length > 0 &&
+              deltaOpsStartWith(
+                parentEditorRef.current?.getOpsAfterNote(noteKeyRef.current) ?? [],
+                appliedCarriedText,
+              );
+            if (isAppliedTextInPlace)
+              replaceOps.push({ delete: deltaOpsLength(appliedCarriedText) });
+            replaceOps.push(...carriedText);
+            appliedCarriedTextRef.current = carriedText;
+          }
+          parentEditorRef.current?.replaceEmbedUpdate(noteKeyRef.current, replaceOps);
         }
       }
     },
-    [noteKey, onChange, onNoteEdit, parentEditorRef],
+    [inline, onChange, onNoteEdit, parentEditorRef],
   );
 
   /**
@@ -569,6 +854,10 @@ export default function FootnoteEditor({
    */
   const applyCallerToEditor = useCallback(
     (resolvedCallerType: FootnoteCallerType, resolvedCustomCaller: string) => {
+      // The note is rebuilt from what this reads, and the read is unsettled: a marker rename still
+      // pending under the caret (the dropdown's blur leaves it pending) would be written back as
+      // the old marker. Settled first, as `closeAndSave` does.
+      if (!paletteSession.current) editorRef.current?.commitPendingMarkerEdits();
       const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
       if (!currentNoteOp || !isInsertEmbedOpOfType('note', currentNoteOp)) return;
       if (!currentNoteOp.insert.note) return;
@@ -587,18 +876,217 @@ export default function FootnoteEditor({
     [replaceNoteKeepingCaret],
   );
 
+  // Inline live-apply: schedule/flush a debounced apply-to-parent. Refs (not state) because
+  // flush must run synchronously during unmount cleanup with the latest values.
+  const pendingApplyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const saveCurrentNoteOpRef = useRef(saveCurrentNoteOp);
+  useEffect(() => {
+    saveCurrentNoteOpRef.current = saveCurrentNoteOp;
+  }, [saveCurrentNoteOp]);
+
+  // Clears a pending debounced apply without firing it. Immediate-apply paths (caller/type
+  // changes, closeAndSave) call this before their own apply so the two never race - cancelling
+  // rather than flushing avoids applying the same edit to the parent twice in one tick (once
+  // with the stale flushed state, once with the immediate call's fresher state).
+  const cancelPendingApply = useCallback(() => {
+    if (pendingApplyTimeoutRef.current === undefined) return;
+    clearTimeout(pendingApplyTimeoutRef.current);
+    pendingApplyTimeoutRef.current = undefined;
+  }, []);
+
+  // Declared BEFORE the load effect below (which calls it from its cleanup) so it can be listed
+  // in that effect's dependency array without a temporal-dead-zone reference. Its own dependency
+  // (cancelPendingApply) never changes identity, so flushPendingApply's identity is stable too.
+  const flushPendingApply = useCallback(() => {
+    if (pendingApplyTimeoutRef.current === undefined) return;
+    cancelPendingApply();
+    saveCurrentNoteOpRef.current(true);
+  }, [cancelPendingApply]);
+
+  const schedulePendingApply = useCallback(() => {
+    cancelPendingApply();
+    pendingApplyTimeoutRef.current = setTimeout(() => {
+      pendingApplyTimeoutRef.current = undefined;
+      saveCurrentNoteOpRef.current(true);
+    }, INLINE_APPLY_DEBOUNCE_MS);
+  }, [cancelPendingApply]);
+
+  // When the component loads, applies the note ops to the current editor, gets the note ref and caller
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
+    let reassertFrame: ReturnType<typeof requestAnimationFrame> | undefined;
+    let reassertTimeout: ReturnType<typeof setTimeout> | undefined;
+    hasInitializedEditor.current = false;
+    hasUserEditsRef.current = false;
+    lastFocusOutSelectionRef.current = undefined;
+    setIsAtInitialState(true);
+    const noteOp = noteOps?.at(0);
+    // The note about to be loaded is, by definition, what the parent already holds.
+    lastAppliedNoteOpRef.current = noteOp;
+    carriedTextRef.current = [];
+    appliedCarriedTextRef.current = [];
+    undoneCarryRef.current = undefined;
+    lastNoteOpRef.current = undefined;
+    if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
+      const rawCaller = noteOp.insert.note?.caller;
+      // Parses the current caller
+      let parsedCallerType: FootnoteCallerType = 'custom';
+      if (rawCaller === GENERATOR_NOTE_CALLER) {
+        parsedCallerType = 'generated';
+      } else if (rawCaller === HIDDEN_NOTE_CALLER) {
+        parsedCallerType = 'hidden';
+      }
+      // Set for every load, not only a custom one: an inline editor stays mounted from one note to
+      // the next, and would otherwise offer the previous note's custom caller for this one.
+      // A note whose caller was deleted (an unclosed note in the text lets that happen) has an
+      // empty custom caller, shown as nothing rather than as the default character.
+      const loadedCustomCaller =
+        parsedCallerType === 'custom' && rawCaller !== undefined
+          ? rawCaller
+          : DEFAULT_CUSTOM_CALLER;
+      setCustomCaller(loadedCustomCaller);
+      setOriginalCustomCaller(loadedCustomCaller);
+      setCallerType(parsedCallerType);
+      setOriginalCallerType(parsedCallerType);
+      // Assigns note type
+      setNoteType(noteOp.insert.note?.style ?? 'f');
+      timeout = setTimeout(() => {
+        // Inserts the note node to be edited as a delta operation, at OT index 0: the wrapper
+        // paragraph renders NO marker prefix in any marker mode (`showParaMarkerPrefixes: false`
+        // in the options above), so there are no prefix bytes to retain past — index 0 IS the
+        // start of the paragraph's content.
+        //
+        // A load must leave exactly ONE note in this document. On a fresh mount the wrapper
+        // paragraph is empty, but an inline editor can be handed new `noteOps` while it is still
+        // mounted (the consumer re-opens the same row, or the note's content changed under it),
+        // and a bare insert would then stack the incoming note on top of the one already loaded.
+        // Deleting the unit the insert displaces is the same insert-then-delete replacement
+        // `applyCallerToEditor` performs.
+        const loadedNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
+        editorRef.current?.applyUpdate(loadedNoteOp ? [noteOp, { delete: 1 }] : [noteOp]);
+        // Put the caret where this session starts (see `placeInitialCaret`), so the user can type
+        // immediately. Applies to REOPENED notes too: each popover instance mounts fresh, so there
+        // is never a prior caret to preserve — only Radix's open-autofocus parking the DOM caret at
+        // the wrapper-para start (outside the note body), where Enter plain-split and the `\`
+        // palette both resolved against the WRONG context.
+        placeInitialCaret();
+        editorRef.current?.focus();
+        // Radix's open-autofocus (load-bearing for the focus handoff into this popover —
+        // preventing it was falsified live) can land AFTER this and park the DOM caret at the
+        // wrapper-para start, where Enter plain-splits instead of inserting \fp.
+        // Re-assert the session's caret once the autofocus has settled (a frame plus a
+        // macrotask later); skipped when the caret is already inside the note, so a user's own
+        // click in the meantime is never overridden.
+        reassertFrame = requestAnimationFrame(() => {
+          reassertTimeout = setTimeout(() => {
+            if (isDomCaretInsideNote()) return;
+            placeInitialCaret();
+            editorRef.current?.focus();
+          }, 0);
+        });
+      }, 0);
+    }
+
+    return () => {
+      // Flush FIRST, before clearing the load timers: a consumer can swap in a different note's
+      // noteOps (a new identity) while a debounced apply from the OUTGOING note is still
+      // pending. React runs every effect's cleanup (this one included) before any effect's setup
+      // for the same commit, so at this point noteKeyRef (mirrored by its own, later-declared
+      // effect) still holds the OUTGOING note's key, and editorRef still holds its rendered
+      // content (applying the NEW note is itself deferred to a setTimeout(0) in this same
+      // effect's setup, which hasn't run yet) - so the flush targets the note that's actually
+      // unloading, not the one about to load.
+      flushPendingApply();
+      // `initialCaretPosition` describes the gesture that OPENED this session, so it belongs to the
+      // first load of it and no other. A reload replaces this document from outside the editor, and
+      // landing the caret back at the opening click would drag it off wherever the user had typed
+      // to since; an unpositioned load puts it at the end of the note instead. Cleared here rather
+      // than at the placement itself because the load's own caret re-assert still needs it, and
+      // React runs this cleanup before the next setup - so a genuinely new session, which re-mints
+      // the prop, still receives its position through the mirroring effect above.
+      initialCaretPositionRef.current = undefined;
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      if (reassertFrame !== undefined) cancelAnimationFrame(reassertFrame);
+      if (reassertTimeout !== undefined) clearTimeout(reassertTimeout);
+    };
+  }, [noteOps, flushPendingApply, isDomCaretInsideNote, placeInitialCaret]);
+
+  // Ending an inline editing session = unmounting this component; unsaved edits must land.
+  // useLayoutEffect (not useEffect): on unmount, React detaches `editorRef` before passive-effect
+  // (useEffect) cleanups run but after layout-effect cleanups, so a useEffect-based flush would
+  // read a null editorRef and silently no-op.
+  useLayoutEffect(() => {
+    return () => flushPendingApply();
+  }, [flushPendingApply]);
+
+  // Every ORDINARY end of an inline session - the user picking another note, focus leaving the
+  // pane - arrives here rather than at `closeAndSave`, so this is where the abandonment window has
+  // to close: settle mid-edit marker text before the final read, or a rename the user walked away
+  // from serializes as the stale pre-rename marker. Skipped while this editor's own marker-palette
+  // session is open, as `closeAndSave`'s settle is - the palette's own apply must be the one to
+  // consume the typed literal.
+  //
+  // Gated on the user having changed the note at all. A session that changed nothing has nothing
+  // to settle into, and this handle is called on EVERY close, including ones the host reaches from
+  // inside the parent editor's update listener (where the note has usually already gone), so an
+  // unconditional settle would dispatch into this editor on paths with no edit to save. A pending
+  // debounce is NOT that signal: the debounced apply reads the note unsettled, so when it fires
+  // with a rename still pending under the caret it finds nothing new, applies nothing, and clears
+  // itself — leaving the rename with no timer to be found by.
+  const flushPendingEdits = useCallback(() => {
+    if (!hasUserEditsRef.current) return;
+    if (!paletteSession.current) editorRef.current?.commitPendingMarkerEdits();
+    flushPendingApply();
+  }, [flushPendingApply]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      flushPendingEdits,
+      focus: () => editorRef.current?.focus(),
+      containsFocus: () => {
+        const container = containerRef.current;
+        return !!container && container.contains(container.ownerDocument.activeElement);
+      },
+    }),
+    [flushPendingEdits],
+  );
+
   const closeAndSave = useCallback(() => {
     // Abandonment window: settle pending mid-edit marker text before the final read
     // of the note ops, so a marker rename walked away from mid-edit saves as what's on screen
-    // rather than the stale pre-rename marker. Clicking Save blurs this popover's editor, so
-    // the settle covers everything; skipped while this popover's own marker-palette session is
-    // open (the palette's apply must be the one to consume the typed literal). Deliberately
-    // NOT in saveCurrentNoteOp: the auto-save path runs inside a Lexical update listener,
-    // where dispatching another (discrete) update mid-commit is unsafe.
-    if (!paletteSession.current) editorRef.current?.commitPendingMarkerEdits();
-    saveCurrentNoteOp(true);
+    // rather than the stale pre-rename marker. Skipped while this popover's own marker-palette
+    // session is open (the palette's apply must be the one to consume the typed literal).
+    // Deliberately NOT in saveCurrentNoteOp: the auto-save path runs inside a Lexical update
+    // listener, where dispatching another (discrete) update mid-commit is unsafe.
+    //
+    // The settle leaves the marker under the caret pending while this editor holds focus, since a
+    // pause mid-typing must not settle under the user. Ending the session IS leaving that marker,
+    // so focus is released first. Clicking Save already did that; Escape in the inline editor
+    // arrives with focus still here.
+    if (!paletteSession.current) {
+      const editorInput = editorParentRef.current?.querySelector<HTMLElement>('.editor-input');
+      if (editorInput?.contains(editorInput.ownerDocument.activeElement)) editorInput.blur();
+      editorRef.current?.commitPendingMarkerEdits();
+    }
+    if (inline) {
+      // The inline surface has no Save: every edit has already been applied to the parent as it
+      // was made, so ending the session only has to land whatever is still inside the debounce
+      // window. Applying unconditionally here would write the note back on every session end,
+      // including ends that touched nothing — and this path runs from a layout effect, where a
+      // parent-editor update forces React to flush a decorator render mid-commit.
+      flushPendingApply();
+    } else {
+      // Cancel (not flush) a pending debounced apply: it would otherwise fire moments later,
+      // redundant with the immediate apply below.
+      cancelPendingApply();
+      saveCurrentNoteOp(true);
+    }
     onClose();
-  }, [onClose, saveCurrentNoteOp]);
+  }, [cancelPendingApply, flushPendingApply, inline, onClose, saveCurrentNoteOp]);
 
   // Keep a stable ref to closeAndSave so the chapter-change effect below only needs to depend on
   // scrRef.book and scrRef.chapterNum (not on caller state that changes during editing).
@@ -622,10 +1110,16 @@ export default function FootnoteEditor({
     }
   }, [scrRef.book, scrRef.chapterNum]);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     const editorInput = editorParentRef.current?.getElementsByClassName('editor-input')[0];
-    if (editorInput?.textContent) {
-      navigator.clipboard.writeText(editorInput.textContent);
+    if (!editorInput?.textContent) return;
+    // The Copy button honors the same copy limit as a copy from the editor itself.
+    const text = truncateToCopyLimit(editorInput.textContent, editorOptions.copyLimit);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.warn(`Could not copy the footnote to the clipboard: ${getErrorMessage(error)}`);
     }
   };
 
@@ -643,13 +1137,20 @@ export default function FootnoteEditor({
       // replaced. One call carrying both halves is also what keeps a single choice to a single
       // save — the note is replaced in the editor on the way through.
       applyCallerToEditor(newCallerType, newCustomCaller);
+      // A caller change is a discrete action, not continuous typing. Inline mode has no Save
+      // button, so send the edit the line above just made to the parent now rather than waiting
+      // out the debounce `handleUsjChange` scheduled for it. A no-op when the caller did not
+      // actually change, since `applyCallerToEditor` then edits nothing and nothing is pending.
+      if (inline) flushPendingApply();
     },
-    [applyCallerToEditor, onNoteEdit],
+    [applyCallerToEditor, flushPendingApply, inline, onNoteEdit],
   );
 
   const handleNoteTypeChange = (value: string) => {
     setNoteType(value);
 
+    // Settled before the read for the same reason as `applyCallerToEditor`.
+    if (!paletteSession.current) editorRef.current?.commitPendingMarkerEdits();
     // Changes the note type for the current note that is being edited
     const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
     if (currentNoteOp && isInsertEmbedOpOfType('note', currentNoteOp)) {
@@ -665,6 +1166,8 @@ export default function FootnoteEditor({
 
       // Inserts the new footnote/cross-reference and deletes the old one — triggers handleUsjChange
       replaceNoteKeepingCaret(currentNoteOp);
+      // A discrete action, applied now like a caller change (see `handleCallerChange`).
+      if (inline) flushPendingApply();
     }
   };
 
@@ -717,21 +1220,36 @@ export default function FootnoteEditor({
         if (!hasInitializedEditor.current) {
           hasInitializedEditor.current = true;
           initialNoteOpsJson.current = JSON.stringify(noteOp);
+          lastNoteOpRef.current = noteOp;
           setIsAtInitialState(true);
           return;
         }
 
+        hasUserEditsRef.current = true;
+        followCarriedTextThroughHistory(lastNoteOpRef.current, noteOp);
+        lastNoteOpRef.current = noteOp;
+        // Deferred like the extra-node cleanup above: this runs from the editor's change listener.
+        if (editorRef.current?.getOpsAfterNote(0)?.length) setTimeout(takeTextAfterNote, 0);
         // Track whether the user has undone all their edits back to the initial state
         setIsAtInitialState(JSON.stringify(noteOp) === initialNoteOpsJson.current);
 
         // Auto-save on every content change (does not apply to parent editor)
         saveCurrentNoteOp();
+        // Inline mode has no Save button - content changes apply to the parent editor live,
+        // debounced so rapid keystrokes coalesce into one replaceEmbedUpdate call.
+        if (inline) schedulePendingApply();
       } else {
         setIsTypeSwitchable(false);
         setIsAtInitialState(true);
       }
     },
-    [saveCurrentNoteOp],
+    [
+      inline,
+      saveCurrentNoteOp,
+      schedulePendingApply,
+      followCarriedTextThroughHistory,
+      takeTextAfterNote,
+    ],
   );
 
   const showInlineMarkersMenu = useCallback(() => {
@@ -775,37 +1293,44 @@ export default function FootnoteEditor({
     (
       ctx: { anchorRect?: { x: number; y: number; width: number; height: number } },
       items: EditorMarkerMenuItem[],
-      openOptions: { passive: boolean },
+      openOptions: { hasTextSelection: boolean },
     ) => {
       const { anchorRect } = ctx;
       if (!markerPalette || !anchorRect) return;
-      const { passive } = openOptions;
+      const { hasTextSelection } = openOptions;
       runMarkerPaletteSession({
         items,
-        passive,
-        // No `shouldSpaceCommit`, deliberately: the Space note-marker exception exists for
-        // Standard-view BODY text, where a materialized `\f ` literal absorbs the following word
-        // as the new footnote's caller. This palette offers note-INTERNAL markers for content
-        // already inside a note, so Space keeps its plain typed-literal commit here.
+        // The kind decides how a commit APPLIES — wrap the selected text, or land at the caret.
+        // It decides nothing about focus: every marker palette focuses its list.
+        kind: hasTextSelection ? 'selection' : 'backslash',
+        // The Space note rule: when the typed filter names a NOTE marker in the stylesheet, Space
+        // commits that marker if this list OFFERS it and inserts NOTHING if it does not. This
+        // popover's list offers note-INTERNAL markers only, so a typed `\f` always takes the second
+        // branch — which is the point of the rule here: materializing it would make a NESTED `\f `
+        // literal, and the Tier-2 tokenizer would absorb the following word into it as a caller
+        // just as it does in body text. Decided from the stylesheet rather than from the offered
+        // items for exactly that reason.
+        // Same stylesheet the items come from: while the data provider is loading, or after it
+        // errors, `styleInfo` is undefined and the list is built from the default, so reading the
+        // raw value here would turn the rule off exactly when it is needed.
+        isNoteMarker: (marker) => isNoteMarker(options.styleInfo ?? defaultStyleInfo, marker),
         sessionCounterRef: paletteSessionCounter,
-        setSession: (session) => {
-          paletteSession.current = session;
-        },
-        clearSessionIfCurrent: (token) => clearPaletteSessionIfCurrent(paletteSession, token),
+        setSession: setPaletteSession,
+        clearSessionIfCurrent: clearPaletteSession,
         // Through the ref so the palette always runs the CURRENT handler — the callback is
         // captured once, at show time, while the session it drives is replaced on every reopen.
         runSessionKey: (event) => runPaletteSessionKeyRef.current(event),
         show: (keyForwarding) =>
-          markerPalette.show(
-            items.map(markerMenuItemToPaletteItem),
-            anchorRect,
-            passive,
+          markerPalette.show({
+            items: items.map(markerMenuItemToPaletteItem),
+            anchor: anchorRect,
             keyForwarding,
-          ),
+          }),
         // What a lost selection costs on this path specifically: the apply lands the marker as an
         // invalid trailing span after the note's closing marker while the typed literal strands at
         // the real caret (live-observed: a red `\fq` after `\f*`).
         restoreSelectionIfLost,
+        hasEditorChangedSinceFocus,
         focusEditor: () => editorRef.current?.focus(),
         applyItem: (selected) =>
           editorRef.current?.applyMarkerMenuSelection(selected, {
@@ -826,7 +1351,14 @@ export default function FootnoteEditor({
         },
       });
     },
-    [markerPalette, restoreSelectionIfLost],
+    [
+      markerPalette,
+      restoreSelectionIfLost,
+      hasEditorChangedSinceFocus,
+      options.styleInfo,
+      setPaletteSession,
+      clearPaletteSession,
+    ],
   );
 
   /**
@@ -839,9 +1371,14 @@ export default function FootnoteEditor({
     if (!ctx) return false;
     const items = getMarkerMenuItems(options.styleInfo ?? defaultStyleInfo, ctx);
     if (items.length === 0) return false;
-    openMarkerPalette(ctx, items, { passive: !ctx.hasTextSelection });
+    openMarkerPalette(ctx, items, { hasTextSelection: !!ctx.hasTextSelection });
     return true;
   }, [openMarkerPalette, options.styleInfo]);
+
+  useMarkerPaletteCompositionClose({
+    isSessionOpen: useCallback(() => !!paletteSession.current, []),
+    dismiss: useCallback(() => markerPalette?.dismiss(), [markerPalette]),
+  });
 
   /**
    * Routes ONE key through the open session — the single implementation behind both entry points:
@@ -850,40 +1387,28 @@ export default function FootnoteEditor({
    */
   const runPaletteSessionKey = useCallback(
     (event: MarkerPaletteKeyEvent) => {
-      const session = paletteSession.current;
-      if (!session || !markerPalette) return;
-      const outcome = handleMarkerPaletteSessionKeyDown(event, session, {
-        // Overlay ops delegate to the host-supplied driver; the commit ops are EDITOR-side
-        // applies this popover owns (it holds the editor ref). The table calls `dismiss()` right
-        // after each, resolving the show promise `undefined` — which the openMarkerPalette
-        // `.then` treats as a dismissal, so nothing double-applies.
-        update: (update) => markerPalette.update(update),
-        commit: () => markerPalette.commit(),
-        dismiss: () => markerPalette.dismiss(),
-        commitTyped: (typed) => editorRef.current?.commitTypedMarker(typed),
-        commitTypedAndReopen: (typed) => {
-          // The `\` commit: same materialization as Space with NO terminating space, then a
-          // fresh palette for the backslash just pressed. Showing a new palette replaces the
-          // current overlay (the old show promise rejects ABORTED, handled below), so there is
-          // no explicit dismiss to sequence against the commit.
-          editorRef.current?.commitTypedMarker(typed, { trailingSpace: false });
-          openMarkerPaletteAtCaret();
-        },
-        commitTypedCloser: (typed) => editorRef.current?.commitTypedCloser(typed),
-        commitItem: (marker) => {
-          const selected = session.items.find((item) => item.marker === marker);
-          if (!selected) return;
-          editorRef.current?.applyMarkerMenuSelection(selected, {
-            trigger: 'backslash',
-            literalPrefixLanded: false,
-          });
-        },
+      if (!markerPalette) return;
+      const routed = routeMarkerPaletteKey(event, {
+        sessionRef: paletteSession,
+        editorRef,
+        palette: markerPalette,
+        restoreCaret: restoreSelectionIfLost,
+        reopenAtCaret: openMarkerPaletteAtCaret,
+        clearSessionIfCurrent: clearPaletteSession,
+        hasEditorChangedSinceFocus,
       });
-      // Clear only if this session is still the current one: a `\` commit opens a REPLACEMENT
-      // session synchronously inside the table call, and an unconditional clear would kill it.
-      if (outcome === 'ended') clearPaletteSessionIfCurrent(paletteSession, session.token);
+      // The palette outlived its session: it holds real focus and forwards EVERY key here, so
+      // returning would swallow them all — Escape included — leaving a box the keyboard cannot
+      // get out of. Close it instead.
+      if (routed === 'no-session') markerPalette.dismiss();
     },
-    [markerPalette, openMarkerPaletteAtCaret],
+    [
+      markerPalette,
+      openMarkerPaletteAtCaret,
+      restoreSelectionIfLost,
+      clearPaletteSession,
+      hasEditorChangedSinceFocus,
+    ],
   );
 
   useEffect(() => {
@@ -899,16 +1424,13 @@ export default function FootnoteEditor({
   // last saw; the palette commit path in openMarkerPalette restores it when it finds the live
   // selection gone. Only overwrite when readable: if the selection is already gone at focusout,
   // the previous capture is the best remaining approximation.
-  useEffect(() => {
-    const handleFocusOut = (event: FocusEvent) => {
-      const editorInput = editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input');
-      if (!editorInput || event.target !== editorInput) return;
-      const selection = editorRef.current?.getSelection();
-      if (selection) lastFocusOutSelectionRef.current = selection;
-    };
-    document.addEventListener('focusout', handleFocusOut);
-    return () => document.removeEventListener('focusout', handleFocusOut);
-  }, []);
+  useMarkerPaletteFocusOutCapture({
+    containerRef: editorParentRef,
+    editorRef,
+    selectionRef: lastFocusOutSelectionRef,
+    baselineRef: paletteBaselineSnapshotRef,
+    isSessionOpen: useCallback(() => !!paletteSession.current, []),
+  });
 
   // Need to add a window listener for click events that will close the markers menu when you click
   // outside. There is another `onClick` listener for the marker menu that prevents click events
@@ -965,14 +1487,33 @@ export default function FootnoteEditor({
         // its own. (The shared forwarding table repeats the check for its in-session keys, so
         // this outer guard covers only this handler's own trigger paths.)
         if (isImeCompositionKeyEvent(event)) return;
-        const editorInput = getEditorInput();
-        if (!editorInput || document.activeElement !== editorInput) return;
         const session = paletteSession.current;
+        const editorInput = getEditorInput();
+        // Focus is the whole rule, for an open session as much as for the trigger paths below.
+        // The editor keeps focus (and its caret) for the life of a session, so its own keys route
+        // here; once the palette has taken focus its keys come back through key forwarding
+        // instead, and anything else focused in this document keeps its own keys.
+        if (!editorInput || document.activeElement !== editorInput) return;
 
         if (session && markerPalette) {
           // Through the ref so this listener and the palette's forwarded keys provably run the
           // same handler (and so this effect needs no dependency on it).
           runPaletteSessionKeyRef.current(event);
+          return;
+        }
+
+        // This popover's own right-click menu is up: let its own keydown listener handle every
+        // key instead of the guards below, which otherwise resolve against the caret/selection —
+        // collapsing a selection the menu's own Enter (e.g. Cut) is about to act on. Still claim
+        // and drop `\`, mirroring the main editor's swallow-while-menu-open behavior, so the
+        // literal backslash never leaks into the note once the menu closes. See
+        // `isEditorContextMenuOpenFor`. Scoped to THIS popover's root — a second editor's open
+        // menu (e.g. the main Standard-view editor) must never trip this gate.
+        if (isEditorContextMenuOpenFor(editorParentRef.current)) {
+          if (event.key === defaultMarkerMenuTrigger) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
           return;
         }
 
@@ -1004,10 +1545,9 @@ export default function FootnoteEditor({
           editorRef.current?.focus();
           return;
         }
-        // ACTIVE palette: the trigger never lands, whatever the selection shape — typing filters
-        // the palette, not the document. In capture, the claim keeps Lexical from ever seeing
-        // the `\`. (`passive` still selects the overlay's non-focus-stealing display for the
-        // collapsed caret.)
+        // The trigger never lands, whatever the selection shape — typing filters the palette, not
+        // the note. In capture, the claim keeps Lexical from ever seeing the `\`.
+        //
         // Claimed only when a palette actually opens: with nothing to offer, the `\` is an
         // ordinary character and must still reach the document.
         if (openMarkerPaletteAtCaret()) {
@@ -1076,6 +1616,30 @@ export default function FootnoteEditor({
     isDomCaretInsideNote,
   ]);
 
+  // The inline surface renders no Cancel/Close control - its edits apply live - so Escape is its
+  // explicit dismissal, and the only one that does not require a pointer. It ends the session
+  // KEEPING what was typed (`closeAndSave`'s inline branch just flushes the pending apply).
+  // Anywhere in the editor counts, its own controls included: Tab from the row above lands on the
+  // note-type dropdown first.
+  //
+  // Listens in the BUBBLE phase on the editor's own element, so every layer inside it has had its
+  // turn first, and ends the session only on an Escape none of them claimed: the marker palette,
+  // the editor's right-click menu, and a toolbar tooltip each spend the key on closing themselves.
+  // Portalled dropdowns hold focus outside this element, so their Escape never arrives here.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!inline || !container) return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || isImeCompositionKeyEvent(event))
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeAndSaveRef.current();
+    };
+    container.addEventListener('keydown', handleKeyDown);
+    return () => container.removeEventListener('keydown', handleKeyDown);
+  }, [inline]);
+
   // Snaps the DOM caret back into the note whenever a selection lands in the popover's wrapper-para
   // "dead space" (the wrapper paragraph's own text/margins, outside `span.note`). The open-time
   // placement/re-assert effect above and the Enter/`\` keydown guards in the effect above only
@@ -1095,6 +1659,11 @@ export default function FootnoteEditor({
       const editorInput =
         editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
       if (!editorInput || document.activeElement !== editorInput) return;
+      // Focus held by an overlay in ANOTHER document (the marker palette) leaves this document's
+      // active element on the editor, so the check above still passes. Snapping then would
+      // re-select the note end under a palette commit that is about to restore the caret the user
+      // last saw, so the commit would keep the snapped caret instead.
+      if (!document.hasFocus()) return;
       // Only a COLLAPSED caret is snapped. A drag-select that merely STARTS in the wrapper
       // dead space is a selection the user is still building (its live end may be inside the
       // note), and collapsing it via selectNote(0) destroyed the drag mid-gesture — in every
@@ -1117,15 +1686,33 @@ export default function FootnoteEditor({
 
   const copyButtonTooltip = localizedStrings['%footnoteEditor_copyButton_tooltip%'];
 
+  const undoRedoButtons = (
+    <UndoRedoButtons
+      onUndoClick={() => editorRef.current?.undo()}
+      onRedoClick={() => editorRef.current?.redo()}
+      canUndo={!isAtInitialState}
+      canRedo={canRedo}
+      localizedStrings={localizedStrings}
+    />
+  );
+
   return (
     <>
       {/* `max-w-full`: the width lock below is taken before the surrounding pop-up knows how much
           room the pane has, so the container must still give way to a narrower pop-up. */}
-      <div ref={containerRef} className="footnote-editor tw:grid tw:max-w-full tw:gap-[12px]">
+      <div
+        ref={containerRef}
+        className={cn('footnote-editor tw:grid tw:max-w-full tw:gap-[12px]', inline && 'tw:w-full')}
+      >
         {/* Wraps the action buttons onto their own line when a narrow (or zoomed) pop-up has no
             room for the whole row; `flex-1` keeps them on the first line, right-aligned, otherwise. */}
         <div className="tw:flex tw:flex-wrap tw:gap-y-2">
-          <div className="tw:flex tw:gap-4">
+          {/* The inline editor's cluster wraps rather than overflowing: its row is only as wide as
+              the footnotes pane, which the user can drag down to a fraction of the editor's width,
+              and a non-wrapping cluster of two labelled dropdowns plus undo/redo needs ~250px. The
+              popover keeps the cluster on one line and moves its Cancel/Save group to the next
+              line instead. */}
+          <div className={cn('tw:flex tw:gap-4', inline && 'tw:flex-wrap')}>
             <FootnoteTypeDropdown
               isTypeSwitchable={isTypeSwitchable}
               noteType={noteType}
@@ -1140,29 +1727,31 @@ export default function FootnoteEditor({
               localizedStrings={localizedStrings}
               focusNoteText={focusNoteText}
             />
+            {/* An inline editor is one row inside a list of notes, and the row is as wide as the
+                pane: pushing undo/redo to the far end would strand them across a gap from the
+                controls they belong with, so they join the dropdowns in a single cluster. The
+                popover, sized to its own content, keeps them at the end of the row with the
+                Cancel/Save pair below. */}
+            {inline && undoRedoButtons}
           </div>
-          <div className="tw:flex tw:flex-1 tw:justify-end">
-            <ButtonGroup>
-              <UndoRedoButtons
-                onUndoClick={() => editorRef.current?.undo()}
-                onRedoClick={() => editorRef.current?.redo()}
-                canUndo={!isAtInitialState}
-                canRedo={canRedo}
-                localizedStrings={localizedStrings}
-              />
-              <CancelAcceptButtons
-                onCancelClick={onClose}
-                onAcceptClick={closeAndSave}
-                canAccept={
-                  !isAtInitialState ||
-                  originalCallerType !== callerType ||
-                  (callerType === 'custom' && customCaller !== originalCustomCaller)
-                }
-                localizedStrings={localizedStrings}
-                acceptLabel={localizedStrings['%footnoteEditor_saveButton_tooltip%']}
-              />
-            </ButtonGroup>
-          </div>
+          {!inline && (
+            <div className="tw:flex tw:flex-1 tw:justify-end">
+              <ButtonGroup>
+                {undoRedoButtons}
+                <CancelAcceptButtons
+                  onCancelClick={onClose}
+                  onAcceptClick={closeAndSave}
+                  canAccept={
+                    !isAtInitialState ||
+                    originalCallerType !== callerType ||
+                    (callerType === 'custom' && customCaller !== originalCustomCaller)
+                  }
+                  localizedStrings={localizedStrings}
+                  acceptLabel={localizedStrings['%footnoteEditor_saveButton_tooltip%']}
+                />
+              </ButtonGroup>
+            </div>
+          )}
         </div>
         <div
           ref={editorParentRef}
@@ -1185,7 +1774,7 @@ export default function FootnoteEditor({
               />
             </EditorKeyboardShortcuts>
           </div>
-          <div className="tw:absolute tw:bottom-0 tw:right-0">
+          <div className="tw:absolute tw:bottom-0 tw:end-0">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>

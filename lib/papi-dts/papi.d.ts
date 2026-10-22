@@ -2838,7 +2838,11 @@ declare module 'renderer/services/electron-papi-port-provider' {
   export function createElectronPapiPortProvider(win?: Window): PapiPortProvider;
 }
 declare module 'renderer/services/renderer-web-socket.service' {
-  /** Once our network is running, run this to stop extensions from connecting to it directly */
+  /**
+   * Once our network is running, run this so `PapiRendererWebSocket` (the `WebSocket` web views get)
+   * refuses connections to it. Web views can still reach the native `WebSocket` on `window.top`; see
+   * "The renderer's PAPI port" in `.context/standards/Security-Guide.md`.
+   */
   export const blockWebSocketsToPapiNetwork: () => void;
   /** This wraps the browser's WebSocket implementation to provide
    * better control over internet access. It is isomorphic with the standard WebSocket, so it should
@@ -3096,6 +3100,14 @@ declare module 'main/services/rpc-server' {
     private readonly propagateEventMethod;
     /** Called by an RpcServer once its client's methods have been removed from the registry */
     private readonly announceClientDisconnectMethod;
+    /** See the constructor's `isWebSocketWithoutOrigin` */
+    private readonly isWebSocketWithoutOrigin;
+    /**
+     * @param isWebSocketWithoutOrigin Whether the client connected over a WebSocket whose handshake
+     *   carried no `Origin` header. Only such a client may send the request types main refuses to
+     *   browsers and renderers. Defaults to false, so a connection nobody vouched for is refused
+     *   them.
+     */
     constructor(
       name: string,
       webSocket: ServerSocketLike,
@@ -3103,6 +3115,7 @@ declare module 'main/services/rpc-server' {
       rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
       rpcEventDetailsByEventName: IRpcEventRegistry,
       announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
+      isWebSocketWithoutOrigin?: boolean,
     );
     connect(): Promise<boolean>;
     disconnect(): Promise<void>;
@@ -3340,6 +3353,10 @@ declare module 'main/services/rpc-websocket-listener' {
      * @param eventType The event name being announced.
      */
     private warnIfInvalidEventAnnouncement;
+    /**
+     * @param upgradeRequest The handshake request, which `ws` always passes. Without one the client
+     *   is treated as having sent `Origin`.
+     */
     private onClientConnect;
     /** Attach an `RpcServer` to a socket and track it until the socket closes */
     private serveClient;
@@ -4219,6 +4236,18 @@ declare module 'shared/models/project-data-provider.model' {
    * Provider must implement
    */
   export const PROJECT_INTERFACE_PLATFORM_BASE = 'platform.base';
+  /**
+   * The name of the `projectInterface` a Project Data Provider serves when it can list the
+   * `dataQualifier`s an extension has data for in a project (`listExtensionDataQualifiers`).
+   *
+   * This is its own `projectInterface`, not a member of `platform.base`: not every PDP can enumerate
+   * its extension data (one over a remote store may not be able to), and a PDP method is never
+   * optional. A PDP that can enumerate advertises this interface and one that cannot leaves it off,
+   * so a consumer learns which it is from the project's metadata `projectInterfaces` instead of by
+   * calling and failing.
+   */
+  export const PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION =
+    'platform.extensionDataEnumeration';
   /** Indicates to a PDP what extension data is being referenced */
   export type ExtensionDataScope = {
     /** Name of an extension as provided in its manifest */
@@ -4236,6 +4265,11 @@ declare module 'shared/models/project-data-provider.model' {
      */
     dataQualifier: string;
   };
+  /**
+   * Indicates to a PDP whose `dataQualifier`s to list: the extension named, and nothing narrower. The
+   * whole list comes back; filter it at the call site.
+   */
+  export type ExtensionDataListScope = Pick<ExtensionDataScope, 'extensionName'>;
   /**
    * `DataProviderDataTypes` that each project data provider **must** implement. They are assumed to
    * exist and are used by other data providers.
@@ -4336,6 +4370,37 @@ declare module 'shared/models/project-data-provider.model' {
       dataScope: ExtensionDataScope,
       data: string,
     ): Promise<DataProviderUpdateInstructions<TProjectDataTypes>>;
+  };
+  /**
+   * `DataProviderDataTypes` for the `platform.extensionDataEnumeration` `projectInterface`. There are
+   * none: the interface is one method with no paired setter and nothing to subscribe to, so it
+   * contributes no `get*`/`set*`/`subscribe*` trio.
+   */
+  export type ExtensionDataEnumerationProjectDataTypes = {};
+  /**
+   * The method a Project Data Provider Engine provides to serve the
+   * `platform.extensionDataEnumeration` `projectInterface`
+   * ({@link PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION}). It is the interface's whole
+   * surface; an engine that claims the interface must implement it.
+   */
+  export type WithProjectDataProviderEngineExtensionDataEnumerationMethods = {
+    /**
+     * Lists the `dataQualifier`s an extension has data for in this project.
+     *
+     * Every returned string is a valid `dataQualifier` for `getExtensionData` under the same
+     * `extensionName`, exactly as it would be passed: forward slashes, relative to the extension's
+     * own data, nested paths included. The list is sorted and includes empty documents.
+     *
+     * Listing never creates anything, so an extension that has never written any data gets `[]`.
+     *
+     * Only a PDP that advertises `platform.extensionDataEnumeration` has this method. A consumer
+     * learns that from the project's metadata `projectInterfaces` before asking for the PDP; see
+     * `IExtensionDataEnumerationProjectDataProvider` in `papi-shared-types`.
+     *
+     * @param scope Which extension's `dataQualifier`s to list
+     * @returns Sorted `dataQualifier`s that exist for that extension in this project
+     */
+    listExtensionDataQualifiers(scope: ExtensionDataListScope): Promise<string[]>;
   };
 }
 declare module 'shared/models/data-provider.interface' {
@@ -4568,7 +4633,13 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
    *
    * Works with generic types `IDataProvider`, `DataProviderInternal`, `IDisposableDataProvider`, and
    * `IDataProviderEngine` along with the `papi-shared-types` extensible interfaces `DataProviders`
-   * and `DisposableDataProviders`
+   * and `DisposableDataProviders`.
+   *
+   * A data provider with no data types at all - a `projectInterface` made only of non-data methods,
+   * such as `platform.extensionDataEnumeration` - resolves to `{}`. The `infer` branches cannot
+   * recover `{}` on their own: the `get*`/`set*`/`subscribe*` mapped types over no keys simplify
+   * away, leaving nothing to infer from, so without the explicit branch the result would be `never`,
+   * which in a mapped type over its keys means _every_ key rather than none.
    */
   export type ExtractDataProviderDataTypes<TDataProvider> =
     TDataProvider extends IDataProvider<infer TDataProviderDataTypes>
@@ -4579,8 +4650,89 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
           ? TDataProviderDataTypes
           : TDataProvider extends IDataProviderEngine<infer TDataProviderDataTypes>
             ? TDataProviderDataTypes
-            : never;
+            : TDataProvider extends IDataProvider<{}>
+              ? {}
+              : never;
   export default ExtractDataProviderDataTypes;
+}
+declare module 'shared/models/extension-host-lifecycle.model' {
+  import type { Schema } from 'shared/models/openrpc.model';
+  /**
+   * Why the extension host stopped without main asking it to.
+   *
+   * - `'lost-connection'`: the extension host lost its connection to main and ended itself, since it
+   *   cannot do anything without that connection.
+   * - `'crashed'`: any other exit main did not request — an OS signal, an out-of-memory kill, a native
+   *   crash, or a non-zero exit during startup — and a restart that could not start a new process.
+   *
+   * @experimental
+   */
+  export type ExtensionHostStopReason = 'lost-connection' | 'crashed';
+  /**
+   * Payload of the {@link EVENT_NAME_ON_DID_STOP_EXTENSION_HOST} network event and the answer of
+   * `platform.getExtensionHostStoppedState`. Carries the reason only; the exit code, signal and pid
+   * stay in main's log.
+   *
+   * @experimental
+   */
+  export type ExtensionHostStoppedEvent = {
+    reason: ExtensionHostStopReason;
+  };
+  /**
+   * OpenRPC schema of an {@link ExtensionHostStoppedEvent}, shared by every registration that sends
+   * one over the network. Frozen throughout, so a registration cannot change it for the others.
+   *
+   * @experimental
+   */
+  export const EXTENSION_HOST_STOPPED_EVENT_SCHEMA: Schema;
+  /**
+   * Name of the network event main emits when the extension host stops without being asked to. Not
+   * emitted for a restart main itself requested (`platform.restartExtensionHost`, the dev-mode file
+   * watcher) or while the app is shutting down. Every window shows its "extensions have stopped"
+   * notice on it.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_DID_STOP_EXTENSION_HOST = 'platform.onDidStopExtensionHost';
+  /**
+   * Name of the network event the extension host emits once its extensions have initialized. No
+   * payload. Emitted by every extension host process, including the first; its use is the readiness
+   * signal a window waits for after `platform.restartExtensionHost`, since that command settles at
+   * fork time, long before the new process can serve anything.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_DID_START_EXTENSION_HOST = 'platform.onDidStartExtensionHost';
+  /**
+   * How long after a restart begins a new extension host may take to announce its start
+   * ({@link EVENT_NAME_ON_DID_START_EXTENSION_HOST}) before it is no longer waited for. A dev build
+   * needs about a minute to transpile and activate extensions; a packaged build is faster.
+   *
+   * Main and the windows share it so they give up at about the same time: main, timing from when the
+   * restart began, stops treating the restart as in flight (a further `platform.restartExtensionHost`
+   * call then starts a new restart instead of joining it), and a window's stopped notice stops
+   * waiting and shows the restart as unconfirmed.
+   *
+   * @experimental
+   */
+  export const EXTENSION_HOST_RESTART_READY_TIMEOUT_MS = 90000;
+  /**
+   * Name of the network event main emits when the app quits. No payload. On an explicit quit (Cmd+Q,
+   * the Quit menu item, `platform.quit` or `platform.restart`) it is emitted before any window is
+   * destroyed, and a window uses it to read the death of its own connection a moment later as the app
+   * going away rather than as a failure.
+   *
+   * When closing windows shuts the app down instead (a close-all from the primary window's close
+   * button, or closing the last window on Windows and Linux), it is emitted only after every window
+   * is gone, so no window sees it. Those windows need no hint: each one's connection was closed
+   * cleanly, as a normal close rather than a failure, before the window was destroyed. Other peers,
+   * such as the extension host, still receive it. Best effort even on an explicit quit: delivery is
+   * asynchronous and a window may be gone before it arrives, so a subscriber must still cope without
+   * it.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_WILL_SHUT_DOWN = 'platform.onWillShutDown';
 }
 declare module 'shared/models/docking-framework.model' {
   import { MutableRefObject, ReactNode } from 'react';
@@ -4836,11 +4988,35 @@ declare module 'shared/models/docking-framework.model' {
     | 'move'
     | 'active'
     | 'update';
-  /** Information about a panel */
+  /**
+   * Information about a panel: a tab opened beside the tab group holding `targetTabId`. When no
+   * `targetTabId` is given (or it is not in this window), the tab opens beside the tab group of the
+   * tab most recently opened as a `'tab'` or re-opened in this window, else of the first tab in it.
+   *
+   * When the target's tab group is docked, the tab is added, as its active tab, to the tab group
+   * directly on the `direction` side instead of a new group being created, if that group can take it:
+   * it sits beside the target's group (a group touching it only at a corner does not count), has at
+   * least one tab, holds the same kind of tab, is not one of Simple mode's fixed columns, and is at
+   * least as wide (as tall for `top` and `bottom`) as a new group beside the target would be.
+   * Otherwise the tab opens as a new group beside the target's group.
+   *
+   * When the target's tab group is floating or maximized, the tab opens as a new group at the
+   * reading-end edge of the dock area (the right, or the left in a right-to-left UI), whichever
+   * `direction` was asked for, and a floating target that would cover that group is moved aside.
+   * `left` and `right` are mirrored in a right-to-left UI. A target in another application window is
+   * placed by these same rules in the window that holds it.
+   */
   interface PanelLayout {
     type: 'panel';
+    /**
+     * The side of the target's tab group to open on, in reading order: `right` is the reading-end
+     * side, which is the left in a right-to-left UI
+     */
     direction?: PanelDirection;
-    /** If undefined, it will add in the `direction` relative to the previously added tab. */
+    /**
+     * If undefined (or not in this window), the panel is placed relative to the tab most recently
+     * opened as a `'tab'` or re-opened in this window, else the first tab in it.
+     */
     targetTabId?: string;
   }
   interface ReplaceTabLayout {
@@ -5539,26 +5715,6 @@ declare module 'shared/models/network-object-status.service-model' {
   }
   export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';
 }
-declare module 'shared/utils/cached-initializer' {
-  /**
-   * Creates a function that runs an asynchronous initializer at most once, caching the promise so
-   * concurrent and subsequent calls share the same initialization attempt. If the initializer fails,
-   * the cached promise is cleared so the next call starts a fresh attempt instead of failing forever
-   * with the same error. This is useful for initializing access to a resource that may not be
-   * available yet, like a network object owned by a process that is still starting up.
-   *
-   * Note that calls that awaited the failed attempt all reject with its error; only calls arriving
-   * after the rejection settles retry. The initializer must therefore be safe to run again after a
-   * failure, e.g. it should not leave partial registrations behind.
-   *
-   * @param initializer Asynchronous function that performs the initialization
-   * @returns Function that returns the cached initialization promise, starting a new initialization
-   *   attempt if there is no cached promise
-   */
-  export function createCachedInitializer<T = void>(
-    initializer: () => Promise<T>,
-  ): () => Promise<T>;
-}
 declare module 'shared/services/network-object-status.service' {
   import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
   /**
@@ -6107,9 +6263,12 @@ declare module 'papi-shared-types' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import type {
+    ExtensionDataEnumerationProjectDataTypes,
     ExtensionDataScope,
     MandatoryProjectDataTypes,
     PROJECT_INTERFACE_PLATFORM_BASE,
+    PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION,
+    WithProjectDataProviderEngineExtensionDataEnumerationMethods,
     WithProjectDataProviderEngineExtensionDataMethods,
   } from 'shared/models/project-data-provider.model';
   import type {
@@ -6122,6 +6281,7 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from 'shared/services/scroll-group.service-model';
+  import type { ExtensionHostStoppedEvent } from 'shared/models/extension-host-lifecycle.model';
   import type {
     AppWindowInputEvent,
     FocusedWindowIdEvent,
@@ -6133,6 +6293,29 @@ declare module 'papi-shared-types' {
     UpdateWebViewEvent,
   } from 'shared/services/web-view.service-model';
   import { ContentZoomAreaId, WebViewId } from 'shared/models/web-view.model';
+  /**
+   * What `platform.resetFirstRun` does with the Paratext registration in Platform.Bible's own
+   * ParatextData folder. Paratext 9's registration is never changed.
+   *
+   * - `keep`: leave the registration as it is
+   * - `copyFromParatext9`: on the restart, replace Platform.Bible's registration and internet
+   *   settings with fresh copies of Paratext 9's, the way a Paratext 9 user's first launch does.
+   *   With no registered Paratext 8 or 9 on the machine, this leaves Platform.Bible unregistered
+   *   and on default internet settings.
+   * - `clear`: remove the registration, like a Paratext 9 user who never registered
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  type ResetFirstRunRegistration = 'keep' | 'copyFromParatext9' | 'clear';
+  /**
+   * Options for `platform.resetFirstRun`
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  type ResetFirstRunOptions = {
+    /** What to do with the registration. Defaults to `keep`. */
+    registration?: ResetFirstRunRegistration;
+  };
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
    * to add commands that it registers on the papi with `papi.commands.registerCommand`.
@@ -6158,7 +6341,27 @@ declare module 'papi-shared-types' {
     'test.echo': (message: string) => string;
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
+    /**
+     * Restart the extension host, which reloads and reinitializes TS/JS extensions. Resolves once
+     * the new process is forked, before it has started; `platform.onDidStartExtensionHost` says
+     * when it has.
+     *
+     * A call while a restart is already in flight (from its start until the new extension host
+     * announces its start) joins that restart and resolves with it, at once if the new process is
+     * already forked, rather than stopping the host that is still starting.
+     */
     'platform.restartExtensionHost': () => Promise<void>;
+    /**
+     * Whether the extension host is currently stopped without main having asked it to, and why. A
+     * window asks this once at startup, in case the stop happened before it was listening for
+     * `platform.onDidStopExtensionHost`.
+     *
+     * @returns The stop, or nothing while the extension host is running (or has been restarted
+     *   since). Over JSON-RPC that "nothing" arrives as `null`, not `undefined`, so test the result
+     *   for truthiness rather than comparing it with `undefined`.
+     * @experimental
+     */
+    'platform.getExtensionHostStoppedState': () => Promise<ExtensionHostStoppedEvent | undefined>;
     /** Shut down the application */
     'platform.quit': () => Promise<void>;
     /** Restart the application */
@@ -6365,6 +6568,19 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.showOnboardingTour': () => Promise<void>;
+    /**
+     * Developer and tester tool, not for extensions to call: it can delete the user's registration.
+     *
+     * Forget first-run progress and restart into the first-run wizard, in Simple mode, as a new
+     * user — or a Paratext 9 user launching Platform.Bible for the first time — would see it. Also
+     * clears the orientation tour's completion and turns `platform.syncOnStartup` and
+     * `platform.showRegistrationReminderOnStartup` back on. Works in installed builds: press F12
+     * and run `await papi.commands.sendCommand('platform.resetFirstRun')` in the console.
+     *
+     * @param options What to do with the Paratext registration; see {@link ResetFirstRunOptions}
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.resetFirstRun': (options?: ResetFirstRunOptions) => Promise<void>;
     /**
      * Navigate the active scroll group to the next chapter (rolls into the next book)
      *
@@ -6857,6 +7073,26 @@ declare module 'papi-shared-types' {
           options?: DataProviderSubscriberOptions,
         ): Promise<UnsubscriberAsync>;
       };
+  /**
+   * A Project Data Provider that can list the `dataQualifier`s an extension has data for in its
+   * project. Returned from `papi.projectDataProviders.get('platform.extensionDataEnumeration',
+   * projectId)`.
+   *
+   * This is its own `projectInterface` rather than a member of `platform.base`, because not every
+   * PDP can enumerate its extension data (one over a remote store may not be able to) and a PDP
+   * method is never optional. A project whose PDP can enumerate lists
+   * `'platform.extensionDataEnumeration'` in its metadata `projectInterfaces`
+   * (`papi.projectLookup.getMetadataForProject`), so check there first:
+   * `papi.projectDataProviders.get` throws for a project that does not advertise the interface, and
+   * on a platform that predates the interface no project advertises it. Treat "not advertised" as
+   * "cannot enumerate", never as "no data".
+   *
+   * The qualifiers it lists are exactly the ones `getExtensionData` on the same project's
+   * `platform.base` PDP reads.
+   */
+  type IExtensionDataEnumerationProjectDataProvider =
+    IProjectDataProvider<ExtensionDataEnumerationProjectDataTypes> &
+      WithProjectDataProviderEngineExtensionDataEnumerationMethods;
   /** This is just a simple example so we have more than one. It's not intended to be real. */
   type NotesOnlyProjectDataTypes = MandatoryProjectDataTypes & {
     Notes: DataProviderDataType<string, string | undefined, string>;
@@ -6930,6 +7166,13 @@ declare module 'papi-shared-types' {
      * There should be a PDP that provides `platform.base` for all available project ids.
      */
     [PROJECT_INTERFACE_PLATFORM_BASE]: IBaseProjectDataProvider<MandatoryProjectDataTypes>;
+    /**
+     * `projectInterface` a PDP serves when it can list the `dataQualifier`s an extension has data
+     * for. Its one method is `listExtensionDataQualifiers`. Separate from `platform.base` because
+     * not every PDP can enumerate its extension data and a PDP method is never optional; see
+     * {@link IExtensionDataEnumerationProjectDataProvider} for how a consumer discovers it.
+     */
+    [PROJECT_INTERFACE_PLATFORM_EXTENSION_DATA_ENUMERATION]: IExtensionDataEnumerationProjectDataProvider;
     'platform.notesOnly': IProjectDataProvider<NotesOnlyProjectDataTypes>;
     'platform.placeholder': IProjectDataProvider<PlaceholderDataTypes>;
   }
@@ -7215,6 +7458,32 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.onDidChangeFocusedWindowId': FocusedWindowIdEvent;
+    /**
+     * Emitted by the main process when the extension host stops without being asked to: it lost its
+     * connection to main (`'lost-connection'`) or exited for any other reason (`'crashed'`). Not
+     * emitted for a requested restart or during app shutdown.
+     *
+     * @experimental
+     */
+    'platform.onDidStopExtensionHost': ExtensionHostStoppedEvent;
+    /**
+     * Emitted by the extension host once its extensions have initialized, including on the first
+     * start. No payload. The readiness signal after `platform.restartExtensionHost`.
+     *
+     * @experimental
+     */
+    'platform.onDidStartExtensionHost': undefined;
+    /**
+     * Emitted by the main process when the app quits. On an explicit quit (Cmd+Q, the Quit menu
+     * item, `platform.quit` or `platform.restart`) it comes before any window is destroyed. When
+     * closing windows shuts the app down (close-all from the primary window, or the last window on
+     * Windows and Linux) it comes only after every window is gone, so no window sees it; those
+     * windows' connections were closed cleanly, as a normal close rather than a failure, before
+     * they were destroyed. No payload. Best effort: a window may be gone before it arrives.
+     *
+     * @experimental
+     */
+    'platform.onWillShutDown': undefined;
   }
   /** Union of all known network event names (keys of {@link NetworkEvents}). */
   type NetworkEventTypes = keyof NetworkEvents;
@@ -7365,18 +7634,18 @@ declare module 'shared/models/notification.service-model' {
     secondaryClickCommand?: keyof CommandHandlers;
     /**
      * Optional command to run if the user dismisses the notification themselves - by swiping/dragging
-     * it away, or by clicking the close button (if the host ever enables one). Sent no arguments
-     * other than the notification id, like {@link clickCommand}:
+     * it away, or by clicking the close button that a notification with no time limit shows. Sent no
+     * arguments other than the notification id, like {@link clickCommand}:
      *
      * - NotificationId: The ID of the notification that was dismissed
      *
      * The command handler should have the type signature {@link NotificationClickCommandHandler}.
      *
      * IMPORTANT: this fires when the user dismisses the notification themselves (swiping/dragging it
-     * away, or clicking a close button if the host ever enables one) AND when the notification
-     * auto-closes because its `duration` elapsed - a timeout is treated as an implicit dismissal, so
-     * a must-answer toast that times out still runs this command instead of vanishing silently. It
-     * does NOT fire when the notification is dismissed programmatically via
+     * away, or clicking the close button of a notification with no time limit) AND when the
+     * notification auto-closes because its `duration` elapsed - a timeout is treated as an implicit
+     * dismissal, so a must-answer toast that times out still runs this command instead of vanishing
+     * silently. It does NOT fire when the notification is dismissed programmatically via
      * {@link INotificationService.dismiss}, nor when the user clicks {@link clickCommand} /
      * {@link secondaryClickCommand}. Use this to treat a swipe-away (or timeout) as an explicit
      * decision - e.g. pairing it with a "postpone" command lets a two-button, must-answer-style toast
@@ -7435,7 +7704,9 @@ declare module 'shared/models/notification.service-model' {
     notificationId?: string | number;
     /**
      * Optional duration in milliseconds for how long the notification is displayed. To make the
-     * notification show indefinitely, specify a `duration` of `0` or less.
+     * notification show indefinitely, specify a `duration` of `0` or less. Such a notification gets a
+     * close button, so it can be closed without a mouse, unless it is not user-dismissible (see
+     * {@link dismissible}, which also says when `false` is ignored).
      *
      * When omitted, duration is computed from message length (minimum 10 seconds, maximum 35
      * seconds).
@@ -7501,6 +7772,35 @@ declare module 'shared/models/notification.service-model' {
    * @experimental
    */
   export const NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS: NetworkObjectDocumentation;
+}
+declare module 'shared/utils/paratext-error-notification.util' {
+  import { PlatformNotification } from 'shared/models/notification.service-model';
+  /**
+   * One id for every internet-block notification: a single block fails every subscription that
+   * reaches the network, and without a shared id each one would raise its own identical
+   * notification.
+   *
+   * `internet-block-notification.utils.ts` in the platform-get-resources extension sends the same
+   * message under this same literal, so a block noticed there and here shows once. The two cannot
+   * import each other across the extension boundary, so they are kept in step by hand; the tests
+   * beside each pin the value.
+   *
+   * @experimental This export is unstable and may change shape or disappear without notice
+   */
+  export const INTERNET_BLOCKED_NOTIFICATION_ID = 'platform.internetBlocked';
+  /**
+   * Builds the notification for a ParatextData failure the user can do something about — internet
+   * blocked, or a registration that is no longer valid — with an action that opens the setting
+   * responsible. Anything else gets no notification: its message describes ParatextData internals,
+   * and there is nothing for the user to act on.
+   *
+   * @param exception The error, or its message, to classify
+   * @returns The notification to send, or `undefined` if the error is not one the user can act on
+   * @experimental This export is unstable and may change shape or disappear without notice
+   */
+  export function constructParatextErrorNotification(
+    exception: unknown,
+  ): PlatformNotification | undefined;
 }
 declare module 'shared/services/notification.service' {
   import { type INotificationService } from 'shared/models/notification.service-model';
@@ -9650,6 +9950,7 @@ declare module 'shared/models/elevated-privilege-names.model' {
     CreateProcess = 'createProcess',
     ManageExtensions = 'manageExtensions',
     HandleUri = 'handleUri',
+    RequestRegistryTokens = 'requestRegistryTokens',
   }
 }
 declare module 'extension-host/extension-types/extension-manifest.model' {
@@ -9673,6 +9974,12 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
     main: string;
     /** List of special permissions required by the extension to work as intended */
     elevatedPrivileges: `${ElevatedPrivilegeNames}`[];
+    /**
+     * Services this extension may request Paratext Registry access tokens for, as exact resource
+     * identifiers (for example `https://assistant.example.org`). Required, and must be non-empty,
+     * when `elevatedPrivileges` includes `requestRegistryTokens`; otherwise ignored.
+     */
+    paratextRegistryTokenResources?: string[];
     /**
      * Path to the TypeScript type declaration file that describes this extension and its interactions
      * on the PAPI. Relative to the extension's root folder.
@@ -9918,10 +10225,111 @@ declare module 'shared/models/handle-uri-privilege.model' {
     redirectUri: string;
   };
 }
+declare module 'shared/models/request-registry-tokens-privilege.model' {
+  /**
+   * Every {@link RegistryReadScope}, as a list. Keep in sync with `AllowedScopes` in
+   * `c-sharp/Users/RegistryAccessTokenService.cs`; a test on each side pins the same scopes.
+   */
+  export const REGISTRY_READ_SCOPES: readonly [
+    'projects.members:read',
+    'projects:read',
+    'projects.progress:read',
+    'orgs:read',
+    'users.org:read',
+  ];
+  /**
+   * The read-only Paratext Registry scopes Platform.Bible requests on an extension's behalf. The
+   * Registry would issue write scopes to a registration-code caller too; Platform.Bible never asks
+   * for them.
+   */
+  export type RegistryReadScope = (typeof REGISTRY_READ_SCOPES)[number];
+  /** What an extension asks for when it requests a Paratext Registry access token */
+  export type RegistryAccessTokenRequest = {
+    /**
+     * Identifier of the service the token is for (an RFC 8707 resource, for example
+     * `https://assistant.example.org`). Must exactly match an entry in the extension manifest's
+     * `paratextRegistryTokenResources`, and must be registered with the Paratext Registry that this
+     * Platform.Bible is pointed at.
+     */
+    resource: string;
+    /**
+     * Scopes the token should carry. Pass them explicitly: if omitted, the token carries none. As of
+     * 2026-10 the Paratext Registry both documents and implements that for a caller using a
+     * registration code; its default scopes apply only to trusted clients.
+     */
+    scope?: RegistryReadScope[];
+  };
+  /** A Paratext Registry access token for one service */
+  export type RegistryAccessToken = {
+    /** Bearer token, valid only at the requested `resource`. Never log it. */
+    accessToken: string;
+    /**
+     * When the token expires, in milliseconds since the Unix epoch. A token handed out by
+     * {@link RequestRegistryTokens.getAccessToken} has at least two minutes left unless the Registry
+     * issues shorter-lived tokens.
+     */
+    expiresAt: number;
+  };
+  /**
+   * Gets Paratext Registry access tokens that identify the current user to a service the extension
+   * names, using the user's existing Paratext registration. The registration code never leaves
+   * Platform.Bible.
+   *
+   * To receive this, an extension lists `requestRegistryTokens` in its manifest's
+   * `elevatedPrivileges` and lists the services it may request tokens for in
+   * `paratextRegistryTokenResources`:
+   *
+   * ```json
+   * {
+   *   "elevatedPrivileges": ["requestRegistryTokens"],
+   *   "paratextRegistryTokenResources": ["https://assistant.example.org"]
+   * }
+   * ```
+   */
+  export type RequestRegistryTokens = {
+    /**
+     * Gets an access token for `request.resource`. Tokens are cached, so call this before each
+     * request to the service instead of storing the token.
+     *
+     * Call this, and the service, from extension-host code. Never return the token from, or store it
+     * in, a command, network object, data provider, web view state or web view message: commands are
+     * callable by every extension and web views are same-origin, so any other extension could read it
+     * there.
+     *
+     * Send the token only to `request.resource`: whoever receives it can call that service as the
+     * user until it expires, so build request URLs from the resource instead of accepting them from
+     * callers.
+     *
+     * Rejects with a `PlatformError`. Its `code` says why; its `message` is an English diagnostic for
+     * logs, so show users your own localized text based on the `code`:
+     *
+     * - `PERMISSION_DENIED`: `resource` is not in the manifest's `paratextRegistryTokenResources`, or
+     *   the Registry accepted the registration but refused to issue the token (HTTP 403), which
+     *   registering again won't fix
+     * - `INVALID_ARGUMENT`: a scope is not allowed, or the Registry rejected the request (for example,
+     *   the resource is not registered with this Registry)
+     * - `UNAUTHENTICATED`: the user has no valid registration, or the Registry did not accept it
+     * - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: internet access is
+     *   off, or "Disable access to some Bible translation services" is selected and this computer's
+     *   location is restricted or could not be determined
+     * - `UNAVAILABLE`: there is no internet connection, reading the registration or the Internet &
+     *   connectivity settings failed or took too long, or the Registry could not be reached or did
+     *   not return a usable token; retrying later may help
+     *
+     * Other failures, such as a request that times out, reject without a `code`. Treat them like
+     * `UNAVAILABLE`.
+     *
+     * @param request The service to get a token for and the scopes the token should carry
+     * @returns The token and when it expires
+     */
+    getAccessToken(request: RegistryAccessTokenRequest): Promise<RegistryAccessToken>;
+  };
+}
 declare module 'shared/models/elevated-privileges.model' {
   import type { CreateProcess } from 'shared/models/create-process-privilege.model';
   import type { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
   import type { HandleUri } from 'shared/models/handle-uri-privilege.model';
+  import type { RequestRegistryTokens } from 'shared/models/request-registry-tokens-privilege.model';
   /** Object that contains properties with special capabilities for extensions that required them */
   export type ElevatedPrivileges = {
     /** Functions that can be run to start new processes */
@@ -9933,6 +10341,11 @@ declare module 'shared/models/elevated-privileges.model' {
      * this extension
      */
     handleUri: HandleUri | undefined;
+    /**
+     * Functions for getting Paratext Registry access tokens for the services listed in the manifest's
+     * `paratextRegistryTokenResources`
+     */
+    requestRegistryTokens: RequestRegistryTokens | undefined;
   };
 }
 declare module 'extension-host/extension-types/extension-activation-context.model' {
@@ -9959,6 +10372,143 @@ declare module 'extension-host/extension-types/extension-activation-context.mode
     /** Tracks all registrations made by an extension so they can be cleaned up when it is unloaded */
     registrations: UnsubscriberAsyncList;
   };
+}
+declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
+  import { NetworkObject, NetworkObjectDetails } from 'shared/models/network-object.model';
+  /**
+   * What a network-object hook knows about the object it was asked for.
+   *
+   * A bare `NetworkObject | undefined` cannot separate "not yet", "there is nothing to ask for", and
+   * "asking failed" — so a consumer handed `undefined` cannot tell a window it should wait out from a
+   * dead end it should report. It also cannot say that the object on hand answers a source the caller
+   * has stopped asking about, which is what lets one project's data be read, and written, under
+   * another's id.
+   *
+   * Deliberately a discriminated union rather than an object of flags, because the object exists in
+   * exactly one of these states — see `adr-async-hook-state-shape`. Pass the whole state around; do
+   * not split it into a status plus a nullable object, which reintroduces the pairing it forbids.
+   */
+  export type NetworkObjectState<T> =
+    /** No source was given, so there is nothing to look up. Not a failure — nothing was asked. */
+    | {
+        status: 'noSource';
+      }
+    /** A lookup for the CURRENT source is in flight. Whatever was shown before is now stale. */
+    | {
+        status: 'loading';
+      }
+    /** The object answers the source being asked for right now. The only state that may be acted on. */
+    | {
+        status: 'ready';
+        networkObject: T;
+      }
+    /**
+     * The lookup for the current source finished without a usable object. For a project data provider
+     * this most often means the project does not implement the requested `projectInterface`, which no
+     * amount of waiting or retrying changes — so report it rather than spinning.
+     *
+     * What re-runs the lookup depends on how this status was reached. If the hook instance has never
+     * held an object that was then disposed, only a change of source (or of the hook's other
+     * arguments) re-runs it, so a transient failure — for instance the bounded wait inside
+     * `getMetadataForProject` timing out on a slow start — persists for as long as the caller keeps
+     * asking for the same thing. Once an object this hook held has been disposed, it also looks again
+     * whenever a matching network object is published (as the hook's
+     * `doesCreatedNetworkObjectMatchSource` decides), so `unavailable` reached after a disposal can
+     * recover on its own. If a consumer needs recovery beyond that, the fix is an opt-in retry on the
+     * hook — see PT-4515 — rather than a retry affordance in each consumer.
+     */
+    | {
+        status: 'unavailable';
+        error?: unknown;
+      };
+  /**
+   * This function takes in a getNetworkObject function and creates a hook with that function in it
+   * which will return a network object
+   *
+   * @param getNetworkObject A function that takes in an id string and returns a network object
+   * @param mapParametersToNetworkObjectSource Function that takes the parameters passed into the hook
+   *   and returns the `networkObjectSource` associated with those parameters. Defaults to taking the
+   *   first parameter passed into the hook and using that as the `networkObjectSource`.
+   *
+   *   - Note: `networkObjectSource` is string name of the network object to get OR `networkObject`
+   *       (result of this hook, if you want this hook to just return the network object again)
+   *
+   * @param doesCreatedNetworkObjectMatchSource Function that decides whether a network object that
+   *   was just created on the network means the hook should look its source up again. Defaults to
+   *   comparing the new object's id to the `networkObjectSource`.
+   *
+   *   - MUST be supplied by any caller whose `networkObjectSource` is not literally the id the object is
+   *       registered under — a data provider name becomes `{name}-data`, a web view id becomes
+   *       `webViewController{id}`, and so on. Left at the default, such a hook's re-lookup listener
+   *       compares two strings that can never be equal, so it never fires and the hook is left with
+   *       the single re-lookup a disposal drives.
+   *
+   * @returns A function that takes in a networkObjectSource and returns a NetworkObject
+   */
+  function createUseNetworkObjectCoreHook<THookParams extends unknown[]>(
+    getNetworkObject: (...args: THookParams) => Promise<NetworkObject<object> | undefined>,
+    mapParametersToNetworkObjectSource?: (
+      ...args: THookParams
+    ) => string | NetworkObject<object> | undefined,
+    doesCreatedNetworkObjectMatchSource?: (
+      networkObjectDetails: NetworkObjectDetails,
+      networkObjectSource: string,
+    ) => boolean,
+  ): (...args: THookParams) => {
+    networkObject: NetworkObject<object> | undefined;
+    state: NetworkObjectState<NetworkObject<object>>;
+  };
+  /**
+   * Creates a hook that returns the network object for a source, or `undefined`.
+   *
+   * `undefined` conflates "not yet", "nothing to ask for", and "asking failed", and across a source
+   * change this keeps serving the PREVIOUS source's object until the new lookup settles — so a
+   * consumer whose source can change in place should use {@link createUseNetworkObjectStateHook}
+   * instead, whose union can tell those apart. See {@link NetworkObjectState}.
+   *
+   * If the new lookup rejects, this serves `undefined` rather than keeping the previous object, which
+   * answers for a source the caller is no longer asking about.
+   *
+   * @param getNetworkObject See {@link createUseNetworkObjectStateHook}
+   * @param mapParametersToNetworkObjectSource See {@link createUseNetworkObjectStateHook}
+   * @param doesCreatedNetworkObjectMatchSource See {@link createUseNetworkObjectStateHook}
+   * @returns A function that takes in a networkObjectSource and returns the network object, or
+   *   `undefined`
+   */
+  export function createUseNetworkObjectHook<THookParams extends unknown[]>(
+    ...createArgs: Parameters<typeof createUseNetworkObjectCoreHook<THookParams>>
+  ): (...args: THookParams) => NetworkObject<object> | undefined;
+  /**
+   * Creates a hook that returns a {@link NetworkObjectState} for a source — which of "nothing asked",
+   * "in flight", "here it is", and "not available" the lookup is in, so a consumer can wait out a
+   * transient window, report a dead end, and act only on an object that answers the source it is
+   * asking about right now.
+   *
+   * Shares its implementation with {@link createUseNetworkObjectHook}, so re-lookup on disposal and on
+   * factory publication behave identically.
+   *
+   * @param getNetworkObject Function that takes the hook's parameters and returns the network object
+   *   they name
+   * @param mapParametersToNetworkObjectSource Function that takes the parameters passed into the hook
+   *   and returns the `networkObjectSource` associated with them. Defaults to using the first
+   *   parameter.
+   *
+   *   Note: `networkObjectSource` is the string name of the network object to get OR the network object
+   *   itself (the result of this hook, if you want it handed straight back).
+   * @param doesCreatedNetworkObjectMatchSource Decides whether a network object that was just created
+   *   means the hook should look its source up again. Defaults to comparing the new object's id to
+   *   the `networkObjectSource`.
+   *
+   *   MUST be supplied by any caller whose `networkObjectSource` is not literally the id the object is
+   *   registered under — a data provider name becomes `{name}-data`, a web view id becomes
+   *   `webViewController{id}`, and so on. Left at the default, such a hook's re-lookup listener
+   *   compares two strings that can never be equal.
+   * @returns A function that takes in a networkObjectSource and returns its state
+   */
+  export function createUseNetworkObjectStateHook<THookParams extends unknown[]>(
+    ...createArgs: Parameters<typeof createUseNetworkObjectCoreHook<THookParams>>
+  ): (...args: THookParams) => NetworkObjectState<NetworkObject<object>>;
+  export default createUseNetworkObjectHook;
 }
 declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
@@ -10132,44 +10682,6 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
     ) => void,
   ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
   export default useDialogCallback;
-}
-declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
-  import { NetworkObject, NetworkObjectDetails } from 'shared/models/network-object.model';
-  /**
-   * This function takes in a getNetworkObject function and creates a hook with that function in it
-   * which will return a network object
-   *
-   * @param getNetworkObject A function that takes in an id string and returns a network object
-   * @param mapParametersToNetworkObjectSource Function that takes the parameters passed into the hook
-   *   and returns the `networkObjectSource` associated with those parameters. Defaults to taking the
-   *   first parameter passed into the hook and using that as the `networkObjectSource`.
-   *
-   *   - Note: `networkObjectSource` is string name of the network object to get OR `networkObject`
-   *       (result of this hook, if you want this hook to just return the network object again)
-   *
-   * @param doesCreatedNetworkObjectMatchSource Function that decides whether a network object that
-   *   was just created on the network means the hook should look its source up again. Defaults to
-   *   comparing the new object's id to the `networkObjectSource`.
-   *
-   *   - MUST be supplied by any caller whose `networkObjectSource` is not literally the id the object is
-   *       registered under — a data provider name becomes `{name}-data`, a web view id becomes
-   *       `webViewController{id}`, and so on. Left at the default, such a hook's re-lookup listener
-   *       compares two strings that can never be equal, so it never fires and the hook is left with
-   *       the single re-lookup a disposal drives.
-   *
-   * @returns A function that takes in a networkObjectSource and returns a NetworkObject
-   */
-  export function createUseNetworkObjectHook<THookParams extends unknown[]>(
-    getNetworkObject: (...args: THookParams) => Promise<NetworkObject<object> | undefined>,
-    mapParametersToNetworkObjectSource?: (
-      ...args: THookParams
-    ) => string | NetworkObject<object> | undefined,
-    doesCreatedNetworkObjectMatchSource?: (
-      networkObjectDetails: NetworkObjectDetails,
-      networkObjectSource: string,
-    ) => boolean,
-  ): (...args: THookParams) => NetworkObject<object> | undefined;
-  export default createUseNetworkObjectHook;
 }
 declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
   import { DataProviderNames, DataProviders } from 'papi-shared-types';
@@ -10565,9 +11077,9 @@ declare module 'shared/data/platform.data' {
    * RETRIEVE any information from it.
    *
    * The Usersnap keys are intentionally empty in Platform.Bible. A product built on top of core
-   * (Paratext 10 Studio) sets them at build time through its repository patch, together with the Help
-   * menu items that open the forms. While this key is empty, Usersnap is never initialized and makes
-   * no network request.
+   * (Paratext 10) sets them at build time through its repository patch, together with the Help menu
+   * items that open the forms. While this key is empty, Usersnap is never initialized and makes no
+   * network request.
    *
    * Typed as `string` rather than the literal `''` so a build that sets it still type-checks.
    *
@@ -10926,9 +11438,11 @@ declare module 'shared/services/localization.service-model' {
      */
     getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
     /**
-     * Get a collection of known user-interface languages
+     * Get the interface languages to list in language pickers: a curated subset of the languages that
+     * have a locale file. Any loaded language can still be set in `platform.interfaceLanguage` and
+     * renders; it just isn't listed here.
      *
-     * @returns All user-interface languages
+     * @returns The offered user-interface languages, keyed by raw locale tag
      */
     getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
     /**
@@ -10938,8 +11452,8 @@ declare module 'shared/services/localization.service-model' {
      */
     retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
     /**
-     * Get the interface languages that have setup-dialog localizations (used by the first-run
-     * language picker). A language qualifies when it has ≥90% of the English setup-dialog
+     * Get the interface languages offered in the first-run language picker. A language qualifies when
+     * it is offered (see `getAvailableInterfaceLanguages`) and has ≥90% of the English setup-dialog
      * (`%firstRun_*%`) keys.
      *
      * @returns Qualifying user-interface languages, keyed by raw locale tag
@@ -11267,6 +11781,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   export default useSetting;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
+  import { type NetworkObjectState } from 'renderer/hooks/hook-generators/create-use-network-object-hook.util';
   import { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
   /**
    * Gets a project data provider with specified provider name
@@ -11290,6 +11805,37 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
     projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
     pdpFactoryId?: string,
   ) => ProjectDataProviderInterfaces[ProjectInterface] | undefined;
+  /**
+   * Gets the state of the project data provider for a project: which of "no project given", "the
+   * lookup is in flight", "here it is", and "not available" it is in.
+   *
+   * Prefer this over {@link useProjectDataProvider} whenever the project can change WITHOUT the
+   * consumer remounting — a web view that re-points itself with `updateWebViewDefinition({ projectId
+   * })`, or one that follows the active editor. `useProjectDataProvider` answers such a change with
+   * the PREVIOUS project's provider and no way to tell, so a consumer reads one project's data under
+   * another's id and writes data derived from one into the other's storage. This union makes that
+   * window visible, and separates it from a lookup that failed and will not recover on its own.
+   *
+   * Act only on `ready`. While `loading`, a consumer may keep displaying what it last rendered, but
+   * must not write through it — that distinction between what may be shown and what may be written is
+   * the point.
+   *
+   * The returned state keeps its identity across renders that do not change it, so it is safe to key
+   * memos and effects on.
+   *
+   * @param projectInterface `projectInterface` that the project must support. The `networkObject` in
+   *   the `ready` state has the project data provider interface type associated with this
+   *   `projectInterface`.
+   * @param projectDataProviderSource String id of the project to get, or a project data provider to
+   *   pass straight through, or `undefined` for `noSource`
+   * @param pdpFactoryId Optional ID of the PDP factory to get the project data provider from
+   * @returns The {@link NetworkObjectState} of the project data provider
+   */
+  export const useProjectDataProviderState: <ProjectInterface extends ProjectInterfaces>(
+    projectInterface: ProjectInterface,
+    projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+    pdpFactoryId?: string,
+  ) => NetworkObjectState<ProjectDataProviderInterfaces[ProjectInterface]>;
   export default useProjectDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
@@ -11617,6 +12163,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useSetting } from 'renderer/hooks/papi-hooks/use-setting.hook';
   export { default as useProjectData } from 'renderer/hooks/papi-hooks/use-project-data.hook';
   export { default as useProjectDataProvider } from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
+  export { useProjectDataProviderState } from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
   export { default as useProjectSetting } from 'renderer/hooks/papi-hooks/use-project-setting.hook';
   export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
@@ -11995,11 +12542,16 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      *
      * Set this when an exact, predictable match list matters more than forgiving lookup — marker
      * palettes do, because the rendered list participates in commit semantics (typing a marker and
-     * pressing Space must agree byte-for-byte with what is displayed). Palettes with
-     * {@link CommandPaletteRequest.keyForwarding} and passive palettes always match by containment
-     * regardless of this option: their filtered list is resolved by the HOST (commits and forwarded
-     * keys are answered from it), and the host's filter must agree exactly with what is on screen —
-     * cmdk's scorer is not reimplemented host-side.
+     * pressing Space must agree byte-for-byte with what is displayed).
+     *
+     * Some palettes match host-side regardless of this option, because their filtered list is
+     * resolved by the HOST — commits and forwarded keys are answered from it, so the host's filter
+     * must agree exactly with what is on screen, and cmdk's scorer is not reimplemented host-side.
+     * Which rule they get depends on the palette:
+     *
+     * - `passive`, or {@link CommandPaletteRequest.focusTarget} `'list'` — label PREFIX match, mirroring
+     *   PT9's marker dropdown.
+     * - {@link CommandPaletteRequest.keyForwarding} WITHOUT `'list'` focus — containment.
      */
     disableFuzzyMatching?: boolean;
     /**
@@ -12038,6 +12590,36 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * shown, so matching always runs against the same label text the palette displays.
      */
     passive?: boolean;
+    /**
+     * Which element inside the palette takes keyboard focus when it opens. Defaults to `'input'` —
+     * the palette's search box, which owns the query and the arrow-key highlight itself.
+     *
+     * `'list'` focuses the palette's result list instead and renders the search box read-only,
+     * showing the host-driven {@link IOverlayService.updateCommandPalette} filter text exactly as
+     * {@link CommandPaletteRequest.passive} does. The requester keeps ownership of every key semantic:
+     * EVERY keydown the palette receives is handed to {@link PaletteKeyForwarding.onKey}, not only the
+     * keys named in {@link PaletteKeyForwarding.keys}, so one table decides what each key means.
+     *
+     * It also changes how the list MATCHES, for the same reason `passive` does: the host resolves the
+     * filtered list, so matching moves host-side and becomes a label PREFIX match rather than cmdk's
+     * fuzzy scoring or containment. A consumer adopting `'list'` for the focus behavior alone gets
+     * that change too.
+     *
+     * @remarks
+     * Focusing something that cannot be edited is what keeps composed input out: an IME or a dead key
+     * starts composing in any focused text box, no matter what the palette cancels, which would put
+     * candidate text in the palette and — once a composition is under way — out of reach of per-key
+     * rules. With focus on the list, no composition starts and a dead key arrives as an ordinary
+     * keydown.
+     *
+     * Ignored when `passive` is true, which takes no focus at all.
+     *
+     * `'list'` REQUIRES {@link CommandPaletteRequest.keyForwarding} (unless `passive`), and a request
+     * without it is rejected. A list-focused palette drives nothing itself: its filter renders
+     * read-only and it handles no key but Escape, so with no requester answering for the keys there
+     * is no way to type, navigate or commit.
+     */
+    focusTarget?: 'input' | 'list';
     /**
      * Keys the REQUESTING session claims while this palette is open, and where to send them.
      *
@@ -13019,6 +13601,7 @@ declare module '@papi/core' {
   export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
   export type { ExecutionToken } from 'node/models/execution-token.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+  export type { NetworkObjectState } from 'renderer/hooks/hook-generators/create-use-network-object-hook.util';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export type {
     CommandPaletteItem,
@@ -13050,6 +13633,10 @@ declare module '@papi/core' {
   } from 'shared/models/docking-framework.model';
   export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
   export type {
+    ExtensionHostStoppedEvent,
+    ExtensionHostStopReason,
+  } from 'shared/models/extension-host-lifecycle.model';
+  export type {
     HandleUri,
     RegisterUriHandler,
     UriHandler,
@@ -13077,8 +13664,17 @@ declare module '@papi/core' {
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
   export type {
+    RequestRegistryTokens,
+    RegistryAccessToken,
+    RegistryAccessTokenRequest,
+    RegistryReadScope,
+  } from 'shared/models/request-registry-tokens-privilege.model';
+  export type {
+    ExtensionDataEnumerationProjectDataTypes,
+    ExtensionDataListScope,
     ExtensionDataScope,
     MandatoryProjectDataTypes,
+    WithProjectDataProviderEngineExtensionDataEnumerationMethods,
   } from 'shared/models/project-data-provider.model';
   export type { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
   export type {
@@ -14442,6 +15038,7 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
   import { type PaletteFilterMode } from 'platform-bible-react/experimental';
   import type {
     CommandPaletteItem,
+    CommandPaletteRequest,
     PaletteSearchField,
   } from 'renderer/services/overlays/overlay.service-model';
   /**
@@ -14451,6 +15048,24 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
    * identity (marker palettes) opt into `['label']` per request instead.
    */
   export const DEFAULT_PALETTE_SEARCH_FIELDS: readonly PaletteSearchField[];
+  /**
+   * Whether the REQUESTER resolves this palette's filtered list rather than the palette resolving it
+   * itself — true for a passive palette and for one that focuses its list.
+   *
+   * Both render a read-only search box over a host-supplied filter and answer commits from the
+   * requester's own list, so both must match HOST-SIDE rather than through cmdk: reimplementing
+   * cmdk's fuzzy scorer is the only way the two lists could otherwise agree, and a disagreement
+   * commits an item the user cannot see. That host-side rule is {@link PaletteFilterMode} `'passive'`
+   * — a label PREFIX match, mirroring PT9's marker dropdown. Derived in one place so the palette's
+   * display and the host's commit resolution can never drift apart.
+   */
+  export function isHostDrivenPalette(
+    request: Pick<CommandPaletteRequest, 'passive' | 'focusTarget'>,
+  ): boolean;
+  /** The {@link PaletteFilterMode} a request's palette filters by. */
+  export function getPaletteFilterMode(
+    request: Pick<CommandPaletteRequest, 'passive' | 'focusTarget'>,
+  ): PaletteFilterMode;
   /**
    * Filters command palette items by matching `filterText` against each item's text, with
    * per-{@link PaletteFilterMode} semantics and the request's `searchFields` deciding which fields

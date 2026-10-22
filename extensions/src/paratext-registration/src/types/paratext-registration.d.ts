@@ -86,6 +86,7 @@ declare module 'papi-shared-types' {
     InternetSettings,
     IInternetSettingsDataProvider,
   } from 'paratext-registration';
+  import type { ResetFirstRunRegistration } from 'papi-shared-types';
 
   export interface CommandHandlers {
     /**
@@ -136,6 +137,24 @@ declare module 'papi-shared-types' {
     'paratextRegistration.validateParatextRegistrationData': (
       registrationData: RegistrationData,
     ) => Promise<boolean>;
+    /**
+     * Whether the current registration is the one Platform.Bible copied from Paratext 9 when it
+     * first set up its own ParatextData folder (false if it was entered in Platform.Bible).
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextRegistration.isRegistrationCopiedFromParatext9': () => Promise<boolean>;
+    /**
+     * Registration half of `platform.resetFirstRun`, which is the command to call: it also resets
+     * first-run progress and restarts the app, which this needs afterwards. Developer and tester
+     * tool, not for extensions to call: it can delete the user's registration. Only ever touches
+     * Platform.Bible's own ParatextData folder; Paratext 9's registration is never changed.
+     *
+     * @param mode See {@link ResetFirstRunRegistration}
+     * @throws If ParatextData is not using Platform.Bible's own folder
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextRegistration.resetForFirstRun': (mode: ResetFirstRunRegistration) => Promise<void>;
     /**
      * @deprecated Use the `paratextRegistration.internetSettingsDataProvider` data provider's
      *   `getInternetSettings` instead. Retained as a thin wrapper for backward compatibility and

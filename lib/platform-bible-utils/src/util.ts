@@ -420,9 +420,15 @@ export function createSyncProxyForAsyncObject<T extends object>(
   });
 }
 
+/** The text to match against, whether the caller passed an error or a message already extracted. */
+function getErrorText(errorMessage: unknown): string {
+  return isString(errorMessage) ? errorMessage : getErrorMessage(errorMessage);
+}
+
 /**
- * Indicates if the exception or error message provided appears to be from ParatextData.dll
- * indicating that Paratext is blocking internet access.
+ * Indicates if the exception or error message provided shows that Paratext refused internet access
+ * because of the user's internet setting — either ParatextData.dll's own block, or the .NET data
+ * provider's gate on Registry, Send/Receive, and Digital Bible Library access.
  *
  * @param errorMessage Error message or exception to check
  * @returns `true` if the message indicates Paratext is blocking internet access, `false` otherwise
@@ -431,9 +437,15 @@ export function isErrorMessageAboutParatextBlockingInternetAccess(errorMessage: 
   // Copied from ParatextData/InternetAccess.cs, not a localized string
   const paratextExceptionMessage =
     'Bug in Paratext caused attempted access to Internet. Request has been blocked.';
+  // Copied from `InternetServicesGate.BlockedSentinel` in c-sharp/Users/InternetServicesGate.cs.
+  // The message it ends is localized, so match only the sentinel.
+  const internetServicesBlockedSentinel = '(INTERNET_SERVICES_BLOCKED)';
 
-  if (isString(errorMessage)) return errorMessage.includes(paratextExceptionMessage);
-  return getErrorMessage(errorMessage).includes(paratextExceptionMessage);
+  const errorText = getErrorText(errorMessage);
+  return (
+    errorText.includes(paratextExceptionMessage) ||
+    errorText.includes(internetServicesBlockedSentinel)
+  );
 }
 
 /**
@@ -450,10 +462,9 @@ export function isErrorMessageAboutRegistryAuthFailure(errorMessage: unknown): b
   const paratextExceptionMessage2 =
     'User registration is not valid. Cannot retrieve resources from DBL.';
 
-  const errorString = isString(errorMessage) ? errorMessage : getErrorMessage(errorMessage);
+  const errorText = getErrorText(errorMessage);
   return (
-    errorString.includes(paratextExceptionMessage1) ||
-    errorString.includes(paratextExceptionMessage2)
+    errorText.includes(paratextExceptionMessage1) || errorText.includes(paratextExceptionMessage2)
   );
 }
 

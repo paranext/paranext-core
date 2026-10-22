@@ -140,9 +140,15 @@ export interface StartupTasksSignals {
  * - One of {@link ScheduledSessionSyncResult} — the command ran and reported that result;
  * - `'skipped-stale'` — the startup moment went stale before the command registered, so the trigger
  *   was dropped rather than fired late onto an active editor;
+ * - `'skipped-mode-changed'` — before a retry, the interface mode was no longer `'power'` or could
+ *   not be read, so the Power-only trigger was dropped;
  * - `'aborted'` — the app began quitting before the command registered.
  */
-type StartupSyncTriggerOutcome = ScheduledSessionSyncResult | 'skipped-stale' | 'aborted';
+type StartupSyncTriggerOutcome =
+  | ScheduledSessionSyncResult
+  | 'skipped-stale'
+  | 'skipped-mode-changed'
+  | 'aborted';
 
 /**
  * Runs initialization tasks (currently: triggering an initial project sync) shortly after the app
@@ -282,9 +288,18 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
   // what that syncs — it is not always every locally-known project. The C# S/R command registers
   // asynchronously during startup; `sendCommand` will wait (with retry on missing handler) until
   // it's available or times out.
+  //
+  // `true` suppresses the dotnet progress toast: this branch only runs once the mode is known to be
+  // 'simple' (re-checked after the readiness wait), where the toolbar sync indicator is this sync's
+  // persistent surface.
+  //
+  // Mode change mid-sync: intentionally not handled. The flag is fixed for the run, and the
+  // indicator mounts only in Simple mode, so switching to Power while this runs leaves it with no
+  // progress surface until it ends (failure toasts are not suppressed). Accepted in
+  // `adr-sync-surface-per-interface-mode`; reconciling it needs a renderer or signal change.
   logger.debug('Startup sync starting');
   try {
-    await commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined);
+    await commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined, true);
     logger.debug('Startup sync complete');
   } catch (e) {
     logger.warn(
@@ -432,6 +447,9 @@ async function performPowerModeStartupSync(signals?: StartupTasksSignals): Promi
         'Power-mode startup sync skipped: startup no longer fresh; a late trigger would block an active editor',
       );
       break;
+    case 'skipped-mode-changed':
+      logger.debug('Power-mode startup sync skipped: no longer in Power mode');
+      break;
     case 'aborted':
       logger.debug('Power-mode startup sync aborted: app is quitting');
       break;
@@ -457,6 +475,21 @@ async function performPowerModeStartupSync(signals?: StartupTasksSignals): Promi
  */
 function isRetryableBootRaceError(error: unknown): boolean {
   return isJsonRpcMethodNotFoundError(error) || isRequestTimedOutError(error);
+}
+
+/**
+ * Whether `platform.interfaceMode` still reads `'power'`. A failed read warns and answers `false`,
+ * so an unreadable mode never lets the Power-only sync fire.
+ */
+async function isStillPowerMode(): Promise<boolean> {
+  try {
+    return (await settingsService.get('platform.interfaceMode')) === 'power';
+  } catch (e) {
+    logger.warn(
+      `Could not read platform.interfaceMode; skipping the Power-mode startup sync: ${getErrorMessage(e)}`,
+    );
+    return false;
+  }
 }
 
 /**
@@ -487,9 +520,9 @@ function isRetryableBootRaceError(error: unknown): boolean {
  * first its self-trigger starves the same factory.
  *
  * Returns a {@link StartupSyncTriggerOutcome} for the cases the caller logs as non-failures (the
- * command ran and reported a result, the startup went stale, or the app is quitting), and throws
- * for a genuine failure (a non-retryable handler error, or the budget exhausted with the command
- * never registering) so the caller can warn with the right cause.
+ * command ran and reported a result, the startup went stale, the user left Power mode, or the app
+ * is quitting), and throws for a genuine failure (a non-retryable handler error, or the budget
+ * exhausted with the command never registering) so the caller can warn with the right cause.
  *
  * Uses a monotonic `performance.now()` deadline rather than wall-clock `Date.now()`: this runs
  * during OS cold boot, exactly when the wall clock gets stepped (fresh boot / dual-boot RTC skew /
@@ -515,6 +548,13 @@ async function requestSessionSyncWithBootRetry(
       windowInteractiveMs >= STARTUP_SYNC_FRESHNESS_WINDOW_MS
     )
       return 'skipped-stale';
+
+    // Re-read the mode before each retry: the caller read it once before the first attempt, and the
+    // user can switch modes while this loop waits. This sync runs with the dotnet progress toast,
+    // so firing it in Simple mode would put a second cancellable surface beside the toolbar
+    // indicator. An unreadable mode skips too, as the caller's first read does.
+    // eslint-disable-next-line no-await-in-loop
+    if (attempt > 0 && !(await isStillPowerMode())) return 'skipped-mode-changed';
 
     attempt += 1;
     try {

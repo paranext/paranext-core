@@ -10,6 +10,7 @@ import {
   resetWindowBlockingOverlays,
 } from '@renderer/services/window-blocking-overlay-store';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE } from '@renderer/components/toolbar-height.util';
 import { WorkspaceUpdatingOverlay } from './overlay-workspace-updating.component';
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
@@ -181,22 +182,28 @@ describe('WorkspaceUpdatingOverlay', () => {
 
   // The cover is the dialog content itself — see COVER_CONTENT for why the layer that covers the
   // dock cannot be `DialogContent`'s own backdrop — so the inset that clears the toolbar is on it.
-  it('insets 48px from the top in power mode, matching the tw:h-12 toolbar', () => {
+  // It starts where the dock starts, so it also clears the strip below the toolbar when one shows.
+  // `style.top` is read raw: jsdom does not resolve `calc()` or `var()`.
+  it('insets from the top like the dock in power mode, below the tw:h-12 toolbar and the strip', () => {
     vi.mocked(useIsPowerMode).mockReturnValue(true);
     render(<WorkspaceUpdatingOverlay />);
     act(() => {
       startWorkspaceUpdate();
     });
-    expect(screen.getByTestId('workspace-updating-cover')).toHaveStyle({ top: '48px' });
+    expect(screen.getByTestId('workspace-updating-cover').style.top).toBe(
+      `calc(48px + var(${BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE}, 0px))`,
+    );
   });
 
-  it('insets 56px from the top in simple mode, matching the tw:h-14 toolbar', () => {
+  it('insets from the top like the dock in simple mode, below the tw:h-14 toolbar and the strip', () => {
     vi.mocked(useIsPowerMode).mockReturnValue(false);
     render(<WorkspaceUpdatingOverlay />);
     act(() => {
       startWorkspaceUpdate();
     });
-    expect(screen.getByTestId('workspace-updating-cover')).toHaveStyle({ top: '56px' });
+    expect(screen.getByTestId('workspace-updating-cover').style.top).toBe(
+      `calc(56px + var(${BELOW_TOOLBAR_STRIP_HEIGHT_CSS_VARIABLE}, 0px))`,
+    );
   });
 
   // The cover paints over the panes but a web view's iframe keeps the keyboard, so a chord typed

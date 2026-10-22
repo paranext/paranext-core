@@ -1,9 +1,16 @@
+import * as commandService from '@shared/services/command.service';
 import { settingsService } from '@shared/services/settings.service';
 import { logger } from '@shared/services/logger.service';
 import { localizationService } from '@shared/services/localization.service';
-import { getCurrentLocale, getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import type { InternetSettings } from 'paratext-registration';
+import {
+  deepEqual,
+  getCurrentLocale,
+  getErrorMessage,
+  isPlatformError,
+} from 'platform-bible-utils';
 import { readCachedInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
-import { readBooleanFlag, writeBooleanFlag } from './local-storage-flag.util';
+import { clearBooleanFlag, readBooleanFlag, writeBooleanFlag } from './local-storage-flag.util';
 import { decideFirstRun } from './first-run.reducer';
 import { FirstRunStep } from './first-run.model';
 import {
@@ -16,7 +23,22 @@ import { pickBestSetupLanguage } from './pick-best-setup-language';
 export type FirstRunStatus =
   | { kind: 'loading' }
   | { kind: 'app' }
-  | { kind: 'wizard'; step: FirstRunStep; allowContinueWithoutRegistration?: boolean }
+  | {
+      kind: 'wizard';
+      step: FirstRunStep;
+      allowContinueWithoutRegistration?: boolean;
+      /**
+       * The registration was valid when this wizard run started. Language, internet settings and
+       * identify then count as already completed (check marks, reachable with Next).
+       */
+      registrationValidAtStart?: boolean;
+      /**
+       * The registration is the one Platform.Bible copied from Paratext 9 when it first set up its
+       * own folder, and nothing has replaced it since (the data provider forgets the copy whenever
+       * the registration changes). Shows the "copied from Paratext 9" banner.
+       */
+      registrationPreexisting?: boolean;
+    }
   | { kind: 'error' };
 
 const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
@@ -36,16 +58,24 @@ const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
 // resolveInternal reads and consumes it to guard against transient 'invalid' responses from the
 // registration backend: the user just registered, so 'invalid' is almost certainly a server fluke.
 const JUST_REGISTERED_KEY = 'platform-bible.firstRunJustRegistered';
+// Written by the Identify step immediately before it restarts the app to apply changed internet
+// settings for an already-registered user; consumed on the next startup, which then resumes at sync
+// consent — with the same 'invalid' allowance — the way a restart after registering does.
+const WIZARD_RESTARTED_KEY = 'platform-bible.firstRunWizardRestarted';
 
 // Guards startBackgroundRegistrationRecheck so the completed-user re-check runs at most once per
 // startup even if resolveInternal is re-entered (e.g. via retryFirstRunResolution).
 let backgroundRecheckStarted = false;
 
-// Remembers that JUST_REGISTERED_KEY was set when this startup began. The durable flag is a
-// one-shot spent on the first read, but a startup can ask about registration more than once (the
-// Retry button re-enters resolveInternal), and the transient 'invalid' the flag exists to absorb
-// can just as easily land on the retry as on the first probe. See consumeJustRegisteredFlag.
-let justRegisteredThisStartup = false;
+// The one-launch flags (JUST_REGISTERED_KEY, WIZARD_RESTARTED_KEY) that were set when this startup
+// began. See consumeOneLaunchFlag.
+const oneLaunchFlagsSetThisStartup = new Set<string>();
+
+// Internet settings only take effect after a restart. The wizard's Internet settings step reports
+// the values it first loaded and every value it saves; the Identify step restarts the app when the
+// saved values differ from the first ones. In memory only: the restart is what applies the change.
+let internetSettingsAtStart: InternetSettings | undefined;
+let internetSettingsChangedThisRun = false;
 
 /** Demo/UX mode — see {@link DEMO_MODE_KEY}. Enablement only; never true in shipped builds. */
 export function isDemoMode(): boolean {
@@ -60,6 +90,36 @@ export function isDemoMode(): boolean {
  */
 export function markJustRegistered(): void {
   writeBooleanFlag(JUST_REGISTERED_KEY, true);
+}
+
+/**
+ * Records that the wizard is about to restart the app to apply changed internet settings, so the
+ * next startup resumes at sync consent instead of the first step.
+ */
+export function markWizardRestarting(): void {
+  writeBooleanFlag(WIZARD_RESTARTED_KEY, true);
+}
+
+/**
+ * Records the internet settings the wizard's Internet settings step first loaded this run, as the
+ * baseline {@link noteInternetSettingsSaved} compares against. Later calls are ignored.
+ */
+export function noteInternetSettingsLoaded(settings: InternetSettings): void {
+  internetSettingsAtStart ??= settings;
+}
+
+/**
+ * Records internet settings the wizard just saved. They need a restart to take effect unless they
+ * are back to what the step first loaded.
+ */
+export function noteInternetSettingsSaved(settings: InternetSettings): void {
+  internetSettingsChangedThisRun =
+    internetSettingsAtStart === undefined || !deepEqual(settings, internetSettingsAtStart);
+}
+
+/** Whether the internet settings saved in the wizard differ from the ones it started with. */
+export function haveInternetSettingsChanged(): boolean {
+  return internetSettingsChangedThisRun;
 }
 
 function computeInitialStatus(): FirstRunStatus {
@@ -121,21 +181,30 @@ async function markFirstRunComplete(): Promise<void> {
 }
 
 /**
- * On a fresh wizard start, default the interface language to the OS language when it has enough
- * setup-dialog localization (i.e. it qualifies for the picker). Best-effort: any failure leaves the
- * wizard in English. The caller guarantees this only runs on the fresh-start path, so it never
- * overrides a language the user has already chosen. Skips the write when the OS match already
- * equals the current primary language (e.g. an English OS), to avoid a redundant set + re-render.
+ * Whether `value` is what `platform.interfaceLanguage` holds before anyone has chosen a language:
+ * unset, empty, or the default `['en']`. Anything else was set on purpose and must not be
+ * replaced.
+ */
+function isDefaultInterfaceLanguage(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!Array.isArray(value)) return false;
+  return value.length === 0 || (value.length === 1 && value[0] === 'en');
+}
+
+/**
+ * On a fresh wizard start, default the interface language to the OS language when it qualifies for
+ * the setup-dialog picker (offered, with enough setup-dialog localization). Writes only while the
+ * setting is still at its default (see {@link isDefaultInterfaceLanguage}), so a language set before
+ * setup is kept. Skips the write when the best match is English, which is already the default.
+ * Best-effort: any failure leaves the wizard in English.
  */
 async function seedInterfaceLanguageFromOsLocale(): Promise<void> {
   try {
+    const current = await settingsService.get('platform.interfaceLanguage');
+    if (!isDefaultInterfaceLanguage(current)) return;
     const qualifying = await localizationService.getSetupDialogLanguages();
     const best = pickBestSetupLanguage(getCurrentLocale(), Object.keys(qualifying));
-    if (!best) return;
-    const current = await settingsService.get('platform.interfaceLanguage');
-    const currentPrimary =
-      !isPlatformError(current) && Array.isArray(current) && current.length > 0 ? current[0] : 'en';
-    if (best === currentPrimary) return;
+    if (!best || best === 'en') return;
     await settingsService.set('platform.interfaceLanguage', [best]);
   } catch (e) {
     logger.warn(`Could not default interface language to the OS locale: ${getErrorMessage(e)}`);
@@ -231,15 +300,18 @@ async function resolveInternal(generation: number): Promise<void> {
     }
 
     const wizardActive = readBooleanFlag(WIZARD_ACTIVE_KEY);
-    // Consume the just-registered flag before resolving validity: the user set it just before
-    // calling platform.restart(), so 'invalid' here is almost certainly a transient backend fluke.
-    const justRegistered = consumeJustRegisteredFlag();
+    // Consume the one-launch flags before resolving validity: the wizard set one just before calling
+    // platform.restart() with a registration that was valid (just entered, or already there), so
+    // 'invalid' here is almost certainly a transient backend fluke.
+    const justRegistered = consumeOneLaunchFlag(JUST_REGISTERED_KEY);
+    const wizardRestarted = consumeOneLaunchFlag(WIZARD_RESTARTED_KEY);
+    const wizardJustRestarted = justRegistered || wizardRestarted;
     const registrationValidity = await refreshRegistrationValidity();
     const effectiveValidity =
-      justRegistered && registrationValidity === 'invalid' ? 'valid' : registrationValidity;
+      wizardJustRestarted && registrationValidity === 'invalid' ? 'valid' : registrationValidity;
     // Record the answer the gate acted on, not the raw probe, so the reminder dot starts the session
-    // agreeing with the just-registered suppression decided here. A later forced re-check (opening
-    // the profile popover) can still re-probe past it.
+    // agreeing with the suppression decided here. A later forced re-check (opening the profile
+    // popover) can still re-probe past it.
     // See `adr-registration-validity-once-per-session`.
     //
     // Deliberately ahead of the supersession check below, unlike every other side effect here. That
@@ -252,6 +324,7 @@ async function resolveInternal(generation: number): Promise<void> {
       firstRunComplete: false,
       wizardActive,
       registrationValidity: effectiveValidity,
+      wizardJustRestarted,
     });
 
     // The registration probe above is the long await where the watchdog reveals the escape hatch, so
@@ -262,22 +335,23 @@ async function resolveInternal(generation: number): Promise<void> {
     if (isSuperseded()) return;
 
     switch (decision.action) {
-      case 'completeThenShowApp':
-        await markFirstRunComplete();
-        applyStatus({ kind: 'app' });
-        break;
       case 'waitForRegistration':
         applyStatus({ kind: 'error' });
         break;
-      case 'startWizard':
+      case 'startWizard': {
+        const registrationValidAtStart = effectiveValidity === 'valid';
+        const registrationPreexisting =
+          registrationValidAtStart && (await isRegistrationCopiedFromParatext9());
+        // A newer resolution may have superseded this one while that answer was on its way.
+        if (isSuperseded()) return;
         // Fresh start at the language step: default to the OS language if it has enough setup-dialog
-        // localization. `wizardActive` here is the pre-transition value, so this runs once and never
-        // overrides a choice a returning user already made. Seeding the setting *before* setStatus
-        // means the wizard's localized strings resolve straight to the OS language — the live-render
-        // bridge never has to fire a change. (The very first synchronous render still shows the
-        // English defaults that useLocalizedStrings/useSetting return before their async fetch
-        // resolves; that brief default-then-resolve is the same for the English case, so seeding
-        // introduces no new flash.)
+        // localization. `wizardActive` here is the pre-transition value, so this runs once per
+        // wizard run, and the seed itself never replaces a language already chosen. Seeding the
+        // setting *before* setStatus means the wizard's localized strings resolve straight to the
+        // OS language — the live-render bridge never has to fire a change. (The very first
+        // synchronous render still shows the English defaults that useLocalizedStrings/useSetting
+        // return before their async fetch resolves; that brief default-then-resolve is the same
+        // for the English case, so seeding introduces no new flash.)
         if (!wizardActive && decision.step === 'language') {
           await seedInterfaceLanguageFromOsLocale();
           // seedInterfaceLanguageFromOsLocale is another await a bail could land across; re-check so
@@ -285,8 +359,14 @@ async function resolveInternal(generation: number): Promise<void> {
           if (isSuperseded()) return;
         }
         writeBooleanFlag(WIZARD_ACTIVE_KEY, true);
-        applyStatus({ kind: 'wizard', step: decision.step });
+        applyStatus({
+          kind: 'wizard',
+          step: decision.step,
+          registrationValidAtStart,
+          registrationPreexisting,
+        });
         break;
+      }
       default:
         // 'showApp' is unreachable here: we pass firstRunComplete: false above (the real flag was
         // checked and returned early). Defensive fallback.
@@ -296,6 +376,24 @@ async function resolveInternal(generation: number): Promise<void> {
   } catch (e) {
     logger.warn(`resolveFirstRunState failed: ${getErrorMessage(e)}`);
     applyStatus({ kind: 'error' });
+  }
+}
+
+/**
+ * Asks the data provider whether the registration was copied from Paratext 9 when Platform.Bible
+ * first set up its own ParatextData folder. Best-effort: only the banner depends on it, so any
+ * failure answers false.
+ */
+async function isRegistrationCopiedFromParatext9(): Promise<boolean> {
+  try {
+    return await commandService.sendCommand(
+      'paratextRegistration.isRegistrationCopiedFromParatext9',
+    );
+  } catch (e) {
+    logger.warn(
+      `Could not tell whether the registration came from Paratext 9: ${getErrorMessage(e)}`,
+    );
+    return false;
   }
 }
 
@@ -321,24 +419,23 @@ export async function resolveFirstRunState(): Promise<void> {
 }
 
 /**
- * Reads and clears the just-registered flag, returning whether it was set at any point during this
- * startup. The fresh-user startup path and the completed-user background re-check each consume it —
- * a transient 'invalid' on the launch right after a re-register is treated as a backend fluke, not
- * a re-nag.
+ * Reads and clears a one-launch flag the wizard sets just before restarting the app, returning
+ * whether it was set at any point during this startup. A transient 'invalid' on that launch is
+ * treated as a backend fluke, not a re-nag.
  *
  * Clearing the durable flag and remembering the answer are deliberately separate. The flag grants
  * exactly one launch of trust and must not survive into the next one, so it is cleared on the first
  * read. But within that launch the answer has to outlive the read: an `'unknown'` probe routes the
  * user to the "couldn't verify" screen without ever using the flag, and the transient `'invalid'`
- * it was meant to absorb then arrives on the Retry — which, unguarded, mis-routes a user who just
- * registered successfully back to the language step instead of resuming at sync consent.
+ * it was meant to absorb then arrives on the Retry — which, unguarded, mis-routes a user with a
+ * valid registration back to the language step instead of resuming at sync consent.
  */
-function consumeJustRegisteredFlag(): boolean {
-  if (readBooleanFlag(JUST_REGISTERED_KEY)) {
-    writeBooleanFlag(JUST_REGISTERED_KEY, false);
-    justRegisteredThisStartup = true;
+function consumeOneLaunchFlag(key: string): boolean {
+  if (readBooleanFlag(key)) {
+    writeBooleanFlag(key, false);
+    oneLaunchFlagsSetThisStartup.add(key);
   }
-  return justRegisteredThisStartup;
+  return oneLaunchFlagsSetThisStartup.has(key);
 }
 
 /**
@@ -356,7 +453,7 @@ async function startBackgroundRegistrationRecheck(): Promise<void> {
   try {
     // Consume the just-registered flag once per startup, before any early return, so a suppressed
     // launch can't leave it stale (which could later swallow a legitimate wizard raise).
-    const justRegistered = consumeJustRegisteredFlag();
+    const justRegistered = consumeOneLaunchFlag(JUST_REGISTERED_KEY);
     let reminderSuppressed = false;
     try {
       const value = await settingsService.get('platform.showRegistrationReminderOnStartup');
@@ -441,6 +538,21 @@ export function continueWithoutRegistration(): void {
   setStatus({ kind: 'app' });
 }
 
+/**
+ * Clears every first-run flag this store keeps in `localStorage`, for the developer reset
+ * (`platform.resetFirstRun`), which restarts the app right after. Leaves demo mode alone: that is a
+ * deliberate developer toggle, not first-run progress.
+ */
+export function clearFirstRunLocalState(): void {
+  [
+    FIRST_RUN_COMPLETE_CACHE_KEY,
+    WIZARD_ACTIVE_KEY,
+    JUST_REGISTERED_KEY,
+    WIZARD_RESTARTED_KEY,
+    SYNC_ON_STARTUP_DISABLED_CACHE_KEY,
+  ].forEach(clearBooleanFlag);
+}
+
 /** Re-run resolution after an error (e.g. the Retry button on the "couldn't verify" screen). */
 export async function retryFirstRunResolution(): Promise<void> {
   if (resolving) return resolvePromise ?? Promise.resolve();
@@ -460,6 +572,8 @@ export function resetFirstRunStore(): void {
   resolvePromise = undefined;
   resolving = false;
   backgroundRecheckStarted = false;
-  justRegisteredThisStartup = false;
+  oneLaunchFlagsSetThisStartup.clear();
+  internetSettingsAtStart = undefined;
+  internetSettingsChangedThisRun = false;
   listeners.clear();
 }

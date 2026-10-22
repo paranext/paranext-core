@@ -41,7 +41,7 @@ export const NO_MARKERS_TOOLTIP_KEY: LocalizeKey =
 export const SEARCH_PLACEHOLDER_KEY: LocalizeKey = '%markerMenu_searchPlaceholder_character%';
 /** Reuses the shipped sync-blocked wording rather than adding a second phrasing of it. */
 export const SYNC_BLOCKED_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_syncEditBlocked_banner%';
+  '%webView_platformScriptureEditor_syncEditBlocked_banner_2%';
 
 /**
  * Localize keys used by {@link CharacterMarkerControl}. Spread these into the editor web view's

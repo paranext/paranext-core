@@ -118,9 +118,7 @@ test.describe('Power mode', () => {
       await expect(mainPage.getByRole('menuitem', { name: 'Float tab' })).toBeVisible();
       await expect(mainPage.getByRole('menuitem', { name: 'Zoom in' })).toHaveCount(0);
       await expect(mainPage.getByRole('menuitem', { name: 'Zoom out' })).toHaveCount(0);
-      await expect(mainPage.getByRole('menuitem', { name: 'Reset zoom to default' })).toHaveCount(
-        0,
-      );
+      await expect(mainPage.getByRole('menuitem', { name: 'Zoom reset' })).toHaveCount(0);
       await mainPage.keyboard.press('Escape');
     });
   });
@@ -129,7 +127,11 @@ test.describe('Power mode', () => {
 test.describe('Simple mode', () => {
   test.use({
     interfaceMode: 'simple',
-    seedSettings: { 'platform.webViewContentZoom': SEEDED_DEFAULT },
+    // Past first run, so Simple mode starts in the app rather than the setup wizard.
+    seedSettings: {
+      'platform.webViewContentZoom': SEEDED_DEFAULT,
+      'platform.firstRunComplete': true,
+    },
     electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
   });
   test.setTimeout(300_000);

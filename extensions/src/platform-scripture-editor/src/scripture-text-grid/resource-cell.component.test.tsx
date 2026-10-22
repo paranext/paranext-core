@@ -2,12 +2,15 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon } from '@sillsdev/scripture';
+import { VERSE_NUMBER_SCROLL_OFFSET } from '../editor-dom.util';
 import { ResourceCell } from './resource-cell.component';
 import type { ResourceZoomController } from './use-resource-content-zoom.hook';
+import { useChapterCopyLimit } from '../copy-limit/use-chapter-copy-limit.hook';
+import { resetCopyLimitLookupsBeforeEach } from '../copy-limit/copy-limit.test-utils';
 
 const {
   mockUseProjectData,
@@ -35,10 +38,46 @@ const {
   };
 });
 
-vi.mock('@papi/frontend', () => ({ logger: { warn: vi.fn(), info: vi.fn() } }));
+const { mockFindVerseMarker } = vi.hoisted(() => ({
+  /**
+   * Stands in for `findVerseMarkerForVerse`, so a test can see the port and verse the cell asks
+   * for, and script what is found, without rendering real editor DOM.
+   */
+  mockFindVerseMarker: vi.fn(),
+}));
+vi.mock('./reference-scroll.utils', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./reference-scroll.utils')>();
+  return {
+    ...original,
+    findVerseMarkerForVerse: (...args: Parameters<typeof original.findVerseMarkerForVerse>) =>
+      mockFindVerseMarker(...args),
+  };
+});
+
+const providersByKey = new Map<string, { key: string }>();
+function providerFor(key: string) {
+  let provider = providersByKey.get(key);
+  if (!provider) {
+    provider = { key };
+    providersByKey.set(key, provider);
+  }
+  return provider;
+}
+
+vi.mock('@papi/frontend', () => ({
+  default: {
+    projectLookup: {
+      getMetadataForProject: async () => ({ projectInterfaces: ['platformScripture.CopyLimit'] }),
+    },
+  },
+  logger: { warn: vi.fn(), info: vi.fn() },
+}));
 vi.mock('@papi/frontend/react', () => ({
   useProjectData: (...a: unknown[]) => mockUseProjectData(...a),
   useProjectSetting: (...a: unknown[]) => mockUseProjectSetting(...a),
+  // One stable provider object per project, as the real hook resolves one per project.
+  useProjectDataProvider: (projectInterface: string, projectId?: string) =>
+    providerFor(`${projectInterface}:${projectId}`),
   useLocalizedStrings: () => [
     {
       '%webView_scriptureTextGrid_cell_unavailable%': 'Resource unavailable',
@@ -115,6 +154,7 @@ const props = {
   resourceRef: { resourceId: 'r1', projectId: 'p1', label: 'WEB' },
   zoomArea: 'resource-r1',
   scrRef,
+  isViewVisible: true,
   setScrRef: vi.fn(),
 };
 
@@ -172,9 +212,18 @@ const combinedOpeningChapterUsj = usxStringToUsj(`<?xml version="1.0" encoding="
 </usx>
 `);
 
-// 3-tuple [data, setData, isLoading].
-function setUsjResult(value: unknown, isLoading = false) {
-  mockUseProjectData.mockReturnValue({ ChapterUSJ: () => [value, vi.fn(), isLoading] });
+// 3-tuple [data, setData, isLoading]. `copyLimits` defaults to an unlimited (`undefined` value)
+// result so existing tests that don't care about the copy limit keep seeing `copyLimit: undefined`
+// in the editor options.
+function setUsjResult(
+  value: unknown,
+  isLoading = false,
+  copyLimits: [unknown, unknown, boolean] = [undefined, vi.fn(), false],
+) {
+  mockUseProjectData.mockReturnValue({
+    ChapterUSJ: () => [value, vi.fn(), isLoading],
+    BookCopyLimits: () => copyLimits,
+  });
 }
 
 /**
@@ -204,6 +253,19 @@ function renderResourceCell(
   render(<ResourceCell {...props} {...rest} />);
 }
 
+resetCopyLimitLookupsBeforeEach();
+
+// The copy limit looks up each project's metadata once per web view. Settle that lookup for this
+// file's project before each test, so no test starts or ends with it still in flight.
+beforeEach(async () => {
+  setUsjResult(chapter, false);
+  const { unmount } = renderHook(() =>
+    useChapterCopyLimit(props.resourceRef.projectId, scrRef, 'applied-by-caller'),
+  );
+  await act(async () => {});
+  unmount();
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   // The captured handler lives in a plain hoisted closure, which `clearAllMocks` does not reset.
@@ -218,6 +280,7 @@ describe('ResourceCell', () => {
     setUsjResult(undefined, true);
     render(
       <ResourceCell
+        isViewVisible
         resourceRef={{ resourceId: 'dbl-uid-1', projectId: undefined, label: 'NIV' }}
         zoomArea="resource-dbl-uid-1"
         scrRef={scrRef}
@@ -286,6 +349,100 @@ describe('ResourceCell', () => {
     expect(screen.getByText('WEB')).toBeInTheDocument();
     expect(screen.queryByRole('gridcell')).toBeNull();
     expect(screen.queryByRole('button')).toBeNull();
+  });
+});
+
+describe('ResourceCell copy limit', () => {
+  it('passes the resolved chapter copy limit into the editor options', async () => {
+    setUsjResult(chapter, false, [[undefined, 7], vi.fn(), false]);
+    render(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 1 }} />);
+    await waitFor(() =>
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ copyLimit: 7 }),
+      ),
+    );
+  });
+
+  it('passes the copy limit into the editor options in aligned mode too, beside the view', async () => {
+    setUsjResult(twoVerseChapterUsj, false, [[undefined, 7], vi.fn(), false]);
+    render(
+      <ResourceCell
+        {...props}
+        viewMode="aligned"
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 2 }}
+      />,
+    );
+    await waitFor(() =>
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          copyLimit: 7,
+          view: expect.objectContaining({ viewOptionsFor: 'block-verse' }),
+        }),
+      ),
+    );
+  });
+
+  it('blocks copying on the render that changes chapter, before the new chapter text is asked for', async () => {
+    // The mocked fetch never reports loading, as on the render before `useProjectData`'s effect
+    // marks the new chapter as loading.
+    setUsjResult(chapter, false, [[undefined, 7, 12], vi.fn(), false]);
+    const { rerender } = render(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 1 }} />);
+    await waitFor(() =>
+      expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ copyLimit: 7 }),
+      ),
+    );
+    const rendersBeforeChange = capturedEditorOptions.mock.calls.length;
+
+    rerender(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 2 }} />);
+
+    // The previous chapter's text is not shown on that render, and any editor render there was
+    // could copy nothing.
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    capturedEditorOptions.mock.calls
+      .slice(rendersBeforeChange)
+      .forEach(([options]) => expect(options).toEqual(expect.objectContaining({ copyLimit: 0 })));
+
+    rerender(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 2 }} />);
+    expect(capturedEditorOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ copyLimit: 12 }),
+    );
+  });
+
+  // `useChapterCopyLimit` resolves the NEW chapter's limit immediately (book-level limits are
+  // pre-loaded), while the chapter TEXT keeps showing the PREVIOUS chapter until its own fetch
+  // resolves — the round trip during which the old text must not be copyable under the new
+  // chapter's (possibly larger) limit. `deriveCellState` already forces `'downloading'` whenever
+  // the chapter fetch's own `isLoading` is true, regardless of whether stale content is in hand
+  // (see the "re-feeds the editor when a read finishes with the same chapter already in hand" test
+  // above), so Editorial never mounts during that window and no limit — right or wrong — can leak
+  // through it. This pins that guarantee for the copy-limit round trip specifically, with a real
+  // (non-zero) limit already resolved, so a future change to `deriveCellState` that let a loading
+  // cell fall through to `'ready'` would be caught here rather than silently exposing stale text
+  // under the wrong limit.
+  it("does not show the previous resource's text under a new resource before the new text has loaded", () => {
+    setUsjResult(chapter, false);
+    const { rerender } = render(<ResourceCell {...props} />);
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+
+    // The chapter fetch still holds the previous resource's text and reports it settled.
+    const otherResource = { ...props.resourceRef, projectId: 'other-project' };
+    rerender(<ResourceCell {...props} resourceRef={otherResource} />);
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+
+    // The new resource's text loads and arrives.
+    setUsjResult(chapter, true);
+    rerender(<ResourceCell {...props} resourceRef={otherResource} />);
+    setUsjResult(chapter, false);
+    rerender(<ResourceCell {...props} resourceRef={otherResource} />);
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+  });
+
+  it('never mounts the editor while the chapter text is loading, even once the limit is known', () => {
+    setUsjResult(chapter, true, [[undefined, 7], vi.fn(), false]);
+    render(<ResourceCell {...props} scrRef={{ ...scrRef, chapterNum: 1 }} />);
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    expect(capturedEditorOptions).not.toHaveBeenCalled();
   });
 });
 
@@ -598,7 +755,7 @@ describe('ResourceCell right-click menu', () => {
 const zoomMenuLabels = {
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
-  reset: 'Reset zoom',
+  reset: 'Zoom reset',
   options: 'Zoom options for {resourceName}',
 };
 
@@ -622,17 +779,17 @@ describe('ResourceCell zoom menu', () => {
       <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
     );
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom in' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Zoom in/ }));
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    await user.click(screen.getByRole('menuitem', { name: 'Zoom out' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Zoom out/ }));
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    await user.click(screen.getByRole('menuitem', { name: 'Reset zoom' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Zoom reset/ }));
     expect(zoom.adjustZoom).toHaveBeenNthCalledWith(1, 'r1', 1);
     expect(zoom.adjustZoom).toHaveBeenNthCalledWith(2, 'r1', -1);
     expect(zoom.resetZoom).toHaveBeenCalledWith('r1');
   });
 
-  it('disables Zoom in and Reset zoom for a resource that follows a 300 % default', () => {
+  it('disables Zoom in and Zoom reset for a resource that follows a 300 % default', () => {
     // No level of its own, and the Tab content default zoom is at the top of the range.
     const zoom = makeZoom({ getZoom: () => 3, hasOwnLevel: () => false });
     setUsjResult(chapter, false);
@@ -640,32 +797,32 @@ describe('ResourceCell zoom menu', () => {
       <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
     );
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    expect(screen.getByRole('menuitem', { name: 'Zoom in' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Zoom in/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(screen.getByRole('menuitem', { name: 'Zoom out' })).not.toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Zoom out/ })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(screen.getByRole('menuitem', { name: 'Reset zoom' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Zoom reset/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
   });
 
-  it('disables Zoom out at 50 % and enables Reset zoom for a resource with its own level', () => {
+  it('disables Zoom out at 50 % and enables Zoom reset for a resource with its own level', () => {
     const zoom = makeZoom({ getZoom: () => 0.5, hasOwnLevel: () => true });
     setUsjResult(chapter, false);
     render(
       <ResourceCell {...props} viewMode="chapter" zoom={zoom} zoomMenuLabels={zoomMenuLabels} />,
     );
     fireEvent.contextMenu(screen.getByTestId('editorial'));
-    expect(screen.getByRole('menuitem', { name: 'Zoom out' })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Zoom out/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
-    expect(screen.getByRole('menuitem', { name: 'Reset zoom' })).not.toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^Zoom reset/ })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );
@@ -778,5 +935,238 @@ describe('ResourceCell book not in this text', () => {
     // Lexical's placeholder. Assert the re-feed, matching the twin in
     // `resource-text-panel.component.test.tsx`.
     expect(setUsjSpy).toHaveBeenLastCalledWith(chapter);
+  });
+});
+
+describe('ResourceCell reference scroll wiring', () => {
+  /**
+   * Gives a rendered cell's content box the geometry jsdom does not lay out.
+   *
+   * @param container The render container.
+   * @returns The cell's scroll port.
+   */
+  function scriptPortGeometry(container: HTMLElement): HTMLElement {
+    const port = container.querySelector('[data-cell-content]');
+    if (!(port instanceof HTMLElement)) throw new Error('cell rendered no content box');
+    Object.defineProperty(port, 'scrollHeight', { value: 1000, configurable: true });
+    Object.defineProperty(port, 'clientHeight', { value: 100, configurable: true });
+    port.getBoundingClientRect = () => new DOMRect(0, 0, 0, 100);
+    return port;
+  }
+
+  /**
+   * A verse marker sitting below the fold, whose rect moves as the port scrolls.
+   *
+   * @param port The port it lives in.
+   * @returns The marker element.
+   */
+  function buildMarkerBelowFold(port: HTMLElement): HTMLElement {
+    const marker = document.createElement('span');
+    marker.getBoundingClientRect = () => new DOMRect(0, 500 - port.scrollTop, 0, 20);
+    return marker;
+  }
+
+  beforeEach(() => {
+    mockFindVerseMarker.mockReset();
+    mockFindVerseMarker.mockReturnValue(undefined);
+  });
+
+  it('asks the finder for the reference verse in chapter mode, against its OWN content box', async () => {
+    // Pins the `contentRef` wiring: a refactor that handed the hook some other element, or none,
+    // would still render identically.
+    setUsjResult(chapter, false);
+    const { container } = render(<ResourceCell {...props} viewMode="chapter" />);
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+
+    const port = container.querySelector('[data-cell-content]');
+    expect(mockFindVerseMarker.mock.calls[0][0]).toBe(port);
+    expect(mockFindVerseMarker.mock.calls[0][1]).toBe(scrRef.verseNum);
+  });
+
+  it('asks for no scroll in verse mode', async () => {
+    // `sliceUsjToVerse` has already reduced the cell to the reference's verse, so there is nothing
+    // to scroll to. Verse mode is doubly covered: it renders the inline layout, which wires no
+    // `contentRef` at all, so this stays true even if the `isEnabled` gate were removed. The
+    // aligned case below is the one that pins the gate itself.
+    setUsjResult(chapter, false);
+    render(<ResourceCell {...props} viewMode="verse" />);
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+
+    expect(mockFindVerseMarker).not.toHaveBeenCalled();
+  });
+
+  it('asks for no scroll in aligned mode', async () => {
+    // The aligned grid root owns the scroll for every column, so a cell must not fight it. This is
+    // where `isEnabled: viewMode === 'chapter'` earns its keep: aligned mode renders the header
+    // layout, so the cell DOES have a content box, and the gate is the only thing holding it back.
+    setUsjResult(chapter, false);
+    render(<ResourceCell {...props} viewMode="aligned" />);
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+
+    expect(mockFindVerseMarker).not.toHaveBeenCalled();
+  });
+
+  it('scrolls its content box to a marker below the fold, keeping the shared lead-in', async () => {
+    setUsjResult(chapter, false);
+    const { container, rerender } = render(<ResourceCell {...props} viewMode="chapter" />);
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    mockFindVerseMarker.mockReturnValue(buildMarkerBelowFold(port));
+
+    // A new reference re-arms the scroll.
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={{ ...scrRef, verseNum: 9 }} />);
+
+    // Not flush against the top: the reader keeps `VERSE_NUMBER_SCROLL_OFFSET` of the preceding
+    // verse for context, the same framing the editor and the reference panels use.
+    expect(port.scrollTop).toBe(500 - VERSE_NUMBER_SCROLL_OFFSET);
+  });
+
+  it('scrolls to a marker clipped by the bottom edge, where only its verse number shows', async () => {
+    // The chapter cell's visibility rule: a one-line marker must fit completely. Under the aligned
+    // grid's any-part-showing rule this marker would count as visible and the reader would see a
+    // verse number with none of its verse.
+    setUsjResult(chapter, false);
+    const { container, rerender } = render(<ResourceCell {...props} viewMode="chapter" />);
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    const marker = document.createElement('span');
+    // 90..110 in a port showing 0..100.
+    marker.getBoundingClientRect = () => new DOMRect(0, 90 - port.scrollTop, 0, 20);
+    mockFindVerseMarker.mockReturnValue(marker);
+
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={{ ...scrRef, verseNum: 9 }} />);
+
+    expect(port.scrollTop).toBe(90 - VERSE_NUMBER_SCROLL_OFFSET);
+  });
+
+  it('defers the scroll while its tab is hidden, and catches up when shown', async () => {
+    // `.claude/rules/cross-view-sync-hidden-views.md`: a hidden pane has no layout, so the scroll
+    // waits and runs once on activation. In Simple mode this is the common path.
+    setUsjResult(chapter, false);
+    const { container, rerender } = render(
+      <ResourceCell {...props} viewMode="chapter" isViewVisible={false} />,
+    );
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    mockFindVerseMarker.mockReturnValue(buildMarkerBelowFold(port));
+    const next = { ...scrRef, verseNum: 9 };
+
+    rerender(<ResourceCell {...props} viewMode="chapter" isViewVisible={false} scrRef={next} />);
+    expect(mockFindVerseMarker).not.toHaveBeenCalled();
+    expect(port.scrollTop).toBe(0);
+
+    rerender(<ResourceCell {...props} viewMode="chapter" isViewVisible scrRef={next} />);
+
+    expect(port.scrollTop).toBe(500 - VERSE_NUMBER_SCROLL_OFFSET);
+  });
+
+  it('scrolls back to the verse after its column is moved', async () => {
+    // Reordering keyed columns moves their DOM nodes, and a scroll container that is moved loses its
+    // scroll position. The column's new position re-arms the scroll rather than leaving it at the
+    // top of the chapter, where the next check would read the reset as the reader scrolling.
+    setUsjResult(chapter, false);
+    const { container, rerender } = render(
+      <ResourceCell {...props} viewMode="chapter" orderIndex={3} />,
+    );
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    mockFindVerseMarker.mockReturnValue(buildMarkerBelowFold(port));
+    const next = { ...scrRef, verseNum: 9 };
+    rerender(<ResourceCell {...props} viewMode="chapter" orderIndex={3} scrRef={next} />);
+    expect(port.scrollTop).toBe(500 - VERSE_NUMBER_SCROLL_OFFSET);
+
+    // The move: the browser resets the moved container, and the column now sits first.
+    port.scrollTop = 0;
+    rerender(<ResourceCell {...props} viewMode="chapter" orderIndex={0} scrRef={next} />);
+
+    expect(port.scrollTop).toBe(500 - VERSE_NUMBER_SCROLL_OFFSET);
+  });
+
+  /**
+   * A chapter's USJ naming its book and chapter, as the data provider returns it.
+   *
+   * @param chapterNum The chapter number the content carries.
+   * @returns The USJ.
+   */
+  const chapterOf = (chapterNum: number) => ({
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      { type: 'book', marker: 'id', code: scrRef.book },
+      { type: 'chapter', marker: 'c', number: `${chapterNum}` },
+      { type: 'para', marker: 'p', content: [{ type: 'verse', marker: 'v', number: '1' }] },
+    ],
+  });
+
+  it('scrolls to the verse in the NEW chapter after a chapter change', async () => {
+    // A data hook raises `isLoading` only in an effect, so the render where the reference moves
+    // still has the previous chapter in hand and reads as `ready`. Scrolling then aims at the old
+    // chapter; the loading placeholder that replaces it shrinks the port, the browser clamps
+    // `scrollTop` to 0, and that clamp would read as the reader scrolling away.
+    setUsjResult(chapterOf(5), false);
+    const { container, rerender } = render(<ResourceCell {...props} viewMode="chapter" />);
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    mockFindVerseMarker.mockReturnValue(buildMarkerBelowFold(port));
+    mockFindVerseMarker.mockClear();
+    const nextChapter = { ...scrRef, chapterNum: 6, verseNum: 16 };
+
+    // The reference has moved, but the data is still chapter 5.
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={nextChapter} />);
+    expect(mockFindVerseMarker).not.toHaveBeenCalled();
+
+    // The loading placeholder, and the clamp it causes.
+    setUsjResult(chapterOf(5), true);
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={nextChapter} />);
+    port.scrollTop = 0;
+
+    setUsjResult(chapterOf(6), false);
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={nextChapter} />);
+
+    await waitFor(() => expect(port.scrollTop).toBe(500 - VERSE_NUMBER_SCROLL_OFFSET));
+    expect(mockFindVerseMarker).toHaveBeenLastCalledWith(port, 16);
+  });
+
+  it('scrolls a newly shown resource to the verse, even after the reader clicked in the previous one', async () => {
+    // The chapter-context split swaps `resourceRef` on one cell instance. The reference does not
+    // change, so nothing else would re-arm a scroll the reader's click stood down.
+    setUsjResult(chapterOf(scrRef.chapterNum), false);
+    const { container, rerender } = render(<ResourceCell {...props} viewMode="chapter" />);
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    mockFindVerseMarker.mockReturnValue(buildMarkerBelowFold(port));
+    const clicked = { ...scrRef, verseNum: 9 };
+    getEditorScrRefChange()?.(clicked);
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={clicked} />);
+    expect(port.scrollTop).toBe(0);
+
+    const otherResource = { resourceId: 'r2', projectId: 'p2', label: 'KJV' };
+    setUsjResult(chapterOf(scrRef.chapterNum), true);
+    rerender(
+      <ResourceCell {...props} viewMode="chapter" scrRef={clicked} resourceRef={otherResource} />,
+    );
+    setUsjResult(chapterOf(scrRef.chapterNum), false);
+    rerender(
+      <ResourceCell {...props} viewMode="chapter" scrRef={clicked} resourceRef={otherResource} />,
+    );
+
+    await waitFor(() => expect(port.scrollTop).toBe(500 - VERSE_NUMBER_SCROLL_OFFSET));
+  });
+
+  it('does not scroll for the echo of a verse this cell itself published', async () => {
+    // The reader clicked; the group bounces the same reference straight back. Scrolling for it
+    // would drag their click target to the top. The cell's half of the latch is what is pinned
+    // here — the hook's half has its own tests.
+    setUsjResult(chapter, false);
+    const { container, rerender } = render(<ResourceCell {...props} viewMode="chapter" />);
+    await waitFor(() => expect(mockFindVerseMarker).toHaveBeenCalled());
+    const port = scriptPortGeometry(container);
+    mockFindVerseMarker.mockReturnValue(buildMarkerBelowFold(port));
+
+    const clicked = { ...scrRef, verseNum: 9 };
+    getEditorScrRefChange()?.(clicked);
+    rerender(<ResourceCell {...props} viewMode="chapter" scrRef={clicked} />);
+
+    expect(port.scrollTop).toBe(0);
   });
 });

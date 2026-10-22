@@ -31,6 +31,10 @@ export type ResourceColumnProps = {
   resource: GridResource;
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
+  /** Whether this web view is rendered; passed through to the cell's reference scroll. */
+  isViewVisible: boolean;
+  /** This column's position in the row; see `ResourceCell`'s `orderIndex`. */
+  orderIndex?: number;
   /** How the cell renders its text: a whole chapter, or block verses the aligned grid can place. */
   cellViewMode: Exclude<ResourceCollectionViewMode, 'verse'>;
   /**
@@ -53,6 +57,8 @@ export function ResourceColumn({
   resource,
   scrRef,
   setScrRef,
+  isViewVisible,
+  orderIndex,
   cellViewMode,
   className,
   reorder,
@@ -83,6 +89,8 @@ export function ResourceColumn({
         resourceRef={resource}
         scrRef={scrRef}
         setScrRef={setScrRef}
+        isViewVisible={isViewVisible}
+        orderIndex={orderIndex}
         viewMode={cellViewMode}
         zoomArea={zoomArea}
         zoom={zoom}

@@ -223,8 +223,8 @@ export type ManageBooksDialogProps = {
   /**
    * (A2) Whether the project is shared with other users (PT9: `ScrText.IsProjectShared` with more
    * than one registered user). When true, the delete-confirm prompt warns that the books will be
-   * deleted for all users when they next Send/Receive — in both the partial and the all-books
-   * variants. Defaults to false.
+   * deleted for all users when they next sync — in both the partial and the all-books variants.
+   * Defaults to false.
    */
   isSharedProject?: boolean;
 
@@ -2067,7 +2067,7 @@ export function ManageBooksDialog({
   // the standard confirm with the shared-users warning (DeleteBooksForm.cs),
   // and the previous PT10 branch order dropped it exactly in the
   // highest-impact case (deleting every book of a shared project). The
-  // wording is S/R-accurate: deletion is local until other users Send/Receive
+  // wording is S/R-accurate: deletion is local until other users sync
   // — the old copy falsely claimed "they will
   // see this change immediately" (old key redirected via metadata
   // fallbackKey).
@@ -2082,8 +2082,8 @@ export function ManageBooksDialog({
       case 'allShared':
         return fmtTemplate(
           t(
-            '%manageBooks_delete_confirmBodyAllShared%',
-            'All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. The project itself will not be deleted. This cannot be undone.',
+            '%manageBooks_delete_confirmBodyAllShared_2%',
+            'All books will be deleted from {0}, which is shared with other users. The books will be deleted for all users when they next sync. The project itself will not be deleted. This cannot be undone.',
           ),
           dest,
         );
@@ -2098,8 +2098,8 @@ export function ManageBooksDialog({
       case 'partialShared':
         return fmtTemplate(
           t(
-            '%manageBooks_delete_confirmBodySharedSendReceive%',
-            '{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next Send/Receive. This cannot be undone.',
+            '%manageBooks_delete_confirmBodySharedSendReceive_2%',
+            '{0} book(s) will be deleted from {1}, which is shared with other users. The books will be deleted for all users when they next sync. This cannot be undone.',
           ),
           n,
           dest,

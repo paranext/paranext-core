@@ -15,6 +15,10 @@ const KEYS: LocalizeKey[] = [
 
 // Demo/UX mode: resolve immediately without touching the real S/R backend so the wizard
 // is fully click-through-able end-to-end (see first-run-store.ts isDemoMode).
+// Otherwise the progress toast is kept by omitting `suppressProgressNotification`: this whole sync
+// runs inside the first-run wizard, which covers the toolbar sync indicator, so the toast is its
+// only visible progress. `undefined` must be passed explicitly: a call with no arguments sends no
+// params, which the dotnet `SyncProjects` rejects.
 const defaultSyncFn = (): Promise<void> =>
   isDemoMode()
     ? Promise.resolve()

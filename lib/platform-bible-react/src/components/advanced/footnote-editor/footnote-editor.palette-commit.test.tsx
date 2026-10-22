@@ -226,12 +226,10 @@ async function runCommitFlow({
     );
     await Promise.resolve();
   });
-  // Preconditions: the session opened as a passive palette offering the marker in this note
-  // context.
+  // Preconditions: the session opened a palette offering the marker in this note context.
   expect(show).toHaveBeenCalledTimes(1);
-  const [shownItems, , shownPassive] = show.mock.calls[0] ?? [];
-  expect(shownPassive).toBe(true);
-  expect(shownItems?.some((item) => item.id === marker)).toBe(true);
+  const [shownOptions] = show.mock.calls[0] ?? [];
+  expect(shownOptions?.items?.some((item) => item.id === marker)).toBe(true);
 
   // ACTIVE palette: no literal is typed into the document — the real flow claims the trigger and
   // filter keystrokes, so at commit time the document is clean. Let jsdom's queued
@@ -244,43 +242,53 @@ async function runCommitFlow({
     });
   });
 
-  if (stealFocus) {
-    // The mouse press on the palette item: focus leaves the editor FIRST (focusout fires
-    // synchronously at the moment of the steal), THEN Lexical's blur-path selection processing
-    // nulls the editor-state selection — the exact order of the live failure.
-    await act(async () => {
-      editorInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-      // Lexical's selection type is `BaseSelection | null` — null IS the "no selection" state
-      // this test must produce, and undefined does not typecheck for $setSelection.
-      // eslint-disable-next-line no-null/no-null
-      lexical.update(() => $setSelection(null));
-      await Promise.resolve();
-    });
-  }
+  // The palette is an overlay in ANOTHER document, so a click on it takes focus away from this
+  // whole document while the editor stays its active element: `hasFocus()` turns false and
+  // `activeElement` does not move. jsdom can't move focus between documents, so stub the former.
+  const hasFocusSpy = stealFocus
+    ? vi.spyOn(editorInput.ownerDocument, 'hasFocus').mockReturnValue(false)
+    : undefined;
+  try {
+    if (stealFocus) {
+      // The mouse press on the palette item: focus leaves the editor FIRST (focusout fires
+      // synchronously at the moment of the steal), THEN Lexical's blur-path selection processing
+      // nulls the editor-state selection — the exact order of the live failure.
+      await act(async () => {
+        editorInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+        // Lexical's selection type is `BaseSelection | null` — null IS the "no selection" state
+        // this test must produce, and undefined does not typecheck for $setSelection.
+        // eslint-disable-next-line no-null/no-null
+        lexical.update(() => $setSelection(null));
+        await Promise.resolve();
+      });
+    }
 
-  await act(async () => {
-    resolveShow(marker);
-    await Promise.resolve();
-    await Promise.resolve();
-    // Let the engine's post-commit async passes (caret snap, note-content re-tokenization)
-    // settle so the outcome read is the state the user would actually see. Waits for the tree to
-    // QUIESCE rather than sleeping a fixed span: a 50ms guess raced the re-tokenization under
-    // full-suite load and read a mid-flight tree (a `\fq` char still carrying an `unmatched`
-    // node, before the `\ft*` closer landed), which surfaced as an intermittent failure.
-    let previousTree = '';
-    let stableReads = 0;
-    await vi.waitFor(
-      () => {
-        const currentTree = readCommitOutcome(lexical, marker).tree;
-        stableReads = currentTree === previousTree ? stableReads + 1 : 0;
-        previousTree = currentTree;
-        // Several consecutive identical reads, not just two: the engine's passes are scheduled
-        // far enough apart that two samples can both land in the same mid-flight state.
-        if (stableReads < 4) throw new Error('editor state is still settling');
-      },
-      { timeout: 5_000, interval: 25 },
-    );
-  });
+    await act(async () => {
+      resolveShow(marker);
+      await Promise.resolve();
+      await Promise.resolve();
+      // Let the engine's post-commit async passes (caret snap, note-content re-tokenization)
+      // settle so the outcome read is the state the user would actually see. Waits for the tree to
+      // QUIESCE rather than sleeping a fixed span: a 50ms guess raced the re-tokenization under
+      // full-suite load and read a mid-flight tree (a `\fq` char still carrying an `unmatched`
+      // node, before the `\ft*` closer landed), which surfaced as an intermittent failure.
+      let previousTree = '';
+      let stableReads = 0;
+      await vi.waitFor(
+        () => {
+          const currentTree = readCommitOutcome(lexical, marker).tree;
+          stableReads = currentTree === previousTree ? stableReads + 1 : 0;
+          previousTree = currentTree;
+          // Several consecutive identical reads, not just two: the engine's passes are scheduled
+          // far enough apart that two samples can both land in the same mid-flight state.
+          if (stableReads < 4) throw new Error('editor state is still settling');
+        },
+        { timeout: 5_000, interval: 25 },
+      );
+    });
+  } finally {
+    hasFocusSpy?.mockRestore();
+  }
 
   const outcome = readCommitOutcome(lexical, marker);
   utils.unmount();
@@ -331,21 +339,44 @@ describe('FootnoteEditor palette commit of fp (the footnote-paragraph BREAK)', (
     expect(outcome.noteCharMarkers).toEqual(['fr', 'ft', 'fp']);
   });
 
-  // Bounded retry for a jsdom-only listener-interleaving race: the synthetic focusout's dispatch
-  // order between Lexical's own blur processing and the popover's document-level capture is not
-  // fully deterministic under parallel-suite load, and when Lexical's nulling wins, the capture
-  // reads no selection and the break falls back to document end. A real equivalence regression
-  // fails on every try; only the interleaving artifact is intermittent.
-  it(
-    'mouse (focus-stolen) commit produces the SAME result as the live-selection one',
-    { retry: 2 },
-    async () => {
-      const liveOutcome = await runCommitFlow({ stealFocus: false, marker: 'fp', caretAt: 'mid' });
-      const stolenOutcome = await runCommitFlow({ stealFocus: true, marker: 'fp', caretAt: 'mid' });
+  it('mouse (focus-stolen) commit produces the SAME result as the live-selection one', async () => {
+    const liveOutcome = await runCommitFlow({ stealFocus: false, marker: 'fp', caretAt: 'mid' });
+    const stolenOutcome = await runCommitFlow({ stealFocus: true, marker: 'fp', caretAt: 'mid' });
 
-      expect(stolenOutcome.markerCharCount).toBe(1);
-      expect(stolenOutcome.strandedLiteralTexts).toEqual([]);
-      expect(stolenOutcome.tree).toBe(liveOutcome.tree);
-    },
-  );
+    expect(stolenOutcome.markerCharCount).toBe(1);
+    expect(stolenOutcome.strandedLiteralTexts).toEqual([]);
+    expect(stolenOutcome.tree).toBe(liveOutcome.tree);
+  });
+});
+
+describe('FootnoteEditor marker palette when the editor closes', () => {
+  // Every close unmounts the editor. A palette left open would offer items with no note to apply
+  // them to, and its host would go on counting an editing session in progress.
+  it('dismisses a palette session still open', async () => {
+    const { markerPalette, show } = makeDeferredMarkerPalette();
+    const { utils, editorInput, lexical } = await renderPopoverAndWaitForInit(editableView, {
+      markerPalette,
+    });
+    await placeCaretInFtText(lexical, editorInput, 'end');
+    await act(async () => {
+      editorInput.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+    });
+    expect(show).toHaveBeenCalledTimes(1);
+
+    utils.unmount();
+
+    expect(markerPalette.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the palette alone when no session is open', async () => {
+    const { markerPalette } = makeDeferredMarkerPalette();
+    const { utils } = await renderPopoverAndWaitForInit(editableView, { markerPalette });
+
+    utils.unmount();
+
+    expect(markerPalette.dismiss).not.toHaveBeenCalled();
+  });
 });

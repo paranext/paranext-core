@@ -1,7 +1,6 @@
 import { appServiceNetworkObjectName, IAppService } from '@shared/services/app.service-model';
 import { networkObjectService } from '@shared/services/network-object.service';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
-import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
+import { createCachedInitializer, createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 let networkObject: IAppService;
 const initialize = createCachedInitializer(async () => {

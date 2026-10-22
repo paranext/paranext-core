@@ -145,14 +145,28 @@
       "%settings_platformScriptureEditor_markerSettleDelayMs_label%": "Marker settle delay (ms)",
       "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Change footnote pane location",
       "%versionHistoryCommit_beforeInsertCrossReference%": "Before inserting cross reference",
+      "%versionHistoryCommit_beforeInsertEndnote%": "Before inserting endnote",
       "%versionHistoryCommit_beforeInsertFootnote%": "Before inserting footnote",
       "%versionHistoryCommit_beforeRemoveCharacterMarker%": "Before removing character marker",
+      "%webView_footnoteList_close%": "Close footnotes pane",
+      "%webView_footnoteList_empty%": "This chapter has no footnotes.",
       "%webView_footnoteList_header%": "Footnotes",
       "%webView_modelTextPanel_bookNotAvailable%": "This book does not exist in this model text. Choose a different model text or go to a book it contains.",
       "%webView_modelTextPanel_catalogUnavailable%": "Couldn't load the list of available resources.",
+      "%webView_modelTextPanel_emptyState_baseOrModel_admin%": "If you are not the project admin, you can choose a text to display as a Base or Model temporarily. When your admin makes a choice, your selection will be replaced. If you will be the only person on this project, you will need to make a selection.",
+      "%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%": "A literal translation which expresses the wording of the Hebrew or Greek text (a word-for-word \"formal equivalent,\" like RSV).",
+      "%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%": "Base:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%": "Some copyright holders require that their texts are not used as a Base or Model text. These texts will display a clear warning.",
+      "%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%": "Note:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_intro%": "If you are not translating from the Hebrew and Greek, the Base and Model texts are the texts you are translating from:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%": "An idiomatic translation which expresses the meaning of the Hebrew or Greek text (a contextualized \"functional equivalent,\" like GNB).",
+      "%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%": "Model:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_prompt%": "No Base or Model text selected. {summary}",
+      "%webView_modelTextPanel_emptyState_baseOrModel_summary%": "Pick a text to display as a reference translation for your project.",
       "%webView_modelTextPanel_emptyState_lessInfo%": "Less info",
       "%webView_modelTextPanel_emptyState_moreInfo%": "More info",
       "%webView_modelTextPanel_emptyState_moreInfo_body%": "The model text is the text you are translating from (your reference/source). If you are not the project admin you can choose one, but your admin will usually choose it, and the admin's choice is what's displayed. If you will be the only person on this project, you'll need to choose it yourself.",
+      "%webView_modelTextPanel_emptyState_pickText%": "Pick a text…",
       "%webView_modelTextPanel_emptyState_prompt%": "No model text selected. Pick one to display a reference translation alongside your project.",
       "%webView_modelTextPanel_installFailed%": "The model text couldn't be installed.",
       "%webView_modelTextPanel_installFailedOffline%": "The model text couldn't be installed. Check your connection and try again.",
@@ -173,6 +187,7 @@
       "%webView_platformScriptureEditor_bookNotAvailable_readOnlyTooltip%": "This project is read-only. Books cannot be added.",
       "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%": "This book is not part of this project. Ask your project administrator to add it.",
       "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%": "Books cannot be added while an automatic Send/Receive is in progress.",
+      "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%": "Books cannot be added while an automatic sync is in progress.",
       "%webView_platformScriptureEditor_bookNotAvailable_title%": "Book not in this project",
       "%webView_platformScriptureEditor_characterMarkerControl_ariaLabel%": "Character marker",
       "%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%": "{name}: {value}",
@@ -201,10 +216,12 @@
       "%webView_platformScriptureEditor_error_selectionContainsMarkers%": "Invalid selection. Selected text must be a simple word or phrase with no markers.",
       "%webView_platformScriptureEditor_error_structureProtected%": "Structure is locked. Paragraph and verse markers cannot be changed.",
       "%webView_platformScriptureEditor_error_syncEditBlocked%": "Editing is paused while an automatic Send/Receive is in progress. Your change was not saved.",
+      "%webView_platformScriptureEditor_error_syncEditBlocked_2%": "Editing is paused while an automatic sync is in progress. Your change was not saved.",
       "%webView_platformScriptureEditor_info%": "Info",
       "%webView_platformScriptureEditor_insert%": "Insert",
       "%webView_platformScriptureEditor_insertCommentAtSelection%": "Insert comment",
       "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%": "Insert cross-reference",
+      "%webView_platformScriptureEditor_insertEndnoteAtSelection%": "Insert endnote",
       "%webView_platformScriptureEditor_insertFootnoteAtSelection%": "Insert footnote",
       "%webView_platformScriptureEditor_markersInventory%": "Inventory: Markers...",
       "%webView_platformScriptureEditor_openChecks%": "Open Checks...",
@@ -219,12 +236,13 @@
       "%webView_platformScriptureEditor_qualityChecks%": "Quality checks",
       "%webView_platformScriptureEditor_redo%": "Redo",
       "%webView_platformScriptureEditor_repeatedWordsInventory%": "Inventory: Repeated Words...",
-      "%webView_platformScriptureEditor_resetZoomToDefault%": "Reset zoom to default",
+      "%webView_platformScriptureEditor_resetZoomToDefault%": "Zoom reset",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Share layout with team",
       "%webView_platformScriptureEditor_showBibleTextsPanel%": "Bible texts",
       "%webView_platformScriptureEditor_showCheckResults%": "Show Check Results...",
       "%webView_platformScriptureEditor_showCommentariesPanel%": "Commentaries",
       "%webView_platformScriptureEditor_showCommentsPanel%": "Comments",
+      "%webView_platformScriptureEditor_showDictionaryPanel%": "Dictionary",
       "%webView_platformScriptureEditor_showFootnotes%": "Show footnotes",
       "%webView_platformScriptureEditor_showTextCollectionPanel%": "Text collection",
       "%webView_platformScriptureEditor_structureProtection_ariaLabel%": "Toggle structure protection",
@@ -239,6 +257,7 @@
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Unlock structure for project",
       "%webView_platformScriptureEditor_switchScriptureView%": "Switch Scripture view",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Editing paused — Send/Receive in progress",
+      "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": "Editing paused — sync in progress",
       "%webView_platformScriptureEditor_tabCouldNotOpen%": "That tab couldn't be opened. Please try again.",
       "%webView_platformScriptureEditor_teamLayout_ariaLabel%": "Edit team layout",
       "%webView_platformScriptureEditor_textCollectionNotOpen%": "Text collection isn't available, so there's no tab to show.",
@@ -249,7 +268,6 @@
       "%webView_platformScriptureEditor_title_format%": "{projectId} {editable}",
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(Read-only)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Resource Viewer",
-      "%webView_platformScriptureEditor_toggleFootnotesAutoShow%": "Auto-show footnote pane",
       "%webView_platformScriptureEditor_tools%": "Tools",
       "%webView_platformScriptureEditor_twoStepDelete_deleteSelection%": "Press {key} again to delete selection",
       "%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%": "Press {key} again to remove verse marker",
@@ -294,7 +312,7 @@
       "%webView_scriptureTextGrid_cell_reorderAnnouncement%": "Moved {resourceName} to position {position} of {total}",
       "%webView_scriptureTextGrid_cell_reorderHandle%": "Reorder {resourceName}",
       "%webView_scriptureTextGrid_cell_reorderHint%": "Drag or press arrow keys to reorder",
-      "%webView_scriptureTextGrid_cell_resetZoom%": "Reset zoom",
+      "%webView_scriptureTextGrid_cell_resetZoom%": "Zoom reset",
       "%webView_scriptureTextGrid_cell_status_bookNotAvailable%": "Book not in this text",
       "%webView_scriptureTextGrid_cell_status_downloading%": "Downloading…",
       "%webView_scriptureTextGrid_cell_status_failed%": "Download failed",
@@ -318,7 +336,9 @@
       "%webView_scriptureTextGrid_viewOptions_grid%": "Grid",
       "%webView_scriptureTextGrid_viewOptions_installing%": "Installing {resourceName}…",
       "%webView_scriptureTextGrid_viewOptions_openPanel%": "View Options",
+      "%webView_scriptureTextGrid_viewOptions_notSupported%": "Text Collection settings could not be loaded for this project.",
       "%webView_scriptureTextGrid_viewOptions_persistFailed%": "Failed to save your changes. Please try again.",
+      "%webView_scriptureTextGrid_viewOptions_settingsUnavailable%": "Couldn't load your texts.",
       "%webView_scriptureTextGrid_viewOptions_pickerNoProjectNotice%": "No project is selected, so a resource you choose here will be downloaded to this computer but not added to a text collection.",
       "%webView_scriptureTextGrid_viewOptions_removeFromList%": "Remove {resourceName} from list",
       "%webView_scriptureTextGrid_viewOptions_textsHeader%": "Texts",
@@ -470,12 +490,25 @@
       "%settings_platformScriptureEditor_markerSettleDelayMs_description%": "Experimental: cuántos milisegundos de inactividad de escritura antes de que el editor complete (asiente) las ediciones de marcadores pendientes en su lugar, en las vistas de marcadores editables. Valor predeterminado: 1000, el retraso de inactividad propio del editor. 0 asienta inmediatamente después de cada edición; -1 desactiva el temporizador de inactividad, de modo que las ediciones se asientan solo cuando el cursor se aleja.",
       "%settings_platformScriptureEditor_markerSettleDelayMs_label%": "Retraso de asentamiento de marcadores (ms)",
       "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Cambiar la ubicación del panel de notas al pie",
+      "%webView_footnoteList_close%": "Cerrar el panel de notas al pie",
+      "%webView_footnoteList_empty%": "Este capítulo no tiene notas al pie.",
       "%webView_footnoteList_header%": "Notas al pie",
       "%webView_modelTextPanel_bookNotAvailable%": "Este libro no existe en este texto modelo. Elija otro texto modelo o vaya a un libro que este texto sí contenga.",
       "%webView_modelTextPanel_catalogUnavailable%": "No se pudo cargar la lista de recursos disponibles.",
+      "%webView_modelTextPanel_emptyState_baseOrModel_admin%": "Si no es el administrador del proyecto, puede elegir temporalmente un texto para mostrarlo como base o modelo. Cuando su administrador haga una elección, se reemplazará su selección. Si usted va a ser la única persona en este proyecto, deberá hacer una selección.",
+      "%webView_modelTextPanel_emptyState_baseOrModel_baseDefinition%": "Una traducción literal que expresa la redacción del texto hebreo o griego (una «equivalencia formal», palabra por palabra, como la RSV).",
+      "%webView_modelTextPanel_emptyState_baseOrModel_baseTerm%": "Texto base:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_copyrightNote%": "Algunos titulares de derechos de autor exigen que sus textos no se usen como texto base o modelo. Estos textos mostrarán una advertencia clara.",
+      "%webView_modelTextPanel_emptyState_baseOrModel_copyrightTerm%": "Nota:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_intro%": "Si no traduce desde el hebreo y el griego, los textos base y modelo son los textos desde los cuales traduce:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_modelDefinition%": "Una traducción idiomática que expresa el significado del texto hebreo o griego (una «equivalencia funcional» contextualizada, como la GNB).",
+      "%webView_modelTextPanel_emptyState_baseOrModel_modelTerm%": "Texto modelo:",
+      "%webView_modelTextPanel_emptyState_baseOrModel_prompt%": "Ningún texto base o modelo seleccionado. {summary}",
+      "%webView_modelTextPanel_emptyState_baseOrModel_summary%": "Elija un texto para mostrarlo como traducción de referencia para su proyecto.",
       "%webView_modelTextPanel_emptyState_lessInfo%": "Menos información",
       "%webView_modelTextPanel_emptyState_moreInfo%": "Más información",
       "%webView_modelTextPanel_emptyState_moreInfo_body%": "El texto modelo es el texto desde el cual usted traduce (su referencia o fuente). Si no es el administrador del proyecto, puede elegir uno, pero normalmente lo elegirá su administrador, y se muestra la elección del administrador. Si usted será la única persona en este proyecto, deberá elegirlo usted mismo.",
+      "%webView_modelTextPanel_emptyState_pickText%": "Elegir un texto…",
       "%webView_modelTextPanel_emptyState_prompt%": "Ningún texto modelo seleccionado. Elija uno para mostrar una traducción de referencia junto a su proyecto.",
       "%webView_modelTextPanel_installFailed%": "No se pudo instalar el texto modelo.",
       "%webView_modelTextPanel_installFailedOffline%": "No se pudo instalar el texto modelo. Compruebe su conexión e inténtelo de nuevo.",
@@ -496,6 +529,7 @@
       "%webView_platformScriptureEditor_bookNotAvailable_readOnlyTooltip%": "Este proyecto es de solo lectura. No se pueden añadir libros.",
       "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%": "Este libro no forma parte de este proyecto. Pida al administrador del proyecto que lo añada.",
       "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%": "No se pueden añadir libros mientras se realiza un Enviar/Recibir automático.",
+      "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%": "No se pueden añadir libros mientras se realiza una sincronización automática.",
       "%webView_platformScriptureEditor_bookNotAvailable_title%": "Libro no incluido en este proyecto",
       "%webView_platformScriptureEditor_characterMarkerControl_ariaLabel%": "Marcador de carácter",
       "%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%": "{name}: {value}",
@@ -524,10 +558,12 @@
       "%webView_platformScriptureEditor_error_selectionContainsMarkers%": "Selección inválida. El texto seleccionado debe ser una palabra o frase simple sin marcadores.",
       "%webView_platformScriptureEditor_error_structureProtected%": "La estructura está bloqueada. Los marcadores de párrafo y versículo no se pueden cambiar.",
       "%webView_platformScriptureEditor_error_syncEditBlocked%": "La edición está pausada mientras se realiza un Enviar/Recibir automático. Su cambio no se guardó.",
+      "%webView_platformScriptureEditor_error_syncEditBlocked_2%": "La edición está pausada mientras se realiza una sincronización automática. Su cambio no se guardó.",
       "%webView_platformScriptureEditor_info%": "Información",
       "%webView_platformScriptureEditor_insert%": "Insertar",
       "%webView_platformScriptureEditor_insertCommentAtSelection%": "Insertar comentario",
       "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%": "Insertar referencia cruzada",
+      "%webView_platformScriptureEditor_insertEndnoteAtSelection%": "Insertar nota al final",
       "%webView_platformScriptureEditor_insertFootnoteAtSelection%": "Insertar nota al pie",
       "%webView_platformScriptureEditor_markersInventory%": "Inventario: Marcadores...",
       "%webView_platformScriptureEditor_openChecks%": "Abrir verificaciones...",
@@ -548,6 +584,7 @@
       "%webView_platformScriptureEditor_showCheckResults%": "Mostrar resultados de verificación...",
       "%webView_platformScriptureEditor_showCommentariesPanel%": "Comentarios bíblicos",
       "%webView_platformScriptureEditor_showCommentsPanel%": "Comentarios de proyecto",
+      "%webView_platformScriptureEditor_showDictionaryPanel%": "Diccionario",
       "%webView_platformScriptureEditor_showFootnotes%": "Mostrar notas al pie",
       "%webView_platformScriptureEditor_showTextCollectionPanel%": "Colección de textos",
       "%webView_platformScriptureEditor_structureProtection_ariaLabel%": "Alternar protección de estructura",
@@ -562,6 +599,7 @@
       "%webView_platformScriptureEditor_structureProtection_unlockStructureForProject%": "Desbloquear estructura para el proyecto",
       "%webView_platformScriptureEditor_switchScriptureView%": "Cambiar vista de escrituras",
       "%webView_platformScriptureEditor_syncEditBlocked_banner%": "Edición pausada — Enviar/Recibir en curso",
+      "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": "Edición pausada — sincronización en curso",
       "%webView_platformScriptureEditor_tabCouldNotOpen%": "No se pudo abrir esa pestaña. Inténtelo de nuevo.",
       "%webView_platformScriptureEditor_teamLayout_ariaLabel%": "Editar el diseño del equipo",
       "%webView_platformScriptureEditor_textCollectionNotOpen%": "La colección de textos no está disponible, así que no hay ninguna pestaña que mostrar.",
@@ -572,7 +610,6 @@
       "%webView_platformScriptureEditor_title_format%": "{projectId} {editable}",
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(solo lectura)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Visor de recursos",
-      "%webView_platformScriptureEditor_toggleFootnotesAutoShow%": "Mostrar nota al pie automáticamente",
       "%webView_platformScriptureEditor_tools%": "Herramientas",
       "%webView_platformScriptureEditor_twoStepDelete_deleteSelection%": "Presione {key} de nuevo para eliminar lo seleccionado",
       "%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%": "Presione {key} de nuevo para borrar este número de versículo",
@@ -641,7 +678,9 @@
       "%webView_scriptureTextGrid_viewOptions_grid%": "Cuadrícula",
       "%webView_scriptureTextGrid_viewOptions_installing%": "Instalando {resourceName}…",
       "%webView_scriptureTextGrid_viewOptions_openPanel%": "Opciones de vista",
+      "%webView_scriptureTextGrid_viewOptions_notSupported%": "No se pudo cargar la configuración de Colección de textos para este proyecto.",
       "%webView_scriptureTextGrid_viewOptions_persistFailed%": "No se pudieron guardar los cambios. Vuelva a intentarlo.",
+      "%webView_scriptureTextGrid_viewOptions_settingsUnavailable%": "No se pudieron cargar sus textos.",
       "%webView_scriptureTextGrid_viewOptions_pickerNoProjectNotice%": "No hay ningún proyecto seleccionado, así que el recurso que elija aquí se descargará a esta computadora, pero no se agregará a una colección de textos.",
       "%webView_scriptureTextGrid_viewOptions_removeFromList%": "Quitar {resourceName} de la lista",
       "%webView_scriptureTextGrid_viewOptions_textsHeader%": "Textos",
@@ -1162,8 +1201,38 @@
     "%webView_footnoteList_header%": {
       "fallbackKey": "%Paratext.ProjectMenu.ProjectPropertiesForm.showInFootnotes.HeaderText%"
     },
+    "%webView_modelTextPanel_emptyState_moreInfo_body%": {
+      "deprecationInfo": {
+        "date": "2026-09-30",
+        "message": "The empty state now explains both Base and Model texts rather than the model text alone. The new key is %webView_modelTextPanel_emptyState_baseOrModel_intro% (with its _baseTerm, _baseDefinition, _modelTerm, _modelDefinition, _admin, _copyrightTerm and _copyrightNote siblings)."
+      }
+    },
+    "%webView_modelTextPanel_emptyState_prompt%": {
+      "deprecationInfo": {
+        "date": "2026-09-30",
+        "message": "The empty state now explains both Base and Model texts rather than the model text alone. The new key is %webView_modelTextPanel_emptyState_baseOrModel_prompt%."
+      }
+    },
+    "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%"
+    },
     "%webView_platformScriptureEditor_error_bookNotFoundProject%": {
       "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%"
+    },
+    "%webView_platformScriptureEditor_error_syncEditBlocked%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_error_syncEditBlocked_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_error_syncEditBlocked_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_error_syncEditBlocked%"
     },
     "%webView_platformScriptureEditor_insert%": {
       "fallbackKey": "%Paratext.EditMenu.ListForm.insertToolStripMenuItem.Text%"
@@ -1209,6 +1278,15 @@
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
       "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
+    },
+    "%webView_platformScriptureEditor_syncEditBlocked_banner%": {
+      "deprecationInfo": {
+        "date": "2026-10-13",
+        "message": "\"Send/Receive\" is now called \"sync\". The new key is %webView_platformScriptureEditor_syncEditBlocked_banner_2%."
+      }
+    },
+    "%webView_platformScriptureEditor_syncEditBlocked_banner_2%": {
+      "fallbackKey": "%webView_platformScriptureEditor_syncEditBlocked_banner%"
     }
   }
 }

@@ -61,6 +61,7 @@ export const Row: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
@@ -80,6 +81,7 @@ export const RowDraggable: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
@@ -99,6 +101,7 @@ export const ChapterContextOpen: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
@@ -120,7 +123,7 @@ const localizedStrings = getLocalizedStrings([...RESOURCE_CELL_STRING_KEYS]);
 const zoomMenuLabels = {
   zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom in',
   zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom out',
-  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Reset zoom',
+  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Zoom reset',
   options: localizedStrings[ZOOM_OPTIONS_KEY] ?? 'Zoom options for {resourceName}',
 };
 
@@ -145,6 +148,7 @@ export const RowWithZoomEnabled: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
@@ -167,6 +171,7 @@ export const AlignedGridView: Story = {
   render: () => (
     <GridBox>
       <ScriptureTextGrid
+        isViewVisible
         resources={resources}
         scrRef={scrRef}
         setScrRef={noop}
