@@ -7,6 +7,7 @@ import type { WebViewProps } from '@papi/core';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
+import { useSetting } from '@papi/frontend/react';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 
 // ---------------------------------------------------------------------------
@@ -20,6 +21,7 @@ const {
   mockUseChapterCopyLimit,
   capturedGetResourceChapter,
   capturedResourceCopyLimit,
+  capturedHasProject,
 } = vi.hoisted(() => ({
   mockUseEffectiveResourceReferenceList: vi.fn(),
   mockGetProjectDataProvider: vi.fn(),
@@ -32,6 +34,8 @@ const {
   capturedGetResourceChapter: vi.fn(),
   /** Collects the `resourceCopyLimit` prop the web view passes on each render. */
   capturedResourceCopyLimit: vi.fn(),
+  /** Collects the `hasProject` prop the web view passes on each render. */
+  capturedHasProject: vi.fn(),
 }));
 
 // @papi/frontend — papi default export used for projectDataProviders.get
@@ -113,12 +117,15 @@ vi.mock('./model-text-panel.component', () => ({
   ModelTextPanel: ({
     getResourceChapter,
     resourceCopyLimit,
+    hasProject,
   }: {
     getResourceChapter: unknown;
     resourceCopyLimit: unknown;
+    hasProject: unknown;
   }) => {
     capturedGetResourceChapter(getResourceChapter);
     capturedResourceCopyLimit(resourceCopyLimit);
+    capturedHasProject(hasProject);
     return React.createElement('div', { 'data-testid': 'model-text-panel-stub' });
   },
   MODEL_TEXT_PANEL_STRING_KEYS: [],
@@ -256,6 +263,7 @@ function renderWithModelText(
     isCatalogReady: true,
     isLoadingResources: false,
     hasCatalogError: false,
+    hasRegistrationError: false,
     refetchCatalog: vi.fn(),
   });
   mockUseChapterCopyLimit.mockReturnValue(8);
@@ -296,5 +304,22 @@ describe('ModelTextPanelWebView — copy limit', () => {
       'applied-by-caller',
     );
     expect(capturedResourceCopyLimit).toHaveBeenLastCalledWith(8);
+  });
+});
+
+describe('ModelTextPanelWebView with no project open', () => {
+  it('keeps no model-text choice of its own', () => {
+    // Until PT-4780 lets a user change a chosen model text, a pick made without a project could
+    // never be undone, so this panel stores none; reading happens in the Bible texts panel.
+    mockUseEffectiveResourceReferenceList.mockReturnValue({ status: 'loading' });
+    mockUseChapterCopyLimit.mockReturnValue(undefined);
+    const ModelTextPanelWebView = getWebViewComponent();
+    render(<ModelTextPanelWebView {...makeProps({ projectId: undefined })} />);
+
+    // Positive control: the panel really rendered in the no-project state.
+    expect(capturedHasProject).toHaveBeenLastCalledWith(false);
+    expect(vi.mocked(useSetting).mock.calls.map(([key]) => key)).not.toContain(
+      'platformScriptureEditor.noProjectModelTexts',
+    );
   });
 });

@@ -13,11 +13,6 @@ import {
 } from './resource-reference-list.const';
 import { filterFreeReferences } from './free-resources.utils';
 
-/** The two project settings whose reference lists a reading panel can be driven by. */
-export type ReferenceListSettingName =
-  | 'platformScripture.modelTexts'
-  | 'platformScripture.referencedProjectsAndResources';
-
 /**
  * Where a reading panel's chosen resources come from, and how to read and write them.
  *
@@ -40,32 +35,34 @@ export type ResourceReferenceSource = {
   isNoProject: boolean;
 };
 
-/** The app-scoped setting that stands in for each project setting when no project is open. */
-const NO_PROJECT_SETTING_NAMES = {
-  'platformScripture.modelTexts': 'platformScriptureEditor.noProjectModelTexts',
-  'platformScripture.referencedProjectsAndResources':
-    'platformScriptureEditor.noProjectReferencedResources',
-} as const;
+/**
+ * The app-scoped setting that stands in for the project's referenced-resources list when no project
+ * is open.
+ *
+ * The Model text panel has no counterpart: until PT-4780 lets a user change a chosen model text, a
+ * pick made without a project could never be undone, so that panel offers none.
+ */
+const NO_PROJECT_SETTING_NAME = 'platformScriptureEditor.noProjectReferencedResources';
 
 /** An empty item list, for the branches that have nothing to show. */
 const EMPTY_ITEMS: EffectiveResourceReference[] = [];
 
 /**
- * Resolves the reference list a reading panel should show: from the project when one is open, and
- * from an app-scoped setting when none is.
+ * Resolves the referenced-resources list the Bible texts and Commentaries panels should show: from
+ * the project when one is open, and from an app-scoped setting when none is.
  *
  * ## Why the no-project list is not a project setting
  *
  * The project path persists user picks in the `platformScripture.textConnectionSettings` project
  * data provider, which does not exist without a project. `useWebViewState` is not a substitute:
  * Simple mode never persists its layout, so a pick would be lost on every restart — for exactly the
- * user this exists to help. The app-scoped settings named in {@link NO_PROJECT_SETTING_NAMES} carry
+ * user this exists to help. The app-scoped setting named in {@link NO_PROJECT_SETTING_NAME} carries
  * the same `ResourceReferenceList` shape, so everything downstream of this hook is unchanged.
  *
- * The two lists never migrate into a project. Opening one reloads both panels with a real
- * `projectId` and the project source takes over; the no-project list stays where it is and comes
- * back if the user is ever project-less again. Copying it into the project would write into a
- * setting that is shared and admin-visible.
+ * The list never migrates into a project. Opening one reloads the panels with a real `projectId`
+ * and the project source takes over; the no-project list stays where it is and comes back if the
+ * user is ever project-less again. Copying it into the project would write into a setting that is
+ * shared and admin-visible.
  *
  * ## Free-resource filtering
  *
@@ -81,18 +78,15 @@ const EMPTY_ITEMS: EffectiveResourceReference[] = [];
  * no-project branch.
  *
  * @param projectId The panel's container project, or `undefined` when no project is open.
- * @param settingName Which reference list this panel reads.
  * @returns See {@link ResourceReferenceSource}.
  */
-export function useResourceReferenceSource(
-  projectId: string | undefined,
-  settingName: ReferenceListSettingName,
-): ResourceReferenceSource {
-  const isModelTexts = settingName === 'platformScripture.modelTexts';
-
+export function useResourceReferenceSource(projectId: string | undefined): ResourceReferenceSource {
   // #region Project-backed source
 
-  const projectState = useEffectiveResourceReferenceList(projectId, settingName);
+  const projectState = useEffectiveResourceReferenceList(
+    projectId,
+    'platformScripture.referencedProjectsAndResources',
+  );
   const textConnectionsPdp = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
     projectId,
@@ -102,12 +96,8 @@ export function useResourceReferenceSource(
 
   // #region App-scoped source
 
-  // One subscription, for the setting this panel actually reads. Both keys are declared
-  // `ResourceReferenceList`, so indexing by the caller's setting name keeps a concrete type; reading
-  // both would cost every panel instance a second live PAPI subscription and a second `get()` round
-  // trip on every app-wide settings write.
   const [storedList, setStoredList, , isLoadingStored] = useSetting(
-    NO_PROJECT_SETTING_NAMES[settingName],
+    NO_PROJECT_SETTING_NAME,
     DEFAULT_RESOURCE_REFERENCE_LIST,
   );
 
@@ -179,21 +169,15 @@ export function useResourceReferenceSource(
 
   // #endregion
 
-  const getProjectList = useCallback(async () => {
-    if (!textConnectionsPdp) return undefined;
-    return isModelTexts
-      ? textConnectionsPdp.getUserModelTexts()
-      : textConnectionsPdp.getUserReferencedProjectsAndResources();
-  }, [textConnectionsPdp, isModelTexts]);
+  const getProjectList = useCallback(
+    async () => textConnectionsPdp?.getUserReferencedProjectsAndResources(),
+    [textConnectionsPdp],
+  );
 
   const setProjectList = useCallback(
-    async (list: ResourceReferenceList) => {
-      if (!textConnectionsPdp) return undefined;
-      return isModelTexts
-        ? textConnectionsPdp.setUserModelTexts(list)
-        : textConnectionsPdp.setUserReferencedProjectsAndResources(list);
-    },
-    [textConnectionsPdp, isModelTexts],
+    async (list: ResourceReferenceList) =>
+      textConnectionsPdp?.setUserReferencedProjectsAndResources(list),
+    [textConnectionsPdp],
   );
 
   const isNoProject = projectId === undefined;

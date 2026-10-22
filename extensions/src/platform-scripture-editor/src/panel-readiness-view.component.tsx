@@ -43,7 +43,9 @@ import {
  *   the settings error this one IS recoverable, so it is paired with a working retry.
  * @param registrationRequiredMessage Already-localized message for a catalog that is unreachable
  *   without a valid Paratext registration. Paired with the registration action rather than a retry,
- *   because re-running the fetch cannot succeed until the registration itself changes.
+ *   because re-running the fetch cannot succeed until the registration itself changes. Needed only
+ *   by a panel that can report `registrationRequired`, i.e. one that passes `hasRegistrationError`
+ *   to `getResourcePanelReadiness`; the same goes for `registerLabel` and `onOpenRegistration`.
  * @param registerLabel Already-localized label for the button that opens Paratext registration.
  * @param loadingLabel Already-localized status text shown beside the loading spinner.
  * @param emptyPrompt Already-localized prompt shown when nothing is configured.
@@ -74,8 +76,8 @@ export function PanelReadinessView({
   readiness: ResourcePanelReadiness;
   errorMessage: ReactNode;
   catalogErrorMessage: ReactNode;
-  registrationRequiredMessage: ReactNode;
-  registerLabel: ReactNode;
+  registrationRequiredMessage?: ReactNode;
+  registerLabel?: ReactNode;
   loadingLabel: ReactNode;
   emptyPrompt: ReactNode;
   moreInfo?: ReactNode;
@@ -83,7 +85,7 @@ export function PanelReadinessView({
   retryLabel: ReactNode;
   onPick: () => void;
   onRetryCatalog: () => void;
-  onOpenRegistration: () => void;
+  onOpenRegistration?: () => void;
 }): ReactNode {
   // An unreadable setting is its own answer — never the empty prompt, which would invite the user
   // to replace a resource that may already be configured.
@@ -122,7 +124,7 @@ export function PanelReadinessView({
           <EmptyDescription>{registrationRequiredMessage}</EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <Button onClick={() => onOpenRegistration()}>{registerLabel}</Button>
+          <Button onClick={() => onOpenRegistration?.()}>{registerLabel}</Button>
         </EmptyContent>
       </Empty>
     );

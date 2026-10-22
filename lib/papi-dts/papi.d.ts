@@ -9628,8 +9628,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
      *
      * Distinct from {@link ResourcePickerDialogOptions.selectedResourceIds}, which marks what the
      * caller already has: this narrows what the catalog is allowed to offer at all. It exists for
-     * entry points that may only hand out a subset of the catalog — currently the no-project reading
-     * panels, which are restricted to free / openly-licensed resources.
+     * entry points that may only hand out a subset of the catalog — currently the no-project Bible
+     * texts panel, which is restricted to free / openly-licensed resources.
      *
      * Omit it to offer the whole catalog. An empty array offers nothing, which is the correct reading
      * of "this caller may offer no resource", not a synonym for "no restriction".

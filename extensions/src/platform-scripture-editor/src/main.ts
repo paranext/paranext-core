@@ -1341,13 +1341,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     'platformScriptureEditor.enableScriptureTextGrid',
   );
 
-  // The two app-scoped settings that hold a no-project reading choice. They are hidden and written
-  // only by the panels' resource picker, so a validator here is what stops a hand-edited settings
+  // The app-scoped setting that holds a no-project reading choice. It is hidden and written only by
+  // the Bible texts panel's resource picker, so a validator here is what stops a hand-edited settings
   // file from putting a malformed or non-DBL reference in front of a user with no project.
-  const noProjectModelTextsValidatorPromise = papi.settings.registerValidator(
-    'platformScriptureEditor.noProjectModelTexts',
-    noProjectReferenceListValidator,
-  );
   const noProjectReferencedResourcesValidatorPromise = papi.settings.registerValidator(
     'platformScriptureEditor.noProjectReferencedResources',
     noProjectReferenceListValidator,
@@ -1590,7 +1586,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await showBibleTextsPanelPromise,
     await showCommentariesPanelPromise,
     await showTextCollectionPanelPromise,
-    await noProjectModelTextsValidatorPromise,
     await noProjectReferencedResourcesValidatorPromise,
     selectionChangedEventEmitter,
     {

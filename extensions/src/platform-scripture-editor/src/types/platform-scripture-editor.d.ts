@@ -757,22 +757,18 @@ declare module 'papi-shared-types' {
      */
     'platformScriptureEditor.enableScriptureTextGrid': boolean;
     /**
-     * The model text a user has chosen to read while **no project is open**, in the same shape as
-     * the project-scoped `platformScripture.modelTexts` setting.
-     *
-     * Hidden: it is written only by the Model Text panel's no-project resource picker, never by the
-     * settings dialog. It exists because the project-scoped text-connection data provider — where
-     * the equivalent choice normally lives — does not exist without a project, and Simple mode
-     * never persists its layout, so per-web-view state would be lost on every restart. Restricted
-     * to free / openly-licensed resources on both read and write; see `free-resources.utils.ts`.
-     */
-    'platformScriptureEditor.noProjectModelTexts': ResourceReferenceList;
-    /**
      * The Bible texts a user has chosen to read while **no project is open**, in the same shape as
      * the project-scoped `platformScripture.referencedProjectsAndResources` setting.
      *
-     * Hidden and free-resource-restricted for the same reasons as
-     * {@link SettingTypes.'platformScriptureEditor.noProjectModelTexts'}.
+     * Hidden: it is written only by the Bible texts panel's no-project resource picker, never by
+     * the settings dialog. It exists because the project-scoped text-connection data provider —
+     * where the equivalent choice normally lives — does not exist without a project, and Simple
+     * mode never persists its layout, so per-web-view state would be lost on every restart.
+     * Restricted to free / openly-licensed resources on both read and write; see
+     * `free-resources.utils.ts`.
+     *
+     * The Model text panel has no counterpart: until PT-4780 lets a user change a chosen model
+     * text, a pick made without a project could never be undone, so that panel offers none.
      */
     'platformScriptureEditor.noProjectReferencedResources': ResourceReferenceList;
     /**

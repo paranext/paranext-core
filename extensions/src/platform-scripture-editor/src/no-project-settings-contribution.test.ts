@@ -4,17 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
 
 /**
- * The two app-scoped settings that hold a no-project reading choice. Their defaults are declared in
+ * The app-scoped settings that hold a no-project reading choice. Their defaults are declared in
  * JSON, far from the `ResourceReferenceList` code that reads them, and nothing in the build ties
  * the two together — TypeScript does not typecheck a settings contribution's `default` against
  * `SettingTypes`. So a `dataVersion` bump in `resource-reference-list.const.ts` would leave these
  * defaults quietly behind, and the drift would only surface as a stored list that reads as an older
  * schema than anything else in the app.
  */
-const NO_PROJECT_SETTING_KEYS = [
-  'platformScriptureEditor.noProjectModelTexts',
-  'platformScriptureEditor.noProjectReferencedResources',
-] as const;
+const NO_PROJECT_SETTING_KEYS = ['platformScriptureEditor.noProjectReferencedResources'] as const;
 
 type SettingsContributionFile = Array<{
   properties: Record<string, { label?: string; default?: unknown; isHidden?: boolean }>;

@@ -35,7 +35,6 @@ vi.mock('./free-resources.const', () => ({
 
 const { useResourceReferenceSource } = await import('./use-resource-reference-source.hook');
 
-const MODEL_TEXTS_SETTING = 'platformScriptureEditor.noProjectModelTexts';
 const REFERENCED_SETTING = 'platformScriptureEditor.noProjectReferencedResources';
 
 function list(...ids: string[]): ResourceReferenceList {
@@ -59,13 +58,12 @@ function idsOf(state: EffectiveResourceReferenceListState): (string | undefined)
 type SettingStub = { value: unknown; isLoading?: boolean };
 
 /**
- * Points each no-project setting key at its own stub, so a test can tell which key the hook read.
+ * Points each setting key at its own stub, so a test can tell which key the hook read.
  *
  * @returns The setter each key hands back, for asserting what was written.
  */
 function setSettings(stubs: Record<string, SettingStub> = {}) {
   const setters: Record<string, ReturnType<typeof vi.fn>> = {
-    [MODEL_TEXTS_SETTING]: vi.fn(async () => true),
     [REFERENCED_SETTING]: vi.fn(async () => true),
   };
   useSettingMock.mockImplementation((key: string, defaultValue: unknown) => {
@@ -87,9 +85,7 @@ describe('source selection', () => {
     const projectList = { dataVersion: CURRENT_DATA_VERSION, items: [] };
     useEffectiveListMock.mockReturnValue({ status: 'ready', list: projectList });
 
-    const { result } = renderHook(() =>
-      useResourceReferenceSource('project-1', 'platformScripture.modelTexts'),
-    );
+    const { result } = renderHook(() => useResourceReferenceSource('project-1'));
 
     expect(result.current.isNoProject).toBe(false);
     expect(result.current.state).toEqual({ status: 'ready', list: projectList });
@@ -99,51 +95,28 @@ describe('source selection', () => {
     // `useEffectiveResourceReferenceList(undefined, …)` reports `loading` forever, so trusting it
     // in the no-project branch would leave the panel spinning with no way out.
     useEffectiveListMock.mockReturnValue({ status: 'loading' });
-    setSettings({ [MODEL_TEXTS_SETTING]: { value: list('FREE0001') } });
+    setSettings({ [REFERENCED_SETTING]: { value: list('FREE0001') } });
 
-    const { result } = renderHook(() =>
-      useResourceReferenceSource(undefined, 'platformScripture.modelTexts'),
-    );
+    const { result } = renderHook(() => useResourceReferenceSource(undefined));
 
     expect(result.current.isNoProject).toBe(true);
     expect(result.current.state.status).toBe('ready');
-  });
-
-  it('reads each setting name from its own key', () => {
-    setSettings({
-      [MODEL_TEXTS_SETTING]: { value: list('FREE0001') },
-      [REFERENCED_SETTING]: { value: list('FREE0002') },
-    });
-
-    const model = renderHook(() =>
-      useResourceReferenceSource(undefined, 'platformScripture.modelTexts'),
-    );
-    const referenced = renderHook(() =>
-      useResourceReferenceSource(undefined, 'platformScripture.referencedProjectsAndResources'),
-    );
-
-    expect(idsOf(model.result.current.state)).toEqual(['FREE0001']);
-    expect(idsOf(referenced.result.current.state)).toEqual(['FREE0002']);
   });
 });
 
 describe('no-project readiness', () => {
   it('reports loading while the setting is still resolving', () => {
-    setSettings({ [MODEL_TEXTS_SETTING]: { value: list(), isLoading: true } });
+    setSettings({ [REFERENCED_SETTING]: { value: list(), isLoading: true } });
 
-    const { result } = renderHook(() =>
-      useResourceReferenceSource(undefined, 'platformScripture.modelTexts'),
-    );
+    const { result } = renderHook(() => useResourceReferenceSource(undefined));
 
     expect(result.current.state).toEqual({ status: 'loading' });
   });
 
   it('reports error when the setting cannot be read', () => {
-    setSettings({ [MODEL_TEXTS_SETTING]: { value: newPlatformError('nope') } });
+    setSettings({ [REFERENCED_SETTING]: { value: newPlatformError('nope') } });
 
-    const { result } = renderHook(() =>
-      useResourceReferenceSource(undefined, 'platformScripture.modelTexts'),
-    );
+    const { result } = renderHook(() => useResourceReferenceSource(undefined));
 
     expect(result.current.state).toEqual({ status: 'error' });
   });
@@ -151,11 +124,9 @@ describe('no-project readiness', () => {
   it('reports ready with zero items for an empty stored list', () => {
     // `ready` with no items is the genuine "nothing chosen yet" state — the only one in which a
     // panel may show its pick prompt.
-    setSettings({ [MODEL_TEXTS_SETTING]: { value: list() } });
+    setSettings({ [REFERENCED_SETTING]: { value: list() } });
 
-    const { result } = renderHook(() =>
-      useResourceReferenceSource(undefined, 'platformScripture.modelTexts'),
-    );
+    const { result } = renderHook(() => useResourceReferenceSource(undefined));
 
     expect(result.current.state).toEqual({
       status: 'ready',
@@ -167,12 +138,10 @@ describe('no-project readiness', () => {
     // The stored value never passes through the project setting validator on read, so a malformed
     // `items` would otherwise throw inside the memo and unmount the panel with no error boundary.
     setSettings({
-      [MODEL_TEXTS_SETTING]: { value: { dataVersion: CURRENT_DATA_VERSION, items: undefined } },
+      [REFERENCED_SETTING]: { value: { dataVersion: CURRENT_DATA_VERSION, items: undefined } },
     });
 
-    const { result } = renderHook(() =>
-      useResourceReferenceSource(undefined, 'platformScripture.modelTexts'),
-    );
+    const { result } = renderHook(() => useResourceReferenceSource(undefined));
 
     expect(result.current.state).toEqual({
       status: 'ready',
@@ -181,11 +150,9 @@ describe('no-project readiness', () => {
   });
 
   it('tags items as user-sourced, since no admin layer exists without a project', () => {
-    setSettings({ [MODEL_TEXTS_SETTING]: { value: list('FREE0001') } });
+    setSettings({ [REFERENCED_SETTING]: { value: list('FREE0001') } });
 
-    const { result } = renderHook(() =>
-      useResourceReferenceSource(undefined, 'platformScripture.modelTexts'),
-    );
+    const { result } = renderHook(() => useResourceReferenceSource(undefined));
 
     expect(result.current.state).toEqual({
       status: 'ready',
@@ -201,11 +168,9 @@ describe('free-resource filtering', () => {
   it('drops a stored resource that is no longer allowlisted', () => {
     // The case a write-side guard alone cannot cover: a uid stored while the allowlist was wider,
     // or hand-edited into the setting, must not keep rendering.
-    setSettings({ [MODEL_TEXTS_SETTING]: { value: list('FREE0001', 'NOTFREE9') } });
+    setSettings({ [REFERENCED_SETTING]: { value: list('FREE0001', 'NOTFREE9') } });
 
-    const { result } = renderHook(() =>
-      useResourceReferenceSource(undefined, 'platformScripture.modelTexts'),
-    );
+    const { result } = renderHook(() => useResourceReferenceSource(undefined));
 
     expect(idsOf(result.current.state)).toEqual(['FREE0001']);
   });
@@ -215,14 +180,12 @@ describe('free-resource filtering', () => {
     // the curated list is expected to widen and `selectTextConnection` round-trips the whole list,
     // so one unrelated pick would otherwise drop it for good. Refusing newly ADDED non-free
     // references is the validator's job.
-    const setters = setSettings({ [MODEL_TEXTS_SETTING]: { value: list() } });
+    const setters = setSettings({ [REFERENCED_SETTING]: { value: list() } });
 
-    const { result } = renderHook(() =>
-      useResourceReferenceSource(undefined, 'platformScripture.modelTexts'),
-    );
+    const { result } = renderHook(() => useResourceReferenceSource(undefined));
     await result.current.setUserList(list('FREE0001', 'NOTFREE9'));
 
-    expect(setters[MODEL_TEXTS_SETTING]).toHaveBeenCalledWith({
+    expect(setters[REFERENCED_SETTING]).toHaveBeenCalledWith({
       dataVersion: CURRENT_DATA_VERSION,
       items: [
         { type: 'dblResource', name: 'Name FREE0001', id: 'FREE0001' },
@@ -237,9 +200,7 @@ describe('free-resource filtering', () => {
       setUserReferencedProjectsAndResources: setUserReferenced,
     });
 
-    const { result } = renderHook(() =>
-      useResourceReferenceSource('project-1', 'platformScripture.referencedProjectsAndResources'),
-    );
+    const { result } = renderHook(() => useResourceReferenceSource('project-1'));
     const projectList: ResourceReferenceList = {
       dataVersion: CURRENT_DATA_VERSION,
       items: [{ type: 'project', name: 'A project', id: 'proj-9' }],
@@ -254,14 +215,12 @@ describe('read-modify-write freshness', () => {
   it('hands back the latest stored list, not the one captured at first render', async () => {
     // `selectTextConnection` reads then writes. Reading the render closure would let a second pick
     // compute its next state from a pre-write snapshot and silently drop the first.
-    setSettings({ [MODEL_TEXTS_SETTING]: { value: list('FREE0001') } });
+    setSettings({ [REFERENCED_SETTING]: { value: list('FREE0001') } });
 
-    const { result, rerender } = renderHook(() =>
-      useResourceReferenceSource(undefined, 'platformScripture.modelTexts'),
-    );
+    const { result, rerender } = renderHook(() => useResourceReferenceSource(undefined));
     const { getUserList } = result.current;
 
-    setSettings({ [MODEL_TEXTS_SETTING]: { value: list('FREE0001', 'FREE0002') } });
+    setSettings({ [REFERENCED_SETTING]: { value: list('FREE0001', 'FREE0002') } });
     rerender();
 
     await waitFor(async () => {
@@ -273,11 +232,9 @@ describe('read-modify-write freshness', () => {
   });
 
   it('reports an unreadable setting as no list rather than handing back the error object', async () => {
-    setSettings({ [MODEL_TEXTS_SETTING]: { value: newPlatformError('nope') } });
+    setSettings({ [REFERENCED_SETTING]: { value: newPlatformError('nope') } });
 
-    const { result } = renderHook(() =>
-      useResourceReferenceSource(undefined, 'platformScripture.modelTexts'),
-    );
+    const { result } = renderHook(() => useResourceReferenceSource(undefined));
 
     expect(await result.current.getUserList()).toBeUndefined();
   });
@@ -287,25 +244,24 @@ describe('project source callbacks', () => {
   it('resolves to no list while the project data provider has not arrived', async () => {
     useProjectDataProviderMock.mockReturnValue(undefined);
 
-    const { result } = renderHook(() =>
-      useResourceReferenceSource('project-1', 'platformScripture.modelTexts'),
-    );
+    const { result } = renderHook(() => useResourceReferenceSource('project-1'));
 
     expect(await result.current.getUserList()).toBeUndefined();
   });
 
-  it('reads and writes the model-text methods for the model-text setting', async () => {
-    const getUserModelTexts = vi.fn(async () => list('anything'));
-    const setUserModelTexts = vi.fn(async () => true);
-    useProjectDataProviderMock.mockReturnValue({ getUserModelTexts, setUserModelTexts });
+  it("reads and writes the project's referenced-resources list", async () => {
+    const getUserReferenced = vi.fn(async () => list('anything'));
+    const setUserReferenced = vi.fn(async () => true);
+    useProjectDataProviderMock.mockReturnValue({
+      getUserReferencedProjectsAndResources: getUserReferenced,
+      setUserReferencedProjectsAndResources: setUserReferenced,
+    });
 
-    const { result } = renderHook(() =>
-      useResourceReferenceSource('project-1', 'platformScripture.modelTexts'),
-    );
+    const { result } = renderHook(() => useResourceReferenceSource('project-1'));
     await result.current.getUserList();
     await result.current.setUserList(list('anything'));
 
-    expect(getUserModelTexts).toHaveBeenCalled();
-    expect(setUserModelTexts).toHaveBeenCalledWith(list('anything'));
+    expect(getUserReferenced).toHaveBeenCalled();
+    expect(setUserReferenced).toHaveBeenCalledWith(list('anything'));
   });
 });

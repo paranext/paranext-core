@@ -173,10 +173,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // Reads the project's referenced resources when a project is open, and the app-scoped
   // free-resource choice when none is. Same state shape either way, so everything below is unchanged.
-  const resourceSource = useResourceReferenceSource(
-    projectId,
-    'platformScripture.referencedProjectsAndResources',
-  );
+  const resourceSource = useResourceReferenceSource(projectId);
   const effectiveResourcesState = resourceSource.state;
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');

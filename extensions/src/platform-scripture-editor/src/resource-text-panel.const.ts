@@ -43,7 +43,7 @@ export const RESOURCE_PANEL_STRING_KEYS = Object.freeze([
   '%webView_resourcePanel_bibleTexts_emptyState_moreInfo%',
   '%webView_resourcePanel_bibleTexts_emptyState_lessInfo%',
   '%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%',
-  // The Bible-texts tab's no-project free-resource entry point, shared with the model text panel's.
+  // The Bible-texts tab's no-project free-resource entry point.
   // Not part of RESOURCE_PANEL_TYPED_STRING_KEYS for the same reason: nothing in the commentary
   // catalogue is openly licensed, so the Commentaries tab has no such entry point to word.
   '%webView_resourcePanel_noProject_emptyState_prompt%',

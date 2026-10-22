@@ -14,11 +14,6 @@
         "isHidden": true,
         "default": 1000
       },
-      "platformScriptureEditor.noProjectModelTexts": {
-        "label": "%settings_platformScriptureEditor_noProjectModelTexts_label%",
-        "default": { "dataVersion": "1.1.0", "items": [] },
-        "isHidden": true
-      },
       "platformScriptureEditor.noProjectReferencedResources": {
         "label": "%settings_platformScriptureEditor_noProjectReferencedResources_label%",
         "default": { "dataVersion": "1.1.0", "items": [] },

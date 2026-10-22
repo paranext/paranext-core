@@ -539,7 +539,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   main editor, and that lookup (`findFirstEditorWebViewDefinition`) requires a Scripture editor web
   view **with a `projectId`**. With no project open there is none, so the control disabled — which
   did not matter while the no-project state had nothing to read, and started mattering the moment
-  PT-4326 let those panels show a resource. Without a fix, a user could choose a resource, watch it
+  PT-4326 let the Bible texts panel show a resource. Without a fix, a user could choose a resource, watch it
   render, and be stuck at GEN 1:1. PT-4346 does not address this; it consults open resources only
   *after* a target resolves.
 - **Decision:** Add a third resolution step: when no editor has a project, resolve to the first open
@@ -4471,29 +4471,31 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Date:** 2026-08-25
 - **Status:** Accepted
 - **Context:** PT-4326 lets a user with no project open pick and read freely-licensed resources in
-  the two reading panels that flank the editor. Everything those panels do downstream of "which
-  resources are chosen" is already project-independent — both render
+  the Bible texts panel (Simple mode's Column 3). Everything that panel does downstream of "which
+  resources are chosen" is already project-independent — it renders
   `platformScripture.USJ_Chapter` for the **resource's own** project id, never the container
   project. Only the chosen-reference list is project-scoped: it lives in the
   `platformScripture.textConnectionSettings` project data provider, which does not exist when no
   project is open.
-- **Decision:** Store the no-project choice in two hidden app settings —
-  `platformScriptureEditor.noProjectModelTexts` and
-  `platformScriptureEditor.noProjectReferencedResources` — carrying the same `ResourceReferenceList`
-  shape as their project-scoped counterparts, and select between the two sources in one hook
+- **Decision:** Store the no-project choice in a hidden app setting,
+  `platformScriptureEditor.noProjectReferencedResources`, carrying the same `ResourceReferenceList`
+  shape as its project-scoped counterpart, and select between the two sources in one hook
   (`useResourceReferenceSource`) that returns the same `EffectiveResourceReferenceListState` either
-  way. The panels branch on *which source*, never on a second copy of the readiness/install/render
-  state machine. The lists never migrate into a project: opening one reloads both panels with a real
-  `projectId` and the project source takes over.
+  way. The panel branches on *which source*, never on a second copy of the readiness/install/render
+  state machine. The list never migrates into a project: opening one reloads the panel with a real
+  `projectId` and the project source takes over. The Model text panel (Column 1) gets no
+  counterpart and shows only its no-project message: until PT-4780 lets a user change a chosen model
+  text, a pick made there without a project could never be undone (UX review, October 2026).
 - **Alternatives considered:** **`useWebViewState`** — rejected: Simple mode never persists its
   layout (`saveLayout` no-ops), so a pick would be lost on every restart, for exactly the
   just-finished-setup user the feature exists to help. **`UserStateContribution`** — it looks
   purpose-built for this, but it is a type-only stub: its sole reference outside
   `settings.model.ts` is a re-export in `platform-bible-utils/src/index.ts`, and nothing implements
   it. **Migrating the choice into the project when one opens** — rejected: it would write a personal
-  scratch choice into a setting that is shared and admin-visible.
-- **Consequences:** Two settings that only one caller writes, which is why they are `isHidden` and
-  why their validator (`no-project-reference-list.utils.ts`) is stricter than the project-scoped
+  scratch choice into a setting that is shared and admin-visible. **A second setting for the Model
+  text panel** — dropped for the reason given under Decision; revisit once PT-4780 lands.
+- **Consequences:** A setting that only one caller writes, which is why it is `isHidden` and why its
+  validator (`no-project-reference-list.utils.ts`) is stricter than the project-scoped
   `resourceReferenceListValidator` — it accepts only DBL references. Because the settings are
   declared in JSON while `CURRENT_DATA_VERSION` lives in TypeScript, and nothing typechecks a
   contribution's `default` against `SettingTypes`, a test pins the two together. Free-resource
