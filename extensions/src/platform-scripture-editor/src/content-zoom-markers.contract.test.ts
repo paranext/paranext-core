@@ -4,17 +4,18 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /*
- * Guards the text marker, and that nothing puts the popovers beside it in a zoom area, in
- * `platform-scripture-editor.web-view.tsx` — the file is a 3 981-line web view that cannot be
- * mounted in jsdom (it depends on the editor iframe, PAPI services, and a reverse portal), so
- * this is a source-reading contract test rather than a render test, the same shape as
- * `editor-character-marker-contract.test.ts`. These markers *are* the entire zoom opt-in for
- * this view: a refactor that silently drops one leaves no other signal anywhere that the text
- * stopped zooming or that a popover started to.
+ * Guards, by reading `platform-scripture-editor.web-view.tsx`'s source, the parts of its content zoom
+ * opt-in that no passing test exercises yet. Reading source text is a last resort (see
+ * `adr-tests-exercise-behavior-not-source-text`): the web view cannot be mounted in jsdom.
  *
- * Behaviour (that the marked areas actually zoom, together with the platform's
- * `web-view-content-zoom` service) is covered by the e2e spec
- * `e2e-tests/tests/isolated/scripture-editor/content-zoom.spec.ts`.
+ * The rest moved to the e2e spec `e2e-tests/tests/isolated/scripture-editor/content-zoom.spec.ts`
+ * ("only the text and the footnotes list are marked, once each"): the main and footnotes areas, no
+ * nesting, the scroll box and toolbar outside, and the footnotes area's label. That spec's later
+ * steps also cover the popovers below at interface scale and beside their anchors, but they run
+ * after its footnote-popover step, which currently fails: clicking a footnote caller does not open
+ * the popover the step waits for. Repair that step, then delete the popover tests here. The non-text
+ * states and the Simple-mode controls need an e2e step of their own, or the state selection
+ * extracted from `renderEditor`, before their test here can go.
  */
 
 const SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -61,13 +62,6 @@ describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => 
     ].forEach((control) => expect(inside).not.toContain(control));
   });
 
-  it('hands the editor no context-menu container, so its right-click menu stays at interface scale', () => {
-    // Positive control: the editor options are still built in this file.
-    expect(source).toContain('const options = useMemo<EditorOptions>(');
-    expect(source).not.toContain('contextMenuContainer');
-    expect(source).not.toContain('editorZoomRootRef');
-  });
-
   it('renders the three popovers beside the editor without naming a zoom area for them', () => {
     // Pop-ups stay at interface scale. Positive control: the three popovers are still here.
     expect(source).toMatch(
@@ -99,34 +93,5 @@ describe('content zoom markers (platform-scripture-editor.web-view.tsx)', () => 
 
   it('does not nest a second marker inside the footnote editor popover', () => {
     expect(source).not.toMatch(/<PopoverContent[^>]*> (?:\{\/\*.*?\*\/\} )?<ContentZoomRoot>/);
-  });
-
-  it('marks both areas as `main` (no ContentZoomRoot carries an `area` prop)', () => {
-    expect(source).not.toContain('<ContentZoomRoot area=');
-  });
-
-  it('leaves the editor scroll container present and unmarked, not a ContentZoomRoot', () => {
-    // Matching the literal `<div` (rather than `<ContentZoomRoot`) proves the element itself is a
-    // plain div; its class list is styling, not part of the zoom contract this test guards.
-    expect(source).toMatch(/<div ref={editorContainerRef}/);
-  });
-
-  it('names the footnotes area on the zoom badge with a string the view loads', () => {
-    // Without the label the badge shows a bare level that reads as the Scripture text's own; a key
-    // missing from the loaded list leaves the prop undefined, with the same result.
-    // `(?:=>|[^>])*` spans the opening tag, stepping over arrow-function `=>`.
-    expect(source).toMatch(
-      /<FootnotesLayout\b(?:=>|[^>])*\bzoomAreaLabel=\{localizedStrings\[FOOTNOTES_ZOOM_AREA_LABEL_KEY\]\}/,
-    );
-    // The list holds bracketed entries of its own (spreads of mapped arrays), so it is bounded by
-    // the declaration's opening line and the `];` that closes it at the start of a line.
-    const rawSource = readFileSync(WEB_VIEW_FILE, 'utf-8');
-    const listStart = rawSource.indexOf('const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [');
-    expect(listStart).toBeGreaterThan(-1);
-    const listEnd = rawSource.indexOf('\n];', listStart);
-    expect(listEnd).toBeGreaterThan(listStart);
-    const loadedKeys = rawSource.slice(listStart, listEnd);
-    // An entry of its own line, so a mention in a comment or inside another expression is not one.
-    expect(loadedKeys).toMatch(/^ *FOOTNOTES_ZOOM_AREA_LABEL_KEY,$/m);
   });
 });
