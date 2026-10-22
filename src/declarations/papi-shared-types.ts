@@ -262,6 +262,16 @@ declare module 'papi-shared-types' {
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+    /**
+     * Open a Settings tab limited to the project shown in the given web view — the same as
+     * `platform.openSettings`, under a name of its own so a web view's Project settings menu item
+     * can show its keyboard shortcut without the main menu's Settings item, which runs
+     * `platform.openSettings`, showing it too.
+     *
+     * @param webViewId Web view whose project the Settings tab should be limited to, if any
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.openProjectSettingsForWebView': (webViewId?: WebViewId) => Promise<void>;
 
     // These commands are provided in `web-view.service-router.ts` (main)
     /**

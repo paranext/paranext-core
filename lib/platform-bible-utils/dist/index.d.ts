@@ -1723,6 +1723,24 @@ export type MenuItemBase = OrderedItem & {
 	 * items that should show in every mode — most items need no value here at all.
 	 */
 	hiddenInterfaceModes?: InterfaceMode[];
+	/**
+	 * Lucide icon name (kebab-case, e.g. `refresh-cw`) to display before the menu text. The icon
+	 * takes the text colour of the item. The curated names are listed in `LUCIDE_ICON_NAMES`
+	 * (exported from `platform-bible-react/experimental`). Wins over `iconPathBefore` when both are
+	 * set, unless the name is not in that set: then `iconPathBefore` is shown if set, else no icon.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	iconNameBefore?: string;
+	/**
+	 * Lucide icon name (kebab-case, e.g. `external-link`) to display after the menu text. The icon
+	 * takes the text colour of the item. The curated names are listed in `LUCIDE_ICON_NAMES`
+	 * (exported from `platform-bible-react/experimental`). Wins over `iconPathAfter` when both are
+	 * set, unless the name is not in that set: then `iconPathAfter` is shown if set, else no icon.
+	 *
+	 * @experimental This field is unstable and may change or disappear without notice
+	 */
+	iconNameAfter?: string;
 };
 /** Menu item that hosts a submenu */
 export type MenuItemContainingSubmenu = MenuItemBase & {
@@ -1734,13 +1752,13 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	/** Name of the PAPI command to run when this menu item is selected. */
 	command: ReferencedItem;
 	/**
-	 * Uri path to the icon to display after the menu text. Ex:
-	 * `papi-extension://helloWorld/assets/icon.png`
+	 * Uri path to the icon to display after the menu text, shown at up to 16px wide and tall (the
+	 * size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`
 	 */
 	iconPathAfter?: string;
 	/**
-	 * Uri path to the icon to display before the menu text. Ex:
-	 * `papi-extension://helloWorld/assets/icon.png`
+	 * Uri path to the icon to display before the menu text, shown at up to 16px wide and tall (the
+	 * size of a named icon). Ex: `papi-extension://helloWorld/assets/icon.png`
 	 */
 	iconPathBefore?: string;
 	/**
@@ -2092,6 +2110,14 @@ export declare const menuDocumentSchema: {
 						enum: string[];
 					};
 					uniqueItems: boolean;
+				};
+				iconNameBefore: {
+					description: string;
+					type: string;
+				};
+				iconNameAfter: {
+					description: string;
+					type: string;
 				};
 			};
 			required: string[];

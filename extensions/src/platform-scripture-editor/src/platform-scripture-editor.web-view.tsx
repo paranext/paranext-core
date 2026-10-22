@@ -125,6 +125,7 @@ import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet
 import { useChapterCopyLimit } from './copy-limit/use-chapter-copy-limit.hook';
 import { useIsProjectDataLoading } from './copy-limit/use-is-project-data-loading.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
+import { substituteProjectNameInMenu } from './menu-label-substitution.util';
 import {
   StructureProtectionButton,
   STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
@@ -161,7 +162,11 @@ import {
   scrollToNoteCaller,
   scrollToVerse,
 } from './editor-dom.util';
-import { handleEditMenuCommand, isEditMenuCommand } from './edit-menu-actions.util';
+import {
+  type EditMenuActionCommand,
+  handleEditMenuCommand,
+  isEditMenuCommand,
+} from './edit-menu-actions.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
@@ -221,7 +226,6 @@ import {
   insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
   nextEditingNoteOps,
-  noteKindForCtrlTChord,
   NOTE_INSERT_CONFIG,
   resolvePaletteItemStrings,
   parseCallerSequenceSetting,
@@ -230,6 +234,7 @@ import {
   returnFocusToScriptureTextIfDocumentFocused,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
+import { matchEditorChord, runEditorChord, shouldRunEditorChord } from './editor-chords.util';
 import { useGuardedProjectSetting } from './use-guarded-project-setting.hook';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
@@ -790,11 +795,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setViewType('standard');
   }, [hadPersistedViewTypeAtMount, isInterfaceModeLoading, isPowerMode, setViewType]);
 
-  // Standard view must never be shown in simple mode: simple mode pairs with structure
+  // Standard and markers views must never be shown in simple mode: simple mode pairs with structure
   // protection, which intentionally blocks the paragraph-marker edits standard view's editing
-  // affordances are built around (see `resolveViewTypeForInterfaceMode`). This covers both a
-  // 'standard' persisted during a power-mode session loading while the app is in simple mode and
-  // a live `platform.interfaceMode` flip to simple while this standard-view web view is open.
+  // affordances are built around, and it offers no way out of the read-only markers view (see
+  // `resolveViewTypeForInterfaceMode`). This covers both a 'standard' or 'markers' persisted during
+  // a power-mode session loading while the app is in simple mode and a live
+  // `platform.interfaceMode` flip to simple while such a web view is open.
   // The coercion is DERIVED for display, never written back: persisting it would destroy the
   // user's choice permanently — flipping back to power mode could not restore it, because the
   // one-shot power-default correction above is gated on `hadPersistedViewTypeAtMount` and its
@@ -2000,6 +2006,35 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     ],
   );
 
+  /**
+   * Runs an Edit flyout action on this editor with its read-only notices, selection restore and
+   * refocus. Cut, Copy and Paste reach it from the menu's select handler (the clipboard needs the
+   * click's user activation); Undo and Redo reach it as PAPI-command messages.
+   */
+  const runEditMenuCommand = useCallback(
+    (command: EditMenuActionCommand) =>
+      handleEditMenuCommand(
+        command,
+        editorRef.current ?? undefined,
+        { isReadOnly: isReadOnlyEffective, isDurablyReadOnly, isSyncBlocked },
+        {
+          notifyActionBlocked: () => notifyEditMenuActionBlocked(localizedStrings),
+          notifySyncEditBlocked,
+          restoreSelectionIfLost: (editor) =>
+            restoreSelectionIfLost(editor, lastFocusOutSelectionRef.current),
+          onActionError: (e) => logger.warn(`Edit menu action failed: ${getErrorMessage(e)}`),
+          focusEditor: () => requestAnimationFrame(() => editorRef.current?.focus()),
+        },
+      ),
+    [
+      isDurablyReadOnly,
+      isReadOnlyEffective,
+      isSyncBlocked,
+      localizedStrings,
+      notifySyncEditBlocked,
+    ],
+  );
+
   // listen to messages from the web view controller
   useEffect(() => {
     const webViewMessageListener = async ({
@@ -2032,12 +2067,31 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         case 'changeScriptureView': {
           // Cycle through the available views for QA (a temporary affordance, to be replaced by
-          // the polished power-default view + menu). The cycle is mode-aware: standard view is
-          // power-mode-only, so in simple mode the cycle skips it (see `getNextViewTypeInCycle`
-          // for the full cycle semantics and why it switches on `viewType` rather than
-          // `viewOptions.markerMode`).
+          // the polished power-default view + menu). The cycle is mode-aware: simple mode has only
+          // the formatted view, so there it changes nothing and the view type saved in Power stays
+          // (see `getNextViewTypeInCycle` for the full cycle semantics and why it switches on
+          // `viewType` rather than `viewOptions.markerMode`).
+          const nextViewType = getNextViewTypeInCycle(viewType, isPowerMode);
+          if (nextViewType) {
+            endPaneNoteEdit();
+            setViewType(nextViewType);
+          }
+          break;
+        }
+        case 'setScriptureView': {
+          // The request is persisted as is. Standard and markers views are Power-only, so outside
+          // Power the displayed `viewType` above coerces it to formatted while the saved choice
+          // survives a switch back to Power.
           endPaneNoteEdit();
-          setViewType(getNextViewTypeInCycle(viewType, isPowerMode));
+          setViewType(editorMessage.viewType);
+          break;
+        }
+        case 'undo': {
+          runEditMenuCommand('platformScriptureEditor.undo');
+          break;
+        }
+        case 'redo': {
+          runEditMenuCommand('platformScriptureEditor.redo');
           break;
         }
         case 'toggleFootnotesPaneVisibility': {
@@ -2256,6 +2310,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setViewType,
     viewType,
     isPowerMode,
+    runEditMenuCommand,
   ]);
 
   // #region Marker Palettes
@@ -2649,23 +2704,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [getSelectionBeforePointerPress],
   );
 
-  // Listen for the marker menu trigger to open the marker menu, for Ctrl+T / Ctrl+Shift+T to
-  // insert a footnote/cross-reference, and for
-  // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
+  // Listen for the marker menu trigger to open the marker menu, for F7 (footnotes), Ctrl+Shift+R
+  // (Basic checks) and Ctrl+T / Ctrl+Shift+T (insert a footnote/cross-reference) in every view, and
+  // for Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at
+  // selection
   useEffect(() => {
     /**
      * Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux). Read by BOTH listeners below:
      * the capture one claims it while a palette session is open, the bubble one acts on it
-     * otherwise.
+     * otherwise. A key an input method (IME) is still composing with is never the chord, as for the
+     * other editor chords (see `matchEditorChord`).
      */
-    const isInsertCommentChord = (event: KeyboardEvent) =>
-      isMac
+    const isInsertCommentChord = (event: KeyboardEvent) => {
+      if (event.isComposing || event.keyCode === 229) return false;
+      return isMac
         ? event.metaKey &&
-          event.altKey &&
-          // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
-          (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
+            event.altKey &&
+            // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
+            (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
         : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
-          (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
+            (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
+    };
 
     // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
     // root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
@@ -2792,36 +2851,48 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // Swallowed while the editor's right-click menu is up, like the Ctrl+T shortcuts below.
         // See `isEditorContextMenuOpen`.
         if (!isEditorContextMenuOpen(editorContainerRef.current)) insertCommentAtCurrentSelection();
-      } else if (
-        !isReadOnlyEffective &&
-        viewType === 'standard' &&
-        editorRef.current?.isFocused() &&
-        event.ctrlKey &&
-        // AltGr reports as Ctrl+Alt on Windows/Linux, and it is how `t`-bearing characters are
-        // typed on several European layouts — so an unqualified Ctrl+T would eat those keystrokes
-        // and insert a footnote instead. Meta is excluded for the same reason: it is a different
-        // chord, not this one.
-        !event.altKey &&
-        !event.metaKey &&
-        event.key.toLowerCase() === 't'
-      ) {
-        // Ctrl+T inserts a footnote; Ctrl+Shift+T inserts a cross-reference. Scoped to
-        // the main editor via the same `editorRef.current.isFocused()` check used for the marker
-        // menu trigger above, so the shortcut doesn't fire while the FootnoteEditor/CommentEditor
-        // popovers (which have their own separate `.editor-input`) have focus. Standard-view only,
-        // matching the other Standard view PT9-parity entry points.
+      } else {
+        const chordMatch = matchEditorChord(event);
+        if (
+          !chordMatch ||
+          !shouldRunEditorChord(chordMatch.chord, {
+            isReadOnly: isReadOnlyEffective,
+            // Scoped to the main editor via `isFocused()`, so the insert chords don't fire while the
+            // FootnoteEditor/CommentEditor popovers (which have their own `.editor-input`) have focus
+            isEditorFocused: !!editorRef.current?.isFocused(),
+            isPowerMode,
+          })
+        )
+          return;
+
         event.preventDefault();
-        // Swallowed while the editor's right-click menu is up: the insert opens the footnote editor,
-        // which would land over a menu that is still open. See `isEditorContextMenuOpen`.
-        if (isEditorContextMenuOpen(editorContainerRef.current)) return;
-        // insertNoteAtCurrentSelection is async and this handler is not, so surface a rejection
-        // instead of dropping it as an unhandled promise: the user pressed a key and must not be
-        // left with no marker and no explanation.
-        const method = noteKindForCtrlTChord(event.shiftKey);
-        logInsertRejection(
-          insertNoteAtCurrentSelection(method),
-          `${NOTE_INSERT_CONFIG[method].editDescription} from keyboard shortcut`,
-        );
+        // A held chord is swallowed so its default action (macOS Ctrl+T transposes characters)
+        // cannot fire, but it acts only once.
+        if (chordMatch.isRepeat) return;
+        const { chord } = chordMatch;
+        runEditorChord(chord, {
+          webViewId,
+          sendCommand: (command, id) => {
+            papi.commands
+              .sendCommand(command, id)
+              .catch((e) =>
+                logger.warn(`Failed to run ${chord} from the keyboard: ${getErrorMessage(e)}`),
+              );
+          },
+          insertNote: (method) => {
+            // Swallowed while the editor's right-click menu is up: the insert opens the footnote
+            // editor, which would land over a menu that is still open. See
+            // `isEditorContextMenuOpen`.
+            if (isEditorContextMenuOpen(editorContainerRef.current)) return;
+            // insertNoteAtCurrentSelection is async and this handler is not, so surface a rejection
+            // instead of dropping it as an unhandled promise: the user pressed a key and must not
+            // be left with no marker and no explanation.
+            logInsertRejection(
+              insertNoteAtCurrentSelection(method),
+              `${NOTE_INSERT_CONFIG[method].editDescription} from keyboard shortcut`,
+            );
+          },
+        });
       }
     };
 
@@ -2839,6 +2910,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     showInlineMarkersMenu,
     isMac,
     isReadOnlyEffective,
+    isPowerMode,
+    webViewId,
     viewType,
     styleInfo,
     openMarkerPaletteAtCaret,
@@ -4499,6 +4572,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return webViewMenuPossiblyError;
   }, [webViewMenuPossiblyError]);
 
+  // Menu labels are localized once for every editor, so the project name stays as the
+  // `{projectName}` placeholder (for example the Sync item's "Sync {projectName}") until here.
+  const projectMenuData = useMemo(
+    () => substituteProjectNameInMenu(webViewMenu.topMenu, projectName),
+    [webViewMenu.topMenu, projectName],
+  );
+
   const [booksPresentPossiblyError] = useProjectSetting(
     projectId,
     'platformScripture.booksPresent',
@@ -4545,22 +4625,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const menuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
-      // The Edit flyout acts on this editor, and the clipboard needs the click's user activation,
-      // so it runs here rather than as a PAPI command
+      // Cut, Copy and Paste act on this editor and need the click's user activation for the
+      // clipboard, so they run here rather than as a PAPI command (Undo and Redo go through PAPI)
       if (isEditMenuCommand(projectMenuCommand.command)) {
-        handleEditMenuCommand(
-          projectMenuCommand.command,
-          editorRef.current ?? undefined,
-          { isReadOnly: isReadOnlyEffective, isDurablyReadOnly, isSyncBlocked },
-          {
-            notifyActionBlocked: () => notifyEditMenuActionBlocked(localizedStrings),
-            notifySyncEditBlocked,
-            restoreSelectionIfLost: (editor) =>
-              restoreSelectionIfLost(editor, lastFocusOutSelectionRef.current),
-            onActionError: (e) => logger.warn(`Edit menu action failed: ${getErrorMessage(e)}`),
-            focusEditor: () => requestAnimationFrame(() => editorRef.current?.focus()),
-          },
-        );
+        runEditMenuCommand(projectMenuCommand.command);
         return;
       }
       // Find is the one menu command that needs more than the tab id: it carries this tab's current
@@ -4591,15 +4659,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           ),
         );
     },
-    [
-      getMenuFindSelectionText,
-      isDurablyReadOnly,
-      isReadOnlyEffective,
-      isSyncBlocked,
-      localizedStrings,
-      notifySyncEditBlocked,
-      webViewId,
-    ],
+    [getMenuFindSelectionText, runEditMenuCommand, webViewId],
   );
 
   function renderEditor() {
@@ -4855,7 +4915,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
-        projectMenuData={webViewMenu.topMenu}
+        projectMenuData={projectMenuData}
         className={`scripture-editor-tab-nav tw:z-10${isPowerMode ? '' : ' scripture-editor-tab-nav-simple'}`}
         startAreaChildren={
           <>

@@ -52,7 +52,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { ShortcutKeys } from 'platform-bible-react/experimental';
+import { LUCIDE_ICON_NAMES, LucideIcon, ShortcutKeys } from 'platform-bible-react/experimental';
 import {
   getErrorMessage,
   isLocalizeKey,
@@ -81,6 +81,12 @@ const TAB_BAR_CHROME_OVERHEAD_PX = 40;
 type PlatformTabTitleProps = {
   /** Url to image to show on the tab. Defaults to the software's standard logo. */
   iconUrl?: string;
+  /**
+   * Name of a lucide icon to show on the tab instead of `iconUrl`. An unknown name is ignored.
+   *
+   * @experimental This field is unstable and may change or disappear without notice
+   */
+  iconName?: string;
   /** Text to show on the tab */
   text: string | LocalizeKey;
   /** Text to show when hovering over the tab. Defaults to empty string */
@@ -377,6 +383,8 @@ const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
  * Custom tab title for all tabs in Platform
  *
  * @param iconUrl Url to image to show on the tab. Defaults to the software's standard logo.
+ * @param iconName Name of a lucide icon to show on the tab instead of `iconUrl`. An unknown name is
+ *   ignored.
  * @param text The text to show on the tab title
  * @param tooltip Text to show when hovering over the tab. Defaults to empty string
  * @param flashTriggerTime Trigger to make the tab flash. Each time this value changes to a truthy
@@ -386,6 +394,7 @@ const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
  */
 export function PlatformTabTitle({
   iconUrl,
+  iconName,
   text,
   tooltip,
   flashTriggerTime,
@@ -932,18 +941,28 @@ export function PlatformTabTitle({
 
   const iconOnlyClass = isIconOnly ? ' icon-only' : '';
 
-  const icon = (
-    <div
-      className={`tab-menu-icon${dragIgnoreClass}`}
-      style={
-        iconUrl
-          ? {
-              backgroundImage: `url(${iconUrl})`,
-            }
-          : undefined
-      }
-    />
-  );
+  // A lucide icon name wins over an icon url. An unknown name falls through to the url and then to
+  // the default logo, since `LucideIcon` renders nothing for a name it does not know
+  const icon =
+    iconName && LUCIDE_ICON_NAMES.includes(iconName) ? (
+      // The wrapper keeps the 16px icon box of `.tab-menu-icon` without its default-logo background.
+      // The svg ignores the pointer so the wrapper, which carries the drag-ignore marker, is the
+      // element under the pointer.
+      <span className={`tab-lucide-icon${dragIgnoreClass}`}>
+        <LucideIcon name={iconName} className="tw:pointer-events-none" />
+      </span>
+    ) : (
+      <div
+        className={`tab-menu-icon${dragIgnoreClass}`}
+        style={
+          iconUrl
+            ? {
+                backgroundImage: `url(${iconUrl})`,
+              }
+            : undefined
+        }
+      />
+    );
 
   const titleWithTooltip = (
     <TooltipProvider>

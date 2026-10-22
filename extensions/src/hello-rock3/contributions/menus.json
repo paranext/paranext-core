@@ -85,7 +85,7 @@
             "command": "helloRock3.openViewerByWebViewId"
           },
           {
-            "label": "%webView_openProjectSettings%",
+            "label": "%webView_openProjectSettings_2%",
             "group": "helloRock3.projectGroup",
             "order": 3,
             "command": "platform.openSettings"

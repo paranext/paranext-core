@@ -23,11 +23,20 @@ import {
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { RefObject, useEffect, useRef } from 'react';
+import { ReactNode, RefObject, useEffect, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
-import { getSortedMenuColumns, getSubMenuGroupKeyForMenuItemId } from './menu.util';
+import {
+  getColumnGroupKeys,
+  getItemsInGroups,
+  getLeadingIconSlot,
+  getSortedMenuColumns,
+  getSubMenuGroupKeysForMenuItemId,
+  GroupContent,
+  joinGroupsWithSeparators,
+  LeadingIconSlot,
+} from './menu.util';
 import MenuItemIcon from './menu-icon.component';
 
 /**
@@ -46,26 +55,34 @@ const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEvent
   }, 0);
 };
 
+const createMenubarSeparator = (groupKey: string) => (
+  <MenubarSeparator key={`separator-${groupKey}`} />
+);
+
+/**
+ * Renders the items of the given groups in the order given, one entry per group. A column and a
+ * submenu both join the entries with {@link joinGroupsWithSeparators}, so a separator only ever sits
+ * between two groups that have items.
+ *
+ * @param groupKeys Keys of the groups to render, already sorted by the groups' `order`
+ * @param leadingSlot The leading icon slot of the list these items render in. A submenu works out
+ *   its own from its items.
+ */
 const getMenubarContent = (
   groups: Localized<GroupsInMultiColumnMenu>,
   items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
-  columnOrSubMenuKey: string | undefined,
+  groupKeys: string[],
   onSelectMenuItem: SelectMenuItemHandler,
-) => {
-  if (!columnOrSubMenuKey) return undefined;
-
-  const sortedGroupsForColumn = Object.entries(groups)
-    .filter(
-      ([key, group]) =>
-        ('column' in group && group.column === columnOrSubMenuKey) || key === columnOrSubMenuKey,
-    )
-    .sort(([, a], [, b]) => a.order - b.order);
-
-  return sortedGroupsForColumn.flatMap(([groupKey], index) => {
-    const groupItems = items
+  leadingSlot: LeadingIconSlot,
+): GroupContent<ReactNode>[] =>
+  groupKeys.map((groupKey) => ({
+    groupKey,
+    items: items
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
       .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
+        const subGroupKeys =
+          'command' in item ? [] : getSubMenuGroupKeysForMenuItemId(groups, item.id);
         return (
           <Tooltip key={`tooltip-${item.label}-${'command' in item ? item.command : item.id}`}>
             <TooltipTrigger asChild>
@@ -78,28 +95,47 @@ const getMenubarContent = (
                     onSelectMenuItem(item as MenuItemContainingCommand);
                   }}
                 >
-                  {item.iconPathBefore && (
-                    <MenuItemIcon icon={item.iconPathBefore} menuLabel={item.label} leading />
-                  )}
+                  <MenuItemIcon
+                    iconName={item.iconNameBefore}
+                    icon={item.iconPathBefore}
+                    menuLabel={item.label}
+                    leading
+                    leadingSlot={leadingSlot}
+                  />
                   {item.label}
-                  {item.iconPathAfter && (
-                    <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
-                  )}
+                  <MenuItemIcon
+                    iconName={item.iconNameAfter}
+                    icon={item.iconPathAfter}
+                    menuLabel={item.label}
+                  />
                   {item.shortcut && (
-                    <MenubarShortcut>
+                    <MenubarShortcut className="tw:ps-4">
                       <ShortcutKeys hint={item.shortcut} />
                     </MenubarShortcut>
                   )}
                 </MenubarItem>
               ) : (
                 <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
-                  <MenubarSubTrigger>{item.label}</MenubarSubTrigger>
+                  <MenubarSubTrigger>
+                    <MenuItemIcon
+                      iconName={item.iconNameBefore}
+                      menuLabel={item.label}
+                      leading
+                      leadingSlot={leadingSlot}
+                    />
+                    {item.label}
+                    <MenuItemIcon iconName={item.iconNameAfter} menuLabel={item.label} />
+                  </MenubarSubTrigger>
                   <MenubarSubContent>
-                    {getMenubarContent(
-                      groups,
-                      items,
-                      getSubMenuGroupKeyForMenuItemId(groups, item.id),
-                      onSelectMenuItem,
+                    {joinGroupsWithSeparators(
+                      getMenubarContent(
+                        groups,
+                        items,
+                        subGroupKeys,
+                        onSelectMenuItem,
+                        getLeadingIconSlot(getItemsInGroups(items, subGroupKeys)),
+                      ),
+                      createMenubarSeparator,
                     )}
                   </MenubarSubContent>
                 </MenubarSub>
@@ -108,16 +144,8 @@ const getMenubarContent = (
             {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
           </Tooltip>
         );
-      });
-
-    const itemsWithSeparator = [...groupItems];
-    if (groupItems.length > 0 && index < sortedGroupsForColumn.length - 1) {
-      itemsWithSeparator.push(<MenubarSeparator key={`separator-${groupKey}`} />);
-    }
-
-    return itemsWithSeparator;
-  });
-};
+      }),
+  }));
 
 type PlatformMenubarProps = {
   /** Menu data that is used to populate the Menubar component. */
@@ -241,18 +269,30 @@ export function PlatformMenubar({
 
   return (
     <Menubar ref={menubarRef} className="pr-twp tw:border-0 tw:bg-transparent" variant={variant}>
-      {getSortedMenuColumns(menuData.columns).map(({ columnKey, column }) => (
-        <MenubarMenu key={columnKey}>
-          <MenubarTrigger ref={getRefForColumn(columnKey)}>{column.label}</MenubarTrigger>
-          <MenubarContent
-            style={{ zIndex: Z_INDEX_ABOVE_DOCK }} // Need to get over the floating web view z-index 200
-          >
-            <TooltipProvider>
-              {getMenubarContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
-            </TooltipProvider>
-          </MenubarContent>
-        </MenubarMenu>
-      ))}
+      {getSortedMenuColumns(menuData.columns).map(({ columnKey, column }) => {
+        const columnGroupKeys = getColumnGroupKeys(menuData.groups, columnKey);
+        return (
+          <MenubarMenu key={columnKey}>
+            <MenubarTrigger ref={getRefForColumn(columnKey)}>{column.label}</MenubarTrigger>
+            <MenubarContent
+              style={{ zIndex: Z_INDEX_ABOVE_DOCK }} // Need to get over the floating web view z-index 200
+            >
+              <TooltipProvider>
+                {joinGroupsWithSeparators(
+                  getMenubarContent(
+                    menuData.groups,
+                    menuData.items,
+                    columnGroupKeys,
+                    onSelectMenuItem,
+                    getLeadingIconSlot(getItemsInGroups(menuData.items, columnGroupKeys)),
+                  ),
+                  createMenubarSeparator,
+                )}
+              </TooltipProvider>
+            </MenubarContent>
+          </MenubarMenu>
+        );
+      })}
     </Menubar>
   );
 }

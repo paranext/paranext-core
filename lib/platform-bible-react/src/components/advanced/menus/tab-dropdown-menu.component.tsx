@@ -38,27 +38,42 @@ import {
 import { useInteractionModality } from '@/hooks/use-interaction-modality.hook';
 import { ShortcutKeys } from '@/components/basics/shortcut-keys.component';
 import {
+  getColumnGroupKeys,
+  getItemsInGroups,
+  getLeadingIconSlot,
   getMenuSectionsWithItems,
-  getSubMenuGroupKeyForMenuItemId,
-  isGroupUnderColumnOrSubMenu,
+  getSubMenuGroupKeysForMenuItemId,
+  GroupContent,
+  joinGroupsWithSeparators,
+  LeadingIconSlot,
 } from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
 
+const createDropdownSeparator = (groupKey: string) => (
+  <DropdownMenuSeparator key={`separator-${groupKey}`} />
+);
+
+/**
+ * Renders the items of the given groups in the order given, one entry per group. A submenu joins
+ * the entries with {@link joinGroupsWithSeparators}, so a separator sits between each pair of its
+ * groups that have items; a column runs its groups together, since the menu does not distinguish
+ * the groups within a column.
+ *
+ * @param groupKeys Keys of the groups to render, already sorted by the groups' `order`
+ * @param leadingSlot The leading icon slot of the list these items render in. A submenu works out
+ *   its own from its items.
+ */
 const getGroupContent = (
   groups: Localized<GroupsInMultiColumnMenu>,
   items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
-  columnOrSubMenuKey: string | undefined,
+  groupKeys: string[],
   onSelectMenuItem: SelectMenuItemHandler,
-) => {
-  if (!columnOrSubMenuKey) return undefined;
-
-  const sortedGroupsForColumn = Object.entries(groups)
-    .filter(([key, group]) => isGroupUnderColumnOrSubMenu(key, group, columnOrSubMenuKey))
-    .sort(([, a], [, b]) => a.order - b.order);
-
-  return sortedGroupsForColumn.flatMap(([groupKey]) => {
-    const groupItems = items
+  leadingSlot: LeadingIconSlot,
+): GroupContent<ReactNode>[] =>
+  groupKeys.map((groupKey) => ({
+    groupKey,
+    items: items
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
       .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
@@ -79,15 +94,21 @@ const getGroupContent = (
                     onSelectMenuItem(item as MenuItemContainingCommand);
                   }}
                 >
-                  {item.iconPathBefore && (
-                    <MenuItemIcon icon={item.iconPathBefore} menuLabel={item.label} leading />
-                  )}
+                  <MenuItemIcon
+                    iconName={item.iconNameBefore}
+                    icon={item.iconPathBefore}
+                    menuLabel={item.label}
+                    leading
+                    leadingSlot={leadingSlot}
+                  />
                   {item.label}
-                  {item.iconPathAfter && (
-                    <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
-                  )}
+                  <MenuItemIcon
+                    iconName={item.iconNameAfter}
+                    icon={item.iconPathAfter}
+                    menuLabel={item.label}
+                  />
                   {item.shortcut && (
-                    <DropdownMenuShortcut>
+                    <DropdownMenuShortcut className="tw:ps-4">
                       <ShortcutKeys hint={item.shortcut} />
                     </DropdownMenuShortcut>
                   )}
@@ -101,7 +122,19 @@ const getGroupContent = (
         // Only wrap the trigger when there is a tooltip: `TooltipTrigger asChild` clones its own
         // `data-state` and `data-slot` onto the trigger, hiding the submenu's open state from
         // `data-open:` styles
-        const subTrigger = <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>;
+        const subTrigger = (
+          <DropdownMenuSubTrigger>
+            <MenuItemIcon
+              iconName={item.iconNameBefore}
+              menuLabel={item.label}
+              leading
+              leadingSlot={leadingSlot}
+            />
+            {item.label}
+            <MenuItemIcon iconName={item.iconNameAfter} menuLabel={item.label} />
+          </DropdownMenuSubTrigger>
+        );
+        const subGroupKeys = getSubMenuGroupKeysForMenuItemId(groups, item.id);
         return (
           <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
             {item.tooltip ? (
@@ -115,21 +148,22 @@ const getGroupContent = (
 
             <DropdownMenuPortal>
               <DropdownMenuSubContent>
-                {getGroupContent(
-                  groups,
-                  items,
-                  getSubMenuGroupKeyForMenuItemId(groups, item.id),
-                  onSelectMenuItem,
+                {joinGroupsWithSeparators(
+                  getGroupContent(
+                    groups,
+                    items,
+                    subGroupKeys,
+                    onSelectMenuItem,
+                    getLeadingIconSlot(getItemsInGroups(items, subGroupKeys)),
+                  ),
+                  createDropdownSeparator,
                 )}
               </DropdownMenuSubContent>
             </DropdownMenuPortal>
           </DropdownMenuSub>
         );
-      });
-
-    return groupItems;
-  });
-};
+      }),
+  }));
 
 export type TabDropdownMenuProps = {
   /** The handler to use for menu commands */
@@ -169,9 +203,10 @@ export type TabDropdownMenuProps = {
 /**
  * Dropdown menu for Platform.Bible menu data. Each column that has items is a section, divided from
  * the next by a line; columns without items are left out. Groups within a column are not
- * distinguished. Items show their tooltip on hover and their `shortcut`, if any, at the end of the
- * row. With `showSectionHeadings`, each section is headed by its column label, except a column that
- * sets `isHeaderHidden`, whose label names the section for screen readers only.
+ * distinguished, while the groups of a submenu are divided by a line. Items show their tooltip on
+ * hover and their `shortcut`, if any, at the end of the row. With `showSectionHeadings`, each
+ * section is headed by its column label, except a column that sets `isHeaderHidden`, whose label
+ * names the section for screen readers only.
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
@@ -189,6 +224,13 @@ export default function TabDropdownMenu({
   const headingIdPrefix = useId();
   const sections = getMenuSectionsWithItems(menuData);
   const showHeadings = showSectionHeadings && sections.length > 1;
+  // Every section shares one content, so one slot keeps all their labels aligned
+  const leadingSlot = getLeadingIconSlot(
+    getItemsInGroups(
+      menuData.items,
+      sections.flatMap(({ columnKey }) => getColumnGroupKeys(menuData.groups, columnKey)),
+    ),
+  );
 
   // Radix restores focus to the trigger on every close, and the tab order depends on that. The focus
   // ring does not belong there after a pointer close, though — it would sit on a button the pointer
@@ -243,7 +285,13 @@ export default function TabDropdownMenu({
                   </DropdownMenuLabel>
                 )}
                 <TooltipProvider>
-                  {getGroupContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
+                  {getGroupContent(
+                    menuData.groups,
+                    menuData.items,
+                    getColumnGroupKeys(menuData.groups, columnKey),
+                    onSelectMenuItem,
+                    leadingSlot,
+                  ).flatMap((group) => group.items)}
                 </TooltipProvider>
               </DropdownMenuGroup>
 

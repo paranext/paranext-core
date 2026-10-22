@@ -30,7 +30,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
   // The dialog reports the failure itself; this notification is what carries the action that opens
-  // the Internet & connectivity setting responsible for it.
+  // the Internet connectivity setting responsible for it.
   const notifyIfInternetBlocked = useCallback((error: unknown) => {
     const notification = getInternetBlockedNotification(error);
     if (notification) papi.notifications.send(notification);

@@ -5,7 +5,7 @@ import paratextRegistrationListStyles from './tailwind.css?inline';
 
 export const paratextRegistrationWebViewType = 'paratextRegistration.registrationView';
 
-const titleKey = '%paratextRegistrationProfile_webView_title%';
+const titleKey = '%paratextRegistrationProfile_webView_title_2%';
 const tooltipKey = '%paratextRegistrationProfile_webView_tooltip%';
 
 export class ParatextRegistrationWebViewProvider implements IWebViewProvider {

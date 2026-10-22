@@ -23,7 +23,6 @@ import {
   insertNoteAtCurrentSelectionCore,
   markerMenuItemsToResolvedPaletteItems,
   nextEditingNoteOps,
-  noteKindForCtrlTChord,
   NOTE_INSERT_CONFIG,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
@@ -842,16 +841,6 @@ describe('CONTEXT_MENU_ACTION_TO_NOTE_KIND', () => {
   });
 });
 
-describe('noteKindForCtrlTChord', () => {
-  it('maps Ctrl+T (no Shift) to the footnote kind', () => {
-    expect(noteKindForCtrlTChord(false)).toBe('insertFootnoteAtSelection');
-  });
-
-  it('maps Ctrl+Shift+T to the cross-reference kind', () => {
-    expect(noteKindForCtrlTChord(true)).toBe('insertCrossReferenceAtSelection');
-  });
-});
-
 describe('createInsertContextMenuItems', () => {
   // Parity contract: the context menu must offer exactly the Insert-menu inserts, in menu order.
   // Read the Insert menu straight from the contribution so a menus.json change without a
@@ -931,12 +920,12 @@ describe('createInsertContextMenuItems', () => {
       ...ENABLED,
       isReadOnly: true,
     });
-    expect(readOnly.map((i) => !!i.isDisabled)).toEqual([true, true, true, false]);
+    expect(readOnly.map((i) => !!i.isDisabled)).toEqual([false, true, true, true]);
     const noCommentPermission = createInsertContextMenuItems(strings, makeActions(), {
       ...ENABLED,
       canUserCreateComments: false,
     });
-    expect(noCommentPermission.map((i) => !!i.isDisabled)).toEqual([false, false, false, true]);
+    expect(noCommentPermission.map((i) => !!i.isDisabled)).toEqual([true, false, false, false]);
   });
 
   // A sync freeze reaches the note inserts through the editor's own read-only state, so only the
@@ -946,7 +935,7 @@ describe('createInsertContextMenuItems', () => {
       ...ENABLED,
       isSyncBlocked: true,
     });
-    expect(syncBlocked.map((i) => !!i.isDisabled)).toEqual([false, false, false, true]);
+    expect(syncBlocked.map((i) => !!i.isDisabled)).toEqual([true, false, false, false]);
   });
 
   // Per-item, not aggregate: calling every item's onSelect and counting each action's TOTAL calls
@@ -954,10 +943,10 @@ describe('createInsertContextMenuItems', () => {
   // wired to insertCrossReference from the correct wiring. Asserting ONE item's onSelect against
   // every action's call count catches exactly that cross-wiring.
   it.each([
-    [0, 'insertFootnote'],
-    [1, 'insertCrossReference'],
-    [2, 'insertEndnote'],
-    [3, 'insertComment'],
+    [0, 'insertComment'],
+    [1, 'insertFootnote'],
+    [2, 'insertCrossReference'],
+    [3, 'insertEndnote'],
   ] as const)('item %i runs ONLY its own action (%s)', (index, actionName) => {
     const actions = makeActions();
     const items = createInsertContextMenuItems(strings, actions, ENABLED);

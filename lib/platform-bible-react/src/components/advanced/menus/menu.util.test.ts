@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { ColumnsWithHeaders, Localized, MultiColumnMenu } from 'platform-bible-utils';
-import { getMenuSectionsWithItems, getSortedMenuColumns } from './menu.util';
+import {
+  getColumnGroupKeys,
+  getItemsInGroups,
+  getLeadingIconSlot,
+  getMenuSectionsWithItems,
+  getSortedMenuColumns,
+  getSubMenuGroupKeysForMenuItemId,
+  joinGroupsWithSeparators,
+} from './menu.util';
 
 /** Columns carrying the extensibility flags a served menu puts alongside the columns themselves */
 const COLUMNS_WITH_FLAGS: Localized<ColumnsWithHeaders> = {
@@ -147,5 +155,178 @@ describe('getMenuSectionsWithItems', () => {
       'platform.app',
       'platformScriptureEditor.tools',
     ]);
+  });
+});
+
+describe('getColumnGroupKeys', () => {
+  it('returns the groups that name the column or are keyed by it, sorted by `order`', () => {
+    // Stored out of order, so the result can only be right by sorting
+    const groups: Localized<MultiColumnMenu>['groups'] = {
+      'test.second': { column: 'test.column', order: 2 },
+      'test.elsewhere': { column: 'test.otherColumn', order: 1 },
+      'test.column': { menuItem: 'test.unusedMenuItem', order: 3 },
+      'test.first': { column: 'test.column', order: 1 },
+    };
+
+    expect(getColumnGroupKeys(groups, 'test.column')).toEqual([
+      'test.first',
+      'test.second',
+      'test.column',
+    ]);
+  });
+
+  it('returns an empty list when no group belongs to the column', () => {
+    expect(getColumnGroupKeys(MENU_WITH_SUBMENU.groups, 'test.unknown')).toEqual([]);
+  });
+});
+
+describe('getSubMenuGroupKeysForMenuItemId', () => {
+  it('returns every group that points at the submenu item, sorted by `order`', () => {
+    // Stored out of order, so the result can only be right by sorting
+    const groups: Localized<MultiColumnMenu>['groups'] = {
+      'test.editFind': { menuItem: 'test.editSubmenu', order: 2 },
+      'test.other': { menuItem: 'test.otherSubmenu', order: 1 },
+      'test.top': { column: 'test.project', order: 1 },
+      'test.editActions': { menuItem: 'test.editSubmenu', order: 1 },
+    };
+
+    expect(getSubMenuGroupKeysForMenuItemId(groups, 'test.editSubmenu')).toEqual([
+      'test.editActions',
+      'test.editFind',
+    ]);
+  });
+
+  it('returns the single group of a submenu that has one', () => {
+    expect(
+      getSubMenuGroupKeysForMenuItemId(
+        MENU_WITH_SUBMENU.groups,
+        'platformScriptureEditor.inventoriesMenuItem',
+      ),
+    ).toEqual(['platformScriptureEditor.inventoriesSubmenu']);
+  });
+
+  it('returns an empty list when no group points at the item', () => {
+    expect(getSubMenuGroupKeysForMenuItemId(MENU_WITH_SUBMENU.groups, 'test.unknown')).toEqual([]);
+  });
+});
+
+describe('getLeadingIconSlot', () => {
+  it('reserves no slot for an empty list or a list without leading icons', () => {
+    expect(getLeadingIconSlot([])).toBe('none');
+    expect(getLeadingIconSlot([{}, { iconNameBefore: undefined }])).toBe('none');
+  });
+
+  it('reserves an icon slot when any item has a named leading icon', () => {
+    expect(getLeadingIconSlot([{}, { iconNameBefore: 'search' }])).toBe('icon');
+  });
+
+  it('reserves the same icon slot when only image paths are used', () => {
+    expect(getLeadingIconSlot([{}, { iconPathBefore: 'https://example.test/a.svg' }])).toBe('icon');
+  });
+
+  it('reserves one icon slot when both kinds appear', () => {
+    expect(
+      getLeadingIconSlot([
+        { iconPathBefore: 'https://example.test/a.svg' },
+        { iconNameBefore: 'search' },
+      ]),
+    ).toBe('icon');
+  });
+
+  it('treats an unknown icon name as no icon', () => {
+    expect(getLeadingIconSlot([{ iconNameBefore: 'not-a-known-icon' }])).toBe('none');
+  });
+
+  it('falls back to the image path beside an unknown icon name', () => {
+    expect(
+      getLeadingIconSlot([
+        { iconNameBefore: 'not-a-known-icon', iconPathBefore: 'https://example.test/a.svg' },
+      ]),
+    ).toBe('icon');
+  });
+
+  it('ignores trailing icons', () => {
+    const trailingOnly = [
+      { iconNameBefore: undefined, iconNameAfter: 'search' },
+      { iconNameBefore: undefined, iconPathAfter: 'x.svg' },
+    ];
+    expect(getLeadingIconSlot(trailingOnly)).toBe('none');
+  });
+});
+
+describe('getItemsInGroups', () => {
+  it('keeps only the items of the given groups', () => {
+    const items = [
+      { group: 'a', id: 1 },
+      { group: 'b', id: 2 },
+      { group: 'c', id: 3 },
+    ];
+    expect(getItemsInGroups(items, ['a', 'c']).map((item) => item.id)).toEqual([1, 3]);
+    expect(getItemsInGroups(items, [])).toEqual([]);
+  });
+});
+
+describe('joinGroupsWithSeparators', () => {
+  const join = (groups: [string, string[]][]) =>
+    joinGroupsWithSeparators(
+      groups.map(([groupKey, items]) => ({ groupKey, items })),
+      (groupKey) => `--${groupKey}`,
+    );
+
+  it('puts one separator between two groups that have items', () => {
+    expect(
+      join([
+        ['a', ['a1', 'a2']],
+        ['b', ['b1']],
+      ]),
+    ).toEqual(['a1', 'a2', '--b', 'b1']);
+  });
+
+  /** Each case: a description, the groups as `[groupKey, items]`, and the joined result */
+  const emptiedGroupCases: [string, [string, string[]][], string[]][] = [
+    [
+      'a leading group',
+      [
+        ['a', []],
+        ['b', ['b1']],
+        ['c', ['c1']],
+      ],
+      ['b1', '--c', 'c1'],
+    ],
+    [
+      'a middle group',
+      [
+        ['a', ['a1']],
+        ['b', []],
+        ['c', ['c1']],
+      ],
+      ['a1', '--c', 'c1'],
+    ],
+    [
+      'a trailing group',
+      [
+        ['a', ['a1']],
+        ['b', ['b1']],
+        ['c', []],
+      ],
+      ['a1', '--b', 'b1'],
+    ],
+  ];
+
+  it.each(emptiedGroupCases)(
+    'leaves no stray separator for %s with no items',
+    (_, groups, expected) => {
+      expect(join(groups)).toEqual(expected);
+    },
+  );
+
+  it('returns nothing when every group is empty', () => {
+    expect(
+      join([
+        ['a', []],
+        ['b', []],
+      ]),
+    ).toEqual([]);
+    expect(join([])).toEqual([]);
   });
 });

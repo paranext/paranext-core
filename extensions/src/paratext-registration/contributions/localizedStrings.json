@@ -1,5 +1,41 @@
 {
   "metadata": {
+    "%internetSettings_webView_title_2%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Renamed to \"Internet connectivity\". The new key is %internetSettings_webView_title_3%."
+      }
+    },
+    "%internetSettings_webView_title_3%": {
+      "fallbackKey": "%internetSettings_webView_title_2%"
+    },
+    "%mainMenu_openParatextRegistration%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Relabeled to \"Registration information\". The new key is %mainMenu_openParatextRegistration_2%."
+      }
+    },
+    "%mainMenu_openParatextRegistration_2%": {
+      "fallbackKey": "%mainMenu_openParatextRegistration%"
+    },
+    "%paratextRegistrationProfile_webView_title%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Renamed to \"Registration information\". The new key is %paratextRegistrationProfile_webView_title_2%."
+      }
+    },
+    "%paratextRegistrationProfile_webView_title_2%": {
+      "fallbackKey": "%paratextRegistrationProfile_webView_title%"
+    },
+    "%paratextRegistration_alert_updatedInternetSettings_2%": {
+      "deprecationInfo": {
+        "date": "2026-10-20",
+        "message": "Renamed to \"Internet connectivity settings updated\". The new key is %paratextRegistration_alert_updatedInternetSettings_3%."
+      }
+    },
+    "%paratextRegistration_alert_updatedInternetSettings_3%": {
+      "fallbackKey": "%paratextRegistration_alert_updatedInternetSettings_2%"
+    },
     "%paratextRegistration_commit_comment_changing_user%": {
       "fallbackKey": "%Paratext.&quot;Before changing registered user&quot;%"
     },
@@ -177,16 +213,20 @@
       "%internetSettings_webView_subtitle_2%": "Manage how Paratext accesses the internet. These settings apply only to Paratext 10 — not to all internet traffic on your computer, and not to a co-installed Paratext 9.",
       "%internetSettings_webView_title%": "Internet Settings",
       "%internetSettings_webView_title_2%": "Internet & connectivity",
+      "%internetSettings_webView_title_3%": "Internet connectivity",
       "%internetSettings_webView_tooltip%": "Enter your Paratext Registration Internet Settings into this form.",
       "%mainMenu_openInternetSettings%": "Internet Settings...",
       "%mainMenu_openInternetSettings_2%": "Internet & connectivity",
       "%mainMenu_openParatextRegistration%": "Paratext Registration Information...",
+      "%mainMenu_openParatextRegistration_2%": "Registration information",
+      "%paratextRegistrationProfile_webView_title_2%": "Registration information",
       "%paratextRegistration_alert_invalidRegistration%": "Registration information not found",
       "%paratextRegistration_alert_invalidRegistration_description%": "Check to make sure that the registration name and code you received are accurately entered here.",
       "%paratextRegistration_alert_unchangedRegistration%": "Unchanged registration information",
       "%paratextRegistration_alert_unchangedRegistration_description%": "Registration name and code have not been changed.",
       "%paratextRegistration_alert_updatedInternetSettings%": "Internet settings updated",
       "%paratextRegistration_alert_updatedInternetSettings_2%": "Internet & connectivity settings updated",
+      "%paratextRegistration_alert_updatedInternetSettings_3%": "Internet connectivity settings updated",
       "%paratextRegistration_alert_updatedRegistration%": "Registration information updated",
       "%paratextRegistration_alert_updatedRegistration_description%": "Changes applied! The application will restart in a few seconds.",
       "%paratextRegistration_alert_updatedRegistration_description_hasRestarted%": "The application successfully restarted! Your changes are now in effect.",
@@ -266,16 +306,20 @@
       "%internetSettings_webView_subtitle_2%": "Gestiona cómo Paratext accede a internet. Esta configuración se aplica únicamente a Paratext 10: no afecta a todo el tráfico de internet de su computadora ni a un Paratext 9 instalado en paralelo.",
       "%internetSettings_webView_title%": "Configuración de Internet",
       "%internetSettings_webView_title_2%": "Internet y conectividad",
+      "%internetSettings_webView_title_3%": "Conectividad a Internet",
       "%internetSettings_webView_tooltip%": "Ingrese su configuración de Internet de Registro de Paratext en este formulario.",
       "%mainMenu_openInternetSettings%": "Configuración de Internet...",
       "%mainMenu_openInternetSettings_2%": "Internet y conectividad",
       "%mainMenu_openParatextRegistration%": "Información de Registro Paratext...",
+      "%mainMenu_openParatextRegistration_2%": "Información de registro",
+      "%paratextRegistrationProfile_webView_title_2%": "Información de registro",
       "%paratextRegistration_alert_invalidRegistration%": "Información de registro no encontrada",
       "%paratextRegistration_alert_invalidRegistration_description%": "Verifique que el nombre y el código de registro que recibió estén ingresados correctamente aquí.",
       "%paratextRegistration_alert_unchangedRegistration%": "Información de registro sin cambios",
       "%paratextRegistration_alert_unchangedRegistration_description%": "El nombre y el código de registro no han sido modificados.",
       "%paratextRegistration_alert_updatedInternetSettings%": "Configuración de internet actualizada",
       "%paratextRegistration_alert_updatedInternetSettings_2%": "Configuración de Internet y conectividad actualizada",
+      "%paratextRegistration_alert_updatedInternetSettings_3%": "Configuración de conectividad a Internet actualizada",
       "%paratextRegistration_alert_updatedRegistration%": "Información de registro actualizada",
       "%paratextRegistration_alert_updatedRegistration_description%": "Cambios aplicados. La aplicación se reiniciará en unos segundos.",
       "%paratextRegistration_alert_updatedRegistration_description_hasRestarted%": "¡La aplicación se reinició correctamente! Sus cambios ahora están activos.",
