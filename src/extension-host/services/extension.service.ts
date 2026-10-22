@@ -1726,4 +1726,12 @@ export async function shutdown() {
 export const testingExtensionService = {
   parseManifest,
   prepareElevatedPrivileges,
+  /**
+   * Stands in for the discovery half of `reloadExtensions`, which fills this list from the file
+   * system before activating anything, so a test can observe the service between discovery and
+   * activation without loading any extension.
+   */
+  setAvailableExtensions: (extensions: ExtensionInfo[]) => {
+    availableExtensions = extensions;
+  },
 };
