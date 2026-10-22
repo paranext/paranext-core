@@ -800,9 +800,9 @@ export async function formatEditorTitle(
     const editable = isReadOnly ? localizedStrings[READONLY_KEY] : localizedStrings[EDITABLE_KEY];
 
     if (projectId) {
-      const projectName = await getProjectName(projectId);
+      const projectName = getProjectDisplayName(projectId, await getProjectName(projectId));
       title = formatProjectTitle(localizedTitleFormatStr, projectId, projectName, {
-        projectId: getProjectDisplayName(projectId, projectName),
+        projectId: projectName,
         editable,
       });
     } else title = formatReplacementString(localizedTitleFormatStr, { projectId, editable });

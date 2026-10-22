@@ -4181,6 +4181,7 @@ describe('formatEditorTitle', () => {
 
   it.each([
     ['empty', ''],
+    ['whitespace-only', '   '],
     ['missing', undefined],
   ])('shows the project id when the name is %s', async (_description, projectName) => {
     const title = await formatEditorTitle(

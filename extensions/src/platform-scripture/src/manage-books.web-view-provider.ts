@@ -11,7 +11,10 @@ import {
   WebViewDefinition,
 } from '@papi/core';
 import { LocalizeKey } from 'platform-bible-utils';
-import type { ManageBooksAction } from './manage-books-dialog/manage-books-dialog.types';
+import {
+  MANAGE_BOOKS_TITLE_WITH_PROJECT_KEY,
+  type ManageBooksAction,
+} from './manage-books-dialog/manage-books-dialog.types';
 import manageBooksWebView from './manage-books.web-view?inline';
 // Reuse the inventory styles for now — Tailwind classes resolve at the
 // platform-bible-react level; we mainly need the base body styles. If the
@@ -55,7 +58,7 @@ export class ManageBooksWebViewProvider implements IWebViewProvider {
   titleKey: LocalizeKey = '%manageBooks_dialog_title%';
 
   /** Title key used instead of {@link titleKey} when the dialog is for a project */
-  titleWithProjectKey: LocalizeKey = '%manageBooks_dialog_titleWithProject%';
+  titleWithProjectKey: LocalizeKey = MANAGE_BOOKS_TITLE_WITH_PROJECT_KEY;
 
   async getWebView(
     savedWebView: SavedWebViewDefinition,

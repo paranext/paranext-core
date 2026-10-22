@@ -57,8 +57,11 @@ describe('getLocalizedProjectTitle', () => {
     });
   });
 
-  it('shows the project id when the short name is empty', async () => {
-    getSetting.mockResolvedValue('');
+  it.each([
+    ['empty', ''],
+    ['whitespace-only', '   '],
+  ])('shows the project id when the short name is %s', async (_description, projectName) => {
+    getSetting.mockResolvedValue(projectName);
     await expect(
       localizationService.getLocalizedProjectTitle({
         localizeKey: '%webView_characterInventory_title%',
@@ -67,8 +70,17 @@ describe('getLocalizedProjectTitle', () => {
     ).resolves.toBe('Character Inventory: abc123');
   });
 
-  it('shows the project id when the project cannot be found', async () => {
-    vi.mocked(getProjectDataProvider).mockRejectedValue(new Error('No such project'));
+  it.each([
+    [
+      'the project cannot be found',
+      () => vi.mocked(getProjectDataProvider).mockRejectedValue(new Error('No such project')),
+    ],
+    [
+      'the name cannot be read',
+      () => getSetting.mockRejectedValue(new Error('Setting unavailable')),
+    ],
+  ])('shows the project id when %s', async (_description, failLookup) => {
+    failLookup();
     await expect(
       localizationService.getLocalizedProjectTitle({
         localizeKey: '%webView_characterInventory_title%',
@@ -95,5 +107,16 @@ describe('getLocalizedProjectTitle', () => {
         projectId: 'abc123',
       }),
     ).resolves.toBe('WEB');
+  });
+
+  it('resolves to the project id when both lookups fail', async () => {
+    getSetting.mockRejectedValue(new Error('Setting unavailable'));
+    getLocalizedString.mockRejectedValue(new Error('Localization unavailable'));
+    await expect(
+      localizationService.getLocalizedProjectTitle({
+        localizeKey: '%webView_characterInventory_title%',
+        projectId: 'abc123',
+      }),
+    ).resolves.toBe('abc123');
   });
 });
