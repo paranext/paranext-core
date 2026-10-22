@@ -1953,56 +1953,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [projectId, localizedStrings, isReadOnlyEffective, endPaneNoteEdit],
   );
 
-  const options = useMemo<EditorOptions>(
-    () => ({
-      isReadonly: isReadOnlyEffective,
-      structureProtectionMode,
-      hasSpellCheck: false,
-      nodes: nodeOptions,
-      textDirection: textDirectionEffective,
-      markerMenuTrigger: '\\',
-      view: viewOptions,
-      styleInfo,
-      markerSettleDelayMs,
-      hasExternalUI: true,
-      contextMenu: createInsertContextMenuItems(
-        localizedStrings,
-        {
-          insertFootnote: runInsertFromContextMenu(
-            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote].editDescription,
-          ),
-          insertCrossReference: runInsertFromContextMenu(
-            () =>
-              insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference]
-              .editDescription,
-          ),
-          insertEndnote: runInsertFromContextMenu(
-            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote),
-            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote].editDescription,
-          ),
-          insertComment: insertCommentAtCurrentSelection,
-        },
-        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
-      ),
-    }),
-    [
-      isReadOnlyEffective,
-      structureProtectionMode,
-      canUserCreateComments,
-      isSyncBlocked,
-      textDirectionEffective,
-      nodeOptions,
-      viewOptions,
-      styleInfo,
-      markerSettleDelayMs,
-      localizedStrings,
-      insertCommentAtCurrentSelection,
-      insertNoteAtCurrentSelection,
-    ],
-  );
-
   // listen to messages from the web view controller
   useEffect(() => {
     const webViewMessageListener = async ({
@@ -2938,10 +2888,59 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // view's project changes only by reloading it, which remounts it.
   const isChapterTextLoading = useIsProjectDataLoading(chapterUsjSelector, isUsjFromPdpLoading);
   const copyLimit = useChapterCopyLimit(projectId, scrRef, isChapterTextLoading);
-  /** `options` with the chapter's copy limit, for every copy surface the editor's text reaches. */
-  const editorOptionsWithCopyLimit = useMemo<EditorOptions>(
-    () => ({ ...options, copyLimit }),
-    [options, copyLimit],
+  // Built here, below the copy limit, so the editor has one options object and every copy surface
+  // its text reaches — the editor, the footnote editors, the footnotes pane — gets the copy limit
+  // from it. There is no variant without the copy limit to pass by mistake.
+  const options = useMemo<EditorOptions>(
+    () => ({
+      isReadonly: isReadOnlyEffective,
+      structureProtectionMode,
+      hasSpellCheck: false,
+      nodes: nodeOptions,
+      textDirection: textDirectionEffective,
+      markerMenuTrigger: '\\',
+      view: viewOptions,
+      styleInfo,
+      markerSettleDelayMs,
+      hasExternalUI: true,
+      copyLimit,
+      contextMenu: createInsertContextMenuItems(
+        localizedStrings,
+        {
+          insertFootnote: runInsertFromContextMenu(
+            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertFootnote].editDescription,
+          ),
+          insertCrossReference: runInsertFromContextMenu(
+            () =>
+              insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertCrossReference]
+              .editDescription,
+          ),
+          insertEndnote: runInsertFromContextMenu(
+            () => insertNoteAtCurrentSelection(CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote),
+            NOTE_INSERT_CONFIG[CONTEXT_MENU_ACTION_TO_NOTE_KIND.insertEndnote].editDescription,
+          ),
+          insertComment: insertCommentAtCurrentSelection,
+        },
+        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
+      ),
+    }),
+    [
+      isReadOnlyEffective,
+      structureProtectionMode,
+      canUserCreateComments,
+      isSyncBlocked,
+      textDirectionEffective,
+      nodeOptions,
+      viewOptions,
+      styleInfo,
+      markerSettleDelayMs,
+      localizedStrings,
+      insertCommentAtCurrentSelection,
+      insertNoteAtCurrentSelection,
+      copyLimit,
+    ],
   );
   // What the failure in hand IS, independent of what is on screen. Parsed once per failure, and
   // deliberately not keyed on the reference: the same held error is re-read on every navigation, and
@@ -3784,7 +3783,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         onClose={closePaneFootnoteEditorFromInside}
         onNoteEdit={onFootnoteEditorNoteEdit}
         scrRef={scrRef}
-        editorOptions={editorOptionsWithCopyLimit}
+        editorOptions={options}
         defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
         localizedStrings={localizedStrings}
         parentEditorRef={editorRef}
@@ -3796,7 +3795,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       closePaneFootnoteEditorFromInside,
       onFootnoteEditorNoteEdit,
       scrRef,
-      editorOptionsWithCopyLimit,
+      options,
       localizedStrings,
       footnoteMarkerPalette,
     ],
@@ -4689,7 +4688,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               ref={editorRef}
               scrRef={scrRef}
               onScrRefChange={setScrRefNoScroll}
-              options={editorOptionsWithCopyLimit}
+              options={options}
               logger={logger}
               onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
               onSelectionChange={handleSelectionChange}
@@ -5000,7 +4999,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 // beside it shows a spinner.
                 isLoading={!liveEditorUsj && usjFromPdp === defaultUsj}
                 zoomAreaLabel={localizedStrings[FOOTNOTES_ZOOM_AREA_LABEL_KEY]}
-                copyLimit={editorOptionsWithCopyLimit.copyLimit}
+                copyLimit={copyLimit}
               >
                 {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                 <OutPortal node={editorPortalNode} />
@@ -5044,7 +5043,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onClose={onFootnoteEditorClose}
             onNoteEdit={onFootnoteEditorNoteEdit}
             scrRef={scrRef}
-            editorOptions={editorOptionsWithCopyLimit}
+            editorOptions={options}
             defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
             localizedStrings={localizedStrings}
             parentEditorRef={editorRef}
