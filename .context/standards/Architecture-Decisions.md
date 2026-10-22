@@ -3026,6 +3026,55 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   title header was removed by team decision, and PT9's own pane likewise closes via a corner button
   rather than a toggle in a title bar.
 - **Source:** PT-4189, PT-4478.
+- **Amended 2026-10-22 (PT-4846):** Partly superseded by `adr-footnote-pane-editing-in-simple-mode`.
+  Simple mode's Formatted view is now in scope for the pane: it resolves to `'pane'`, not
+  `'popover'`, and a caller click reveals a hidden pane there too, not only in Power mode. The
+  surface helper's input is a `usesPaneModel` flag (from `usesPaneNoteModel`) rather than the view
+  type, and `resolveCallerHighlight` takes the same flag. Everything else above stands.
+
+## adr-footnote-pane-editing-in-simple-mode: Simple mode edits footnotes in the footnotes pane, like Standard view
+
+- **Date:** 2026-10-22
+- **Status:** Accepted
+- **Context:** Simple mode edited footnotes in a popover while Power's Standard view edits them in
+  place in the footnotes pane (`adr-footnote-editing-surface-per-view`). A UX review found the
+  popover fighting the main editor in Simple: the character-style control acting on the main text
+  while it was open (PT-4836), applying the keyword marker adding a paragraph (PT-4834), Escape not
+  closing it (PT-4096), and the popover drifting off-screen when zooming. UX decided Simple should
+  edit footnotes as Power does, showing markers in the pane and editing there.
+- **Decision:** One pure predicate, `usesPaneNoteModel({ viewType, isPowerMode,
+  isInterfaceModeLoading })` in `platform-scripture-editor.utils.ts`, decides whether a view uses
+  the pane note model: Standard view, and Simple's Formatted view. Power's Formatted and Markers
+  views and Simple's Markers view (read-only, notes expanded) keep their behavior; while
+  `platform.interfaceMode` is still loading only Standard counts, so a Power user never briefly gets
+  Simple's answer. Every note check that was Standard-only in the scripture editor web view goes
+  through it — the editing surface, the caller-click decision, navigation to a picked note, the
+  caller highlight, and the pane taking focus in a read-only text —
+  and `note-pane-model-wiring.contract.test.ts` fails on any new `=== 'standard'` comparison there.
+  In Simple, the pane and its row editor get Standard view's view options
+  (`resolveFootnotesPaneViewOptions`), so they show markers, while the main text keeps Simple's.
+  Three things stay Standard-only on purpose: Standard's own view options, the Ctrl+T /
+  Ctrl+Shift+T insert shortcuts (insertion, not editing), and the project stylesheet mode. An open
+  popover is not closed when switching from Power to Simple: it applies only on Save, so closing it
+  would discard what was typed; that one session ends through its own Save or X.
+- **Alternatives:**
+  - **Keep the popover in Simple and fix its bugs one by one.** Rejected by UX: two editing models
+    for one product, and the popover's problems come from being a second editor floating over the
+    first.
+  - **Put Simple in Standard view.** Rejected: Simple pairs with structure protection and its main
+    text must keep hiding markers (`resolveViewTypeForInterfaceMode`).
+  - **Put Simple's Markers view on the pane model too.** Rejected: Power's Markers view is not on
+    it, and the view is read-only with its notes already expanded in the text.
+- **Consequences:** The footnotes pane now opens in Simple on a caller click, and stays open until
+  the user closes it, as in Power. Simple's character-marker bar is wired to the main editor, so it
+  still acts on the main text while a pane row editor has focus; Power has nothing equivalent to
+  copy, and PT-4836 tracks it. The row editor in Simple runs Standard's editable marker mode, so the
+  `\` marker palette and Enter-for-`\fp` work there as in Standard view. For the latter it runs with
+  structure protection `'off'`, as Power's does, whatever the project's lock state: a note has no
+  verse or paragraph structure of its own to protect, its edits only ever replace the note, and
+  `'protected'` claims Enter as a paragraph insert before the note's `\fp` handling can run. The main
+  text keeps the project's protection mode.
+- **Source:** PT-4846.
 
 ## adr-footnote-unclosed-note-edited-in-place: In Standard view an unclosed note is edited in place in the text, and in the footnotes pane too
 
@@ -4011,7 +4060,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   four Inventories, Markers Checklist, or Open Checks. That follows the v0 Simple design, which has
   no quality tools in the Project menu; UX has not yet confirmed it. Auto-show footnote pane
   (`platformScriptureEditor.toggleFootnotesAutoShow`) is Power-only too, because Simple keeps PT9's
-  manual footnotes pane: Show footnotes opens it and it stays open. The Edit flyout's ids are not
+  manual footnotes pane: Show footnotes opens it and it stays open. *(Amended 2026-10-22: a caller
+  click now also opens Simple's pane — see `adr-footnote-pane-editing-in-simple-mode`; only the
+  auto-show toggle stays Power-only.)* The Edit flyout's ids are not
   registered commands, and `KeyboardShortcutEntry.command` is typed to registered commands, so
   those items cannot show a shortcut hint even though Ctrl+Z, Ctrl+Y and the clipboard chords work
   in the editor.

@@ -71,10 +71,16 @@ describe('copy-limit wiring (platform-scripture-editor.web-view.tsx)', () => {
     ]);
   });
 
-  it('gives every footnote editor (the popover and the pane row editor) the copy-limited options', () => {
+  it('gives every footnote editor (the pane row editor and the popover) the copy-limited options', () => {
     expect(propExpressions(sourceFile, 'FootnoteEditor', 'editorOptions')).toEqual([
-      'editorOptionsWithCopyLimit',
+      'paneFootnoteEditorOptions',
       'editorOptionsWithCopyLimit',
     ]);
+  });
+
+  it('builds the pane row editor’s options from the copy-limited options', () => {
+    expect(sourceFile.getText()).toMatch(
+      /\(\{\s*\.\.\.editorOptionsWithCopyLimit,\s*view: footnotesPaneViewOptions,/,
+    );
   });
 });

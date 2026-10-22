@@ -60,7 +60,8 @@ repo's half for the facts each side holds alone.
 `lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts` is the single
 forwarding table for all three consumers: the scripture editor web view, the footnote editor
 component (any host that runs it in editable marker mode), and the footnotes pane's inline row
-editor (Standard view — see `resolveNoteEditingSurface` in
+editor (a pane-model view — Standard view, or Simple's Formatted view, which gives the pane
+Standard's view options; see `usesPaneNoteModel` and `resolveNoteEditingSurface` in
 `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`). The
 per-consumer copies drifted once already; there is one table now.
 
@@ -316,8 +317,9 @@ commits do, before focusing. It is a no-op when the selection survived.
   offset. Both skip the note's own marker, caller and closing marker, every NBSP separator, and
   attribute text. A change to what `FootnoteItem` renders as a `.marker` (or to what the editor
   renders as a glyph) has to change the other side too, or clicks land off by the difference.
-- **In Standard view, the same component runs `inline` inside the footnotes pane — there is no
-  popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply unchanged. Its
+- **In a pane-model view (Standard view, or Simple's Formatted view, where the pane and its row
+  editor get Standard's view options), the same component runs `inline` inside the footnotes pane
+  — there is no popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply unchanged. Its
   live-apply re-keys the note in the parent editor, so the host must re-sync its session key from
   `onUsjChange`'s `insertedNodeKey`, and must not hand the mounted editor a new `noteOps` identity
   for its own live-apply — that reloads the editor mid-typing. An unclosed note (the one kind the text
