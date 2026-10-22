@@ -2225,9 +2225,11 @@ function PlatformScriptureEditor({
           // the formatted view, so there it changes nothing and the view type saved in Power stays
           // (see `getNextViewTypeInCycle` for the full cycle semantics and why it switches on
           // `viewType` rather than `viewOptions.markerMode`).
-          endPaneNoteEdit();
           const nextViewType = getNextViewTypeInCycle(viewType, isPowerMode);
-          if (nextViewType) setViewType(nextViewType);
+          if (nextViewType) {
+            endPaneNoteEdit();
+            setViewType(nextViewType);
+          }
           break;
         }
         case 'setScriptureView': {
