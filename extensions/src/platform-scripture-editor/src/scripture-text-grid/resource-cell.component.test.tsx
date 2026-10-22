@@ -749,8 +749,10 @@ describe('ResourceCell name display', () => {
     const name = screen.getByText('WEB');
     const editorial = await screen.findByTestId('editorial');
     // Inline: name and editor share an intermediate row, not the cell root directly.
-    expect(name.parentElement).not.toBe(cellRoot);
-    expect(name.parentElement).toContainElement(editorial);
+    const row = name.closest('.stg-verse-row');
+    expect(row).not.toBeNull();
+    expect(row).not.toBe(cellRoot);
+    expect(row).toContainElement(editorial);
   });
 
   it('chapter mode uses the header band (name sits in the band atop the cell root)', () => {
@@ -761,6 +763,26 @@ describe('ResourceCell name display', () => {
     // Header mode: the name sits in a header band that is a direct child of the cell root, not an
     // inline row shared with the editor.
     expect(name.parentElement?.parentElement).toBe(cellRoot);
+  });
+
+  it('forwards the disclosure props, so verse mode renders the name as the disclosure control', () => {
+    setUsjResult(chapter, false);
+    const onDisclosureActivate = vi.fn();
+    render(
+      <ResourceCell
+        {...props}
+        viewMode="verse"
+        onDisclosureActivate={onDisclosureActivate}
+        disclosureAccessibleName="WEB, GEN 1:1"
+        isDisclosureExpanded
+        disclosureControlsId="chapter-context-panel"
+      />,
+    );
+    const control = screen.getByRole('button', { name: 'WEB, GEN 1:1' });
+    expect(control).toHaveAttribute('aria-expanded', 'true');
+    expect(control).toHaveAttribute('aria-controls', 'chapter-context-panel');
+    fireEvent.click(control);
+    expect(onDisclosureActivate).toHaveBeenCalledTimes(1);
   });
 });
 

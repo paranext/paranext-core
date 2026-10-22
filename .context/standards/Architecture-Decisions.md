@@ -9997,6 +9997,110 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-3683 (decision comment 19735); scripture-editors PR paranext/scripture-editors#11,
   paranext-core PR #2823.
 
+## adr-verse-row-name-is-the-disclosure-control: The Text Collection verse row's name is its disclosure control, beside the content rather than around it
+
+- **Date:** 2026-09-21
+- **Status:** Accepted
+- **Context:** Each Text Collection verse row discloses a chapter-context panel. The row is a
+  `listitem` in a list of resources, so the obvious move was to put `aria-expanded`/`aria-controls`
+  and the tab stop on the row itself. `aria-expanded` is not in ARIA 1.2's supported set for
+  `listitem` (that role takes the globals plus `aria-level`/`aria-posinset`/`aria-setsize`), and
+  `jsx-a11y`'s `role-supports-aria-props` enforces it. An assistive technology that maps attributes
+  strictly per role can drop the state, leaving a screen-reader user with no indication the row is
+  toggleable or currently open.
+- **Decision:** The row's **name** is the disclosure control — a real `<button>` rendered by the cell
+  as a sibling of the verse content. It owns the accessible name, the tab stop, `aria-expanded`, and
+  `aria-controls` while open, and carries `data-disclosure-control`, which the grid's focus-restore
+  effects query. The `listitem` keeps `data-resource-id` (the zoom hook and drag handlers resolve
+  through it) and takes an `aria-label` only when no control exists to name it, so the name is never
+  announced twice. The row retains a click handler as a pointer-only convenience for the enlarged hit
+  area; that alone still needs `no-noninteractive-element-interactions` suppressed, which is correct,
+  because the row deliberately is not the control.
+- **Alternatives:** **`aria-expanded` on the `listitem`, with the lint rule suppressed** — rejected:
+  it trades a real accessibility guarantee for an untested assumption about AT behaviour. **A control
+  wrapping the row content** — not available: the row contains the reorder grip and the editor's
+  contenteditable surface, so wrapping nests interactive content inside a button, invalid for
+  `<button>` and the `nested-interactive` anti-pattern for `role="button"`. **`role="treeitem"` in a
+  `role="tree"`** — rejected: it supports `aria-expanded` natively but imports a keyboard contract
+  where arrow keys navigate, and arrow keys here already reorder. **Dropping `aria-expanded`** —
+  rejected: spec-clean but strictly less informative than either working alternative.
+- **Consequences:** Moving the disclosure off the row is tab-stop-neutral: the name control replaces
+  the row as the row's single stop. (A reorder-enabled verse row does end up with two — grip then
+  name control — but the second one comes from giving verse mode a grip at all, not from this decision.)
+  Enter and Space work with no key handler of our own, because the control is a native button. Anything that needs to focus a row must
+  target `[data-disclosure-control]` rather than the row element. A test double for the cell has to
+  forward the disclosure props or the control disappears from the tree, which is the same failure
+  mode the reorder grip's mock had.
+- **Source:** PT-4544 (WI-18), after `jsx-a11y/role-supports-aria-props` flagged the row-level
+  `aria-expanded`.
+
+## adr-verse-row-reserves-with-a-generated-float: The Text Collection verse row reserves its content-sized name with a generated float inside the editor's own block flow
+
+- **Date:** 2026-09-18; name sized to its text 2026-10-14
+- **Status:** Accepted for the float mechanism. The content-sized name is Proposed: as of
+  2026-10-22 it awaits product confirmation on PR #2857, because the ticket asked for a fixed-size
+  name area.
+- **Context:** The Text Collection's verse rows put a resource short name beside the verse text.
+  Laid out as a two-column flex split, wrapped lines stayed in the right-hand column, leaving a band
+  of empty space under every name. The requirement is "flow content after and beneath shortname —
+  same as PT9": content flowing after the name on line 1 and *beneath* it on line 2+. That is a
+  text-wrap-around shape, which no flex or grid split produces — a split necessarily keeps line 2 in
+  the text column. PT9's Text Collection (`ParatextBase/TextCollection/TextCollectionCss.css`,
+  `.abbrev`) floats the abbreviation at its own width with an 8px margin, so the text starts right
+  after it. Zoom is per-resource: the platform applies CSS `zoom` to the element marking the
+  resource's text (`ContentZoomRoot`), so anything sized inside that subtree is multiplied while the
+  name beside it is not.
+- **Decision:** The name is `position: absolute` at the row's inline-start, `inline-size:
+  max-content` up to a cap (`--stg-name-max-width`, 6rem, or 40% of a narrow row), past which it
+  truncates with the full-name tooltip. The space it occupies is reserved inside the text's own flow
+  by `.stg-verse-content .editor-input::before`, a float as wide as the name and as tall as its line,
+  which shortens only the lines beside the name, so line 2+ start at the row's flush inline edge.
+  The float lives inside the zoomed text, which CSS cannot size from the unzoomed name beside it, so
+  `ResourceCellView` measures the name with a `ResizeObserver` and sets `--stg-name-width` on the
+  row; every derived length (`--stg-text-start`, the float, the placeholder reserve) follows it.
+  Until the first measurement the cap stands in, so line 1 never starts under the name, and a zero
+  measurement (a row in a hidden tab, which has no layout) is ignored until the observer reports
+  again. The row hands its resource's zoom level (the platform's `--platform-content-zoom-<area>`
+  variable, with the same fallback the platform's own rule uses) to `--stg-zoom` from **outside**
+  the zoomed subtree, and every length inside divides by it, so a row at any zoom reserves the same
+  device pixels as the unzoomed name beside it. The first block's top margin and `text-indent` are
+  reset to 0: its line 1 is the slot beside the name, where a marker's top margin would drop it below
+  the name, a positive indent would only widen the gap, and a hanging indent (`\q1`) would pull it
+  back under the name. Later blocks keep both. Centered placeholders have no line boxes for a float to
+  shorten, so they reserve the same width with `padding-inline-start`, compensated identically. The
+  rules live in their own `_scripture-text-grid-verse.scss`, used only by the grid web view, because
+  they target `.editor-input` and `_editor-overrides.scss` reaches four web views. `.editor-input`'s
+  `min-height`, sized for the full-panel editors, is reset to `0` for verse cells only: measured in
+  the running app it floors every verse row at 150px regardless of content.
+- **Alternatives:** **A fixed-width name area (6rem)**, which the ticket's wording asked for so rows
+  align — rejected: it leaves a wide gap after a short name (`WEB`, `KJV`), which is most rows, and
+  PT9 does not do it. **Size every row to the widest name in the collection** — keeps rows aligned
+  with far less gap, but is not what PT9 does; not chosen. **A `text-indent` on the first line** —
+  rejected: it reserves space on line 1 of the first block only, so when that block is a single short
+  line (a zoomed-out row, or a one-line `\q1` followed by `\q2`) the next line starts under the name;
+  a float as tall as the name keeps every line beside it clear. **A flex or grid split** — rejected:
+  it cannot put line 2 under the name. **Reserving with padding on the editor**, as
+  `_simple-mode.scss` does for the inline-end marker-bar gutter — it indents *every* line rather than
+  only those beside the name, the opposite of the required shape. That rule's reasoning ("no right
+  margin to float over") is about an element floated *over* laid-out text, which does not shorten
+  line boxes; a float generated inside the flow does, so the two decisions do not conflict. **Sizing
+  the reserve in CSS alone** (float the real name and zoom only a wrapper around the editor, or render
+  the label in `::before` from a custom property) — would remove the measurement, but reworks how
+  zoom applies to the whole row; not taken.
+- **Consequences:** Rows with different names start line 1 on different columns, as in PT9; rows
+  with the same name still align at any zoom. The layout depends on a measurement in JavaScript, not
+  CSS alone. The float and the verse's blocks are siblings inside `.editor-input`, so the shape
+  survives any `overflow` on `.editor-input` or `.editor-inner`. It breaks if `.editor-input`
+  becomes a flex or grid container (the float stops floating), or if the first block establishes its
+  own formatting context (`display: flow-root`, a non-`visible` `overflow`): that block then sits
+  beside the float as a whole, so line 2+ stay indented. A local-only e2e geometry spec asserts those
+  computed values and the resulting line rects so that failure is loud rather than a subtle
+  misrender. `float: inline-start` resolves against the element's own `direction`, so RTL needs no
+  second rule; the stylesheet containing no `[dir]` selector is the check that this holds. Storybook
+  needs a stand-in carrying the real class chain to show any of this; the stories import the real
+  stylesheet, but only the e2e spec checks the cascade against the real editor styles.
+- **Source:** PT-4544 (WI-18), serving TODD-NTH-1.1/1.2 and TODD-NTH-1.3's residual grip.
+
 ## adr-web-view-content-zoom-in-iframe-shortcuts: Content-zoom chords are handled by a platform-injected bootstrap inside each web view
 
 - **Date:** 2026-09-15
