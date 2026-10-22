@@ -137,13 +137,13 @@ test.describe('scripture editor chapter line left as text', () => {
       await expect
         .poll(() => recordedToasts(mainPage), { timeout: 20_000 })
         .toEqual(expect.arrayContaining([expect.stringContaining(correctionMessage(2))]));
-      // `\\ 2` is a paragraph with no marker name, as ParatextData reads it. Its `\\ ` holds no
-      // caret, so the caret that was between the `\\` and the space is at the start of its text.
+      // `\\ 2` is a paragraph with no marker name, as ParatextData reads it. The caret stays where
+      // it was, just past the `\\`, at the end of that empty name.
       await expect.poll(readLines, { timeout: 20_000 }).toEqual({
         chapterLine: '\\c 2 ',
         nextLine: '\\ 2',
         caretInNextLine: true,
-        textBeforeCaret: '\\ ',
+        textBeforeCaret: '\\',
       });
       await expect.poll(() => getRuthUsfm(2), { timeout: 30_000 }).toMatch(/^\\c 2\s+\\ 2\s+\\p/);
     });

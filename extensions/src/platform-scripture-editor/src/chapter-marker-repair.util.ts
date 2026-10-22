@@ -16,9 +16,15 @@
  */
 
 import {
+  isUsjClosingMarkerLocation,
+  isUsjMarkerLocation,
+  isUsjPropertyValueLocation,
+  isUsjTextContentLocation,
   MarkerContent,
   MarkerObject,
+  PropertyJsonPath,
   Usj,
+  UsjDocumentLocation,
   usjJsonPathFromIndexes,
 } from '@eten-tech-foundation/scripture-utilities';
 import type { SelectionRange } from '@eten-tech-foundation/platform-editor';
@@ -210,30 +216,80 @@ function chooseAnchor(
 }
 
 /**
- * The caret position immediately after a chapter marker's number.
+ * The path to `property` of the marker `indexes` addresses.
  *
- * The editor renders an editable marker as a glyph of on-screen bytes — a backslash, the marker
- * name, a separator, the number, and a trailing space — held in the marker's first content item, so
- * the position just past the number is the length of everything ahead of it.
- *
- * @param chapterIndexes Content indexes addressing the chapter marker itself.
+ * @param indexes Content indexes addressing a marker; never empty.
+ * @param property The property's name.
  */
-function caretAfterChapterNumber(
-  chapterIndexes: number[],
-  marker: string,
-  number: string,
-): SelectionRange {
+function propertyPath(indexes: number[], property: string): PropertyJsonPath {
+  return `$.${indexes.map((index) => `content[${index}]`).join('.')}['${property}']`;
+}
+
+/**
+ * The caret position immediately after a chapter marker's number: the end of its `number` value.
+ *
+ * @param chapterIndex Where the chapter marker sits in the document's top-level content.
+ * @param number The chapter marker's number.
+ */
+function caretAfterChapterNumber(chapterIndex: number, number: string): SelectionRange {
   return {
     start: {
-      jsonPath: usjJsonPathFromIndexes([...chapterIndexes, 0]),
-      offset: 1 + marker.length + 1 + number.length,
+      jsonPath: propertyPath([chapterIndex], 'number'),
+      propertyOffset: number.length,
     },
   };
 }
 
-/** The caret position at the boundary a removed chapter marker used to occupy. */
-function caretAtRemovalBoundary(parentIndexes: number[], childIndex: number): SelectionRange {
-  return { start: { jsonPath: usjJsonPathFromIndexes(parentIndexes), offset: childIndex } };
+/**
+ * The caret position in front of the item at `childIndex` among the content `parentIndexes`
+ * addresses in `content`, spelled as the location model spells it: the start of a text, the
+ * location of a marker, or, when nothing follows, the end of the line — the end of the text, verse
+ * number or closing marker before it, or the end of the marker name of a paragraph with nothing in
+ * it.
+ *
+ * @param content A document's top-level content.
+ * @param parentIndexes Content indexes addressing the item whose content holds the position; `[]`
+ *   for the top level.
+ * @param childIndex The position's boundary among that content.
+ */
+function caretBeforeChild(
+  content: MarkerContent[],
+  parentIndexes: number[],
+  childIndex: number,
+): SelectionRange {
+  let parent: MarkerContent | undefined;
+  let siblings: MarkerContent[] | undefined = content;
+  parentIndexes.forEach((index) => {
+    parent = siblings?.[index];
+    siblings = isMarkerObject(parent) ? parent.content : undefined;
+  });
+  const pathTo = (index: number) => usjJsonPathFromIndexes([...parentIndexes, index]);
+  const child = siblings?.[childIndex];
+  if (typeof child === 'string') return { start: { jsonPath: pathTo(childIndex), offset: 0 } };
+  if (child) return { start: { jsonPath: pathTo(childIndex) } };
+  const previous = siblings?.[childIndex - 1];
+  if (typeof previous === 'string')
+    return { start: { jsonPath: pathTo(childIndex - 1), offset: previous.length } };
+  if (isMarkerObject(previous)) {
+    if (previous.number !== undefined)
+      return {
+        start: {
+          jsonPath: propertyPath([...parentIndexes, childIndex - 1], 'number'),
+          propertyOffset: previous.number.length,
+        },
+      };
+    // The closing marker: a backslash, the marker, and a `*`.
+    const closerLength = (previous.marker ?? '').length + 2;
+    return { start: { jsonPath: pathTo(childIndex - 1), closingMarkerOffset: closerLength } };
+  }
+  if (isMarkerObject(parent) && parent.marker !== undefined)
+    return {
+      start: {
+        jsonPath: propertyPath(parentIndexes, 'marker'),
+        propertyOffset: parent.marker.length,
+      },
+    };
+  return { start: { jsonPath: usjJsonPathFromIndexes(parentIndexes) } };
 }
 
 /**
@@ -267,110 +323,114 @@ function appendToParagraph(
   return { para: { ...para, content: paraContent }, placement };
 }
 
-/** The caret position at the start of an item the repair kept, wherever it ended up. */
-function caretAtStartOf({ indexes, textOffset }: Placement): SelectionRange {
+/**
+ * The caret position at the start of an item the repair kept, wherever it ended up: the start of a
+ * top-level text, at the start of a top-level marker's content, or in front of an item joined into
+ * a paragraph.
+ *
+ * @param content The repaired document's top-level content.
+ * @param placement Where the item ended up.
+ */
+function caretAtStartOf(
+  content: MarkerContent[],
+  { indexes, textOffset }: Placement,
+): SelectionRange {
   if (textOffset !== undefined)
     return { start: { jsonPath: usjJsonPathFromIndexes(indexes), offset: textOffset } };
-  if (indexes.length === 1) return caretAtRemovalBoundary(indexes, 0);
-  return caretAtRemovalBoundary(indexes.slice(0, -1), indexes[indexes.length - 1]);
+  if (indexes.length === 1 && isMarkerObject(content[indexes[0]]))
+    return caretBeforeChild(content, indexes, 0);
+  return caretBeforeChild(content, indexes.slice(0, -1), indexes[indexes.length - 1]);
 }
 
 /** A caret address inside a top-level item: the item's index, and the rest of the path below it. */
 const TOP_LEVEL_CARET_PATH_REGEX = /^\$\.content\[(\d+)\](.*)$/;
 
-/** A path below a top-level item that goes only through `content` children. */
-const CONTENT_INDEXES_PATH_REGEX = /^(\.content\[\d+\])*$/;
-
-/** The rest of a top-level caret path when it is in the item's first child. */
-const FIRST_CHILD_PATH = '.content[0]';
-
-/** The rest of a top-level caret path when it is in the item's marker name. */
-const MARKER_NAME_PATH = '.marker';
+/** A path below a top-level item: the content indexes it goes through, then any property. */
+const PATH_BELOW_ITEM_REGEX = /^((?:\.content\[\d+\])*)(?:\['([^']+)'\])?$/;
 
 /**
- * Where the caret goes when it was in a top-level line the repair moved: the same place in that
- * line, wherever the line now is. That line is what is left of a chapter line whose bytes stopped
- * being a chapter marker (`c 2`, `\ 2` once the `c` is deleted, which is a paragraph with no marker
- * name, or `\sc 2` once an `s` is typed into the `\c`), or text typed ahead of the marker; the
- * restored marker goes above it, and the user is still typing in it.
+ * `location` in top-level item `newIndex` instead of the one it is in, at the same place within it,
+ * or `undefined` for a kind of location this does not move.
  *
- * The save that makes the repair normally runs while that line is still a chapter line on screen:
- * the editor settles it into what it now is only after a longer pause in typing. The caret then
- * counts the whole line, marker and all (`\s|c 2`), and is placed at the same character of what the
- * line settles into: in the marker's name, or in the text after it. Only the line the chapter
- * marker stood on is read this way, and only while the caret is on a chapter line on screen: a
- * caret in the text of any other paragraph is addressed just as one counting a chapter line is, so
- * what the line holds cannot tell the two apart, and a misread would put the caret in a marker.
+ * @param location A location inside a top-level item.
+ * @param pathBelowItem `location`'s path below that item.
+ * @param newIndex Where the item now is.
+ */
+function locationInItemAt(
+  location: UsjDocumentLocation,
+  pathBelowItem: string,
+  newIndex: number,
+): UsjDocumentLocation | undefined {
+  const match = PATH_BELOW_ITEM_REGEX.exec(pathBelowItem);
+  if (!match) return undefined;
+  const indexes = [newIndex, ...[...match[1].matchAll(/\d+/g)].map(([digits]) => Number(digits))];
+  const property = match[2];
+  if (property !== undefined)
+    return isUsjPropertyValueLocation(location)
+      ? { jsonPath: propertyPath(indexes, property), propertyOffset: location.propertyOffset }
+      : undefined;
+  const jsonPath = usjJsonPathFromIndexes(indexes);
+  if (isUsjTextContentLocation(location)) return { jsonPath, offset: location.offset };
+  if (isUsjClosingMarkerLocation(location))
+    return { jsonPath, closingMarkerOffset: location.closingMarkerOffset };
+  return isUsjMarkerLocation(location) ? { jsonPath } : undefined;
+}
+
+/**
+ * `caret`'s start, with the place in front of a top-level marker that follows a top-level line of
+ * text spelled as the end of that text instead. The two are the same place, and the editor reports
+ * the place in front of the marker, but only the text is the line the user is typing in.
+ */
+function caretStartInTopLevelText(
+  caret: SelectionRange,
+  content: MarkerContent[],
+): SelectionRange['start'] {
+  const { start } = caret;
+  const match = TOP_LEVEL_CARET_PATH_REGEX.exec(start.jsonPath);
+  if (!match || match[2] !== '' || Object.keys(start).length !== 1) return start;
+  const previous = content[Number(match[1]) - 1];
+  if (typeof previous !== 'string') return start;
+  return {
+    jsonPath: usjJsonPathFromIndexes([Number(match[1]) - 1]),
+    offset: previous.length,
+  };
+}
+
+/**
+ * Where the caret goes when it was in the top-level line the stored chapter marker stood on, and
+ * the repair moved that line: the same place in that line, wherever the line now is. That line is
+ * what is left of a chapter line whose bytes stopped being a chapter marker (`c 2`, `\ 2` once the
+ * `c` is deleted, which is a paragraph with no marker name, or `\sc 2` once an `s` is typed into
+ * the `\c`), text typed ahead of the marker, or the paragraph a chapter line merged into (a
+ * selection from the chapter line into that paragraph, typed over). The restored marker goes above
+ * it, and the user is still typing in it.
  *
- * Off a chapter line, the caret addresses the line the way the saved document holds it, so it keeps
- * its exact place there and only the line's index changes. That is the case once the line has
- * settled, and when the chapter line merged into the paragraph below it (a selection from the
- * chapter line into that paragraph, typed over), which leaves that paragraph where the line stood.
- *
- * The editor addresses a top-level line of text one level deeper than the USJ item, in both the
- * caret read from it and the target given back to it. A nameless marker's own `\ ` holds no caret,
- * so a caret that was inside it goes to the start of the text after it.
+ * The editor reports the caret in the document it saves, which is the document the repair works on,
+ * so the caret keeps its exact place in the line and only the line's index changes.
  *
  * @param caret The editor's caret when the save was made, if it had one.
  * @param content The document's top-level content, in the coordinates `caret` addresses.
  * @param placements Where each item of `content` ended up in the repaired document.
  * @param chapterLineIndex Where in `content` the stored chapter marker stood, if it is known.
- * @param isCaretInChapterLine Whether the caret was on a chapter line on screen.
  */
 function caretInMovedText(
   caret: SelectionRange | undefined,
   content: MarkerContent[],
   placements: Map<number, Placement>,
   chapterLineIndex: number | undefined,
-  isCaretInChapterLine: boolean,
 ): SelectionRange | undefined {
-  if (!caret || (caret.end && !deepEqualAcrossIframes(caret.end, caret.start))) return undefined;
-  const match = TOP_LEVEL_CARET_PATH_REGEX.exec(caret.start.jsonPath);
-  if (!match) return undefined;
-  const index = Number(match[1]);
-  const pathBelowItem = match[2];
-  const item = content[index];
-  const placement = placements.get(index);
-  if (!placement || placement.textOffset !== undefined) return undefined;
-  const [newIndex, ...deeper] = placement.indexes;
-  if (deeper.length > 0 || newIndex === index) return undefined;
-  const caretInMarkerName = (propertyOffset: number): SelectionRange => ({
-    start: { jsonPath: `$.content[${newIndex}]${MARKER_NAME_PATH}`, propertyOffset },
-  });
-  if (index === chapterLineIndex && !isCaretInChapterLine) {
-    if (pathBelowItem === MARKER_NAME_PATH && 'propertyOffset' in caret.start)
-      return caretInMarkerName(caret.start.propertyOffset);
-    if (!('offset' in caret.start) || caret.start.offset === undefined) return undefined;
-    if (!CONTENT_INDEXES_PATH_REGEX.test(pathBelowItem)) return undefined;
-    const indexesBelowItem = [...pathBelowItem.matchAll(/\d+/g)].map(([digits]) => Number(digits));
-    return {
-      start: {
-        jsonPath: usjJsonPathFromIndexes([newIndex, ...indexesBelowItem]),
-        offset: caret.start.offset,
-      },
-    };
-  }
-  if (index !== chapterLineIndex || pathBelowItem !== FIRST_CHILD_PATH) return undefined;
-
-  const caretOffset = 'offset' in caret.start ? (caret.start.offset ?? 0) : 0;
-  const caretInText = (text: string, offset: number): SelectionRange => ({
-    start: {
-      jsonPath: usjJsonPathFromIndexes([newIndex, 0]),
-      offset: Math.max(0, Math.min(offset, text.length)),
-    },
-  });
-  if (typeof item === 'string') return caretInText(item, caretOffset);
-  if (!isMarkerObject(item) || item.type === CHAPTER_TYPE) return undefined;
-
-  const marker = item.marker ?? '';
-  // The backslash, then the marker's name, then its separator.
-  const markerNameEnd = 1 + marker.length;
-  if (marker && caretOffset <= markerNameEnd)
-    return caretInMarkerName(Math.max(0, caretOffset - 1));
-  const [lead] = item.content ?? [];
-  if (typeof lead !== 'string')
-    return { start: { jsonPath: usjJsonPathFromIndexes([newIndex]), offset: 0 } };
-  return caretInText(lead, caretOffset - (markerNameEnd + 1));
+  if (!caret || chapterLineIndex === undefined) return undefined;
+  if (caret.end && !deepEqualAcrossIframes(caret.end, caret.start)) return undefined;
+  const start = caretStartInTopLevelText(caret, content);
+  const match = TOP_LEVEL_CARET_PATH_REGEX.exec(start.jsonPath);
+  if (!match || Number(match[1]) !== chapterLineIndex) return undefined;
+  const placement = placements.get(chapterLineIndex);
+  if (!placement || placement.textOffset !== undefined || placement.indexes.length !== 1)
+    return undefined;
+  const [newIndex] = placement.indexes;
+  if (newIndex === chapterLineIndex) return undefined;
+  const moved = locationInItemAt(start, match[2], newIndex);
+  return moved && { start: moved };
 }
 
 /**
@@ -409,15 +469,12 @@ function toRepairResult(
  * @param caret The editor's caret, if it has one; see {@link caretInMovedText}.
  * @param chapterLineIndex Where in the document's content the stored chapter marker stood, if it is
  *   known; see {@link caretInMovedText}.
- * @param isCaretInChapterLine Whether `caret` was on a chapter line on screen; see
- *   {@link caretInMovedText}.
  */
 export function repairChapterMarkers(
   usj: Usj,
   expectedChapterNum: number,
   caret?: SelectionRange,
   chapterLineIndex?: number,
-  isCaretInChapterLine = false,
 ): ChapterMarkerRepairResult {
   // Without a real chapter number there is nothing to repair the document toward.
   if (expectedChapterNum < 1) return { usj, didRepair: false, caretTarget: undefined };
@@ -444,11 +501,13 @@ export function repairChapterMarkers(
    * `toRepairedIndexes` because the top level is rebuilt around the surviving marker.
    */
   function nestedRemovalCaretTarget(
+    repairedContent: MarkerContent[],
     toRepairedIndexes: (index: number) => number[],
   ): SelectionRange | undefined {
     if (!firstNestedRemoval) return undefined;
     const { topLevelIndex, removal } = firstNestedRemoval;
-    return caretAtRemovalBoundary(
+    return caretBeforeChild(
+      repairedContent,
       [...toRepairedIndexes(topLevelIndex), ...removal.parentIndexes],
       removal.childIndex,
     );
@@ -461,7 +520,7 @@ export function repairChapterMarkers(
     return toRepairResult(
       usj,
       strippedContent,
-      nestedRemovalCaretTarget((index) => [index]),
+      nestedRemovalCaretTarget(strippedContent, (index) => [index]),
     );
   }
 
@@ -536,19 +595,9 @@ export function repairChapterMarkers(
         ),
       )
     : undefined;
-  const caretAtChapterNumber = caretAfterChapterNumber(
-    [insertIndex],
-    repairedChapterObject.marker ?? CHAPTER_MARKER,
-    expected,
-  );
+  const caretAtChapterNumber = caretAfterChapterNumber(insertIndex, expected);
   // A line the user is typing in that the repair only moved keeps their caret, ahead of all these.
-  const movedTextCaret = caretInMovedText(
-    caret,
-    strippedContent,
-    placements,
-    chapterLineIndex,
-    isCaretInChapterLine,
-  );
+  const movedTextCaret = caretInMovedText(caret, strippedContent, placements, chapterLineIndex);
   let caretTarget: ChapterMarkerCaretTarget | undefined;
   if (movedTextCaret) {
     caretTarget = movedTextCaret;
@@ -557,9 +606,9 @@ export function repairChapterMarkers(
   } else if (anchor.chapterObject.number !== expected) {
     caretTarget = caretAtChapterNumber;
   } else if (followingItemPlacement) {
-    caretTarget = caretAtStartOf(followingItemPlacement);
+    caretTarget = caretAtStartOf(repairedContent, followingItemPlacement);
   } else {
-    caretTarget = nestedRemovalCaretTarget(indexesOfItem) ?? caretAtChapterNumber;
+    caretTarget = nestedRemovalCaretTarget(repairedContent, indexesOfItem) ?? caretAtChapterNumber;
   }
 
   return toRepairResult(usj, repairedContent, caretTarget);
@@ -618,15 +667,12 @@ function isStoredChapterWithoutItsMarker(usjFromEditor: Usj, usjFromPdp: Usj | u
  * @param usjFromPdp What the PDP currently holds for this chapter, if anything.
  * @param expectedChapterNum The chapter the editor is editing.
  * @param caret The editor's caret, if it has one, so a line of text the repair moves keeps it.
- * @param isCaretInChapterLine Whether `caret` was on a chapter line on screen; see
- *   {@link caretInMovedText}.
  */
 export function prepareUsjForChapterSave(
   usjFromEditor: Usj,
   usjFromPdp: Usj | undefined,
   expectedChapterNum: number,
   caret?: SelectionRange,
-  isCaretInChapterLine = false,
 ): ChapterSavePreparation {
   const editorUsjToSave = resolveUsjToSaveToPdp(usjFromEditor, usjFromPdp);
   if (!editorUsjToSave)
@@ -645,14 +691,9 @@ export function prepareUsjForChapterSave(
     expectedChapterNum,
     caret,
     isMarkerDeleted || storedChapterIndex < 0 ? undefined : storedChapterIndex,
-    isCaretInChapterLine,
   );
   // A restored marker always goes at the start (chapter 1, which may lack one, is never restored).
-  const restoredMarkerCaret = caretAfterChapterNumber(
-    [0],
-    CHAPTER_MARKER,
-    String(expectedChapterNum),
-  );
+  const restoredMarkerCaret = caretAfterChapterNumber(0, String(expectedChapterNum));
   return {
     repairedUsj: didRepair ? repaired : undefined,
     usjToSave: didRepair ? resolveUsjToSaveToPdp(repaired, usjFromPdp) : editorUsjToSave,

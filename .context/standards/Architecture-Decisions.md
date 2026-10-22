@@ -922,34 +922,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     (`setUsj(usj, { force: true })`, `scripture-editors` `packages/platform/src/editor/Editor.tsx`).
     A load can leave a stray browser selection where the replaced text was, so an existing selection
     is not taken to be the user's caret.
-  - **The target is computed from the repair, not carried across from the pre-repair selection,
-    except inside a line the repair only moved.** `EditorRef.getSelection()` addresses the LIVE tree
-    while the repair works on `getUsj()`'s SETTLED document, and the two differ for exactly the
-    gesture that matters: a `\c` typed under the caret is still a pending literal in the live tree
-    while the settled document already holds a chapter node. A captured path is therefore in the
-    wrong coordinate system, whereas a target computed from the repair is in the right one, because
-    the editor is about to load precisely that document.
-  - **The exception: what is left of the chapter line keeps the live caret**
+  - **The target is computed from the repair, except inside a line the repair only moved.** The
+    correction the user is standing in front of is where the caret belongs, and only the repair
+    knows where that ended up. Every target is a USJ location in the repaired document, which is
+    the document the editor is about to load: just past a corrected number is the end of the
+    chapter's `number` value (`{ jsonPath: "$.content[0]['number']", propertyOffset: 1 }`).
+  - **The exception: what is left of the chapter line keeps the user's caret**
     (`caretInMovedText` in `chapter-marker-repair.util.ts`, ranked ahead of every target above).
     When the chapter line's bytes stop being a chapter marker (`\ 2` once the `c` is deleted, `\sc 2`
-    once an `s` is typed into it) or text is typed ahead of the marker, the repair restores the
-    marker above that line and moves the line down whole, and the user is still typing in it — a
-    computed target cannot know where. The live caret's coordinates hold there because the
-    mismatch is confined to that one line and is known: the save normally runs while the line is
-    still a chapter glyph on screen, so the caret counts the whole line, marker and all (`\s|c 2`),
-    and is mapped to the same character of what the line settles into (its marker name or its text);
-    a caret read after the line settled is already in those coordinates. So it is read only on the
-    top-level line where the stored marker stood, and the glyph arithmetic (`\s|c 2` mapped into
-    the marker name) is applied only while the caret is on a chapter line on screen, read from the
-    web view's DOM selection (`isSelectionInChapterLine`). Off a chapter line the caret addresses
-    the line as the saved document holds it, so its path is kept with only the line's index changed.
-    That covers a line that has already settled, and a chapter line merged into the paragraph below
-    it (a selection from the chapter line into that paragraph, typed over), which leaves that
-    paragraph where the line stood. The decision comes from where the caret is on screen, not from
-    what the lines hold: a caret in a paragraph's text and one counting a chapter glyph have the
-    same address, and comparing the line with its neighbours to tell them apart is fooled by
-    repeated lines, which put the caret inside the paragraph's marker. A caret anywhere else is
-    never carried across.
+    once an `s` is typed into it), text is typed ahead of the marker, or the chapter line merges into
+    the paragraph below it (a selection from the chapter line into that paragraph, typed over), the
+    repair restores the marker above that line and moves the line down whole, and the user is still
+    typing in it — a computed target cannot know where. `EditorRef.getSelection()` reports the
+    caret in the document `getUsj()` returns, even while the line's edit is still pending on
+    screen, and that is the document the repair works on, so the caret keeps its exact place and
+    only the line's index changes. It is read only on the top-level line where the stored marker
+    stood; a caret anywhere else is never carried across.
 - **Alternatives:**
   - **Apply the repair as OT delta ops (`EditorRef.applyUpdate`) instead of `setUsj`** — rejected
     for now, though it would keep the history (no load, so no `CLEAR_HISTORY_COMMAND`). A chapter is
@@ -990,17 +978,11 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   pre-existing and accepted, not something the repair introduced. Anyone revisiting it should know
   that `destroyed` is the wrong value to reuse: the published contract defines it as "when the text
   the annotation was on is completely deleted", so a consumer acting on it could discard data whose
-  text is intact. No annotation set in this repo carries an `interactionCommand` today. The caret
-  offset the util computes encodes the editor's glyph byte layout, which no unit test can check
-  from this repo, so it is pinned end to end instead
-  (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts` reads the web view's own
-  DOM selection). That end-to-end cover is of a RENUMBERED marker and stands for a RESTORED one
-  because the two are the same shape: `caretTarget` addresses the marker's first content item — the
-  glyph the editor renders — and a chapter node holds no content in USJ either way, since the parser
-  emits it childless. That equivalence is pinned in
-  `chapter-marker-repair.util.test.ts` ("renumbers and synthesizes markers of the same childless
-  shape"), because it is a property of the parser that nothing else here would notice changing.
-  **Revisit** with PT-4818.
+  text is intact. No annotation set in this repo carries an `interactionCommand` today. Where the
+  editor puts a caret target on screen is pinned end to end
+  (`e2e-tests/tests/isolated/scripture-editor/chapter-marker-repair.spec.ts`,
+  `chapter-marker-deleted.spec.ts` and `chapter-line-left-as-text.spec.ts` read the web view's own
+  DOM selection). **Revisit** with PT-4818.
 - **Source:** PT-4608 hand QA.
 
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping

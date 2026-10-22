@@ -16,10 +16,15 @@
 
 import type { SelectionRange } from '@eten-tech-foundation/platform-editor';
 import {
-  isUsjMarkerLocation,
+  indexesFromUsjJsonPath,
   isUsjTextContentLocation,
+  usjJsonPathFromIndexes,
+  type MarkerContent,
+  type Usj,
   type UsjDocumentLocation,
 } from '@eten-tech-foundation/scripture-utilities';
+import { USFM_MARKERS_MAP_PARATEXT_3_0, UsjReaderWriter } from 'platform-bible-utils';
+import { correctEditorUsjVersion, deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
 /** How often a caret placement that could not be made yet is retried. */
 const CARET_RESTORE_RETRY_MS = 50;
@@ -48,10 +53,13 @@ export interface CaretRestoreEditor {
    * this is true.
    */
   hasLoadedDocument: () => boolean;
-  /** Places the caret. Makes no guarantee it took — see {@link CaretRestoreEditor.getSelection}. */
+  /** Places the caret. Makes no guarantee it took — see {@link CaretRestoreEditor.isCaretAt}. */
   setSelection: (selection: SelectionRange) => void;
-  /** Where the caret is now, used to confirm a placement. */
-  getSelection: () => SelectionRange | undefined;
+  /**
+   * Whether the caret is now at `target`, used to confirm a placement. See
+   * {@link isSamePlaceInDocument} for comparing the locations the editor reports.
+   */
+  isCaretAt: (target: SelectionRange) => boolean;
   /**
    * Gives the editor DOM focus. Called only once the caret is in place, because an editor focused
    * with no selection takes the end of the document instead — which is exactly what a restore with
@@ -88,22 +96,57 @@ export interface ScheduledCaretRestore {
 }
 
 /**
- * The offset a location addresses within its `jsonPath`. The editor reports a caret at the very
- * start of a paragraph whose marker is shown as that paragraph's marker location, with no offset —
- * the same point as the paragraph's boundary 0 it was placed at.
+ * `location`, with the one alias the location model allows spelled the canonical way: a position at
+ * the end of a text that a marker follows is that marker's own location.
  */
-function offsetOf(location: UsjDocumentLocation): number | undefined {
-  if (isUsjMarkerLocation(location)) return 0;
-  return isUsjTextContentLocation(location) ? location.offset : undefined;
+function canonicalLocation(usj: Usj, location: UsjDocumentLocation): UsjDocumentLocation {
+  if (!isUsjTextContentLocation(location)) return location;
+  const indexes = indexesFromUsjJsonPath(location.jsonPath);
+  const textIndex = indexes[indexes.length - 1];
+  let siblings: MarkerContent[] | undefined = usj.content;
+  indexes.slice(0, -1).forEach((index) => {
+    const parent: MarkerContent | undefined = siblings?.[index];
+    siblings = typeof parent === 'object' ? parent.content : undefined;
+  });
+  const text = siblings?.[textIndex];
+  const next = siblings?.[textIndex + 1];
+  if (typeof text !== 'string' || location.offset !== text.length || typeof next !== 'object')
+    return location;
+  return { jsonPath: usjJsonPathFromIndexes([...indexes.slice(0, -1), textIndex + 1]) };
 }
 
-/** Whether a placement took: the caret reads back at the point it was asked for. */
-function isSelectionAt(selection: SelectionRange | undefined, target: SelectionRange): boolean {
-  return (
-    selection !== undefined &&
-    selection.start.jsonPath === target.start.jsonPath &&
-    offsetOf(selection.start) === offsetOf(target.start)
-  );
+/**
+ * Whether two locations in `usj` are the same place: equal once each is spelled canonically, or at
+ * the same position in the USFM the document writes. The editor reports a caret held at the end of
+ * a text that a marker follows as the text's end, which is the same place as that marker's
+ * location.
+ *
+ * @param usj The document both locations address.
+ * @param a A location in `usj`.
+ * @param b Another location in `usj`.
+ * @param bookId The book `usj` is in, for a document with no `\id` of its own.
+ */
+export function isSamePlaceInDocument(
+  usj: Usj,
+  a: UsjDocumentLocation,
+  b: UsjDocumentLocation,
+  bookId: string,
+): boolean {
+  if (deepEqualAcrossIframes(canonicalLocation(usj, a), canonicalLocation(usj, b))) return true;
+  // Two texts side by side in `usj` are one text in the editor, which then addresses a place in the
+  // second as an offset into the first; both are one position in the USFM the document writes.
+  try {
+    const usjReaderWriter = new UsjReaderWriter(correctEditorUsjVersion(usj), {
+      markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+    });
+    const indexOf = (location: UsjDocumentLocation) =>
+      usjReaderWriter.usfmVerseLocationToIndexInUsfm(
+        usjReaderWriter.usjDocumentLocationToUsfmVerseRefVerseLocation(location, bookId),
+      );
+    return indexOf(a) === indexOf(b);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -157,7 +200,7 @@ export function scheduleCaretRestore<THandle = ReturnType<typeof setTimeout>>({
         editor.setSelection(target);
         // Read back rather than assumed: a placement against a document the editor is not holding
         // reports nothing and changes nothing, and that silence is the whole reason for the retry.
-        if (isSelectionAt(editor.getSelection(), target)) {
+        if (editor.isCaretAt(target)) {
           editor.focus();
           onSettled?.({ outcome: 'restored' });
           return;

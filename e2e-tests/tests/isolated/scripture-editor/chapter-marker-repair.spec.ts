@@ -153,8 +153,8 @@ test.describe('scripture editor chapter-marker repair', () => {
     await test.step('the caret comes back to the number that was corrected', async () => {
       // The push-back replaces the whole document (`setUsj`), which regenerates every Lexical key
       // and so leaves the editor with no caret at all; the save path places one afresh at the
-      // correction. This is the assertion that pins the offset the repair util computes from the
-      // glyph's byte layout — the unit suite can only state that layout, not check it.
+      // correction. This is the assertion that pins where the editor puts the repair util's target
+      // on screen — the unit suite can only state the target, not check where it lands.
       await expect
         .poll(readCaret, { timeout: 20_000 })
         .toEqual({ where: 'chapter-marker-glyph', charsAfterCaret: 1 });

@@ -1,9 +1,11 @@
 import type { SelectionRange } from '@eten-tech-foundation/platform-editor';
+import type { Usj, UsjDocumentLocation } from '@eten-tech-foundation/scripture-utilities';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CaretRestoreEditor,
   CaretRestoreResult,
   CaretRestoreTimers,
+  isSamePlaceInDocument,
   scheduleCaretRestore,
 } from './caret-restore.util';
 
@@ -67,7 +69,7 @@ function fakeEditor({
     setSelection: vi.fn((next: SelectionRange) => {
       if (isLoaded()) selection = next;
     }),
-    getSelection: vi.fn(() => selection),
+    isCaretAt: vi.fn((target: SelectionRange) => selection === target),
     focus: vi.fn(),
   };
   return { editor, getSelection: () => selection };
@@ -110,55 +112,6 @@ describe('scheduleCaretRestore', () => {
     expect(editor.setSelection).toHaveBeenCalledTimes(1);
   });
 
-  // The editor reads a caret at the very start of a paragraph whose marker is shown back as that
-  // paragraph's marker location, which carries no offset. Taken as a failed placement, it would be
-  // re-applied every 50 ms for the whole window, snapping back any caret the user moved.
-  it('accepts a paragraph-start placement the editor reads back as the marker location', () => {
-    const { timers, advance, pendingCount } = fakeTimers();
-    const paragraphStart: SelectionRange = { start: { jsonPath: '$.content[3]', offset: 0 } };
-    const editor: CaretRestoreEditor = {
-      hasLoadedDocument: () => true,
-      setSelection: vi.fn(),
-      getSelection: () => ({ start: { jsonPath: '$.content[3]' } }),
-      focus: vi.fn(),
-    };
-    const settled: CaretRestoreResult[] = [];
-
-    scheduleCaretRestore({
-      target: paragraphStart,
-      editor,
-      isStillWanted: () => true,
-      onSettled: (result) => settled.push(result),
-      timers,
-    });
-
-    advance(50);
-    expect(editor.setSelection).toHaveBeenCalledTimes(1);
-    expect(editor.focus).toHaveBeenCalledTimes(1);
-    expect(settled).toEqual([{ outcome: 'restored' }]);
-    expect(pendingCount()).toBe(0);
-  });
-
-  it('does not take a marker location on another paragraph for the placement', () => {
-    const { timers, advance } = fakeTimers();
-    const editor: CaretRestoreEditor = {
-      hasLoadedDocument: () => true,
-      setSelection: vi.fn(),
-      getSelection: () => ({ start: { jsonPath: '$.content[4]' } }),
-      focus: vi.fn(),
-    };
-
-    scheduleCaretRestore({
-      target: { start: { jsonPath: '$.content[3]', offset: 0 } },
-      editor,
-      isStillWanted: () => true,
-      timers,
-    });
-
-    advance(200);
-    expect(editor.focus).not.toHaveBeenCalled();
-  });
-
   // With no target the caret belongs at the end of the document, which focusing a freshly loaded
   // editor gives it — but only once the load has happened: focused against the outgoing document,
   // the caret stays where the user was typing and is then lost to the load.
@@ -197,7 +150,7 @@ describe('scheduleCaretRestore', () => {
       setSelection: (next) => {
         if (accepts) selection = next;
       },
-      getSelection: () => selection,
+      isCaretAt: (target) => selection === target,
       focus: vi.fn(),
     };
     const settled: CaretRestoreResult[] = [];
@@ -282,7 +235,7 @@ describe('scheduleCaretRestore', () => {
       setSelection: () => {
         throw thrown;
       },
-      getSelection: () => undefined,
+      isCaretAt: () => false,
       focus: vi.fn(),
     };
     const settled: CaretRestoreResult[] = [];
@@ -298,5 +251,86 @@ describe('scheduleCaretRestore', () => {
 
     expect(settled).toEqual([{ outcome: 'abandoned', error: thrown }]);
     expect(pendingCount()).toBe(0);
+  });
+});
+
+describe('isSamePlaceInDocument', () => {
+  const usj: Usj = {
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      { type: 'chapter', marker: 'c', number: '2' },
+      {
+        type: 'para',
+        marker: 'p',
+        content: [
+          { type: 'verse', marker: 'v', number: '1' },
+          'aaa',
+          { type: 'verse', marker: 'v', number: '2' },
+          'bbb',
+        ],
+      },
+    ],
+  };
+
+  it('is true for the same location', () => {
+    const place: UsjDocumentLocation = { jsonPath: "$.content[0]['number']", propertyOffset: 1 };
+    expect(isSamePlaceInDocument(usj, place, { ...place }, 'GEN')).toBe(true);
+  });
+
+  // The location model allows one alias: the end of text that a marker follows is also that
+  // marker's own location. The editor reports a caret held at the end of the text that way.
+  it('is true for the end of text and the marker after it', () => {
+    expect(
+      isSamePlaceInDocument(
+        usj,
+        { jsonPath: '$.content[1].content[2]' },
+        { jsonPath: '$.content[1].content[1]', offset: 3 },
+        'GEN',
+      ),
+    ).toBe(true);
+  });
+
+  // Removing a chapter marker typed between two texts leaves them side by side, which the editor
+  // holds as one text.
+  it('is true for the start of a text and the end of the text beside it', () => {
+    const sideBySide: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'chapter', marker: 'c', number: '2' },
+        { type: 'para', marker: 'p', content: ['before', 'after'] },
+      ],
+    };
+    expect(
+      isSamePlaceInDocument(
+        sideBySide,
+        { jsonPath: '$.content[1].content[1]', offset: 0 },
+        { jsonPath: '$.content[1].content[0]', offset: 6 },
+        'GEN',
+      ),
+    ).toBe(true);
+  });
+
+  it('is false for a different offset in the same property', () => {
+    expect(
+      isSamePlaceInDocument(
+        usj,
+        { jsonPath: "$.content[0]['number']", propertyOffset: 1 },
+        { jsonPath: "$.content[0]['number']", propertyOffset: 0 },
+        'GEN',
+      ),
+    ).toBe(false);
+  });
+
+  it('is false for a different place', () => {
+    expect(
+      isSamePlaceInDocument(
+        usj,
+        { jsonPath: '$.content[1].content[1]', offset: 1 },
+        { jsonPath: '$.content[1].content[3]', offset: 1 },
+        'GEN',
+      ),
+    ).toBe(false);
   });
 });

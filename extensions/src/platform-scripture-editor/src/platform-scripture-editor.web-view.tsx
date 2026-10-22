@@ -168,6 +168,7 @@ import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { isEditorContentForChapter, performDebouncedPdpSave } from './debounced-pdp-save.util';
 import {
   PLATFORM_CARET_RESTORE_TIMERS,
+  isSamePlaceInDocument,
   scheduleCaretRestore,
   ScheduledCaretRestore,
 } from './caret-restore.util';
@@ -248,7 +249,6 @@ import {
   resolvePaletteItemStrings,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
-  isSelectionInChapterLine,
   restoreSelectionIfLost,
   returnFocusToScriptureTextIfDocumentFocused,
   STALE_NOTE_EDITING_SESSION_MS,
@@ -3654,7 +3654,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // Only acted on when the repair is pushed back, which happens only while this editor
           // still shows the chapter being saved, so the caret addresses the same document.
           editorRef.current?.getSelection(),
-          isSelectionInChapterLine(document.getSelection()),
         ),
         savedChapterKey,
         // Read live rather than captured, so a save that fires after a chapter switch compares the
@@ -3774,7 +3773,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             );
           },
           setSelection: (selection) => editorRef.current?.setSelection(selection),
-          getSelection: () => editorRef.current?.getSelection(),
+          isCaretAt: (target) => {
+            const selection = editorRef.current?.getSelection();
+            return (
+              !!selection &&
+              isSamePlaceInDocument(
+                repairedUsj,
+                selection.start,
+                target.start,
+                savedChapterSelector.book,
+              )
+            );
+          },
           focus: () => editorRef.current?.focus(),
         },
         isStillWanted,

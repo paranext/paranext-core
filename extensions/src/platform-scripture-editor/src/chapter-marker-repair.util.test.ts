@@ -4,6 +4,7 @@ import {
   MarkerContent,
   MarkerObject,
   Usj,
+  UsjDocumentLocation,
   usxStringToUsj,
 } from '@eten-tech-foundation/scripture-utilities';
 import {
@@ -317,7 +318,9 @@ describe('prepareUsjForChapterSave', () => {
   // marker leaves the caret at the end of that text; deleting the marker of a chapter with text
   // means the user was on the chapter line, so the caret goes back there.
   describe('where a restore sends the caret', () => {
-    const RESTORED_CHAPTER_2_NUMBER = { start: { jsonPath: '$.content[0].content[0]', offset: 4 } };
+    const RESTORED_CHAPTER_2_NUMBER = {
+      start: { jsonPath: "$.content[0]['number']", propertyOffset: 1 },
+    };
     const stored = usjOf(chapter('2', { sid: 'GEN 2' }), para('p', 'body'), para('q1', 'poem'));
 
     it('to the end of the chapter line when only the marker was deleted', () => {
@@ -343,23 +346,20 @@ describe('prepareUsjForChapterSave', () => {
 
   // What the editor saves when the chapter line's bytes stop being a chapter marker: the bytes, as
   // a line of text. Paratext 9 saves the same bytes with a marker put back above them, so they stay,
-  // and so does the caret the user had in them.
+  // and so does the caret the user had in them. The editor reports the caret in the document it
+  // saves, so the caret keeps its exact place in the line, which the repair moves down by one.
   describe('a chapter line left as text', () => {
     const stored = usjOf(chapter('2', { sid: 'GEN 2' }), para('p', 'body'));
-    const caretInLine = (offset: number): SelectionRange => ({
-      start: { jsonPath: '$.content[0].content[0]', offset },
-    });
 
     it('keeps what a deletion left, under a restored marker, with the caret where it was', () => {
       const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
         usjOf('c 2', para('p', 'body')),
         stored,
         2,
-        caretInLine(0),
-        true,
+        { start: { jsonPath: '$.content[0]', offset: 2 } },
       );
       expect(repairedUsj?.content).toEqual([chapter('2'), 'c 2', para('p', 'body')]);
-      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 0 } });
+      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1]', offset: 2 } });
     });
 
     // `\ 2` once the `c` is deleted: a paragraph with no marker name, as ParatextData reads it.
@@ -369,65 +369,42 @@ describe('prepareUsjForChapterSave', () => {
       ...(text === undefined ? {} : { content: [text] }),
     });
 
-    it('keeps a nameless paragraph, with the caret at the same character of its text', () => {
+    it.each<[string, UsjDocumentLocation, UsjDocumentLocation]>([
+      [
+        'in its text',
+        { jsonPath: '$.content[0].content[0]', offset: 2 },
+        { jsonPath: '$.content[1].content[0]', offset: 2 },
+      ],
+      [
+        'right after its backslash',
+        { jsonPath: "$.content[0]['marker']", propertyOffset: 0 },
+        { jsonPath: "$.content[1]['marker']", propertyOffset: 0 },
+      ],
+    ])('keeps a nameless paragraph, with the caret %s', (_label, caret, expected) => {
       const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
         usjOf(nameless('2 more'), para('p', 'body')),
         stored,
         2,
-        caretInLine(4),
-        true,
+        { start: caret },
       );
       expect(repairedUsj?.content).toEqual([chapter('2'), nameless('2 more'), para('p', 'body')]);
-      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 2 } });
-    });
-
-    it("puts a caret that was inside a nameless marker's backslash at the start of its text", () => {
-      const { caretTarget } = prepareUsjForChapterSave(
-        usjOf(nameless('2'), para('p', 'body')),
-        stored,
-        2,
-        caretInLine(1),
-        true,
-      );
-      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 0 } });
-    });
-
-    it('puts the caret in a nameless paragraph with no text', () => {
-      const { caretTarget } = prepareUsjForChapterSave(
-        usjOf(nameless(), para('p', 'body')),
-        stored,
-        2,
-        caretInLine(1),
-        true,
-      );
-      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1]', offset: 0 } });
+      expect(caretTarget).toEqual({ start: expected });
     });
 
     it('moves text typed ahead of the marker below it, with the caret', () => {
+      // The caret just past `X` is spelled as the place in front of the chapter marker after it.
       const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
         usjOf('X', chapter('2', { sid: 'GEN 2' }), para('p', 'body')),
         stored,
         2,
-        caretInLine(1),
-        true,
+        { start: { jsonPath: '$.content[1]' } },
       );
       expect(repairedUsj?.content).toEqual([
         chapter('2', { sid: 'GEN 2' }),
         'X',
         para('p', 'body'),
       ]);
-      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 1 } });
-    });
-
-    it('keeps the caret within the text when the line was longer on screen', () => {
-      const { caretTarget } = prepareUsjForChapterSave(
-        usjOf('c 2', para('p', 'body')),
-        stored,
-        2,
-        caretInLine(4),
-        true,
-      );
-      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 3 } });
+      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1]', offset: 1 } });
     });
 
     it('leaves chapter 1 without a marker, as Paratext 9 does', () => {
@@ -435,8 +412,7 @@ describe('prepareUsjForChapterSave', () => {
         usjOf(ID_GEN, nameless('1'), para('p', 'body')),
         usjOf(ID_GEN, chapter('1'), para('p', 'body')),
         1,
-        caretInLine(1),
-        true,
+        { start: { jsonPath: '$.content[1].content[0]', offset: 0 } },
       );
       expect(repairedUsj).toBeUndefined();
       expect(usjToSave?.content).toEqual([ID_GEN, nameless('1'), para('p', 'body')]);
@@ -450,43 +426,36 @@ describe('prepareUsjForChapterSave', () => {
       content: ['2 '],
     };
 
-    it.each([
-      ['just past the backslash', 1, { jsonPath: '$.content[1].marker', propertyOffset: 0 }],
-      ['in the marker name', 2, { jsonPath: '$.content[1].marker', propertyOffset: 1 }],
-      ['at the end of the marker name', 3, { jsonPath: '$.content[1].marker', propertyOffset: 2 }],
-      ['in the text after the marker', 5, { jsonPath: '$.content[1].content[0]', offset: 1 }],
-    ])('keeps a caret %s of a marker typed into the chapter marker', (_label, offset, expected) => {
+    it.each<[string, UsjDocumentLocation, UsjDocumentLocation]>([
+      [
+        'just past the backslash',
+        { jsonPath: "$.content[0]['marker']", propertyOffset: 0 },
+        { jsonPath: "$.content[1]['marker']", propertyOffset: 0 },
+      ],
+      [
+        'in the marker name',
+        { jsonPath: "$.content[0]['marker']", propertyOffset: 1 },
+        { jsonPath: "$.content[1]['marker']", propertyOffset: 1 },
+      ],
+      [
+        'at the end of the marker name',
+        { jsonPath: "$.content[0]['marker']", propertyOffset: 2 },
+        { jsonPath: "$.content[1]['marker']", propertyOffset: 2 },
+      ],
+      [
+        'in the text after the marker',
+        { jsonPath: '$.content[0].content[0]', offset: 1 },
+        { jsonPath: '$.content[1].content[0]', offset: 1 },
+      ],
+    ])('keeps a caret %s of a marker typed into the chapter marker', (_label, caret, expected) => {
       const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
         usjOf(smallCaps, para('p', 'body')),
         stored,
         2,
-        caretInLine(offset),
-        true,
+        { start: caret },
       );
       expect(repairedUsj?.content).toEqual([chapter('2'), smallCaps, para('p', 'body')]);
       expect(caretTarget).toEqual({ start: expected });
-    });
-
-    it('keeps a caret read after the line settled, in its text', () => {
-      const { caretTarget } = prepareUsjForChapterSave(
-        usjOf(smallCaps, para('p', 'body')),
-        stored,
-        2,
-        caretInLine(1),
-      );
-      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 1 } });
-    });
-
-    it('keeps a caret read after the line settled, in its marker name', () => {
-      const { caretTarget } = prepareUsjForChapterSave(
-        usjOf(smallCaps, para('p', 'body')),
-        stored,
-        2,
-        { start: { jsonPath: '$.content[0].marker', propertyOffset: 1 } },
-      );
-      expect(caretTarget).toEqual({
-        start: { jsonPath: '$.content[1].marker', propertyOffset: 1 },
-      });
     });
 
     it('keeps a caret in a paragraph marker typed over the chapter marker', () => {
@@ -494,11 +463,10 @@ describe('prepareUsjForChapterSave', () => {
         usjOf(para('q1', '2 '), para('p', 'body')),
         stored,
         2,
-        caretInLine(3),
-        true,
+        { start: { jsonPath: "$.content[0]['marker']", propertyOffset: 2 } },
       );
       expect(caretTarget).toEqual({
-        start: { jsonPath: '$.content[1].marker', propertyOffset: 2 },
+        start: { jsonPath: "$.content[1]['marker']", propertyOffset: 2 },
       });
     });
 
@@ -512,9 +480,22 @@ describe('prepareUsjForChapterSave', () => {
       expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
     });
 
+    it('uses the usual caret for a selection, not a caret', () => {
+      const { caretTarget } = prepareUsjForChapterSave(
+        usjOf(smallCaps, para('p', 'body')),
+        stored,
+        2,
+        {
+          start: { jsonPath: '$.content[0].content[0]', offset: 0 },
+          end: { jsonPath: '$.content[0].content[0]', offset: 1 },
+        },
+      );
+      expect(caretTarget).toBe(CARET_AT_DOCUMENT_END);
+    });
+
     // A selection from the chapter line into the paragraph below it, typed over, deletes the chapter
     // line and leaves that paragraph where the line stood. The repair moves the paragraph down whole,
-    // so the caret keeps its place in it; it counts only the paragraph's own text, not a marker.
+    // so the caret keeps its place in it.
     describe('a chapter line merged into the paragraph below it', () => {
       const verse: MarkerContent = { type: 'verse', marker: 'v', number: '1' };
       const storedRuth2 = usjOf(
@@ -522,13 +503,16 @@ describe('prepareUsjForChapterSave', () => {
         { type: 'para', marker: 'p', content: [verse, 'Naomi had a relative'] },
         para('p', 'next'),
       );
+      const caretInText = (offset: number): SelectionRange => ({
+        start: { jsonPath: '$.content[0].content[0]', offset },
+      });
 
       it.each([1, 2, 3, 5])('keeps a caret at offset %i of its text', (offset) => {
         const { repairedUsj, caretTarget } = prepareUsjForChapterSave(
           usjOf(para('p', 'abhad a relative'), para('p', 'next')),
           storedRuth2,
           2,
-          caretInLine(offset),
+          caretInText(offset),
         );
         expect(repairedUsj?.content).toEqual([
           chapter('2'),
@@ -563,13 +547,11 @@ describe('prepareUsjForChapterSave', () => {
           usjOf(para('p', 'abhad a relative'), para('p', 'next, edited')),
           storedRuth2,
           2,
-          caretInLine(2),
+          caretInText(2),
         );
         expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 2 } });
       });
 
-      // Two identical lines after the marker make the merge look, from its neighbours, like the
-      // chapter line changed in place; the caret is still in the merged paragraph's text.
       it('keeps the caret in its text when the two lines after the marker are the same', () => {
         const { caretTarget } = prepareUsjForChapterSave(
           usjOf(para('q2', 'abpraise'), para('q2', 'Selah praise'), para('p', 'next')),
@@ -580,35 +562,10 @@ describe('prepareUsjForChapterSave', () => {
             para('p', 'next'),
           ),
           2,
-          caretInLine(2),
+          caretInText(2),
         );
         expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 2 } });
       });
-
-      // A caret on a chapter line on screen counts the whole glyph; one that merely sits in a line
-      // whose text starts with the chapter number does not.
-      it('keeps the caret in its text when that text starts with the chapter number', () => {
-        const { caretTarget } = prepareUsjForChapterSave(
-          usjOf(para('p', '2had a relative'), para('p', 'next')),
-          storedRuth2,
-          2,
-          caretInLine(1),
-        );
-        expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 1 } });
-      });
-    });
-
-    // Only the line the chapter marker stood on is read as a chapter line. A nameless paragraph
-    // elsewhere is ordinary text, however the caret's offset would read with its `\ ` counted.
-    it('does not count the marker of a nameless line the chapter marker did not stand on', () => {
-      const { caretTarget } = prepareUsjForChapterSave(
-        usjOf(nameless('2 more'), para('p', 'body')),
-        usjOf(chapter('2', { sid: 'GEN 2' }), nameless('2 more'), para('p', 'body')),
-        2,
-        caretInLine(5),
-        true,
-      );
-      expect(caretTarget).toEqual({ start: { jsonPath: '$.content[0].content[0]', offset: 4 } });
     });
 
     it('uses the usual caret when the caret was not in the moved text', () => {
@@ -777,7 +734,10 @@ describe('applyChapterSavePreparation', () => {
 });
 
 describe('repairChapterMarkers — where the caret belongs after a repair', () => {
-  const CHAPTER_GLYPH = '$.content[0].content[0]';
+  /** Just past the number of the chapter marker at `index`, as many characters into it as it has. */
+  const afterNumber = (index: number, length: number) => ({
+    start: { jsonPath: `$.content[${index}]['number']`, propertyOffset: length },
+  });
 
   it('reports no caret target when nothing needed repairing', () => {
     const { didRepair, caretTarget } = repairChapterMarkers(
@@ -790,12 +750,12 @@ describe('repairChapterMarkers — where the caret belongs after a repair', () =
 
   it('puts the caret just after a corrected chapter number', () => {
     const { caretTarget } = repairChapterMarkers(usjOf(chapter('3'), para('p', 'body')), 2);
-    expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 4 } });
+    expect(caretTarget).toEqual(afterNumber(0, 1));
   });
 
   it('counts every digit of a multi-digit chapter number', () => {
     const { caretTarget } = repairChapterMarkers(usjOf(chapter('3'), para('p', 'body')), 12);
-    expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 5 } });
+    expect(caretTarget).toEqual(afterNumber(0, 2));
   });
 
   // Not in the new marker: keys typed there would become part of the chapter number.
@@ -817,7 +777,7 @@ describe('repairChapterMarkers — where the caret belongs after a repair', () =
     // caret belongs in is not the first thing in the document.
     const { usj, caretTarget } = repairChapterMarkers(usjOf(para('ip', 'intro'), chapter('2')), 1);
     expect(usj.content).toEqual([para('ip', 'intro'), chapter('1')]);
-    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[0]', offset: 4 } });
+    expect(caretTarget).toEqual(afterNumber(1, 1));
   });
 
   it('puts the caret where a chapter marker typed mid-chapter was removed', () => {
@@ -825,7 +785,7 @@ describe('repairChapterMarkers — where the caret belongs after a repair', () =
       usjOf(chapter('2'), para('p', 'one'), chapter('2'), para('p', 'two')),
       2,
     );
-    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[2]', offset: 0 } });
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[2].content[0]', offset: 0 } });
   });
 
   it('puts the caret where a chapter marker nested in a paragraph was removed', () => {
@@ -837,7 +797,7 @@ describe('repairChapterMarkers — where the caret belongs after a repair', () =
       }),
       3,
     );
-    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1]', offset: 1 } });
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[1]', offset: 0 } });
   });
 
   it('places a nested removal even for an intro-only chapter 1, which has no marker to fall back to', () => {
@@ -849,7 +809,7 @@ describe('repairChapterMarkers — where the caret belongs after a repair', () =
       }),
       1,
     );
-    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1]', offset: 1 } });
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[1]', offset: 0 } });
   });
 
   it('falls back to the surviving marker when the removed marker ended the document', () => {
@@ -857,7 +817,7 @@ describe('repairChapterMarkers — where the caret belongs after a repair', () =
       usjOf(chapter('2'), para('p', 'one'), chapter('2')),
       2,
     );
-    expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 4 } });
+    expect(caretTarget).toEqual(afterNumber(0, 1));
   });
 
   // The item after the first removed marker is another removed marker, so it is no place to put the
@@ -868,7 +828,7 @@ describe('repairChapterMarkers — where the caret belongs after a repair', () =
       2,
     );
     expect(usj.content).toEqual([chapter('2'), para('p', 'one')]);
-    expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 4 } });
+    expect(caretTarget).toEqual(afterNumber(0, 1));
   });
 
   it('puts the caret where several adjacent markers typed mid-chapter were removed', () => {
@@ -877,7 +837,7 @@ describe('repairChapterMarkers — where the caret belongs after a repair', () =
       2,
     );
     expect(usj.content).toEqual([chapter('2'), para('p', 'one'), para('p', 'two')]);
-    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[2]', offset: 0 } });
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[2].content[0]', offset: 0 } });
   });
 
   it('puts the caret where a chapter marker typed mid-paragraph was removed, inside the rejoined text', () => {
@@ -912,15 +872,41 @@ describe('repairChapterMarkers — where the caret belongs after a repair', () =
       usjOf(chapter('3'), para('p', 'aaa'), chapter('5'), VERSE_1, 'bbb'),
       3,
     );
-    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1]', offset: 1 } });
+    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[1].content[1]' } });
   });
+
+  // The location model's own spellings for the end of a line, which is where a removed marker that
+  // ended its paragraph leaves the caret.
+  it.each<[string, MarkerContent[], UsjDocumentLocation]>([
+    ['text', ['before'], { jsonPath: '$.content[1].content[0]', offset: 6 }],
+    [
+      'a verse number',
+      [VERSE_1],
+      { jsonPath: "$.content[1].content[0]['number']", propertyOffset: 1 },
+    ],
+    [
+      'a closed character span',
+      [{ type: 'char', marker: 'nd', content: ['LORD'] }],
+      { jsonPath: '$.content[1].content[0]', closingMarkerOffset: 4 },
+    ],
+    ['nothing', [], { jsonPath: "$.content[1]['marker']", propertyOffset: 1 }],
+  ])(
+    'puts the caret at the end of a paragraph a nested marker ended, after %s',
+    (_label, before, expected) => {
+      const { caretTarget } = repairChapterMarkers(
+        usjOf(chapter('3'), { type: 'para', marker: 'p', content: [...before, chapter('9')] }),
+        3,
+      );
+      expect(caretTarget).toEqual({ start: expected });
+    },
+  );
 
   it('prefers the corrected number over a removal site when the repair did both', () => {
     const { caretTarget } = repairChapterMarkers(
       usjOf(chapter('9'), para('p', 'one'), chapter('9'), para('p', 'two')),
       2,
     );
-    expect(caretTarget).toEqual({ start: { jsonPath: CHAPTER_GLYPH, offset: 4 } });
+    expect(caretTarget).toEqual(afterNumber(0, 1));
   });
 });
 
@@ -931,7 +917,9 @@ describe('the caret target on the way to the editor', () => {
       usjOf(chapter('3'), para('p', 'body')),
       3,
     );
-    expect(caretTarget).toEqual({ start: { jsonPath: '$.content[0].content[0]', offset: 4 } });
+    expect(caretTarget).toEqual({
+      start: { jsonPath: "$.content[0]['number']", propertyOffset: 1 },
+    });
   });
 
   it('is absent when no repair was needed', () => {
@@ -945,7 +933,7 @@ describe('the caret target on the way to the editor', () => {
 
   it('is handed to the editor alongside the repaired document', () => {
     const caretTarget: SelectionRange = {
-      start: { jsonPath: '$.content[0].content[0]', offset: 4 },
+      start: { jsonPath: "$.content[0]['number']", propertyOffset: 1 },
     };
     const applyRepairToEditor = vi.fn();
 
