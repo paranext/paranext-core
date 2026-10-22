@@ -412,6 +412,54 @@ describe('UserProfilePopover server badge', () => {
     },
   );
 
+  test('plain click on the badge sends the command with requestDeveloperSettings=false, same as the row', async () => {
+    setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const badge = await screen.findByTestId('user-profile-server-badge');
+    fireEvent.click(badge);
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showInternetSettings',
+      false,
+    );
+  });
+
+  test('Shift+click on the badge sends the command with requestDeveloperSettings=true, same as the row', async () => {
+    setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const badge = await screen.findByTestId('user-profile-server-badge');
+    fireEvent.click(badge, { shiftKey: true });
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showInternetSettings',
+      true,
+    );
+  });
+
+  test('Enter on the focused badge sends the command with requestDeveloperSettings=false', async () => {
+    setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const badge = await screen.findByTestId('user-profile-server-badge');
+    fireEvent.keyDown(badge, { key: 'Enter' });
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showInternetSettings',
+      false,
+    );
+  });
+
+  test('Shift+Enter on the focused badge sends the command with requestDeveloperSettings=true', async () => {
+    setMockSetting('internetSettings', { selectedServer: 'QualityAssurance' });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    const badge = await screen.findByTestId('user-profile-server-badge');
+    fireEvent.keyDown(badge, { key: 'Enter', shiftKey: true });
+    expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+      'paratextRegistration.showInternetSettings',
+      true,
+    );
+  });
+
   test('is absent while the internet settings data provider has not registered yet', async () => {
     setMockSetting('internetSettingsProviderAvailable', false);
     render(<UserProfilePopover />);

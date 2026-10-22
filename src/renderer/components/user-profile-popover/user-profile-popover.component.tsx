@@ -531,41 +531,58 @@ export function UserProfilePopover() {
               </>
             )}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="tw:w-full tw:justify-start tw:gap-2 tw:px-2 tw:font-normal"
-            onClick={(e) => handleNetworkSettings(e.shiftKey)}
-            // A keyboard-activated click on a focused button carries the live modifier state in
-            // Chromium, so this duplicates that path defensively rather than depending on it:
-            // `preventDefault` stops the native click the Enter keypress would otherwise also
-            // trigger, so Shift+Enter calls the handler exactly once.
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && e.shiftKey) {
-                e.preventDefault();
-                handleNetworkSettings(true);
-              }
-            }}
-            data-testid="user-profile-action-network"
-          >
-            <Wifi className="tw:size-3.5" />
-            {localizedStrings['%userProfile_networkSettings_2%']}
+          <div className="tw:relative tw:flex tw:w-full tw:items-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="tw:w-full tw:justify-start tw:gap-2 tw:px-2 tw:font-normal"
+              onClick={(e) => handleNetworkSettings(e.shiftKey)}
+              // A keyboard-activated click on a focused button carries the live modifier state in
+              // Chromium, so this duplicates that path defensively rather than depending on it:
+              // `preventDefault` stops the native click the Enter keypress would otherwise also
+              // trigger, so Shift+Enter calls the handler exactly once.
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && e.shiftKey) {
+                  e.preventDefault();
+                  handleNetworkSettings(true);
+                }
+              }}
+              data-testid="user-profile-action-network"
+            >
+              <Wifi className="tw:size-3.5" />
+              {localizedStrings['%userProfile_networkSettings_2%']}
+            </Button>
             {selectedServer !== undefined && (
-              // Narrowly scoped to just this badge — the file's other TooltipProvider only wraps the
-              // toolbar-trigger tooltip, not PopoverContent.
+              // A sibling of the Button, not a child: a focusable element nested inside another
+              // interactive element fails the axe `nested-interactive` rule and folds the badge
+              // text into the button's accessible name. Absolutely positioned over the row's right
+              // edge to keep the original layout. Narrowly scoped TooltipProvider — the file's other
+              // one only wraps the toolbar-trigger tooltip, not PopoverContent.
               <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    {/* tabIndex makes the badge a separate focus stop from the enclosing button
-                        (Tab reaches the row, a second Tab reaches the badge) so a keyboard or
-                        screen-reader user can still reach the tooltip — the one case that matters
-                        is a non-English speaker on a non-Production server, where the badge alone
-                        isn't enough context but the (localized) tooltip is. */}
+                    {/* Independently clickable and keyboard-activatable, mirroring the row Button's
+                        plain-click and Shift-click behavior exactly: the badge is a second,
+                        equivalent way to reach the same two outcomes, not a new one. `role="button"`
+                        plus its own key handling make that contract explicit now that it is no
+                        longer a plain nested span inside the Button. `tabIndex` also makes it a
+                        separate focus stop (Tab reaches the row, a second Tab reaches the badge) so
+                        a keyboard or screen-reader user can still reach the tooltip — the one case
+                        that matters is a non-English speaker on a non-Production server, where the
+                        badge alone isn't enough context but the (localized) tooltip is. */}
                     <Badge
                       variant="muted"
                       data-testid="user-profile-server-badge"
-                      className="tw:ms-auto"
+                      className="tw:absolute tw:end-2 tw:top-1/2 tw:-translate-y-1/2 tw:cursor-pointer"
+                      role="button"
                       tabIndex={0}
+                      onClick={(e) => handleNetworkSettings(e.shiftKey)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleNetworkSettings(e.shiftKey);
+                        }
+                      }}
                     >
                       {localizedStrings[SERVER_BADGE_KEYS[selectedServer].label]}
                     </Badge>
@@ -578,7 +595,7 @@ export function UserProfilePopover() {
                 </Tooltip>
               </TooltipProvider>
             )}
-          </Button>
+          </div>
         </div>
         <div className="tw:flex tw:items-start tw:justify-between tw:gap-2 tw:px-2">
           <span className="tw:flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:pt-1 tw:text-xs tw:text-muted-foreground">
