@@ -36,10 +36,15 @@
 import path from 'path';
 import type { FrameLocator, Locator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { sendOpenMarkersChecklistCommand, waitForAppReady } from '../../fixtures/helpers';
+import {
+  sendOpenMarkersChecklistCommand,
+  waitForAppReady,
+  waitForOpenWebViewIdByType,
+} from '../../fixtures/helpers';
 
 // The suite's layout is written for Power mode, and the editor menu hides the Markers Checklist item
-// in both modes, so the checklist is opened by command. Basic checks is in Power's editor menu.
+// in both modes, so the checklist is opened by command. So is the Checks side panel: Basic checks
+// is hidden in both modes too.
 test.use({ requiredInterfaceMode: 'power' });
 
 // ---------------------------------------------------------------------------
@@ -573,21 +578,25 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   // ═══════════════════════════════════════════════════════════════════════
   // The checks-side-panel uses `useOpenProjectTabs` and `handleSelectProject` (Task 14) to focus
   // an existing editor tab instead of opening a duplicate when the user re-selects a project
-  // that already has an editor open. Navigation: scripture editor → hamburger → "Basic checks".
+  // that already has an editor open. Navigation: the checks side panel is opened by command for the
+  // editor, since its "Basic checks" menu item is hidden in both modes.
   test('Test 8: re-selecting an open project in checks-side-panel focuses the editor tab without duplicating it', async ({
     mainPage,
   }) => {
-    // The default project (`wgPIDGIN`) editor is already open from `beforeEach`. Open the
-    // checks side panel from the editor's hamburger menu — same pattern as
-    // `openMarkersChecklistViaToolsMenu`, just a different menu item.
-    const editorFrame = mainPage.frameLocator(
-      `iframe[title*="${PROJECT_NAME}" i][title*="Editable" i]`,
+    // The default project (`wgPIDGIN`) editor is already open from `beforeEach`. Open the checks
+    // side panel for it — the same command the hidden menu item runs.
+    const editorWebViewId = await waitForOpenWebViewIdByType(
+      mainPage,
+      'platformScriptureEditor.react',
     );
-    await editorFrame.locator("button[aria-label='Project']").first().click();
-    await editorFrame
-      .getByRole('menuitem', { name: /Basic checks/i })
-      .first()
-      .click();
+    await mainPage.evaluate(async (webViewId) => {
+      // The renderer exposes `papi` on `window` without a declared type in the e2e project.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const win = window as unknown as {
+        papi: { commands: { sendCommand: (command: string, id: string) => Promise<unknown> } };
+      };
+      await win.papi.commands.sendCommand('platformScripture.openChecksSidePanel', webViewId);
+    }, editorWebViewId);
 
     // The side panel mounts as a docked panel to the right; its iframe title is "Checks".
     const sidePanelFrame = mainPage.frameLocator('iframe[title*="Checks" i]');
