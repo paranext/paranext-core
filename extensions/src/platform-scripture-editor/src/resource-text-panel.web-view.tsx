@@ -276,6 +276,11 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // nothing to display yet anyway.
   //
   // This call must stay below the selection region: `resourceProjectId` is what it converts into.
+  //
+  // TODO(PT-4896): a project-reference row resolves to its project id even when that project is not
+  // on this machine, so each verse change repeats a failing versification lookup.
+  // TODO(PT-4898): on mount and on a resource switch the hook still returns the reference last shown
+  // for the previous conversion project, costing one extra chapter fetch.
   const [scrRef, setScrRef] = useScrollGroupScrRef(
     scrollGroupScrRef,
     useCallback(
