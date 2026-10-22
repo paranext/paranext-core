@@ -180,7 +180,9 @@ internal sealed class CheckCache
             projectId,
             id =>
             {
-                var dataSource = new ChecksDataSource(LocalParatextProjects.GetParatextProject(id));
+                var scrText = LocalParatextProjects.GetParatextProject(id);
+                scrText.ThrowIfOpenBlocked();
+                var dataSource = new ChecksDataSource(scrText);
 
                 dataSource.ScrText.TextChanged += (sender, args) =>
                 {

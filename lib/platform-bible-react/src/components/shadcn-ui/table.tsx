@@ -4,6 +4,13 @@ import React from 'react';
 import { getFocusableElements } from '@/utils/focus.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 
+// CUSTOM: Whether a React keyboard event started inside `container`'s DOM. React bubbles events
+// from portalled descendants through their React ancestors even though they are elsewhere in the
+// DOM, so the handler's own element does not say where the key was pressed.
+function isEventFromWithin(e: React.KeyboardEvent, container: HTMLElement): boolean {
+  return e.target instanceof Node && container.contains(e.target);
+}
+
 // CUSTOM: Added TSDoc with link to shadcn/ui documentation for this component
 /**
  * Table components provide a responsive table. These components are built and styled with Shadcn
@@ -74,12 +81,15 @@ function Table({
   const handleKeyDownInTable = (e: React.KeyboardEvent<HTMLTableElement>) => {
     const { current: currentTable } = tableRef;
     if (!currentTable) return;
+    // CUSTOM: Ignore keys pressed in content portalled out of the table (e.g. a row's dropdown
+    // menu). React bubbles their events through the table, but they are not table navigation.
+    if (!isEventFromWithin(e, currentTable)) return;
 
     if (e.key === 'ArrowDown') {
       // Move focus to the first row in the table (header or body)
       e.preventDefault();
-      const firstRow = getFocusableElements(currentTable)[0];
-      firstRow.focus();
+      // CUSTOM: Optional chaining, since a table can have no focusable row
+      getFocusableElements(currentTable)[0]?.focus();
       return;
     }
     if (e.key === ' ' && document.activeElement === currentTable) {
@@ -299,6 +309,12 @@ function TableRow({
     (e: React.KeyboardEvent<HTMLTableRowElement>) => {
       const { current: currentRow } = rowRef;
       if (!currentRow || !currentRow.parentElement) return;
+      // CUSTOM: Keys pressed in content portalled out of the row (e.g. its dropdown menu) bubble
+      // here through React but are not row navigation, so only the caller's handler sees them
+      if (!isEventFromWithin(e, currentRow)) {
+        onKeyDown?.(e);
+        return;
+      }
 
       const closestTable = currentRow.closest('table');
       const rowsInTable = closestTable

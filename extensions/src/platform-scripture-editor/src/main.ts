@@ -38,6 +38,7 @@ import {
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
   formatEditorTitle,
+  buildScriptureEditorWebViewState,
   getTabTitleProjectName,
   openCommentListAndSelectThread,
   type OpenEditorDispatch,
@@ -221,8 +222,11 @@ async function open(
         'platformGetResources.excludePdpFactoryIdsInHome',
       ),
     });
+    const openableProjectMetadatas = projectMetadatas.filter(
+      (projectMetadata) => !projectMetadata.unsupportedReason,
+    );
     const projectsWithIsPublished = await Promise.all(
-      projectMetadatas.map(async (projectMetadata) => {
+      openableProjectMetadatas.map(async (projectMetadata) => {
         const pdp = await papi.projectDataProviders.get('platform.base', projectMetadata.id);
         return {
           projectId: projectMetadata.id,
@@ -565,6 +569,13 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       unformattedTitle,
     };
 
+    // Started here so its project lookup overlaps the permission check and title formatting below.
+    const webViewStatePromise = buildScriptureEditorWebViewState(
+      papi,
+      projectId,
+      savedWebViewStateUpdated,
+    );
+
     // Fold the Scripture-edit role check into the title's read-only computation only — `isReadOnly`
     // itself must keep its narrower "opened as Resource Viewer" tab-identity meaning (see Section 2
     // of the design spec). A lookup failure or a project that doesn't advertise
@@ -597,6 +608,8 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       papi.localization.getLocalizedStrings,
     );
 
+    const webViewState = await webViewStatePromise;
+
     return {
       ...savedWebView,
       title,
@@ -604,7 +617,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       tooltip: optionsTooltip ?? savedWebView.tooltip,
       content: platformScriptureEditorWebView,
       styles: platformScriptureEditorWebViewStyles,
-      state: savedWebViewStateUpdated,
+      state: webViewState,
       projectId,
       allowPopups: true,
       shouldShowToolbar: false,

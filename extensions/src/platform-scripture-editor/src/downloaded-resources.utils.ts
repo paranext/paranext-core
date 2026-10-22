@@ -66,7 +66,7 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
     const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
       includeProjectInterfaces: ['platform.base'],
     });
-    const metadata = allMetadata.filter((m) => m.isEditable === false);
+    const metadata = allMetadata.filter((m) => m.isEditable === false && !m.unsupportedReason);
     return metadata.map((data) => ({
       projectId: data.id,
       name: data.name ?? data.id,

@@ -1138,16 +1138,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
     skips the re-point only when it is `true`: a published resource has no collection of its own, so
     following it would cost a reload, and the in-memory state it drops, for an empty panel. The rule
     lives in that function rather than in a caller, so both switch paths apply it. A translation
-    project with editing switched off is followed like any other. `platform.isEditable` is the wrong discriminator
-    for this: it is the project-wide `Editable` flag (`GetIsEditable` in
+    project with editing switched off is followed like any other. `platform.isEditable` is the
+    wrong discriminator for this: it is the project-wide `Editable` flag (`GetIsEditable` in
     `c-sharp/Projects/ScrTextExtensions.cs`, forced false for resources), not a per-user permission
     — that is `canUserEditScripture` — so gating on it stranded the Text Collection and Find on the
     outgoing project whenever an `Editable=F` translation project was opened. A failed `isPublished`
-    read counts as not published — the setting's default, and what `resolveProjectIsPublished` in
-    `web-view.service-shard.ts` does — so the grid follows. The class newly followed is a plain
-    folder project carrying `<Editable>F</Editable>`, such as the bundled WEB sample; locally
-    installed `.p8z` resources load as resource projects (`GetAllResourceScrTexts` in
-    `LocalParatextProjects.cs` filters on `IsResourceProject`, which is exactly what
+    read counts as not published (the setting's default), so the grid follows. The class newly
+    followed is a plain folder project carrying `<Editable>F</Editable>`, such as the bundled WEB
+    sample; locally installed `.p8z` resources load as resource projects (`GetAllResourceScrTexts`
+    in `LocalParatextProjects.cs` filters on `IsResourceProject`, which is exactly what
     `platform.isPublished` reports), so they are published and stay skipped. Find follows every
     editor-column switch, resources included, and withholds Replace itself per
     `adr-find-follows-editor-to-read-only`. Everything else
@@ -9560,6 +9559,127 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   determination AND the text to reproduce, not a relaxation of the gate.
 - **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
   `policyRemedy`.
+
+## adr-unsupported-project-reason: Unsupported projects are enumerated but gated at open, with a generic blocking reason
+
+- **Date:** 2026-09-25
+- **Status:** Accepted
+- **Context:** Study Bible Additions (SBA) projects are enumerated with every other Scripture project
+  (`LocalParatextProjects.GetAllProjectDetails`), but Platform.Bible cannot open their Scripture
+  content. The PO wants them visible but disabled where users open projects, with the reason, and a
+  placeholder if one is opened anyway. They must stay syncable.
+- **Decision:**
+  - **One source of the reason.** C# computes a generic localize key in
+    `ScrTextExtensions.GetOpenBlockedReason` (a `ScrText` overload, and an `Enum<ProjectType>`
+    overload for projects that are only on the S/R server). It rides on
+    `ProjectMetadata.unsupportedReason`. Consumers render whatever reason they get; none names SBA.
+    Absent or empty means openable, and so does a failed lookup, so an error never locks a user out
+    of a real project.
+  - **C# enforces it at the text boundary.** `ScrTextExtensions.ThrowIfOpenBlocked` throws
+    `ProjectOpenBlockedException` (the key plus `(PROJECT_OPEN_BLOCKED)`). It guards
+    `GetFromScrText` and the four text setters, comment creation and conflict resolution, checks,
+    inventories, the Checklist, and Manage Books via `ResolveProjectOrThrow` (so
+    `CopyCustomVersification` refuses too). Core's current-text reads, including Compare versions'
+    current text, go through `GetFromScrText`, so they are blocked. Writes refuse right after
+    `EnterWrite`. It is not in `LocalParatextProjects.GetParatextProject`, which S/R, settings and
+    metadata share. `OpenBlockedCoverageTests` scans the guarded services for text reads and
+    writes and fails on any that neither refuses first nor carries an `// open-block: exempt`
+    marker naming its guarded caller. The exception's `FAILED_PRECONDITION` code is for C# callers
+    only: `CommonErrorData` drops `Exception.Data` at the JSON-RPC boundary, so TypeScript relies on
+    the sentinel.
+  - **TypeScript shows the reason.** Tools that surface the refusal detect the sentinel and show the
+    localized reason (`%project_unsupported_generic%` if the key can't be read). The inventory,
+    checks, Checklist and Manage Books `open*` commands also refuse such a project; `openFind`
+    doesn't, because Find never searches one. Defence in depth: the editor placeholder offers no
+    tool launchers (its menus live in the unmounted editor, and editor tabs don't use the renderer
+    toolbar).
+  - **Where projects are opened, shown disabled with the reason:** the Simple toolbar picker (a
+    hover tooltip), and Home and New Tab (a tooltip on the disabled Open button, and inline in the ⋯
+    menu when Open is there).
+  - **They don't count as having a project.** The empty editor's no-projects guidance
+    (`useProjectPresence`) leaves them out, so a user whose only projects cannot be opened is told
+    how to get one, even though the toolbar picker lists those projects disabled. A separate message
+    for that case was rejected: it needs new strings for a state that lasts only until SBA support
+    lands.
+  - **Tool pickers hide them.** Manage Books filters in C# (`ProjectFilterService`). Find, Checks,
+    Checklist, Settings, the select and project-picker dialogs, `open()`'s project list and the
+    resource lists filter on `unsupportedReason`. Find also ignores such projects' open tabs, so a
+    layout whose only tab is an SBA shows Find's no-open-projects state. A Find restored onto an SBA
+    while another searchable tab is open moves to that tab's project, as it does when a project's
+    last tab closes; it never searches the SBA.
+  - **Never auto-opened.** Simple-mode auto-open (recent projects, then the S/R fallback) and the
+    Power→Simple slow path skip them. The last-opened cache stores only ids verified usable, so the
+    Power→Simple fast path takes its cached id with no lookup; its key was bumped once
+    (`platform-bible.lastOpenedProject.v2`) so no entry written earlier can name an SBA. Auto-open
+    holds each candidate's answer (`createUnsupportedProjectIdsCache`, looked up by
+    `includeProjectIds` so the lookup service's startup retry still applies) until
+    `platform.onDidChangeProjects` or a new PDP factory. A failed lookup counts as openable and is
+    retried after 30 s. After a run finds no candidate, auto-open doesn't ask for shared projects
+    again until a sync ends, the set of projects changes, a PDP factory registers, or an editor
+    shows a project.
+  - **If opened anyway,** the editor factory writes the reason into the tab's state on every build
+    (`buildScriptureEditorWebViewState`), and the entry point shows it in a placeholder instead of
+    mounting the editor. The placeholder is the editor's alone; other tools rely on the C# refusal.
+  - **Sync is untouched.** Send/Receive, `commitChanges` and `commitDaily` are never blocked. Home's
+    Sync works, and double-click still Gets a project that is only on the server; only Open is
+    blocked.
+- **Alternatives:**
+  - **Refusing in the TypeScript project data provider `get()`** — rejected: it is not a real
+    boundary, because services that call C# directly (checks, inventories, the Checklist, Manage
+    Books) bypass it; and a refused `get()` leaves its callers on endless spinners.
+  - An `isStudyBibleAdditions` boolean flag — rejected: every UI surface that cares would hard-code
+    the check, drifting toward an unmaintained `ProjectKind` typology.
+  - Dropping interfaces (e.g., `USJ_Chapter`) so SBA falls out of filtered lists — rejected: it hides
+    instead of disabling, cannot explain why, and removes data access other features use.
+  - Returning a `Paratext.Data.UnsupportedReason` from `MigrateProjectIfNeeded`
+    (`PlatformScrTextCollection`) — rejected: ScrTextCollection then drops the project everywhere,
+    including Send/Receive rosters, which must show it selectable and syncable.
+  - A read-only computed project setting — rejected: `projectDataProviders.get()` already fans out to
+    `getMetadataForProject()` the same way, saving nothing and adding a settings API contract.
+  - A default filter in `getMetadataForAllProjects` — rejected: it would hide unsupported projects
+    from S/R rosters, sync-status panels, and layering factories that need to see all projects.
+  - An opt-in lookup filter (a new PAPI parameter) — rejected: a shared API change to avoid a
+    one-line filter at each picker call site.
+  - Refusing an explicit project id in `open()` — rejected: that id reaches the placeholder, and C#
+    refuses the text anyway.
+  - Re-checking the cached project on every Power→Simple switch — rejected: a lookup fan-out per
+    switch, only to cover entries written before this change, which the one-time key bump covers.
+- **Consequences:**
+  - A new unsupported project type needs one C# line in `GetOpenBlockedReason` and one localize key
+    in `en.json` and `es.json`. Every new list for picking or opening a project must hide or disable
+    such projects; Send/Receive lists keep them. The rule is in `Paranext-Core-Patterns.md`
+    ("Projects that cannot be opened").
+  - While an SBA is being synced, a write to it reports `SR_EDIT_BLOCKED` before the reason.
+  - **Pending in other repos (as of 2026-09-29):** Studio's Send/Receive service does not yet fill
+    `SharedProjectInfo.unsupportedReason` (the `Enum<ProjectType>` overload is for it), so a
+    server-only SBA shows no reason until it is downloaded. Studio's Compare-versions revision reads
+    (`CompareVersionsMethods.GetBaseVersionText` and `GetTextForRevision`, which Studio's core patch
+    adds and its `ParatextProjectSendReceiveService` calls on the `ScrText` directly) bypass the C#
+    guards, and the compare view in `paratext-bible-internal-extensions` does not yet turn the
+    sentinel into the reason. All three are for the Studio and internal-extensions PRs.
+  - **Known gaps:**
+    - A command invoked with an unsupported project id opens the placeholder, and in Simple mode
+      Column 3 follows it until the user switches projects.
+    - On the placeholder, the controller's `getSelection` waits out its 10-second timeout, because no
+      editor reports a selection.
+    - The Simple picker's reason is hover-only; keyboard users cannot reach it.
+    - A Simple layout saved before this change with Column 3 restored on an unsupported project
+      keeps it open until the user switches projects.
+    - If the C# factory hasn't registered within the lookup service's 30-second startup grace, the
+      editor factory's lookup fails open and that tab isn't re-checked until it is rebuilt. The
+      editor mounts, and shows the reason taken from the C# refusal of its first text read instead
+      of loading forever.
+    - The first auto-open run can pick an SBA in the same late-registration case, or when another
+      factory already serves one of its candidates (the startup retry then doesn't run). The
+      placeholder or the C# refusal still applies.
+    - Manage Books restored on an SBA shows an empty list with no reason.
+    - A saved Text Collection column or Bible-texts/Commentaries reference that names an SBA isn't
+      filtered (only the metadata-derived resource list is), so it shows the generic "could not be
+      loaded" / "Resource unavailable" message rather than the reason. It needs an `Editable=F` SBA
+      or a reference saved before this change; C# still refuses the read.
+    - Deferred to a follow-up: each editor build adds a `getMetadataForProject` fan-out, and
+      auto-open its own metadata lookup, rather than reusing lookups they already make.
+- **Source:** PT-4685.
 
 ## adr-unsynced-changes-signal-is-backend-read: "Unsynced changes" is read from the project's local Mercurial state in the backend and pushed as a snapshot
 

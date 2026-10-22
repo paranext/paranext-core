@@ -100,6 +100,7 @@ function metadataToProjectItem(m: ProjectMetadata): ProjectItem {
     language: resolved?.tag,
     languageDisplayName: resolved?.displayName,
     isEditable: m.isEditable ?? true,
+    unsupportedReason: m.unsupportedReason,
   };
 }
 

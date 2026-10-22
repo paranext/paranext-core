@@ -35,7 +35,7 @@ export type ProjectSelectorProject = {
   isDisabled?: boolean;
   /**
    * Human-readable explanation surfaced in the row tooltip, and to screen readers as the row's
-   * description, when `isDisabled` is true.
+   * description, when `isDisabled` is true. Rendered verbatim, so pass already-localized text.
    */
   disabledReason?: string;
   /**

@@ -18,6 +18,7 @@ import {
   CardFooter,
   CardHeader,
   cn,
+  DisabledActionTooltip,
   DropdownMenuItem,
   Label,
   SearchBar,
@@ -35,13 +36,15 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import type { ProjectMetadata } from '@papi/core';
-import type { LocalizedStringValue } from 'platform-bible-utils';
+import type { LanguageStrings, LocalizedStringValue } from 'platform-bible-utils';
 import {
   formatReplacementString,
   formatTimeSpan,
   getErrorMessage,
   hasDistinctFullName,
+  isLocalizeKey,
   normalizeFullName,
+  PROJECT_OPEN_BLOCKED_FALLBACK_KEY,
 } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useRef, useState } from 'react';
@@ -136,6 +139,7 @@ export type RemoteProjectsState =
 const NO_LOCAL_PROJECTS: LocalProjectInfo[] = [];
 const NO_SHARED_PROJECTS: SharedProjectsInfo = {};
 const NO_ACTIVE_SEND_RECEIVE_PROJECTS: string[] = [];
+const NO_LOCALIZED_UNSUPPORTED_REASONS: LanguageStrings = {};
 
 export type SortConfig = {
   key: 'shortName' | 'fullName' | 'language' | 'activity' | 'action';
@@ -191,6 +195,8 @@ export type LocalProjectInfo = {
    * an "editable" one read-only.
    */
   isEditable?: boolean;
+  /** Localize key; absent means the project can be opened. See `ProjectMetadata.unsupportedReason`. */
+  unsupportedReason?: string;
 };
 
 /**
@@ -206,6 +212,7 @@ export function metadataToLocalProjectInfo(data: ProjectMetadata): LocalProjectI
     fullName: normalizeFullName(data.fullName),
     name: data.name ?? data.id,
     language: data.language ?? '',
+    unsupportedReason: data.unsupportedReason,
   };
 }
 
@@ -227,6 +234,8 @@ export type MergedProjectInfo = {
    */
   hasUnsyncedChanges?: boolean;
   lastSendReceiveDate?: string;
+  /** Localize key; absent means the project can be opened. See `ProjectMetadata.unsupportedReason`. */
+  unsupportedReason?: string;
 };
 
 /**
@@ -309,6 +318,12 @@ export type HomeProps = {
   /** Array of project IDs that are currently being sent/received. */
   activeSendReceiveProjects?: string[];
   /**
+   * Localized text for each `unsupportedReason` key in the list, plus
+   * `%project_unsupported_generic%`, which is shown for a reason that is not a key or has no entry.
+   * With neither, no reason text is shown.
+   */
+  localizedUnsupportedReasons?: LanguageStrings;
+  /**
    * Content for the header, e.g. <><HomeIcon
    * size={36}/><CardTitle>{localizedDialogTitleText}</CardTitle></>
    */
@@ -338,6 +353,8 @@ export type HomeProps = {
  * @param {sharedProjectsInfo} - Object of shared project information, containing projects on the
  *   send/receive server.
  * @param {activeSendReceiveProjects} - Array of project IDs that are currently being sent/received.
+ * @param {localizedUnsupportedReasons} - Localized text for each `unsupportedReason` key in the
+ *   list, plus `%project_unsupported_generic%` for a reason that cannot be shown itself.
  * @param {headerContent} - Content for the header, e.g. <><HomeIcon
  *   size={36}/><CardTitle>{localizedDialogTitleText}</CardTitle></>
  * @returns
@@ -359,6 +376,7 @@ export function Home({
   localProjectsInfo = NO_LOCAL_PROJECTS,
   sharedProjectsInfo = NO_SHARED_PROJECTS,
   activeSendReceiveProjects = NO_ACTIVE_SEND_RECEIVE_PROJECTS,
+  localizedUnsupportedReasons = NO_LOCALIZED_UNSUPPORTED_REASONS,
   headerContent,
 }: HomeProps) {
   const getLocalizedString = (localizeKey: HomeLocalizedStringKey) => {
@@ -482,6 +500,9 @@ export function Home({
           editedStatus: sharedProject.editedStatus,
           hasUnsyncedChanges: unsyncedProjectIds?.includes(projectId.toUpperCase()),
           lastSendReceiveDate: sharedProject.lastSendReceiveDate,
+          // The server's answer covers a project that is not downloaded yet; the local one covers a
+          // server that does not report it. `||` so an empty reason never masks a real one.
+          unsupportedReason: sharedProject.unsupportedReason || localProject?.unsupportedReason,
         });
       });
     }
@@ -499,6 +520,7 @@ export function Home({
           isSendReceivable: false,
           isLocallyAvailable: true,
           hasUnsyncedChanges: unsyncedProjectIds?.includes(project.projectId.toUpperCase()),
+          unsupportedReason: project.unsupportedReason,
         });
       }
     });
@@ -837,24 +859,69 @@ export function Home({
 
   const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
     const isOpening = openingProjectIds.includes(project.projectId);
+    const isOpenBlocked = !!project.unsupportedReason;
+    // A key with no translation can resolve to itself (the loading seed, and possibly the
+    // fallback chain's last resort), so a value that is still a localize key is treated as
+    // missing rather than shown verbatim as tooltip text. A reason that is missing that way, or
+    // is not a key at all, falls back to the generic reason.
+    const toShowableText = (text: string | undefined) =>
+      text && !isLocalizeKey(text) ? text : undefined;
+    const unsupportedReasonText = isOpenBlocked
+      ? (toShowableText(
+          project.unsupportedReason && isLocalizeKey(project.unsupportedReason)
+            ? localizedUnsupportedReasons[project.unsupportedReason]
+            : undefined,
+        ) ?? toShowableText(localizedUnsupportedReasons[PROJECT_OPEN_BLOCKED_FALLBACK_KEY]))
+      : undefined;
+    // The reason is written inside the item, since a menu item cannot show a hover tooltip. The
+    // item is `aria-disabled` rather than Radix-`disabled` so keyboard navigation still reaches
+    // it and the reason is read as part of its accessible name; selecting it does nothing.
     if (isMenuItem)
       return (
-        <DropdownMenuItem disabled={isOpening} onClick={() => handleOpenProject(project)}>
-          <span>{openText}</span>
+        <DropdownMenuItem
+          disabled={isOpening}
+          aria-disabled={isOpenBlocked || undefined}
+          className={cn({ 'tw:opacity-50': isOpenBlocked })}
+          onSelect={(event) => {
+            if (isOpenBlocked) {
+              event.preventDefault();
+              return;
+            }
+            handleOpenProject(project);
+          }}
+        >
+          {/* Not muted: the blocked item is already drawn at half opacity, and muted text under
+              that is unreadable. `min-w-0` lets a long reason wrap instead of widening the menu. */}
+          <div className="tw:flex tw:min-w-0 tw:flex-col">
+            <span>{openText}</span>
+            {unsupportedReasonText && (
+              <span className="tw:text-xs tw:italic tw:whitespace-normal tw:text-foreground">
+                {unsupportedReasonText}
+              </span>
+            )}
+          </div>
         </DropdownMenuItem>
       );
+    // Without reason text the wrapper would be a nameless tab stop with an empty bubble; the button
+    // stays disabled either way.
     return (
-      <Button
-        // Not `disabled`, which would drop the focus of a keyboard user who pressed it; a repeat
-        // press is ignored by `handleOpenProject`.
-        aria-disabled={isOpening}
-        aria-busy={isOpening}
-        // The spinner has no text, so the button keeps its name while it shows.
-        aria-label={openText}
-        onClick={() => handleOpenProject(project)}
+      <DisabledActionTooltip
+        disabled={isOpenBlocked && !!unsupportedReasonText}
+        tooltipText={unsupportedReasonText ?? ''}
       >
-        {isOpening ? <Spinner className="tw:h-5 tw:py-[1px]" /> : openText}
-      </Button>
+        <Button
+          disabled={isOpenBlocked}
+          // Not `disabled` while opening, which would drop the focus of a keyboard user who pressed
+          // it; a repeat press is ignored by `handleOpenProject`.
+          aria-disabled={isOpening}
+          aria-busy={isOpening}
+          // The spinner has no text, so the button keeps its name while it shows.
+          aria-label={openText}
+          onClick={() => handleOpenProject(project)}
+        >
+          {isOpening ? <Spinner className="tw:h-5 tw:py-[1px]" /> : openText}
+        </Button>
+      </DisabledActionTooltip>
     );
   };
 
@@ -1022,14 +1089,19 @@ export function Home({
                             }}
                             onDoubleClick={(e) => {
                               if (!isEventInside(e)) return;
-                              if (project.isLocallyAvailable) handleOpenProject(project);
-                              else if (!isSendReceiveInProgress)
+                              if (project.isLocallyAvailable) {
+                                // Only Open is blocked for an unsupported project, not Get.
+                                if (project.unsupportedReason) return;
+                                handleOpenProject(project);
+                              } else if (!isSendReceiveInProgress) {
                                 handleSendReceiveProject(project.projectId);
+                              }
                             }}
                             key={project.projectId}
                             className={cn('tw:rounded-sm', {
                               'tw:text-muted-foreground/70 tw:hover:text-foreground':
-                                !project.isLocallyAvailable,
+                                !project.isLocallyAvailable && !project.unsupportedReason,
+                              'tw:text-muted-foreground/70': !!project.unsupportedReason,
                             })}
                           >
                             <TableCell className={cn({ 'tw:ps-2': isEdited(project) })}>
@@ -1043,18 +1115,18 @@ export function Home({
 
                                 <div className="tw:grow tw:hidden tw:max-[300px]:!flex">
                                   <div className="tw:grow" />
+                                  {/*
+                                   * The menu-item builders return `DropdownMenuItem`s themselves.
+                                   * Wrapping one in another `DropdownMenuItem asChild` would spread
+                                   * the outer item's `aria-disabled`/`data-disabled` (undefined)
+                                   * over the inner item's, so a disabled Open would look and act
+                                   * enabled.
+                                   */}
                                   <HomeItemDropdownMenu ellipsisButtonClassName="tw:h-6">
                                     {project.isSendReceivable &&
-                                      (!project.isLocallyAvailable || isEdited(project)) && (
-                                        <DropdownMenuItem asChild>
-                                          {syncOrGetButton(project, true)}
-                                        </DropdownMenuItem>
-                                      )}
-                                    {project.isLocallyAvailable && (
-                                      <DropdownMenuItem asChild>
-                                        {openButton(project, true)}
-                                      </DropdownMenuItem>
-                                    )}
+                                      (!project.isLocallyAvailable || isEdited(project)) &&
+                                      syncOrGetButton(project, true)}
+                                    {project.isLocallyAvailable && openButton(project, true)}
                                   </HomeItemDropdownMenu>
                                 </div>
                               </div>
@@ -1078,11 +1150,9 @@ export function Home({
                                   : openButton(project)}
                                 {project.isSendReceivable && project.isLocallyAvailable && (
                                   <HomeItemDropdownMenu>
-                                    <DropdownMenuItem asChild>
-                                      {isEdited(project)
-                                        ? openButton(project, true)
-                                        : syncOrGetButton(project, true)}
-                                    </DropdownMenuItem>
+                                    {isEdited(project)
+                                      ? openButton(project, true)
+                                      : syncOrGetButton(project, true)}
                                   </HomeItemDropdownMenu>
                                 )}
                               </div>

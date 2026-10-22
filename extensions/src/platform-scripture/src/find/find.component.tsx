@@ -379,6 +379,11 @@ export type FindProps = {
   searchStatus: FindJobStatus | undefined;
   /** The find-job error message, if the status is `errored`. */
   searchError: string | undefined;
+  /**
+   * Why the project cannot be searched, already localized. Shown on its own, in place of
+   * {@link searchError}, when the status is `errored`.
+   */
+  openBlockedMessage?: string;
   /** Percent complete of the running search (0-100). */
   searchProgress: number;
   /** Total number of results the job reports (may exceed loaded results). */
@@ -593,6 +598,7 @@ export function Find({
   focusedResultIndex,
   searchStatus,
   searchError,
+  openBlockedMessage,
   searchProgress,
   totalNumberOfResults,
   numberOfHiddenResults,
@@ -1572,7 +1578,10 @@ export function Find({
             searchStatus === 'exceeded') && (
             <p className="tw:font-light tw:text-center">{resultsMessage}</p>
           )}
-          {searchStatus === 'errored' && searchError && (
+          {searchStatus === 'errored' && openBlockedMessage && (
+            <p className="tw:font-light tw:text-center">{openBlockedMessage}</p>
+          )}
+          {searchStatus === 'errored' && !openBlockedMessage && searchError && (
             <p className="tw:font-light tw:text-center">
               {formatReplacementString(localizedStrings['%webView_find_errorOccurred%'], {
                 error: searchError,

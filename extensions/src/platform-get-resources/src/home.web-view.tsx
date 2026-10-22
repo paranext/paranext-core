@@ -17,6 +17,7 @@ import { Home, HOME_STRING_KEYS, type RemoteProjectsState } from './home.compone
 import { parseUnsyncedProjectIds } from './home-unsynced.util';
 import { getInternetBlockedNotification } from './internet-block-notification.utils';
 import { isProjectResourceFilterValue } from './project-resource-filter.component';
+import { useUnsupportedReasonStrings } from './use-unsupported-reason-strings.hook';
 import { useLocalProjects } from './use-local-projects.hook';
 import { openHomeItem } from './open-home-item';
 
@@ -406,6 +407,11 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
 
   const dialogTitleText: string = localizedStringsWithLoadingState[0]['%home_dialog_title%'];
 
+  const localizedUnsupportedReasons = useUnsupportedReasonStrings(
+    localProjectsInfo,
+    sharedProjectsInfo,
+  );
+
   return (
     <Home
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
@@ -424,6 +430,7 @@ globalThis.webViewComponent = function HomeWebView({ useWebViewState }: WebViewP
       localProjectsInfo={localProjectsInfo}
       sharedProjectsInfo={sharedProjectsInfo}
       activeSendReceiveProjects={activeSendReceiveProjects}
+      localizedUnsupportedReasons={localizedUnsupportedReasons}
       headerContent={
         <>
           <HomeIcon size={36} />

@@ -287,3 +287,98 @@ function ProjectsOnlyDecorator(Story: (update?: { args: HomeProps }) => ReactEle
 export const ProjectsOnly: Story = {
   decorators: [ProjectsOnlyDecorator],
 };
+
+const UNSUPPORTED_REASON_KEY = '%project_unsupported_studyBibleAdditions%';
+
+/**
+ * A project that cannot be opened (e.g. a Study Bible Additions project): its row is muted and its
+ * Open action is disabled, with the reason reachable through a tooltip. Sync and Get stay enabled.
+ */
+function UnsupportedProjectDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: [
+          ...staticLocalProjectsAndResources,
+          {
+            projectId: 'sba1',
+            isPublished: false,
+            fullName: 'SBA Project - unsupported',
+            name: 'SBA',
+            language: 'English',
+            unsupportedReason: UNSUPPORTED_REASON_KEY,
+          },
+        ],
+        localizedUnsupportedReasons: {
+          [UNSUPPORTED_REASON_KEY]: "Study Bible Additions projects aren't supported yet.",
+        },
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+export const UnsupportedProject: Story = {
+  decorators: [UnsupportedProjectDecorator],
+};
+
+/**
+ * An unsupported project that is downloaded and has local edits: Sync takes the action cell's
+ * button and Open moves into its ⋯ menu, where it is disabled and carries the reason as text in the
+ * item.
+ */
+function UnsupportedProjectWithLocalEditsDecorator(
+  Story: (update?: { args: HomeProps }) => ReactElement,
+) {
+  return (
+    <Story
+      args={{
+        localizedStringsWithLoadingState: [localizedStrings, false],
+        localProjectsInfo: [
+          {
+            projectId: 'sba1',
+            isPublished: false,
+            fullName: 'SBA Project - unsupported, with local edits',
+            name: 'SBA',
+            language: 'English',
+            unsupportedReason: UNSUPPORTED_REASON_KEY,
+          },
+        ],
+        sharedProjectsInfo: {
+          sba1: {
+            id: 'sba1',
+            name: 'SBA',
+            fullName: 'SBA Project - unsupported, with local edits',
+            language: 'English',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2026-09-01T12:00:00Z',
+          },
+        },
+        remoteProjectsState: 'loaded',
+        localizedUnsupportedReasons: getLocalizedStrings([UNSUPPORTED_REASON_KEY]),
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home</CardTitle>
+          </>
+        ),
+        onOpenProject: (projectId) =>
+          alertCommand('platformScriptureEditor.openScriptureEditor', { projectId }),
+        onSendReceiveProject: (projectId) =>
+          alertCommand('paratextBibleSendReceive.sendReceiveProjects', {
+            projectIds: [projectId],
+          }),
+      }}
+    />
+  );
+}
+
+export const UnsupportedProjectWithLocalEdits: Story = {
+  decorators: [UnsupportedProjectWithLocalEditsDecorator],
+};

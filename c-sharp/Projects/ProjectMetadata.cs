@@ -14,6 +14,8 @@ namespace Paranext.DataProvider.Projects;
 /// <see cref="LanguageTag"/>, <see cref="IsEditable"/>, <see cref="IsPublished"/>) are populated at
 /// project enumeration time (see <c>ScrTextExtensions.GetProjectDetails</c>) so the renderer can show
 /// project lists (e.g. the project picker, Home) without opening a project data provider per project.
+/// <see cref="UnsupportedReason"/> is populated then too, but has no <c>platform.*</c> setting twin,
+/// so the parity invariant below does not cover it.
 ///
 /// Canonical parity invariant (other docs point here): each populated value matches what the
 /// corresponding <c>platform.*</c> project setting getter in
@@ -34,7 +36,8 @@ public class ProjectMetadata(
     string? language = null,
     string? languageTag = null,
     bool? isEditable = null,
-    bool? isPublished = null
+    bool? isPublished = null,
+    string? unsupportedReason = null
 )
 {
     /// <summary>
@@ -105,6 +108,16 @@ public class ProjectMetadata(
     /// <remarks>Nullable and omitted from the wire when unset; see <see cref="IsEditable"/>.</remarks>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? IsPublished { get; } = isPublished;
+
+    /// <summary>
+    /// Localize key explaining why Platform.Bible cannot open this project, or null when it can
+    /// (<c>ScrTextExtensions.GetOpenBlockedReason</c>). Tool pickers leave such a project out; surfaces
+    /// where users open projects show it disabled with the reason. The full contract is on the
+    /// TypeScript <c>ProjectMetadataWithoutFactoryInfo.unsupportedReason</c>.
+    /// </summary>
+    /// <remarks>Omitted from the wire when null; never set it to an empty string.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? UnsupportedReason { get; } = unsupportedReason;
 
     public override string ToString()
     {
