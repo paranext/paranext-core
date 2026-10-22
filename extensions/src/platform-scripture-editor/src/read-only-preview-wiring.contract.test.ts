@@ -62,6 +62,13 @@ describe('the web view read-only wiring', () => {
     expect(source).not.toContain("viewTypeRef.current === 'standard'");
   });
 
+  it('focuses the pane row on a caller click in read-only Preview as in Standard view', () => {
+    expect(source).toContain(
+      "focusRowOnFocusRequest={usesPaneModel && noteEditingSurface === 'none'}",
+    );
+    expect(source).not.toContain("viewType === 'standard' && noteEditingSurface");
+  });
+
   it('has no editable-markers dev switch', () => {
     expect(source).not.toContain('dev-editableMarkersView');
   });
