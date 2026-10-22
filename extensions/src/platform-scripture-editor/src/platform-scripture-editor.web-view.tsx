@@ -5090,11 +5090,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 onSelectedFootnoteChange={handleSelectedFootnoteChange}
                 onFocusedFootnoteChange={handleFocusedFootnoteChange}
                 onPaneFocusLeft={handlePaneFocusLeft}
-                // A caller click in a read-only Standard view has nowhere else to put focus, and
+                // A caller click in a read-only Standard view or Preview has nowhere else to put focus, and
                 // PT9 still moves the caret into the note — so the pane takes it, which is what
                 // turns the caller highlight on. Everywhere else the click's own editor (the row
                 // editor or the popover) owns focus and the pane must not pull it away.
-                focusRowOnFocusRequest={viewType === 'standard' && noteEditingSurface === 'none'}
+                focusRowOnFocusRequest={
+                  usesPaneNoteModel(viewType, isPowerMode) && noteEditingSurface === 'none'
+                }
                 onPaneFocusChange={handlePaneFocusChange}
                 // The placeholder the data hook serves until the chapter arrives, while the text
                 // beside it shows a spinner.
