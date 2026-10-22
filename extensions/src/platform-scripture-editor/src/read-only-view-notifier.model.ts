@@ -152,6 +152,10 @@ export class ReadOnlyViewNotifier {
       // suppress the notification.
       if (!(await this.canUserEditScripture(projectId))) return;
 
+      // A project that is not editable is read-only in every view, so the advice to switch to
+      // Standard view would be false. A failed lookup does not suppress the notification.
+      if (!(await this.isProjectEditable(projectId))) return;
+
       // Check if this notification is disabled for this project
       const disabledTime = this.disabledMap[projectId];
       // If the disable time hasn't elapsed yet, don't send another notification
@@ -215,6 +219,22 @@ export class ReadOnlyViewNotifier {
       });
     } catch (e) {
       logger.warn(`ReadOnlyViewNotifier failed handling WebView: ${getErrorMessage(e)}`);
+    }
+  }
+
+  /**
+   * Whether the project's `platform.isEditable` setting allows editing. Fails open: a lookup that
+   * fails counts as editable.
+   */
+  private async isProjectEditable(projectId: string): Promise<boolean> {
+    try {
+      const pdp = await this.papiInstance.projectDataProviders.get('platform.base', projectId);
+      return (await pdp.getSetting('platform.isEditable')) !== false;
+    } catch (e) {
+      logger.warn(
+        `ReadOnlyViewNotifier failed to check whether project ${projectId} is editable: ${getErrorMessage(e)}`,
+      );
+      return true;
     }
   }
 

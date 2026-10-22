@@ -23,7 +23,7 @@ function asMock<T>(partial: unknown): T {
   return partial as T;
 }
 
-function setup(interfaceMode = 'power', canUserEditScripture = true) {
+function setup(interfaceMode = 'power', canUserEditScripture = true, isEditable = true) {
   const openListeners: WebViewListener[] = [];
   const updateListeners: WebViewListener[] = [];
   const closeListeners: WebViewListener[] = [];
@@ -38,7 +38,11 @@ function setup(interfaceMode = 'power', canUserEditScripture = true) {
   const projectDataProvidersGet = vi.fn(async (pdpType: string) =>
     pdpType === 'platformScripture.scriptureEditPermissions'
       ? { canUserEditScripture: canUserEditScriptureMock }
-      : { getSetting: vi.fn().mockResolvedValue('Project') },
+      : {
+          getSetting: vi.fn(async (key: string) =>
+            key === 'platform.isEditable' ? isEditable : 'Project',
+          ),
+        },
   );
   const capture = (listeners: WebViewListener[]) =>
     vi.fn((listener: WebViewListener) => {
@@ -147,6 +151,30 @@ describe('ReadOnlyViewNotifier', () => {
     await notifier.start();
     await open(editorWebView('formatted'));
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('does not notify when the project is not editable', async () => {
+    const { notifier, open, send } = setup('power', true, false);
+    await notifier.start();
+    await open(editorWebView('formatted'));
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('announces anyway when the editable-setting lookup fails', async () => {
+    const { notifier, open, send, projectDataProvidersGet } = setup();
+    projectDataProvidersGet.mockImplementation(async (pdpType: string) => ({
+      ...(pdpType === 'platformScripture.scriptureEditPermissions'
+        ? { canUserEditScripture: vi.fn().mockResolvedValue(true) }
+        : {
+            getSetting: vi.fn(async (key: string) => {
+              if (key === 'platform.isEditable') throw new Error('setting unavailable');
+              return 'Project';
+            }),
+          }),
+    }));
+    await notifier.start();
+    await open(editorWebView('formatted'));
+    expect(send).toHaveBeenCalledTimes(1);
   });
 
   it('announces anyway when the edit-permission lookup fails', async () => {
