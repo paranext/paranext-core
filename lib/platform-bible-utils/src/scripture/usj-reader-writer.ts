@@ -2852,6 +2852,23 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       }
     }
 
+    // A character marker that directly follows a chapter marker (e.g. the second run in
+    // `\c 5 \ca 5a\ca* \ca 5b\ca*`) needs the space ParatextData writes after the chapter and its
+    // folded `\ca`/`\cp` attributes (`UsxFragmenter.AppendStartUsfm` ends every `\c` with a space).
+    // USJ has no whitespace node there, so without this the two runs fuse together.
+    if (
+      typeof markerParentOrIsInsideMarkerWithSameType === 'object' &&
+      !('isClosingMarker' in marker) &&
+      marker.type === 'char' &&
+      !/\s$/.test(usfmOutput)
+    ) {
+      const siblings = markerParentOrIsInsideMarkerWithSameType.content;
+      const markerIndex = siblings?.indexOf(marker) ?? -1;
+      const previousSibling = markerIndex > 0 ? siblings?.[markerIndex - 1] : undefined;
+      if (typeof previousSibling === 'object' && previousSibling.type === 'chapter')
+        usfmOutput += ' ';
+    }
+
     // Add the marker fragments and USFM into the existing fragments and USFM
     if (fragmentsInfo)
       UsjReaderWriter.mergeFragmentsInfoIntoExistingArray(
