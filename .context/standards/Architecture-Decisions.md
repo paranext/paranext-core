@@ -8725,8 +8725,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   a cancelled sync as a failure. Where both signals carry a verdict, the two are ORDERED rather than
   guessed between: the snapshot carries `completedAt` (C# `DateTimeOffset?`) beside the outcome, and
   `useSyncStatus` compares it against the claim's own `lastResults.sendReceiveDate`, showing whichever
-  describes the run that finished later. A build that dates neither leaves them unordered, and the
-  claim's richer per-project verdict stands. A verdict that came from the backend has no per-project
+  is dated later. The backend never dates a run later than the claim's results for it, so a tie keeps
+  the claim's verdict; that is what still recognizes the claim's own run when the indicator mounts
+  after it ended. A build that dates neither leaves them unordered, and the claim's richer
+  per-project verdict stands. A verdict that came from the backend has no per-project
   detail behind it — the details web view describes the last CLAIMED sync — so the popover withholds
   its "View sync details" link for one. And the picker syncs the project being switched TO last
   (`syncOnProjectSwitch`), because these are two backend runs and the indicator reports the most
@@ -8758,13 +8760,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   did before, with the claim's verdict standing. This does not close
   `adr-toolbar-sync-status-is-local` follow-up 1 (those paths still raise no claim) or the
   overlapping sync notifications recorded there, which still fall short of reporting sync status
-  once and truthfully. Open items, none filed as of this entry:
+  once and truthfully. Open items, unfiled unless a ticket is named:
   1. *A watchdog re-query in flight when the closing snapshot arrives* re-applies the older "still
      syncing" answer and drops the outcome until the next tick. Pre-existing, and `completedAt` does
      not help: the stale answer is a live read of whether a sync is running, not a verdict to order.
-  2. *A project switch still runs two backend runs*, so a failure flushing the project being left is
-     logged rather than shown. Reporting both would take one run covering both projects, at the cost
-     of a deep sync on the way out.
+  2. *A project switch still runs two backend runs*, so the indicator reports the incoming project's
+     sync only; a failure flushing the project being left reaches the user through its own failure
+     toast. Reporting both needs one run covering both projects, which an optional flush-first
+     parameter on `syncProjects` would give without a deep sync of the project being left
+     (PT-4902).
   3. *`first-run/steps/sync-progress.component.tsx`* could read the outcome rather than rely on its
      recovery timeout alone, but still needs the timeout for a build that cannot say.
   4. *"Has this user ever synced"* (PT-4327) — the outcome lasts one backend process, so answering

@@ -19,7 +19,10 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// </remarks>
 public enum SyncOutcome
 {
-    /// <summary>The run completed and succeeded for every project it covered.</summary>
+    /// <summary>
+    /// The run completed and succeeded for every project it covered, including a run that found
+    /// nothing to sync.
+    /// </summary>
     Succeeded,
 
     /// <summary>

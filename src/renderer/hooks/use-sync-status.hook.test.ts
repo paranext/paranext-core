@@ -790,6 +790,28 @@ describe('useSyncStatus', () => {
     expect(result.current.status).toBe('synced');
   });
 
+  it('keeps the claim’s verdict for its own run when both are dated alike', async () => {
+    // Mounted after the run ended (a Simple/Power toggle, a reload), this hook never saw the claim
+    // join it, so only the dates relate the two verdicts. The backend dates a run no later than the
+    // claim's results for it, so a tie must keep the claim's verdict and the detail behind it.
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'failed' }, '2026-09-18T10:00:00Z'));
+    seedActivity({
+      isSyncing: false,
+      projectIds: [],
+      outcome: 'failed',
+      completedAt: '2026-09-18T10:00:00Z',
+    });
+    captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('failed');
+    expect(result.current.isVerdictFromBackendOnly).toBe(false);
+  });
+
   it('reports the outcome when the claim only answers after the sync has ended', async () => {
     // The Simple-mode startup case: send/receive activates while the sync is already running, so the
     // claim's first answer lands after it finished. That answer carries no verdict of its own — the

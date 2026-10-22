@@ -73,14 +73,19 @@ public readonly record struct SyncActivityState(
     public SyncOutcome? Outcome { get; init; }
 
     /// <summary>
-    /// When the run <see cref="Outcome"/> describes finished. Set and cleared with it, so the two are
+    /// The date of the run <see cref="Outcome"/> describes. Set and cleared with it, so the two are
     /// both present or both absent.
     /// <para>
     /// This is what lets a consumer holding two verdicts decide which one is newer. The Send/Receive
-    /// extension's own results carry the time of the sync they describe, and a consumer reading both
-    /// signals has no other way to tell an outcome from this run apart from a verdict left over from
-    /// an earlier one — so without this it can only guess, and a guess here shows a verdict for a run
+    /// extension's own results carry a date on the same clock, and a consumer reading both signals
+    /// has no other way to tell an outcome from this run apart from a verdict left over from an
+    /// earlier one — so without this it can only guess, and a guess here shows a verdict for a run
     /// it does not describe.
+    /// </para>
+    /// <para>
+    /// Not necessarily the moment the run finished. What it guarantees is the ordering: a later run
+    /// always has a later date, and for a run the extension's results also describe it is never
+    /// later than their date, so ordering by date keeps their richer per-project verdict.
     /// </para>
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

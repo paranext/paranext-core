@@ -402,7 +402,7 @@ declare module 'paratext-bible-send-receive' {
      */
     outcome?: SyncOutcome;
     /**
-     * When the run {@link SyncActivitySnapshot.outcome} describes finished, as an ISO 8601 string.
+     * The date of the run {@link SyncActivitySnapshot.outcome} describes, as an ISO 8601 string.
      * Present exactly when `outcome` is.
      *
      * A consumer that also reads {@link SyncState.lastResults} holds two verdicts from different
@@ -410,6 +410,10 @@ declare module 'paratext-bible-send-receive' {
      * one describes the sync that just finished, and the older one belongs to a sync it never saw.
      * Without it a consumer can only guess, so treat its absence as "these cannot be ordered" and
      * fall back on something other than a guess.
+     *
+     * Not necessarily when the run finished. What it guarantees is the ordering: a later run always
+     * has a later date, and for a run `lastResults` also describes it is never later than
+     * `sendReceiveDate` — so on a tie, keep `lastResults`, the richer of the two.
      */
     completedAt?: string;
   };
@@ -417,7 +421,8 @@ declare module 'paratext-bible-send-receive' {
   /**
    * How a completed Send/Receive run turned out, as carried by {@link SyncActivitySnapshot.outcome}.
    *
-   * - `succeeded` = the run succeeded for every project it covered
+   * - `succeeded` = the run succeeded for every project it covered, including a run that found
+   *   nothing to sync
    * - `failed` = the run did not succeed for at least one project it covered. A run the user
    *   cancelled reports this too, matching how {@link ResultInfo.resultStatus} reports a cancelled
    *   sync as a non-success rather than as a status of its own

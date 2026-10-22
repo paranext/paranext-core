@@ -915,10 +915,11 @@ export function useSyncStatus(): SyncStatusInfo {
    * picker's per-project sync — the claim's verdict belongs to a different sync, so the backend's
    * `outcome` answers, or `unknown` when there is none. When the claim has reached no verdict at
    * all (`idle`/`unknown`), the outcome is the only one on offer. When both carry a verdict, the
-   * one describing the run that finished LATER wins, which is what their timestamps settle; where a
-   * build dates neither, the claim's richer per-project verdict stands. Reporting `unknown` rather
-   * than guessing is the point of that state: a sync happened and how it went is not knowable,
-   * which beats decorating it with an unrelated sync's green check.
+   * one dated LATER wins, and a tie keeps the claim's, since the backend never dates a run later
+   * than the claim's results for it; where a build dates neither, the claim's richer per-project
+   * verdict stands. Reporting `unknown` rather than guessing is the point of that state: a sync
+   * happened and how it went is not knowable, which beats decorating it with an unrelated sync's
+   * green check.
    *
    * The reverse direction is deliberately NOT wired: the activity signal reporting `isSyncing:
    * false` does not clear a claim that says `syncing`. The two disagree that way for an ordinary
@@ -967,12 +968,11 @@ export function useSyncStatus(): SyncStatusInfo {
       // The claim reached no verdict of its own, so the backend's outcome is the only one on offer.
       if (claimStatus === 'idle' || claimStatus === 'unknown') return backendVerdict(outcomeStatus);
       // The claim saw the run this outcome describes, so both verdicts are about the SAME sync and
-      // its per-project results are the richer account. Ordering them by time here would compare
-      // two clocks for one run — and the run bracket closes last, so the coarse verdict would
-      // usually win, taking the way into the detail behind it along with it.
+      // its per-project results are the richer account.
       if (activityRun.didClaimSee) return claimVerdict(claimStatus);
-      // Two verdicts from two signals, each about a run the other never saw. The one describing the
-      // run that finished later is this sync's.
+      // Ordered by date. The later one is this sync's. A tie keeps the claim's: the backend never
+      // dates a run later than the claim's results for it, which is what still recognizes the
+      // claim's own run when this hook mounted after it ended and never saw the claim join it.
       const outcomeAt = readTimestamp(activityCompletedAt);
       if (outcomeAt !== undefined && claimVerdictAt !== undefined)
         return outcomeAt > claimVerdictAt
