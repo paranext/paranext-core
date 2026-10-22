@@ -1815,7 +1815,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   metadata list arrived.
 - **Consequences:** "No project" is now reachable two ways — none was named, or the named one is
   gone — and every consumer must treat them identically, because that equivalence is what makes the
-  free-resource reading path (`adr-no-project-reading-choice-in-app-settings`) the answer for both. A
+  no-project reading path (`adr-no-project-reading-choice-in-app-settings`) the answer for both. A
   consumer that needs to tell them apart has to keep the raw prop deliberately. The resolution cannot
   distinguish absence from an infrastructure failure outlasting the lookup's own waits; both land on
   the no-project path, which renders something usable and re-resolves when the id changes, rather
@@ -4470,9 +4470,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Date:** 2026-08-25
 - **Status:** Accepted
-- **Context:** PT-4326 lets a user with no project open pick and read freely-licensed resources in
-  the Bible texts panel (Simple mode's Column 3). Everything that panel does downstream of "which
-  resources are chosen" is already project-independent — it renders
+- **Context:** PT-4326 lets a user with no project open pick and read resources in the Bible texts
+  and Commentaries panels (Simple mode's Column 3). Everything those panels do downstream of "which
+  resources are chosen" is already project-independent — they render
   `platformScripture.USJ_Chapter` for the **resource's own** project id, never the container
   project. Only the chosen-reference list is project-scoped: it lives in the
   `platformScripture.textConnectionSettings` project data provider, which does not exist when no
@@ -4481,9 +4481,12 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   `platformScriptureEditor.noProjectReferencedResources`, carrying the same `ResourceReferenceList`
   shape as its project-scoped counterpart, and select between the two sources in one hook
   (`useResourceReferenceSource`) that returns the same `EffectiveResourceReferenceListState` either
-  way. The panel branches on *which source*, never on a second copy of the readiness/install/render
-  state machine. The list never migrates into a project: opening one reloads the panel with a real
-  `projectId` and the project source takes over. The Model text panel (Column 1) gets no
+  way. The panels branch on *which source*, never on a second copy of the readiness/install/render
+  state machine. The list never migrates into a project: opening one reloads the panels with a real
+  `projectId` and the project source takes over. What may be picked follows **registration**, not
+  the missing project: a registered user is offered the whole catalog on either tab, and an
+  unregistered user only the freely-licensed Bible texts in `free-resources.const.ts` (UX review,
+  October 2026). The Model text panel (Column 1) gets no
   counterpart and shows only its no-project message: until PT-4780 lets a user change a chosen model
   text, a pick made there without a project could never be undone (UX review, October 2026).
 - **Alternatives considered:** **`useWebViewState`** — rejected: Simple mode never persists its
@@ -4496,11 +4499,16 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   text panel** — dropped for the reason given under Decision; revisit once PT-4780 lands.
 - **Consequences:** A setting that only one caller writes, which is why it is `isHidden` and why its
   validator (`no-project-reference-list.utils.ts`) is stricter than the project-scoped
-  `resourceReferenceListValidator` — it accepts only DBL references. Because the settings are
+  `resourceReferenceListValidator` — it accepts only DBL references, and only free ones from an
+  unregistered user, asking the registration command when a non-free one is added. The panels
+  probe registration themselves (a web view cannot reach the renderer's registration store), once
+  on mount, and show `loading` until it answers; a failed check counts as unregistered. As of
+  2026-10-22 an unregistered user cannot reach the DBL catalog at all, so the free-only branch is
+  reachable only once that changes — a product question, not yet decided. Because the settings are
   declared in JSON while `CURRENT_DATA_VERSION` lives in TypeScript, and nothing typechecks a
-  contribution's `default` against `SettingTypes`, a test pins the two together. Free-resource
-  filtering is applied on read as well as on write, so a UID stored while the allowlist was wider
-  cannot keep rendering.
+  contribution's `default` against `SettingTypes`, a test pins the two together. For an
+  unregistered user, free-resource filtering is applied on read as well as on write, so a UID
+  stored while the allowlist was wider cannot keep rendering.
 - **Source:** PT-4326.
 
 ## adr-node-dom-globals-polyfill: Node processes install `@xmldom/xmldom` DOM globals; the extension host does it in a first-import side-effect module

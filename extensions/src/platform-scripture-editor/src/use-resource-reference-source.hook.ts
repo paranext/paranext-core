@@ -12,6 +12,8 @@ import {
   DEFAULT_RESOURCE_REFERENCE_LIST,
 } from './resource-reference-list.const';
 import { filterFreeReferences } from './free-resources.utils';
+import { isDblResourceReference } from './resource-reference.utils';
+import type { RegistrationValidity } from './use-registration-validity.hook';
 
 /**
  * Where a reading panel's chosen resources come from, and how to read and write them.
@@ -66,11 +68,15 @@ const EMPTY_ITEMS: EffectiveResourceReference[] = [];
  *
  * ## Free-resource filtering
  *
- * The no-project branch filters its items through `filterFreeReferences` on the way OUT — when the
- * list is READ — and not on the way in. A UID stored while the allowlist was wider, or edited into
- * the setting by hand, must not keep rendering; but nor should it be destroyed, since the curated
- * list is expected to widen. Refusing newly ADDED non-free references is
- * `noProjectReferenceListValidator`'s job, at the layer every writer passes through.
+ * Only an unregistered user is restricted to free resources; a registered user may read any DBL
+ * resource with or without a project. Until the registration check answers, the no-project branch
+ * reports `loading`, so neither user is shown a list that is about to change.
+ *
+ * For an unregistered user the no-project branch filters its items through `filterFreeReferences`
+ * on the way OUT — when the list is READ — and not on the way in. A UID stored while the allowlist
+ * was wider, or edited into the setting by hand, must not keep rendering; but nor should it be
+ * destroyed, since the curated list is expected to widen. Refusing newly ADDED non-free references
+ * is `noProjectReferenceListValidator`'s job, at the layer every writer passes through.
  *
  * Every underlying hook is called unconditionally and the result is selected afterwards, so hook
  * order is stable whether or not a project is open. `useEffectiveResourceReferenceList(undefined,
@@ -78,9 +84,14 @@ const EMPTY_ITEMS: EffectiveResourceReference[] = [];
  * no-project branch.
  *
  * @param projectId The panel's container project, or `undefined` when no project is open.
+ * @param registration Whether this machine has a valid Paratext registration. Consulted only when
+ *   no project is open.
  * @returns See {@link ResourceReferenceSource}.
  */
-export function useResourceReferenceSource(projectId: string | undefined): ResourceReferenceSource {
+export function useResourceReferenceSource(
+  projectId: string | undefined,
+  registration: RegistrationValidity,
+): ResourceReferenceSource {
   // #region Project-backed source
 
   const projectState = useEffectiveResourceReferenceList(
@@ -113,7 +124,7 @@ export function useResourceReferenceSource(projectId: string | undefined): Resou
   storedListRef.current = storedList;
 
   const noProjectState = useMemo<EffectiveResourceReferenceListState>(() => {
-    if (isLoadingStored) return { status: 'loading' };
+    if (isLoadingStored || registration === 'unknown') return { status: 'loading' };
     if (isPlatformError(storedList)) return { status: 'error' };
 
     // Nothing validates this value on READ — the registered validator runs on write only, and the
@@ -131,10 +142,15 @@ export function useResourceReferenceSource(projectId: string | undefined): Resou
       status: 'ready',
       list: mergeResourceReferenceLists(DEFAULT_RESOURCE_REFERENCE_LIST, {
         dataVersion: CURRENT_DATA_VERSION,
-        items: filterFreeReferences(items),
+        // DBL references only, whoever the user is: with no project there is nothing to resolve any
+        // other reference type against.
+        items:
+          registration === 'valid'
+            ? items.filter(isDblResourceReference)
+            : filterFreeReferences(items),
       }),
     };
-  }, [isLoadingStored, storedList]);
+  }, [isLoadingStored, registration, storedList]);
 
   const getNoProjectList = useCallback(async () => {
     const { current } = storedListRef;

@@ -1,6 +1,7 @@
 /**
  * The DBL entry UIDs that Platform.Bible treats as **free / openly licensed**, and therefore offers
- * to a user who has no project open.
+ * to an unregistered user who has no project open. A registered user is offered the whole catalog
+ * with or without a project.
  *
  * ## Why this is a hand-curated list
  *
@@ -62,9 +63,9 @@
  * the catalog supplies. Entries here may be written in either case.
  *
  * An empty list means no resource qualifies as free. `HAS_FREE_RESOURCES` then switches the
- * no-project entry point off entirely rather than offering a picker that cannot be populated — the
- * safe direction to fail, since the alternative would offer resources we cannot confirm are freely
- * readable.
+ * unregistered user's no-project entry point off entirely rather than offering a picker that cannot
+ * be populated — the safe direction to fail, since the alternative would offer resources we cannot
+ * confirm are freely readable.
  */
 // Keep expanding this list: one entry is enough to switch the no-project panels on, but it leaves a
 // user with a single text in one language. See the harvesting steps above for how to add more.

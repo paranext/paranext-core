@@ -757,15 +757,16 @@ declare module 'papi-shared-types' {
      */
     'platformScriptureEditor.enableScriptureTextGrid': boolean;
     /**
-     * The Bible texts a user has chosen to read while **no project is open**, in the same shape as
-     * the project-scoped `platformScripture.referencedProjectsAndResources` setting.
+     * The Bible texts and commentaries a user has chosen to read while **no project is open**, in
+     * the same shape as the project-scoped `platformScripture.referencedProjectsAndResources`
+     * setting.
      *
-     * Hidden: it is written only by the Bible texts panel's no-project resource picker, never by
-     * the settings dialog. It exists because the project-scoped text-connection data provider —
-     * where the equivalent choice normally lives — does not exist without a project, and Simple
-     * mode never persists its layout, so per-web-view state would be lost on every restart.
-     * Restricted to free / openly-licensed resources on both read and write; see
-     * `free-resources.utils.ts`.
+     * Hidden: it is written only by the resource panels' no-project picker, never by the settings
+     * dialog. It exists because the project-scoped text-connection data provider — where the
+     * equivalent choice normally lives — does not exist without a project, and Simple mode never
+     * persists its layout, so per-web-view state would be lost on every restart. Holds DBL
+     * resources only. For an unregistered user it is restricted to free / openly-licensed resources
+     * on both read and write; see `free-resources.utils.ts`.
      *
      * The Model text panel has no counterpart: until PT-4780 lets a user change a chosen model
      * text, a pick made without a project could never be undone, so that panel offers none.

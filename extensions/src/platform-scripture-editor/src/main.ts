@@ -64,7 +64,7 @@ import {
   showCommentariesTab,
   showTextCollectionTab,
 } from './show-panel.util';
-import { noProjectReferenceListValidator } from './no-project-reference-list.utils';
+import { createNoProjectReferenceListValidator } from './no-project-reference-list.utils';
 
 logger.debug('Scripture Editor is importing!');
 
@@ -1342,11 +1342,16 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   // The app-scoped setting that holds a no-project reading choice. It is hidden and written only by
-  // the Bible texts panel's resource picker, so a validator here is what stops a hand-edited settings
-  // file from putting a malformed or non-DBL reference in front of a user with no project.
+  // the resource panels' picker, so a validator here is what stops a hand-edited settings file from
+  // putting a malformed or non-DBL reference — or, for an unregistered user, a non-free one — in
+  // front of a user with no project.
   const noProjectReferencedResourcesValidatorPromise = papi.settings.registerValidator(
     'platformScriptureEditor.noProjectReferencedResources',
-    noProjectReferenceListValidator,
+    createNoProjectReferenceListValidator(
+      async () =>
+        (await papi.commands.sendCommand('paratextRegistration.doesUserHaveValidRegistration')) ===
+        true,
+    ),
   );
 
   const openResourceTextPromise = papi.commands.registerCommand(

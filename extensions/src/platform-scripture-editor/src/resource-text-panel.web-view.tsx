@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useChapterUsjWithCopyLimit } from './copy-limit/use-chapter-usj-with-copy-limit.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useResourceReferenceSource } from './use-resource-reference-source.hook';
+import { useRegistrationValidity } from './use-registration-validity.hook';
 import { useResolvedContainerProjectId } from './use-resolved-container-project-id.hook';
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
 import type { PickerResource } from './downloaded-resources.utils';
@@ -44,7 +45,7 @@ import { resolveResourceSelection } from './resource-selection.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
 import { selectTextConnection } from './select-dbl-resource';
-import { ResourceTextPanel } from './resource-text-panel.component';
+import { ResourceTextPanel, type NoProjectPicker } from './resource-text-panel.component';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
@@ -171,9 +172,10 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // #region Data sources
 
-  // Reads the project's referenced resources when a project is open, and the app-scoped
-  // free-resource choice when none is. Same state shape either way, so everything below is unchanged.
-  const resourceSource = useResourceReferenceSource(projectId);
+  // Reads the project's referenced resources when a project is open, and the app-scoped choice when
+  // none is. Same state shape either way, so everything below is unchanged.
+  const registration = useRegistrationValidity();
+  const resourceSource = useResourceReferenceSource(projectId, registration);
   const effectiveResourcesState = resourceSource.state;
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
@@ -187,11 +189,16 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   );
   const { getUserList: getUserResourceTexts, setUserList: setUserResourceTexts } = resourceSource;
 
-  // Bible-texts-only, and only while something is actually allowlisted: an empty allowlist leaves
-  // nothing to offer, so the tab keeps its plain "no project" message rather than a picker that
-  // cannot be populated.
-  const isFreeResourceEntryPoint =
-    resourceSource.isNoProject && resourceType === 'ScriptureResource' && HAS_FREE_RESOURCES;
+  // With no project open, a registered user may pick from the whole catalog on either tab, and an
+  // unregistered one only from the free Bible texts — and only while something is allowlisted, since
+  // an empty allowlist leaves a picker that cannot be populated. `unknown` takes the catalog branch
+  // only to stay out of the plain no-project message: the source reports `loading` until the check
+  // answers, so no picker can open in the meantime.
+  let noProjectPicker: NoProjectPicker = 'none';
+  if (registration !== 'invalid') noProjectPicker = 'catalog';
+  else if (resourceType === 'ScriptureResource' && HAS_FREE_RESOURCES)
+    noProjectPicker = 'freeResources';
+  const isFreeResourcesOnly = resourceSource.isNoProject && noProjectPicker === 'freeResources';
 
   // Re-resolve the cached resource list once an install completes so the resource flips to
   // installed and renders; the install itself lives in the shared hook. Returns a no-op until the
@@ -220,10 +227,10 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     hasCatalogError,
     // Scoped to the free-resource entry point: with a project open the panel may still have an
     // installed resource to show, so the retryable catalog error stays the better answer there.
-    hasRegistrationError: isFreeResourceEntryPoint && hasRegistrationError,
-    // The free-resource prompt can only offer what the catalog supplies, so it must not appear
-    // before the catalog has settled.
-    needsCatalogBeforeEmpty: isFreeResourceEntryPoint,
+    hasRegistrationError: isFreeResourcesOnly && hasRegistrationError,
+    // The no-project prompt can only offer what the catalog supplies, so it must not appear before
+    // the catalog has settled.
+    needsCatalogBeforeEmpty: resourceSource.isNoProject && noProjectPicker !== 'none',
     matchingCount: filteredResources.length,
   });
 
@@ -473,13 +480,13 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
         resourceType,
         selectedResourceIds: currentFilteredDblIds,
         ...freeResourcePickerOptions(
-          isFreeResourceEntryPoint,
+          isFreeResourcesOnly,
           localizedStrings['%webView_resourcePanel_freeResourcesOnly_notice%'],
           localizedStrings['%webView_resourcePanel_noProject_register%'],
         ),
         isModal: true,
       }),
-      [resourceType, currentFilteredDblIds, isFreeResourceEntryPoint, localizedStrings],
+      [resourceType, currentFilteredDblIds, isFreeResourcesOnly, localizedStrings],
     ),
     useCallback(
       (resource: DblResourceData | undefined) => {
@@ -498,7 +505,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     <ResourceTextPanel
       localizedStrings={localizedStrings}
       hasProject={!!projectId}
-      isFreeResourceEntryPoint={isFreeResourceEntryPoint}
+      noProjectPicker={noProjectPicker}
       resourceType={resourceType}
       filteredResources={filteredResources}
       selectedRef={selectedRef}

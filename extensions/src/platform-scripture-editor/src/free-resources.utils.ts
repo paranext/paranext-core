@@ -16,10 +16,10 @@ const FREE_RESOURCE_UID_SET: ReadonlySet<string> = new Set(
 /**
  * Whether any resource is allowlisted at all.
  *
- * Gates the whole no-project entry point. With an empty allowlist the panels would otherwise offer
- * a pick prompt whose picker is empty by construction — a worse answer than the plain "no project"
- * message, which at least says something true. See {@link FREE_RESOURCE_DBL_ENTRY_UIDS} for why the
- * list can legitimately be empty.
+ * Gates the unregistered user's no-project entry point. With an empty allowlist the panel would
+ * offer a pick prompt whose picker is empty by construction — a worse answer than the plain "no
+ * project" message, which at least says something true. See {@link FREE_RESOURCE_DBL_ENTRY_UIDS} for
+ * why the list can legitimately be empty.
  */
 export const HAS_FREE_RESOURCES: boolean = FREE_RESOURCE_DBL_ENTRY_UIDS.length > 0;
 
@@ -48,17 +48,18 @@ const SHOW_REGISTRATION_COMMAND: keyof CommandHandlers =
  * Callers spread the result inside their own `useMemo`/`useCallback`, which is what keeps the
  * dialog options at a stable identity.
  *
- * @param isFreeResourceEntryPoint Whether this caller is the no-project free-resource entry point.
+ * @param isFreeResourcesOnly Whether this caller may offer only free resources: no project open and
+ *   no valid registration.
  * @param notice Already-localized sentence explaining the restriction.
  * @param registerLabel Already-localized label for the button that opens registration.
  * @returns Options to spread; `{}` when unrestricted.
  */
 export function freeResourcePickerOptions(
-  isFreeResourceEntryPoint: boolean,
+  isFreeResourcesOnly: boolean,
   notice: string,
   registerLabel: string,
 ) {
-  return isFreeResourceEntryPoint
+  return isFreeResourcesOnly
     ? {
         allowedResourceIds: FREE_RESOURCE_DBL_ENTRY_UIDS,
         notice,
@@ -86,10 +87,10 @@ export function isFreeResource(dblEntryUid: string | undefined): boolean {
 /**
  * Narrows a stored reference list to the free DBL resources in it.
  *
- * Applied when READING the no-project lists, not only when writing them. A UID stored while the
- * allowlist was wider — or edited into the setting by hand — would otherwise keep rendering in the
- * no-project entry point long after it stopped qualifying, which is the case the write-side guard
- * alone cannot cover.
+ * Applied, for an unregistered user, when READING the no-project list, not only when writing it. A
+ * UID stored while the allowlist was wider — or edited into the setting by hand — would otherwise
+ * keep rendering in the no-project entry point long after it stopped qualifying, which is the case
+ * the write-side guard alone cannot cover.
  *
  * Non-DBL references (projects, and every other reference type) are dropped too: the no-project
  * state has no project context to resolve them against, so there is nothing to render.

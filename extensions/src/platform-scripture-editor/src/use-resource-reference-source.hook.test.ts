@@ -85,7 +85,7 @@ describe('source selection', () => {
     const projectList = { dataVersion: CURRENT_DATA_VERSION, items: [] };
     useEffectiveListMock.mockReturnValue({ status: 'ready', list: projectList });
 
-    const { result } = renderHook(() => useResourceReferenceSource('project-1'));
+    const { result } = renderHook(() => useResourceReferenceSource('project-1', 'valid'));
 
     expect(result.current.isNoProject).toBe(false);
     expect(result.current.state).toEqual({ status: 'ready', list: projectList });
@@ -97,7 +97,7 @@ describe('source selection', () => {
     useEffectiveListMock.mockReturnValue({ status: 'loading' });
     setSettings({ [REFERENCED_SETTING]: { value: list('FREE0001') } });
 
-    const { result } = renderHook(() => useResourceReferenceSource(undefined));
+    const { result } = renderHook(() => useResourceReferenceSource(undefined, 'invalid'));
 
     expect(result.current.isNoProject).toBe(true);
     expect(result.current.state.status).toBe('ready');
@@ -108,7 +108,7 @@ describe('no-project readiness', () => {
   it('reports loading while the setting is still resolving', () => {
     setSettings({ [REFERENCED_SETTING]: { value: list(), isLoading: true } });
 
-    const { result } = renderHook(() => useResourceReferenceSource(undefined));
+    const { result } = renderHook(() => useResourceReferenceSource(undefined, 'invalid'));
 
     expect(result.current.state).toEqual({ status: 'loading' });
   });
@@ -116,7 +116,7 @@ describe('no-project readiness', () => {
   it('reports error when the setting cannot be read', () => {
     setSettings({ [REFERENCED_SETTING]: { value: newPlatformError('nope') } });
 
-    const { result } = renderHook(() => useResourceReferenceSource(undefined));
+    const { result } = renderHook(() => useResourceReferenceSource(undefined, 'invalid'));
 
     expect(result.current.state).toEqual({ status: 'error' });
   });
@@ -126,7 +126,7 @@ describe('no-project readiness', () => {
     // panel may show its pick prompt.
     setSettings({ [REFERENCED_SETTING]: { value: list() } });
 
-    const { result } = renderHook(() => useResourceReferenceSource(undefined));
+    const { result } = renderHook(() => useResourceReferenceSource(undefined, 'invalid'));
 
     expect(result.current.state).toEqual({
       status: 'ready',
@@ -141,7 +141,7 @@ describe('no-project readiness', () => {
       [REFERENCED_SETTING]: { value: { dataVersion: CURRENT_DATA_VERSION, items: undefined } },
     });
 
-    const { result } = renderHook(() => useResourceReferenceSource(undefined));
+    const { result } = renderHook(() => useResourceReferenceSource(undefined, 'invalid'));
 
     expect(result.current.state).toEqual({
       status: 'ready',
@@ -152,7 +152,7 @@ describe('no-project readiness', () => {
   it('tags items as user-sourced, since no admin layer exists without a project', () => {
     setSettings({ [REFERENCED_SETTING]: { value: list('FREE0001') } });
 
-    const { result } = renderHook(() => useResourceReferenceSource(undefined));
+    const { result } = renderHook(() => useResourceReferenceSource(undefined, 'invalid'));
 
     expect(result.current.state).toEqual({
       status: 'ready',
@@ -165,12 +165,12 @@ describe('no-project readiness', () => {
 });
 
 describe('free-resource filtering', () => {
-  it('drops a stored resource that is no longer allowlisted', () => {
+  it('drops a stored resource that is not allowlisted for an unregistered user', () => {
     // The case a write-side guard alone cannot cover: a uid stored while the allowlist was wider,
     // or hand-edited into the setting, must not keep rendering.
     setSettings({ [REFERENCED_SETTING]: { value: list('FREE0001', 'NOTFREE9') } });
 
-    const { result } = renderHook(() => useResourceReferenceSource(undefined));
+    const { result } = renderHook(() => useResourceReferenceSource(undefined, 'invalid'));
 
     expect(idsOf(result.current.state)).toEqual(['FREE0001']);
   });
@@ -182,7 +182,7 @@ describe('free-resource filtering', () => {
     // references is the validator's job.
     const setters = setSettings({ [REFERENCED_SETTING]: { value: list() } });
 
-    const { result } = renderHook(() => useResourceReferenceSource(undefined));
+    const { result } = renderHook(() => useResourceReferenceSource(undefined, 'invalid'));
     await result.current.setUserList(list('FREE0001', 'NOTFREE9'));
 
     expect(setters[REFERENCED_SETTING]).toHaveBeenCalledWith({
@@ -200,7 +200,7 @@ describe('free-resource filtering', () => {
       setUserReferencedProjectsAndResources: setUserReferenced,
     });
 
-    const { result } = renderHook(() => useResourceReferenceSource('project-1'));
+    const { result } = renderHook(() => useResourceReferenceSource('project-1', 'valid'));
     const projectList: ResourceReferenceList = {
       dataVersion: CURRENT_DATA_VERSION,
       items: [{ type: 'project', name: 'A project', id: 'proj-9' }],
@@ -211,13 +211,42 @@ describe('free-resource filtering', () => {
   });
 });
 
+describe('registration', () => {
+  it('shows a registered user every stored resource, free or not', () => {
+    setSettings({ [REFERENCED_SETTING]: { value: list('FREE0001', 'NOTFREE9') } });
+
+    const { result } = renderHook(() => useResourceReferenceSource(undefined, 'valid'));
+
+    expect(idsOf(result.current.state)).toEqual(['FREE0001', 'NOTFREE9']);
+  });
+
+  it('waits for the registration check before showing the stored list', () => {
+    // Showing the list before the check answers would flash a registered user's non-free picks out
+    // and back, or show an unregistered user picks they cannot keep.
+    setSettings({ [REFERENCED_SETTING]: { value: list('FREE0001') } });
+
+    const { result } = renderHook(() => useResourceReferenceSource(undefined, 'unknown'));
+
+    expect(result.current.state).toEqual({ status: 'loading' });
+  });
+
+  it('does not wait on the registration check when a project is open', () => {
+    const projectList = { dataVersion: CURRENT_DATA_VERSION, items: [] };
+    useEffectiveListMock.mockReturnValue({ status: 'ready', list: projectList });
+
+    const { result } = renderHook(() => useResourceReferenceSource('project-1', 'unknown'));
+
+    expect(result.current.state).toEqual({ status: 'ready', list: projectList });
+  });
+});
+
 describe('read-modify-write freshness', () => {
   it('hands back the latest stored list, not the one captured at first render', async () => {
     // `selectTextConnection` reads then writes. Reading the render closure would let a second pick
     // compute its next state from a pre-write snapshot and silently drop the first.
     setSettings({ [REFERENCED_SETTING]: { value: list('FREE0001') } });
 
-    const { result, rerender } = renderHook(() => useResourceReferenceSource(undefined));
+    const { result, rerender } = renderHook(() => useResourceReferenceSource(undefined, 'invalid'));
     const { getUserList } = result.current;
 
     setSettings({ [REFERENCED_SETTING]: { value: list('FREE0001', 'FREE0002') } });
@@ -234,7 +263,7 @@ describe('read-modify-write freshness', () => {
   it('reports an unreadable setting as no list rather than handing back the error object', async () => {
     setSettings({ [REFERENCED_SETTING]: { value: newPlatformError('nope') } });
 
-    const { result } = renderHook(() => useResourceReferenceSource(undefined));
+    const { result } = renderHook(() => useResourceReferenceSource(undefined, 'invalid'));
 
     expect(await result.current.getUserList()).toBeUndefined();
   });
@@ -244,7 +273,7 @@ describe('project source callbacks', () => {
   it('resolves to no list while the project data provider has not arrived', async () => {
     useProjectDataProviderMock.mockReturnValue(undefined);
 
-    const { result } = renderHook(() => useResourceReferenceSource('project-1'));
+    const { result } = renderHook(() => useResourceReferenceSource('project-1', 'valid'));
 
     expect(await result.current.getUserList()).toBeUndefined();
   });
@@ -257,7 +286,7 @@ describe('project source callbacks', () => {
       setUserReferencedProjectsAndResources: setUserReferenced,
     });
 
-    const { result } = renderHook(() => useResourceReferenceSource('project-1'));
+    const { result } = renderHook(() => useResourceReferenceSource('project-1', 'valid'));
     await result.current.getUserList();
     await result.current.setUserList(list('anything'));
 

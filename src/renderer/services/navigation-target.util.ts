@@ -79,8 +79,9 @@ function resolveMainEditorWebView(allowProjectlessEditor: boolean): ResolvedWebV
   if (editorDefinition) return { id: editorDefinition.id, definition: editorDefinition };
 
   // No editor has a project. Fall back to the first open Scripture editor web view regardless,
-  // because a user with no project open can still be READING something: the Bible texts panel offers
-  // freely available resources in that state, and it follows the scroll group the editor drives. Without this the toolbar's book/chapter control disables — `isBookChapterControlDisabled`
+  // because a user with no project open can still be READING something: the Bible texts and
+  // Commentaries panels offer resources in that state, and they follow the scroll group the editor
+  // drives. Without this the toolbar's book/chapter control disables — `isBookChapterControlDisabled`
   // is `!resolvedWebView` — and a resource a user just chose is readable at exactly one reference.
   //
   // The editor's own project is what supplies `platformScripture.booksPresent` to the control, so a

@@ -73,6 +73,13 @@ const STRINGS = {
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%':
     'No Bible texts selected. Pick one to display a reference translation alongside your project.',
   '%webView_resourcePanel_bibleTexts_pick%': PICK_BIBLE_TEXTS,
+  '%webView_resourcePanel_bibleTexts_noProject_emptyState_prompt%':
+    'No Bible texts selected. Pick one to read.',
+  '%webView_resourcePanel_commentaries_noProject_emptyState_prompt%':
+    'No commentaries selected. Pick one to read.',
+  '%webView_resourcePanel_commentaries_pick%': 'Pick commentaries…',
+  '%webView_resourcePanel_noProject_emptyState_prompt%': 'Choose a freely available text to read.',
+  '%webView_resourcePanel_noProject_pick%': 'Choose a text…',
   '%webView_resourcePanel_selecting%': SELECTING,
   '%webView_resourcePanel_textUnavailable%': TEXT_UNAVAILABLE,
   '%webView_resourcePanel_bibleTexts_bookNotAvailable%': BIBLE_TEXT_MISSING_BOOK,
@@ -155,7 +162,7 @@ function makeProps(overrides: Partial<ResourceTextPanelProps> = {}): ResourceTex
   return {
     localizedStrings: STRINGS,
     hasProject: true,
-    isFreeResourceEntryPoint: false,
+    noProjectPicker: 'none',
     resourceType: 'ScriptureResource',
     filteredResources: [WEB_ROW],
     selectedRef: WEB_ROW,
@@ -509,5 +516,46 @@ describe('ResourceTextPanel install failure', () => {
       screen.getByText(STRINGS['%webView_resourcePanel_installedButUnavailable%']),
     ).toBeInTheDocument();
     expect(screen.queryByText(/couldn't be installed/)).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceTextPanel with no project open', () => {
+  it('offers a registered user the whole catalog, in wording that names no project', () => {
+    renderPanel({
+      hasProject: false,
+      noProjectPicker: 'catalog',
+      resourceType: 'CommentaryResource',
+      filteredResources: [],
+      selectedRef: undefined,
+      readiness: 'empty',
+    });
+
+    expect(screen.getByText('No commentaries selected. Pick one to read.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pick commentaries…' })).toBeInTheDocument();
+  });
+
+  it('offers an unregistered user freely available Bible texts', () => {
+    renderPanel({
+      hasProject: false,
+      noProjectPicker: 'freeResources',
+      filteredResources: [],
+      selectedRef: undefined,
+      readiness: 'empty',
+    });
+
+    expect(screen.getByText('Choose a freely available text to read.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose a text…' })).toBeInTheDocument();
+  });
+
+  it('says only that no project is open when there is nothing to offer', () => {
+    renderPanel({
+      hasProject: false,
+      noProjectPicker: 'none',
+      resourceType: 'CommentaryResource',
+      readiness: 'empty',
+    });
+
+    expect(screen.getByText('No project.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pick commentaries…' })).not.toBeInTheDocument();
   });
 });

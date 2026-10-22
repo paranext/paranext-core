@@ -9,7 +9,10 @@ vi.mock('./free-resources.const', () => ({
 }));
 
 // Imported after the mock so the allowlist lookup is built from the stand-in list.
-const { noProjectReferenceListValidator } = await import('./no-project-reference-list.utils');
+const { createNoProjectReferenceListValidator } = await import('./no-project-reference-list.utils');
+
+/** The validator as an unregistered user meets it — the case every allowlist test below is about. */
+const noProjectReferenceListValidator = createNoProjectReferenceListValidator(async () => false);
 
 function list(items: ResourceReferenceList['items'], dataVersion = '1.1.0'): ResourceReferenceList {
   return { dataVersion, items };
@@ -119,6 +122,36 @@ describe('noProjectReferenceListValidator', () => {
       await expect(
         noProjectReferenceListValidator(list([dblRef('NOTFREE9')]), corruptCurrent, {}),
       ).rejects.toThrow(/index 0 is not a free/);
+    });
+  });
+
+  describe('registration', () => {
+    it('lets a registered user add any DBL resource', async () => {
+      const validator = createNoProjectReferenceListValidator(async () => true);
+      expect(await validator(list([dblRef('NOTFREE9')]), list([]), {})).toBe(true);
+    });
+
+    it('still rejects a non-DBL reference from a registered user', async () => {
+      const validator = createNoProjectReferenceListValidator(async () => true);
+      await expect(
+        validator(list([{ type: 'project', name: 'P', id: 'proj-1' }]), list([]), {}),
+      ).rejects.toThrow(/not a DBL resource reference/);
+    });
+
+    it('treats a registration check that fails as unregistered', async () => {
+      const validator = createNoProjectReferenceListValidator(async () => {
+        throw new Error('no handler');
+      });
+      await expect(validator(list([dblRef('NOTFREE9')]), list([]), {})).rejects.toThrow(
+        /index 0 is not a free/,
+      );
+    });
+
+    it('does not ask about registration when everything added is free', async () => {
+      const isUserRegistered = vi.fn(async () => false);
+      const validator = createNoProjectReferenceListValidator(isUserRegistered);
+      expect(await validator(list([dblRef('FREE0001')]), list([]), {})).toBe(true);
+      expect(isUserRegistered).not.toHaveBeenCalled();
     });
   });
 });

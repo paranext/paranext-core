@@ -142,20 +142,27 @@ function ResourceSelectorDropdown({
   );
 }
 
+/**
+ * What a resource panel offers to pick while no project is open.
+ *
+ * - `catalog` — a registered user: the whole catalog, as with a project.
+ * - `freeResources` — an unregistered user on the Bible texts tab: only the freely-licensed texts in
+ *   `free-resources.const.ts`.
+ * - `none` — nothing to offer (an unregistered user on the Commentaries tab, or nothing allowlisted),
+ *   so the panel says only that no project is open.
+ */
+export type NoProjectPicker = 'catalog' | 'freeResources' | 'none';
+
 export type ResourceTextPanelProps = {
   /** Localized strings; import `RESOURCE_PANEL_STRING_KEYS` to resolve them. */
   localizedStrings: ResourcePanelLocalizedStrings;
   /** Whether the panel has a project context (opened with a project id). */
   hasProject: boolean;
   /**
-   * Whether the panel is running as the no-project free-resource entry point, where the Bible texts
-   * tab offers freely-licensed texts instead of a project's referenced resources.
-   *
-   * Distinct from `!hasProject`: on the Commentaries tab, or with nothing allowlisted, there is
-   * nothing to offer, so the panel keeps its plain no-project message rather than a picker that
-   * cannot be populated.
+   * What the panel offers to pick while no project is open; ignored when `hasProject` is true. See
+   * {@link NoProjectPicker}.
    */
-  isFreeResourceEntryPoint: boolean;
+  noProjectPicker: NoProjectPicker;
   /**
    * Which kind of resource this panel shows. `'ScriptureResource'` is the Bible texts tab; every
    * other type is the commentaries tab. Selects the whole matched set of strings — see
@@ -262,7 +269,7 @@ export type ResourceTextPanelProps = {
 export function ResourceTextPanel({
   localizedStrings,
   hasProject,
-  isFreeResourceEntryPoint,
+  noProjectPicker,
   resourceType,
   filteredResources,
   selectedRef,
@@ -526,16 +533,19 @@ export function ResourceTextPanel({
   // #region Render
 
   // One resource type, one matched set of strings. See `resolveResourcePanelStringKeys`.
-  const { emptyStatePromptKey, bookNotAvailableKey, pickButtonKey } =
+  const { emptyStatePromptKey, noProjectEmptyStatePromptKey, bookNotAvailableKey, pickButtonKey } =
     resolveResourcePanelStringKeys(resourceType);
+  const isFreeResourcesOnly = !hasProject && noProjectPicker === 'freeResources';
+  let emptyPromptKey: ResourcePanelLocalizedStringKey = emptyStatePromptKey;
+  if (isFreeResourcesOnly) emptyPromptKey = '%webView_resourcePanel_noProject_emptyState_prompt%';
+  else if (!hasProject) emptyPromptKey = noProjectEmptyStatePromptKey;
 
   // Both web-view types share this component and resolve to the same content-zoom memory identity
   // (their container project), so each names its own area to keep its remembered level separate.
   const contentZoomArea = resourceType === 'ScriptureResource' ? 'bible-texts' : 'commentaries';
 
-  // No project, and not the free-resource entry point — the Commentaries tab, or nothing
-  // allowlisted. There is nothing to offer here.
-  if (!hasProject && !isFreeResourceEntryPoint) {
+  // No project, and nothing to offer without one.
+  if (!hasProject && noProjectPicker === 'none') {
     return (
       <ResourceMessageView
         message={localize(localizedStrings, '%webView_resourcePanel_noProject%')}
@@ -579,17 +589,12 @@ export function ResourceTextPanel({
       <PanelReadinessView
         readiness={readiness}
         errorMessage={localize(localizedStrings, '%webView_resourcePanel_settingsUnavailable%')}
-        emptyPrompt={localize(
-          localizedStrings,
-          isFreeResourceEntryPoint
-            ? '%webView_resourcePanel_noProject_emptyState_prompt%'
-            : emptyStatePromptKey,
-        )}
+        emptyPrompt={localize(localizedStrings, emptyPromptKey)}
         moreInfo={
           // Only Bible Texts needs the disclosure; the Commentaries prompt says what it is asking
           // for, so it renders the shorter empty state. The disclosure describes a team's choices,
           // which mean nothing when no project is open.
-          resourceType === 'ScriptureResource' && !isFreeResourceEntryPoint ? (
+          resourceType === 'ScriptureResource' && hasProject ? (
             <ExpandableInfo
               moreLabel={localize(
                 localizedStrings,
@@ -618,7 +623,7 @@ export function ResourceTextPanel({
         loadingLabel={localize(localizedStrings, '%webView_resourcePanel_loading%')}
         pickLabel={localize(
           localizedStrings,
-          isFreeResourceEntryPoint ? '%webView_resourcePanel_noProject_pick%' : pickButtonKey,
+          isFreeResourcesOnly ? '%webView_resourcePanel_noProject_pick%' : pickButtonKey,
         )}
         retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
         onPick={() => onShowResourcePicker()}

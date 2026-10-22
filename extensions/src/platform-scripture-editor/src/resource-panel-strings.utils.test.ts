@@ -10,6 +10,8 @@ describe('resolveResourcePanelStringKeys', () => {
       titleKey: '%webView_resourcePanel_bibleTexts_title%',
       titleWithResourceKey: '%webView_resourcePanel_bibleTexts_title_withResource%',
       emptyStatePromptKey: '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
+      noProjectEmptyStatePromptKey:
+        '%webView_resourcePanel_bibleTexts_noProject_emptyState_prompt%',
       bookNotAvailableKey: '%webView_resourcePanel_bibleTexts_bookNotAvailable%',
       pickButtonKey: '%webView_resourcePanel_bibleTexts_pick%',
     });
@@ -22,6 +24,8 @@ describe('resolveResourcePanelStringKeys', () => {
       titleKey: '%webView_resourcePanel_commentaries_title%',
       titleWithResourceKey: '%webView_resourcePanel_commentaries_title_withResource%',
       emptyStatePromptKey: '%webView_resourcePanel_commentaries_emptyState_prompt%',
+      noProjectEmptyStatePromptKey:
+        '%webView_resourcePanel_commentaries_noProject_emptyState_prompt%',
       bookNotAvailableKey: '%webView_resourcePanel_commentaries_bookNotAvailable%',
       pickButtonKey: '%webView_resourcePanel_commentaries_pick%',
     });
@@ -50,7 +54,7 @@ describe('resolveResourcePanelStringKeys', () => {
 
   it('exposes both resource types’ keys for the localization parity test', () => {
     // A key the panel renders but that this list omits would silently escape en/es parity coverage.
-    expect(RESOURCE_PANEL_TYPED_STRING_KEYS).toHaveLength(10);
-    expect(new Set(RESOURCE_PANEL_TYPED_STRING_KEYS).size).toBe(10);
+    expect(RESOURCE_PANEL_TYPED_STRING_KEYS).toHaveLength(12);
+    expect(new Set(RESOURCE_PANEL_TYPED_STRING_KEYS).size).toBe(12);
   });
 });

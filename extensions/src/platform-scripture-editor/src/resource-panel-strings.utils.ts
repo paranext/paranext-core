@@ -8,6 +8,11 @@ export type ResourcePanelStringKeys = {
   titleWithResourceKey: LocalizeKey;
   /** Prompt shown when nothing has been picked yet. */
   emptyStatePromptKey: LocalizeKey;
+  /**
+   * The same prompt with no project open, for a user offered the whole catalog. The project wording
+   * describes reading a text alongside the project, which does not exist here.
+   */
+  noProjectEmptyStatePromptKey: LocalizeKey;
   /** Message shown when the current book is not in the selected resource. */
   bookNotAvailableKey: LocalizeKey;
   /** Label of the button that opens the resource picker. */
@@ -22,6 +27,7 @@ const BIBLE_TEXTS_KEYS = {
   titleKey: '%webView_resourcePanel_bibleTexts_title%',
   titleWithResourceKey: '%webView_resourcePanel_bibleTexts_title_withResource%',
   emptyStatePromptKey: '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
+  noProjectEmptyStatePromptKey: '%webView_resourcePanel_bibleTexts_noProject_emptyState_prompt%',
   bookNotAvailableKey: '%webView_resourcePanel_bibleTexts_bookNotAvailable%',
   pickButtonKey: '%webView_resourcePanel_bibleTexts_pick%',
 } as const satisfies ResourcePanelStringKeys;
@@ -30,6 +36,7 @@ const COMMENTARIES_KEYS = {
   titleKey: '%webView_resourcePanel_commentaries_title%',
   titleWithResourceKey: '%webView_resourcePanel_commentaries_title_withResource%',
   emptyStatePromptKey: '%webView_resourcePanel_commentaries_emptyState_prompt%',
+  noProjectEmptyStatePromptKey: '%webView_resourcePanel_commentaries_noProject_emptyState_prompt%',
   bookNotAvailableKey: '%webView_resourcePanel_commentaries_bookNotAvailable%',
   pickButtonKey: '%webView_resourcePanel_commentaries_pick%',
 } as const satisfies ResourcePanelStringKeys;
@@ -67,7 +74,7 @@ export function resolveResourcePanelStringKeys(
 // Deliberately NOT annotated `: readonly LocalizeKey[]`. That annotation would widen these literals
 // back to `LocalizeKey`, which absorbs any `%...%` string — and because
 // `resource-text-panel.const.ts` spreads this into its own `as const` tuple, the widening
-// propagates: `ResourcePanelLocalizedStringKey` degrades from the exact 22-key union to "any
+// propagates: `ResourcePanelLocalizedStringKey` degrades from the exact key union to "any
 // `%...%` string", so it stops constraining `localize()`'s argument and the panel's
 // `localizedStrings` prop. Nothing else checks that, and the loss is invisible at runtime — the
 // parity test iterates the same frozen array either way. Leave the type inferred.
