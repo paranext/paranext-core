@@ -2588,6 +2588,24 @@
   }
 }
 
+/* Paragraph armed for the two-step merge (first Backspace/Delete at its boundary, or on its
+   selected marker): the same destructive tint and blink as an armed verse marker, across the row. */
+.verse-delete-armed .para-merge-armed {
+  background-color: color-mix(in srgb, var(--destructive) 15%, transparent);
+  border-radius: 4px;
+  animation: verse-armed-glow 1.06s steps(1) infinite;
+}
+
+.dark .verse-delete-armed .para-merge-armed {
+  background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .verse-delete-armed .para-merge-armed {
+    animation: none;
+    box-shadow: 0 2px 0 -1px var(--destructive);
+  }
+}
+
 span.unread img {
   background-color: #ffff99;
   position: relative;

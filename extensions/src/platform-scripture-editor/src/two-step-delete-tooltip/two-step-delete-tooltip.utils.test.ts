@@ -3,6 +3,7 @@ import {
   computeAnchorRect,
   confirmingKey,
   getConfirmingKeyDisplayLabel,
+  hintMessageKey,
   readArmedHint,
 } from './two-step-delete-tooltip.utils';
 
@@ -61,7 +62,18 @@ describe('readArmedHint', () => {
     expect(readArmedHint(undefined)).toBeUndefined();
   });
 
-  it('returns undefined for an unrecognized kind (e.g. a paragraph merge exposes none)', () => {
+  it.each(['joinPreviousPara', 'joinNextPara', 'removeEmptyPara'] as const)(
+    'reads a paragraph arm of kind %s',
+    (kind) => {
+      const el = makeAttrEl({
+        'data-verse-delete-intent': 'deleteForward',
+        'data-verse-delete-kind': kind,
+      });
+      expect(readArmedHint(el)).toEqual({ intent: 'deleteForward', kind });
+    },
+  );
+
+  it('returns undefined for an unrecognized kind', () => {
     const el = makeAttrEl({
       'data-verse-delete-intent': 'deleteBackward',
       'data-verse-delete-kind': 'para',
@@ -75,6 +87,18 @@ describe('readArmedHint', () => {
       'data-verse-delete-kind': 'verse',
     });
     expect(readArmedHint(el)).toBeUndefined();
+  });
+});
+
+describe('hintMessageKey', () => {
+  it.each([
+    ['verse', '%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%'],
+    ['selection', '%webView_platformScriptureEditor_twoStepDelete_deleteSelection%'],
+    ['joinPreviousPara', '%webView_platformScriptureEditor_twoStepDelete_joinPreviousParagraph%'],
+    ['joinNextPara', '%webView_platformScriptureEditor_twoStepDelete_joinNextParagraph%'],
+    ['removeEmptyPara', '%webView_platformScriptureEditor_twoStepDelete_removeEmptyParagraph%'],
+  ] as const)('names the %s arm with %s', (kind, key) => {
+    expect(hintMessageKey({ intent: 'deleteBackward', kind })).toBe(key);
   });
 });
 

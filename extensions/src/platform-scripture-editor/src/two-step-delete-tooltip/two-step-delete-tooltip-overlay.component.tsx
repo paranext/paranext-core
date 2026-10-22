@@ -10,16 +10,13 @@ import {
   CONFIRMING_KEY_LOCALIZED_STRING_KEYS,
   confirmingKey,
   getConfirmingKeyDisplayLabel,
+  hintMessageKey,
   readArmedHint,
+  TWO_STEP_DELETE_MESSAGE_STRING_KEYS,
 } from './two-step-delete-tooltip.utils';
 
-const REMOVE_VERSE_MARKER_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%';
-const DELETE_SELECTION_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_twoStepDelete_deleteSelection%';
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
-  REMOVE_VERSE_MARKER_KEY,
-  DELETE_SELECTION_KEY,
+  ...TWO_STEP_DELETE_MESSAGE_STRING_KEYS,
   ...CONFIRMING_KEY_LOCALIZED_STRING_KEYS,
 ];
 
@@ -30,16 +27,17 @@ type ArmedData = AnchorRect & ArmedHint;
 type Props = { children: React.ReactNode };
 
 /**
- * Renders the destructive "press again to delete" hint while a verse marker (or a selection
- * containing verse markers) is armed for the two-step delete. This lives in core — not the editor
- * repo — so the user-facing copy is localized. Rendering itself is delegated to
+ * Renders the destructive "press again to delete" hint while a verse marker, a selection containing
+ * verse markers, or a paragraph merge is armed for the two-step delete. This lives in core — not
+ * the editor repo — so the user-facing copy is localized. Rendering itself is delegated to
  * `platform-bible-react`'s `DestructiveKeyConfirmation`; this component owns only detecting the
  * armed state and where to anchor it.
  *
  * The editor (shared-react's StructureKeyboardPlugin) publishes the armed state to its root as
- * `data-verse-delete-intent`/`data-verse-delete-kind` and marks the armed marker with
- * `verse-selected`; this overlay observes those DOM signals and anchors the hint to the marker.
- * Mirrors {@link ../paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component}.
+ * `data-verse-delete-intent`/`data-verse-delete-kind` and marks the armed verse marker with
+ * `verse-selected`, or the armed paragraph with `para-merge-armed`; this overlay observes those DOM
+ * signals and anchors the hint to the marked element. Mirrors
+ * {@link ../paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component}.
  */
 export function TwoStepDeleteTooltipOverlay({ children }: Props) {
   const [armed, setArmed] = useState<ArmedData | undefined>(undefined);
@@ -79,7 +77,9 @@ export function TwoStepDeleteTooltipOverlay({ children }: Props) {
     const sync = () => {
       const root = positionAnchor.querySelector('[data-verse-delete-kind]');
       const hint = readArmedHint(root);
-      const marker = positionAnchor.querySelector<HTMLElement>('.verse-selected');
+      const marker = positionAnchor.querySelector<HTMLElement>(
+        '.verse-selected, .para-merge-armed',
+      );
       if (!hint || !marker) {
         setArmed(undefined);
         return;
@@ -112,15 +112,13 @@ export function TwoStepDeleteTooltipOverlay({ children }: Props) {
     };
   }, []); // refs are stable; empty deps is correct
 
-  const messageKey = armed?.kind === 'selection' ? DELETE_SELECTION_KEY : REMOVE_VERSE_MARKER_KEY;
-
   return (
     <div ref={positionAnchorRef} className="tw:relative">
       {children}
       <DestructiveKeyConfirmation
         open={!!armed}
         anchorRect={armed ?? EMPTY_ANCHOR_RECT}
-        message={localizedStrings[messageKey]}
+        message={armed ? localizedStrings[hintMessageKey(armed)] : ''}
         confirmingKeyLabel={
           armed
             ? getConfirmingKeyDisplayLabel(
