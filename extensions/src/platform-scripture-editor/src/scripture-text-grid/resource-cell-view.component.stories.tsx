@@ -177,6 +177,25 @@ function SampleEditorial({
   );
 }
 
+/**
+ * Stand-in for a two-line poetry verse (Ps 23:1, WEB): a short `\q1` line followed by a `\q2` line,
+ * each its own block, so at a small zoom the second block starts beside the name.
+ */
+function SamplePoetryCouplet() {
+  return (
+    <div className="editor-container">
+      <div className="editor-inner">
+        <div className="editor-input usfm marker-hidden text-spacing formatted-font" dir="ltr">
+          <p className="usfm_q1">
+            <span className="usfm_v">1</span> Yahweh is my shepherd:
+          </p>
+          <p className="usfm_q2">I shall lack nothing.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Wraps a verse-row story with the editor wrapper styles Storybook does not otherwise load. */
 function VerseRowBox({ children, width }: { children: React.ReactNode; width?: string }) {
   return (
@@ -1177,6 +1196,100 @@ export const VerseZoomedPlaceholder: Story = {
         nameDisplay="inline"
         editor={undefined}
       />
+    </VerseRowBox>
+  ),
+};
+
+/**
+ * A short `\q1` line followed by a `\q2` line, at 50 % and 100 %. At 50 % the first block is
+ * shorter than the unzoomed name, so the `\q2` line also starts beside the name, where its hanging
+ * indent can pull it under the name.
+ */
+export const VersePoetryCoupletZoomedOut: Story = {
+  render: () => (
+    <VerseRowBox width="420px">
+      <div className="tw:divide-y">
+        <ContentZoomStandIn levels={[0.5, 1]} />
+        {[0.5, 1].map((level) => (
+          <ResourceCellView
+            key={level}
+            zoomArea={storyZoomAreaAt(level)}
+            copyLimit={undefined}
+            state="ready"
+            label="WEB"
+            textDirection="ltr"
+            localizedStrings={localizedStrings}
+            nameDisplay="inline"
+            editor={<SamplePoetryCouplet />}
+            showDragHandle
+            reorderHandleId={`web-${level}`}
+            reorderHandleLabel="Reorder WEB"
+            onDisclosureActivate={() => {}}
+            disclosureAccessibleName="WEB, PSA 23:1"
+          />
+        ))}
+      </div>
+    </VerseRowBox>
+  ),
+};
+
+/**
+ * Placeholder rows at 50 %, stacked as the grid stacks them. A placeholder has no float to hold the
+ * row open, so the row is only as tall as its zoomed message, while the name and grip beside it
+ * keep their unzoomed size.
+ */
+export const VersePlaceholderRowsZoomedOut: Story = {
+  render: () => (
+    <VerseRowBox width="420px">
+      <div className="tw:divide-y">
+        <ContentZoomStandIn levels={[0.5]} />
+        <ResourceCellView
+          zoomArea={storyZoomAreaAt(0.5)}
+          copyLimit={undefined}
+          state="ready"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          nameDisplay="inline"
+          emptyMessage={localizedStrings[EMPTY_KEY]}
+          editor={<SampleEditorial />}
+          showDragHandle
+          reorderHandleId="web-empty"
+          reorderHandleLabel="Reorder WEB"
+          onDisclosureActivate={() => {}}
+          disclosureAccessibleName="WEB, PSA 23:1"
+        />
+        <ResourceCellView
+          zoomArea={storyZoomAreaAt(0.5)}
+          copyLimit={undefined}
+          state="bookNotAvailable"
+          label="KJV"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          nameDisplay="inline"
+          editor={undefined}
+          showDragHandle
+          reorderHandleId="kjv-book"
+          reorderHandleLabel="Reorder KJV"
+          onDisclosureActivate={() => {}}
+          disclosureAccessibleName="KJV, PSA 23:1"
+        />
+        <ResourceCellView
+          zoomArea={storyZoomAreaAt(0.5)}
+          copyLimit={undefined}
+          state="ready"
+          label="ESV"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          nameDisplay="inline"
+          editor={<SampleEditorial />}
+          showDragHandle
+          reorderHandleId="esv"
+          reorderHandleLabel="Reorder ESV"
+          onDisclosureActivate={() => {}}
+          disclosureAccessibleName="ESV, PSA 23:1"
+        />
+      </div>
     </VerseRowBox>
   ),
 };

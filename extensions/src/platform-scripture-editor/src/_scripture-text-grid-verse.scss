@@ -36,6 +36,8 @@
   --stg-name-width: min(var(--stg-name-max-width), 40%);
   // The inset from the row's inline-start edge, and the gap between the name and line 1.
   --stg-name-gap: 0.5rem;
+  // The height of the name's line (`text-sm`); the grip is centred on it and the exclusion matches it.
+  --stg-name-line-size: 1.25rem;
   // The grip's box and the icon centred in it; these match its `tw:h-6`/`tw:w-6` and the icon's
   // `tw:h-4`/`tw:w-4` in resource-cell-view.component.tsx.
   --stg-grip-size: 1.5rem;
@@ -51,7 +53,15 @@
   --stg-name-start: var(--stg-name-gap);
   // Where line 1 of the verse text starts, measured from the row's inline-start edge.
   --stg-text-start: calc(var(--stg-name-start) + var(--stg-name-width) + var(--stg-name-gap));
+  // How far below the top of the content the name and grip reach, as hit targets: the grip is
+  // centred on the name's line and taller than it, and the name's button adds a 1px border above and
+  // below its line, which comes to the same depth.
+  --stg-name-reach: calc((var(--stg-name-line-size) + var(--stg-grip-size)) / 2);
   padding-block: 0.5rem;
+  // The name and grip are out of flow and unzoomed, so nothing in the row's content holds it open
+  // around them: a placeholder at a small zoom is shorter than they are. The floor keeps the row
+  // around both plus its padding, so neither hangs into the next row and takes clicks meant for it.
+  min-block-size: calc(0.5rem + var(--stg-name-reach) + 0.5rem);
 }
 
 // The grip leads the row, before the name, matching the chapter view's header line.
@@ -79,8 +89,8 @@
 .stg-verse-grip {
   z-index: 10;
   inset-inline-start: max(0px, var(--stg-grip-start));
-  // Centred on the name's first line (`text-sm`, 1.25rem tall).
-  inset-block-start: calc(0.5rem + (1.25rem - var(--stg-grip-size)) / 2);
+  // Centred on the name's first line.
+  inset-block-start: calc(0.5rem + (var(--stg-name-line-size) - var(--stg-grip-size)) / 2);
 
   > svg {
     margin-inline-start: calc(2 * min(0px, var(--stg-grip-start)));
@@ -117,20 +127,25 @@
 // - Its first-line indent goes: a positive one (`\p`) only widens the gap after the name, and a
 //   negative one (`\q1`'s hanging indent) is applied after the float shortens the line, so it would
 //   pull line 1 back under the name.
-// Later blocks in the same verse keep both, so a second poetry line or a new paragraph keeps its shape.
+// - It reaches at least as far down as the name and grip: at a small zoom a one-line first block is
+//   shorter than they are, so the next block would start beside the name too, where its own hanging
+//   indent (`\q2` after `\q1`) pulls it back under the name.
+// Later blocks in the same verse keep their margin and indent, so a second poetry line or a new
+// paragraph keeps its shape, and the floor keeps them clear of the name.
 .stg-verse-content .editor-input > :first-child {
   margin-block-start: 0;
   text-indent: 0;
+  min-block-size: calc(var(--stg-name-reach) / var(--stg-zoom, 1));
 }
 
-// The exclusion starts at the editor's content edge, which already sits `--stg-name-gap` in. It is
-// as tall as the name's line (`text-sm`, 1.25rem), so every text line that starts beside the name
-// starts after it — at a small zoom, line 2 starts while the unzoomed name is still beside it.
+// The exclusion starts at the editor's content edge, which already sits `--stg-name-gap` in. It
+// reaches as far down as the name and grip, so every text line that starts beside them starts after
+// the name — at a small zoom, line 2 starts while the unzoomed name is still beside it.
 .stg-verse-content .editor-input::before {
   content: '';
   float: inline-start;
   inline-size: calc((var(--stg-text-start) - var(--stg-name-gap)) / var(--stg-zoom, 1));
-  block-size: calc(1.25rem / var(--stg-zoom, 1));
+  block-size: calc(var(--stg-name-reach) / var(--stg-zoom, 1));
 }
 
 // Centered placeholders (downloading / unavailable / bookNotAvailable / failed / empty verse) have no
