@@ -61,6 +61,14 @@ import {
  */
 const RAF_SETTLE_TIMEOUT_MS = 2_000;
 
+/**
+ * Window width for the footnote popover's narrow-pane check. Simple's layout gives the editor a
+ * much narrower frame than Power's at the same window width (about 400 px here against Power's
+ * 970), and this is close to the narrowest window at which the popover's minimum width (about 380
+ * px) fits Simple's frame; at the app's 900 px minimum the frame is only about 300 px.
+ */
+const NARROW_WINDOW_WIDTH_PX = 1_000;
+
 // DEV_NOISY=false: the noisy dev test layout replaces the normal layouts (see
 // scroll-group-sync.spec.ts).
 test.use({
@@ -244,11 +252,11 @@ test.describe('scripture editor pop-ups in the Simple-mode view', () => {
       await closeFootnotePopover();
 
       // Narrow pane: the popover and its content must still fit inside it, at 200 % and at the
-      // 300 % maximum (the app does not allow a narrower window). A real OS window resize, never
+      // 300 % maximum (see NARROW_WINDOW_WIDTH_PX for the width). A real OS window resize, never
       // `mainPage.setViewportSize()` — on this CDP-attached fixture that applies an emulation
       // override that bypasses the app's enforced `minWidth` instead of actually narrowing the
       // window (see `setWindowWidth` in fixtures/helpers.ts).
-      await setWindowWidth(electronApp, mainPage, 900);
+      await setWindowWidth(electronApp, mainPage, NARROW_WINDOW_WIDTH_PX);
       // Sequential: each zoom level's pop-up must be opened, checked and closed before the next.
       /* eslint-disable no-await-in-loop */
       const narrowFactors = [2, 3];
