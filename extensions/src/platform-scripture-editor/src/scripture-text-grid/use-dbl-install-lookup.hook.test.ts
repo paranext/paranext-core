@@ -322,6 +322,34 @@ describe('useDblInstallLookup', () => {
     expect(result.current.status).toBe('unanswered');
   });
 
+  it('does not let a busy answer after an install shut out a slower real one, once projects have changed', async () => {
+    let resolveInstallAsk: (status: DblResourceInstallStatus) => void = () => {};
+    const answers: Promise<DblResourceInstallStatus>[] = [
+      Promise.resolve({ uid: 'P' }),
+      Promise.resolve({ uid: 'P' }),
+      new Promise((resolve) => {
+        resolveInstallAsk = resolve;
+      }),
+    ];
+    provideRecompute(() => answers.shift() ?? Promise.resolve({}));
+    const { result, rerender } = renderLookup(CATALOG_FAILED);
+    await flush();
+    await changeProjects();
+
+    rerender({ ...CATALOG_REFETCHING, refreshCounter: 1 });
+    await flush();
+    // The settle's ask hears only "busy" and finishes before the install's slower ask answers.
+    rerender({ ...CATALOG_FAILED, refreshCounter: 1 });
+    await advance(2500);
+    resolveInstallAsk({ uid: 'P' });
+    await flush();
+    // A Retry answers from the answer in hand without asking, so it shows which one was kept.
+    rerender({ ...CATALOG_REFETCHING, refreshCounter: 1 });
+    await flush();
+
+    expect(result.current).toEqual({ status: 'answered', installedProjectIds: { uid: 'P' } });
+  });
+
   it('collapses a burst of project changes into one re-ask', async () => {
     const recompute = provideRecompute(() => Promise.resolve({ uid: 'P' }));
     renderLookup(CATALOG_FAILED);
