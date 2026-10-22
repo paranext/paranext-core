@@ -302,6 +302,37 @@ If you need more than 3 mocks for a test, reconsider:
 | Network calls | Mock all HTTP/WebSocket calls            |
 | GUIDs         | Inject a generator or use fixed values   |
 
+#### 4. Reading Production Source as Text
+
+Don't test behavior by reading a production `.ts`/`.tsx` file (`readFileSync`, `?raw`) and matching
+substrings or regexes in it — "the guard comes before the call", "the app is wrapped in the
+boundary", "this file imports only the logger". Such a test:
+
+- **Fails on harmless change** — a reformat, a rename, a helper extraction, a comment that moves.
+- **Passes on wrong behavior** — the guard can sit in a comment, a dead branch or an uncalled
+  function, and two strings in the right order do not run in that order.
+- **Spreads** — each one becomes the precedent the next author cites for a component they could not
+  mount.
+
+Test the behavior instead, in roughly this order:
+
+| To pin                                          | Do this                                                                                                                                                                              |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A decision: a guard, an ordering, a key routing | Extract a pure function, or one that takes its side effects as injected steps, and unit-test it; the call site calls it (`shouldRoutePaletteKey`, `startPendingComment`, `runPaletteSessionKeyDown`) |
+| What renders, or where a marker sits            | Render it with Testing Library. When a whole web view cannot mount, render the piece that matters (`RendererRoot`, the Enhanced Resources shell)                                     |
+| Module state a test cannot reach                | Call the real function behind a narrow test seam (`testingExtensionService.setAvailableExtensions`)                                                                                  |
+| Two values that must match across bundles       | Keep the value in an import-free module and import it into the test                                                                                                                 |
+| An import boundary                              | A lint rule (`no-restricted-imports` in a per-file `.eslintrc.js` override)                                                                                                          |
+| A wrong value that is easy to pass              | Remove the variant, so there is nothing wrong to pass (one options object, not two of the same type)                                                                                 |
+| Wiring only the running app shows               | An isolated e2e step                                                                                                                                                                 |
+
+Reading a file is fine when the file itself is the subject: data (JSON, localized strings,
+manifests), stylesheets, built output (`dist`, `papi.d.ts`), cross-language parity that cannot share
+an import (TypeScript ↔ C#), and build-tooling invariants. If no behavioral test is reachable without
+a large refactor, keep the source scan but add a comment naming the smallest real fix — don't write a
+new one. See `adr-tests-exercise-behavior-not-source-text` in
+[Architecture-Decisions.md](Architecture-Decisions.md).
+
 ### Mocking Decision Matrix
 
 | Dependency       | Unit Tests    | Integration Tests |

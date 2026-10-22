@@ -13,6 +13,11 @@ import { join } from 'path';
  * connection is seen by nothing and is missed for good. Moving the call into the IIFE, or into a
  * React effect, reopens that window while leaving every other test green, which is why the
  * constraint needs a pin of its own rather than only the comment at the call site.
+ *
+ * Reading source text is a last resort here (see `adr-tests-exercise-behavior-not-source-text`).
+ * The smallest real fix: move the module-level subscriptions and the async startup into an exported
+ * function in a module of their own, taking the network service as a parameter, so a test can hand
+ * it a network service whose `initialize()` reports a lost connection and check the loss is shown.
  */
 describe('renderer startup ordering', () => {
   it('subscribes the connection-lost service before the network service is initialized', () => {
