@@ -245,6 +245,25 @@ describe('legacy comment manager main.ts activation', () => {
       expect(selectThread).toHaveBeenCalledWith('thread-1');
     });
 
+    it.each([
+      ['rejects', () => mocks.reloadWebView.mockRejectedValueOnce(new Error('window closing'))],
+      ['returns no web view', () => mocks.reloadWebView.mockResolvedValueOnce(undefined)],
+    ])(
+      'still selects, and clears the pending project, when the panel reload %s',
+      async (_outcome, arrangeReload) => {
+        arrange('project-A', 'project-B');
+        arrangeReload();
+
+        await expect(select('thread-1', true, 'editor-1')).resolves.toBe('comments-tab');
+
+        expect(selectThread).toHaveBeenCalledWith('thread-1');
+        // A pending project the reload never consumed would be picked up by a later, unrelated
+        // panel load.
+        expect(mocks.setPendingCommentListPanelProjectId).toHaveBeenLastCalledWith(undefined);
+        expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('project-B'));
+      },
+    );
+
     it("selects without reloading when the editor's project cannot be resolved", async () => {
       arrange('project-A', undefined);
       mocks.getOpenWebViewDefinition.mockRejectedValueOnce(new Error('no window answered'));

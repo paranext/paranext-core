@@ -248,10 +248,24 @@ async function showEditorProjectInCommentListPanel(
   if (!editorProjectId || editorProjectId === panelProjectId) return;
 
   setPendingCommentListPanelProjectId(editorProjectId);
-  await papi.webViews.reloadWebView(commentListPanelWebViewType, panelWebViewId, {
-    // The caller's probe already raised the tab if it was asked to
-    bringToFront: false,
-  });
+  let failure: string | undefined;
+  try {
+    const reloadedWebViewId = await papi.webViews.reloadWebView(
+      commentListPanelWebViewType,
+      panelWebViewId,
+      // The caller's probe already raised the tab if it was asked to
+      { bringToFront: false },
+    );
+    if (!reloadedWebViewId) failure = 'the reload returned no web view';
+  } catch (e) {
+    failure = getErrorMessage(e);
+  }
+  if (failure) {
+    // A failed reload may never have consumed the pending project; clear it so a later, unrelated
+    // panel load doesn't pick it up. The caller still selects in the panel as it is.
+    setPendingCommentListPanelProjectId(undefined);
+    logger.warn(`Could not point the Comment List panel at project ${editorProjectId}: ${failure}`);
+  }
 }
 
 /**
