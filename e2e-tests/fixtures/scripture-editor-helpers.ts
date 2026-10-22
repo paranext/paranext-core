@@ -1,4 +1,6 @@
 import { type Frame, type Locator, type Page } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
 import {
   LAUNCH_PHASE_TIMEOUT_MS,
   requireIsolatedProjectRoot,
@@ -39,6 +41,53 @@ export const CONTENT_ZOOM_COMMANDS = {
   out: 'platform.webViewContentZoomOut',
   reset: 'platform.webViewContentZoomReset',
 } as const;
+
+/**
+ * Path to the Scripture editor's persisted "Don't show again today" choices for the read-only
+ * Preview notice. `papi.storage`'s user-data files are named for the base64url of the storage key,
+ * so this is `platformScriptureEditor.markerViewNotificationDisabled` encoded — see
+ * `disabledMapUserDataKey` in
+ * `extensions/src/platform-scripture-editor/src/read-only-view-notifier.model.ts`.
+ */
+const DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH = path.resolve(
+  __dirname,
+  '../../dev-appdata/extensions/platformScriptureEditor/user-data/cGxhdGZvcm1TY3JpcHR1cmVFZGl0b3IubWFya2VyVmlld05vdGlmaWNhdGlvbkRpc2FibGVk',
+);
+
+/**
+ * Replaces the persisted "Don't show again today" choices for the read-only Preview notice before
+ * the app launches. The notifier reads them once at startup and stays silent for a project for 24
+ * hours after its dismiss is clicked, and the file lives in the shared `dev-appdata`, so a click in
+ * any earlier run or in the developer's own dev app would otherwise hide the notice a spec waits
+ * for.
+ *
+ * Must be called BEFORE the app launches (in `test.beforeAll` for the isolated fixture's
+ * test-scoped app).
+ *
+ * @param dismissedAtByProjectId When each project's notice was dismissed, in epoch milliseconds, as
+ *   the notifier stores it. `{}` means no project's notice is dismissed.
+ * @returns A restore function that writes the file back to its exact pre-call contents (or deletes
+ *   it if it did not exist). Call it AFTER the app has closed — clicking the dismiss rewrites it.
+ */
+export function preConfigurePreviewNoticeDismissals(
+  dismissedAtByProjectId: Record<string, number>,
+): () => void {
+  let originalContents: string | undefined;
+  if (fs.existsSync(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH))
+    originalContents = fs.readFileSync(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH, 'utf-8');
+
+  fs.mkdirSync(path.dirname(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH), { recursive: true });
+  fs.writeFileSync(
+    DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH,
+    JSON.stringify(dismissedAtByProjectId),
+  );
+
+  return () => {
+    if (originalContents !== undefined)
+      fs.writeFileSync(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH, originalContents);
+    else fs.rmSync(DEV_APPDATA_PREVIEW_NOTICE_DISMISSALS_PATH, { force: true });
+  };
+}
 
 /**
  * The `<iframe data-web-view-id>` element's content frame — a real `Frame`, not a `FrameLocator`,

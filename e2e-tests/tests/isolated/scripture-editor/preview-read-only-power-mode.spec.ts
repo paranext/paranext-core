@@ -22,6 +22,7 @@ import {
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
+  preConfigurePreviewNoticeDismissals,
   SAMPLE_WEB_PROJECT_ID,
   sendCommandWithId,
   waitForHomeTab,
@@ -44,6 +45,18 @@ const READ_ONLY_TITLE = '(Read-only)';
 const PREVIEW_NOTICE_TEXT = 'is read-only. To edit, switch to Standard view.';
 
 test.describe('Power-mode Standard view and Preview', () => {
+  let restorePreviewNoticeDismissals: (() => void) | undefined;
+
+  // A "Don't show again today" clicked in an earlier run or in the dev app would hide the notice
+  // step 2 waits for, and the notifier reads those choices only at startup.
+  test.beforeAll(() => {
+    restorePreviewNoticeDismissals = preConfigurePreviewNoticeDismissals({});
+  });
+
+  test.afterAll(() => {
+    restorePreviewNoticeDismissals?.();
+  });
+
   test('Ctrl+E toggles Standard view and a read-only Preview', async ({ mainPage }) => {
     // Heavy isolated test (own Electron instance, backend-readiness gates, several view switches).
     test.slow();
