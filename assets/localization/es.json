@@ -491,7 +491,7 @@
   "%onboardingTour_step_modelText_description%": "Este es su texto modelo: la referencia desde la cual traduce. Normalmente lo elige su administrador para el equipo; consulte Más información en esta columna si necesita elegirlo usted mismo.",
   "%onboardingTour_step_modelText_title%": "Su texto modelo",
   "%onboardingTour_step_profile_description%": "¿Necesita cambiar su conexión a internet o su registro? Están aquí, bajo el botón Perfil.",
-  "%onboardingTour_step_profile_description_2%": "¿Necesita cambiar entre el modo simplificado y el avanzado, controlar su conexión a internet o cambiar su registro? Está aquí, en el menú Perfil.",
+  "%onboardingTour_step_profile_description_2%": "¿Necesita cambiar entre el modo simplificado y el avanzado, controlar su conexión a internet o cambiar su registro? Está aquí, en el menú de usuario.",
   "%onboardingTour_step_profile_title%": "Perfil",
   "%onboardingTour_step_project_description%": "Este es su proyecto: el que está editando. Aquí siempre hay un solo proyecto.",
   "%onboardingTour_step_project_title%": "Su proyecto",

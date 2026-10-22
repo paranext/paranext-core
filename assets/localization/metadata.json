@@ -143,7 +143,7 @@
   "%onboardingTour_step_profile_description%": {
     "deprecationInfo": {
       "date": "2026-10-20",
-      "message": "The tour's profile stop now also names the Simple / Power switch in the Profile menu. The new key is %onboardingTour_step_profile_description_2%."
+      "message": "The tour's profile stop now also names the Simple / Power switch in the User menu. The new key is %onboardingTour_step_profile_description_2%."
     }
   },
   "%onboardingTour_step_sendReceive_description%": {

@@ -373,7 +373,7 @@
   "%onboardingTour_step_modelText_description%": "This is your model text — the reference you're translating from. Your admin usually picks it for the team; see More info in this column if you need to pick it yourself.",
   "%onboardingTour_step_modelText_title%": "Your model text",
   "%onboardingTour_step_profile_description%": "Need to change your internet connection or registration? They're here, under the Profile button.",
-  "%onboardingTour_step_profile_description_2%": "Need to switch between Simple and Power mode, control your internet connection or change your registration? It's here, in the Profile menu.",
+  "%onboardingTour_step_profile_description_2%": "Need to switch between Simple and Power mode, control your internet connection or change your registration? It's here, in the User menu.",
   "%onboardingTour_step_profile_title%": "Profile",
   "%onboardingTour_step_project_description%": "This is your project — the one you're editing. There is only ever one project here.",
   "%onboardingTour_step_project_title%": "Your project",

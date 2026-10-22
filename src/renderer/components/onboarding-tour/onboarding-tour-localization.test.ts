@@ -28,9 +28,8 @@ describe.each(STEP_LOCALIZE_KEYS)('onboarding tour stop string %s', (key) => {
   });
 });
 
-// The profile stop also teaches the Simple / Power switch that lives in the same menu. The shipped
-// description named only the internet connection and registration, so a new key carries the wording
-// and the shipped one is retired with its value intact.
+// The profile stop also teaches the Simple / Power switch that lives in the same menu. Its retired
+// description keeps its shipped values (Localization-Guide.md, "Existing Strings Are Immutable").
 describe('onboarding tour profile stop', () => {
   it('asks for the profile description that names the Simple / Power switch', () => {
     expect(STEP_LOCALIZE_KEYS).toContain('%onboardingTour_step_profile_description_2%');
@@ -39,7 +38,7 @@ describe('onboarding tour profile stop', () => {
 
   it('has the agreed English text', () => {
     expect(english['%onboardingTour_step_profile_description_2%']).toBe(
-      "Need to switch between Simple and Power mode, control your internet connection or change your registration? It's here, in the Profile menu.",
+      "Need to switch between Simple and Power mode, control your internet connection or change your registration? It's here, in the User menu.",
     );
   });
 

@@ -135,8 +135,8 @@ function ReminderDot({ testId, className }: { testId: string; className?: string
  * (theme) controls. Replaces the previous standalone theme-toggle, internet-settings, and
  * Paratext-registration buttons in the toolbar.
  *
- * The Power option's label ends in "[preview]": Power mode is shipped as a preview, so users should
- * expect missing features rather than read the gaps as bugs.
+ * The Power option's label is marked as a preview: Power mode ships with features still missing, so
+ * users should read the gaps as "not built yet" rather than as bugs.
  *
  * When the user's Paratext registration is missing or invalid, an unobtrusive reminder dot appears
  * on the toolbar trigger and on the "Profile & registration" row. The dot is never the only signal:
