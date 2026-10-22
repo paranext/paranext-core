@@ -9483,6 +9483,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   a backup that carries a stale last-synced tip reads as ⬇️ until its next sync, and a project
   with no last-synced tip at all is never ⬇️. Public core carries an always-empty `toReceive`, and
   the Studio patch must keep the exact `GetServerTipIds` signature so the seam keeps binding.
+- **Amended 2026-10-20 (PT-4694 follow-up):** ⬆️ means "local changes this user's sync will send",
+  so a project whose current user cannot change it (an Observer, or not a member) is never ⬆️:
+  ParatextData's Send/Receive neither commits nor pushes for such a user
+  (`VersionedText.ShareChanges` gates both on `PermissionManager.HaveRoleNotObserver`), so files an
+  extension writes into the project's `shared` folder stayed ⬆️ through every successful sync.
+  `ParatextProjectSendReceiveService.HasUnsyncedLocalChanges` applies the rule before reading the
+  repository, using the project's local user list (`ProjectUserAccess.xml`). Send/Receive instead
+  decides from the member list the server reports, and nothing copies that list into the local
+  file, so after a role change made only on the server a promoted user sees no ⬆️ for changes
+  their next sync does send, and a demoted user sees ⬆️ for changes the sync discards. ⬇️ is not
+  affected by this rule.
 - **Source:** PT-4694; the follow-up of `adr-toolbar-sync-status-is-local`.
 
 ## adr-usersnap-lives-in-product-patch: Usersnap keys and Help items live in the product's repo patch; core ships empty constants

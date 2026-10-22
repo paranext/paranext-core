@@ -418,9 +418,10 @@ declare module 'paratext-bible-send-receive' {
    */
   export type UnsyncedChangesSnapshot = {
     /**
-     * Projects with local changes not yet sent (⬆️). Normalized (upper-case) ids of the projects
-     * whose local repository holds uncommitted edits or local commits made since the last
-     * successful sync; empty when none.
+     * Projects with local changes this user's next sync would send (⬆️). Normalized (upper-case)
+     * ids of the projects whose local repository holds uncommitted edits or local commits made
+     * since the last successful sync, and whose current user has a role that may change the
+     * project; never a project where the user is an Observer or not a member. Empty when none.
      *
      * @experimental This field is unstable and may change or disappear without notice
      */
