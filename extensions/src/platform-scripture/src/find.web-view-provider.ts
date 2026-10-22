@@ -9,8 +9,9 @@ import {
 import findWebView from './find.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
 import { buildFindWebViewFields, FIND_TITLE_KEY } from './find/find-web-view-definition.util';
+import { findWebViewType } from './find-web-view-type.const';
 
-export const findWebViewType = 'platformScripture.find';
+export { findWebViewType };
 
 export interface FindWebViewOptions extends OpenWebViewOptions {
   /**
