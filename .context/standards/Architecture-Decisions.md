@@ -8744,7 +8744,7 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   remount the panel.
 - **Source:** PT-4534 (review of #2847), found checking the Checks tab in the running app.
 
-## adr-web-view-provider-retry-scoped-to-tab-restore: Only a tab-restore request gets the webview provider's patient retry; a fresh `openWebView()` keeps the shorter 20s failure
+## adr-web-view-provider-retry-scoped-to-tab-restore: A tab-restore request and the extension-reload re-fetch get the webview provider's patient retry; a fresh `openWebView()` keeps the shorter 20s failure
 
 - **Date:** 2026-10-20
 - **Status:** Accepted — the 2-minute budget is a bounded patch, not a full fix; see the deferred
@@ -8759,13 +8759,17 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   empirically that Windows Defender's real-time scan on a cold file read was responsible for the
   extra delay, during `require()` rather than `activate()`.
 - **Decision:** `retrieveWebViewContent` (`web-view.component.tsx`) calls
-  `waitForWebViewProviderToRegister` (`web-view.service-shard.ts`) BEFORE calling `reloadWebView`,
-  only for a tab-restore request. `waitForWebViewProviderToRegister` re-arms the same 20-second wait
-  up to a 2-minute total budget before propagating the final rejection; once it resolves,
-  `reloadWebView` → `openOrReloadWebView` → `getWebViewProvider` run exactly as they always have, with
-  a single, shorter 20-second wait. Every other caller — a fresh
-  `openWebView()` request, the error boundary's retry, a PAPI-triggered reload — never calls
-  `waitForWebViewProviderToRegister` and so uses the shorter 20-second wait.
+  `waitForWebViewProviderToRegister` (`web-view.service-shard.ts`) BEFORE calling `reloadWebView`.
+  Both of `retrieveWebViewContent`'s callers get this patience — a tab-restore request and the
+  `platform.onDidReloadExtensions` re-fetch for every open tab — since neither is a user action and
+  both can hit the same still-activating-extension race. `waitForWebViewProviderToRegister` re-arms
+  the same 20-second wait up to a 2-minute total budget before propagating the final rejection; once
+  it resolves, `reloadWebView` → `openOrReloadWebView` → `getWebViewProvider` run exactly as they
+  always have, with a single, shorter 20-second wait. Every other caller — a fresh `openWebView()`
+  request, the error boundary's retry, a PAPI-triggered reload — never calls
+  `waitForWebViewProviderToRegister` and so uses the shorter 20-second wait. Whether the
+  extension-reload re-fetch should keep this same scope, or be narrowed to only the tabs whose
+  extension is actually still activating, is a separate, still-open question.
 - **Alternatives:** Re-arm the wait uniformly inside `getWebViewProvider` itself, with no caller-side
   opt-in — rejected because it would apply the same ~2-minute patience to a fresh, explicit
   `openWebView()` request too: a Power-mode user choosing "Open X" from a menu would see that request
