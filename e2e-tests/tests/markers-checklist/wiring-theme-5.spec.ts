@@ -107,10 +107,11 @@ async function openDefaultProject(page: Page): Promise<void> {
 }
 
 /**
- * Open the Markers Checklist web view via the scripture editor's hamburger menu. No-op if the tab
- * is already open (clicks back to activate it instead).
+ * Open the Markers Checklist web view by sending its command with the open scripture editor's web
+ * view id (see `sendOpenMarkersChecklistCommand`); the editor's menu hides the item in both
+ * interface modes. No-op if the tab is already open (clicks back to activate it instead).
  */
-async function openMarkersChecklistViaToolsMenu(page: Page): Promise<void> {
+async function openMarkersChecklistByCommand(page: Page): Promise<void> {
   const existing = page.locator('.dock-tab').filter({ hasText: WEBVIEW_IFRAME_TITLE_RE });
   if ((await existing.count()) > 0) {
     await existing.first().click();
@@ -187,7 +188,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 1: first-launch seed defaults to scope="chapter" with current book/chapter', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -211,7 +212,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 2: scope auto-follow — editor navigation updates the verse-range trigger label', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -308,7 +309,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   // — picker interaction skipped, OK commits whatever the dialog seeds with. The point of 4a
   // is the OK→commit path, not specific BCV values.
   test('Test 4a: range mode — OK commits and trigger shows the range', async ({ mainPage }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -371,7 +372,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 4b: range mode — Cancel/Escape discards, trigger label unchanged', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -431,7 +432,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 5: clicking a row goto link broadcasts the ref and focuses the editor tab', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -471,7 +472,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   }) => {
     // Open the markers-checklist FIRST so we can close the editor without losing the dock-tab
     // for the checklist itself.
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -520,7 +521,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 7: changing the primary project via ProjectSelector retargets the checklist', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -665,7 +666,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 9: sticky toolbar triggers stay at top of the iframe when the data table scrolls', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
@@ -707,7 +708,7 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   test('Test 10: Hide-Matches is disabled when columnCount === 1 and enabled with a comparative text', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 

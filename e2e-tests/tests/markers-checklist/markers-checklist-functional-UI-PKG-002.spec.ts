@@ -90,26 +90,16 @@ async function openDefaultProject(page: Page): Promise<void> {
 }
 
 /**
- * Open the Markers Checklist web view via visible UI: scripture editor's hamburger menu → "Markers
- * Checklist..." item.
+ * Open the Markers Checklist web view by sending `platformScripture.openMarkersChecklist` with the
+ * open scripture editor's web view id (see `sendOpenMarkersChecklistCommand`). The editor's
+ * hamburger menu hides the Markers Checklist item in both interface modes, so the command is the
+ * only way in. The handler reads the project from the editor's web-view definition, so the
+ * checklist opens against the editor's project as a new dock tab titled "Markers Checklist -
+ * {PROJECT_NAME}".
  *
- * The menu item is declared in `platform-scripture-editor/contributions/menus.json` under the
- * `platformScriptureEditor.inventory` group (same spot as Inventory: Characters/Markers/etc.),
- * firing `platformScripture.openMarkersChecklist`. Invoking the command from the editor's web-view
- * menu passes the editor's `webViewId` to the handler, which reads the active `projectId` from the
- * web-view definition — so the checklist opens against the editor's project.
- *
- * Navigation steps:
- *
- * 1. Precondition: the project must already be open (see `openDefaultProject`).
- * 2. Enter the scripture editor's iframe (title matches `{PROJECT_NAME} (Editable)`).
- * 3. Click the hamburger button in the top-left (aria-label="Project" inside the iframe — NOT the
- *    identically-named button outside the iframe, which is a dock-tab project menu).
- * 4. Radix portals the menu into the iframe's body, so use `editorFrame.getByRole('menuitem')`.
- * 5. Click "Markers Checklist..." → new dock-tab appears at the main-page level titled "Markers
- *    Checklist - {PROJECT_NAME}".
+ * Precondition: the project must already be open (see `openDefaultProject`).
  */
-async function openMarkersChecklistViaToolsMenu(page: Page): Promise<void> {
+async function openMarkersChecklistByCommand(page: Page): Promise<void> {
   await sendOpenMarkersChecklistCommand(page);
 
   // The new web view's dock-tab is at the main-page level (not inside any iframe).
@@ -167,6 +157,8 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
 
     // The editor's hamburger menu hides the item in both modes (hidden, not removed).
     await editorFrame.locator("button[aria-label='Project']").first().click();
+    // Positive control: the menu is open and filled, so the absence below is not vacuous
+    await expect(editorFrame.getByRole('menuitem', { name: /Project settings/i })).toBeVisible();
     await expect(editorFrame.getByRole('menuitem', { name: /Markers Checklist/i })).toHaveCount(0);
     await mainPage.screenshot({ path: `${EVD_DIR}/UI-PKG-002-EVD-001-menu-open.png` });
     await mainPage.keyboard.press('Escape');
@@ -193,7 +185,7 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
   test('renders all toolbar elements from the Test Contract on initial load', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
 
     // startAreaChildren: three outline-button triggers (selector stand-ins today; ProjectSelector
@@ -221,7 +213,7 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
   test('renders column headers for the primary project and data rows with backslash-prefixed markers', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
 
     // Column header row must exist.
@@ -249,7 +241,7 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
   test('fetches real data from the backend NetworkObject and displays marker rows with backslash prefix', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
 
     // aria-busy goes false once the first `buildChecklistData` call settles.
@@ -273,7 +265,7 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
   test('toggling Hide Matches hides matching rows and announces "{N} Matches Omitted"', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
 
     // Wait for the initial data load to finish so the data-table's aria-busy settles to false
@@ -335,7 +327,7 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
   // @behavior BHV-302, BHV-315, BHV-604
   // EVD-005 — Show Verse Text ON shows marker + verse text in cells
   test('toggling Show Verse Text displays verse text alongside markers', async ({ mainPage }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
 
     // Wait for initial data load.
@@ -374,7 +366,7 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
   test('Settings… item is present in the web-view hamburger menu under the export group', async ({
     mainPage,
   }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
 
     // The web-view's hamburger menu (aria-label "View Info") is generated by Platform.Bible's
@@ -407,7 +399,7 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
     const browserContext = mainPage.context();
     await browserContext.grantPermissions(['clipboard-read', 'clipboard-write']);
 
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
 
     // Wait for data.
@@ -452,7 +444,7 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
   test.fixme(
     'Hide Matches + verse range survive close and reopen via useWebViewState slots',
     async ({ mainPage }) => {
-      await openMarkersChecklistViaToolsMenu(mainPage);
+      await openMarkersChecklistByCommand(mainPage);
       const frame = checklistFrame(mainPage);
 
       // Wait for initial load so the data-table settles before we drive UI changes.
@@ -497,7 +489,7 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
       await closeMarkersChecklistTab(mainPage);
 
       // Reopen.
-      await openMarkersChecklistViaToolsMenu(mainPage);
+      await openMarkersChecklistByCommand(mainPage);
       const frame2 = checklistFrame(mainPage);
 
       // Hide Matches persisted → match-count label is visible again without user action.
@@ -526,7 +518,7 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
   test.fixme(
     'renders the "Comparative texts have identical markers." message when all markers match',
     async ({ mainPage }) => {
-      await openMarkersChecklistViaToolsMenu(mainPage);
+      await openMarkersChecklistByCommand(mainPage);
       const frame = checklistFrame(mainPage);
 
       // Wait for initial data-load so the ProjectSelector has populated its options list.
@@ -598,7 +590,7 @@ test.describe('markers-checklist UI-PKG-002: Checklists Tool', () => {
   test.fixme(
     'when buildChecklistData fails, renders a destructive Alert with a Retry button that re-invokes the call',
     async ({ mainPage }) => {
-      await openMarkersChecklistViaToolsMenu(mainPage);
+      await openMarkersChecklistByCommand(mainPage);
       const frame = checklistFrame(mainPage);
 
       // Drive the error path by setting an empty/invalid marker filter pattern that the backend

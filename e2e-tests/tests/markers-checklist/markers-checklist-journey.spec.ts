@@ -84,11 +84,11 @@ async function openDefaultProject(page: Page): Promise<void> {
 }
 
 /**
- * Open the Markers Checklist web view via the scripture editor's hamburger menu. The menu item is
- * declared in `platform-scripture-editor/contributions/menus.json` under the inventory group. No-op
- * if the tab is already open (clicks back to activate instead).
+ * Open the Markers Checklist web view by sending its command with the open scripture editor's web
+ * view id (see `sendOpenMarkersChecklistCommand`); the editor's menu hides the item in both
+ * interface modes. No-op if the tab is already open (clicks back to activate instead).
  */
-async function openMarkersChecklistViaToolsMenu(page: Page): Promise<void> {
+async function openMarkersChecklistByCommand(page: Page): Promise<void> {
   const existing = page.locator('.dock-tab').filter({ hasText: WEBVIEW_IFRAME_TITLE_RE });
   if ((await existing.count()) > 0) {
     await existing.first().click();
@@ -173,7 +173,7 @@ test.describe('markers-checklist Journey Tests (cross-WP)', () => {
   // UI-PKG-002 data refresh) still provides strong cross-WP coverage without persistence.
   test('adjust marker settings via Settings dialog, verify data refresh', async ({ mainPage }) => {
     // ── Step 1 (UI-PKG-001): Open Markers Checklist via the scripture-editor hamburger. ──
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
 
     // ── Step 2 (UI-PKG-002): Initial data load settles. ──
@@ -237,7 +237,7 @@ test.describe('markers-checklist Journey Tests (cross-WP)', () => {
   // functional tests prove the read/write round-trip).
   test('toggle Hide Matches and Show Verse Text in combination', async ({ mainPage }) => {
     // ── Step 1 (UI-PKG-001): Open Markers Checklist. ──
-    await openMarkersChecklistViaToolsMenu(mainPage);
+    await openMarkersChecklistByCommand(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
 
