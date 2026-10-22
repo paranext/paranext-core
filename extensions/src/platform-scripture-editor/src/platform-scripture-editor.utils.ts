@@ -56,7 +56,7 @@ import type { MutableRefObject } from 'react';
 // import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
 // import from the editor package drags its React-bundling dist into the main bundle, breaking
 // extension activation. See platform-scripture-editor.web-view.utils.ts's header.
-import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
+import type { DeltaOp, EditorRef, ViewOptions } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
@@ -382,29 +382,89 @@ export function validateCommentSelection(
   };
 }
 
-/** Where a note is edited: the footnotes pane (Standard view), the popover, or nowhere. */
+/**
+ * Decides whether a view uses the footnotes-pane note model, PT9's: notes are edited in place in
+ * the footnotes pane, picking a note moves the text to it, and the picked note's caller is
+ * highlighted. Standard view uses it, and so does Simple mode's Formatted view, which edits notes
+ * exactly as Standard view does while its own text keeps hiding markers. Power mode's Formatted and
+ * Markers views keep the popover model, and so does Simple's Markers view, which is read-only and
+ * shows its notes expanded in the text.
+ *
+ * While `platform.interfaceMode` is still loading, `isPowerMode` reads `false` whatever the mode
+ * really is, so only Standard view counts then: a Power user never briefly gets Simple's answer.
+ *
+ * @param options.viewType The scripture editor's current view type
+ * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @param options.isInterfaceModeLoading Whether `platform.interfaceMode` is still loading
+ * @returns Whether the view uses the footnotes-pane note model
+ */
+export function usesPaneNoteModel({
+  viewType,
+  isPowerMode,
+  isInterfaceModeLoading,
+}: {
+  viewType: ScriptureEditorViewType;
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+}): boolean {
+  if (viewType === 'standard') return true;
+  return !isInterfaceModeLoading && !isPowerMode && viewType === 'formatted';
+}
+
+/**
+ * Where a note is edited: the footnotes pane (a view using the pane note model — see
+ * {@link usesPaneNoteModel}), the popover, or nowhere.
+ */
 export type NoteEditingSurface = 'pane' | 'popover' | 'none';
 
 /**
- * Decides the note-editing surface for a click on a note caller. Standard view edits notes in the
- * footnotes pane, in place, matching PT9's model; every other view keeps the popover. A read-only
- * text has no editing surface at all — a caller click in Standard view still navigates (see
- * {@link decideNoteCallerClickAction}) but never opens an editor; outside Standard view the caller
- * is inert.
+ * Decides the note-editing surface for a click on a note caller. A view using the pane note model
+ * (see {@link usesPaneNoteModel}) edits notes in the footnotes pane, in place, matching PT9's model;
+ * every other view keeps the popover. A read-only text has no editing surface at all — a caller
+ * click in a pane-model view still navigates (see {@link decideNoteCallerClickAction}) but never
+ * opens an editor; in any other view the caller is inert.
  *
- * @param viewType The scripture editor's current view type
+ * @param usesPaneModel Whether the view uses the pane note model ({@link usesPaneNoteModel})
  * @param isReadOnly Whether the text is read-only (editing is disabled)
  * @returns Where a click on a collapsed note caller should open its editor
  */
 export function resolveNoteEditingSurface({
-  viewType,
+  usesPaneModel,
   isReadOnly,
 }: {
-  viewType: ScriptureEditorViewType;
+  usesPaneModel: boolean;
   isReadOnly: boolean;
 }): NoteEditingSurface {
   if (isReadOnly) return 'none';
-  return viewType === 'standard' ? 'pane' : 'popover';
+  return usesPaneModel ? 'pane' : 'popover';
+}
+
+/**
+ * Decides the view options the footnotes pane and its row editor render with. Power mode's pane
+ * follows the main editor's view (in Standard view, the pane-model view, they are Standard's
+ * already). Simple mode's pane shows markers as Standard view's does, while the main text keeps
+ * Simple's own view options and goes on hiding them. While `platform.interfaceMode` is still
+ * loading, `isPowerMode` reads `false` whatever the mode really is, so the pane follows the main
+ * editor then: a Power user's pane never briefly takes Simple's answer.
+ *
+ * @param options.isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @param options.isInterfaceModeLoading Whether `platform.interfaceMode` is still loading
+ * @param options.mainViewOptions The main editor's view options
+ * @param options.standardViewOptions Standard view's view options
+ * @returns The view options for the footnotes pane and its row editor
+ */
+export function resolveFootnotesPaneViewOptions({
+  isPowerMode,
+  isInterfaceModeLoading,
+  mainViewOptions,
+  standardViewOptions,
+}: {
+  isPowerMode: boolean;
+  isInterfaceModeLoading: boolean;
+  mainViewOptions: ViewOptions | undefined;
+  standardViewOptions: ViewOptions;
+}): ViewOptions | undefined {
+  return isPowerMode || isInterfaceModeLoading ? mainViewOptions : standardViewOptions;
 }
 
 /**
@@ -412,13 +472,14 @@ export function resolveNoteEditingSurface({
  * `CallerHighlightSynchronizer`: the border marks where the focused pane's caret is, so it shows
  * only while the footnotes pane owns DOM focus. Clicking back into the Scripture text leaves the
  * row selected but takes the border off the caller; clicking the row (or its editor) again puts it
- * back. Standard view is the only view that highlights callers at all.
+ * back. Only a view using the pane note model (see {@link usesPaneNoteModel}) highlights callers at
+ * all.
  *
  * PT9's pane has one caret, so the note it is in is the one marked. Here keyboard focus on a row
  * (Tab or the arrow keys) is that caret whenever a row has it, and the selected row otherwise (the
  * row editor, or the pane's chrome, holds focus).
  *
- * @param options.isStandardView Whether the editor is showing Standard view
+ * @param options.usesPaneModel Whether the view uses the pane note model
  * @param options.paneHasFocus Whether DOM focus is inside the footnotes pane (its row list or its
  *   inline row editor)
  * @param options.focusedRowIndex The footnotes pane row holding DOM focus, or `undefined` when no
@@ -428,17 +489,17 @@ export function resolveNoteEditingSurface({
  * @returns The note index to highlight, or `undefined` to clear the highlight
  */
 export function resolveCallerHighlight({
-  isStandardView,
+  usesPaneModel,
   paneHasFocus,
   focusedRowIndex,
   selectedIndex,
 }: {
-  isStandardView: boolean;
+  usesPaneModel: boolean;
   paneHasFocus: boolean;
   focusedRowIndex?: number;
   selectedIndex: number | undefined;
 }): number | undefined {
-  if (!isStandardView || !paneHasFocus) return undefined;
+  if (!usesPaneModel || !paneHasFocus) return undefined;
   return focusedRowIndex ?? selectedIndex;
 }
 
@@ -483,17 +544,18 @@ export type NoteCallerClickState = {
   /** Whether the footnotes pane is actually rendered (visible toggle AND data loaded). */
   paneRendered: boolean;
   /**
-   * Whether the interface is in Power mode. A caller click reveals a hidden pane only in Power
-   * mode; Simple mode keeps PT9's manual pane visibility.
+   * Whether the interface is in Power mode. In Power mode a caller click reveals a hidden pane in
+   * every view; otherwise only a view using the pane note model reveals it.
    */
   isPowerMode: boolean;
   /** Where the clicked note would be edited; see {@link resolveNoteEditingSurface}. */
   surface: NoteEditingSurface;
   /**
-   * Whether the text is shown in Standard view. Only Standard view gives a read-only text the
-   * navigation half of the pane model; every other view keeps a read-only caller inert.
+   * Whether the view uses the pane note model (see {@link usesPaneNoteModel}). Only such a view
+   * gives a read-only text the navigation half of the pane model; every other view keeps a
+   * read-only caller inert.
    */
-  isStandardView: boolean;
+  usesPaneModel: boolean;
 };
 
 /** What a collapsed-note caller click resolves to — see {@link decideNoteCallerClickAction}. */
@@ -520,13 +582,14 @@ export type NoteCallerClickDecision = {
    *
    * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
    * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored.
-   * - `ignore-read-only` — the text is read-only and not in Standard view, so the caller is inert:
-   *   the pane's navigation model belongs to Standard view alone.
-   * - `open-popover` — open the footnote-editor popover for the clicked note (every view but
-   *   Standard).
-   * - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (Standard view).
-   * - `navigate-only` — the text is read-only in Standard view, so there is no editing surface; the
-   *   click still navigates (reveals/scrolls the pane) without opening an editor.
+   * - `ignore-read-only` — the text is read-only in a view that does not use the pane note model, so
+   *   the caller is inert: the pane's navigation model belongs to pane-model views alone.
+   * - `open-popover` — open the footnote-editor popover for the clicked note (every view that does
+   *   not use the pane note model).
+   * - `open-pane-editor` — open the clicked note's row editor in the footnotes pane (a pane-model
+   *   view).
+   * - `navigate-only` — the text is read-only in a pane-model view, so there is no editing surface;
+   *   the click still navigates (reveals/scrolls the pane) without opening an editor.
    */
   action: NoteCallerClickAction;
   /**
@@ -535,7 +598,10 @@ export type NoteCallerClickDecision = {
    * pane's focus-request machinery retries a request that arrives before its data mounts.
    */
   sendPaneFocusRequest: boolean;
-  /** Also show the footnotes pane: it is currently toggled off and the interface is in Power mode. */
+  /**
+   * Also show the footnotes pane: it is currently toggled off, and either the interface is in Power
+   * mode or the view uses the pane note model.
+   */
   showPane: boolean;
 };
 
@@ -544,20 +610,21 @@ export type NoteCallerClickDecision = {
  * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests.
  *
  * The editing surface ({@link NoteCallerClickState.surface}, from {@link resolveNoteEditingSurface})
- * decides where a routed click opens an editor: the footnotes pane in Standard view, the popover
- * everywhere else, and nowhere in a read-only text, where the click still navigates without opening
- * an editor. In every case:
+ * decides where a routed click opens an editor: the footnotes pane in a view using the pane note
+ * model, the popover everywhere else, and nowhere in a read-only text, where the click still
+ * navigates without opening an editor. In every case:
  *
  * - An expanded note's caller does nothing (the note is edited in place).
- * - A read-only text outside Standard view does nothing either: the pane's navigate-to-note model is
- *   Standard view's, and every other view keeps the caller inert.
+ * - A read-only text outside a pane-model view does nothing either: the pane's navigate-to-note model
+ *   belongs to pane-model views, and every other view keeps the caller inert.
  * - While a popover is really shown, a popover-surface click is ignored (one session at a time). A
  *   pane-editor session has no such limit — its row stays open across clicks.
  * - A popover session's key left behind without a shown popover is STALE and must not block the
  *   click; a pane-editor session's key is never stale, since the pane keeps it by design.
  *
  * Alongside whichever action is chosen, the pane highlights the clicked note when it is rendered,
- * and a click also SHOWS the pane when it is toggled off and the interface is in Power mode.
+ * and a click also SHOWS the pane when it is toggled off and either the interface is in Power mode
+ * or the view uses the pane note model.
  *
  * {@link NoteCallerClickDecision.clearStaleEditingSession} is decided independently of the action
  * and is reported on EVERY branch, the dead-click ones included: orphaned popover bookkeeping has
@@ -567,7 +634,7 @@ export type NoteCallerClickDecision = {
 export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
   const clearStaleEditingSession =
     state.editingNoteKey !== undefined && !state.popoverShown && state.surface !== 'pane';
-  const showPane = state.isPowerMode && !state.paneVisible;
+  const showPane = !state.paneVisible && (state.isPowerMode || state.usesPaneModel);
   const sendPaneFocusRequest = state.paneRendered || showPane;
 
   if (!state.isCollapsed)
@@ -577,7 +644,7 @@ export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCa
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  if (state.surface === 'none' && !state.isStandardView)
+  if (state.surface === 'none' && !state.usesPaneModel)
     return {
       clearStaleEditingSession,
       action: 'ignore-read-only',
