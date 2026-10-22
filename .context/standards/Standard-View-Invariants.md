@@ -319,12 +319,13 @@ commits do, before focusing. It is a no-op when the selection survived.
   renders as a glyph) has to change the other side too, or clicks land off by the difference.
 - **In a pane-model view (Standard view, or Simple's Formatted view, where the pane and its row
   editor get Standard's view options), the same component runs `inline` inside the footnotes pane
-  — there is no popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply unchanged. Its
-  live-apply re-keys the note in the parent editor, so the host must re-sync its session key from
-  `onUsjChange`'s `insertedNodeKey`, and must not hand the mounted editor a new `noteOps` identity
-  for its own live-apply — that reloads the editor mid-typing. An unclosed note (the one kind the text
-  shows the content of) is edited in place in the text as well, as PT9 does, and the row editor is
-  not opened on one typed or pasted there; see `adr-footnote-unclosed-note-edited-in-place`.
+  — there is no popover.** The note-shell, caret-guard, and `updateCaller` invariants above apply
+  unchanged. Its live-apply re-keys the note in the parent editor, so the host must re-sync its
+  session key from `onUsjChange`'s `insertedNodeKey`, and must not hand the mounted editor a new
+  `noteOps` identity for its own live-apply — that reloads the editor mid-typing. An unclosed note
+  (the one kind the text shows the content of) is edited in place in the text as well, as PT9 does,
+  and the row editor is not opened on one typed or pasted there; see
+  `adr-footnote-unclosed-note-edited-in-place`.
 - **The caller and note-type changes rebuild the note from `getNoteOps`, which reads the live tree
   unsettled.** Both must settle pending marker edits (`commitPendingMarkerEdits`, skipped while a
   marker-palette session is open) before reading — the same rule `closeAndSave` and

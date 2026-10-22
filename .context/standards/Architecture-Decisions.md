@@ -3549,18 +3549,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Decision:** One pure predicate, `usesPaneNoteModel({ viewType, isPowerMode,
   isInterfaceModeLoading })` in `platform-scripture-editor.utils.ts`, decides whether a view uses
   the pane note model: Standard view, and Simple's Formatted view. Power's Formatted and Markers
-  views and Simple's Markers view (read-only, notes expanded) keep their behavior; while
-  `platform.interfaceMode` is still loading only Standard counts, so a Power user never briefly gets
-  Simple's answer. Every note check that was Standard-only in the scripture editor web view goes
-  through it — the editing surface, the caller-click decision, navigation to a picked note, the
-  caller highlight, and the pane taking focus in a read-only text —
-  and `note-pane-model-wiring.contract.test.ts` fails on any new `=== 'standard'` comparison there.
-  In Simple, the pane and its row editor get Standard view's view options
-  (`resolveFootnotesPaneViewOptions`), so they show markers, while the main text keeps Simple's.
-  Three things stay Standard-only on purpose: Standard's own view options, the Ctrl+T /
-  Ctrl+Shift+T insert shortcuts (insertion, not editing), and the project stylesheet mode. An open
-  popover is not closed when switching from Power to Simple: it applies only on Save, so closing it
-  would discard what was typed; that one session ends through its own Save or X.
+  views and Simple's Markers view (read-only, notes expanded) keep their note-editing behavior;
+  while `platform.interfaceMode` is still loading only Standard counts, so a Power user never
+  briefly gets Simple's answer. Every note check that was Standard-only in the scripture editor web
+  view goes through it — the editing surface, the caller-click decision, navigation to a picked
+  note, the caller highlight, and the pane taking focus in a read-only text — and
+  `note-pane-model-wiring.contract.test.ts` fails on any new check of the view against
+  `'standard'` there (`===`, `!==`, either operand order, or a `case`). In Simple, the pane and its
+  row editor get Standard view's view options (`resolveFootnotesPaneViewOptions`) in both of
+  Simple's views, so the pane shows markers in Markers view too, while the main text keeps
+  Simple's. Four things stay Standard-only on purpose: Standard's own view options, the Ctrl+T /
+  Ctrl+Shift+T insert shortcuts (insertion, not editing), the project stylesheet mode, and the
+  main text's `\` marker-menu trigger (which Standard view does not use). An open popover is not
+  closed when switching from Power to Simple: its text applies only on Save, so closing it would
+  discard what was typed. That one session ends through its own Save or X, and caller clicks and
+  pane-row clicks are ignored until it does, as a second caller click already is in Power's
+  Formatted view.
 - **Alternatives:**
   - **Keep the popover in Simple and fix its bugs one by one.** Rejected by UX: two editing models
     for one product, and the popover's problems come from being a second editor floating over the

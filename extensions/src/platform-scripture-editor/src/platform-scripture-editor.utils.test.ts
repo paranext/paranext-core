@@ -3889,7 +3889,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     );
   });
 
-  it('Power Formatted keeps revealing the pane alongside the popover, and highlights the note once it mounts', () => {
+  it('Power Formatted reveals a hidden pane alongside the popover, and highlights the note once it mounts', () => {
     expect(decideNoteCallerClickAction({ ...base, isPowerMode: true })).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
@@ -3898,10 +3898,23 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     });
   });
 
-  it('a popover-surface view outside Power leaves a closed pane closed', () => {
-    expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
+  it('a pane-model view ignores clicks while a popover opened before switching to it is still shown', () => {
+    // The popover applies its text only on Save, so opening the row editor (which closes the
+    // popover) would discard what was typed. The popover is finished through its own Save or X.
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        isPowerMode: false,
+        surface: 'pane',
+        usesPaneModel: true,
+        editingNoteKey: 'note-1',
+        popoverShown: true,
+        paneVisible: true,
+        paneRendered: true,
+      }),
+    ).toEqual({
       clearStaleEditingSession: false,
-      action: 'open-popover',
+      action: 'ignore-popover-open',
       sendPaneFocusRequest: false,
       showPane: false,
     });

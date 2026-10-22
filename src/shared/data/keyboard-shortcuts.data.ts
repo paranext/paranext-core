@@ -372,7 +372,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the marker typed in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text, the footnote editor popover, or a note being edited in the footnotes pane (Standard view, or Simple mode)), while the markers menu is open',
+      'Scripture editor web view (main text, the footnote editor popover, or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
     // Space commits what was TYPED, not the highlighted entry — the same in the `\` menu and the
     // Enter-triggered paragraph menu, both of which the forwarding table drives now that every
     // marker palette focuses its LIST rather than an input of its own. At a collapsed caret it
@@ -390,7 +390,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the highlighted entry in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text, the footnote editor popover, or a note being edited in the footnotes pane (Standard view, or Simple mode)), while the markers menu is open',
+      'Scripture editor web view (main text, the footnote editor popover, or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
     // Enter and Tab are one commit gesture, matching the editor package's own menus, and the same
     // in both menus — including the Enter-triggered paragraph menu, which the forwarding table
     // drives throughout now that it focuses its list instead of an input, so an Enter-Enter cannot
@@ -408,7 +408,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Move the highlight and widen or narrow the typed filter in the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text in Standard view, or a note being edited in the footnotes pane in Standard view or Simple mode), while the markers menu is open',
+      'Scripture editor web view (main text in Standard view, or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
     // Arrow keys move the highlighted entry; Backspace widens the typed filter, or closes the
     // menu when nothing is typed — the same in both menus. Marker characters (letters, digits,
     // `+`, `-`) narrow it. The character the layout produced is what counts whenever it can name a
@@ -429,7 +429,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit a closing marker from the markers menu',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text in Standard view, or a note being edited in the footnotes pane in Standard view or Simple mode), while the markers menu is open',
+      'Scripture editor web view (main text in Standard view, or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
     // The counterpart to Space's opening-marker commit: commits the typed marker's closing form
     // with no terminating space, in both menus. Over a non-collapsed selection the selected content
     // is replaced, which is what typing a closing marker by hand has always done — except with
@@ -443,7 +443,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Commit the typed marker and immediately open the markers menu again',
     category: 'Editing',
     context:
-      'Scripture editor web view (main text in Standard view, or a note being edited in the footnotes pane in Standard view or Simple mode), while the markers menu is open',
+      'Scripture editor web view (main text in Standard view, or a note being edited in the footnotes pane in Standard view or Simple’s Formatted view), while the markers menu is open',
     // Commits like Space but without the terminating space, then reopens for the backslash just
     // pressed, so a paired marker is one continuous flow — in both menus. With nothing typed there
     // is nothing to commit, so it is ignored and the menu stays open. Not a commit key over a

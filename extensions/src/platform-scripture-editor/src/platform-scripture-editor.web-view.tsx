@@ -3031,7 +3031,7 @@ function PlatformScriptureEditor({
         isPowerMode,
         isInterfaceModeLoading,
         mainViewOptions: options.view,
-        standardViewOptions: getViewOptions(STANDARD_VIEW_MODE) ?? getDefaultViewOptions(),
+        standardViewOptions: getViewOptionsForType('standard', isPowerMode),
       }),
     [isPowerMode, isInterfaceModeLoading, options.view],
   );
@@ -3392,6 +3392,10 @@ function PlatformScriptureEditor({
       // The old chapter's note, while the new chapter loads (see `navigateToNote`): its session
       // would only be ended by the load.
       if (editorChapterKeyRef.current !== toBookChapterKey(scrRefRef.current)) return;
+      // A popover that outlived a switch into this view still holds its session, and it applies its
+      // text only on Save: opening a row editor would close it and discard what was typed. The row
+      // is left merely selected until the popover is saved or closed, as a caller click is.
+      if (showFootnoteEditorRef.current) return;
       // A row editor open on another note is ended through the normal close path BEFORE this note
       // is read, as Space on another row does. The row editor stays mounted and simply loads the
       // next note, and a load flushes the outgoing note unsettled: a marker rename still pending
@@ -3811,8 +3815,10 @@ function PlatformScriptureEditor({
 
   // The row editor exists only where the pane IS the editing surface, so leaving a pane-model view
   // or losing editability ends the session. An open popover is deliberately not closed the other
-  // way round (switching into a pane-model view): it applies only on Save, so closing it would
-  // discard what was typed; that session ends through its own Save or X.
+  // way round (switching into a pane-model view): its text applies only on Save, so closing it would
+  // discard what was typed; that session ends through its own Save or X, and caller and pane-row
+  // clicks are ignored until it does (see `decideNoteCallerClickAction` and
+  // `handleFootnoteEditRequested`).
   useEffect(() => {
     if (noteEditingSurface !== 'pane' && paneEditingIndex !== undefined) closeFootnoteEditor(false);
   }, [noteEditingSurface, paneEditingIndex, closeFootnoteEditor]);
