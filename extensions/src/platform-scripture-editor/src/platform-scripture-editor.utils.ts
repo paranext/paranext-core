@@ -1623,9 +1623,10 @@ export async function openDefaultActiveProjectIfApplicable(
  *   a project's metadata changes (a rename, its language, whether it is editable), which re-runs
  *   the picker for nothing. Once the editor has a project, such a run exits early (`'no-empty'`).
  *   While an empty editor exists, each one repeats the recently-opened lookup,
- *   `paratextBibleSendReceive.getSharedProjects` and a permission lookup per candidate; that is
- *   bounded by the emitter's debounce and by the coalescing below. Not debounced here: its emitter
- *   (`LocalParatextProjects`, C#) already debounces it.
+ *   `paratextBibleSendReceive.getSharedProjects`, a permission lookup per candidate and the lookup
+ *   of which candidates cannot be opened; that is bounded by the emitter's debounce and by the
+ *   coalescing below. Not debounced here: its emitter (`LocalParatextProjects`, C#) already
+ *   debounces it.
  *
  * Cold-start gap: there is no explicit "S/R command registered" signal, so if
  * `paratextBibleSendReceive` activates after `platformScriptureEditor` but before any of the

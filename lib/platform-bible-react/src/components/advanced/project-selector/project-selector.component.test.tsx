@@ -1338,8 +1338,12 @@ describe('ProjectSelector — per-row disabled', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Cannot be opened here');
 
     // The tooltip bubble inverts the theme (`bg-foreground`), so muted text on it is unreadable;
-    // the reason line inherits the bubble's text color like its sibling secondary lines.
-    const reasonLines = screen.getAllByText('Cannot be opened here');
+    // the reason line inherits the bubble's text color like its sibling secondary lines. The row's
+    // own `hidden` copy of the reason, which only screen readers read, is not a tooltip line.
+    const reasonLines = screen
+      .getAllByText('Cannot be opened here')
+      .filter((reasonLine) => !reasonLine.hidden);
+    expect(reasonLines.length).toBeGreaterThan(0);
     reasonLines.forEach((reasonLine) => {
       expect(reasonLine).toHaveClass('tw:italic');
       expect(reasonLine).not.toHaveClass('tw:text-muted-foreground');

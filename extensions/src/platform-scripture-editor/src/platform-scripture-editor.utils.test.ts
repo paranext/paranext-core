@@ -2819,10 +2819,7 @@ describe('startDefaultProjectPicker', () => {
       },
       {
         label: 'the set of projects changes',
-        fire: (mocks: PickerMocks) => {
-          mocks.fireProjectsChanged();
-          mocks.fireWebViewOpen();
-        },
+        fire: (mocks: PickerMocks) => mocks.fireProjectsChanged(),
       },
       {
         label: 'a project data provider factory registers',
@@ -2881,7 +2878,6 @@ describe('startDefaultProjectPicker', () => {
       startDefaultProjectPicker(mocks.papi);
       await vi.waitFor(() => expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(1));
       mocks.fireProjectsChanged();
-      mocks.fireWebViewOpen();
 
       await vi.waitFor(() => expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(2));
     });
@@ -2900,7 +2896,6 @@ describe('startDefaultProjectPicker', () => {
           expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(1),
         );
         mocks.fireProjectsChanged();
-        mocks.fireWebViewOpen();
 
         await vi.waitFor(() =>
           expect(mocks.mockGetMetadataForAllProjects).toHaveBeenCalledTimes(2),
