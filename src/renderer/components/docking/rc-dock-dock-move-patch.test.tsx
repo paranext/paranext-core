@@ -108,8 +108,54 @@ describe('patched rc-dock dockMove with objects the layout has since replaced', 
     });
   });
 
+  // Pins the patch: dropped next to another tab, the dragged tab keeps the update it got mid-drag.
+  // Unpatched, the layout is rebuilt from the replaced tab group, which reverts the update.
+  it('keeps a mid-drag update when dropped next to another tab', () => {
+    const dockLayout = renderDock();
+    const draggedTab = findTab(dockLayout, 'project');
+
+    updateTitle(dockLayout, 'project', 'Project (loaded)');
+    act(() => {
+      dockLayout.dockMove(draggedTab, findTab(dockLayout, 'home'), 'before-tab');
+    });
+
+    expect(shapeOf(findTabGroup(dockLayout, 'left-group'))).toEqual(['project', 'home']);
+    expect(findTab(dockLayout, 'project').title).toBe('Project (loaded)');
+  });
+
+  // Pins the patch: rc-dock refuses a drop of a tab onto itself by comparing objects, which a tab
+  // updated mid-drag gets past. Unpatched, and with the swap alone, the tab shows up twice.
+  it('ignores a tab updated mid-drag and dropped onto itself', () => {
+    const dockLayout = renderDock();
+    const draggedTab = findTab(dockLayout, 'project');
+
+    updateTitle(dockLayout, 'project', 'Project (loaded)');
+    act(() => {
+      dockLayout.dockMove(draggedTab, findTab(dockLayout, 'project'), 'after-tab');
+    });
+
+    expect(shapeOf(findTabGroup(dockLayout, 'left-group'))).toEqual(['home', 'project']);
+  });
+
+  // Pins the patch: the same for a whole tab group dragged by its header onto itself.
+  it('ignores a tab group updated mid-drag and dropped onto itself', () => {
+    const dockLayout = renderDock();
+    const draggedTabGroup = findTabGroup(dockLayout, 'right-group');
+
+    updateTitle(dockLayout, 'checks', 'Checks (loaded)');
+    act(() => {
+      dockLayout.dockMove(draggedTabGroup, findTabGroup(dockLayout, 'right-group'), 'middle');
+    });
+
+    expect(shapeOf(dockLayout.getLayout().dockbox)).toEqual({
+      mode: 'horizontal',
+      children: [['home', 'project'], ['checks']],
+    });
+  });
+
   // Pins the patch's target half: a drop target rendered before another tab in its group was
-  // updated. Unpatched, the layout is rebuilt from the replaced tab group, losing the update.
+  // updated. Unpatched, the layout is rebuilt from the replaced tab group, which shows the dragged
+  // tab twice and reverts the update.
   it('docks onto a tab group replaced since the drop target last rendered', () => {
     const dockLayout = renderDock();
     const dropTarget = findTabGroup(dockLayout, 'left-group');

@@ -93,7 +93,9 @@ tests don't see the patch unless they import `rc-dock/es/...` directly
 - `DockLayout.dockMove`: swaps the source and target for the live layout objects with the same ids
   (`findLiveLayoutData`) before moving. A drag holds the tab it picked up, and `updateTab` replaces
   that tab and its ancestors; without the swap, a tab updated mid-drag (common right after it opens)
-  vanishes on an edge drop, or shows up twice when dropped on its own panel's edge.
+  vanishes on an edge drop, shows up twice when dropped on its own panel's edge, or loses the update.
+  A move whose live source is its own target is a no-op, since rc-dock's own "not onto itself"
+  checks compare objects and let a replaced tab or panel through.
 - `DockLayout.updateTab`: updating a tab without activating it no longer focuses that tab's panel.
 - `DockLayout.setDropRect`: guards a `null` `oldStates.dropRect` on a doubled `'remove'`.
 - `DockTabs` `isPopupDiv`: tells the overflow dropdown's hidden tab copies apart from the real strip

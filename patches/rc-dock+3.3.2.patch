@@ -1,5 +1,5 @@
 diff --git a/node_modules/rc-dock/es/DockLayout.js b/node_modules/rc-dock/es/DockLayout.js
-index bac288d..ea43637 100644
+index bac288d..79babd9 100644
 --- a/node_modules/rc-dock/es/DockLayout.js
 +++ b/node_modules/rc-dock/es/DockLayout.js
 @@ -21,6 +21,34 @@ import * as Serializer from "./Serializer";
@@ -37,7 +37,7 @@ index bac288d..ea43637 100644
  class DockPortalManager extends React.PureComponent {
      constructor() {
          super(...arguments);
-@@ -162,6 +190,19 @@ export class DockLayout extends DockPortalManager {
+@@ -162,6 +190,26 @@ export class DockLayout extends DockPortalManager {
       */
      dockMove(source, target, direction, floatPosition) {
          let layout = this.getLayout();
@@ -47,6 +47,10 @@ index bac288d..ea43637 100644
 +         * Work on the live layout objects, not the possibly replaced ones the caller holds (see
 +         * `findLiveLayoutData`). Only a source that was placed in a layout (it has a `parent`) is
 +         * swapped: a brand-new tab being added is not in the layout yet and must be added as given.
++         *
++         * rc-dock's drop targets refuse a drop onto the dragged tab or panel itself by comparing
++         * objects, so a replaced one gets past them. Once swapped, it is the target itself: moving
++         * it onto itself is a no-op, not a second copy.
 +         */
 +        if (source && source.parent) {
 +            source = findLiveLayoutData(layout, source);
@@ -54,10 +58,13 @@ index bac288d..ea43637 100644
 +        if (target && typeof target !== 'string') {
 +            target = findLiveLayoutData(layout, target);
 +        }
++        if (source && source === target) {
++            return;
++        }
          if (direction === 'maximize') {
              layout = Algorithm.maximize(layout, source);
              this.panelToFocus = source.id;
-@@ -258,7 +299,17 @@ export class DockLayout extends DockPortalManager {
+@@ -258,7 +306,17 @@ export class DockLayout extends DockPortalManager {
                  if (!makeActive) {
                      // restore the previous activeId
                      panelData.activeId = activeId;
@@ -76,7 +83,7 @@ index bac288d..ea43637 100644
                  }
              }
              else if (makeActive && panelData.activeId !== id) {
-@@ -316,7 +367,21 @@ export class DockLayout extends DockPortalManager {
+@@ -316,7 +374,21 @@ export class DockLayout extends DockPortalManager {
          if (dropRect) {
              if (direction === 'remove') {
                  this.setState((oldStates) => {
