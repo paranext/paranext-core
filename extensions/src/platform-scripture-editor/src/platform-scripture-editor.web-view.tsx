@@ -816,8 +816,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // never be shown there, because simple mode pairs with structure protection, which intentionally
   // blocks the paragraph-marker edits Standard view's editing affordances are built around. In
   // Power, a saved 'markers' (a value from earlier versions) shows as Standard view, so once the
-  // interface mode is known this is never 'markers'. A never-saved Power tab shows Standard view, the Power default, ahead of the
-  // correction effect above saving it.
+  // interface mode is known this is never 'markers'. A never-saved Power tab shows Standard view,
+  // the Power default, ahead of the correction effect above saving it.
   // The coercion is DERIVED for display, never written back: persisting it would destroy the
   // user's choice permanently — flipping back to power mode could not restore it, because the
   // one-shot power-default correction above is gated on `hadPersistedViewTypeAtMount` and its
@@ -3809,8 +3809,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // A caller highlight means something only in Standard view, or Preview in Power, and no other
   // view would ever clear one left behind, so the highlight is re-derived on EVERY view or mode
-  // change, in both directions. Leaving those views drops it — whether or not a session is open, since a selected pane row holds a
-  // highlight on its own (a read-only Standard view only ever has that). Coming BACK to Standard
+  // change, in both directions. Leaving those views drops it, whether or not a session is open,
+  // since a selected pane row holds a highlight on its own (a read-only Standard view only ever
+  // has that). Coming BACK to Standard
   // restores it: the pane survives the round trip with its row still selected, and cycling the view
   // (the `changeScriptureView` message) moves no DOM focus, so both of the rule's inputs can still
   // hold on return with nothing else to re-apply the border. `viewTypeRef` is updated by an effect
@@ -5092,8 +5093,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 onPaneFocusLeft={handlePaneFocusLeft}
                 // A caller click in a read-only Standard view or Preview has nowhere else to put
                 // focus, and PT9 still moves the caret into the note — so the pane takes it, which
-                // is what turns the caller highlight on. Everywhere else the click's own editor (the row
-                // editor or the popover) owns focus and the pane must not pull it away.
+                // is what turns the caller highlight on. Everywhere else the click's own editor
+                // (the row editor or the popover) owns focus and the pane must not pull it away.
                 focusRowOnFocusRequest={
                   usesPaneNoteModel(viewType, isPowerMode) && noteEditingSurface === 'none'
                 }
