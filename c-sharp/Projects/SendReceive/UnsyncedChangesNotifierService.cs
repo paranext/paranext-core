@@ -6,7 +6,8 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <summary>
 /// Bridges <see cref="UnsyncedChangesTracker.Changed"/> and <see cref="RemoteChangesPoller.Changed"/>
 /// to the PAPI so the renderer can show, per project, which direction Send/Receive has work in:
-/// local changes not yet sent (<c>toSend</c>) and server changes not yet received (<c>toReceive</c>).
+/// local changes this user's next sync would send (<c>toSend</c>) and server changes not yet
+/// received (<c>toReceive</c>).
 /// <para>
 /// Two surfaces, both carrying the same wire shape <c>{ toSend, toReceive, isRechecking }</c> (an
 /// <see cref="UnsyncedChangesState"/> serialized via the shared camelCase PAPI JSON options):
@@ -58,9 +59,10 @@ internal class UnsyncedChangesNotifierService(
                 Experimental = true,
                 Summary =
                     "Announces, per sync direction, the projects with changes waiting "
-                    + "({ toSend, toReceive, isRechecking }), whenever either set changes. toSend is local "
-                    + "repository truth: the projects whose local repository holds changes not yet "
-                    + "sent by Send/Receive. toReceive is the result of the last server lookup, "
+                    + "({ toSend, toReceive, isRechecking }), whenever either set changes. toSend is read "
+                    + "from the local repository: the projects holding local changes this user's next "
+                    + "Send/Receive would send, never a project the user is an Observer on or not a "
+                    + "member of. toReceive is the result of the last server lookup, "
                     + "refreshed every few minutes and after each sync; it is always empty in "
                     + "public Platform.Bible, and only a build that supplies server information "
                     + "reports it. isRechecking is true from the start of a sync until the "
@@ -117,8 +119,10 @@ internal class UnsyncedChangesNotifierService(
             Create(
                 "Returns, per sync direction, the projects with changes waiting ({ toSend, "
                     + "toReceive, isRechecking }) so a renderer can seed its indicator on demand instead of "
-                    + "waiting for the next onUnsyncedChangesChanged transition. toSend is local "
-                    + "repository truth. toReceive is the result of the last server lookup, "
+                    + "waiting for the next onUnsyncedChangesChanged transition. toSend is read from "
+                    + "the local repository: the projects holding local changes this user's next "
+                    + "Send/Receive would send, never a project the user is an Observer on or not a "
+                    + "member of. toReceive is the result of the last server lookup, "
                     + "refreshed every few minutes and after each sync; it is always empty in "
                     + "public Platform.Bible, and only a build that supplies server information "
                     + "reports it. isRechecking is true from the start of a sync until the "

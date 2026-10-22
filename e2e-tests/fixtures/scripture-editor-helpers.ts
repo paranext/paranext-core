@@ -1,4 +1,4 @@
-import { type Frame, type Page } from '@playwright/test';
+import { type Frame, type Locator, type Page } from '@playwright/test';
 import {
   LAUNCH_PHASE_TIMEOUT_MS,
   requireIsolatedProjectRoot,
@@ -529,4 +529,18 @@ export async function findScriptureEditorFrame(page: Page, timeout = 30_000): Pr
     await page.waitForTimeout(500);
   }
   throw new Error(`Scripture editor not found: no Project button visible after ${timeout}ms`);
+}
+
+/**
+ * Click the very start of `glyph`'s rendered text (the boundary immediately BEFORE it) — the
+ * insertion point a user would click to type new content right before a marker glyph, or to reach
+ * the end of the text a closing glyph follows. A plain `.click()` lands mid-glyph at an
+ * unpredictable offset; clicking just inside the left edge (x: 1) is the reliable way to place the
+ * caret at a specific structural boundary in a contentEditable without counting characters (glyph
+ * text length varies with `+`-nesting).
+ */
+export async function clickBeforeGlyph(glyph: Locator): Promise<void> {
+  const box = await glyph.boundingBox();
+  if (!box) throw new Error('Glyph has no bounding box (not visible/attached)');
+  await glyph.click({ position: { x: 1, y: box.height / 2 } });
 }

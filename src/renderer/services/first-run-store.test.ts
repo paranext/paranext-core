@@ -14,6 +14,7 @@ import {
   clearFirstRunLocalState,
   completeFirstRun,
   continueWithoutRegistration,
+  declineFirstRunSync,
   getFirstRunStatus,
   haveInternetSettingsChanged,
   markJustRegistered,
@@ -24,6 +25,7 @@ import {
   resolveFirstRunState,
   retryFirstRunResolution,
 } from './first-run-store';
+import { askForInternetUseChoiceIfNeeded } from './internet-use-choice-store';
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn(), set: vi.fn() },
@@ -40,6 +42,9 @@ vi.mock('./resolve-registration-validity', () => ({
 vi.mock('@shared/services/localization.service', () => ({
   localizationService: { getSetupDialogLanguages: vi.fn() },
 }));
+// What the Power-mode question does is covered by internet-use-choice-store.test.ts; here only
+// whether startup asks it.
+vi.mock('./internet-use-choice-store', () => ({ askForInternetUseChoiceIfNeeded: vi.fn() }));
 vi.mock('platform-bible-utils', async (importOriginal) => ({
   ...(await importOriginal<typeof import('platform-bible-utils')>()),
   getCurrentLocale: vi.fn(() => 'en-US'),
@@ -52,6 +57,7 @@ const mockGetCurrentLocale = vi.mocked(getCurrentLocale);
 const mockGetSetupDialogLanguages = vi.mocked(localizationService.getSetupDialogLanguages);
 const mockLogger = vi.mocked(logger);
 const mockSendCommand = vi.mocked(commandService.sendCommand);
+const mockAskForInternetUseChoice = vi.mocked(askForInternetUseChoiceIfNeeded);
 
 /** SettingsService.get is keyed; return the right value per setting. */
 function stubSettings({
@@ -86,11 +92,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetCurrentLocale.mockReturnValue('en-US');
   mockGetSetupDialogLanguages.mockResolvedValue({ en: { autonym: 'English' } });
-  // Registration entered in Platform.Bible unless a test says it came from Paratext 9.
-  mockSendCommand.mockResolvedValue(false);
   localStorage.clear();
   // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
   mockSet.mockResolvedValue(undefined);
+  // clearAllMocks keeps implementations, so a rejection set by one test would leak into the next.
+  mockSendCommand.mockReset();
+  // Registration entered in Platform.Bible unless a test says it came from Paratext 9.
+  mockSendCommand.mockResolvedValue(false);
   resetFirstRunStore();
   // Required, not hygiene: the gate now resolves registration through the shared store, which caches
   // a definitive answer for the session. Without this reset a value cached by one test would be
@@ -105,6 +113,20 @@ describe('resolveFirstRunState', () => {
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockResolveReg).not.toHaveBeenCalled();
+  });
+
+  it('asks a power-mode user for an internet-use choice, since the wizard never does', async () => {
+    stubSettings({ mode: 'power' });
+    await resolveFirstRunState();
+    expect(mockAskForInternetUseChoice).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the internet-use question to the wizard in simple mode', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toMatchObject({ kind: 'wizard' });
+    expect(mockAskForInternetUseChoice).not.toHaveBeenCalled();
   });
 
   it('shows the app when first run is already complete', async () => {
@@ -344,42 +366,11 @@ describe('resolveFirstRunState', () => {
     expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true); // self-heal retry
   });
 
-  it('re-persists platform.syncOnStartup when cache indicates a failed write', async () => {
-    // Reproduces the analogous failure for skipping sync: the wizard wrote the localStorage cache
-    // but settingsService.set threw. A subsequent launch finds firstRunComplete=true but
-    // syncOnStartup still true on disk — the self-heal must re-persist from the cache.
-    localStorage.setItem('platform-bible.syncOnStartupDisabled', 'true');
-    stubSettings({ firstRunComplete: true, showReminder: false }); // suppress background recheck; focus on self-heal path
+  it('never touches platform.syncOnStartup for an already-completed user', async () => {
+    stubSettings({ firstRunComplete: true, showReminder: false }); // suppress background recheck
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
-    expect(mockSet).toHaveBeenCalledWith('platform.syncOnStartup', false);
-    // Cache cleared after success so subsequent startups skip the settings round-trip.
-    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('false');
-  });
-
-  it('does not re-persist platform.syncOnStartup when the setting is already persisted', async () => {
-    localStorage.setItem('platform-bible.syncOnStartupDisabled', 'true');
-    // @ts-expect-error ts(2345) - the mock's implicit-undefined fallthrough is not assignable
-    // to the SettingTypes union; that mismatch is the load-bearing compile-time guard that every
-    // setting this store reads has a case above (no member of SettingTypes admits undefined).
-    mockGet.mockImplementation(async (key: string) => {
-      if (key === 'platform.interfaceMode') return 'simple';
-      if (key === 'platform.firstRunComplete') return true;
-      if (key === 'platform.syncOnStartup') return false; // already persisted as false (skip)
-      if (key === 'platform.showRegistrationReminderOnStartup') return false; // suppress background recheck
-      return undefined;
-    });
-    await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
-    expect(mockSet).not.toHaveBeenCalledWith('platform.syncOnStartup', expect.anything());
-    // Cache cleared even when no write was needed, to avoid future redundant reads.
-    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('false');
-  });
-
-  it('does not attempt platform.syncOnStartup self-heal when cache says skip never happened', async () => {
-    stubSettings({ firstRunComplete: true, showReminder: false }); // suppress background recheck; focus on self-heal path
-    await resolveFirstRunState();
-    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(mockGet).not.toHaveBeenCalledWith('platform.syncOnStartup');
     expect(mockSet).not.toHaveBeenCalledWith('platform.syncOnStartup', expect.anything());
   });
 });
@@ -425,11 +416,10 @@ describe('demo mode (PT-4219)', () => {
   it('completion reveals the app but persists nothing, so the demo re-runs next launch', async () => {
     localStorage.setItem(DEMO_MODE_KEY, 'true');
     resetFirstRunStore();
-    await completeFirstRun({ skippedStep: 'syncConsent' });
+    await completeFirstRun();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockSet).not.toHaveBeenCalled();
     expect(localStorage.getItem('platform-bible.firstRunComplete')).toBeNull();
-    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBeNull();
   });
 });
 
@@ -450,63 +440,36 @@ describe('completeFirstRun', () => {
     expect(localStorage.getItem('platform-bible.firstRunComplete')).toBe('true');
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
   });
+});
 
-  it('clears the sync-disabled cache hint after a successful syncOnStartup write', async () => {
-    // The hint is set before the write (crash recovery) and cleared once the write is confirmed.
-    // A stale 'true' hint would trigger a redundant self-heal read on every subsequent launch.
-    await completeFirstRun({ skippedStep: 'syncConsent' });
-    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('false');
+describe('declineFirstRunSync', () => {
+  it('withholds automatic sync for the session before persisting completion', async () => {
+    await declineFirstRunSync();
+
+    expect(mockSendCommand).toHaveBeenCalledWith('platform.deferAutomaticSyncForSession');
+    expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true);
+    // Persisted completion opens every automatic sync gate, so the deferral must be recorded first.
+    expect(mockSendCommand.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSet.mock.invocationCallOrder[0],
+    );
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
   });
 
-  it('persists platform.syncOnStartup=false when sync consent is skipped', async () => {
-    await completeFirstRun({ skippedStep: 'syncConsent' });
-    expect(mockSet).toHaveBeenCalledWith('platform.syncOnStartup', false);
-  });
+  it('persists no sync preference, so the next launch syncs as usual', async () => {
+    // A persisted platform.syncOnStartup=false would disable startup sync on every later launch,
+    // with no way back from the wizard.
+    await declineFirstRunSync();
 
-  it('does not write platform.syncOnStartup when no step was skipped', async () => {
-    await completeFirstRun();
     expect(mockSet).not.toHaveBeenCalledWith('platform.syncOnStartup', expect.anything());
   });
 
-  it('clears the sync-disabled hint when no step was skipped', async () => {
-    // A stale hint (e.g. from devtools or a prior aborted skip flow) must not trigger the self-heal
-    // to set syncOnStartup=false on a user who completed without skipping.
-    localStorage.setItem('platform-bible.syncOnStartupDisabled', 'true');
-    await completeFirstRun();
-    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('false');
-  });
+  it('completes nothing when the deferral cannot be recorded', async () => {
+    mockSendCommand.mockRejectedValue(new Error('main process unavailable'));
 
-  it('writes firstRunComplete before syncOnStartup (crash-safe ordering)', async () => {
-    // A crash between the two writes must leave the wizard closed and sync enabled.
-    // If the order were swapped, an aborted session would permanently disable sync.
-    const callOrder: string[] = [];
-    // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
-    mockSet.mockImplementation(async (key: string) => {
-      callOrder.push(key);
-      return undefined;
-    });
+    await expect(declineFirstRunSync()).rejects.toThrow('main process unavailable');
 
-    await completeFirstRun({ skippedStep: 'syncConsent' });
-
-    const completeIdx = callOrder.indexOf('platform.firstRunComplete');
-    const skippedIdx = callOrder.indexOf('platform.syncOnStartup');
-    expect(completeIdx).toBeGreaterThanOrEqual(0);
-    expect(skippedIdx).toBeGreaterThanOrEqual(0);
-    expect(completeIdx).toBeLessThan(skippedIdx);
-  });
-
-  it('still completes first run even when persisting sync-disabled throws', async () => {
-    // Make the syncOnStartup write fail, but the firstRunComplete write succeed
-    // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
-    mockSet.mockImplementation(async (key: string) => {
-      if (key === 'platform.syncOnStartup') throw new Error('write failed');
-      return undefined;
-    });
-    await completeFirstRun({ skippedStep: 'syncConsent' });
-    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
-    expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true);
-    expect(mockSet).toHaveBeenCalledWith('platform.syncOnStartup', false);
-    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('true');
+    expect(mockSet).not.toHaveBeenCalledWith('platform.firstRunComplete', true);
+    expect(localStorage.getItem('platform-bible.firstRunComplete')).toBeNull();
   });
 });
 
@@ -759,6 +722,7 @@ describe('resolveFirstRunState — power mode cache fallback (FIX 3)', () => {
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockResolveReg).not.toHaveBeenCalled();
+    expect(mockAskForInternetUseChoice).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -954,7 +918,6 @@ describe('clearFirstRunLocalState', () => {
       'platform-bible.firstRunWizardActive',
       'platform-bible.firstRunJustRegistered',
       'platform-bible.firstRunWizardRestarted',
-      'platform-bible.syncOnStartupDisabled',
     ];
     firstRunKeys.forEach((key) => localStorage.setItem(key, 'true'));
     localStorage.setItem('platform-bible.firstRunDemoMode', 'true');

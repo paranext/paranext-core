@@ -33,9 +33,10 @@
  * Runs against an isolated project root, so the only project is the bundled sample WEB (installed
  * by the C# backend into the empty root): `npm run test:e2e:isolated scripture-editor`.
  */
-import { FrameLocator, Locator } from '@playwright/test';
+import { FrameLocator } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
+  clickBeforeGlyph,
   makeSampleProjectEditable,
   navigateToolbarBcv,
   openEditableScriptureEditorForProject,
@@ -50,19 +51,6 @@ test.use({
   interfaceMode: 'power',
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
 });
-
-/**
- * Click the very start of `glyph`'s rendered text (the boundary immediately BEFORE it) — the
- * insertion point a user would click to type new content right before a marker glyph. A plain
- * `.click()` lands mid-glyph at an unpredictable offset; clicking just inside the left edge (x: 1)
- * is the reliable way to place the caret at a specific structural boundary in a contentEditable
- * without counting characters (glyph text length varies with `+`-nesting).
- */
-async function clickBeforeGlyph(glyph: Locator): Promise<void> {
-  const box = await glyph.boundingBox();
-  if (!box) throw new Error('Glyph has no bounding box (not visible/attached)');
-  await glyph.click({ position: { x: 1, y: box.height / 2 } });
-}
 
 test.describe('scripture editor attribute display', () => {
   test('char-span attribute bytes display and settle in Standard view and hide in Simple view', async ({

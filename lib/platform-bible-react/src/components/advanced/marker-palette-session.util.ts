@@ -42,6 +42,13 @@ export interface MarkerPaletteOpenSession<TItem extends { marker: string }>
   /** Identifies this session to async settle-time cleanup, from the consumer's monotonic counter. */
   token: number;
   items: readonly TItem[];
+  /**
+   * An item a typed commit chose but left for the session's close to apply, through the same path
+   * as a highlighted commit: the caret restored, the editor focused, then the item applied. Set by
+   * `routeMarkerPaletteKey` for a note marker committed with Space, so the note's editor opens
+   * after the overlay service has handed focus back to the main editor rather than before it.
+   */
+  itemToApplyOnClose?: TItem;
 }
 
 /**
@@ -201,8 +208,9 @@ export function runMarkerPaletteSession<TItem extends { marker: string }>(
     keys: getMarkerPaletteClaimedKeys(),
     onKey: (event) => runSessionKey(event),
   })
-    .then((id) => {
+    .then((committedId) => {
       clearSessionIfCurrent(token);
+      const id = committedId ?? session.itemToApplyOnClose?.marker;
       if (id !== undefined) {
         // Ask the guard BEFORE restoring, not after: the restore writes a selection back into the
         // editor, so a guard consulted afterwards compares against that write instead of against
