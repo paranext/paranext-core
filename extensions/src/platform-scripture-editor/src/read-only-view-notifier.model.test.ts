@@ -207,6 +207,22 @@ describe('ReadOnlyViewNotifier', () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 
+  it('announces again after the 24 hour dismiss expires', async () => {
+    const { notifier, open, update, send, dismiss } = setup();
+    await notifier.start();
+    await open(editorWebView('formatted'));
+    await dismiss('notification-1');
+    await update(editorWebView('standard'));
+    vi.advanceTimersByTime(23 * 60 * 60 * 1000);
+    await update(editorWebView('formatted'));
+    expect(send).toHaveBeenCalledTimes(1);
+
+    await update(editorWebView('standard'));
+    vi.advanceTimersByTime(2 * 60 * 60 * 1000);
+    await update(editorWebView('formatted'));
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
   it('forgets a closed web view', async () => {
     const { notifier, open, close, send } = setup();
     await notifier.start();

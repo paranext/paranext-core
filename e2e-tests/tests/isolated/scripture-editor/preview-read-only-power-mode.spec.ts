@@ -98,6 +98,20 @@ test.describe('Power-mode Standard view and Preview', () => {
       await mainPage.keyboard.press('Control+e');
     };
 
+    /** Waits until keyboard focus is inside the footnotes pane. */
+    const expectFocusInPane = async () => {
+      await expect
+        .poll(
+          () =>
+            editorFrame.evaluate(
+              (paneSelector) => !!document.activeElement?.closest(paneSelector),
+              FOOTNOTES_PANE_SELECTOR,
+            ),
+          { timeout: 10_000 },
+        )
+        .toBe(true);
+    };
+
     await test.step('starts editable in Standard view', async () => {
       await expect(editorFrame.locator('.editor-input.marker-editable')).toBeAttached({
         timeout: 20_000,
@@ -132,9 +146,14 @@ test.describe('Power-mode Standard view and Preview', () => {
 
       await editorFrame.locator(TEXT_NOTE_CALLER_SELECTOR).first().click();
       await expect(pane).toHaveCount(1, { timeout: 20_000 });
-      await expect(pane.locator('[role="option"][aria-selected="true"]')).toHaveCount(1, {
-        timeout: 20_000,
-      });
+      // The first caller in the text is the first note, so its row is the one selected.
+      const selectedRow = pane.locator('[role="option"][aria-selected="true"]');
+      await expect(selectedRow).toHaveCount(1, { timeout: 20_000 });
+      await expect(pane.locator('[role="option"]').first()).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await expectFocusInPane();
       // Checked once the pane has answered the click, so a popover the click opened would be up.
       await expect(footnotePopover).toHaveCount(0);
       await expect(editingRow).toHaveCount(0);
@@ -202,16 +221,7 @@ test.describe('Power-mode Standard view and Preview', () => {
       await editorFrame.locator(TEXT_NOTE_CALLER_SELECTOR).first().click();
       await expect(editingRow).toHaveCount(1, { timeout: 20_000 });
       await expect(editingRow.locator('.editor-input')).toBeAttached();
-      await expect
-        .poll(
-          () =>
-            editorFrame.evaluate(
-              (paneSelector) => !!document.activeElement?.closest(paneSelector),
-              FOOTNOTES_PANE_SELECTOR,
-            ),
-          { timeout: 10_000 },
-        )
-        .toBe(true);
+      await expectFocusInPane();
       await mainPage.keyboard.type('qjx');
       await expect(editingRow).toContainText('qjx', { timeout: 10_000 });
 
