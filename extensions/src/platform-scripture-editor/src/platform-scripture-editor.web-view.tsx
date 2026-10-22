@@ -2734,10 +2734,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [getSelectionBeforePointerPress],
   );
 
-  // Listen for the marker menu trigger to open the marker menu, for F7 (footnotes), Ctrl+Shift+R
-  // (Basic checks) and Ctrl+T / Ctrl+Shift+T (insert a footnote/cross-reference) in every view, and
-  // for Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at
-  // selection
+  // Listen for the marker menu trigger to open the marker menu, for F7 (footnotes), Ctrl+E (toggle
+  // Standard view and Preview, Power only), Ctrl+Shift+R (Basic checks) and Ctrl+T / Ctrl+Shift+T
+  // (insert a footnote/cross-reference) in every view, and for Cmd+Alt+M (macOS) or Ctrl+Alt+M /
+  // Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
     /**
      * Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux). Read by BOTH listeners below:
