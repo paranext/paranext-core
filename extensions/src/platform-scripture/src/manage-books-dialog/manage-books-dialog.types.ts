@@ -190,6 +190,12 @@ export type EstherTemplate = 'lxx' | 'vulgate' | 'modern_scholars';
 /* ------------------------------------------------------------------ */
 
 /**
+ * Localization key of the tab title for a project. Shared by the WebView provider's opening title
+ * and the WebView's updates on a project switch, so the two cannot drift.
+ */
+export const MANAGE_BOOKS_TITLE_WITH_PROJECT_KEY = '%manageBooks_dialog_titleWithProject%';
+
+/**
  * All localization keys consumed by `ManageBooksDialog`. Pass to `useLocalizedStrings` to obtain a
  * `ManageBooksDialogLocalizedStrings` map and forward it via the `localizedStrings` prop.
  */

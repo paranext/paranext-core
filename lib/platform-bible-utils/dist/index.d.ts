@@ -4759,6 +4759,63 @@ export declare function compareProjectsByName(a: ProjectNames, b: ProjectNames):
  */
 export declare function normalizeFullName(fullName: unknown): string | undefined;
 /**
+ * Chooses the name to show for a project: its short name (the `platform.name` project setting) when
+ * that is a non-blank string, otherwise its id.
+ *
+ * Accepts the raw setting value so callers need no checks of their own: a missing name, a blank
+ * name, and a `PlatformError` (as `useProjectSetting` reports a failed read) all fall back to the
+ * id. Blank means empty or whitespace-only, the same rule {@link normalizeFullName} applies to the
+ * full name: such a name is present but invisible, so it would leave the title without a project.
+ *
+ * @example
+ *
+ * ```ts
+ * getProjectDisplayName('4f3e…', 'WEB'); // 'WEB'
+ * getProjectDisplayName('4f3e…', ''); // '4f3e…'
+ * getProjectDisplayName('4f3e…', '  '); // '4f3e…'
+ * getProjectDisplayName('4f3e…', undefined); // '4f3e…'
+ * ```
+ *
+ * @param projectId The project's id, shown when no usable name is available.
+ * @param projectName The project's `platform.name` setting value, or anything else a lookup
+ *   produced (`undefined`, an error, etc.).
+ * @returns `projectName` when it is a non-blank string, otherwise `projectId`.
+ */
+export declare function getProjectDisplayName(projectId: string, projectName: unknown): string;
+/**
+ * Formats a title for something scoped to one project, such as a WebView's tab, by replacing
+ * `{projectName}` in `titleFormat` with the project's display name (see
+ * {@link getProjectDisplayName}). Use it wherever a provider and its WebView both build the same
+ * title, so the two always agree.
+ *
+ * To look up the name and the localized format as well, use
+ * `papi.localization.getLocalizedProjectTitle` (in a WebView provider or other async code) or the
+ * `useLocalizedProjectTitle` hook (in a WebView).
+ *
+ * @example
+ *
+ * ```ts
+ * formatProjectTitle('Character Inventory: {projectName}', '4f3e…', 'WEB');
+ * // 'Character Inventory: WEB'
+ * formatProjectTitle('Results ({resultsCount}): {projectName}', '4f3e…', '', {
+ *   resultsCount: 3,
+ * });
+ * // 'Results (3): 4f3e…'
+ * ```
+ *
+ * @param titleFormat Title containing a `{projectName}` placeholder, typically a localized string.
+ * @param projectId The project's id, shown when `projectName` is not a non-blank string.
+ * @param projectName The project's `platform.name` setting value, or anything else a lookup
+ *   produced (`undefined`, an error, etc.).
+ * @param replacements Values for any other `{key}` placeholders in `titleFormat`. A `projectName`
+ *   entry here is ignored in favor of the resolved display name.
+ * @returns `titleFormat` with its placeholders replaced. Placeholders with no replacement are left
+ *   as their key text, as {@link formatReplacementString} does.
+ */
+export declare function formatProjectTitle(titleFormat: string, projectId: string, projectName: unknown, replacements?: {
+	[key: string]: unknown;
+}): string;
+/**
  * Creates a function that runs an asynchronous initializer at most once, caching the promise so
  * concurrent and subsequent calls share the same initialization attempt. If the initializer fails,
  * the cached promise is cleared so the next call starts a fresh attempt instead of failing forever

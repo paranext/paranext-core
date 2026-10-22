@@ -35,6 +35,7 @@ export {
   useDataProviderMulti,
   useWebViewController,
   useRecentScriptureRefs,
+  useLocalizedProjectTitle,
 } from '../../src/renderer/hooks/papi-hooks';
 
 /** Render real English strings; when opted in this is what makes first-run chrome legible. */

@@ -4162,6 +4162,37 @@ describe('formatEditorTitle', () => {
     );
     expect(title).toBe('My Project (Read-only)');
   });
+
+  it('fills {projectName} in the default title format', async () => {
+    const getLocalizedStrings = vi.fn().mockResolvedValue({
+      '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+      '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+      '%webView_platformScriptureEditor_title_format_2%': '{projectName} {editable}',
+    });
+    const title = await formatEditorTitle(
+      undefined,
+      'project-1',
+      false,
+      mockGetProjectName,
+      getLocalizedStrings,
+    );
+    expect(title).toBe('My Project (Editable)');
+  });
+
+  it.each([
+    ['empty', ''],
+    ['whitespace-only', '   '],
+    ['missing', undefined],
+  ])('shows the project id when the name is %s', async (_description, projectName) => {
+    const title = await formatEditorTitle(
+      TITLE_FORMAT_KEY,
+      'project-1',
+      false,
+      vi.fn().mockResolvedValue(projectName),
+      mockGetLocalizedStrings,
+    );
+    expect(title).toBe('project-1 (Editable)');
+  });
 });
 
 // #region updateRelatedTextCollectionPanel
@@ -4565,12 +4596,14 @@ describe('getTabTitleProjectName', () => {
   function papiWithSettings(settings: Record<string, unknown>) {
     const mockGetSetting = vi.fn(async (key: string) => settings[key]);
     const mockGet = vi.fn().mockResolvedValue({ getSetting: mockGetSetting });
+    const mockWarn = vi.fn();
     // Mocking just the part of the PAPI that we need for these tests
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const papi = {
       projectDataProviders: { get: mockGet },
+      logger: { warn: mockWarn },
     } as unknown as typeof PapiBackend;
-    return { papi, mockGet, mockGetSetting };
+    return { papi, mockGet, mockGetSetting, mockWarn };
   }
 
   it('shows the short name, not the full name', async () => {
@@ -4584,10 +4617,21 @@ describe('getTabTitleProjectName', () => {
     expect(await getTabTitleProjectName(papi, 'project-1')).toBe('WEB');
   });
 
-  it('falls back to the project id when the project has no short name', async () => {
-    const { papi } = papiWithSettings({});
+  it.each([
+    ['no short name', {}],
+    ['an empty short name', { 'platform.name': '' }],
+  ])('falls back to the project id when the project has %s', async (_description, settings) => {
+    const { papi } = papiWithSettings(settings);
 
     expect(await getTabTitleProjectName(papi, 'project-1')).toBe('project-1');
+  });
+
+  it('falls back to the project id and warns when the lookup fails', async () => {
+    const { papi, mockGet, mockWarn } = papiWithSettings({});
+    mockGet.mockRejectedValue(new Error('provider unavailable'));
+
+    expect(await getTabTitleProjectName(papi, 'project-1')).toBe('project-1');
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('provider unavailable'));
   });
 });
 

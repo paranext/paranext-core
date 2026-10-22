@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState, type ComponentType } from 'react';
 import type { WebViewProps } from '@papi/core';
@@ -37,12 +37,16 @@ type MockWireProject = {
   versification: string;
 };
 
-const { mockRecentProjects, mockWireProjects } = vi.hoisted(() => {
+const { mockRecentProjects, mockWireProjects, mockUseLocalizedProjectTitle } = vi.hoisted(() => {
   // Annotated rather than asserted: `undefined`/`[]` would otherwise narrow to types no test can
   // assign a real fixture to.
   const recentProjects: { value: unknown } = { value: undefined };
   const wireProjects: { value: MockWireProject[] } = { value: [] };
-  return { mockRecentProjects: recentProjects, mockWireProjects: wireProjects };
+  return {
+    mockRecentProjects: recentProjects,
+    mockWireProjects: wireProjects,
+    mockUseLocalizedProjectTitle: vi.fn((): string | undefined => undefined),
+  };
 });
 
 vi.mock('@papi/frontend', () => ({
@@ -78,6 +82,7 @@ vi.mock('@papi/frontend/react', async () => {
       Object.fromEntries(keys.map((key) => [key, isSharedKey(key) ? valueFor(key) : key])),
       false,
     ],
+    useLocalizedProjectTitle: mockUseLocalizedProjectTitle,
     useProjectSetting: (_projectId: unknown, _key: unknown, defaultValue: unknown) => [
       defaultValue,
       vi.fn(),
@@ -269,5 +274,43 @@ describe('ManageBooksWebView sidebar project grouping', () => {
         name: localizedValueFor('%projectSelector_grouping_language_label%'),
       }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('ManageBooksWebView tab title', () => {
+  it("sets the tab title from the project's localized title", async () => {
+    mockRecentProjects.value = [];
+    mockWireProjects.value = [wireProject({})];
+    mockUseLocalizedProjectTitle.mockReturnValue('Manage books — A');
+
+    const ManageBooksWebView = getManageBooksWebView();
+    const props = makeProps();
+    render(<ManageBooksWebView {...props} />);
+
+    await waitFor(() =>
+      expect(props.updateWebViewDefinition).toHaveBeenCalledWith({
+        projectId: 'PROJECT-A',
+        title: 'Manage books — A',
+      }),
+    );
+    expect(mockUseLocalizedProjectTitle).toHaveBeenCalledWith(
+      'PROJECT-A',
+      '%manageBooks_dialog_titleWithProject%',
+    );
+  });
+
+  it('leaves the tab title alone while the title is loading', async () => {
+    mockRecentProjects.value = [];
+    mockWireProjects.value = [wireProject({})];
+    mockUseLocalizedProjectTitle.mockReturnValue(undefined);
+
+    const ManageBooksWebView = getManageBooksWebView();
+    const props = makeProps();
+    render(<ManageBooksWebView {...props} />);
+
+    expect(await screen.findByTestId('manage-books-sidebar-project-trigger')).toBeInTheDocument();
+    expect(props.updateWebViewDefinition).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.anything() }),
+    );
   });
 });
