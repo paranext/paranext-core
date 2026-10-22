@@ -151,10 +151,9 @@ describe('ReadOnlyViewNotifier', () => {
 
   it('announces anyway when the edit-permission lookup fails', async () => {
     const { notifier, open, send, projectDataProvidersGet } = setup();
-    const fallbackGet = projectDataProvidersGet.getMockImplementation();
     projectDataProvidersGet.mockImplementation(async (pdpType: string) => {
       if (pdpType === 'platformScripture.scriptureEditPermissions') throw new Error('no such PDP');
-      return fallbackGet?.(pdpType);
+      return { getSetting: vi.fn().mockResolvedValue('Project') };
     });
     await notifier.start();
     await open(editorWebView('formatted'));
