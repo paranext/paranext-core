@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { useRef, useState } from 'react';
 import type { WebViewProps } from '@papi/core';
@@ -457,6 +458,35 @@ describe('chapter-context split across a project change', () => {
     await waitFor(() => expect(screen.queryByTestId('chapter-split')).not.toBeInTheDocument());
     // …and a screen reader must not be left holding the stale "opened" message.
     expect(liveRegionText()).toBe('Chapter view closed');
+  });
+
+  it('lets Escape close an open pop-up first, and closes the split only on the next Escape', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    hookResultsByProjectId.set(
+      'projectOne',
+      readyResult(twoResourceSources([]), createFakeTextConnectionPdp()),
+    );
+    await renderWebView({ projectId: 'projectOne' });
+    fireEvent.click(screen.getByTestId('open-chapter-split'));
+    expect(screen.getByTestId('chapter-split')).toBeInTheDocument();
+
+    // Any pop-up over the grid — the View Options popover here, and equally a verse row's tooltip
+    // or right-click menu — is the innermost layer, so Escape is its to handle.
+    await openViewOptions();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByText(TEXTS_HEADER)).not.toBeInTheDocument());
+    expect(screen.getByTestId('chapter-split')).toBeInTheDocument();
+
+    // Closing the popover returns focus to its trigger, whose tooltip then opens; move focus away so
+    // nothing is open. Positive control: with no pop-up open, Escape closes the split.
+    act(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    await waitFor(() =>
+      expect(document.querySelector('[data-radix-popper-content-wrapper]')).toBeNull(),
+    );
+    await user.keyboard('{Escape}');
+    expect(screen.queryByTestId('chapter-split')).not.toBeInTheDocument();
   });
 
   it('leaves in-flight installs running when the project changes', async () => {

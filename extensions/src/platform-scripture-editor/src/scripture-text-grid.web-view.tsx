@@ -240,6 +240,10 @@ function ScriptureTextGridProjectView({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || chapterContext === undefined || viewMode !== 'verse') return;
+      // An open pop-up (a tooltip, the right-click menu, the View Options popover) is the innermost
+      // layer, so Escape is its to dismiss; this capture-phase listener would otherwise take the key
+      // before Radix sees it. Every Radix pop-up renders inside this wrapper while open.
+      if (document.querySelector('[data-radix-popper-content-wrapper]')) return;
       event.preventDefault();
       event.stopPropagation();
       handleCloseChapterContext();
