@@ -4195,8 +4195,70 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   setting governs ParatextData-backed services only — network use by the Node and Chromium
   processes (extension host, renderers) is not covered. Automatic syncs that hit the gate fail the
   way other automatic-sync failures do: logged, with no user-facing error.
+- **Amended 2026-10-22 (PT-4893):** "Disable access to some Bible translation services" now saves
+  `Disabled`, the alternative rejected above, and `VpnRequired` returns to its Paratext 9 meaning
+  as the not-yet-available "sensitive locations" option — see
+  `adr-internet-use-options-follow-pt9-values`. The first rejection reason no longer holds: Platform.Bible
+  copies `InternetSettings.xml` from Paratext 9 once and keeps its own copy after that
+  (`PlatformParatextInfo`), so a co-installed Paratext 9 never reads what this app saves. Startup
+  now migrates a saved `VpnRequired` to `Disabled`. The gate itself is unchanged and still refuses
+  on both values, so an unsupported `VpnRequired` fails closed if that migration fails.
 - **Source:** PT-4590. ParatextData's internals above were read from decompiled ParatextData
   9.5.0.24, which this repo consumes as a binary package.
+
+## adr-internet-use-options-follow-pt9-values: Each internet-access option saves the ParatextData value that means the same thing in Paratext 9
+
+- **Date:** 2026-10-22
+- **Status:** Accepted
+- **Context:** Under `adr-internet-services-gate`, "Disable access to some Bible translation
+  services" saved `VpnRequired`, and the gate made that value block Send/Receive and the DBL
+  everywhere. In Paratext 9, `VpnRequired` blocks only where the machine's location is flagged as
+  sensitive, so a value carried over from Paratext 9 changed meaning on the way in. It also left
+  the "Block internet when in sensitive locations" option with no value of its own.
+- **Decision:** `InternetAccessOptionList` (`lib/platform-bible-react`) maps each row to the value
+  with its Paratext 9 meaning. "Disable access to some Bible translation services" saves
+  `Disabled`. `VpnRequired` is the "Block internet when in sensitive locations" row, still Coming
+  soon. The "Disable all Internet access" row is removed. The label keeps "some" because `Disabled`
+  stops only ParatextData's internet use; the app's Node and Chromium processes keep theirs. Once
+  the app can block those too, this option becomes "Disable all Internet access". The existing
+  localized strings are reused under their old key names. On every startup, before anything reads
+  the internet settings, `InternetSettingsDataProvider.MigrateVpnRequiredToDisabled` saves
+  `Disabled` in place of a saved `VpnRequired`, since the app does not implement `VpnRequired` and
+  `Disabled` is the most restrictive option it offers. A saved `VpnRequired` cannot tell a user who
+  chose "Disable access…" under the PT-4590 mapping from ParatextData's first-run default or a
+  value carried over from Paratext 9, so every one is migrated. This writes the
+  `InternetSettings.xml` in Platform.Bible's folder, never Paratext 9's: `PlatformParatextInfo`
+  pins ParatextData to that folder and only ever reads Paratext 9's. It runs every startup because
+  ParatextData saves `VpnRequired` when nothing is stored, and a re-seed from Paratext 9 can bring
+  it back. `InternetServicesGate` still blocks `VpnRequired`, so Send/Receive and the DBL fail
+  closed if the migration fails. `ProxyOnly`, the other Coming soon value, is neither migrated nor
+  gated: ParatextData honors the proxy carried over from Paratext 9.
+- **Alternatives:** **Keep `VpnRequired` behind "Disable access…"** (the PT-4590 mapping) —
+  rejected: it gives a Paratext 9 value a meaning only Platform.Bible uses, and leaves the
+  sensitive-locations option nothing to save. **Migrate only the users who chose "Disable
+  access…"** — not possible: `platform.internetUseChoiceAsked` is also set when Power mode only
+  asked, and a choice made in the Internet & connectivity settings does not set it. **Leave
+  `VpnRequired` saved and show it under the unsupported-value banner** — rejected: everyone who
+  chose "Disable access…" would be told their setting is unsupported, and nearly every first run
+  starts from that value. **Stop gating `VpnRequired` and let ParatextData resolve it by
+  location** — rejected while the sensitive-locations option is unimplemented: an unsupported
+  setting should fail closed, not quietly turn these services on.
+- **Consequences:** Every saved `VpnRequired` becomes `Disabled`. That includes ParatextData's
+  first-run default and Paratext 9 users who chose "sensitive locations". The gate already kept
+  Send/Receive and the DBL off for all of them; `Disabled` also stops ParatextData's other internet
+  uses, which is what it means in Paratext 9. Two of those change for users outside sensitive
+  locations: extensions' Registry access tokens are refused (`RegistryAccessTokenService`), and
+  writing systems are no longer looked up in the SLDR (`PlatformScrTextCollection`). Registration
+  itself is checked offline and is unaffected. Nobody is told: Simple-mode users who finished first
+  run before it asked for a choice are not asked again (`adr-power-mode-internet-use-prompt`). The
+  Paratext 9 copy of the setting is untouched, so Paratext 9 keeps its location-dependent behavior.
+  Every Platform.Bible build on the account shares the migrated file, so a build from before this
+  change shows `Disabled` as its unsupported "Disable all Internet access" row, and choosing
+  "Disable access…" there saves `VpnRequired`, which the next launch of this build migrates again.
+  Revisit the migration when the sensitive-locations option is built (PT-4900), since `VpnRequired`
+  will then be a value to keep, while files that older builds saved for "Disable access…" will
+  still hold it.
+- **Source:** PT-4893; reverses the option-to-value mapping chosen in PT-4590.
 
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
@@ -7597,6 +7659,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   them because a web view can drive it. Revisit when PT-4750 lands (throw codes instead of
   returning them), when the WebSocket authenticates its clients (and remove the `Origin` stopgap
   then), or if a consent prompt becomes necessary.
+- **Amended 2026-10-22 (PT-4893):** "Disable access to some Bible translation services" now saves
+  `Disabled`, so tokens are refused for it in every location; the location check applies only to a
+  saved `VpnRequired`, the not-yet-available "Block internet when in sensitive locations" option.
+  See `adr-internet-use-options-follow-pt9-values`.
 - **Source:** PT-4865 (design spec attached there).
 
 ## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path

@@ -33,10 +33,7 @@ import { useId } from 'react';
 export type InternetUse = 'Enabled' | 'VpnRequired' | 'Disabled' | 'ProxyOnly';
 
 type OptionRow = {
-  // BlockInSensitiveLocations is included here as a UI-only option that the UX spec requires
-  // showing in this list, but it is not part of the InternetUse type that PAPI persists — the
-  // onChange handler filters it out before calling the caller (see the if-guard below).
-  value: InternetUse | 'BlockInSensitiveLocations';
+  value: InternetUse;
   labelKey: LocalizeKey;
   descriptionKey: LocalizeKey;
   isEnabled: boolean;
@@ -44,7 +41,7 @@ type OptionRow = {
 
 /**
  * Hover dwell before a row's description tooltip opens. TooltipProvider defaults to 0, which makes
- * tooltips flash on every pointer sweep down this five-row stack.
+ * tooltips flash on every pointer sweep down this stack of rows.
  */
 const TOOLTIP_DELAY_MS = 300;
 
@@ -55,20 +52,19 @@ const OPTION_ROWS = [
     descriptionKey: '%paratextRegistration_description_internetUse_option_Enabled_details_2%',
     isEnabled: true,
   },
+  // The `VpnRequired_*` keys are named for the value this text was first written for. It says
+  // "some" services because `Disabled` switches off ParatextData's internet use only — the app's
+  // other processes keep theirs — so it stays worded that way until the app can block them too.
   {
-    value: 'VpnRequired',
+    value: 'Disabled',
     labelKey: '%paratextRegistration_description_internetUse_option_VpnRequired_2%',
     descriptionKey: '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%',
     isEnabled: true,
   },
+  // As in Paratext 9, `VpnRequired` means blocking only where the machine's location is flagged as
+  // sensitive.
   {
-    value: 'Disabled',
-    labelKey: '%paratextRegistration_description_internetUse_option_Disabled_2%',
-    descriptionKey: '%paratextRegistration_description_internetUse_option_Disabled_details%',
-    isEnabled: false,
-  },
-  {
-    value: 'BlockInSensitiveLocations',
+    value: 'VpnRequired',
     labelKey: '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%',
     descriptionKey:
       '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%',
@@ -83,7 +79,7 @@ const OPTION_ROWS = [
 ] as const satisfies readonly OptionRow[];
 
 const isInternetUse = (value: string): value is InternetUse =>
-  OPTION_ROWS.some((row) => row.value !== 'BlockInSensitiveLocations' && row.value === value);
+  OPTION_ROWS.some((row) => row.value === value);
 
 /**
  * Whether the app can honor this internet-use value.
@@ -91,8 +87,9 @@ const isInternetUse = (value: string): value is InternetUse =>
  * `InternetSettings.xml` is seeded once from a co-installed Paratext 9 on first launch (the two
  * apps keep separate copies thereafter), so a stored value may name an option this app does not
  * implement yet (the "Coming soon" rows). Such a value is shown selected and called out in a banner
- * rather than silently replaced — callers that gate on a usable selection (the first-run wizard's
- * Next button) should refuse to advance until this returns true.
+ * rather than swapped for another row — callers that gate on a usable selection (the first-run
+ * wizard's Next button) should refuse to advance until this returns true. (The data provider
+ * replaces a stored `VpnRequired` with `Disabled` at startup, so in practice this is `ProxyOnly`.)
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
@@ -125,7 +122,7 @@ export type InternetAccessOptionListProps = {
 };
 
 /**
- * The five internet-access options as radio rows. Each row's description sits behind an info icon
+ * The internet-access options as radio rows. Each row's description sits behind an info icon
  * button, revealed as a tooltip on hover or keyboard focus.
  *
  * The descriptions run to two sentences — longer than `Guidelines/Tooltips` allows a tooltip on a
@@ -187,7 +184,6 @@ export function InternetAccessOptionList({
           // the caller's `onChange`.
           value={value ?? ''}
           onValueChange={(v) => {
-            // BlockInSensitiveLocations is UI-only; isInternetUse excludes it.
             if (isInternetUse(v)) onChange(v);
           }}
           disabled={disabled}

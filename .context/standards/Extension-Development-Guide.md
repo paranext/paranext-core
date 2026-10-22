@@ -225,9 +225,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 - Failures reject with a `PlatformError`. Branch on its `code`. Its `message` is an English
   diagnostic for logs, so show users your own localized text based on the `code`:
   - `UNAUTHENTICATED`: offer `paratextRegistration.showParatextRegistration`.
-  - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: internet access is
-    off, or "Disable access to some Bible translation services" is selected and this computer's
-    location is restricted or could not be determined.
+  - `FAILED_PRECONDITION`: the user's Internet & connectivity settings block it: "Disable access to
+    some Bible translation services" is selected, or "Block internet when in sensitive locations"
+    is selected and this computer's location is restricted or could not be determined.
   - `UNAVAILABLE`: retry later.
   - `INVALID_ARGUMENT` or `PERMISSION_DENIED`: a configuration bug in the extension or the
     Registry. `PERMISSION_DENIED` also covers the Registry refusing to issue the token for a

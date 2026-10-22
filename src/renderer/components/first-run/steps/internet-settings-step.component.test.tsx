@@ -73,7 +73,10 @@ vi.mock('platform-bible-react', () => ({
   cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
 }));
 
-vi.mock('platform-bible-react/experimental', () => ({
+// The real `isSupportedInternetUse` comes through, so Next is gated on the same supported options as
+// in production.
+vi.mock('platform-bible-react/experimental', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('platform-bible-react/experimental')>()),
   // One button stands in for the radio group; `data-state` and `disabled` mirror the selected Radix
   // radio the step puts focus back on after a save.
   InternetAccessOptionList: ({
@@ -96,14 +99,11 @@ vi.mock('platform-bible-react/experimental', () => ({
       option list
     </button>
   ),
-  // Stands in for the real helper, whose own list of implemented options is covered by
-  // InternetAccessOptionList's tests. This step only cares that it gates Next.
-  isSupportedInternetUse: (value: string) => value === 'Enabled' || value === 'VpnRequired',
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: [],
 }));
 
 const MOCK_SETTINGS = {
-  permittedInternetUse: 'VpnRequired' as const,
+  permittedInternetUse: 'Disabled' as const,
   selectedServer: 'Production' as const,
   proxyPort: 0,
 };
@@ -221,9 +221,10 @@ describe('InternetSettingsStep', () => {
     expect(setCanProceed).not.toHaveBeenCalledWith(true);
   });
 
-  // ParatextData saves "Disable access to some Bible translation services" (VpnRequired) on first
-  // startup, and a Paratext 9 upgrade can carry over a value nobody chose. That option turns off
-  // sync and the DBL, so the wizard must not accept it on the user's behalf.
+  // ParatextData saves VpnRequired on first startup, which startup migrates to "Disable access to
+  // some Bible translation services" (Disabled), and a Paratext 9 upgrade can carry over a value
+  // nobody chose. That option turns off sync and the DBL, so the wizard must not accept it on the
+  // user's behalf.
   describe('an explicit choice', () => {
     it('selects no option and keeps Next disabled once data has loaded', async () => {
       configureHooks({ value: MOCK_SETTINGS, isLoading: false });
@@ -507,13 +508,13 @@ describe('InternetSettingsStep', () => {
   // selected under a banner; Next has to stay shut until the user replaces it with one that will
   // actually take effect.
   describe('a stored value the app cannot honor', () => {
-    const UNSUPPORTED_SETTINGS = { ...MOCK_SETTINGS, permittedInternetUse: 'Disabled' as const };
+    const UNSUPPORTED_SETTINGS = { ...MOCK_SETTINGS, permittedInternetUse: 'ProxyOnly' as const };
 
     it('keeps Next disabled while it is the current selection', async () => {
       configureHooks({ value: UNSUPPORTED_SETTINGS, isLoading: false });
       const { setCanProceed } = renderStep();
 
-      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Disabled');
+      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'ProxyOnly');
       await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(false));
       expect(setCanProceed).not.toHaveBeenCalledWith(true);
     });

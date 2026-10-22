@@ -10,15 +10,24 @@ namespace Paranext.DataProvider.Users;
 /// </summary>
 /// <remarks>
 /// ParatextData only blocks these calls itself when its effective <c>InternetAccess.Status</c> is
-/// <see cref="InternetUse.Disabled"/>. It resolves <see cref="InternetUse.VpnRequired"/> — the
-/// setting Platform.Bible labels "Disable access to some Bible translation services" — by the
+/// <see cref="InternetUse.Disabled"/>. It resolves <see cref="InternetUse.VpnRequired"/> by the
 /// machine's location: <see cref="InternetUse.Disabled"/> where the location is flagged as
 /// sensitive or cannot be determined, <see cref="InternetUse.Enabled"/> everywhere else. So this
 /// gate checks the saved value (<c>InternetAccess.RawStatus</c>) instead, and every entry point that
 /// reaches one of these services calls <see cref="ThrowIfBlocked"/> before doing so. In core that is
 /// the DBL catalog fetch and install; the Send/Receive entry points are implemented only in the
-/// Paratext 10 Studio patch, which calls the gate itself. A co-installed Paratext 9 reads the same
-/// saved value and keeps its own location-dependent behavior.
+/// Paratext 10 Studio patch, which calls the gate itself.
+/// <para>
+/// <see cref="InternetUse.VpnRequired"/> ("Block internet when in sensitive locations") is blocked
+/// because Platform.Bible does not implement that option yet (PT-4900), so it fails closed rather
+/// than turning these services on outside sensitive locations. Startup replaces it with
+/// <see cref="InternetUse.Disabled"/> (<see cref="InternetSettingsDataProvider.MigrateVpnRequiredToDisabled"/>),
+/// so this matters only if that fails or something saves <see cref="InternetUse.VpnRequired"/>
+/// later in the session. Only Send/Receive and the DBL fail closed: other ParatextData internet
+/// use, such as Registry access tokens, still resolves it by location.
+/// <see cref="InternetUse.ProxyOnly"/> is not blocked: ParatextData sends its requests through the
+/// proxy carried over from Paratext 9, even though Platform.Bible cannot configure one yet.
+/// </para>
 /// </remarks>
 internal static class InternetServicesGate
 {
