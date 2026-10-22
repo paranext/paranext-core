@@ -629,7 +629,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-text-grid-open-chapter-context',
     purpose: 'Open the chapter-context view for the focused cell',
     category: 'View',
-    context: 'Scripture Text Grid web view',
+    context: 'Scripture Text Grid web view (the cell itself focused, not a control inside it)',
     keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
@@ -649,9 +649,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-text-grid-close-chapter-context',
     purpose: 'Close the chapter-context view',
     category: 'View',
-    context: 'Scripture Text Grid web view',
+    context: 'Scripture Text Grid web view (not inside an open window or menu, which closes first)',
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
-    locations: ['extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx'],
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/chapter-context-escape.utils.ts',
+    ],
   },
   {
     id: 'scripture-text-grid-reorder-cell',

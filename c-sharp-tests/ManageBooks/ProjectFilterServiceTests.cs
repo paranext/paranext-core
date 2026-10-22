@@ -230,6 +230,111 @@ namespace TestParanextDataProvider.ManageBooks
             });
         }
 
+        private const string NivCopyright =
+            "The Holy Bible, New International Version® NIV® Copyright © 2011 by Biblica, Inc.®";
+
+        [Test]
+        public void FromScrText_MarksATraditionallyLicensedBiblicaResourceAsRestrictedAsABase()
+        {
+            using ResourceDummyScrText scrText = CreateResourceScrText(
+                "NIV11",
+                ProjectType.Standard,
+                editable: false
+            );
+            scrText.Settings.Copyright = NivCopyright;
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.True);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictABiblicaOpenTextKnownOnlyByItsDblId()
+        {
+            using ResourceDummyScrText scrText = CreateResourceScrText(
+                "OBTT",
+                ProjectType.Standard,
+                editable: false
+            );
+            scrText.Settings.Copyright = "Copyright © 2023 by Biblica, Inc., The Translation Trust";
+            scrText.Settings.DBLId = HexId.FromStr("f6a5ef6e2e75a8b4");
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictOtherTexts()
+        {
+            using ResourceDummyScrText scrText = CreateResourceScrText(
+                "WEB",
+                ProjectType.Standard,
+                editable: false
+            );
+            scrText.Settings.Copyright = "Public domain";
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictAnEditableProjectWithABiblicaCopyright()
+        {
+            // A Biblica translation team's own project carries Biblica's copyright
+            using DummyScrText scrText = CreateScrText(
+                "NIVTeam",
+                ProjectType.Standard,
+                editable: true
+            );
+            scrText.Settings.Copyright = NivCopyright;
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
+        [Test]
+        public void FromScrText_DoesNotRestrictAnEditableProjectWithAListedDblId()
+        {
+            // Biblica's master project has the DBL id of the resource published from it (NIV11)
+            using DummyScrText scrText = CreateScrText(
+                "NIVMaster",
+                ProjectType.Standard,
+                editable: true
+            );
+            scrText.Settings.DBLId = HexId.FromStr("71c6eab17ae5b667");
+
+            Assert.That(ProjectSummary.FromScrText(scrText).IsRestrictedAsBase, Is.False);
+        }
+
+        [Test]
+        public void FilterProjects_AResourceWhoseLicenseCannotBeRead_StillListsEveryProject()
+        {
+            using var unreadable = new UnreadableLicenseResourceScrText(
+                new Paranext.DataProvider.Projects.ProjectDetails(
+                    "UnreadableResource",
+                    new Paranext.DataProvider.Projects.ProjectMetadata(
+                        HexId.CreateNew().ToString(),
+                        []
+                    ),
+                    ""
+                )
+            );
+            unreadable.Settings.TranslationInfo = new TranslationInformation(
+                ProjectType.Standard,
+                ""
+            );
+            AddProject(unreadable);
+
+            ProjectListResult result = ProjectFilterService.FilterProjects(
+                new ProjectFilterInput(ProjectFilterPurpose.AllScripture, null)
+            );
+
+            ProjectSummary? unreadableSummary = result.Projects.FirstOrDefault(p =>
+                p.Name == unreadable.Name
+            );
+            Assert.Multiple(() =>
+            {
+                Assert.That(unreadableSummary, Is.Not.Null);
+                Assert.That(unreadableSummary?.IsRestrictedAsBase, Is.False);
+                Assert.That(result.Projects.Select(p => p.Name), Does.Contain(_std.Name));
+            });
+        }
+
         [Test]
         [Category("Contract")]
         [Property("CapabilityId", "CAP-011")]
@@ -711,6 +816,37 @@ namespace TestParanextDataProvider.ManageBooks
             scrText.Settings.TranslationInfo = new TranslationInformation(type, baseName);
             scrText.Settings.Editable = editable;
             return scrText;
+        }
+
+        /// <summary>
+        /// A resource whose settings fail when the license check reads them, as a damaged resource's
+        /// can. Its full name is one of the settings that check reads.
+        /// </summary>
+        private sealed class UnreadableLicenseResourceScrText(
+            Paranext.DataProvider.Projects.ProjectDetails details
+        ) : DummyScrText(details)
+        {
+            public override bool IsResourceProject => true;
+
+            protected override ProjectSettings CreateProjectSettings(bool ignoreFileMissing)
+            {
+                ProjectSettings readable = base.CreateProjectSettings(ignoreFileMissing);
+                return new UnreadableFullNameSettings(this)
+                {
+                    MinParatextDataVersion = readable.MinParatextDataVersion,
+                    Guid = readable.Guid,
+                };
+            }
+        }
+
+        private sealed class UnreadableFullNameSettings(ScrText scrText)
+            : ProjectSettings(scrText, true)
+        {
+            public override string FullName
+            {
+                get => throw new InvalidOperationException("The settings could not be read");
+                set => base.FullName = value;
+            }
         }
     }
 }

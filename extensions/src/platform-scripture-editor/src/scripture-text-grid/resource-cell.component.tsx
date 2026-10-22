@@ -16,7 +16,7 @@ import {
   MIN_ZOOM_FACTOR,
 } from 'platform-bible-utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type DragEvent, type KeyboardEvent } from 'react';
 import { useChapterUsjWithCopyLimit } from '../copy-limit/use-chapter-usj-with-copy-limit.hook';
 import { deriveCellState, isUsjForChapter } from './resource-cell.utils';
 import {
@@ -39,9 +39,11 @@ import { findVerseMarkerForVerse, isMarkerFullyInPortView } from './reference-sc
 import { useReferenceScroll } from './use-reference-scroll.hook';
 import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
 import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from '../copyright-notice/copyright-notice.const';
+import { CopyrightNoticeIndicator } from '../copyright-notice/copyright-notice-indicator.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
-const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
+const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS, ...COPYRIGHT_NOTICE_STRING_KEYS];
 
 /**
  * A resource to render as a grid cell.
@@ -92,7 +94,7 @@ type ResourceCellProps = {
   /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
   onReorderKeyDown?: (event: KeyboardEvent) => void;
   /** Makes the cell's header band the drag source for a reorder; passed straight to the view. */
-  headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
+  headerDrag?: { onDragStart: (event: DragEvent) => void; onDragEnd: () => void };
 };
 
 /**
@@ -363,6 +365,12 @@ export function ResourceCell({
       reorderHint={reorderHint}
       onReorderKeyDown={onReorderKeyDown}
       headerDrag={headerDrag}
+      copyrightIndicator={
+        <CopyrightNoticeIndicator
+          projectId={resourceRef.projectId}
+          localizedStrings={localizedStrings}
+        />
+      }
       editor={
         <Editorial
           ref={editorRef}

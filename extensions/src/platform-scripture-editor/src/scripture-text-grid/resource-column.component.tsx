@@ -15,10 +15,10 @@ import type { ResourceCollectionViewMode } from '../resource-collection-options/
 export type ResourceColumnReorder = {
   /** True while a dragged column is hovering this one, which shows the drop-target ring. */
   isDropTarget: boolean;
-  onDragStart: () => void;
+  onDragStart: (event: DragEvent) => void;
   onDragEnd: () => void;
   onDragOver: (event: DragEvent) => void;
-  onDrop: () => void;
+  onDrop: (event: DragEvent) => void;
   /** Accessible name for the grip (e.g. "Reorder Genesis"). */
   handleLabel?: string;
   /** Tooltip shown on grip hover/focus. */

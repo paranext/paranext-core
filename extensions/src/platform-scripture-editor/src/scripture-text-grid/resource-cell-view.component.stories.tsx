@@ -12,6 +12,8 @@ import {
   ZOOM_OPTIONS_KEY,
   ZOOM_OUT_KEY,
 } from './resource-cell-view.component';
+import { CopyrightNoticeIndicatorView } from '../copyright-notice/copyright-notice-indicator.component';
+import { COPYRIGHT_NOTICE_STRING_KEYS } from '../copyright-notice/copyright-notice.const';
 
 /**
  * One cell of the Scripture Text Grid: a single resource's focused chapter. In the app the
@@ -732,6 +734,56 @@ export const LongLabel: Story = {
         copyLimit={undefined}
         editor={<SampleChapter />}
         zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+};
+
+/** The info button a cell shows beside the name of a text that carries a copyright notice */
+const copyrightIndicator = (
+  <CopyrightNoticeIndicatorView
+    notice={{
+      kind: 'restrictedLicense',
+      name: 'NIV11',
+      fullName: 'New International Version 2011',
+      copyrightYears: '1973, 1978, 1984, 2011',
+    }}
+    localizedStrings={getLocalizedStrings([...COPYRIGHT_NOTICE_STRING_KEYS])}
+  />
+);
+
+/** A text with a copyright notice: its info button sits in the header beside the name. */
+export const ReadyWithCopyrightNotice: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        zoomArea={STORY_ZOOM_AREA}
+        label="NIV11"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        copyLimit={undefined}
+        editor={<SampleChapter />}
+        copyrightIndicator={copyrightIndicator}
+      />
+    </CellBox>
+  ),
+};
+
+/** Verse mode: the info button sits beside the hanging name, outside the verse text. */
+export const VerseWithCopyrightNotice: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        zoomArea={STORY_ZOOM_AREA}
+        label="NIV11"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        copyLimit={undefined}
+        editor={<SampleVerse />}
+        copyrightIndicator={copyrightIndicator}
       />
     </CellBox>
   ),

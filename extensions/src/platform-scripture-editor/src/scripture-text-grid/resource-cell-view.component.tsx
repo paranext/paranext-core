@@ -31,6 +31,7 @@ import {
   useCallback,
   useRef,
   useState,
+  type DragEvent,
   type KeyboardEvent,
   type MouseEvent,
   type Ref,
@@ -167,7 +168,9 @@ export type ResourceCellViewProps = {
    * source turns a click-drag across the text into a reorder instead of a selection — and selecting
    * a passage down a column is the reason this view renders one editor per column.
    */
-  headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
+  headerDrag?: { onDragStart: (event: DragEvent) => void; onDragEnd: () => void };
+  /** The resource's copyright notice indicator, shown beside its name */
+  copyrightIndicator?: ReactNode;
 };
 
 /** The spelling of `shortcut` for the operating system the app is running on. */
@@ -354,6 +357,7 @@ export function ResourceCellView({
   reorderHint,
   onReorderKeyDown,
   headerDrag,
+  copyrightIndicator,
 }: ResourceCellViewProps) {
   let readyContent: ReactNode = editor;
   if (emptyMessage) {
@@ -446,6 +450,9 @@ export function ResourceCellView({
 
   const handleCellContextMenu = useCallback(
     (event: MouseEvent<HTMLElement>) => {
+      // A window opened from the cell (its copyright details) renders outside it, but React still
+      // delivers its events here; leave its right-clicks alone
+      if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return;
       // The editor owns `contextmenu` over its content, and its built-in menu clips and cannot flip
       // near the viewport edge. Intercept in the capture phase (before the editor's handler) and open
       // our own portaled, collision-aware menu at the cursor instead.
@@ -494,6 +501,7 @@ export function ResourceCellView({
         // remaining min-w-0 column. Only the verse text scales with zoom; the hanging name is fixed.
         <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
           <ResourceNameLabel label={label} className="tw:max-w-24 tw:min-w-0 tw:text-sm" />
+          {copyrightIndicator}
           <div
             ref={copyAreaRef}
             className={`tw:min-w-0 tw:flex-1 ${contentOverflowClass}`}
@@ -544,6 +552,7 @@ export function ResourceCellView({
               </TooltipProvider>
             ) : undefined}
             <ResourceNameLabel label={label} className="tw:min-w-0 tw:flex-1 tw:text-xs" />
+            {copyrightIndicator}
             {zoomMenuLabels ? (
               <TooltipProvider>
                 <DropdownMenu>

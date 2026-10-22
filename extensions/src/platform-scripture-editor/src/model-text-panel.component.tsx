@@ -29,7 +29,15 @@ import type {
   ProjectReference,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ComponentProps,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { selectTextConnection } from './select-dbl-resource';
 import {
   getModelResourceProjectId,
@@ -163,6 +171,11 @@ export type ModelTextPanelProps = {
   resourceCopyLimit: number | undefined;
   /** Logger forwarded to the editor (the webview supplies the PAPI logger; stories may omit it). */
   logger?: ComponentProps<typeof Editorial>['logger'];
+  /**
+   * The model text's copyright notice, shown below the header. The web view supplies it because
+   * reading the notice needs PAPI.
+   */
+  copyrightNotice?: ReactNode;
 };
 
 /**
@@ -188,6 +201,7 @@ export function ModelTextPanel({
   getResourceChapter,
   resourceCopyLimit,
   logger,
+  copyrightNotice,
 }: ModelTextPanelProps) {
   // --- Resolve the configured model text against the DBL resource list ---
 
@@ -802,6 +816,9 @@ export function ModelTextPanel({
           </Tooltip>
         </TooltipProvider>
       )}
+      {/* Below the header, so the header keeps the fixed 42px height that lines it up with
+          Column 3's tab bar */}
+      {copyrightNotice}
       {/* The label row stays outside the zoom area (marked inside the editor's scroll box in
           `renderContent`) so its pinned 42 px height — aligned with the editor's toolbar and
           Column 3's tab bar — doesn't scale with the content. */}
