@@ -213,6 +213,7 @@ import {
   hasPendingCommentTextChanged,
   shouldEndPaneNoteEditOnRowSelect,
   shouldPublishPaneDocument,
+  usesPaneNoteModel,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
@@ -1488,7 +1489,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             `paneVisible=${footnotesPaneVisibleRef.current} paneRendered=${footnotesPaneRenderedRef.current} ` +
             `viewType=${viewTypeRef.current} surface=${surface}`,
         );
-        const isStandardView = viewTypeRef.current === 'standard';
+        const isPaneNoteModel = usesPaneNoteModel(viewTypeRef.current, isPowerModeRef.current);
         const decision = decideNoteCallerClickAction({
           isCollapsed,
           editingNoteKey: editingNoteKey.current,
@@ -1499,7 +1500,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           paneRendered: footnotesPaneRenderedRef.current,
           isPowerMode: isPowerModeRef.current,
           surface,
-          isStandardView,
+          isPaneNoteModel,
         });
         if (decision.clearStaleEditingSession) {
           // A prior session's key survived without its popover — orphaned bookkeeping that
@@ -1547,11 +1548,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             );
         }
 
-        // Standard view treats a note and its verse as one place (see `navigateToNote`): the
-        // caret parks just past the caller the user clicked, and the scroll group follows the
-        // note's verse. Every other view answers a caller click with a popover anchored on the
-        // caller and leaves the text exactly where it was.
-        if (isStandardView && index !== undefined) navigateToNoteRef.current(index);
+        // Standard view and Preview in Power treat a note and its verse as one place (see
+        // `navigateToNote`): the caret parks just past the caller the user clicked, and the scroll
+        // group follows the note's verse. Every other view answers a caller click with a popover
+        // anchored on the caller and leaves the text exactly where it was.
+        if (isPaneNoteModel && index !== undefined) navigateToNoteRef.current(index);
 
         // A read-only text has no editing surface, so the navigation above is the whole click.
         if (decision.action === 'navigate-only') return;
@@ -3360,15 +3361,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /**
    * A footnotes pane row was selected without an edit request: Space in any view, or a row click in
-   * a view that opens no row editor (a read-only Standard view). Standard view ends a row editor
-   * open on a different note (see {@link shouldEndPaneNoteEditOnRowSelect}), navigates the text to
-   * the note (see {@link navigateToNote}), and leaves DOM focus in the pane, where the caller
-   * highlight (see {@link handleSelectedFootnoteChange}) marks the note. Every other view moves the
-   * text caret into the note.
+   * a view that opens no row editor (a read-only Standard view, or Preview in Power). Standard view
+   * and Preview end a row editor open on a different note (see
+   * {@link shouldEndPaneNoteEditOnRowSelect}), navigate the text to the note (see
+   * {@link navigateToNote}), and leave DOM focus in the pane, where the caller highlight (see
+   * {@link handleSelectedFootnoteChange}) marks the note. Every other view moves the text caret into
+   * the note.
    */
   const handleFootnoteSelected = useCallback(
     (index: number) => {
-      if (viewTypeRef.current === 'standard') {
+      if (usesPaneNoteModel(viewTypeRef.current, isPowerModeRef.current)) {
         if (
           shouldEndPaneNoteEditOnRowSelect({
             paneEditingIndex: paneEditingIndexRef.current,
@@ -3450,7 +3452,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const applyCallerHighlight = useCallback(() => {
     editorRef.current?.highlightNote(
       resolveCallerHighlight({
-        isStandardView: viewTypeRef.current === 'standard',
+        isPaneNoteModel: usesPaneNoteModel(viewTypeRef.current, isPowerModeRef.current),
         paneHasFocus: paneHasFocusRef.current,
         focusedRowIndex: paneFocusedRowIndexRef.current,
         selectedIndex: paneSelectedIndexRef.current,

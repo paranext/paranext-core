@@ -447,13 +447,13 @@ export function resolveNoteEditingSurface({
  * `CallerHighlightSynchronizer`: the border marks where the focused pane's caret is, so it shows
  * only while the footnotes pane owns DOM focus. Clicking back into the Scripture text leaves the
  * row selected but takes the border off the caller; clicking the row (or its editor) again puts it
- * back. Standard view is the only view that highlights callers at all.
+ * back. Only Standard view, and Preview in Power, highlight callers at all.
  *
  * PT9's pane has one caret, so the note it is in is the one marked. Here keyboard focus on a row
  * (Tab or the arrow keys) is that caret whenever a row has it, and the selected row otherwise (the
  * row editor, or the pane's chrome, holds focus).
  *
- * @param options.isStandardView Whether the editor is showing Standard view
+ * @param options.isPaneNoteModel Whether the editor is showing Standard view, or Preview in Power
  * @param options.paneHasFocus Whether DOM focus is inside the footnotes pane (its row list or its
  *   inline row editor)
  * @param options.focusedRowIndex The footnotes pane row holding DOM focus, or `undefined` when no
@@ -463,17 +463,17 @@ export function resolveNoteEditingSurface({
  * @returns The note index to highlight, or `undefined` to clear the highlight
  */
 export function resolveCallerHighlight({
-  isStandardView,
+  isPaneNoteModel,
   paneHasFocus,
   focusedRowIndex,
   selectedIndex,
 }: {
-  isStandardView: boolean;
+  isPaneNoteModel: boolean;
   paneHasFocus: boolean;
   focusedRowIndex?: number;
   selectedIndex: number | undefined;
 }): number | undefined {
-  if (!isStandardView || !paneHasFocus) return undefined;
+  if (!isPaneNoteModel || !paneHasFocus) return undefined;
   return focusedRowIndex ?? selectedIndex;
 }
 
@@ -525,10 +525,11 @@ export type NoteCallerClickState = {
   /** Where the clicked note would be edited; see {@link resolveNoteEditingSurface}. */
   surface: NoteEditingSurface;
   /**
-   * Whether the text is shown in Standard view. Only Standard view gives a read-only text the
-   * navigation half of the pane model; every other view keeps a read-only caller inert.
+   * Whether the text is shown in Standard view, or Preview in Power. Only these views give a
+   * read-only text the navigation half of the pane model; every other view keeps a read-only caller
+   * inert.
    */
-  isStandardView: boolean;
+  isPaneNoteModel: boolean;
 };
 
 /** What a collapsed-note caller click resolves to — see {@link decideNoteCallerClickAction}. */
@@ -612,7 +613,7 @@ export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCa
       sendPaneFocusRequest: false,
       showPane: false,
     };
-  if (state.surface === 'none' && !state.isStandardView)
+  if (state.surface === 'none' && !state.isPaneNoteModel)
     return {
       clearStaleEditingSession,
       action: 'ignore-read-only',

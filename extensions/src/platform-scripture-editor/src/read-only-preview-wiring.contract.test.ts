@@ -53,6 +53,13 @@ describe('the web view read-only wiring', () => {
     expect(sliceUseMemo(source, 'isReadOnlyForTitle')).toContain('isInterfaceModeLoading');
   });
 
+  it('chooses the caller model through usesPaneNoteModel', () => {
+    const calls = source.split('usesPaneNoteModel(viewTypeRef.current, isPowerModeRef.current)');
+    // noteCallerOnClick, handleFootnoteSelected and applyCallerHighlight
+    expect(calls.length - 1).toBeGreaterThanOrEqual(3);
+    expect(source).not.toContain("viewTypeRef.current === 'standard'");
+  });
+
   it('has no editable-markers dev switch', () => {
     expect(source).not.toContain('dev-editableMarkersView');
   });

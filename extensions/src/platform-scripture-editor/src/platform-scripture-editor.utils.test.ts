@@ -3330,8 +3330,33 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     paneRendered: false,
     isPowerMode: true,
     surface: 'popover' as const,
-    isStandardView: false,
+    isPaneNoteModel: false,
   };
+
+  it('navigates a read-only Preview caller to the pane and shows a hidden pane in Power', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      isCollapsed: true,
+      surface: 'none',
+      isPaneNoteModel: true,
+      isPowerMode: true,
+      paneVisible: false,
+      paneRendered: false,
+    });
+    expect(d.action).toBe('navigate-only');
+    expect(d.showPane).toBe(true);
+    expect(d.sendPaneFocusRequest).toBe(true);
+  });
+
+  it('keeps a read-only caller inert without the pane model', () => {
+    const d = decideNoteCallerClickAction({
+      ...base,
+      isCollapsed: true,
+      surface: 'none',
+      isPaneNoteModel: false,
+    });
+    expect(d.action).toBe('ignore-read-only');
+  });
 
   it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
     expect(decideNoteCallerClickAction({ ...base, isPowerMode: false })).toEqual({
@@ -3438,7 +3463,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   });
 
   it('Standard view: opens the pane editor and reveals a hidden pane', () => {
-    const d = decideNoteCallerClickAction({ ...base, surface: 'pane', isStandardView: true });
+    const d = decideNoteCallerClickAction({ ...base, surface: 'pane', isPaneNoteModel: true });
     expect(d).toEqual({
       clearStaleEditingSession: false,
       action: 'open-pane-editor',
@@ -3451,7 +3476,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     const d = decideNoteCallerClickAction({
       ...base,
       surface: 'pane',
-      isStandardView: true,
+      isPaneNoteModel: true,
       editingNoteKey: 'k1',
       paneVisible: true,
       paneRendered: true,
@@ -3461,7 +3486,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   });
 
   it('read-only Standard view: navigates only, still revealing the pane in Power mode', () => {
-    const d = decideNoteCallerClickAction({ ...base, surface: 'none', isStandardView: true });
+    const d = decideNoteCallerClickAction({ ...base, surface: 'none', isPaneNoteModel: true });
     expect(d.action).toBe('navigate-only');
     expect(d.showPane).toBe(true);
     expect(d.sendPaneFocusRequest).toBe(true);
@@ -3474,7 +3499,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
       decideNoteCallerClickAction({
         ...base,
         surface: 'none',
-        isStandardView: true,
+        isPaneNoteModel: true,
         isPowerMode: false,
       }),
     ).toMatchObject({ action: 'navigate-only', showPane: false, sendPaneFocusRequest: false });
@@ -3482,7 +3507,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
       decideNoteCallerClickAction({
         ...base,
         surface: 'none',
-        isStandardView: true,
+        isPaneNoteModel: true,
         isPowerMode: false,
         paneVisible: true,
         paneRendered: true,
@@ -3497,7 +3522,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
         decideNoteCallerClickAction({
           ...base,
           surface: 'none',
-          isStandardView: false,
+          isPaneNoteModel: false,
           isPowerMode,
           paneVisible: true,
           paneRendered: true,
@@ -3516,7 +3541,7 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
       decideNoteCallerClickAction({
         ...base,
         surface: 'pane',
-        isStandardView: true,
+        isPaneNoteModel: true,
         isCollapsed: false,
       }).action,
     ).toBe('ignore-expanded');
@@ -3658,14 +3683,14 @@ describe('shouldEndPaneNoteEditOnRowSelect', () => {
 describe('resolveCallerHighlight', () => {
   it('highlights the selected note while Standard view has the pane focused', () => {
     expect(
-      resolveCallerHighlight({ isStandardView: true, paneHasFocus: true, selectedIndex: 0 }),
+      resolveCallerHighlight({ isPaneNoteModel: true, paneHasFocus: true, selectedIndex: 0 }),
     ).toBe(0);
   });
 
   it('clears the highlight while the pane has no selection', () => {
     expect(
       resolveCallerHighlight({
-        isStandardView: true,
+        isPaneNoteModel: true,
         paneHasFocus: true,
         selectedIndex: undefined,
       }),
@@ -3674,13 +3699,13 @@ describe('resolveCallerHighlight', () => {
 
   it('clears the highlight while focus is outside the pane', () => {
     expect(
-      resolveCallerHighlight({ isStandardView: true, paneHasFocus: false, selectedIndex: 2 }),
+      resolveCallerHighlight({ isPaneNoteModel: true, paneHasFocus: false, selectedIndex: 2 }),
     ).toBeUndefined();
   });
 
   it('clears the highlight outside Standard view', () => {
     expect(
-      resolveCallerHighlight({ isStandardView: false, paneHasFocus: true, selectedIndex: 2 }),
+      resolveCallerHighlight({ isPaneNoteModel: false, paneHasFocus: true, selectedIndex: 2 }),
     ).toBeUndefined();
   });
 
@@ -3689,7 +3714,7 @@ describe('resolveCallerHighlight', () => {
     // focused row is where the pane's caret is, so its note is the one marked.
     expect(
       resolveCallerHighlight({
-        isStandardView: true,
+        isPaneNoteModel: true,
         paneHasFocus: true,
         focusedRowIndex: 3,
         selectedIndex: 1,
@@ -3697,7 +3722,7 @@ describe('resolveCallerHighlight', () => {
     ).toBe(3);
     expect(
       resolveCallerHighlight({
-        isStandardView: true,
+        isPaneNoteModel: true,
         paneHasFocus: true,
         focusedRowIndex: 3,
         selectedIndex: undefined,
@@ -3708,7 +3733,7 @@ describe('resolveCallerHighlight', () => {
   it('falls back to the selected row when no row holds focus', () => {
     expect(
       resolveCallerHighlight({
-        isStandardView: true,
+        isPaneNoteModel: true,
         paneHasFocus: true,
         focusedRowIndex: undefined,
         selectedIndex: 1,
@@ -3719,7 +3744,7 @@ describe('resolveCallerHighlight', () => {
   it('marks no focused row while focus is outside the pane', () => {
     expect(
       resolveCallerHighlight({
-        isStandardView: true,
+        isPaneNoteModel: true,
         paneHasFocus: false,
         focusedRowIndex: 3,
         selectedIndex: 1,
@@ -3731,9 +3756,9 @@ describe('resolveCallerHighlight', () => {
     // A view round trip leaves the pane mounted, its row selected, and DOM focus where it was, so
     // re-deriving on the way back has to give the index again rather than staying cleared.
     const paneState = { paneHasFocus: true, selectedIndex: 2 };
-    expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
-    expect(resolveCallerHighlight({ isStandardView: false, ...paneState })).toBeUndefined();
-    expect(resolveCallerHighlight({ isStandardView: true, ...paneState })).toBe(2);
+    expect(resolveCallerHighlight({ isPaneNoteModel: true, ...paneState })).toBe(2);
+    expect(resolveCallerHighlight({ isPaneNoteModel: false, ...paneState })).toBeUndefined();
+    expect(resolveCallerHighlight({ isPaneNoteModel: true, ...paneState })).toBe(2);
   });
 });
 
