@@ -257,8 +257,8 @@ describe('PlatformMenubar icons', () => {
 /**
  * Hiding menu items for an interface mode prunes items only — the groups and columns they belonged
  * to survive, so a group can end up with nothing in it. These fixtures place an emptied group in
- * each of the three positions a column can put one, because the separator rule keys off a group's
- * index among _all_ the column's groups rather than among the ones that still have items.
+ * each of the three positions a column can put one, since a separator must only ever sit between two
+ * groups that still have items.
  */
 function menuWithGroupsAndItems(
   groupKeys: string[],
@@ -300,6 +300,8 @@ describe('PlatformMenubar separators around groups emptied by mode filtering', (
   it.each([
     ['a leading group', ['g1', 'g2', 'g3'], ['g2', 'g3']],
     ['a middle group', ['g1', 'g2', 'g3'], ['g1', 'g3']],
+    ['a trailing group', ['g1', 'g2', 'g3'], ['g1', 'g2']],
+    ['the last group after a lone populated one', ['g1', 'g2'], ['g1']],
   ])('emits no stray separator when %s is empty', async (_, groupKeys, populatedGroupKeys) => {
     const kinds = childKinds(
       await openProjectColumn(menuWithGroupsAndItems(groupKeys, populatedGroupKeys)),
@@ -312,18 +314,6 @@ describe('PlatformMenubar separators around groups emptied by mode filtering', (
       (kind, index) => index > 0 && kind === 'separator' && kinds[index - 1] === 'separator',
     );
     expect(doubledSeparators).toEqual([]);
-  });
-
-  /**
-   * The shipped Simple menu does not hit this shape — the groups it empties are leading or middle
-   * ones — but nothing prevents a later reordering from emptying a trailing group, so pin the
-   * behavior rather than leave it undiscovered. Suppressing empty groups is deliberately out of
-   * scope here; it belongs with the wider menu restructure.
-   */
-  it('leaves a trailing separator when the last group is empty', async () => {
-    const kinds = childKinds(await openProjectColumn(menuWithGroupsAndItems(['g1', 'g2'], ['g1'])));
-
-    expect(kinds.at(-1)).toBe('separator');
   });
 
   it('separates two populated groups', async () => {
