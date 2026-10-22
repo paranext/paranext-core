@@ -43,18 +43,24 @@ import {
   getLeadingIconSlot,
   getMenuSectionsWithItems,
   getSubMenuGroupKeysForMenuItemId,
+  GroupContent,
+  joinGroupsWithSeparators,
   LeadingIconSlot,
 } from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
 
+const createDropdownSeparator = (groupKey: string) => (
+  <DropdownMenuSeparator key={`separator-${groupKey}`} />
+);
+
 /**
- * Renders the items of the given groups in the order given. Groups within a column are not
- * distinguished from each other; a submenu's groups are, with a separator between each pair that
- * both have items.
+ * Renders the items of the given groups in the order given, one entry per group. A submenu joins
+ * the entries with {@link joinGroupsWithSeparators}, so a separator sits between each pair of its
+ * groups that have items; a column runs its groups together, since the menu does not distinguish
+ * the groups within a column.
  *
  * @param groupKeys Keys of the groups to render, already sorted by the groups' `order`
- * @param separateGroups Whether to put a separator between consecutive groups that have items
  * @param leadingSlot The leading icon slot of the list these items render in. A submenu works out
  *   its own from its items.
  */
@@ -62,13 +68,12 @@ const getGroupContent = (
   groups: Localized<GroupsInMultiColumnMenu>,
   items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
   groupKeys: string[],
-  separateGroups: boolean,
   onSelectMenuItem: SelectMenuItemHandler,
   leadingSlot: LeadingIconSlot,
-): ReactNode[] => {
-  let hasShownItems = false;
-  return groupKeys.flatMap((groupKey) => {
-    const groupItems = items
+): GroupContent<ReactNode>[] =>
+  groupKeys.map((groupKey) => ({
+    groupKey,
+    items: items
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
       .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
@@ -143,31 +148,22 @@ const getGroupContent = (
 
             <DropdownMenuPortal>
               <DropdownMenuSubContent>
-                {getGroupContent(
-                  groups,
-                  items,
-                  subGroupKeys,
-                  true,
-                  onSelectMenuItem,
-                  getLeadingIconSlot(getItemsInGroups(items, subGroupKeys)),
+                {joinGroupsWithSeparators(
+                  getGroupContent(
+                    groups,
+                    items,
+                    subGroupKeys,
+                    onSelectMenuItem,
+                    getLeadingIconSlot(getItemsInGroups(items, subGroupKeys)),
+                  ),
+                  createDropdownSeparator,
                 )}
               </DropdownMenuSubContent>
             </DropdownMenuPortal>
           </DropdownMenuSub>
         );
-      });
-
-    // Only a group with items gets a separator, and only once an earlier group has shown items, so
-    // an emptied group never leaves a stray separator
-    const separator =
-      separateGroups && hasShownItems && groupItems.length > 0
-        ? [<DropdownMenuSeparator key={`separator-${groupKey}`} />]
-        : [];
-    if (groupItems.length > 0) hasShownItems = true;
-
-    return [...separator, ...groupItems];
-  });
-};
+      }),
+  }));
 
 export type TabDropdownMenuProps = {
   /** The handler to use for menu commands */
@@ -293,10 +289,9 @@ export default function TabDropdownMenu({
                     menuData.groups,
                     menuData.items,
                     getColumnGroupKeys(menuData.groups, columnKey),
-                    false,
                     onSelectMenuItem,
                     leadingSlot,
-                  )}
+                  ).flatMap((group) => group.items)}
                 </TooltipProvider>
               </DropdownMenuGroup>
 
