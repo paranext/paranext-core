@@ -218,14 +218,14 @@ public class SettingsServiceTests
         var answered = await WaitWithTimeoutAsync<int?>(
                 client,
                 "testNum",
-                TimeSpan.FromMilliseconds(100),
+                TimeSpan.FromMilliseconds(500),
                 s_retryDelay
             )
             .WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.That(answered, Is.False);
-        // About 10 attempts with these delays; a retry loop that doesn't pause makes thousands.
-        Assert.That(client.Attempts, Is.GreaterThan(1).And.LessThan(50));
+        // Dozens of attempts with these delays; a retry loop that doesn't pause makes thousands.
+        Assert.That(client.Attempts, Is.GreaterThan(1).And.LessThan(200));
     }
 
     [Test]
@@ -250,8 +250,9 @@ public class SettingsServiceTests
     [Test]
     public async Task WaitForSettingAsync_LaterReadNeverAnswered_ReturnsFalseAtTimeout()
     {
-        // The second read starts halfway through, so only a cap at the time left ends it on time.
-        var timeout = TimeSpan.FromMilliseconds(500);
+        // The second read starts halfway through, so only a cap at the time left ends it on time; a
+        // read capped at a fresh full timeout would end past 1.5x.
+        var timeout = TimeSpan.FromSeconds(1);
         using var client = new ScriptedPapiClient(
             new AnswersAfter(timeout / 2, null),
             ScriptedPapiClient.NeverAnswers
@@ -380,13 +381,13 @@ public class SettingsServiceTests
         var answered = await WaitWithTimeoutAsync<string>(
                 client,
                 "testString",
-                TimeSpan.FromMilliseconds(100),
+                TimeSpan.FromMilliseconds(500),
                 s_retryDelay
             )
             .WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.That(answered, Is.False);
-        Assert.That(client.Attempts, Is.GreaterThan(1).And.LessThan(50));
+        Assert.That(client.Attempts, Is.GreaterThan(1).And.LessThan(200));
     }
 
     [Test]
