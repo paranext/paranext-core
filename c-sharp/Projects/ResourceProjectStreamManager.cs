@@ -1,3 +1,4 @@
+using ICSharpCode.SharpZipLib.Checksum;
 using ICSharpCode.SharpZipLib.Zip;
 using Paratext.Data.ProjectFileAccess;
 
@@ -96,10 +97,10 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
 
         // The file manager locks its archive before opening an entry and never unlocks it if
         // opening fails, which would block every later read of the resource from other threads.
-        // So the entry is opened here first, on an archive with no lock, using the password
+        // So the entry is read here first, on an archive with no lock, using the password
         // provider the file manager was given and the rule it applies, and the file manager is
-        // handed only an entry that opens. Its read then happens inside a using, so data found
-        // corrupt partway through still releases the lock.
+        // handed only an entry whose data reads back intact. Its read then happens inside a
+        // using, so data found corrupt partway through still releases the lock.
         // TODO: drop this check once we consume a ParatextData with ubsicap/Paratext#678
         using (ZipFile archive = OpenArchive())
         {
@@ -109,14 +110,19 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
                 return null;
             if (_passwordProvider != null && !entry.IsCrypted)
                 throw new InvalidDataException($"'{streamName}' cannot be verified");
+            bool isIntact;
             try
             {
-                using var _ = archive.GetInputStream(entry);
+                isIntact = IsIntact(archive, entry);
             }
-            catch (ZipException e)
+            // Data decrypted with the wrong password fails to inflate in more ways than
+            // ZipException, such as an IndexOutOfRangeException
+            catch (Exception e)
             {
                 throw new InvalidDataException($"'{streamName}' cannot be read", e);
             }
+            if (!isIntact)
+                throw new InvalidDataException($"'{streamName}' cannot be read");
         }
 
         return new MemoryStream(_fileManager.ReadAllBytes(entryName), writable: false);
@@ -125,6 +131,25 @@ internal class ResourceProjectStreamManager : IProjectStreamManager
     public bool DeleteDataStream(string streamName)
     {
         throw new InvalidOperationException("Resource projects are read-only");
+    }
+
+    /// <summary>
+    /// Whether the entry's data decrypts and decompresses to what its archive recorded. Opening
+    /// the entry is not enough: resources use ZipCrypto, which checks a password against one byte
+    /// of the entry's header, so about 1 in 256 entries encrypted with another password open and
+    /// decrypt to garbage. A stored entry's garbage reads back without error, so only the CRC tells
+    /// it from the real data.
+    /// </summary>
+    private static bool IsIntact(ZipFile archive, ZipEntry entry)
+    {
+        using Stream data = archive.GetInputStream(entry);
+        Crc32 crc = new();
+        byte[] buffer = new byte[81920];
+        int count;
+        while ((count = data.Read(buffer, 0, buffer.Length)) > 0)
+            crc.Update(new ArraySegment<byte>(buffer, 0, count));
+        // An AES entry's stream authenticates the data as it is read, and may record no CRC
+        return entry.AESKeySize > 0 || crc.Value == entry.Crc;
     }
 
     /// <summary>
