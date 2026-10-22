@@ -68,8 +68,8 @@ vi.mock('@papi/backend', () => ({
   ProjectDataProviderEngine: mocks.PapiBackendStubBase,
 }));
 
-// Spied so the tests can see which project a panel reload is pointed at; the rest of the factory
-// module stays real.
+// Spied so the tests can check that re-pointing the panel never writes the module-level pending
+// project slot, which other callers share; the rest of the factory module stays real.
 vi.mock('./comment-list-panel-web-view.factory', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./comment-list-panel-web-view.factory')>()),
   setPendingCommentListPanelProjectId: mocks.setPendingCommentListPanelProjectId,
@@ -214,12 +214,14 @@ describe('legacy comment manager main.ts activation', () => {
 
       await expect(select('thread-1', true, 'editor-1')).resolves.toBe('comments-tab');
 
-      expect(mocks.setPendingCommentListPanelProjectId).toHaveBeenCalledWith('project-B');
+      // The project travels in the reload's options, which the panel's provider reads, rather than
+      // through the pending slot that a concurrent project switch also writes.
       expect(mocks.reloadWebView).toHaveBeenCalledWith(
         'legacyCommentManager.commentListPanel',
         'comments-tab',
-        expect.objectContaining({ bringToFront: false }),
+        expect.objectContaining({ projectId: 'project-B', bringToFront: false }),
       );
+      expect(mocks.setPendingCommentListPanelProjectId).not.toHaveBeenCalled();
       expect(selectThread).toHaveBeenCalledWith('thread-1');
       // The reload must be issued before the selection, or the selection lands in the old project.
       expect(mocks.reloadWebView.mock.invocationCallOrder[0]).toBeLessThan(
@@ -250,22 +252,16 @@ describe('legacy comment manager main.ts activation', () => {
     it.each([
       ['rejects', () => mocks.reloadWebView.mockRejectedValueOnce(new Error('window closing'))],
       ['returns no web view', () => mocks.reloadWebView.mockResolvedValueOnce(undefined)],
-    ])(
-      'rejects without selecting, and clears the pending project, when the panel reload %s',
-      async (_outcome, arrangeReload) => {
-        arrange('project-A', 'project-B');
-        arrangeReload();
+    ])('rejects without selecting when the panel reload %s', async (_outcome, arrangeReload) => {
+      arrange('project-A', 'project-B');
+      arrangeReload();
 
-        await expect(select('thread-1', true, 'editor-1')).rejects.toThrow('project-B');
+      await expect(select('thread-1', true, 'editor-1')).rejects.toThrow('project-B');
 
-        // The panel is known to show another project, where the thread can't be found; selecting
-        // it there would leave the list's pending selection stuck.
-        expect(selectThread).not.toHaveBeenCalled();
-        // A pending project the reload never consumed would be picked up by a later, unrelated
-        // panel load.
-        expect(mocks.setPendingCommentListPanelProjectId).toHaveBeenLastCalledWith(undefined);
-      },
-    );
+      // The panel is known to show another project, where the thread can't be found; selecting
+      // it there would leave the list's pending selection stuck.
+      expect(selectThread).not.toHaveBeenCalled();
+    });
 
     it("selects without reloading when the editor's project cannot be resolved", async () => {
       arrange('project-A', undefined);

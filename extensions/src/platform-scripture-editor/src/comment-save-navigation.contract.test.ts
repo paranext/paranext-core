@@ -59,7 +59,7 @@ describe('onCommentEditorSave thread navigation (platform-scripture-editor.web-v
   // (directly or through a variable) all fail here.
   const NAVIGATION =
     'if (isPowerModeRef.current) await openCommentListAndSelectThreadSafe(papi, webViewId, newThreadId); ' +
-    'else selectCommentThreadInPanelSafe(papi, newThreadId, false);';
+    'else selectCommentThreadInPanelSafe(papi, newThreadId, false, webViewId);';
 
   it('stays within its own callback', () => {
     // Guards the extraction itself: a match that ran on into the next hook would let the

@@ -16,9 +16,8 @@ export interface CommentListPanelOptions extends OpenWebViewOptions {
 
 /**
  * Pending projectId consumed by {@link CommentListPanelWebViewFactory.getWebViewDefinition} after
- * `reloadWebView`. Set via {@link setPendingCommentListPanelProjectId}, called in `main.ts`
- * immediately before `reloadWebView` by `openCommentListPanel` and by
- * `showEditorProjectInCommentListPanel`.
+ * `reloadWebView`. Set via {@link setPendingCommentListPanelProjectId}, called by
+ * `openCommentListPanel` in `main.ts` immediately before it calls `reloadWebView`.
  *
  * Note: `undefined` doubles as the "no pending value" sentinel, so a pending `undefined` cannot
  * clear an already-open panel's project — resolution falls back to the saved projectId. This is an
@@ -28,7 +27,7 @@ let pendingProjectId: string | undefined;
 
 /**
  * Sets the projectId {@link CommentListPanelWebViewFactory.getWebViewDefinition} will consume (and
- * clear) the next time it runs — used in `main.ts` to forward a project change through
+ * clear) the next time it runs — used by `openCommentListPanel` to forward a project change through
  * `reloadWebView`, which has no other way to pass extra data into `getWebView`.
  */
 export function setPendingCommentListPanelProjectId(projectId: string | undefined): void {

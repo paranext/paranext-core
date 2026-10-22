@@ -218,8 +218,8 @@ async function showCommentListPanel(
 
 /**
  * Points the Column 3 Comment List panel at the editor's project when it is showing a different
- * one, the same way {@link openCommentListPanel} does on a project switch. Otherwise a thread from
- * that editor can't be found in the panel. Reloading discards any in-progress inline edit in the
+ * one, by reloading it with that project in the reload's options (which the panel's provider
+ * reads). Otherwise a thread from that editor can't be found in the panel. Reloading remounts the
  * panel, so it happens only on a mismatch. If either project can't be resolved, the panel is left
  * as it is.
  *
@@ -248,27 +248,29 @@ async function showEditorProjectInCommentListPanel(
   }
   if (!editorProjectId || editorProjectId === panelProjectId) return;
 
-  setPendingCommentListPanelProjectId(editorProjectId);
+  // `reloadWebView` hands its options to the panel's provider as `openWebViewOptions`, so the project
+  // travels with this one reload instead of through the module-level pending slot, which a
+  // concurrent project switch also writes.
+  const reloadOptions: CommentListPanelOptions = {
+    projectId: editorProjectId,
+    // The caller's probe already raised the tab if it was asked to
+    bringToFront: false,
+  };
   let failure: string | undefined;
   try {
     const reloadedWebViewId = await papi.webViews.reloadWebView(
       commentListPanelWebViewType,
       panelWebViewId,
-      // The caller's probe already raised the tab if it was asked to
-      { bringToFront: false },
+      reloadOptions,
     );
     if (!reloadedWebViewId) failure = 'the reload returned no web view';
   } catch (e) {
     failure = getErrorMessage(e);
   }
-  if (failure) {
-    // A failed reload may never have consumed the pending project; clear it so a later, unrelated
-    // panel load doesn't pick it up.
-    setPendingCommentListPanelProjectId(undefined);
+  if (failure)
     throw new Error(
       `Could not point the Comment List panel at project ${editorProjectId}: ${failure}`,
     );
-  }
 }
 
 /**
@@ -494,6 +496,13 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             required: true,
             summary: "Whether to also bring the panel's tab to the front",
             schema: { type: 'boolean' },
+          },
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary:
+              "The ID of the scripture editor web view the thread belongs to. If given and the panel shows another project, the panel is first reloaded onto the editor's project",
+            schema: { type: 'string' },
           },
         ],
         result: {
