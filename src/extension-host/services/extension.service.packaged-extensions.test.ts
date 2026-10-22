@@ -1,64 +1,78 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
+import { ExtensionInfo } from '@extension-host/extension-types/extension-info.model';
+import { testingExtensionService } from '@extension-host/services/extension.service';
 
 /*
- * Guards which list `getInstalledExtensions` derives its `packaged` extensions from.
+ * `packaged` must come from the extensions *discovered* for this build, not from the ones that have
+ * finished activating: activation fills in one extension at a time, so a list derived from it
+ * answers "is extension X part of this build?" with `false` for anything still queued — which hid
+ * the Send/Receive toolbar button for entire sessions across two shipped releases. See
+ * `adr-packaged-extensions-are-discovered` in `.context/standards/Architecture-Decisions.md`.
  *
- * `packaged` must come from the extensions *discovered* for this build (`availableExtensions`,
- * assigned in `reloadExtensions` before any activation begins), not from `activeExtensions`, which
- * only fills in as extensions finish activating one by one. Deriving it from activation state makes
- * "is extension X part of this build?" answer `false` for anything that hasn't activated yet — which
- * hid the Send/Receive toolbar button for entire sessions across two shipped releases. See
- * `adr-packaged-extensions-are-discovered` in `.context/standards/Architecture-Decisions.md` and
- * `derivePackagedExtensionIdentifiers`.
- *
- * This reads the source rather than calling the function because the inputs are module-private:
- * `availableExtensions` is only populated by a full `reloadExtensions` run (filesystem discovery
- * plus activation), and `getInstalledExtensions` itself is reachable only through the
- * `manageExtensions` elevated privilege. There is no seam to inject either one, so a behavioral test
- * would have to stand up the whole extension host. A source check is narrow, but it fails on exactly
- * the regression that shipped twice, which is more than the alternative of no check at all.
- *
- * Scope, so it isn't read as more than it is: this guards the CURRENT SHAPE of
- * `getInstalledExtensions` — the one function whose body it scans. Move the derivation into a helper
- * that `getInstalledExtensions` calls and both assertions still pass with the regression back, so
- * move this guard along with it. The derivation's behavior is covered properly by
- * `extension-data.util.test.ts`; what is only covered here is the call site.
+ * These tests ask in exactly that gap: extensions discovered, none activated.
  */
 
-const EXTENSION_SERVICE_PATH = path.join(__dirname, 'extension.service.ts');
+// The extension service logs through the shared logger as it loads, which warns when it cannot tell
+// which process it is running in — so this has to be set before the import above, not after it.
+vi.hoisted(async () => {
+  const { ProcessType } = await import('@shared/global-this.model');
+  globalThis.processType = ProcessType.ExtensionHost;
+});
 
-/**
- * Returns the body of the named top-level `async function`, up to its closing brace at column 0.
- *
- * Reading source text means a benign refactor can break this check without breaking the code — so
- * both failure paths say to suspect this file first.
- */
-function readFunctionBody(source: string, functionName: string): string {
-  const suspectTheGuard = `This guard reads source text, so it may just need updating to match a rename or refactor of ${functionName} — check that before assuming a regression.`;
-  const startIndex = source.indexOf(`async function ${functionName}(`);
-  if (startIndex < 0)
-    throw new Error(
-      `Could not find 'async function ${functionName}' in source. ${suspectTheGuard}`,
-    );
-  const endIndex = source.indexOf('\n}', startIndex);
-  if (endIndex < 0)
-    throw new Error(`Could not find the end of '${functionName}' in source. ${suspectTheGuard}`);
-  return source.slice(startIndex, endIndex);
+// Importing the extension service creates its installed- and disabled-extension directories, and
+// `getInstalledExtensions` lists both. Both are empty here: every discovered extension is packaged.
+vi.mock('@node/services/node-file-system.service', () => ({
+  createDir: vi.fn(),
+  readDir: vi.fn(async () => ({ file: [], directory: [] })),
+  readFileText: vi.fn(),
+  getStats: vi.fn(),
+  copyFile: vi.fn(),
+  deleteFile: vi.fn(),
+  deleteDir: vi.fn(),
+  writeFile: vi.fn(),
+  moveFile: vi.fn(),
+  readFileBinary: vi.fn(),
+  EntryType: { File: 'file', Directory: 'directory' },
+}));
+
+const { prepareElevatedPrivileges, setAvailableExtensions } = testingExtensionService;
+
+function discoveredExtension(name: string, version: string): ExtensionInfo {
+  return {
+    name,
+    version,
+    main: 'index.js',
+    elevatedPrivileges: [],
+    activationEvents: [],
+    dirUri: `resources://${name}`,
+  };
 }
 
-describe('getInstalledExtensions packaged-list source', () => {
-  const body = readFunctionBody(
-    readFileSync(EXTENSION_SERVICE_PATH, 'utf8'),
-    'getInstalledExtensions',
-  );
-
-  it('derives packaged extensions from the discovered list (if only renamed, update this guard)', () => {
-    expect(body).toMatch(/derivePackagedExtensionIdentifiers\(\s*availableExtensions\s*,/);
+/** `getInstalledExtensions` as an extension holding the `manageExtensions` privilege receives it */
+function getInstalledExtensions() {
+  const { manageExtensions } = prepareElevatedPrivileges({
+    name: 'extensionManager',
+    version: '1.0.0',
+    main: 'index.js',
+    elevatedPrivileges: ['manageExtensions'],
+    activationEvents: [],
   });
+  if (!manageExtensions) throw new Error('manageExtensions privilege was not granted');
+  return manageExtensions.getInstalledExtensions();
+}
 
-  it('does not consult activation state (the regression this guards against)', () => {
-    expect(body).not.toMatch(/activeExtensions/);
+describe('getInstalledExtensions packaged list', () => {
+  test('reports every discovered extension as packaged before any of them has activated', async () => {
+    setAvailableExtensions([
+      discoveredExtension('platformGetResources', '1.0.0'),
+      discoveredExtension('paratextBibleSendReceive', '2.1.0'),
+    ]);
+
+    const { packaged } = await getInstalledExtensions();
+
+    expect(packaged).toEqual([
+      { extensionName: 'platformGetResources', extensionVersion: '1.0.0' },
+      { extensionName: 'paratextBibleSendReceive', extensionVersion: '2.1.0' },
+    ]);
   });
 });
