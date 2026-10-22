@@ -20,14 +20,20 @@ import { type Frame, type Locator, type Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   areaBox,
+  boxOf,
   ctrlWheel,
   expectPopupBesideTriggerAndInsideFrame,
+  expectSettledBeside,
   frameBox,
   INDICATOR_SELECTOR,
   type PageBox,
+  readCaretBox,
   readContentZoomMemory,
   readIndicatorText,
-  triggerBox,
+  scrollText,
+  scrollTextKeepingVisible,
+  scrollTriggerNearPaneTop,
+  TEXT_NOTE_CALLER_SELECTOR,
   waitForPopupAnimations,
   zoomAreaTo,
 } from '../../../fixtures/content-zoom-helpers';
@@ -45,15 +51,6 @@ import {
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
 import { DEFAULT_WINDOW_SIZE, setWindowWidth } from '../../../fixtures/helpers';
-
-/**
- * The in-text caller that opens the footnote editor popover (`.immutable-note-caller > button`,
- * shared with cross-references). Scoped to `data-note-kind="footnote"` so it lands on a real
- * footnote — the sample WEB project's Jonah 1 carries footnote callers at verses 1, 6 and 9
- * (`c-sharp/assets/WEB/32JONengWEBUS.SFM`), and this suite navigates to Jonah 1:1.
- */
-const TEXT_NOTE_CALLER_SELECTOR =
-  '.note[data-note-kind="footnote"] .immutable-note-caller > button';
 
 test.use({
   interfaceMode: 'power',
@@ -79,90 +76,6 @@ async function readActiveArea(frame: Frame): Promise<string | undefined> {
 }
 
 /**
- * The main text editor's container. `.first()`: an open footnote popover renders a second
- * `.editor-container` of its own (portaled after the main one), so the bare selector is ambiguous
- * while it is open.
- */
-function mainEditorContainer(frame: Frame): Locator {
-  return frame.locator('.editor-container').first();
-}
-
-/**
- * Scrolls the main text to `to`, or by `by`, and returns its scroll position before and after, the
- * scroll container's main-frame-relative box, and how far that container can scroll at all
- * (`maxScroll`). The text scrolls in its nearest scrollable ancestor (inside the footnotes layout),
- * not in the pane's outer `overflow-auto` wrapper, which never overflows. Called with neither, it
- * only reads.
- */
-async function scrollText(
-  frame: Frame,
-  target: { to?: number; by?: number },
-): Promise<{
-  before: number;
-  after: number;
-  box: PageBox;
-  maxScroll: number;
-}> {
-  const editorFrameBox = await frameBox(frame);
-  const result = await mainEditorContainer(frame).evaluate((element, { to, by }) => {
-    let node: Element | null = element;
-    while (node) {
-      const { overflowY } = getComputedStyle(node);
-      if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight)
-        break;
-      node = node.parentElement;
-    }
-    if (!node) throw new Error('The main text has no scrollable ancestor');
-    const before = node.scrollTop;
-    if (to !== undefined) node.scrollTop = to;
-    else if (by !== undefined) node.scrollTop = before + by;
-    const rect = node.getBoundingClientRect();
-    return {
-      before,
-      after: node.scrollTop,
-      box: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
-      maxScroll: node.scrollHeight - node.clientHeight,
-    };
-  }, target);
-  return {
-    ...result,
-    box: { ...result.box, x: result.box.x + editorFrameBox.x, y: result.box.y + editorFrameBox.y },
-  };
-}
-
-/**
- * Scrolls the main text by `delta` (negative scrolls back up) while a pop-up is open, and checks
- * the scroll really moved and left `trigger` visible, so a following "still beside its trigger"
- * check is meaningful. Returns the distance scrolled.
- */
-async function scrollTextKeepingVisible(
-  frame: Frame,
-  delta: number,
-  trigger: Locator | PageBox,
-): Promise<number> {
-  const { before, after, box: scrollerBox } = await scrollText(frame, { by: delta });
-  const moved = after - before;
-  expect(Math.abs(moved)).toBeGreaterThanOrEqual(Math.abs(delta) / 2);
-  expect(Math.sign(moved)).toBe(Math.sign(delta));
-  const triggerRect = await triggerBox(trigger);
-  // A pre-scroll box (a caret) is shifted by the distance scrolled.
-  const top = 'boundingBox' in trigger ? triggerRect.y : triggerRect.y - moved;
-  expect(top).toBeGreaterThanOrEqual(scrollerBox.y);
-  expect(top + triggerRect.height).toBeLessThanOrEqual(scrollerBox.y + scrollerBox.height);
-  return moved;
-}
-
-/**
- * Distance below the top of the main text's scroll container at which this spec parks a pop-up's
- * trigger before opening the pop-up. At 200 % a pop-up like the comment editor is about half the
- * pane tall, so a trigger left mid-pane has room for it neither above nor below, and the pop-up
- * falls back to covering its own line — real behavior in a pane that short, but not what a "sits
- * beside its trigger" check is about. Near the top of the pane, the whole pane height is below the
- * trigger, with room to spare for the scroll that follows.
- */
-const TRIGGER_TOP_MARGIN_PX = 40;
-
-/**
  * How far the marker palette's box may sit from its trigger and still count as "beside" it, in
  * {@link expectBesideTriggerAndInsideWindow}. Covers the anchored palette's own `sideOffset` (4px,
  * `overlay-command-palette.component.tsx`) plus the slack Radix's collision avoidance can add to
@@ -171,82 +84,6 @@ const TRIGGER_TOP_MARGIN_PX = 40;
  * rather than a value derived from the zoom factor.
  */
 const MAX_PALETTE_TRIGGER_GAP_PX = 24;
-
-/**
- * Scrolls the main text as near as it goes to putting `trigger`'s box {@link TRIGGER_TOP_MARGIN_PX}
- * below the top of the text's scroll container, and returns the box it has there. The room a pop-up
- * opened on that trigger then has is the pane's, rather than whatever the preceding steps left the
- * text scrolled to.
- *
- * Landing higher than that margin is fine and needs no scroll: a trigger already near the top of
- * the pane has the whole pane below it. So the check is a range, not a target — scrolling up is
- * clamped at the top of the text, and demanding an exact offset would fail there instead of
- * accepting the room it asked for. Below the pane's top edge, on the other hand, the trigger is
- * scrolled out of sight.
- *
- * Scrolling down clamps too, at the bottom of the text, and then the trigger stays lower than the
- * margin — so the margin is allowed exactly the distance the scroll came up short by, and the
- * scroll itself is held to moving every pixel that was available. A scroll that simply did not take
- * effect fails on that, rather than buying itself room here. The shortfall only ever arises where
- * it costs nothing: the text comes up short only when the chapter barely overflows the pane, which
- * is the unzoomed case, where a pop-up is a fraction of the pane's height and has room below a
- * trigger wherever it sits. At the zoom levels this step is about, the chapter is several
- * pane-heights tall and the full margin is demanded.
- */
-async function scrollTriggerNearPaneTop(frame: Frame, trigger: PageBox): Promise<PageBox> {
-  const { box: scroller, before: scrollTop, maxScroll } = await scrollText(frame, {});
-  const requested = Math.round(trigger.y - scroller.y - TRIGGER_TOP_MARGIN_PX);
-  const available = Math.min(Math.max(scrollTop + requested, 0), maxScroll) - scrollTop;
-  const { before, after } = await scrollText(frame, { by: requested });
-  // Sub-pixel: scrollTop is fractional while scrollHeight and clientHeight are whole pixels.
-  expect(Math.abs(after - before - available), 'the text scrolled as far as it can').toBeLessThan(
-    1,
-  );
-  const scrolled = { ...trigger, y: trigger.y - (after - before) };
-  const belowPaneTop = scrolled.y - scroller.y;
-  expect(belowPaneTop, 'trigger inside the pane').toBeGreaterThanOrEqual(0);
-  expect(
-    belowPaneTop,
-    'trigger as near the top of the pane as the text scrolls',
-  ).toBeLessThanOrEqual(TRIGGER_TOP_MARGIN_PX + 2 + Math.max(requested - available, 0));
-  return scrolled;
-}
-
-/** The text caret's (or the text selection's) box, main-frame-relative. */
-async function readCaretBox(frame: Frame): Promise<PageBox> {
-  const editorFrameBox = await frameBox(frame);
-  const caret = await frame.evaluate(() => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return undefined;
-    const rect = selection.getRangeAt(0).getBoundingClientRect();
-    return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
-  });
-  if (!caret) throw new Error('No text caret');
-  return { ...caret, x: caret.x + editorFrameBox.x, y: caret.y + editorFrameBox.y };
-}
-
-/**
- * {@link expectPopupBesideTriggerAndInsideFrame}, retried until it holds: a pop-up that has just
- * opened is still being positioned, so its first boxes are not its settled ones. A pop-up that
- * never settles beside its trigger still fails. Once this returns, the pop-up's open animation has
- * ended and its size can be measured.
- */
-async function expectSettledBeside(
-  frame: Frame,
-  popup: Locator,
-  trigger: Locator | PageBox,
-): Promise<void> {
-  await expect(async () => expectPopupBesideTriggerAndInsideFrame(frame, popup, trigger)).toPass({
-    timeout: 5_000,
-  });
-}
-
-/** A locator's main-frame box; throws when it has none. */
-async function boxOf(locator: Locator): Promise<PageBox> {
-  const box = await locator.boundingBox();
-  if (!box) throw new Error('Element has no box');
-  return box;
-}
 
 /**
  * Selects verse 2's text from "great" onto the line below it with a click and a Shift+click, and
@@ -594,8 +431,7 @@ test.describe('scripture editor content zoom', () => {
       // menu, so this pop-up is drawn by the renderer, outside the web view.
       const mainInput = editorFrame.locator('.editor-input').first();
       // Standard view carries `marker-editable` (`_usj-nodes.scss`: "standard view
-      // (.marker-editable)"); `marker-hidden` and `marker-visible` belong to the formatted and
-      // markers views this step must run before.
+      // (.marker-editable)"); `marker-hidden` belongs to Preview, which this step must run before.
       await expect(mainInput).toHaveClass(/\bmarker-editable\b/, { timeout: 20_000 });
       // Verse 1's own text, near the chapter's start rather than "that great city" (verse 2, used
       // by the sibling in-iframe step below): that trigger sits near the pane's right edge. This
@@ -690,41 +526,24 @@ test.describe('scripture editor content zoom', () => {
       await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
     });
 
-    await test.step('the inline marker menu and the comment editor stay at interface scale and follow the text', async () => {
-      // The inline marker menu is the non-standard views' `\` menu (the standard view opens the
-      // platform's command palette instead), and the markers view is read-only, so cycle
-      // standard -> markers -> formatted.
+    await test.step('the comment editor stays at interface scale and follows the text', async () => {
+      // Preview is the formatted rendering; in Power it is read-only, and a read-only text still
+      // takes comments. The inline marker menu and the footnote editor's marker menu need an
+      // editable formatted view, so they are checked in Simple mode (simple-view-popups.spec.ts).
       const mainInput = editorFrame.locator('.editor-input').first();
-      await sendCommandWithId(mainPage, 'platformScriptureEditor.changeView', editorId);
-      await expect(mainInput).toHaveClass(/\bmarker-visible\b/, { timeout: 20_000 });
       await sendCommandWithId(mainPage, 'platformScriptureEditor.changeView', editorId);
       await expect(mainInput).toHaveClass(/\bmarker-hidden\b/, { timeout: 20_000 });
 
       const text = mainInput.getByText('that great city', { exact: false }).first();
-      const markerMenu = editorFrame.locator('[data-slot="popover-content"]').filter({
-        has: editorFrame.locator('input'),
-      });
       const commentEditor = editorFrame
         .locator('[data-slot="popover-content"]')
         .filter({ hasNot: editorFrame.locator('.editor-input') })
         .last();
 
-      // Both pop-ups are anchored to the text caret (or selection), so its box is their trigger.
+      // The pop-up is anchored to the text caret (or selection), so its box is the trigger.
       const placeCaret = async () => {
         await text.click();
         return scrollTriggerNearPaneTop(editorFrame, await readCaretBox(editorFrame));
-      };
-      const openMarkerMenu = async () => {
-        const caret = await placeCaret();
-        await mainPage.keyboard.press('\\');
-        await expect(markerMenu).toBeVisible();
-        await expect(markerMenu).not.toHaveAttribute('data-platform-content-zoom-root', /.*/);
-        await expectSettledBeside(editorFrame, markerMenu, caret);
-        return caret;
-      };
-      const closeMarkerMenu = async () => {
-        await mainPage.keyboard.press('Escape');
-        await expect(markerMenu).toBeHidden();
       };
       const openCommentEditor = async (trigger: PageBox) => {
         await mainPage.keyboard.press('Control+Shift+N');
@@ -750,39 +569,30 @@ test.describe('scripture editor content zoom', () => {
         ).toPass({ timeout: 5_000 });
       };
 
-      // Both pop-ups have fixed widths (500 px and 400 px), so at interface scale their painted
-      // width is the same at every text zoom.
-      const widths = new Map<number, { menu: number; comment: number }>();
-      // Sequential: each zoom level's pop-ups must be opened, measured and closed before the next.
+      // The pop-up has a fixed width (400 px), so at interface scale its painted width is the same
+      // at every text zoom.
+      const widths = new Map<number, number>();
+      // Sequential: each zoom level's pop-up must be opened, measured and closed before the next.
       /* eslint-disable no-await-in-loop */
       const factors = [1, 1.5, 2];
       for (let i = 0; i < factors.length; i += 1) {
         const factor = factors[i];
         await zoomAreaTo(mainPage, editorFrame, editorId, 'main', factor);
-        await openMarkerMenu();
-        const menu = (await boxOf(markerMenu)).width;
-        await closeMarkerMenu();
         await openCommentEditor(await placeCaret());
-        const comment = (await boxOf(commentEditor)).width;
+        widths.set(factor, (await boxOf(commentEditor)).width);
         await closeCommentEditor();
-        widths.set(factor, { menu, comment });
       }
       /* eslint-enable no-await-in-loop */
       const atDefault = widths.get(1);
-      if (!atDefault) throw new Error('No 100 % widths recorded');
+      if (!atDefault) throw new Error('No 100 % width recorded');
       [1.5, 2].forEach((factor) => {
-        expect((widths.get(factor)?.menu ?? 0) / atDefault.menu).toBeCloseTo(1, 1);
-        expect((widths.get(factor)?.comment ?? 0) / atDefault.comment).toBeCloseTo(1, 1);
+        expect((widths.get(factor) ?? 0) / atDefault).toBeCloseTo(1, 1);
       });
 
-      // Still at 200 %: scroll after opening, and each pop-up moves with its caret. The text
+      // Still at 200 %: scroll after opening, and the pop-up moves with its caret. The text
       // scrolls back up (a negative delta), which moves the trigger down: every trigger here is
       // parked near the top of the pane, so scrolling the other way would take it out of the pane
       // and leave nothing to compare the pop-up's position against.
-      const caretForMenu = await openMarkerMenu();
-      await expectFollowsScroll(markerMenu, caretForMenu, -60);
-      await closeMarkerMenu();
-
       const caretForComment = await placeCaret();
       await openCommentEditor(caretForComment);
       await expectFollowsScroll(commentEditor, caretForComment, -60);
@@ -798,104 +608,9 @@ test.describe('scripture editor content zoom', () => {
       await openCommentEditor(selection);
       await expectFollowsScroll(commentEditor, selection, -60);
       await closeCommentEditor();
-      // Stays in the formatted view: the next step needs it too.
-    });
 
-    await test.step("the footnote editor's marker menu sits beside the selection at interface scale", async () => {
-      // The footnote editor opens its own inline marker menu on `\` only outside the standard
-      // view (which opens the platform's command palette instead); the previous step left the
-      // pane in the formatted view.
-      const mainInput = editorFrame.locator('.editor-input').first();
-      await expect(mainInput).toHaveClass(/\bmarker-hidden\b/);
-      const caller = editorFrame.locator(TEXT_NOTE_CALLER_SELECTOR).first();
-      const popover = editorFrame.locator('[data-slot="popover-content"]').filter({
-        has: editorFrame.locator('.editor-input'),
-      });
-      const noteInput = popover.locator('.editor-input');
-      const menu = editorFrame.locator('[data-slot="popover-content"]').filter({
-        has: editorFrame.locator('[cmdk-input]'),
-      });
-      const menuItem = menu.locator('[cmdk-item]').first();
-
-      const openFootnotePopover = async () => {
-        await caller.scrollIntoViewIfNeeded();
-        await caller.click({ force: true });
-        await expect(popover).toBeVisible();
-        await expectSettledBeside(editorFrame, popover, caller);
-      };
-      const closeFootnotePopover = async () => {
-        await popover.getByRole('button', { name: 'Cancel', exact: true }).click();
-        await expect(popover).toBeHidden();
-      };
-      /**
-       * Selects the note text from its reference (`\fr`) into its text (`\ft`) and returns the
-       * selection's box. The menu lists the markers allowed inside the selection's innermost
-       * marker, and only a note (`\f`) has any: a caret inside one `\ft` run offers nothing, so no
-       * menu opens there.
-       */
-      const selectAcrossNoteMarkers = async (): Promise<PageBox> => {
-        const selected = await noteInput.evaluate((root) => {
-          const firstText = (selector: string) => {
-            const element = root.querySelector(selector);
-            if (!element) return undefined;
-            return root.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode();
-          };
-          const from = firstText('[data-marker="fr"]');
-          const to = firstText('[data-marker="ft"]');
-          if (!from || !to) return false;
-          root.ownerDocument
-            .getSelection()
-            ?.setBaseAndExtent(
-              from,
-              Math.min(1, from.textContent?.length ?? 0),
-              to,
-              Math.min(3, to.textContent?.length ?? 0),
-            );
-          return true;
-        });
-        if (!selected) throw new Error('The note has no \\fr and \\ft text to select');
-        return readCaretBox(editorFrame);
-      };
-      /**
-       * Presses `\` until the menu opens: the editor reports the selection's marker after the
-       * selection changes, and the key does nothing until it has.
-       */
-      const openMenu = async () => {
-        await expect(async () => {
-          await mainPage.keyboard.press('\\');
-          await expect(menu).toBeVisible({ timeout: 1_000 });
-        }).toPass({ timeout: 10_000 });
-        await expect(menuItem).toBeVisible();
-      };
-      const closeMenu = async () => {
-        await mainPage.keyboard.press('Escape');
-        await expect(menu).toBeHidden();
-      };
-
-      // Control at 100 %: the menu opens for this selection at all.
-      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 1);
-      await openFootnotePopover();
-      await selectAcrossNoteMarkers();
-      await openMenu();
-      await waitForPopupAnimations(menu);
-      const itemHeightAtDefault = (await boxOf(menuItem)).height;
-      await closeMenu();
-      await closeFootnotePopover();
-
-      await zoomAreaTo(mainPage, editorFrame, editorId, 'main', 2);
-      await openFootnotePopover();
-      const selection = await selectAcrossNoteMarkers();
-      await openMenu();
-      await expect(menu).not.toHaveAttribute('data-platform-content-zoom-root', /.*/);
-      await waitForPopupAnimations(menu);
-      await expectSettledBeside(editorFrame, menu, selection);
-      const itemHeightRatio = (await boxOf(menuItem)).height / itemHeightAtDefault;
-      expect(itemHeightRatio).toBeGreaterThan(0.85);
-      expect(itemHeightRatio).toBeLessThan(1.15);
-      await closeMenu();
-      await closeFootnotePopover();
-
-      // Back to the standard view (formatted -> standard) for the steps that follow, still at 200 %.
+      // Back to the standard view (Preview -> Standard view) for the steps that follow, still at
+      // 200 %.
       await sendCommandWithId(mainPage, 'platformScriptureEditor.changeView', editorId);
       await expect(mainInput).toHaveClass(/\bmarker-editable\b/, { timeout: 20_000 });
     });
