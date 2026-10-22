@@ -2818,9 +2818,9 @@ export async function waitForOpenWebViewIdByType(
 
 /**
  * Open the Markers Checklist for the open scripture editor by sending
- * `platformScripture.openMarkersChecklist` with the editor's web view id, exactly as the editor
- * menu item did. The editor menu hides that item in both interface modes, so the command is the
- * only way in; the handler resolves the project from the web view definition.
+ * `platformScripture.openMarkersChecklist` with the editor's web view id; the handler resolves the
+ * project from the web view definition. The editor menu hides the Markers Checklist item in both
+ * interface modes, so the command is the only way in.
  */
 export async function sendOpenMarkersChecklistCommand(page: Page): Promise<void> {
   const editorWebViewId = await waitForOpenWebViewIdByType(page, 'platformScriptureEditor.react');
