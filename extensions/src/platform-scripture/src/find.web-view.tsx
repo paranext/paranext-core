@@ -118,6 +118,12 @@ const SEARCH_DEBOUNCE_DELAY_MS = 500;
 const HISTORY_DEBOUNCE_DELAY_MS = 5000;
 /** Stable empty-array reference so the History data subscription's default doesn't change identity. */
 const DEFAULT_RECENT_SEARCHES: string[] = [];
+/**
+ * Whether Find offers Replace All. Off because Replace All rewrites every match across the scope in
+ * one go and the user has no way to undo it in the app (only by reverting to the history point it
+ * saves first). Turn it back on once Replace All has an undo or asks for confirmation first.
+ */
+const IS_REPLACE_ALL_ENABLED = false;
 
 /** Display names and language for every scripture project/resource, keyed by canonical project id. */
 type ProjectNamesById = {
@@ -2391,7 +2397,7 @@ global.webViewComponent = function FindWebView({
       onResultReferenceClick={handleOpenAtResult}
       onHideResult={handleHideResult}
       onReplace={handleReplace}
-      onReplaceAll={handleReplaceAll}
+      onReplaceAll={IS_REPLACE_ALL_ENABLED ? handleReplaceAll : undefined}
       onCancelReplace={handleCancelReplace}
       onResultsScroll={handleResultsScroll}
       getBookUsj={getBookUsj}

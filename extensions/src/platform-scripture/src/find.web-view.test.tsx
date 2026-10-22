@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useCallback, useState, type ComponentType } from 'react';
@@ -40,9 +40,11 @@ beforeAll(() => {
 
 const PROJECT_ID = 'PROJ';
 
-const { mockBooksPresent } = vi.hoisted(() => {
+const { mockBooksPresent, mockSettingValues } = vi.hoisted(() => {
   const booksPresent: { value: string } = { value: '' };
-  return { mockBooksPresent: booksPresent };
+  /** Settings a test overrides; any setting not named here resolves to its default. */
+  const settingValues: Record<string, unknown> = {};
+  return { mockBooksPresent: booksPresent, mockSettingValues: settingValues };
 });
 
 vi.mock('@papi/frontend', () => ({
@@ -89,7 +91,12 @@ vi.mock('@papi/frontend/react', () => {
       vi.fn(),
       false,
     ],
-    useSetting: (_key: string, defaultValue: unknown) => [defaultValue, vi.fn(), vi.fn(), false],
+    useSetting: (key: string, defaultValue: unknown) => [
+      key in mockSettingValues ? mockSettingValues[key] : defaultValue,
+      vi.fn(),
+      vi.fn(),
+      false,
+    ],
     useWebViewController: vi.fn(() => undefined),
   };
 });
@@ -207,5 +214,27 @@ describe('Find web view — the saved book scope on a project that lacks some of
 
     // A pick commits the visible set, so the book this project lacks is dropped on purpose.
     expect(writeWebViewState).toHaveBeenCalledWith(SAVED_BOOKS_KEY, ['GEN', 'EXO', 'NUM']);
+  });
+});
+
+describe('Find web view — Replace mode', () => {
+  beforeEach(() => {
+    mockBooksPresent.value = booksPresentFor(['GEN']);
+    // Replace is only offered in power mode.
+    mockSettingValues['platform.interfaceMode'] = 'power';
+  });
+
+  afterEach(() => {
+    delete mockSettingValues['platform.interfaceMode'];
+  });
+
+  it('offers Replace but not Replace all, which cannot be undone', async () => {
+    const FindWebView = getFindWebView();
+    render(<FindWebView {...makeProps({ findActiveMode: 'replace' }, vi.fn())} />);
+
+    expect(
+      await screen.findByRole('button', { name: '%webView_find_replace%' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '%webView_find_replaceAll%' })).toBeNull();
   });
 });
