@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { newPlatformError, type PlatformError } from 'platform-bible-utils';
@@ -93,9 +93,13 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%userProfile_header_defaultName%': 'Default display name',
       '%userProfile_header_notRegistered%': 'Registration needed',
       '%userProfile_interfaceMode_simple_label%': 'Simplified UI',
+      // The deprecated description keys stay mocked so a test can assert they no longer render.
       '%userProfile_interfaceMode_simple_description%': 'Fewer panels',
       '%userProfile_interfaceMode_power_label%': 'Advanced UI',
       '%userProfile_interfaceMode_power_description%': 'All panels',
+      '%userProfile_interfaceMode_simple_description_2%': 'Basic work, short list',
+      '%userProfile_interfaceMode_power_description_2%': 'Configurable, with PT9',
+      '%userProfile_interfaceMode_power_labelWithPreview%': '{label} [early look]',
       '%userProfile_profileAndRegistration%': 'Profile and registration row',
       '%userProfile_networkSettings_2%': 'Internet and connectivity row',
       '%userProfile_language%': 'UI language',
@@ -287,6 +291,43 @@ describe('UserProfilePopover interface mode', () => {
     fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
     fireEvent.click(screen.getByTestId('user-profile-interface-mode-power'));
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
+  });
+
+  test('labels the Power option, and only the Power option, as a preview', () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    const powerOption = screen.getByTestId('user-profile-interface-mode-power');
+    expect(within(powerOption).getByText('Advanced UI [early look]')).toBeInTheDocument();
+    // Screen-reader users get the preview status with the option itself, not as a separate stop.
+    expect(powerOption).toHaveAccessibleName(/Advanced UI \[early look\]/);
+    expect(screen.getByTestId('user-profile-interface-mode-simple')).not.toHaveTextContent(
+      '[early look]',
+    );
+  });
+
+  test('keeps the preview label on the Power option while Power mode is selected', () => {
+    setMockSetting('interfaceMode', 'power');
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    expect(
+      within(screen.getByTestId('user-profile-interface-mode-power')).getByText(
+        'Advanced UI [early look]',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  test('describes each mode with the current description strings', () => {
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    const simpleOption = screen.getByTestId('user-profile-interface-mode-simple');
+    const powerOption = screen.getByTestId('user-profile-interface-mode-power');
+    expect(simpleOption).toHaveTextContent('Basic work, short list');
+    expect(powerOption).toHaveTextContent('Configurable, with PT9');
+    expect(simpleOption).not.toHaveTextContent('Fewer panels');
+    expect(powerOption).not.toHaveTextContent('All panels');
   });
 });
 
