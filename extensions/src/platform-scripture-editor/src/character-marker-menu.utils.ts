@@ -23,6 +23,20 @@ import {
   isMixedCoverage as getIsMixedCoverage,
 } from './character-marker-coverage.utils';
 
+/**
+ * Replaces the applied character marker `fromMarker` with `toMarker`. The character-marker menu and
+ * `useCharacterMarkerState` both take it, under the name `changeCharacterMarker`.
+ *
+ * NOTE THE ARGUMENT ORDER: `EditorRef.replaceCharacterMarker(toMarker, fromMarker?)`, the operation
+ * this adapts, takes its arguments the other way round, and both are `string`, so a wiring that
+ * forwards them positionally compiles and silently swaps the two markers. Adapt, don't forward.
+ *
+ * TODO(PT-4394): wire this to `EditorRef.replaceCharacterMarker`. Note that operation throws in
+ * readonly mode and on unsupported markers, so the caller needs the same error handling the remove
+ * path has.
+ */
+export type ChangeCharacterMarker = (fromMarker: string, toMarker: string) => void;
+
 const REMOVE_CHARACTER_MARKER_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_characterMarkerMenu_removeMarker%';
 /**
@@ -138,17 +152,13 @@ export function generateCharacterMarkerMenuListItems(
      */
     coverage?: CharacterMarkerCoverage;
     /**
-     * Replaces the applied character marker with the picked one. `EditorRef` exposes a
-     * replace-character-marker operation, but no caller wires this to it; while this is absent,
-     * every marker row is inert whenever a character marker is applied. It does **not** fall back
-     * to `insertMarker`, because inserting over an existing character marker nests it rather than
-     * replacing it (verified against the editor package — see the comment at the call site).
-     *
-     * TODO(PT-4394): wire this to `EditorRef.replaceCharacterMarker`. Note that operation throws in
-     * readonly mode and on unsupported markers, so the caller needs the same error handling the
-     * remove path has.
+     * Replaces the applied character marker with the picked one. No caller supplies this yet; while
+     * it is absent, every marker row is inert whenever a character marker is applied. It does
+     * **not** fall back to `insertMarker`, because inserting over an existing character marker
+     * nests it rather than replacing it (verified against the editor package — see the comment at
+     * the call site).
      */
-    changeCharacterMarker?: (fromMarker: string, toMarker: string) => void;
+    changeCharacterMarker?: ChangeCharacterMarker;
     /**
      * Removes character markers, keeping their content. Called with a marker to remove that one,
      * and with no argument to peel one nesting layer from every run the selection covers

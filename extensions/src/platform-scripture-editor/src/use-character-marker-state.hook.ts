@@ -9,7 +9,10 @@ import {
   isEmptyCoverage,
   isMixedCoverage,
 } from './character-marker-coverage.utils';
-import { generateCharacterMarkerMenuListItems } from './character-marker-menu.utils';
+import {
+  ChangeCharacterMarker,
+  generateCharacterMarkerMenuListItems,
+} from './character-marker-menu.utils';
 import { CharacterMarkerControlProps } from './character-marker-control/character-marker-control.component';
 import { correctEditorUsjVersion } from './platform-scripture-editor.utils';
 
@@ -40,10 +43,8 @@ export type UseCharacterMarkerStateOptions = {
   /**
    * Replaces the applied marker with the picked one. Absent means picking a marker while one is
    * applied does nothing — it never falls back to adding, because adding nests.
-   *
-   * TODO(PT-4394): wire this to `EditorRef.replaceCharacterMarker`.
    */
-  changeCharacterMarker?: (fromMarker: string, toMarker: string) => void;
+  changeCharacterMarker?: ChangeCharacterMarker;
 };
 
 /** The control props this hook derives. Placement and sync state stay the caller's business. */
