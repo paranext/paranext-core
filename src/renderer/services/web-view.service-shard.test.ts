@@ -1708,6 +1708,26 @@ describe('a switch from Simple to Power mode syncs what was typed in Simple', ()
     expect(events.filter((event) => event.startsWith('sync'))).toEqual([]);
   });
 
+  it('still switches, and asks for no sync, when the dock cannot say what was open', async () => {
+    await registerWindowShowingEditor(SIMPLE_EDITOR_TAB_ID, 'proj-1');
+    await switchToSimpleShowing('proj-1');
+    const { getDockLayoutSync } = await importHost();
+    // Only the first read fails: the Power layout load reads the dock too, and must still work
+    vi.mocked(getDockLayoutSync().getAllWebViewDefinitions).mockImplementationOnce(() => {
+      throw new Error('dock unavailable');
+    });
+    const { logger } = await import('@shared/services/logger.service');
+    vi.mocked(logger.warn).mockClear();
+    events = [];
+
+    await changeModeTo('power');
+
+    expect(events).toEqual(['load']);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not read which project'),
+    );
+  });
+
   it('does not let a failed sync request escape the switch', async () => {
     await registerWindowShowingEditor(SIMPLE_EDITOR_TAB_ID, 'proj-1');
     await switchToSimpleShowing('proj-1');

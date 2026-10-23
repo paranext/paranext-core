@@ -1562,8 +1562,10 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     'platformScriptureEditor.syncOnSwitchToPower',
     async (projectId) => {
       // Not awaited: waiting for the answer and then the sync can outlast the caller's request
-      // timeout. `syncOnSwitchToPower` catches and logs its own failures.
-      syncOnSwitchToPower(papi, projectId);
+      // timeout. The catch only backs up `syncOnSwitchToPower`'s own handling of its failures.
+      syncOnSwitchToPower(papi, projectId).catch((e) =>
+        logger.warn(`Switch-to-Power sync of ${projectId} failed: ${getErrorMessage(e)}`),
+      );
     },
     {
       method: {

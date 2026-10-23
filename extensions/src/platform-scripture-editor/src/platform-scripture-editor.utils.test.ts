@@ -3280,6 +3280,9 @@ describe('syncOnProjectSwitch', () => {
 
 // #region syncOnSwitchToPower
 
+/** Stubbed answer meaning "no such data provider is registered". */
+const PROVIDER_MISSING = Symbol('provider missing');
+
 /** A settled snapshot listing nothing in either direction. */
 const NOTHING_UNSYNCED = { toSend: [], toReceive: [], isRechecking: false };
 
@@ -3292,7 +3295,18 @@ function createSwitchToPowerMockPapi({
   mode = 'power',
   consent = 'granted',
   seed = NOTHING_UNSYNCED,
-}: SyncGateStub & { seed?: unknown } = {}) {
+  internetUse = 'Enabled',
+}: SyncGateStub & {
+  seed?: unknown;
+  /** The saved internet setting, a missing provider, or a read that rejects */
+  internetUse?:
+    | 'Enabled'
+    | 'VpnRequired'
+    | 'Disabled'
+    | 'ProxyOnly'
+    | typeof PROVIDER_MISSING
+    | typeof READ_THROWS;
+} = {}) {
   const { sendCommand, mockGetSetting, mockWarn, mockInfo, ...gateMocks } = createSyncGateStubs({
     mode,
     consent,
@@ -3307,17 +3321,30 @@ function createSwitchToPowerMockPapi({
     commandName === 'paratextBibleSendReceive.getUnsyncedChanges'
       ? mockGetUnsyncedChanges()
       : sendCommand(commandName, ...args);
+  const mockGetInternetSettings = vi.fn(async () => {
+    if (internetUse === READ_THROWS) throw new Error('internet settings unavailable');
+    return { selectedServer: 'Production', permittedInternetUse: internetUse, proxyPort: 0 };
+  });
+  const mockDataProvidersGet = vi.fn(async (name: string) => {
+    if (name !== 'paratextRegistration.internetSettingsDataProvider')
+      throw new Error(`Unexpected data provider in test stub: ${name}`);
+    return internetUse === PROVIDER_MISSING
+      ? undefined
+      : { getInternetSettings: mockGetInternetSettings };
+  });
   // Must cast since the mock only includes the papi properties used by syncOnSwitchToPower.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
     commands: { sendCommand: routedSendCommand },
     network: { getNetworkEvent: mockGetNetworkEvent },
+    dataProviders: { get: mockDataProvidersGet },
     logger: { warn: mockWarn, info: mockInfo },
     settings: { get: mockGetSetting },
   } as unknown as typeof PapiBackend;
   return {
     papi,
     mockGetSetting,
+    mockGetInternetSettings,
     mockWarn,
     mockInfo,
     mockGetUnsyncedChanges,
@@ -3439,8 +3466,14 @@ describe('waitForUnsentChanges', () => {
     await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS / 2);
     emitUnsyncedChanges({ toSend: [], toReceive: [], isRechecking: true });
     await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
-
     expect(wait.isSettled).toBe(false);
+    // Once the sync ends, a full window runs again before it answers
+    emitUnsyncedChanges(NOTHING_UNSYNCED);
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS - 1);
+    expect(wait.isSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(wait).toEqual({ isSettled: true, answer: false });
   });
 
   it('ignores a seed that resolves after a newer event arrived', async () => {
@@ -3500,6 +3533,33 @@ describe('waitForUnsentChanges', () => {
 
     await expect(answer).resolves.toBe(true);
     expect(mockGetUnsyncedChanges).toHaveBeenCalledTimes(2);
+  });
+
+  it('answers from events when every seed request fails', async () => {
+    const { papi, mockGetUnsyncedChanges, emitUnsyncedChanges, mockWarn } =
+      createSwitchToPowerMockPapi();
+    mockGetUnsyncedChanges.mockRejectedValue(new Error('backend down'));
+    const wait = startWaiting(papi, 'proj-1');
+    await flushMicrotasks();
+
+    emitUnsyncedChanges(NOTHING_UNSYNCED);
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+
+    expect(wait).toEqual({ isSettled: true, answer: false });
+    expect(mockWarn).not.toHaveBeenCalledWith(expect.stringContaining('Could not tell'));
+  });
+
+  it('answers undefined at once when it cannot subscribe to the signal', async () => {
+    const { papi, mockGetNetworkEvent, mockGetUnsyncedChanges, mockWarn } =
+      createSwitchToPowerMockPapi();
+    mockGetNetworkEvent.mockImplementation(() => {
+      throw new Error('network not ready');
+    });
+
+    // No time is advanced: nothing must be left waiting on a signal it never subscribed to
+    await expect(waitForUnsentChanges(papi, 'proj-1')).resolves.toBeUndefined();
+    expect(mockGetUnsyncedChanges).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('could not subscribe'));
   });
 
   it('answers undefined when no snapshot can be read at all', async () => {
@@ -3699,6 +3759,63 @@ describe('syncOnSwitchToPower', () => {
 
     expect(mockSendCommand).not.toHaveBeenCalled();
     expect(mockWarn).toHaveBeenCalled();
+  });
+
+  it.each(['VpnRequired', 'Disabled'] as const)(
+    'syncs nothing while the internet setting is %s, which turns Send/Receive off',
+    async (internetUse) => {
+      const { papi, mockSendCommand, mockInfo } = createSwitchToPowerMockPapi({
+        internetUse,
+        seed: PROJ_1_UNSENT,
+      });
+
+      await syncOnSwitchToPower(papi, 'proj-1');
+
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining(internetUse));
+    },
+  );
+
+  it('syncs when the internet setting is ProxyOnly, which Send/Receive allows', async () => {
+    const { papi, mockSendCommand } = createSwitchToPowerMockPapi({
+      internetUse: 'ProxyOnly',
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-1',
+    ]);
+  });
+
+  it.each([
+    ['the internet settings provider is missing', PROVIDER_MISSING],
+    ['the internet settings cannot be read', READ_THROWS],
+  ] as const)('leaves the decision to Send/Receive when %s', async (_, internetUse) => {
+    // Send/Receive enforces the setting itself, so skipping here would only drop the sync for a
+    // user whose internet is on
+    const { papi, mockSendCommand, mockWarn } = createSwitchToPowerMockPapi({
+      internetUse,
+      seed: PROJ_1_UNSENT,
+    });
+
+    await syncOnSwitchToPower(papi, 'proj-1');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.sendReceiveProjects', [
+      'proj-1',
+    ]);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('internet setting'));
+  });
+
+  it('does not read the internet setting when there is nothing to send', async () => {
+    const { papi, mockGetInternetSettings } = createSwitchToPowerMockPapi();
+
+    const syncing = syncOnSwitchToPower(papi, 'proj-1');
+    await vi.advanceTimersByTimeAsync(UNSENT_CHANGES_GRACE_MS);
+    await syncing;
+
+    expect(mockGetInternetSettings).not.toHaveBeenCalled();
   });
 
   it('resolves and warns when the sync fails', async () => {

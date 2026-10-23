@@ -8,7 +8,8 @@ declined.
 ## The rule
 
 Every code path that starts a Send/Receive **without the user asking for it right then** must first
-get `granted` from the one consent gate, and skip the sync on any other answer:
+get `granted` from the one consent gate, and skip the sync on any other answer (one exception: the
+switch from Simple to Power, below):
 
 - **Main process** — `getAutomaticSyncConsent()` in `src/main/first-run-consent.util.ts`.
 - **Extension host** — the `platform.getAutomaticSyncConsent` command, which calls that same
@@ -19,7 +20,8 @@ get `granted` from the one consent gate, and skip the sync on any other answer:
 Log the skip at `info` with the reason, so a support log can explain a session that did not sync.
 
 **Fail closed.** An unreadable flag or a rejected consent request means *do not sync*: syncing
-unasked cannot be undone, while a missed automatic sync is picked up at the next opportunity.
+unasked cannot be undone, while a missed automatic sync is picked up at the next opportunity. (The
+Simple-to-Power switch, below, fails closed only on a rejected request.)
 
 **"Don't sync yet" lasts the session.** Declining completes the wizard, but the gate answers
 `deferred` until the app restarts.
