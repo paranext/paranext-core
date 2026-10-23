@@ -17,6 +17,9 @@
         "date": "2026-07-26"
       }
     },
+    "%paratextRegistration_description_internetUse_option_DisableSomeServices_details%": {
+      "fallbackKey": "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%"
+    },
     "%paratextRegistration_description_internetUse_option_Enabled_details%": {
       "deprecationInfo": {
         "date": "2026-10-13",
@@ -40,7 +43,11 @@
       }
     },
     "%paratextRegistration_description_internetUse_option_VpnRequired_details_2%": {
-      "fallbackKey": "%paratextRegistration_description_internetUse_option_VpnRequired_details%"
+      "fallbackKey": "%paratextRegistration_description_internetUse_option_VpnRequired_details%",
+      "deprecationInfo": {
+        "message": "Now says Paratext may still connect to other internet services, and that this option will change to \"Disable all Internet access\" once that is available. The new key is %paratextRegistration_description_internetUse_option_DisableSomeServices_details%.",
+        "date": "2026-10-23"
+      }
     },
     "%paratextRegistration_label_proxyHost%": {
       "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.label2.Text%"
@@ -168,6 +175,24 @@
         "message": "Removed. The per-row \"Coming soon\" badge (%paratextRegistration_internetUse_comingSoon%) already marks the unavailable options, and dropping the line keeps the first-run wizard's Next button in view. No replacement key.",
         "date": "2026-08-19"
       }
+    },
+    "%paratextRegistration_internetUse_unsupportedSelection_title%": {
+      "deprecationInfo": {
+        "message": "The title now names the unsupported option. The new key is %paratextRegistration_internetUse_unsupportedSelection_title_2%.",
+        "date": "2026-10-23"
+      }
+    },
+    "%paratextRegistration_internetUse_unsupportedSelection_title_2%": {
+      "fallbackKey": "%paratextRegistration_internetUse_unsupportedSelection_title%"
+    },
+    "%paratextRegistration_internetUse_unsupportedSelection_description%": {
+      "deprecationInfo": {
+        "message": "Now also suggests that users stop using Paratext 10 until the option is supported. The new key is %paratextRegistration_internetUse_unsupportedSelection_description_2%.",
+        "date": "2026-10-23"
+      }
+    },
+    "%paratextRegistration_internetUse_unsupportedSelection_description_2%": {
+      "fallbackKey": "%paratextRegistration_internetUse_unsupportedSelection_description%"
     }
   },
   "localizedStrings": {
@@ -201,6 +226,7 @@
       "%paratextRegistration_description_internetUse_disclaimer%": "These Internet settings only affect connection to Paratext services like the Registry, send/receive, and download resources.",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%": "Block internet when in sensitive locations",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%": "Automatically blocks Paratext internet access in configured sensitive areas.",
+      "%paratextRegistration_description_internetUse_option_DisableSomeServices_details%": "Disables access to Registry, Send-Receive (sync), and the Digital Bible Library within Paratext 10. Paratext may connect to other internet services! This option will automatically change to “Disable all Internet access” once available.",
       "%paratextRegistration_description_internetUse_option_Disabled%": "Disable all Internet use",
       "%paratextRegistration_description_internetUse_option_Disabled_2%": "Disable all Internet access",
       "%paratextRegistration_description_internetUse_option_Disabled_details%": "Blocks all internet access within the Paratext app. Other applications on your computer are not affected.",
@@ -222,7 +248,9 @@
       "%paratextRegistration_internetUse_comingSoon%": "Coming soon",
       "%paratextRegistration_internetUse_footer%": "Disabled options are planned for future updates.",
       "%paratextRegistration_internetUse_unsupportedSelection_description%": "Your Paratext internet settings have “{selectedOption}” selected. This version of Paratext does not support that option yet, so choose one of the available options to continue.",
+      "%paratextRegistration_internetUse_unsupportedSelection_description_2%": "Choose one of the available options to continue or stop using Paratext 10 until it is supported.",
       "%paratextRegistration_internetUse_unsupportedSelection_title%": "This internet setting is not supported yet",
+      "%paratextRegistration_internetUse_unsupportedSelection_title_2%": "“{selectedOption}” is not supported yet",
       "%paratextRegistration_label_emailAddress%": "Email address",
       "%paratextRegistration_label_proxyHost%": "Host",
       "%paratextRegistration_label_proxyMode%": "Mode",
@@ -289,6 +317,7 @@
       "%paratextRegistration_description_internetUse_disclaimer%": "Estas configuraciones de Internet solo afectan la conexión a los servicios de Paratext, como el Registro, Enviar/Recibir y la descarga de recursos.",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%": "Bloquear internet en lugares sensibles",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%": "Bloquea automáticamente el acceso a internet de Paratext en áreas sensibles configuradas.",
+      "%paratextRegistration_description_internetUse_option_DisableSomeServices_details%": "Deshabilita el acceso al Registro, Enviar/Recibir (sincronización) y la Biblioteca Bíblica Digital dentro de Paratext 10. ¡Paratext puede conectarse a otros servicios de internet! Esta opción cambiará automáticamente a “Deshabilitar todo el acceso a Internet” cuando esté disponible.",
       "%paratextRegistration_description_internetUse_option_Disabled%": "Deshabilitar todo uso de Internet",
       "%paratextRegistration_description_internetUse_option_Disabled_2%": "Deshabilitar todo el acceso a Internet",
       "%paratextRegistration_description_internetUse_option_Disabled_details%": "Bloquea todo el acceso a internet dentro de la aplicación Paratext. Otras aplicaciones en tu computadora no se ven afectadas.",
@@ -309,7 +338,9 @@
       "%paratextRegistration_internetUse_comingSoon%": "Próximamente",
       "%paratextRegistration_internetUse_footer%": "Las opciones deshabilitadas están previstas para futuras actualizaciones.",
       "%paratextRegistration_internetUse_unsupportedSelection_description%": "Su configuración de internet de Paratext tiene seleccionada la opción “{selectedOption}”. Esta versión de Paratext aún no admite esa opción, así que elija una de las opciones disponibles para continuar.",
+      "%paratextRegistration_internetUse_unsupportedSelection_description_2%": "Elija una de las opciones disponibles para continuar, o deje de usar Paratext 10 hasta que sea compatible.",
       "%paratextRegistration_internetUse_unsupportedSelection_title%": "Esta configuración de internet aún no es compatible",
+      "%paratextRegistration_internetUse_unsupportedSelection_title_2%": "“{selectedOption}” aún no es compatible",
       "%paratextRegistration_label_emailAddress%": "Dirección de correo electrónico",
       "%paratextRegistration_label_proxyHost%": "Servidor",
       "%paratextRegistration_label_proxyMode%": "Modo",

@@ -5,13 +5,19 @@ import {
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
   isSupportedInternetUse,
 } from 'platform-bible-react/experimental';
-import { useData, useDataProvider, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import {
+  useData,
+  useDataProvider,
+  useLocalizedStrings,
+  useSetting,
+} from '@renderer/hooks/papi-hooks';
 import { useDelayedFlag } from '@renderer/hooks/use-delayed-flag.hook';
 import {
   hasSavedInternetUseChoice,
   markInternetUseChoiceSaved,
 } from '@renderer/services/internet-use-choice-store';
 import { logger } from '@shared/services/logger.service';
+import { settingsService } from '@shared/services/settings.service';
 import {
   noteInternetSettingsLoaded,
   noteInternetSettingsSaved,
@@ -52,10 +58,12 @@ const STRING_KEYS: LocalizeKey[] = [
 
 /**
  * Whether the wizard may move on with `permittedInternetUse` saved: only once the user has chosen
- * (see `internet-use-choice-store`), and only for an option the app actually implements.
+ * (see `internet-use-choice-store`), and only for an option the app actually implements. A
+ * `Disabled` the user chose is "Disable access to some Bible translation services", since "Disable
+ * all Internet access" cannot be chosen.
  */
 function canProceedWith(permittedInternetUse: InternetSettings['permittedInternetUse']): boolean {
-  return hasSavedInternetUseChoice() && isSupportedInternetUse(permittedInternetUse);
+  return hasSavedInternetUseChoice() && isSupportedInternetUse(permittedInternetUse, true);
 }
 
 /**
@@ -154,6 +162,14 @@ function InternetSettingsLoaded({
     undefined,
     DEFAULT_INTERNET_SETTINGS,
   );
+  // Whether a saved Disabled is the user's earlier choice of "Disable access to some Bible
+  // translation services". Unreadable counts as no: Disabled then shows as "Disable all", which
+  // holds Next until the user chooses again.
+  const [savedDisableSomeChoice] = useSetting(
+    'platform.internetUseDisableSomeServicesChosen',
+    false,
+  );
+  const hasSavedDisableSomeChoice = savedDisableSomeChoice === true;
 
   const [settings, setSettings] = useState<InternetSettings | undefined>();
   // Whether the list shows the internet-use choice as made. Unlike the saved choice
@@ -237,6 +253,14 @@ function InternetSettingsLoaded({
       setIsSaving(true);
       setCanProceed?.(false);
       try {
+        // Any Disabled the user picks here is "Disable access…", since "Disable all" cannot be
+        // picked. Saved before the value, so a saved Disabled is never shown as "Disable all" after
+        // the user chose "Disable access…".
+        if (isInternetUseChoice)
+          await settingsService.set(
+            'platform.internetUseDisableSomeServicesChosen',
+            next.permittedInternetUse === 'Disabled',
+          );
         await setData(next);
         noteInternetSettingsSaved(next);
         if (isInternetUseChoice) markInternetUseChoiceSaved();
@@ -286,11 +310,15 @@ function InternetSettingsLoaded({
     );
   }
 
+  // A Disabled the user picked this session is "Disable access…" (see canProceedWith).
+  const hasChosenDisableSomeServices = isChoiceShown || hasSavedDisableSomeChoice;
   // Until the user chooses, select nothing rather than present the stored value as their choice —
   // unless the stored value is one the app cannot honor, which the list shows selected under its
-  // banner so the user can see what was carried over.
+  // banner so the user can see what was carried over. That includes a Disabled the user did not
+  // choose as "Disable access…": in Paratext 9 it is "Disable all Internet access".
   const shownInternetUse =
-    isChoiceShown || !isSupportedInternetUse(settings.permittedInternetUse)
+    isChoiceShown ||
+    !isSupportedInternetUse(settings.permittedInternetUse, hasChosenDisableSomeServices)
       ? settings.permittedInternetUse
       : undefined;
 
@@ -309,6 +337,7 @@ function InternetSettingsLoaded({
         <InternetAccessOptionList
           localizedStrings={localizedStrings}
           value={shownInternetUse}
+          hasChosenDisableSomeServices={hasChosenDisableSomeServices}
           onChange={(v) =>
             handleChange({ ...settings, permittedInternetUse: v }, { isInternetUseChoice: true })
           }

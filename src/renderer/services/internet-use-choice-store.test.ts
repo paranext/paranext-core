@@ -32,16 +32,25 @@ const mockSendCommand = vi.mocked(sendCommand);
 const mockGetProvider = vi.mocked(dataProviderService.get);
 const mockWaitForNetworkObject = vi.mocked(networkObjectStatusService.waitForNetworkObject);
 
-/** Stubs the saved `platform.internetUseChoiceAsked` and the provider's saved internet use. */
+/**
+ * Stubs the saved `platform.internetUseChoiceAsked` and
+ * `platform.internetUseDisableSomeServicesChosen`, and the provider's saved internet use.
+ */
 function stub({
   wasAsked,
-  permittedInternetUse = 'VpnRequired',
+  hasChosenDisableSomeServices,
+  permittedInternetUse = 'Disabled',
 }: {
   wasAsked?: boolean;
+  hasChosenDisableSomeServices?: boolean;
   permittedInternetUse?: string;
 }) {
-  // @ts-expect-error ts(2345) - `undefined` stands in for a setting that was never saved
-  mockGetSetting.mockResolvedValue(wasAsked);
+  // A setting that was never saved reads as its default, false.
+  mockGetSetting.mockImplementation(async (key) =>
+    key === 'platform.internetUseChoiceAsked'
+      ? (wasAsked ?? false)
+      : (hasChosenDisableSomeServices ?? false),
+  );
   const getInternetSettings = vi.fn().mockResolvedValue({
     permittedInternetUse,
     selectedServer: 'Production',
@@ -102,6 +111,15 @@ describe('askForInternetUseChoiceIfNeeded', () => {
       expect(mockSetSetting).toHaveBeenCalledWith('platform.internetUseChoiceAsked', true);
     },
   );
+
+  it('does not open the settings for a Disabled the user chose as "Disable access…", but records it asked', async () => {
+    stub({ permittedInternetUse: 'Disabled', hasChosenDisableSomeServices: true });
+
+    await askForInternetUseChoiceIfNeeded();
+
+    expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockSetSetting).toHaveBeenCalledWith('platform.internetUseChoiceAsked', true);
+  });
 
   it('does not open the settings when the saved value blocks nothing, but records it asked', async () => {
     stub({ permittedInternetUse: 'Enabled' });

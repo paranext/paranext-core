@@ -32,11 +32,14 @@ import { useId } from 'react';
  */
 export type InternetUse = 'Enabled' | 'VpnRequired' | 'Disabled' | 'ProxyOnly';
 
+/**
+ * The radio value of the "Disable all Internet access" row. UI-only: that row saves `Disabled`, as
+ * "Disable access to some Bible translation services" does, so it needs a radio value of its own.
+ */
+const DISABLE_ALL = 'DisableAll';
+
 type OptionRow = {
-  // BlockInSensitiveLocations is included here as a UI-only option that the UX spec requires
-  // showing in this list, but it is not part of the InternetUse type that PAPI persists — the
-  // onChange handler filters it out before calling the caller (see the if-guard below).
-  value: InternetUse | 'BlockInSensitiveLocations';
+  value: InternetUse | typeof DISABLE_ALL;
   labelKey: LocalizeKey;
   descriptionKey: LocalizeKey;
   isEnabled: boolean;
@@ -44,7 +47,7 @@ type OptionRow = {
 
 /**
  * Hover dwell before a row's description tooltip opens. TooltipProvider defaults to 0, which makes
- * tooltips flash on every pointer sweep down this five-row stack.
+ * tooltips flash on every pointer sweep down this stack of rows.
  */
 const TOOLTIP_DELAY_MS = 300;
 
@@ -55,20 +58,28 @@ const OPTION_ROWS = [
     descriptionKey: '%paratextRegistration_description_internetUse_option_Enabled_details_2%',
     isEnabled: true,
   },
-  {
-    value: 'VpnRequired',
-    labelKey: '%paratextRegistration_description_internetUse_option_VpnRequired_2%',
-    descriptionKey: '%paratextRegistration_description_internetUse_option_VpnRequired_details_2%',
-    isEnabled: true,
-  },
+  // The `VpnRequired_2` label key is named for the value this text was first written for. It says
+  // "some" services because `Disabled` switches off ParatextData's internet use only — the app's
+  // other processes keep theirs — so it stays worded that way until the app can block them too.
   {
     value: 'Disabled',
+    labelKey: '%paratextRegistration_description_internetUse_option_VpnRequired_2%',
+    descriptionKey:
+      '%paratextRegistration_description_internetUse_option_DisableSomeServices_details%',
+    isEnabled: true,
+  },
+  // Also stands for `Disabled`, and is what `Disabled` shows as unless the user chose "Disable
+  // access…". Coming soon until the app can block all of its own internet use.
+  {
+    value: DISABLE_ALL,
     labelKey: '%paratextRegistration_description_internetUse_option_Disabled_2%',
     descriptionKey: '%paratextRegistration_description_internetUse_option_Disabled_details%',
     isEnabled: false,
   },
+  // As in Paratext 9, `VpnRequired` means blocking only where the machine's location is flagged as
+  // sensitive.
   {
-    value: 'BlockInSensitiveLocations',
+    value: 'VpnRequired',
     labelKey: '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%',
     descriptionKey:
       '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%',
@@ -83,7 +94,18 @@ const OPTION_ROWS = [
 ] as const satisfies readonly OptionRow[];
 
 const isInternetUse = (value: string): value is InternetUse =>
-  OPTION_ROWS.some((row) => row.value !== 'BlockInSensitiveLocations' && row.value === value);
+  OPTION_ROWS.some((row) => row.value !== DISABLE_ALL && row.value === value);
+
+/**
+ * The row a value selects. `Disabled` is "Disable all Internet access", as in Paratext 9, unless
+ * the user chose "Disable access to some Bible translation services".
+ */
+function rowValueFor(
+  value: InternetUse | undefined,
+  hasChosenDisableSomeServices: boolean,
+): OptionRow['value'] | undefined {
+  return value === 'Disabled' && !hasChosenDisableSomeServices ? DISABLE_ALL : value;
+}
 
 /**
  * Whether the app can honor this internet-use value.
@@ -91,13 +113,19 @@ const isInternetUse = (value: string): value is InternetUse =>
  * `InternetSettings.xml` is seeded once from a co-installed Paratext 9 on first launch (the two
  * apps keep separate copies thereafter), so a stored value may name an option this app does not
  * implement yet (the "Coming soon" rows). Such a value is shown selected and called out in a banner
- * rather than silently replaced — callers that gate on a usable selection (the first-run wizard's
- * Next button) should refuse to advance until this returns true.
+ * rather than swapped for another row — callers that gate on a usable selection (the first-run
+ * wizard's Next button) should refuse to advance until this returns true. `Disabled` counts only
+ * when the user chose "Disable access to some Bible translation services" (see
+ * `hasChosenDisableSomeServices` on the list).
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export function isSupportedInternetUse(value: InternetUse): boolean {
-  return OPTION_ROWS.some((row) => row.value === value && row.isEnabled);
+export function isSupportedInternetUse(
+  value: InternetUse,
+  hasChosenDisableSomeServices = false,
+): boolean {
+  const rowValue = rowValueFor(value, hasChosenDisableSomeServices);
+  return OPTION_ROWS.some((row) => row.value === rowValue && row.isEnabled);
 }
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
@@ -105,8 +133,8 @@ export function isSupportedInternetUse(value: InternetUse): boolean {
 export const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[] = [
   ...OPTION_ROWS.flatMap((row) => [row.labelKey, row.descriptionKey]),
   '%paratextRegistration_internetUse_comingSoon%',
-  '%paratextRegistration_internetUse_unsupportedSelection_title%',
-  '%paratextRegistration_internetUse_unsupportedSelection_description%',
+  '%paratextRegistration_internetUse_unsupportedSelection_title_2%',
+  '%paratextRegistration_internetUse_unsupportedSelection_description_2%',
 ];
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
@@ -122,10 +150,18 @@ export type InternetAccessOptionListProps = {
   onChange: (value: InternetUse) => void;
   /** When true, all rows are non-interactive (loading or saving in progress). */
   disabled: boolean;
+  /**
+   * Whether the user chose "Disable access to some Bible translation services", which saves
+   * `Disabled`. Otherwise a `Disabled` value selects the Coming soon "Disable all Internet access"
+   * row under the not-supported banner: that is what `Disabled` means in Paratext 9, and this app
+   * cannot honor it yet. Any choice of `Disabled` reported through `onChange` is "Disable access…",
+   * since "Disable all" cannot be selected.
+   */
+  hasChosenDisableSomeServices?: boolean;
 };
 
 /**
- * The five internet-access options as radio rows. Each row's description sits behind an info icon
+ * The internet-access options as radio rows. Each row's description sits behind an info icon
  * button, revealed as a tooltip on hover or keyboard focus.
  *
  * The descriptions run to two sentences — longer than `Guidelines/Tooltips` allows a tooltip on a
@@ -140,6 +176,7 @@ export function InternetAccessOptionList({
   value,
   onChange,
   disabled,
+  hasChosenDisableSomeServices = false,
 }: InternetAccessOptionListProps) {
   // Instance-scoped so two lists on one page (e.g. a Storybook autodocs page) don't collide on
   // duplicate ids, which would point a row's label and aria-describedby at the other list's row.
@@ -148,12 +185,15 @@ export function InternetAccessOptionList({
   const descriptionId = (optionValue: OptionRow['value']) => `${radioId(optionValue)}-description`;
 
   // A stored value the app cannot honor still selects its row, so the user can see exactly which
-  // setting is carried over, and this banner says why nothing will act on it. Derived from the
-  // value rather than from a matching row, so a value with no row at all — which selects nothing
-  // and would otherwise leave the wizard's Next disabled with nothing on screen explaining why —
-  // is announced too. Such a value can only be named by its raw form.
-  const isUnsupported = value !== undefined && !isSupportedInternetUse(value);
-  const unsupportedRow = OPTION_ROWS.find((row) => row.value === value);
+  // setting is carried over, and this banner says why nothing will act on it. A value with no row
+  // at all — which selects nothing and would otherwise leave the wizard's Next disabled with nothing
+  // on screen explaining why — is announced too. Such a value can only be named by its raw form.
+  const selectedRowValue = rowValueFor(value, hasChosenDisableSomeServices);
+  const selectedRow = OPTION_ROWS.find((row) => row.value === selectedRowValue);
+  const isUnsupported = value !== undefined && !selectedRow?.isEnabled;
+  const unsupportedOptionName = selectedRow
+    ? (localizedStrings[selectedRow.labelKey] ?? selectedRow.value)
+    : value;
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-1">
@@ -164,18 +204,18 @@ export function InternetAccessOptionList({
         <Alert role="status" className="tw:mb-2">
           <TriangleAlert />
           <AlertTitle>
-            {localizedStrings['%paratextRegistration_internetUse_unsupportedSelection_title%']}
+            {formatReplacementString(
+              localizedStrings['%paratextRegistration_internetUse_unsupportedSelection_title_2%'] ??
+                '',
+              { selectedOption: unsupportedOptionName },
+            )}
           </AlertTitle>
           <AlertDescription>
             {formatReplacementString(
               localizedStrings[
-                '%paratextRegistration_internetUse_unsupportedSelection_description%'
+                '%paratextRegistration_internetUse_unsupportedSelection_description_2%'
               ] ?? '',
-              {
-                selectedOption: unsupportedRow
-                  ? (localizedStrings[unsupportedRow.labelKey] ?? unsupportedRow.value)
-                  : value,
-              },
+              { selectedOption: unsupportedOptionName },
             )}
           </AlertDescription>
         </Alert>
@@ -185,9 +225,8 @@ export function InternetAccessOptionList({
           // '' rather than `undefined` for no selection: Radix treats an undefined `value` as
           // uncontrolled, and would then select the clicked row itself instead of leaving that to
           // the caller's `onChange`.
-          value={value ?? ''}
+          value={selectedRowValue ?? ''}
           onValueChange={(v) => {
-            // BlockInSensitiveLocations is UI-only; isInternetUse excludes it.
             if (isInternetUse(v)) onChange(v);
           }}
           disabled={disabled}

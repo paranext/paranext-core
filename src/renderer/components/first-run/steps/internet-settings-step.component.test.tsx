@@ -20,6 +20,9 @@ import {
 import type { FirstRunStepProps } from '../first-run-step-props.model';
 import { InternetSettingsStep } from './internet-settings-step.component';
 
+// The saved `platform.internetUseDisableSomeServicesChosen`.
+const mockSavedDisableSomeChoice = vi.hoisted(() => ({ value: false }));
+
 // vi.mock is hoisted by vitest to before all imports, so these mocks are active when the
 // imports above are evaluated — even though the import of useDataProvider/useData appears
 // before the vi.mock call in source order.
@@ -38,6 +41,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   ]),
   useDataProvider: vi.fn(),
   useData: vi.fn(),
+  useSetting: vi.fn(() => [mockSavedDisableSomeChoice.value, vi.fn(), vi.fn(), false]),
 }));
 
 vi.mock('@renderer/services/first-run-store', () => ({
@@ -73,37 +77,43 @@ vi.mock('platform-bible-react', () => ({
   cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
 }));
 
-vi.mock('platform-bible-react/experimental', () => ({
+// The option the stand-in option list reports when clicked.
+const mockPick = vi.hoisted(() => ({ internetUse: 'Enabled' }));
+
+// The real `isSupportedInternetUse` comes through, so Next is gated on the same supported options as
+// in production.
+vi.mock('platform-bible-react/experimental', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('platform-bible-react/experimental')>()),
   // One button stands in for the radio group; `data-state` and `disabled` mirror the selected Radix
   // radio the step puts focus back on after a save.
   InternetAccessOptionList: ({
     value,
     onChange,
     disabled,
+    hasChosenDisableSomeServices,
   }: {
     value: string | undefined;
     onChange: (value: string) => void;
     disabled: boolean;
+    hasChosenDisableSomeServices?: boolean;
   }) => (
     <button
       data-testid="option-list"
       data-value={value}
+      data-has-chosen-disable-some={String(!!hasChosenDisableSomeServices)}
       data-state={value ? 'checked' : 'unchecked'}
       disabled={disabled}
       type="button"
-      onClick={() => onChange('Enabled')}
+      onClick={() => onChange(mockPick.internetUse)}
     >
       option list
     </button>
   ),
-  // Stands in for the real helper, whose own list of implemented options is covered by
-  // InternetAccessOptionList's tests. This step only cares that it gates Next.
-  isSupportedInternetUse: (value: string) => value === 'Enabled' || value === 'VpnRequired',
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: [],
 }));
 
 const MOCK_SETTINGS = {
-  permittedInternetUse: 'VpnRequired' as const,
+  permittedInternetUse: 'Disabled' as const,
   selectedServer: 'Production' as const,
   proxyPort: 0,
 };
@@ -172,6 +182,16 @@ function dropFocusToBody() {
   expect(document.body).toHaveFocus();
 }
 
+/**
+ * The stored `Disabled` (MOCK_SETTINGS) shown as "Disable all Internet access", which is how the
+ * step shows it until the user picks an option.
+ */
+function expectDisableAllShown() {
+  const optionList = screen.getByTestId('option-list');
+  expect(optionList).toHaveAttribute('data-value', 'Disabled');
+  expect(optionList).toHaveAttribute('data-has-chosen-disable-some', 'false');
+}
+
 function renderStep(setCanProceed = vi.fn()) {
   const props: FirstRunStepProps = { onNext: vi.fn(), setCanProceed };
   return { ...render(<InternetSettingsStep {...props} />), setCanProceed };
@@ -181,6 +201,8 @@ describe('InternetSettingsStep', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetInternetUseChoiceForTesting();
+    mockPick.internetUse = 'Enabled';
+    mockSavedDisableSomeChoice.value = false;
   });
 
   // The heading and its lead-in match the standalone Internet & Connectivity web view. They wrap
@@ -221,17 +243,44 @@ describe('InternetSettingsStep', () => {
     expect(setCanProceed).not.toHaveBeenCalledWith(true);
   });
 
-  // ParatextData saves "Disable access to some Bible translation services" (VpnRequired) on first
-  // startup, and a Paratext 9 upgrade can carry over a value nobody chose. That option turns off
-  // sync and the DBL, so the wizard must not accept it on the user's behalf.
+  // ParatextData saves VpnRequired on first startup, which startup migrates to Disabled, and a
+  // Paratext 9 upgrade can carry over a value nobody chose. Disabled turns off sync and the DBL, so
+  // the wizard must not accept it, or any other stored value, on the user's behalf.
   describe('an explicit choice', () => {
-    it('selects no option and keeps Next disabled once data has loaded', async () => {
-      configureHooks({ value: MOCK_SETTINGS, isLoading: false });
+    it('selects no option for a stored Enabled and keeps Next disabled once data has loaded', async () => {
+      configureHooks({
+        value: { ...MOCK_SETTINGS, permittedInternetUse: 'Enabled' },
+        isLoading: false,
+      });
       const { setCanProceed } = renderStep();
 
       expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
       await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(false));
       expect(setCanProceed).not.toHaveBeenCalledWith(true);
+    });
+
+    // In Paratext 9, Disabled is "Disable all Internet access", which the app cannot honor yet, so
+    // the list shows that option under its banner until the user picks one.
+    it('shows a stored Disabled as "Disable all Internet access" and keeps Next disabled', async () => {
+      configureHooks({ value: MOCK_SETTINGS, isLoading: false });
+      const { setCanProceed } = renderStep();
+
+      expectDisableAllShown();
+      await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(false));
+      expect(setCanProceed).not.toHaveBeenCalledWith(true);
+    });
+
+    it('shows "Disable access to some Bible translation services" once the user picks it', async () => {
+      mockPick.internetUse = 'Disabled';
+      configureHooks({ value: MOCK_SETTINGS, isLoading: false });
+      const { setCanProceed } = renderStep();
+
+      await userEvent.click(screen.getByTestId('option-list'));
+
+      const optionList = screen.getByTestId('option-list');
+      expect(optionList).toHaveAttribute('data-value', 'Disabled');
+      expect(optionList).toHaveAttribute('data-has-chosen-disable-some', 'true');
+      await waitFor(() => expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(true));
     });
 
     it('shows the choice and enables Next once the user picks an option', async () => {
@@ -243,6 +292,40 @@ describe('InternetSettingsStep', () => {
       expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Enabled');
       await waitFor(() => expect(setCanProceed.mock.calls.at(-1)?.[0]).toBe(true));
     });
+
+    // A saved choice of "Disable access…" makes a stored Disabled one the app supports, so it is
+    // treated like any other supported value: nothing selected until the user picks.
+    it('selects no option for a stored Disabled the user already chose as "Disable access…"', async () => {
+      mockSavedDisableSomeChoice.value = true;
+      configureHooks({ value: MOCK_SETTINGS, isLoading: false });
+      const { setCanProceed } = renderStep();
+
+      expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
+      await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(false));
+      expect(setCanProceed).not.toHaveBeenCalledWith(true);
+    });
+
+    // So the choice is still known on the next launch, and in the Internet & connectivity settings.
+    it.each([
+      ['Disabled', true],
+      ['Enabled', false],
+    ] as const)(
+      'saves whether choosing %s chose "Disable access…"',
+      async (internetUse, isDisableSome) => {
+        mockPick.internetUse = internetUse;
+        configureHooks({ value: MOCK_SETTINGS, isLoading: false });
+        renderStep();
+
+        await userEvent.click(screen.getByTestId('option-list'));
+
+        await waitFor(() =>
+          expect(settingsService.set).toHaveBeenCalledWith(
+            'platform.internetUseDisableSomeServicesChosen',
+            isDisableSome,
+          ),
+        );
+      },
+    );
 
     // So a later switch to Power mode does not ask again (internet-use-choice-store).
     it('records durably that the user was asked once a choice saves', async () => {
@@ -324,7 +407,7 @@ describe('InternetSettingsStep', () => {
       configureHooks({ value: MOCK_SETTINGS });
       const { setCanProceed } = renderStep();
 
-      expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
+      expectDisableAllShown();
       await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(false));
       expect(setCanProceed).not.toHaveBeenCalledWith(true);
     });
@@ -348,7 +431,7 @@ describe('InternetSettingsStep', () => {
       const setCanProceed = vi.fn();
       const props: FirstRunStepProps = { onNext: vi.fn(), setCanProceed };
       const { rerender } = render(<InternetSettingsStep {...props} />);
-      expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
+      expectDisableAllShown();
 
       // The earlier save lands, then the provider reports the value it saved.
       resolveSave();
@@ -468,13 +551,13 @@ describe('InternetSettingsStep', () => {
     configureHooks({ value: MOCK_SETTINGS, setData });
     renderStep();
 
-    // Nothing is shown selected before the user chooses; the click optimistically shows Enabled,
-    // then the failed save must go back to showing no choice.
-    expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
+    // The stored value shows as "Disable all" before the user chooses; the click optimistically shows
+    // Enabled, then the failed save must go back to the stored value.
+    expectDisableAllShown();
     await userEvent.click(screen.getByTestId('option-list'));
 
     await waitFor(() => expect(screen.getByText(/save failed/i)).toBeInTheDocument());
-    expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
+    expectDisableAllShown();
   });
 
   it('bails without persisting or reporting success when setData is unavailable', async () => {
@@ -487,7 +570,7 @@ describe('InternetSettingsStep', () => {
     // The guard warns and returns before the optimistic update, so the selection does not change and
     // no false "saved" state is reported.
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
-    expect(screen.getByTestId('option-list')).not.toHaveAttribute('data-value');
+    expectDisableAllShown();
   });
 
   it('shows a friendly error, a Retry button, and keeps Next disabled when the read is a PlatformError', () => {
@@ -507,13 +590,13 @@ describe('InternetSettingsStep', () => {
   // selected under a banner; Next has to stay shut until the user replaces it with one that will
   // actually take effect.
   describe('a stored value the app cannot honor', () => {
-    const UNSUPPORTED_SETTINGS = { ...MOCK_SETTINGS, permittedInternetUse: 'Disabled' as const };
+    const UNSUPPORTED_SETTINGS = { ...MOCK_SETTINGS, permittedInternetUse: 'ProxyOnly' as const };
 
     it('keeps Next disabled while it is the current selection', async () => {
       configureHooks({ value: UNSUPPORTED_SETTINGS, isLoading: false });
       const { setCanProceed } = renderStep();
 
-      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'Disabled');
+      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'ProxyOnly');
       await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(false));
       expect(setCanProceed).not.toHaveBeenCalledWith(true);
     });

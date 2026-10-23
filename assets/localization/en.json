@@ -526,6 +526,7 @@
   "%settings_platform_comments_enabled_label%": "Comments enabled (experimental)",
   "%settings_platform_firstRunComplete_label%": "Setup complete",
   "%settings_platform_internetUseChoiceAsked_label%": "Asked for an internet access choice",
+  "%settings_platform_internetUseDisableSomeServicesChosen_label%": "Chose to disable access to some Bible translation services",
   "%settings_platform_showRegistrationReminderOnStartup_description%": "When your Paratext registration is no longer valid, show the registration step at startup so you can re-register.",
   "%settings_platform_showRegistrationReminderOnStartup_label%": "Show re-registration reminder at startup",
   "%settings_platform_supporter_group_description%": "Settings a support person may ask you to adjust when helping you",
