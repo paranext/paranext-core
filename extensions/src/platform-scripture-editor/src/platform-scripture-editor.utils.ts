@@ -1252,7 +1252,9 @@ export function getParagraphMarkerTitle(
  *   focus-out selection capture, both of which live in web-view-only code this
  *   extension-host-reachable module may not import (see the note at the bottom of this file).
  *   Omitting it leaves the retag exposed to the lost-caret failure, so callers that can lose focus
- *   to the menu should always pass it.
+ *   to the menu should always pass it. It must leave a selected paragraph marker alone:
+ *   `formatPara` retags that paragraph directly, and a caret restored over it would send the retag
+ *   to the caret's paragraph instead.
  * @param isChapterLoading Reports whether another chapter is loading, during which the editor still
  *   shows the chapter being left and an edit would be dropped. A pick does nothing while it returns
  *   `true`. Omitting it never blocks.
@@ -1289,7 +1291,7 @@ export function generateParagraphMenuListItems(
         // Restore the caret BEFORE applying, exactly as the `\` and Enter marker palettes do
         // before their applies: this menu opens in a popover that takes focus off the editor
         // input, so by the time an item is picked the live selection may already be gone, and
-        // `formatPara` refuses when there is no selection.
+        // `formatPara` refuses when there is neither a selection nor a selected paragraph marker.
         restoreSelection?.();
         editorRef.current?.formatPara(marker);
       },
