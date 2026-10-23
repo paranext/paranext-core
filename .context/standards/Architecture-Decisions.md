@@ -3070,7 +3070,8 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 
 - **Formerly:** ADR-0016
 - **Date:** 2026-08-18
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-10-23 — records one exception, `ResourceMessageView`'s optional
+  action button
 - **Context:** PT-4111 needed a zero-state carrying a title, a description, and an optional action
   button (the scripture editor's "this book is not in this project" state, whose Power-mode variant
   offers a Manage Books button). Three candidate shapes already existed and nothing said which to
@@ -3118,6 +3119,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4111 design + implementation. (The original design note lives under gitignored
   `docs/superpowers/specs/`, so it is not a citable reference — the reasoning is reproduced here
   precisely because that path is not readable from the repo.)
+- **Amended 2026-10-23 (PT-4780):** one recorded exception. `ResourceMessageView`'s optional action
+  button sits beside `EmptyState` rather than inside `Empty`, because most of its callers show the
+  sentence alone and it must look the same either way. The reasoning is in the 2026-10-22 amendment
+  to `adr-resource-missing-book-message`.
 
 ## adr-extension-host-exits-on-lost-connection: The extension host exits when its connection to main dies; main relays the stop to every window, and the user restarts it
 
@@ -7790,19 +7795,22 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 ## adr-resource-missing-book-message: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
 
 - **Date:** 2026-08-20
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-10-22 — the Model text panel's message offers a pick button when
+  the user chose the text themselves
 - **Context:** PT-4132 needed the "book not in this text" state for the Model text and Bible
   texts/Commentaries panels, and the ticket asked to "compare expected behavior for PT-4111", which
   had just built `BookNotAvailableView` with a deliberate Simple/Power split. The obvious reading was
   to reuse that view, or to mirror its shape with a second interface-mode branch.
 - **Decision:** Resource panels get ONE message for both interface modes, with no action button, via
-  a separate `ResourceBookNotAvailable` component. The Simple/Power split in `BookNotAvailableView`
+  a separate `ResourceBookNotAvailable` component. *(Amended 2026-10-22: the Model text panel adds a
+  pick button when the user chose the text; see the amendment below.)* The Simple/Power split in `BookNotAvailableView`
   exists solely because a *project* missing a book is **actionable** in Power (Manage Books can
   create it). A published resource cannot gain a book in either mode, so both arms would say the same
   thing. PT-4111's own `isResource` branch already ignores interface mode for exactly this reason.
   The panels swap only their content area, leaving the header mounted — the resource panel's selector
   is the user's real remedy (switch to a text that has the book), and the model panel's label at
-  least attributes the message to a named text.
+  least attributes the message to a named text. *(Amended 2026-10-22: that label is now a button
+  when the user chose the text.)*
 
   **Scope limit, known and deliberate.** "Published resource" is not the whole of what these panels
   display. The Bible texts tab also lists real Paratext projects (`isProjectReference` in
@@ -7835,7 +7843,9 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   target, and does not repeat the `role="status"` that `EmptyState` already sets. Every surface that
   shows this sentence renders it through that one component — the two resource panels and the main
   editor's `isResource` branch — so the wording, styling, live-region announcement, and focus repair
-  cannot drift apart between them.
+  cannot drift apart between them. *(Amended 2026-10-22: an optional action button may now sit beside
+  the `EmptyState`, outside its live region — a recorded exception to that ADR's "an action means
+  `Empty`", explained in the amendment below.)*
 
   The message is shown only when the failure names BOTH the book and the project the view is
   displaying right now, compared in the RENDER BODY rather than latched when the failure arrived.
@@ -7915,6 +7925,15 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
 - **Source:** PT-4132 (Empty state needs to be improved for the Model and Bible texts). Premise
   scope, the shared-decision correction, and the `isLoading` mechanism correction from PR #2704
   review.
+- **Amended 2026-10-22 (PT-4780):** when the admin has chosen no model text, the text on screen is
+  the user's own (`source: 'user'`), and the user CAN remedy a missing book by picking another. There
+  the Model text panel's message offers "Pick model text…" through `ResourceBookNotAvailable`'s
+  optional `action`, and its header is a button that opens the same picker. When the admin chose the
+  text, the message names the team layout instead and has no action. The Bible texts/Commentaries
+  panel and the main editor are unchanged. The button sits beside `EmptyState`, not inside `Empty`:
+  `EmptyDescription` would style the sentence differently whenever a button follows it, and the
+  action-free callers would then render the same sentence a second way. Rejected: a header button
+  alone, which left the message's own advice unfollowable from the message.
 
 ## adr-resource-panes-name-their-zoom-areas: The Text Collection grid and the Bible Texts / Commentaries / Model Text panels each name their own zoom area, because they share one project identity; Enhanced Resources retires its private zoom
 
