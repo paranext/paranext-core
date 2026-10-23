@@ -74,17 +74,27 @@ import {
 } from './platform-scripture-editor.utils';
 import { restoreSelectionIfLost } from './platform-scripture-editor.web-view.utils';
 
-/** Build a mock editor ref exposing spies for the methods the generators call. */
-function makeMockEditorRef() {
+/**
+ * Build a mock editor ref exposing spies for the methods the generators call. It has no text
+ * selection; pass `selectedParaMarker` to have a paragraph's gutter marker selected instead.
+ */
+function makeMockEditorRef(selectedParaMarker?: string) {
   const formatPara = vi.fn();
   const insertMarker = vi.fn();
-  const getSelectedParaMarker = vi.fn<() => string | undefined>();
+  const getSelectedParaMarker = vi.fn<() => string | undefined>(() => selectedParaMarker);
+  const setSelection = vi.fn();
   // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const ref = {
-    current: { formatPara, insertMarker, getSelectedParaMarker },
+    current: {
+      formatPara,
+      insertMarker,
+      getSelection: () => undefined,
+      getSelectedParaMarker,
+      setSelection,
+    },
   } as unknown as MutableRefObject<EditorRef | null>;
-  return { ref, formatPara, insertMarker, getSelectedParaMarker };
+  return { ref, formatPara, insertMarker, getSelectedParaMarker, setSelection };
 }
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
@@ -4236,18 +4246,7 @@ describe('generateParagraphMenuListItems', () => {
     const olderCaret: SelectionRange = {
       start: { jsonPath: '$.content[2].content[1]', offset: 5 },
     };
-    const formatPara = vi.fn();
-    const setSelection = vi.fn();
-    // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const ref = {
-      current: {
-        getSelection: () => undefined,
-        getSelectedParaMarker: () => 'q1',
-        setSelection,
-        formatPara,
-      },
-    } as unknown as MutableRefObject<EditorRef | null>;
+    const { ref, formatPara, setSelection } = makeMockEditorRef('q1');
     const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), () =>
       restoreSelectionIfLost(ref.current, olderCaret),
     );
