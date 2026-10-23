@@ -1303,6 +1303,70 @@ describe('ProjectSelector — project name display', () => {
   });
 });
 
+describe('ProjectSelector — per-row disabled', () => {
+  const PROJECTS_WITH_DISABLED: ProjectSelectorProject[] = [
+    { id: 'first', shortName: 'FIRST', fullName: 'First enabled project' },
+    {
+      id: 'locked',
+      shortName: 'LOCKED',
+      fullName: 'A locked project',
+      isDisabled: true,
+      disabledReason: 'Cannot be opened here',
+    },
+    { id: 'last', shortName: 'LAST', fullName: 'Last enabled project' },
+  ];
+
+  function renderWithDisabledRow() {
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={PROJECTS_WITH_DISABLED}
+        openTabs={[]}
+        selection={{ projectId: undefined }}
+        onChangeSelection={vi.fn()}
+        localizedStrings={HARNESS_STRINGS}
+      />,
+    );
+  }
+
+  it('shows the disabled reason in text readable on the tooltip bubble', async () => {
+    const user = setupUser();
+    renderWithDisabledRow();
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
+
+    await user.hover(screen.getByText('A locked project'));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Cannot be opened here');
+
+    // The tooltip bubble inverts the theme (`bg-foreground`), so muted text on it is unreadable;
+    // the reason line inherits the bubble's text color like its sibling secondary lines. The row's
+    // own `hidden` copy of the reason, which only screen readers read, is not a tooltip line.
+    const reasonLines = screen
+      .getAllByText('Cannot be opened here')
+      .filter((reasonLine) => !reasonLine.hidden);
+    expect(reasonLines.length).toBeGreaterThan(0);
+    reasonLines.forEach((reasonLine) => {
+      expect(reasonLine).toHaveClass('tw:italic');
+      expect(reasonLine).not.toHaveClass('tw:text-muted-foreground');
+    });
+  });
+
+  it('does not move the highlight onto the disabled row when the pointer moves over it', async () => {
+    const user = setupUser();
+    renderWithDisabledRow();
+    await user.click(screen.getByRole('combobox', { name: /^Project/ }));
+
+    // Positive control: hovering an enabled row moves cmdk's highlight to it.
+    const lastRow = screen.getByRole('option', { name: /LAST/ });
+    await user.hover(lastRow);
+    expect(lastRow).toHaveAttribute('aria-selected', 'true');
+
+    const disabledRow = screen.getByRole('option', { name: /LOCKED/ });
+    await user.hover(disabledRow);
+    expect(disabledRow).toHaveAttribute('aria-selected', 'false');
+    expect(lastRow).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
 describe('ProjectSelector — trigger accessible name', () => {
   it('names the selected project alongside the group label', () => {
     render(<ProjectSelectorHarness initialSelected="web" />);
