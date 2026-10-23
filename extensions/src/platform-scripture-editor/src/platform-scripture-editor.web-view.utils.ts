@@ -158,6 +158,8 @@ export function restoreSelectionIfLost(
   editor: Pick<EditorRef, 'getSelection' | 'setSelection' | 'getSelectedParaMarker'> | null,
   lastFocusOutSelection: SelectionRange | undefined,
 ): void {
+  // TODO(PT-4905): Other selection consumers (insert comment among them) still read a selected
+  // paragraph marker as no selection; this is the only check that accounts for it.
   if (!editor || editor.getSelection() || editor.getSelectedParaMarker()) return;
   if (lastFocusOutSelection) editor.setSelection(lastFocusOutSelection);
 }
