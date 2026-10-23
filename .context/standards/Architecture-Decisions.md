@@ -8239,6 +8239,35 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   load the seed exists to avoid. The theme service is hosted the same way in `adr-theme-hosted-in-main`.
 - **Source:** PT-4275 epic (multi-window architecture plan §6).
 
+## adr-settings-contribution-read-only-flag: A setting is made read-only in the Settings tab by an `isReadOnly` contribution flag, alongside `isHidden`
+
+- **Date:** 2026-10-23
+- **Status:** Accepted
+- **Context:** Product asked that all of the Scripture Project Settings be visible but not editable
+  in the Settings tab, and that several whole settings groups disappear from it. Contributions
+  could already set `isHidden` on a setting, but nothing could mark one read-only, and a group whose
+  settings were all hidden still rendered as an empty card under its own sidebar entry.
+- **Decision:** `SettingBase` (`lib/platform-bible-utils/src/extension-contributions/settings.model.ts`)
+  gains an optional `isReadOnly` next to `isHidden`, for both user and project settings. The
+  Settings tab renders a read-only text field with the native `readOnly` attribute, so its whole
+  value can still be focused, selected and scrolled; switches, steppers and selects have no
+  read-only state and are disabled. This is separate from the `disabled` prop that blocks a
+  project's settings during an automatic Send/Receive. The flag only affects the Settings tab:
+  extensions can still change the value. The Settings tab also removes `isHidden` settings once at
+  load, then any group and sidebar entry left empty, so hiding a whole group is done by hiding each
+  of its settings.
+- **Alternatives:** Disabling the Scripture Project Settings group by name in the renderer was
+  smaller but couples core's Settings tab to one extension, and every later request would add
+  another special case. Removing a contribution to hide its group would leave its settings with no
+  registered default or validator, which breaks the extension that still reads them. A group-level
+  `isReadOnly`/`isHidden` would cover settings added to the group later, but it was deferred: a
+  per-setting flag keeps the option of one editable setting in an otherwise read-only group, and
+  no request needs the group-wide rule yet.
+- **Consequences:** Any extension can make a setting read-only or hide a whole group from JSON
+  alone. A setting whose read-only state depends on other values (e.g. `platform.isEditable` while
+  `platform.isPublished`) still needs renderer logic; a static flag cannot express it.
+- **Source:** PT-4646.
+
 ## adr-shard-discovery-by-type: Service routers discover shards by network-object type, not by rebuilding the scoped name
 
 - **Date:** 2026-08-06

@@ -43,6 +43,9 @@ import './settings.component.scss';
 /** What the language selector offers while the offered languages load, or if they cannot be read. */
 const OFFERED_LANGUAGE_DEFAULTS = getOfferedLanguageDefaults();
 
+/** A read-only text field otherwise looks editable, so it gets the muted fill and an arrow cursor. */
+const READ_ONLY_INPUT_CLASS_NAME = 'tw:bg-muted tw:dark:bg-muted tw:cursor-default';
+
 /** Props shared between the user and project setting components */
 type BaseSettingProps<TSettingKey, TSettingValue> = {
   /** Key of the setting */
@@ -61,6 +64,12 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
    * to `false`.
    */
   disabled?: boolean;
+  /**
+   * When true, the user can read but not change the setting: text stays focusable, selectable and
+   * scrollable, and controls with no read-only state (switches, steppers, selects) are disabled.
+   * Used for settings contributed with `isReadOnly`. Defaults to `false`.
+   */
+  readOnly?: boolean;
 };
 
 /**
@@ -241,6 +250,7 @@ export function Setting({
   className,
   description,
   disabled = false,
+  readOnly = false,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -431,7 +441,7 @@ export function Setting({
             // Without a writer the stepper has nothing to send a press to, and its readout moves the
             // moment a button is pressed. Gating the control keeps the number on screen honest
             // instead of reporting a percentage that was never written.
-            disabled={disabled || !setSetting}
+            disabled={disabled || readOnly || !setSetting}
             groupLabel={label}
             labels={{
               increase: localizedStrings[labelKeys.increase],
@@ -459,6 +469,8 @@ export function Setting({
             onChange={debouncedHandleChange}
             defaultValue={setting}
             disabled={disabled}
+            readOnly={readOnly}
+            className={readOnly ? READ_ONLY_INPUT_CLASS_NAME : undefined}
             aria-describedby={ariaDescribedBy}
             aria-invalid={ariaInvalid}
           />
@@ -474,7 +486,7 @@ export function Setting({
             id={controlId}
             onCheckedChange={debouncedHandleChange}
             defaultChecked={setting}
-            disabled={disabled}
+            disabled={disabled || readOnly}
             aria-describedby={ariaDescribedBy}
             aria-invalid={ariaInvalid}
           />
@@ -494,11 +506,9 @@ export function Setting({
               aria-labelledby={labelId}
               aria-describedby={ariaDescribedBy}
             >
-              {/* interfaceLanguage is a user (not project) setting, so it is never subject to
-                  per-project Send/Receive edit-blocking; UiLanguageSelector exposes no `disabled`
-                  prop, so none is passed. */}
               <UiLanguageSelector
                 className="language-selector"
+                disabled={disabled || readOnly}
                 knownUiLanguages={knownUiLanguages}
                 primaryLanguage={setting[0]}
                 fallbackLanguages={setting.slice(1)}
@@ -518,6 +528,8 @@ export function Setting({
             onChange={debouncedHandleChange}
             defaultValue={JSON.stringify(setting, undefined, 2)}
             disabled={disabled}
+            readOnly={readOnly}
+            className={readOnly ? READ_ONLY_INPUT_CLASS_NAME : undefined}
             aria-describedby={ariaDescribedBy}
             aria-invalid={ariaInvalid}
           />
@@ -540,6 +552,7 @@ export function Setting({
     debouncedHandleStepperChange,
     knownUiLanguages,
     disabled,
+    readOnly,
     setSetting,
     controlId,
     labelId,
