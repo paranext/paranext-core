@@ -289,6 +289,7 @@ import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragr
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
 import { CharacterMarkerBarOverlay } from './character-marker-bar/character-marker-bar-overlay.component';
 import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.component';
+import { shouldShowCharacterMarkerBar } from './character-marker-bar/character-marker-bar.utils';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import {
   INLINE_MARKERS_MENU_TRIGGER,
@@ -5445,19 +5446,14 @@ function PlatformScriptureEditor({
             the stored value arrives — taking Lexical's undo history and the scroll position with it.
             An empty slot renders nothing beside the editor.
 
-            `hasGutterParaMarkers` is checked here because it is the OTHER half of the condition the
-            gutter reservation in `_simple-mode.scss` matches on
-            (`.editor-container-simple .usfm.psc-gutter-markers`). Gating the bar on the same two
-            things the CSS does keeps the bar and the space it occupies inseparable: if this view ever
-            stops using the paragraph-structure preset — a Simple view-option chooser would do it —
-            the reservation and the bar disappear together instead of leaving the bar painting over
-            project text. The reservation cannot simply be broadened to match `!isPowerMode` alone,
-            because `_simple-mode.scss` is compiled into the resource-text and model-text panels too,
-            and both apply `editor-container-simple` unconditionally to an editor that has no gutter
-            markers. */}
+            `shouldShowCharacterMarkerBar` gates the bar on the same two conditions the gutter
+            reservation in `_simple-mode.scss` matches on, so the bar and the space it occupies stay
+            inseparable: if this view ever stops using the paragraph-structure preset — a Simple
+            view-option chooser would do it — the reservation and the bar disappear together instead
+            of leaving the bar painting over project text. */}
           <CharacterMarkerBarOverlay
             bar={
-              isPowerMode || !viewOptions.hasGutterParaMarkers ? undefined : (
+              shouldShowCharacterMarkerBar(isPowerMode, viewOptions) ? (
                 <CharacterMarkerBar
                   editorRef={editorRef}
                   getSelection={getSelection}
@@ -5473,7 +5469,7 @@ function PlatformScriptureEditor({
                   textDirection={textDirectionEffective}
                   localizedStrings={localizedStrings}
                 />
-              )
+              ) : undefined
             }
           >
             <ParagraphMarkerTooltipOverlay enabled={!isPowerMode}>
