@@ -27,6 +27,9 @@ const projectRow = (id: string): PickerResource => ({
   projectId: id,
 });
 
+/** A row for a resource installed locally but in neither the admin's nor the user's list. */
+const downloadedRow = (id: string): PickerResource => ({ ...projectRow(id), source: 'downloaded' });
+
 describe('matchesSelectedResourceId', () => {
   it('matches the namespaced row id', () => {
     expect(matchesSelectedResourceId(dblRow('abc'), 'dbl:abc')).toBe(true);
@@ -114,6 +117,48 @@ describe('resolveResourceSelection', () => {
   it('selects nothing when the list is empty', () => {
     const result = resolveResourceSelection([], 'dbl:abc', undefined);
     expect(result.selectedRow).toBeUndefined();
+    expect(result.nextSelectedResourceId).toBeUndefined();
+  });
+
+  it('marks a committed pick as the user’s own choice', () => {
+    const result = resolveResourceSelection([dblRow('new')], undefined, 'dbl:new');
+    expect(result.nextIsUserPick).toBe(true);
+  });
+
+  it('marks a fallback it persists as not the user’s choice', () => {
+    const result = resolveResourceSelection([dblRow('a')], 'dbl:gone', undefined, true);
+    expect(result.nextSelectedResourceId).toBe('dbl:a');
+    expect(result.nextIsUserPick).toBe(false);
+  });
+
+  it('shows a downloaded resource when nothing configured is displayable, without persisting it', () => {
+    // Persisting it would keep the panel on it after a configured resource arrives.
+    const rows = [notInstalledRow('configured'), downloadedRow('WEB')];
+    const result = resolveResourceSelection(rows, undefined, undefined);
+    expect(result.selectedRow?.projectId).toBe('WEB');
+    expect(result.nextSelectedResourceId).toBeUndefined();
+  });
+
+  it('moves a downloaded selection the user did not pick to a configured resource', () => {
+    // A selection stored without a user-pick mark counts as a fallback, so it recovers here once
+    // something configured is displayable.
+    const rows = [projectRow('configured'), downloadedRow('WEB')];
+    const result = resolveResourceSelection(rows, 'project:WEB', undefined, undefined);
+    expect(result.selectedRow?.projectId).toBe('configured');
+    expect(result.nextSelectedResourceId).toBe('project:configured');
+  });
+
+  it('keeps a downloaded selection the user did not pick while nothing configured is displayable', () => {
+    const rows = [downloadedRow('WEB')];
+    const result = resolveResourceSelection(rows, 'project:WEB', undefined, false);
+    expect(result.selectedRow?.projectId).toBe('WEB');
+    expect(result.nextSelectedResourceId).toBeUndefined();
+  });
+
+  it('keeps a downloaded resource the user picked even when a configured resource is listed', () => {
+    const rows = [projectRow('configured'), downloadedRow('WEB')];
+    const result = resolveResourceSelection(rows, 'project:WEB', undefined, true);
+    expect(result.selectedRow?.projectId).toBe('WEB');
     expect(result.nextSelectedResourceId).toBeUndefined();
   });
 });

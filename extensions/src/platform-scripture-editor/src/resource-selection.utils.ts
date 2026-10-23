@@ -8,6 +8,11 @@ export type ResourceSelectionResolution = {
    * namespaced form, so a legacy bare id is rewritten the first time its row is seen.
    */
   nextSelectedResourceId: string | undefined;
+  /**
+   * Whether the selection to persist is the user's own pick, or `undefined` to leave the stored
+   * mark alone. Set whenever `nextSelectedResourceId` changes which resource is selected.
+   */
+  nextIsUserPick: boolean | undefined;
   /** Whether the in-flight pick has arrived in the list and can stop suppressing auto-correct. */
   shouldClearPending: boolean;
   /** The row to display, or `undefined` when there is nothing to show. */
@@ -53,17 +58,32 @@ export function matchesSelectedResourceId(
  *    first row that has something to display when the selection has left the list. A row with no
  *    `projectId` has no content, so selecting it would spin forever.
  *
+ * A fallback to a `downloaded` row (installed locally, but in neither the admin's nor the user's
+ * list) is shown but never persisted, and a persisted `downloaded` selection the user did not pick
+ * gives way to the first displayable configured row. Otherwise a fallback chosen while nothing was
+ * configured would outlive the configuration that later arrives, since a downloaded row stays in
+ * the list. A selection persisted without a user-pick mark counts as not picked by the user.
+ *
  * @param rows The panel's filtered rows
  * @param selectedResourceId The persisted selection, namespaced or legacy-bare
  * @param pendingResourceId The row id of a pick still propagating, if any
+ * @param isUserPick Whether the persisted selection is the user's own pick
  * @returns See {@link ResourceSelectionResolution}
  */
 export function resolveResourceSelection(
   rows: PickerResource[],
   selectedResourceId: string | undefined,
   pendingResourceId: string | undefined,
+  isUserPick?: boolean,
 ): ResourceSelectionResolution {
-  const selectedRow = rows.find((row) => matchesSelectedResourceId(row, selectedResourceId));
+  const firstUsable = rows.find((row) => row.projectId !== undefined);
+  const firstUsableConfigured = rows.find(
+    (row) => row.projectId !== undefined && row.source !== 'downloaded',
+  );
+  const matchedRow = rows.find((row) => matchesSelectedResourceId(row, selectedResourceId));
+  const isSupersededFallback =
+    matchedRow?.source === 'downloaded' && !isUserPick && firstUsableConfigured !== undefined;
+  const selectedRow = isSupersededFallback ? undefined : matchedRow;
   const displayRow = selectedRow ?? rows[0];
 
   if (pendingResourceId !== undefined) {
@@ -73,34 +93,47 @@ export function resolveResourceSelection(
     if (pendingRow)
       return {
         nextSelectedResourceId: pendingResourceId,
+        nextIsUserPick: true,
         shouldClearPending: true,
         selectedRow: pendingRow,
       };
     return {
       nextSelectedResourceId: undefined,
+      nextIsUserPick: undefined,
       shouldClearPending: false,
       selectedRow: displayRow,
     };
   }
 
   if (rows.length === 0)
-    return { nextSelectedResourceId: undefined, shouldClearPending: false, selectedRow: undefined };
+    return {
+      nextSelectedResourceId: undefined,
+      nextIsUserPick: undefined,
+      shouldClearPending: false,
+      selectedRow: undefined,
+    };
 
   if (selectedRow) {
     const rowId = getResourceReferenceRowId(selectedRow.reference);
     return {
       nextSelectedResourceId: rowId === selectedResourceId ? undefined : rowId,
+      nextIsUserPick: undefined,
       shouldClearPending: false,
       selectedRow,
     };
   }
 
-  const firstUsable = rows.find((row) => row.projectId !== undefined);
+  if (firstUsableConfigured)
+    return {
+      nextSelectedResourceId: getResourceReferenceRowId(firstUsableConfigured.reference),
+      nextIsUserPick: false,
+      shouldClearPending: false,
+      selectedRow: firstUsableConfigured,
+    };
   return {
-    nextSelectedResourceId: firstUsable
-      ? getResourceReferenceRowId(firstUsable.reference)
-      : undefined,
+    nextSelectedResourceId: undefined,
+    nextIsUserPick: undefined,
     shouldClearPending: false,
-    selectedRow: displayRow,
+    selectedRow: firstUsable ?? displayRow,
   };
 }

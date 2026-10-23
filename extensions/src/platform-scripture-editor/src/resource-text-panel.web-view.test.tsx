@@ -498,6 +498,96 @@ describe('ResourceTextPanel — install against a stale catalog', () => {
   });
 });
 
+/**
+ * Renders the panel with a `useWebViewState` backed by real React state, so a selection the panel
+ * persists is read back on its next render. Returns every value persisted so far, by state key.
+ */
+function renderWithWebViewState() {
+  const persisted: Record<string, unknown> = {};
+  const props = makeProps({
+    useWebViewState: vi.fn(
+      // useWebViewState is generic (key → TState) but mocks can't express that genericity.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (key: string, defaultValue: any): [any, (val: any) => void] => {
+        // Called as a hook by the panel, in the same order on every render.
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        const [value, setValue] = React.useState(
+          key === 'resourceType' ? 'ScriptureResource' : defaultValue,
+        );
+        return [
+          value,
+          (next: unknown) => {
+            persisted[key] = next;
+            setValue(next);
+          },
+        ];
+      },
+    ),
+  });
+  const ResourceTextPanel = getResourceTextPanel();
+  const { rerender } = render(<ResourceTextPanel {...props} />);
+  return {
+    persisted,
+    rerender: () => rerender(<ResourceTextPanel {...props} />),
+  };
+}
+
+const lastSelectedRef = (): PickerResource | undefined =>
+  capturedResourceTextPanelProps.mock.lastCall?.[0].selectedRef;
+
+describe('ResourceTextPanel — selection when a configured resource arrives', () => {
+  const DOWNLOADED_WEB: PickerResource = {
+    reference: { type: 'project', name: 'WEB', id: 'web-project-id' },
+    source: 'downloaded',
+    isAdminLocked: false,
+    type: 'ScriptureResource',
+    installed: true,
+    projectId: 'web-project-id',
+  };
+  const CONFIGURED: PickerResource = {
+    reference: { type: 'project', name: 'CFG', id: 'configured-project-id' },
+    source: 'admin',
+    isAdminLocked: false,
+    type: 'ScriptureResource',
+    installed: true,
+    projectId: 'configured-project-id',
+  };
+
+  beforeEach(() => {
+    capturedResourceTextPanelProps.mockClear();
+    mockUseEffectiveResourceReferenceList.mockReturnValue({
+      status: 'ready',
+      list: { dataVersion: '1.0.0', items: [] },
+    });
+    mockUseResourcePickerResources.mockReturnValue([[DOWNLOADED_WEB], false]);
+  });
+
+  it('moves from the downloaded fallback to the configured resource once it is listed', async () => {
+    const { persisted, rerender } = renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
+
+    mockUseResourcePickerResources.mockReturnValue([[CONFIGURED, DOWNLOADED_WEB], false]);
+    rerender();
+
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('configured-project-id'));
+    expect(persisted.selectedResourceId).toBe('project:configured-project-id');
+  });
+
+  it('keeps a downloaded resource the user picked once a configured resource is listed', async () => {
+    const { persisted, rerender } = renderWithWebViewState();
+    await waitFor(() => expect(lastSelectedRef()?.projectId).toBe('web-project-id'));
+    React.act(() => {
+      capturedResourceTextPanelProps.mock.lastCall?.[0].onSelectResource('project:web-project-id');
+    });
+
+    mockUseResourcePickerResources.mockReturnValue([[CONFIGURED, DOWNLOADED_WEB], false]);
+    rerender();
+
+    await waitFor(() => expect(persisted.selectedResourceId).toBe('project:web-project-id'));
+    expect(lastSelectedRef()?.projectId).toBe('web-project-id');
+  });
+});
+
 /** A Bible text the picker offers, so the panel shows its chapter and asks for its copy limits. */
 const SELECTED_RESOURCE: PickerResource = {
   reference: { type: 'project', name: 'RES', id: 'resource-project-id' },

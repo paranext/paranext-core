@@ -101,6 +101,11 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     'selectedResourceId',
     undefined,
   );
+  // Whether `selectedResourceId` is the user's own pick rather than a fallback the panel chose. See
+  // `resolveResourceSelection` for why a fallback must not outlive a configured resource arriving.
+  const [isSelectedResourceUserPick, setIsSelectedResourceUserPick] = useWebViewState<
+    boolean | undefined
+  >('isSelectedResourceUserPick', undefined);
 
   // #endregion
 
@@ -248,14 +253,32 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
     filteredResources,
     selectedResourceId,
     pendingResourceId,
+    isSelectedResourceUserPick,
   );
   const selectedRef = selection.selectedRow;
 
   useEffect(() => {
+    if (selection.nextIsUserPick !== undefined)
+      setIsSelectedResourceUserPick(selection.nextIsUserPick);
     if (selection.nextSelectedResourceId !== undefined)
       setSelectedResourceId(selection.nextSelectedResourceId);
     if (selection.shouldClearPending) setPendingResourceId(undefined);
-  }, [selection.nextSelectedResourceId, selection.shouldClearPending, setSelectedResourceId]);
+  }, [
+    selection.nextSelectedResourceId,
+    selection.nextIsUserPick,
+    selection.shouldClearPending,
+    setSelectedResourceId,
+    setIsSelectedResourceUserPick,
+  ]);
+
+  // The mark is written before the id so no render sees the user's pick marked as a fallback.
+  const handleSelectResourceFromList = useCallback(
+    (resourceId: string) => {
+      setIsSelectedResourceUserPick(true);
+      setSelectedResourceId(resourceId);
+    },
+    [setIsSelectedResourceUserPick, setSelectedResourceId],
+  );
 
   const [isSelecting, setIsSelecting] = useState(false);
 
@@ -481,7 +504,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
       onRetryCatalog={refetchCatalog}
       scrRef={scrRef}
       onScrRefChange={setScrRef}
-      onSelectResource={setSelectedResourceId}
+      onSelectResource={handleSelectResourceFromList}
       usjPossiblyError={usjPossiblyError}
       isUsjLoading={isUsjLoading}
       textDirection={textDirection}
